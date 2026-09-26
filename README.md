@@ -46,6 +46,7 @@ streams.stderr // []
 | `/commands` | the command registry: `describeProgram`, `annotate`, `flatten` — see below |
 | `/completion` | shell completion over the registry: `suggest`, `formatSuggestions` — see below |
 | `/update` | keeping an install current: `installerOf`, `updateCommand`, `latestVersion`, `mayNotify`, `updateNotice`, `runUpdate` — see below |
+| `/codegen` | build time: an official API description → types, Valibot schemas, an operation manifest and a coverage page — see below |
 
 **Nothing in the root export is HTTP.** Status classification, `Retry-After` parsing and the fetch
 seam live in `@leemour/cli-core/http`, so a CLI that speaks a socket never depends on a stack it
@@ -98,6 +99,30 @@ second line of defence, not the first.
 **Everything the environment knows is passed in.** No `process.env` reads, no config file paths,
 no ambient clock. That is what makes a timeout test finish instantly and a keyring test incapable
 of reaching a real keychain.
+
+**Generating an API catalog is `@leemour/cli-core/codegen`**, a build-time tool. It reads a
+format-neutral `ApiModel` — operations with a transport binding (`http` method and path, or `rpc`
+name), an `effect` (`read`, `write`, `destructive`) and how far the source can be trusted
+(`contract`, `example`, `inferred`, `override`) — and writes committed files. It parses no file
+format: the adapter from OpenAPI, Postman or anything else lives in the CLI that has that source,
+so this adds no dependency. Generation stops, naming the problem, when two operations collide, an
+operation is not classified as a read or a write, an override matches nothing, a reference points
+nowhere or a construct cannot be expressed; it never drops an operation or falls back to `any`.
+
+```ts
+import { generate, manifestGenerator, typesGenerator, valibotGenerator, writeArtifacts } from "@leemour/cli-core/codegen"
+
+const artifacts = generate(model, [typesGenerator({ path }), valibotGenerator({ path, typesImport }), manifestGenerator({ path })], {
+  overrides: { answerOnCallback: { effect: "write", reason: "a POST that edits a message" } },
+  banner: ["Source: spec/bot/schema.yaml", "Run: pnpm bot:generate"],
+})
+const stale = writeArtifacts(artifacts, { root, check: process.argv.includes("--check") })
+```
+
+The generated schemas import `@leemour/cli-core/codegen/runtime` at run time — a few number
+helpers, not the generator. Numbers are expected from a lossless JSON parser (`lossless-json`): a
+64-bit integer comes out as its exact decimal string, and any other integer that does not fit a JS
+number fails instead of rounding. Objects are loose, so a field the API added later passes through.
 
 **Keeping an install current is `@leemour/cli-core/update`.** `installerOf(realpath(script))` says
 which package manager put the CLI there — pnpm, npm or bun, measured on real installs — and

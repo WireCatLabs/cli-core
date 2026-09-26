@@ -8,3 +8,6 @@ coverage/
 # The working trail, kept on the machine doing the work.
 /docs_ai/
 .claude/settings.local.json
+
+# Left behind only if a codegen test is killed mid-run.
+src/**/.tmp-*/
