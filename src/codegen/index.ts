@@ -24,6 +24,7 @@ export type {
   SourceInfo,
   SourceReference,
 } from "./model.js"
+export { identifier, kebab } from "./names.js"
 export {
   applyOverrides,
   CodegenError,
@@ -33,6 +34,5 @@ export {
   type WriteOptions,
   writeArtifacts,
 } from "./pipeline.js"
-export { identifier, kebab } from "./tree.js"
 export { typesGenerator } from "./typescript.js"
 export { type ValibotOptions, valibotGenerator } from "./valibot.js"

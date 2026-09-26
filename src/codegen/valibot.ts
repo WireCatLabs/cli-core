@@ -1,6 +1,7 @@
 import type { ApiModel, CodeGenerator, SchemaNode } from "./model.js"
+import { identifier } from "./names.js"
 import { CodegenError } from "./pipeline.js"
-import { identifier, SchemaTree } from "./tree.js"
+import { SchemaTree } from "./tree.js"
 
 type Literal = { property: string; value: string }
 

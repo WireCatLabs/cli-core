@@ -123,6 +123,12 @@ The generated schemas import `@leemour/cli-core/codegen/runtime` at run time —
 helpers, not the generator. Numbers are expected from a lossless JSON parser (`lossless-json`): a
 64-bit integer comes out as its exact decimal string, and any other integer that does not fit a JS
 number fails instead of rounding. Objects are loose, so a field the API added later passes through.
+Enums and discriminated unions are **strict**: a value or subtype the snapshot does not know fails,
+so decode a live stream (updates, webhooks) only where that is what you want.
+
+**The schemas decode; they do not encode.** Their output carries an `int64` as a string, so sending
+it back would put a string where the API expects a number. Validate a request with the schema, then
+send the original lossless value.
 
 **Keeping an install current is `@leemour/cli-core/update`.** `installerOf(realpath(script))` says
 which package manager put the CLI there — pnpm, npm or bun, measured on real installs — and

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, extname, join } from "node:path"
 import type { ApiModel, ApiOperation, CodeGenerator, GeneratedArtifact, Override, SchemaNode } from "./model.js"
+import { identifier, kebab } from "./names.js"
 
 export class CodegenError extends Error {
   constructor(readonly problems: readonly string[]) {
@@ -61,6 +62,17 @@ export const validateModel = (model: ApiModel): void => {
   for (const key of duplicates(model.operations.map(bindingKey))) problems.push(`two operations are both ${key}`)
   for (const id of duplicates(model.schemas.map((schema) => schema.id))) {
     problems.push(`two schemas share the id "${id}"`)
+  }
+  for (const command of duplicates(model.operations.map((operation) => kebab(operation.id)))) {
+    problems.push(`two operations both become the command "${command}"`)
+  }
+  for (const name of duplicates(model.schemas.map((schema) => identifier(schema.id)))) {
+    problems.push(`two schemas both become the name "${name}"`)
+  }
+  for (const operation of model.operations) {
+    for (const name of duplicates(operation.parameters.map((parameter) => parameter.name))) {
+      problems.push(`operation "${operation.id}" has two parameters named "${name}"`)
+    }
   }
   for (const operation of model.operations) {
     if (!operation.effect) problems.push(`operation "${operation.id}" is not classified as read, write or destructive`)

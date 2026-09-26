@@ -1,5 +1,6 @@
 import type { ApiModel, ApiOperation, Binding, CodeGenerator, Confidence, Effect, SchemaNode } from "./model.js"
-import { kebab, SchemaTree } from "./tree.js"
+import { kebab } from "./names.js"
+import { SchemaTree } from "./tree.js"
 
 /** One operation as a CLI reads it at run time: enough to build a command, validate input and guard a write. */
 export interface ManifestOperation {
@@ -8,6 +9,7 @@ export interface ManifestOperation {
   binding: Binding
   effect: Effect
   summary?: string
+  description?: string
   tags: readonly string[]
   deprecated?: boolean
   parameters: readonly {
@@ -31,6 +33,7 @@ const toManifest = (operation: ApiOperation, tree: SchemaTree): ManifestOperatio
     binding: operation.binding,
     effect: operation.effect as Effect,
     summary: operation.summary,
+    description: operation.description,
     tags: operation.tags,
     deprecated: operation.deprecated,
     parameters: operation.parameters.map((parameter) => withoutUndefined({ ...parameter })),

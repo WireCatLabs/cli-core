@@ -1,5 +1,6 @@
 import type { ApiModel, CodeGenerator, SchemaNode } from "./model.js"
-import { identifier, SchemaTree } from "./tree.js"
+import { identifier } from "./names.js"
+import { SchemaTree } from "./tree.js"
 
 const doc = (text: string | undefined, indent: string): string => {
   const line = text?.replace(/\s+/g, " ").replace(/\*\//g, "*\\/").trim()

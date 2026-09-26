@@ -152,7 +152,35 @@ describe("generate", () => {
     expect(problemsOf(() => generate(broken, generators, { banner, overrides }))).toEqual([
       'two operations share the id "getMyInfo"',
       "two operations are both GET /me",
+      'two operations both become the command "get-my-info"',
       'schema "Broken" refers to unknown schema "Missing"',
+    ])
+  })
+
+  it("refuses two ids that would become one command, one type name or one flag", () => {
+    const base = model()
+    const [first] = base.operations
+    const [user] = base.schemas
+    if (!first || !user) throw new Error("fixture")
+    const clashing = model({
+      operations: [
+        ...base.operations,
+        {
+          ...first,
+          id: "get-my-info",
+          binding: { kind: "http", method: "GET", path: "/me2" },
+          parameters: [
+            { name: "chat_id", in: "query", required: false, schema: { type: "string" } },
+            { name: "chat_id", in: "path", required: true, schema: { type: "string" } },
+          ],
+        },
+      ],
+      schemas: [...base.schemas, { ...user, id: "user" }],
+    })
+    expect(problemsOf(() => generate(clashing, generators, { banner, overrides }))).toEqual([
+      'two operations both become the command "get-my-info"',
+      'two schemas both become the name "User"',
+      'operation "get-my-info" has two parameters named "chat_id"',
     ])
   })
 
