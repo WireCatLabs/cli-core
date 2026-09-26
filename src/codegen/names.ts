@@ -5,9 +5,39 @@ const pascal = (text: string): string =>
     .map((word) => word[0]?.toUpperCase() + word.slice(1))
     .join("")
 
+// A generated `export const Error` compiles, and then every `new Error()` in that module builds a schema.
+const GLOBALS = new Set([
+  "Array",
+  "BigInt",
+  "Boolean",
+  "Date",
+  "Error",
+  "Function",
+  "Intl",
+  "JSON",
+  "Map",
+  "Math",
+  "Number",
+  "Object",
+  "Partial",
+  "Promise",
+  "Proxy",
+  "Record",
+  "Reflect",
+  "RegExp",
+  "Required",
+  "Set",
+  "String",
+  "Symbol",
+  "URL",
+  "WeakMap",
+  "WeakSet",
+])
+
 export const identifier = (id: string): string => {
   const name = pascal(id)
-  return /^[A-Za-z]/.test(name) ? name : `Schema${name}`
+  if (!/^[A-Za-z]/.test(name)) return `Schema${name}`
+  return GLOBALS.has(name) ? `Api${name}` : name
 }
 
 /** `getMyInfo` → `get-my-info`. */

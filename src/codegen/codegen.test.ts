@@ -9,6 +9,7 @@ import {
   CodegenError,
   coverageGenerator,
   generate,
+  identifier,
   manifestGenerator,
   typesGenerator,
   valibotGenerator,
@@ -196,6 +197,14 @@ describe("generate", () => {
     expect(once.find((artifact) => artifact.path === "coverage.md")?.content).toContain(
       "| `answerOnCallback` | `POST /answers` | `x api answer-on-callback` | write |",
     )
+  })
+})
+
+describe("identifier", () => {
+  it("never names a schema after a JS global it would shadow", () => {
+    expect(identifier("Error")).toBe("ApiError")
+    expect(identifier("chat-id")).toBe("ChatId")
+    expect(identifier("2fa")).toBe("Schema2fa")
   })
 })
 
