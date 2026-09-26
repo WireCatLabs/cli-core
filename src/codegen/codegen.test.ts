@@ -42,8 +42,12 @@ const model = (changes: Partial<ApiModel> = {}): ApiModel => ({
         properties: { update_type: { type: "string" }, timestamp: { type: "integer", format: "int64" } },
         required: ["update_type", "timestamp"],
       },
-      discriminator: { property: "update_type", mapping: { bot_started: "BotStartedUpdate", chat_seen: "ChatUpdate" } },
+      discriminator: {
+        property: "update_type",
+        mapping: { bot_started: "BotStartedUpdate", chat_seen: "ChatUpdate", ping: "PingUpdate" },
+      },
     },
+    { id: "PingUpdate", schema: { type: "allOf", of: [{ type: "ref", ref: "Update" }] } },
     {
       id: "BotStartedUpdate",
       schema: {
@@ -279,6 +283,8 @@ describe("generated schemas", () => {
     expect(parse("Update", { ...update, update_type: "chat_seen", chat_type: "chat" }).success).toBe(true)
     expect(parse("Update", { ...update, update_type: "unknown" }).success).toBe(false)
     expect(parse("BotStartedUpdate", { ...update, update_type: "chat_seen" }).success).toBe(false)
+    expect(parse("Update", { update_type: "ping", timestamp: 1 }).success).toBe(true)
+    expect(parse("PingUpdate", { update_type: "bot_started", timestamp: 1 }).success).toBe(false)
   })
 
   it("gives an inline response body a schema of its own", () => {

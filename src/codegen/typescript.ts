@@ -36,7 +36,7 @@ class TypeWriter {
         return `Array<${this.node(node.items, `${where}[]`)}>`
       }
       case "allOf":
-        if (node.of.length === 1 && node.of[0]) return this.#bare(node.of[0], where)
+        if (node.of.length === 1 && node.of[0] && !literal) return this.#bare(node.of[0], where)
         return this.#object(this.tree.flatten(node, where), where, literal)
       case "object":
         return this.#object(node, where, literal)
