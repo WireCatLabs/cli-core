@@ -114,14 +114,12 @@ export const valibotGenerator =
       return `export const ${name}: v.GenericSchema<unknown, T.${name}> = ${expression}\n`
     })
     const helpers = [...writer.helpers].sort()
-    const header = [
+    const runtime = options.runtimeImport ?? "@leemour/cli-core/codegen/runtime"
+    const packages = [
       `import * as v from "valibot"`,
-      ...(helpers.length > 0
-        ? [`import { ${helpers.join(", ")} } from "${options.runtimeImport ?? "@leemour/cli-core/codegen/runtime"}"`]
-        : []),
-      `import type * as T from "${options.typesImport}"`,
-      "",
-    ]
+      ...(helpers.length > 0 ? [`import { ${helpers.join(", ")} } from "${runtime}"`] : []),
+    ].sort((a, b) => (a.split(" from ")[1] ?? "").localeCompare(b.split(" from ")[1] ?? ""))
+    const header = [...packages, `import type * as T from "${options.typesImport}"`, ""]
     const registry = `export const schemas = {\n${tree.named.map(({ name }) => `  ${name},`).join("\n")}\n} as const\n`
     return [{ path: options.path, content: `${header.join("\n")}\n${declarations.join("\n")}\n${registry}` }]
   }
