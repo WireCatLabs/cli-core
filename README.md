@@ -188,11 +188,12 @@ Raise `version` in `package.json` through a pull request, merge it, then on `mai
 bin/release
 ```
 
-It refuses a dirty tree, a branch other than `main`, a `main` that is not pushed and a version npm
-already has, then starts [`release.yml`](.github/workflows/release.yml) and follows it. The workflow
-runs every check, publishes through npm's
-[trusted publishing](https://docs.npmjs.com/trusted-publishers/) — no npm token in GitHub, and npm
-attaches provenance — and tags `v<version>` only once npm shows the new version.
+It refuses a dirty tree, a branch other than `main` and a `main` that is not pushed. When npm already
+has the version, or a higher one, it commits the next free version to `main` — the next minor for
+`x.y.0`, the next patch otherwise — and publishes that. Then it starts
+[`release.yml`](.github/workflows/release.yml) and follows it. The workflow runs every check,
+publishes through npm's [trusted publishing](https://docs.npmjs.com/trusted-publishers/) — no npm
+token in GitHub, and npm attaches provenance — and tags `v<version>` only once npm shows the new version.
 
 npm trusts the workflow **by file name**: the package's Trusted Publisher settings on npmjs.com name
 `leemour` / `cli-core` / `release.yml`. Rename the file and publishing stops until they are updated.

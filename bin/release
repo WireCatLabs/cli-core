@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-# Publishes the version in package.json and tags it. Run on a clean `main`.
+# Publishes the version in package.json and tags it. Run on a clean `main`. When npm already has that
+# version, or a higher one, it commits the next free version to `main` and publishes that.
 #
 #   bin/release           # publishes from GitHub Actions (.github/workflows/release.yml)
 #   bin/release --local   # publishes from this machine with the npm token from the keyring
@@ -31,6 +32,25 @@ version=$(node -p 'require("./package.json").version')
 published() {
   npm view "@leemour/cli-core@$version" version --prefer-online >/dev/null 2>&1
 }
+
+# Two sessions preparing the same number is normal; the second takes the next free one (2026-09-29).
+latest=$(npm view @leemour/cli-core version --prefer-online 2>/dev/null || true)
+versions=$(npm view @leemour/cli-core versions --json --prefer-online 2>/dev/null || true)
+next=$(node scripts/next-version.mjs "$version" "$latest" "$versions")
+if [ "$next" != "$version" ]; then
+  if published; then why="$version is already on npm"; else why="$version is not above npm's latest $latest"; fi
+  echo "$why — publishing $next instead"
+  node -e 'const fs = require("fs"); const [o, n] = process.argv.slice(1)
+    const text = fs.readFileSync("package.json", "utf8")
+    fs.writeFileSync("package.json", text.replace(`"version": "${o}"`, `"version": "${n}"`))' "$version" "$next"
+  git commit -q -am "chore: release $next" -m "bin/release: $why."
+  git push -q origin main || {
+    git reset -q --hard HEAD~1
+    echo "main moved on origin while raising the version — run bin/release again" >&2
+    exit 1
+  }
+  version=$next
+fi
 if published; then
   echo "$version is already on npm — raise the version first" >&2
   exit 1
