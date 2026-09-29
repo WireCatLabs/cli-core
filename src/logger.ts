@@ -1,6 +1,6 @@
 /**
  * The only logging contract core knows about. The CLI adapts Pino to it; a Worker can pass
- * its own. Core never imports a logging library — see docs/ARCHITECTURE.md.
+ * its own. Core never imports a logging library — see docs/dev/ARCHITECTURE.md.
  */
 export interface Logger {
   debug(event: object, message?: string): void

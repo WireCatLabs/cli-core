@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { brokenKeyring, memoryKeyring } from "./keyring.js"
+import { brokenKeyring, memoryKeyring, systemKeyring } from "./keyring.js"
 
 describe("memoryKeyring", () => {
   it("stores, reads and deletes per service and account", () => {
@@ -32,5 +32,13 @@ describe("brokenKeyring", () => {
     expect(() => keyring.get("max-cli", "default")).toThrow(/no secret service/)
     expect(() => keyring.set("max-cli", "default", "x")).toThrow()
     expect(() => keyring.delete("max-cli", "default")).toThrow()
+  })
+})
+
+describe("systemKeyring", () => {
+  it("cannot reach the real keychain from a test", () => {
+    expect(() => systemKeyring.get("cli-core-test", "default")).toThrow(/real OS keyring/)
+    expect(() => systemKeyring.set("cli-core-test", "default", "x")).toThrow(/real OS keyring/)
+    expect(() => systemKeyring.delete("cli-core-test", "default")).toThrow(/real OS keyring/)
   })
 })

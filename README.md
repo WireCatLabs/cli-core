@@ -7,8 +7,9 @@ keyring behind a testable seam, and injectable clocks.
 Extracted from [`brazecli`](https://github.com/leemour/brazecli), where each piece earned its
 shape, and shared with [`max-cli`](https://github.com/leemour/max-cli).
 
-**Status: 0.5.0.** Published on npm, used by `max-cli`. Both extraction steps have landed: the
-files that move unchanged, and the ones that needed a parameter threaded through. 75 tests.
+Published on npm and used by `max-cli`, `cli-messaging`, `tg-cli` and `brazecli`. What changed in
+each version is in [`CHANGELOG.md`](CHANGELOG.md); how the package is put together and released is in
+[`docs/dev/`](docs/dev/ARCHITECTURE.md).
 
 ## The rule this package exists to keep
 
@@ -96,9 +97,10 @@ a throwaway config directory silently overwrites the real secret unless you pass
 And a secret should never be handed to a logger in the first place — redaction by field name is the
 second line of defence, not the first.
 
-**Everything the environment knows is passed in.** No `process.env` reads, no config file paths,
-no ambient clock. That is what makes a timeout test finish instantly and a keyring test incapable
-of reaching a real keychain.
+**Everything the environment knows can be passed in**: the clock, the sleep, the keyring, `env`,
+`fetch` and the streams. The real ones are only defaults — `Credentials` without a `keyring` uses the
+system keychain, `resolvePaths` without `env` reads `process.env`. Passing them is what makes a
+timeout test finish instantly and a keyring test incapable of reaching a real keychain.
 
 **Generating an API catalog is `@leemour/cli-core/codegen`**, a build-time tool. It reads a
 format-neutral `ApiModel` — operations with a transport binding (`http` method and path, or `rpc`
@@ -180,9 +182,12 @@ pnpm typecheck
 pnpm build
 ```
 
+The rest of the checks, and what each is for, are in [`docs/dev/TESTING.md`](docs/dev/TESTING.md).
+
 ## Releasing
 
-Raise `version` in `package.json` through a pull request, merge it, then on `main`:
+Raise `version` in `package.json` and date the `## Unreleased` section of
+[`CHANGELOG.md`](CHANGELOG.md) as that version, through a pull request; merge it, then on `main`:
 
 ```sh
 bin/release
@@ -190,7 +195,7 @@ bin/release
 
 It refuses a dirty tree, a branch other than `main` and a `main` that is not pushed. When npm already
 has the version, or a higher one, it commits the next free version to `main` — the next minor for
-`x.y.0`, the next patch otherwise — and publishes that. Then it starts
+`x.y.0`, the next patch otherwise — renames the changelog heading to match, and publishes that. Then it starts
 [`release.yml`](.github/workflows/release.yml) and follows it. The workflow runs every check,
 publishes through npm's [trusted publishing](https://docs.npmjs.com/trusted-publishers/) — no npm
 token in GitHub, and npm attaches provenance — and tags `v<version>` only once npm shows the new version.

@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 # Publishes the version in package.json and tags it. Run on a clean `main`. When npm already has that
-# version, or a higher one, it commits the next free version to `main` and publishes that.
+# version, or a higher one, it commits the next free version to `main`, with the CHANGELOG heading
+# renamed to match, and publishes that.
 #
 #   bin/release           # publishes from GitHub Actions (.github/workflows/release.yml)
 #   bin/release --local   # publishes from this machine with the npm token from the keyring
@@ -28,6 +29,12 @@ git merge -q --ff-only origin/main
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "main is ahead of origin/main — push first" >&2; exit 1; }
 
 version=$(node -p 'require("./package.json").version')
+# Only the top section: the rename below must never touch one that is already published.
+top=$(grep -m1 '^## ' CHANGELOG.md || true)
+case "$top" in
+  "## $version — "*) ;;
+  *) echo "CHANGELOG.md's top section is \"$top\" — date it as $version first" >&2; exit 1 ;;
+esac
 # `npm view` rather than the registry document, which a CDN serves stale for minutes.
 published() {
   npm view "@leemour/cli-core@$version" version --prefer-online >/dev/null 2>&1
@@ -41,8 +48,13 @@ if [ "$next" != "$version" ]; then
   if published; then why="$version is already on npm"; else why="$version is not above npm's latest $latest"; fi
   echo "$why — publishing $next instead"
   node -e 'const fs = require("fs"); const [o, n] = process.argv.slice(1)
-    const text = fs.readFileSync("package.json", "utf8")
-    fs.writeFileSync("package.json", text.replace(`"version": "${o}"`, `"version": "${n}"`))' "$version" "$next"
+    const swaps = [["package.json", `"version": "${o}"`, `"version": "${n}"`], ["CHANGELOG.md", `\n## ${o} — `, `\n## ${n} — `]]
+    const texts = swaps.map(([file, from]) => {
+      const text = fs.readFileSync(file, "utf8")
+      if (!text.includes(from)) { console.error(`${file} has no ${from.trim()}`); process.exit(1) }
+      return text
+    })
+    swaps.forEach(([file, from, to], i) => fs.writeFileSync(file, texts[i].replace(from, to)))' "$version" "$next"
   git commit -q -am "chore: release $next" -m "bin/release: $why."
   git push -q origin main || {
     git reset -q --hard HEAD~1
