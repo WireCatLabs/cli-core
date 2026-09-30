@@ -48,6 +48,7 @@ streams.stderr // []
 | `/completion` | shell completion over the registry: `suggest`, `formatSuggestions` — see below |
 | `/update` | keeping an install current: `installerOf`, `updateCommand`, `latestVersion`, `mayNotify`, `updateNotice`, `runUpdate` — see below |
 | `/codegen` | build time: an official API description → types, Valibot schemas, an operation manifest and a coverage page — see below |
+| `/release` | release time: `releaseCheck` and the checks it runs — changelog shape, links, package contents, version in step — see below |
 
 **Nothing in the root export is HTTP.** Status classification, `Retry-After` parsing and the fetch
 seam live in `@leemour/cli-core/http`, so a CLI that speaks a socket never depends on a stack it
@@ -142,6 +143,30 @@ the command line, asks npm at most once a day through a state file the CLI names
 sentence or `undefined` — it never throws. `runUpdate` starts the package manager with its output on
 stderr (`spawnPlan` is the Windows `.cmd` rule). Nothing here updates or prints by itself — a CLI
 holding somebody's credentials must not change itself unasked.
+
+**The release checks are `@leemour/cli-core/release`** — everything about a release that a program
+can decide. A check is `{ name, run }`, and `run` returns the problems it found, one line each; an
+empty list is a pass. `releaseCheck(checks, { version, log })` runs them all, even after a failure,
+prints `ok` or `FAIL` per check and returns how many failed — the caller exits. The checks every CLI
+shares: `command(root, "pnpm", "lint")` for anything that passes by exiting 0, `notOnNpm`,
+`packContents` against a list of what may ship, `changelogProblems` for the fixed headings and the
+dated top section, `docsProblems` for dead links and anchors and the rules of the pages a user reads,
+and `versionScript` — the whole of a `version:check` / `version:sync` script. Each CLI passes its
+own headings, id prefixes and pages; the checks that belong to one messenger stay in that CLI.
+
+```ts
+import { command, notOnNpm, packageVersion, releaseCheck } from "@leemour/cli-core/release"
+
+const version = packageVersion(root)
+const failed = releaseCheck(
+  [
+    { name: "version not on npm", run: notOnNpm(root, "@leemour/tg-cli", version) },
+    { name: "lint", run: command(root, "pnpm", "lint") },
+  ],
+  { version, log: console.log },
+)
+process.exit(failed === 0 ? 0 : 1)
+```
 
 ## Where secrets actually go, per platform
 
