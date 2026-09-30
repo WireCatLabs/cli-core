@@ -7,7 +7,16 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
-## Unreleased
+## 0.9.0 — 30.09.2026
+
+### Added
+
+- **`@leemour/cli-core/release` holds the release checks that max-cli and tg-cli share.** A runner,
+  `releaseCheck`, that runs every check and prints one `ok` or `FAIL` line each, and the checks a
+  program can decide: a command that must exit 0, the version not yet on npm, the package contents,
+  the changelog's shape, links and anchors in the documents, and the version in `package.json` and
+  `src/version.ts` in step. Until now each CLI kept its own copy, and the copies had drifted apart.
+  Each caller passes its own changelog headings, id prefixes and user pages.
 
 ## 0.8.0 — 27.09.2026
 
