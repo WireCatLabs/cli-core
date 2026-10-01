@@ -53,6 +53,32 @@ const refsIn = (node: SchemaNode, found: string[] = []): string[] => {
   return found
 }
 
+const mergedRefs = (node: SchemaNode): string[] => {
+  if (node.type === "ref") return [node.ref]
+  if (node.type === "allOf") return node.of.flatMap(mergedRefs)
+  return []
+}
+
+/** Only the references an allOf merge follows: a property or an array item may point back legitimately. */
+const mergeCycles = (model: ApiModel): string[] => {
+  const byId = new Map(model.schemas.map((schema) => [schema.id, schema.schema]))
+  const done = new Set<string>()
+  const problems: string[] = []
+  const visit = (id: string, path: string[]): void => {
+    const at = path.indexOf(id)
+    if (at >= 0) {
+      problems.push(`schema "${id}" includes itself through allOf: ${[...path.slice(at), id].join(" → ")}`)
+      return
+    }
+    const node = byId.get(id)
+    if (done.has(id) || !node) return
+    for (const ref of mergedRefs(node)) visit(ref, [...path, id])
+    done.add(id)
+  }
+  for (const schema of model.schemas) visit(schema.id, [])
+  return problems
+}
+
 /** Everything that would otherwise make an operation vanish or turn into a guess. */
 export const validateModel = (model: ApiModel): void => {
   const problems: string[] = []
@@ -94,6 +120,7 @@ export const validateModel = (model: ApiModel): void => {
     unresolved(`operation "${operation.id}" request`, operation.requestBody?.schema)
     unresolved(`operation "${operation.id}" response`, operation.response?.schema)
   }
+  problems.push(...mergeCycles(model))
   if (problems.length > 0) throw new CodegenError(problems)
 }
 

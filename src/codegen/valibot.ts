@@ -50,7 +50,9 @@ class SchemaWriter {
         const helper = node.format === "int64" ? "int64" : "integer"
         this.helpers.add(helper)
         const call = `${helper}(${range(node)})`
-        return node.enum ? piped(call, [`v.picklist(${JSON.stringify(node.enum)})`]) : call
+        if (!node.enum) return call
+        const values = helper === "int64" ? node.enum.map(String) : node.enum
+        return piped(call, [`v.picklist(${JSON.stringify(values)})`])
       }
       case "number":
         this.helpers.add("number")
