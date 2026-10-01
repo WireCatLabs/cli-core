@@ -31,6 +31,8 @@ const model = (changes: Partial<ApiModel> = {}): ApiModel => ({
           username: { type: "string", nullable: true, pattern: "^[a-z]+$" },
           age: { type: "integer", format: "int32", minimum: 0 },
           tags: { type: "array", items: { type: "string" }, uniqueItems: true },
+          level: { type: "integer", format: "int32", enum: [1, 2] },
+          priority: { type: "integer", format: "int64", enum: [1, 2] },
         },
         required: ["user_id", "name"],
       },
@@ -189,6 +191,42 @@ describe("generate", () => {
     ])
   })
 
+  it("refuses an allOf that reaches its own schema, naming it, instead of recursing forever", () => {
+    const base = model()
+    const looped = model({
+      schemas: [
+        ...base.schemas,
+        {
+          id: "Node",
+          schema: {
+            type: "allOf",
+            of: [
+              { type: "ref", ref: "Parent" },
+              {
+                type: "object",
+                properties: { children: { type: "array", items: { type: "ref", ref: "Node" } } },
+                required: [],
+              },
+            ],
+          },
+        },
+        {
+          id: "Parent",
+          schema: {
+            type: "allOf",
+            of: [
+              { type: "ref", ref: "Node" },
+              { type: "object", properties: {}, required: [] },
+            ],
+          },
+        },
+      ],
+    })
+    expect(problemsOf(() => generate(looped, generators, { banner, overrides }))).toEqual([
+      'schema "Node" includes itself through allOf: Node → Parent → Node',
+    ])
+  })
+
   it("writes the same bytes every time, under a banner with no date in it", () => {
     const once = generate(model(), generators, { banner, overrides })
     const twice = generate(model(), generators, { banner, overrides })
@@ -270,6 +308,15 @@ describe("generated schemas", () => {
     expect(parse("User", { ...valid, age: -1 }).success).toBe(false)
     expect(parse("User", { ...valid, tags: ["a", "a"] }).success).toBe(false)
     expect(parse("ChatType", "channel").success).toBe(false)
+  })
+
+  it("matches an integer enum by value, and a 64-bit one by its decimal string", () => {
+    const valid = { user_id: 1, name: "ann" }
+    expect(parse("User", { ...valid, level: 2 }).success).toBe(true)
+    expect(parse("User", { ...valid, level: 3 }).success).toBe(false)
+    const result = parse("User", { ...valid, priority: lossless("2") })
+    expect(result.success && result.output).toMatchObject({ priority: "2" })
+    expect(parse("User", { ...valid, priority: lossless("3") }).success).toBe(false)
   })
 
   it("lets fields it has never seen through", () => {
