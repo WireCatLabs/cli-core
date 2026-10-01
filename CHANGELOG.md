@@ -15,8 +15,8 @@ Every entry says what changed as a caller sees it, why, and what to watch for �
   machine — a file, the keyring — and never the service. `CommandInfo.local` carries it, and
   `mutates` stays true, so a caller that tells reads from writes still sees a write.
 - **`commandsPage` text takes `mutatesLocal`**, the line shown under such a command instead of
-  `mutates`. Without it a local write gets no line. Before this, `config set` was labelled as
-  changing Telegram or MAX.
+  `mutates`. Without it a local write gets no line. Before this, tg-cli labelled `config set` as
+  changing Telegram.
 
 ## 0.14.0 — 01.10.2026
 
