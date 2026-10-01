@@ -4,6 +4,9 @@
 were read from each repository's `package.json` on `origin/main` that day; they move with every release, so check
 them again before relying on them.
 
+**Correction 2026-10-01:** it describes 0.9.0, which added `/release`. The consumer pins below were
+read again that day.
+
 `cli-core` is the part of a command line tool that is not about any one service: the two output
 streams, the renderer, the error model and exit codes, the keyring and credentials, config and
 paths, clocks, retry, and — behind their own entry points — HTTP, the command registry, completion,
@@ -24,6 +27,7 @@ architecture proposal ([private repository](https://github.com/leemour/max-cli-p
 | `/update` | which installer put the CLI there, the daily notice, running the update | `config` (the state file), `/http`'s `FetchLike` |
 | `/codegen` | build time: `ApiModel` → types, Valibot schemas, manifest, coverage page | nothing at run time |
 | `/codegen/runtime` | the number helpers generated schemas import | `valibot` |
+| `/release` | release checks a CLI runs before it publishes: `releaseCheck` and the checks it runs (changelog shape, document links, versions in step, package contents) | Node built-ins only |
 | `/testing` | `captureStreams`, `memoryKeyring`, `brokenKeyring`, `fakeClock` | the root |
 
 Each is a separate `exports` entry in [`package.json`](../../package.json), built from
@@ -49,10 +53,13 @@ adapter and a renderer; what is written, and where, is the host's call.
 
 | Repository | Pins | Subpaths used |
 |---|---|---|
-| [max-cli](https://github.com/leemour/max-cli) | `0.8.0` | root, `/commands`, `/codegen`, `/codegen/runtime`, `/http`, `/update`, `/completion` |
-| [cli-messaging](https://github.com/leemour/cli-messaging) | `0.7.0` | root, `/commands`, `/completion`, `/update` |
-| [tg-cli](https://github.com/leemour/tg-cli) | `0.7.0` | root, `/commands`, `/http`, `/update` |
+| [max-cli](https://github.com/leemour/max-cli) | `0.9.0` | root, `/commands`, `/codegen`, `/codegen/runtime`, `/http`, `/release`, `/update`, `/completion` |
+| [cli-messaging](https://github.com/leemour/cli-messaging) | `0.9.0` | root, `/commands`, `/completion`, `/update` |
+| [tg-cli](https://github.com/leemour/tg-cli) | `0.9.0` | root, `/commands`, `/http`, `/release`, `/update` |
 | [brazecli](https://github.com/leemour/brazecli) | `^0.6.0` | root, `/commands`, `/completion`, `/http`, `/update` |
+
+**Correction 2026-10-01:** the pins above were `0.8.0`, `0.7.0` and `0.7.0` on 2026-09-29, and
+max-cli and tg-cli did not list `/release`. brazecli still pins `^0.6.0`.
 
 All four are exact versions in effect: a caret on `0.x` does not cross a minor (`^0.6.0` never picks up
 0.7.0). **A release reaches nobody until each consumer bumps its pin.**
@@ -62,6 +69,10 @@ pins 0.8.0 while cli-messaging pins 0.7.0, installs both — they are side by si
 `node_modules/.pnpm` today. tg-cli pins the same 0.7.0 and gets one. The types still line up
 (`CliError` has no private members), but `isCliError()` is an `instanceof` check, so a `CliError` made
 by one copy is not recognised by the other. Bump cli-messaging together with the CLIs.
+
+**Correction 2026-10-01:** there is one copy today. cli-messaging, max-cli and tg-cli all pin
+0.9.0, and so do the cli-messaging versions the two CLIs pin (0.79.0 and 0.82.0). The rule to bump
+them together stands.
 
 ## How a change is published and picked up
 
