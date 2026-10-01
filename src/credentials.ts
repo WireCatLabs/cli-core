@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { writeSecurely } from "./config.js"
+import { CliError } from "./errors.js"
 import { type KeyringStore, systemKeyring } from "./keyring.js"
 
 export const CREDENTIAL_STORAGE = ["auto", "keyring", "file"] as const
@@ -81,7 +82,7 @@ export class Credentials {
       if (fromKeyring) return { secret: fromKeyring, source: "keyring" }
     }
 
-    const fromFile = this.#readFile()[account]?.secret
+    const fromFile = this.#readFile()?.[account]?.secret
     return fromFile ? { secret: fromFile, source: "file" } : undefined
   }
 
@@ -95,6 +96,13 @@ export class Credentials {
     }
 
     const store = this.#readFile()
+    if (!store) {
+      throw new CliError(
+        "configuration_error",
+        `${this.#path()} cannot be read as a credentials file; storing now would replace every secret in it. ` +
+          "Fix the file or move it aside, then try again.",
+      )
+    }
     store[account] = { secret }
     this.#writeFile(store)
     return "file"
@@ -108,7 +116,7 @@ export class Credentials {
     }
 
     const store = this.#readFile()
-    if (store[account] !== undefined) {
+    if (store?.[account] !== undefined) {
       delete store[account]
       this.#writeFile(store)
       removed.push("file")
@@ -121,11 +129,21 @@ export class Credentials {
     return join(this.#configDir, this.#fileName)
   }
 
-  #readFile(): FileStore {
+  /** `undefined` when the file exists but is not a store: writing would replace what it holds. */
+  #readFile(): FileStore | undefined {
+    let text: string
     try {
-      return JSON.parse(readFileSync(this.#path(), "utf8")) as FileStore
+      text = readFileSync(this.#path(), "utf8")
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return {}
+      return undefined
+    }
+    try {
+      const parsed: unknown = JSON.parse(text)
+      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as FileStore) : undefined
     } catch {
-      return {}
+      // The parser's message quotes the file, and the file holds secrets.
+      return undefined
     }
   }
 
