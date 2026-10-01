@@ -7,6 +7,16 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## Unreleased
+
+### Added
+
+- **The shared pre-push hook runs `parity:check` after `typecheck`**, when the project has that
+  script. tg-cli and max-cli check their commands and pages against cli-messaging's parity manifest
+  before a push instead of a minute later in CI. A project without the script sees no change. Why in
+  one command: the check builds into the same `dist/` that typecheck writes, and two `tsc` runs side
+  by side race on its state file.
+
 ## 0.12.0 — 01.10.2026
 
 ### Changed — may break callers

@@ -29,4 +29,6 @@ pre-push:
   parallel: true
   commands:
     typecheck:
-      run: pnpm typecheck
+      # A messaging CLI's parity check builds into the same dist/ as typecheck, so it runs here, after
+      # it, rather than as a command of its own beside it. A project without the script skips it.
+      run: pnpm typecheck && pnpm -s run --if-present parity:check
