@@ -132,6 +132,18 @@ describe("hidden commands", () => {
   })
 })
 
+const COMMON_TEXT = {
+  banner: "",
+  title: "Commands",
+  intro: "",
+  globalHeading: "Global options",
+  globalIntro: "",
+  mutates: "",
+  exitHeading: "Exit codes",
+  exitIntro: "",
+  outro: "",
+}
+
 describe("commandsPage", () => {
   const page = () =>
     commandsPage({
@@ -164,6 +176,25 @@ describe("commandsPage", () => {
     expect(text).toContain("### `tool messages send`\n\n\n\n**Changes something.**")
     expect(text).not.toContain("--debug-wire")
     expect(text.endsWith("| `1` | anything else |\n")).toBe(true)
+  })
+
+  it("labels a write that changes only this machine with its own line, or none", () => {
+    const root = new Command("tool")
+    annotate(root.command("send").description("send"), { mutates: true })
+    annotate(root.command("save").description("save"), { mutates: true, local: true })
+    const text = (mutatesLocal?: string) =>
+      commandsPage({
+        cli: "tool",
+        commands: describeProgram(root),
+        options: [],
+        labels: COMMANDS_PAGE_LABELS.en,
+        text: { ...COMMON_TEXT, mutates: "**Changes the service.**", ...(mutatesLocal ? { mutatesLocal } : {}) },
+      })
+
+    expect(text("**Changes this machine only.**")).toContain("## `tool send`\n\nsend\n\n**Changes the service.**")
+    expect(text("**Changes this machine only.**")).toContain("## `tool save`\n\nsave\n\n**Changes this machine only.**")
+    expect(text()).toContain("## `tool save`\n\nsave\n\n```sh")
+    expect(describeProgram(root)[1]).toMatchObject({ mutates: true, local: true })
   })
 
   it("keeps a pipe or a tilde from breaking its row, and lists the allowed values", () => {

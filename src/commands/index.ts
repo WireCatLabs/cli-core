@@ -18,8 +18,10 @@ export interface CommandMeta {
   origin?: Origin
   /** The catalog operation a generated command was made from. */
   operationId?: string
-  /** True when running the command changes something outside this machine. */
+  /** True when running the command changes something: a write, wherever it lands. */
   mutates?: boolean
+  /** With `mutates`: what it changes is only on this machine — a file, the keyring — never the service. */
+  local?: boolean
   state?: CommandState
   examples?: readonly string[]
 }
@@ -62,6 +64,7 @@ export interface CommandInfo {
   origin: Origin
   operationId?: string
   mutates?: boolean
+  local?: boolean
   state?: CommandState
   examples?: readonly string[]
   arguments: readonly ArgumentInfo[]
