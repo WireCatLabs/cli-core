@@ -5,37 +5,15 @@ on:
     branches: [main]
   pull_request:
 
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test:coverage
-      - run: pnpm docs:check
-      - run: pnpm build
+permissions:
+  contents: read
 
-  bun:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - uses: oven-sh/setup-bun@v2
-      - run: pnpm install --frozen-lockfile
-      # The second runtime, actually executed. A type check proves nothing about a runtime that
-      # does not have the module — node:sqlite is absent in Bun and bun:sqlite is absent in Node.
-      - run: pnpm smoke:bun
+jobs:
+  ci:
+    uses: ./.github/workflows/node-ci.yml
+    with:
+      checks: |
+        pnpm docs:check
 
   version:
     if: github.event_name == 'pull_request'
@@ -58,19 +36,3 @@ jobs:
           [ "$next" != "$pr" ] || exit 0
           echo "::warning file=package.json::version $pr is not above both main ($main) and npm's latest ($latest)" \
             "— bin/release will publish it as $next"
-
-  secrets:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # The whole history: a secret removed in a later commit is still a leaked secret.
-          fetch-depth: 0
-      - name: gitleaks
-        env:
-          GITLEAKS_VERSION: 8.30.1
-        # The binary, not gitleaks-action: the action asks an organisation account for a licence
-        # key, and the tool itself is MIT and needs none.
-        run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
-          ./gitleaks git --no-banner --redact --exit-code 1 .
