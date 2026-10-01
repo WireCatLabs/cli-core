@@ -7,6 +7,22 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## Unreleased
+
+### Fixed
+
+- **`Credentials.write` refuses to replace a credentials file it cannot parse.** It used to read a
+  broken file as empty, and the next write replaced it, losing every other secret stored in it. Now
+  it throws a `CliError` with code `configuration_error` that names the file and never quotes it.
+  `read` still treats such a file as holding nothing, and `remove` leaves it alone.
+  What to watch for: `write` can now throw when the keyring is unavailable and the file is broken —
+  the user fixes the file or moves it aside. An empty file counts as broken.
+- **A generated Valibot schema accepts a 64-bit integer enum.** The values are matched as the
+  decimal strings a 64-bit integer becomes, as the generated type already said; before, no input
+  passed.
+- **Generation stops, naming the schema, when an `allOf` reaches its own schema**, directly or
+  through others. It used to overflow the stack.
+
 ## 0.9.0 — 30.09.2026
 
 ### Added
