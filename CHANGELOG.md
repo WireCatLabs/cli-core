@@ -24,6 +24,16 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 - **The update state file keeps a second field, `skillHintAt`,** and `writeUpdateState` now merges
   into the file as it is when written, instead of replacing it, so the two daily notices do not erase
   each other. It accepts a partial state; `readNoticeState` reads the file whether or not npm was asked.
+- **`commandsPage` in `@leemour/cli-core/commands` writes a CLI's whole `docs/commands.md`** from
+  the command tree: every command at any depth, its usage, arguments and options with defaults, and
+  the exit codes. The table labels come in English and Russian (`COMMANDS_PAGE_LABELS`); the CLI
+  passes its own title, introduction and closing words. It is max-cli's generator, moved here so
+  tg-cli gets the same page from the same code; max-cli's page comes out byte for byte the same.
+- **`structureProblems` in `@leemour/cli-core/release` checks a docs folder against its
+  `meta.json`**, the sidebar the docs portal reads: every listed page exists, every page is listed
+  once, the required pages are there (`REQUIRED_PAGES`), `meta.json` holds only Fumadocs' keys,
+  and each page has exactly one `# ` heading, first. `README.md` in the folder is left out â€” it is
+  the contributors' index.
 
 ### Fixed
 

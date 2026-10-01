@@ -1,6 +1,14 @@
 import { Command, Option } from "commander"
 import { describe, expect, it } from "vitest"
-import { annotate, describeOptions, describeProgram, flatten, metaOf } from "./index.js"
+import {
+  annotate,
+  COMMANDS_PAGE_LABELS,
+  commandsPage,
+  describeOptions,
+  describeProgram,
+  flatten,
+  metaOf,
+} from "./index.js"
 
 const program = (): Command => {
   const root = new Command("tool").description("a tool").option("--json", "print JSON")
@@ -121,5 +129,63 @@ describe("hidden commands", () => {
     root.command("shown")
     root.addCommand(new Command("secret"), { hidden: true })
     expect(describeProgram(root).map(({ name }) => name)).toEqual(["shown"])
+  })
+})
+
+describe("commandsPage", () => {
+  const page = () =>
+    commandsPage({
+      cli: "tool",
+      commands: describeProgram(program()),
+      options: describeOptions(program()),
+      labels: COMMANDS_PAGE_LABELS.en,
+      text: {
+        banner: "<!-- generated -->",
+        title: "Commands",
+        intro: "Every command.",
+        globalHeading: "Global options",
+        globalIntro: "On any command.",
+        mutates: "**Changes something.**",
+        exitHeading: "Exit codes",
+        exitIntro: "Branch on the code.",
+        outro: "",
+      },
+    })
+
+  it("writes every command at its depth, with usage, arguments, options and defaults", () => {
+    const text = page()
+    expect(text.startsWith("<!-- generated -->\n\n# Commands\n\nEvery command.\n\n## Global options")).toBe(true)
+    expect(text).toContain("| `--json` | print JSON |")
+    expect(text).toContain(
+      "### `tool messages list`\n\nlist the messages of one chat\n\n```sh\ntool messages list <chat> [options]\n```",
+    )
+    expect(text).toContain("| `chat` | required | chat id or name |")
+    expect(text).toContain("| `--limit <n>` | how many Default: `20`. |")
+    expect(text).toContain("### `tool messages send`\n\n\n\n**Changes something.**")
+    expect(text).not.toContain("--debug-wire")
+    expect(text.endsWith("| `1` | anything else |\n")).toBe(true)
+  })
+
+  it("keeps a pipe in a flag from splitting its row", () => {
+    expect(page()).toContain("| `--sort <order>` |")
+    const piped = commandsPage({
+      cli: "t",
+      commands: [],
+      options: [{ flags: "--order <recent|name>", description: "a|b", takesValue: true, mandatory: false }],
+      labels: COMMANDS_PAGE_LABELS.ru,
+      text: {
+        banner: "",
+        title: "Команды",
+        intro: "",
+        globalHeading: "Общие опции",
+        globalIntro: "",
+        mutates: "",
+        exitHeading: "Коды",
+        exitIntro: "",
+        outro: "",
+      },
+    })
+    expect(piped).toContain("| `--order <recent\\|name>` | a\\|b |")
+    expect(piped).toContain("| `0` | получилось |")
   })
 })
