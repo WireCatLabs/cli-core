@@ -15,9 +15,13 @@
   "packageManager": "pnpm@11.20.0",
   "files": [
     "dist",
+    "config",
     "README.md",
     "LICENSE"
   ],
+  "bin": {
+    "cli-dev": "dist/dev/bin.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -58,7 +62,12 @@
     "./skill": {
       "types": "./dist/skill/index.d.ts",
       "default": "./dist/skill/index.js"
-    }
+    },
+    "./biome": "./config/biome.base.json",
+    "./tsconfig.base.json": "./config/tsconfig.base.json",
+    "./tsconfig.test.json": "./config/tsconfig.test.json",
+    "./tsconfig.scripts.json": "./config/tsconfig.scripts.json",
+    "./lefthook.yml": "./config/lefthook.yml"
   },
   "scripts": {
     "build": "tsc --build",
