@@ -24,16 +24,21 @@ beforeEach(() => {
   skill = pathToFileURL(join(dir, "SKILL.md"))
 })
 
-const run = async (args: string[]) => {
+const run = async (args: string[], more: Record<string, URL> = {}) => {
   const streams = captureStreams()
   const json = args.includes("--json")
   const program = new Command().option("--json").exitOverride()
   program.addCommand(
-    skillCommand(app, skill, () => ({
-      renderer: createRenderer({ format: json ? "json" : "pretty", color: false, streams }),
-      streams,
-      env,
-    })),
+    skillCommand(
+      app,
+      skill,
+      () => ({
+        renderer: createRenderer({ format: json ? "json" : "pretty", color: false, streams }),
+        streams,
+        env,
+      }),
+      more,
+    ),
   )
   await program.parseAsync(args, { from: "user" })
   return streams
@@ -91,6 +96,22 @@ describe("skill show", () => {
   it("answers JSON when asked for it", async () => {
     const { stdout } = await run(["--json", "skill", "show"])
     expect(JSON.parse(stdout.join(""))).toEqual({ name: "tg-cli", content: SKILL.trimEnd() })
+  })
+
+  it("**prints a skill a library ships by name**, with this CLI's command in it, and refuses an unknown name", async () => {
+    writeFileSync(
+      join(dir, "link.md"),
+      "---\nname: link-conversations\n---\n\nRun `{{command}} conversations batches next`.\n",
+    )
+    const more = { "link-conversations": pathToFileURL(join(dir, "link.md")) }
+
+    const { stdout } = await run(["skill", "show", "link-conversations"], more)
+    expect(stdout.join("")).toContain("Run `tg conversations batches next`.")
+    expect((await run(["skill", "show"], more)).stdout).toEqual([SKILL.trimEnd()])
+    await expect(run(["skill", "show", "nope"], more)).rejects.toThrow(
+      'no skill "nope" — there are: link-conversations',
+    )
+    await expect(run(["skill", "show", "nope"])).rejects.toThrow()
   })
 })
 

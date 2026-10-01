@@ -118,26 +118,47 @@ export const installSkill = (
 /** What the command writes to and where home is, for this invocation — the host's own output resolution. */
 export type SkillEnvironment = (command: Command) => { renderer: Renderer; streams: Streams; env?: Env }
 
-export const skillCommand = (app: SkillApp, skill: URL, environment: SkillEnvironment): Command => {
+/**
+ * `more`: skills a library ships for every CLI built on it, by name — `skill show <name>` prints one with
+ * `{{command}}` turned into this CLI's command. They are printed, not installed: two CLIs would install
+ * the same name.
+ */
+export const skillCommand = (
+  app: SkillApp,
+  skill: URL,
+  environment: SkillEnvironment,
+  more: Readonly<Record<string, URL>> = {},
+): Command => {
   const command = new Command("skill").description("the instructions an agent is given for this tool")
   const machine = (self: Command) => {
     const { json, jsonl } = self.optsWithGlobals<{ json?: boolean; jsonl?: boolean }>()
     return json === true || jsonl === true
   }
 
-  command
+  const named = Object.keys(more)
+  const show = command
     .command("show")
     .description(
       `print SKILL.md — \`${app.command} skill install\` puts it where Claude Code, Codex and Gemini CLI look for it`,
     )
-    .action(function (this: Command) {
-      const { renderer, streams } = environment(this)
-      const content = readFileSync(skill, "utf8").trimEnd()
-      // The file itself even into a pipe: saving it is a redirect, and a redirect is where every
-      // other command switches to JSON. Asked for by name, it is JSON like the rest.
-      if (machine(this)) renderer.result({ name: app.appName, content })
-      else streams.data(content)
-    })
+  if (named.length > 0) show.argument("[name]", `one of the skills shipped for a task: ${named.join(", ")}`)
+  show.action(function (this: Command, given: unknown) {
+    // Without a declared argument Commander passes the options here, not a name.
+    const name = typeof given === "string" ? given : undefined
+    const { renderer, streams } = environment(this)
+    const source = name === undefined ? skill : more[name]
+    if (!source) {
+      throw new CliError("validation_error", `no skill "${name}" — there are: ${named.join(", ")}`)
+    }
+    const content =
+      name === undefined
+        ? readFileSync(source, "utf8").trimEnd()
+        : readFileSync(source, "utf8").trimEnd().replaceAll("{{command}}", app.command)
+    // The file itself even into a pipe: saving it is a redirect, and a redirect is where every
+    // other command switches to JSON. Asked for by name, it is JSON like the rest.
+    if (machine(this)) renderer.result({ name: name ?? app.appName, content })
+    else streams.data(content)
+  })
 
   command
     .command("install")
