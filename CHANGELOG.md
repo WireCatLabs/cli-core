@@ -7,6 +7,17 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## 0.15.0 — 01.10.2026
+
+### Added
+
+- **`annotate(command, { mutates: true, local: true })`** marks a write that changes only this
+  machine — a file, the keyring — and never the service. `CommandInfo.local` carries it, and
+  `mutates` stays true, so a caller that tells reads from writes still sees a write.
+- **`commandsPage` text takes `mutatesLocal`**, the line shown under such a command instead of
+  `mutates`. Without it a local write gets no line. Before this, `config set` was labelled as
+  changing Telegram or MAX.
+
 ## 0.14.0 — 01.10.2026
 
 ### Added
