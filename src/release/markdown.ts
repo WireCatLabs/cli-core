@@ -75,7 +75,7 @@ export const slug = (heading: string) =>
     .replace(/[^\p{L}\p{M}\p{N}\-_ ]/gu, "")
     .replace(/ /g, "-")
 
-const withoutCode = (text: string) =>
+export const withoutCode = (text: string) =>
   text
     .replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, (block) => block.replace(/[^\n]/g, " "))
     .replace(/`[^`\n]*`/g, (span) => " ".repeat(span.length))

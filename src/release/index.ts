@@ -17,6 +17,7 @@ export {
   markdownFiles,
   slug,
 } from "./markdown.js"
+export { REQUIRED_PAGES, type StructureRules, structureProblems } from "./structure.js"
 
 export type Check = { name: string; run: () => string[] }
 

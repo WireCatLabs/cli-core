@@ -147,3 +147,11 @@ const describeOption = (option: Option): OptionInfo => {
     ...(implied ? { implies: implied } : {}),
   }
 }
+
+export {
+  COMMANDS_PAGE_LABELS,
+  type CommandsPage,
+  type CommandsPageLabels,
+  type CommandsPageText,
+  commandsPage,
+} from "./page.js"

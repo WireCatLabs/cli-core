@@ -12,6 +12,7 @@ import {
   packProblems,
   releaseCheck,
   slug,
+  structureProblems,
   versionScript,
 } from "./index.js"
 
@@ -245,5 +246,54 @@ describe("versionScript", () => {
       code: 2,
       message: 'package.json has no usable "version" (got undefined)',
     })
+  })
+})
+
+describe("structureProblems", () => {
+  let root: string
+  const write = (name: string, text: string) => {
+    mkdirSync(dirname(join(root, name)), { recursive: true })
+    writeFileSync(join(root, name), text)
+  }
+  const meta = (value: unknown) => write("docs/meta.json", JSON.stringify(value))
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "structure-"))
+    write("docs/README.md", "# For contributors\n")
+    write("docs/index.md", "# tool\n\n```sh\n# a comment, not a heading\n```\n")
+    write("docs/usage.md", "<!-- generated -->\n\n# Usage\n\n## Reading\n")
+  })
+  afterEach(() => rmSync(root, { recursive: true, force: true }))
+
+  it("passes listed pages, separators, links and the changelog from the root", () => {
+    meta({ title: "tool", pages: ["---Start---", "index", "usage", "[GitHub](https://github.com)", "changelog"] })
+    expect(structureProblems(root, { required: ["index"] })).toEqual([])
+  })
+
+  it("names a missing meta.json, and one that is not JSON", () => {
+    expect(structureProblems(root)).toEqual(["docs/meta.json: missing — it lists the pages in sidebar order"])
+    write("docs/meta.json", "{")
+    expect(structureProblems(root)[0]).toMatch(/^docs\/meta\.json: not JSON/)
+  })
+
+  it("names a listed page with no file, an unlisted file, a duplicate, a required page and a foreign key", () => {
+    meta({ title: "tool", lang: "en", pages: ["index", "index", "ghost"] })
+    expect(structureProblems(root, { required: ["index", "security"] })).toEqual([
+      'docs/meta.json: "lang" is not a Fumadocs key',
+      'docs/meta.json: "index" is listed twice',
+      'docs/meta.json: "ghost" — no docs/ghost.md',
+      'docs/meta.json: "security" is required and not listed',
+      "docs/usage.md: not in meta.json — listed nowhere, so the portal never shows it",
+    ])
+  })
+
+  it("wants exactly one title heading, first on the page", () => {
+    meta({ pages: ["index", "usage", "late", "twice"] })
+    write("docs/late.md", "Some text.\n\n# Late\n")
+    write("docs/twice.md", "# One\n\n# Two\n")
+    expect(structureProblems(root, { required: [] })).toEqual([
+      'docs/late.md: the "# " heading must come first',
+      'docs/twice.md: 2 "# " headings — a page has exactly one, its title',
+    ])
   })
 })
