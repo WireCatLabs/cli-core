@@ -1,6 +1,6 @@
 {
   "name": "@leemour/cli-core",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "The parts every command line tool needs: output modes, terminal rendering, error model, exit codes, credentials, clocks",
   "license": "MIT",
   "author": "Viacheslav Ptsarev",
@@ -67,7 +67,8 @@
     "./tsconfig.base.json": "./config/tsconfig.base.json",
     "./tsconfig.test.json": "./config/tsconfig.test.json",
     "./tsconfig.scripts.json": "./config/tsconfig.scripts.json",
-    "./lefthook.yml": "./config/lefthook.yml"
+    "./lefthook.yml": "./config/lefthook.yml",
+    "./cspell": "./config/cspell.json"
   },
   "scripts": {
     "build": "tsc --build",

@@ -1,0 +1,6 @@
+extends: occurrence
+message: "A sentence of more than 35 words; split it, one idea per sentence."
+level: suggestion
+scope: sentence
+max: 35
+token: '\p{L}+'

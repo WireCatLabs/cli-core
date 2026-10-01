@@ -122,6 +122,14 @@ describe("docs-check", () => {
     ])
   })
 
+  it("checks docs/ against docs/meta.json only with --pages", async () => {
+    write("CHANGELOG.md", changelog)
+    write("docs/index.md", "# Tool\n")
+    expect(await main(["docs-check"], io)).toBe(0)
+    expect(await main(["docs-check", "--pages"], io)).toBe(1)
+    expect(err).toEqual(["docs/meta.json: missing — it lists the pages in sidebar order"])
+  })
+
   it("takes a repository's own rules from a TypeScript module", async () => {
     write("CHANGELOG.md", "# Изменения\n\n## Не выпущено\n\n### Исправлено\n\n- Ошибка.\n")
     write("README.md", "Поправка 2026\n")

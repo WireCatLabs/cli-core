@@ -7,6 +7,17 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## 0.14.0 — 01.10.2026
+
+### Added
+
+- **Shared settings for checking docs**: `@leemour/cli-core/cspell` (spelling in English, British
+  English and Russian, with the shared word list; code and links are not checked),
+  `config/rumdl.toml` (Markdown form) and `config/vale/` (prose: filler words and long sentences in
+  both languages, and tg's tone). A repository installs the tools itself — [README](README.md#shared-tooling).
+- **`cli-dev docs-check --pages`** also checks `docs/` against `docs/meta.json`, the docs portal's
+  page structure.
+
 ## 0.13.0 — 01.10.2026
 
 ### Added

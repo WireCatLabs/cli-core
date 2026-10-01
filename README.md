@@ -271,6 +271,32 @@ extends:
 `--rules` names a module exporting `CHANGELOG` and `docsRules(root)`; `--program` one exporting
 `createProgram`; `--untested` one exporting `UNTESTED`. A TypeScript module loads on Node 24 as it is.
 
+**Docs.** Spelling, Markdown form and prose rules for the pages a user reads. The tools are your
+own dev dependencies (`cspell`, `@cspell/dict-ru_ru`, `@cspell/dict-en-gb`, `rumdl`); the settings
+and the shared word list are here. Code blocks and inline code are not spell-checked: commands and
+options are checked against the program by the parity check.
+
+```jsonc
+// cspell.json — the dictionaries resolve from your node_modules, so you import them yourself
+{
+  "version": "0.2",
+  "import": ["@leemour/cli-core/cspell", "@cspell/dict-en-gb/cspell-ext.json", "@cspell/dict-ru_ru/cspell-ext.json"],
+  "ignorePaths": ["docs/commands.md", "docs/dev/**", "CHANGELOG.md"],
+  "words": []
+}
+```
+
+```sh
+cspell --no-progress README.md "docs/*.md"
+rumdl check --config node_modules/@leemour/cli-core/config/rumdl.toml README.md docs/*.md
+vale README.md docs/*.md   # .vale.ini: StylesPath = node_modules/@leemour/cli-core/config/vale
+```
+
+`cli-dev docs-check --pages` adds the structure check: `docs/` against `docs/meta.json`, the
+sidebar of [the docs portal](https://github.com/leemour/cli-docs/blob/main/docs/STRUCTURE.md).
+Vale's styles are `CliDocs` (filler words, long sentences) and `Tg` (tg's tone: a Telegram client,
+never "unofficial"); its rules warn rather than fail until they are tuned.
+
 **CI.** Install, lint, typecheck, test with coverage, build, your extra checks, Bun, and a gitleaks
 scan of the whole history. Jobs only your repository needs stay beside it in your `ci.yml`.
 
