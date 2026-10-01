@@ -220,6 +220,73 @@ pnpm build
 
 The rest of the checks, and what each is for, are in [`docs/dev/TESTING.md`](docs/dev/TESTING.md).
 
+## Shared tooling
+
+The configuration, development scripts and CI that every CLI on cli-core used to copy. A repository
+takes each piece on its own.
+
+**TypeScript.** Compiler options only; paths and file lists stay in the repository, because `tsc`
+resolves them against the file that declares them.
+
+```jsonc
+// tsconfig.json
+{
+  "extends": "@leemour/cli-core/tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist" },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}
+// tsconfig.test.json — checks every file under src/, tests included, without emitting
+{ "extends": ["./tsconfig.json", "@leemour/cli-core/tsconfig.test.json"] }
+// tsconfig.scripts.json — checks scripts/
+{ "extends": ["./tsconfig.json", "@leemour/cli-core/tsconfig.scripts.json"] }
+```
+
+**Biome.** Formatter, linter and the rule that lets `scripts/` print. Your `files.includes` and
+your own `overrides` (import boundaries) stay in your file; Biome adds them to the shared ones.
+Write the specifier without `.json`: Biome reads anything ending in `.json` as a relative path.
+
+```json
+{ "extends": ["@leemour/cli-core/biome"], "files": { "includes": ["**", "!**/dist", "!**/node_modules", "!pnpm-lock.yaml"] } }
+```
+
+**lefthook.** Biome and gitleaks on staged files before a commit, `pnpm typecheck` before a push.
+An extended file **overrides** your `lefthook.yml`; to change a shared hook, use `lefthook-local.yml`.
+
+```yaml
+extends:
+  - node_modules/@leemour/cli-core/config/lefthook.yml
+```
+
+**`cli-dev`.** Installed with the package; `pnpm exec cli-dev help` lists the commands.
+
+| Instead of | Run |
+|---|---|
+| `scripts/slow-tests.ts` | `cli-dev slow-tests [report] [count]` |
+| `scripts/next-version.mjs` | `cli-dev next-version <wanted> <latest> <versions-json>` |
+| `scripts/version.ts` | `cli-dev version [--sync] [--file src/version.ts]` |
+| `scripts/docs-check.ts` | `cli-dev docs-check --rules scripts/release/checks.ts`, or `--ids CLI,MAX` with the English defaults |
+| `scripts/test-matrix.ts` | `cli-dev test-matrix --program dist/program.js --untested scripts/test-matrix-untested.ts --name max [--check]` |
+
+`--rules` names a module exporting `CHANGELOG` and `docsRules(root)`; `--program` one exporting
+`createProgram`; `--untested` one exporting `UNTESTED`. A TypeScript module loads on Node 24 as it is.
+
+**CI.** Install, lint, typecheck, test with coverage, build, your extra checks, Bun, and a gitleaks
+scan of the whole history. Jobs only your repository needs stay beside it in your `ci.yml`.
+
+```yaml
+jobs:
+  ci:
+    uses: leemour/cli-core/.github/workflows/node-ci.yml@v<version>
+    with:
+      checks: |
+        pnpm docs:check
+      bun-run: pnpm build && pnpm smoke:bun   # the default is pnpm smoke:bun
+```
+
+Inputs: `node-version` (`"24"`), `checks` (shell lines run after the build), `bun` (`true`),
+`bun-run`. The workflow is in the repository, not the package: pin a tag or a commit, not `main`.
+
 ## Releasing
 
 Raise `version` in `package.json` and date the `## Unreleased` section of

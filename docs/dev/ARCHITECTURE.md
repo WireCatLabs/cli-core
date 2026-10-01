@@ -35,6 +35,16 @@ Each is a separate `exports` entry in [`package.json`](../../package.json), buil
 `src/<name>/index.ts`. **Everything under `src/` ships in `dist/`**, including `src/testing/` — which
 is why the test sandbox lives in [`test/`](../../test/sandbox.ts) and not there.
 
+Two more things ship that are not imports:
+
+- **`cli-dev`**, the `bin` built from [`src/dev/`](../../src/dev/main.ts): the development scripts each
+  CLI used to copy. It reads and writes the repository it is run in and never the network.
+- **[`config/`](../../config)**: the tsconfig, Biome and lefthook bases a CLI extends, exported as
+  `./tsconfig.base.json`, `./tsconfig.test.json`, `./tsconfig.scripts.json`, `./biome` and
+  `./lefthook.yml`. cli-core extends them itself, so its own checks exercise them. The reusable CI
+  workflow, [`.github/workflows/node-ci.yml`](../../.github/workflows/node-ci.yml), is not in the
+  package; a repository calls it from GitHub.
+
 ## The two lines this package does not cross
 
 **Nothing in the root export is HTTP**, so a CLI that only speaks a socket never depends on an HTTP
