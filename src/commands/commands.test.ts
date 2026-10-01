@@ -155,23 +155,23 @@ describe("commandsPage", () => {
   it("writes every command at its depth, with usage, arguments, options and defaults", () => {
     const text = page()
     expect(text.startsWith("<!-- generated -->\n\n# Commands\n\nEvery command.\n\n## Global options")).toBe(true)
-    expect(text).toContain("| `--json` | print JSON |")
+    expect(text).toContain("| `--json` | print JSON. |")
     expect(text).toContain(
       "### `tool messages list`\n\nlist the messages of one chat\n\n```sh\ntool messages list <chat> [options]\n```",
     )
-    expect(text).toContain("| `chat` | required | chat id or name |")
-    expect(text).toContain("| `--limit <n>` | how many Default: `20`. |")
+    expect(text).toContain("| `chat` | required | chat id or name. |")
+    expect(text).toContain("| `--limit <n>` | how many. Default: `20`. |")
     expect(text).toContain("### `tool messages send`\n\n\n\n**Changes something.**")
     expect(text).not.toContain("--debug-wire")
     expect(text.endsWith("| `1` | anything else |\n")).toBe(true)
   })
 
-  it("keeps a pipe in a flag from splitting its row", () => {
-    expect(page()).toContain("| `--sort <order>` |")
+  it("keeps a pipe or a tilde from breaking its row, and lists the allowed values", () => {
+    expect(page()).toContain("| `--sort <order>` | order. One of: `new`, `old`. |")
     const piped = commandsPage({
       cli: "t",
       commands: [],
-      options: [{ flags: "--order <recent|name>", description: "a|b", takesValue: true, mandatory: false }],
+      options: [{ flags: "--order <recent|name>", description: "a|b ~~x~~", takesValue: true, mandatory: false }],
       labels: COMMANDS_PAGE_LABELS.ru,
       text: {
         banner: "",
@@ -185,7 +185,7 @@ describe("commandsPage", () => {
         outro: "",
       },
     })
-    expect(piped).toContain("| `--order <recent\\|name>` | a\\|b |")
+    expect(piped).toContain("| `--order <recent\\|name>` | a\\|b \\~\\~x\\~\\~. |")
     expect(piped).toContain("| `0` | получилось |")
   })
 })

@@ -7,6 +7,17 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## 0.12.0 — 01.10.2026
+
+### Changed — may break callers
+
+- **`commandsPage` writes what tg-cli's own copy of it already did**: each description ends as a
+  sentence, the allowed values follow it ("One of: `new`, `old`."), an argument shows its default
+  as an option does, and a `~` is escaped — `~~struck~~` in a description struck out the rest of
+  the row. `CommandsPageLabels` gains `oneOf` (`COMMANDS_PAGE_LABELS` has it in both languages).
+  What to watch for: a regenerated `commands.md` changes on almost every row; a caller with its
+  own labels adds `oneOf`.
+
 ## 0.11.0 — 01.10.2026
 
 ### Added

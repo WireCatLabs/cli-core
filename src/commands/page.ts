@@ -9,8 +9,10 @@ export type CommandsPageLabels = {
   isWhat: string
   required: string
   optional: string
-  /** Precedes an option's default: `Default` → "… Default: `20`." */
+  /** Precedes a default: `Default` → "… Default: `20`." */
   defaultIs: string
+  /** Precedes the allowed values: `One of` → "… One of: `new`, `old`." */
+  oneOf: string
   code: string
   when: string
   success: string
@@ -26,6 +28,7 @@ export const COMMANDS_PAGE_LABELS = {
     required: "required",
     optional: "optional",
     defaultIs: "Default",
+    oneOf: "One of",
     code: "Code",
     when: "When",
     success: "it worked",
@@ -39,6 +42,7 @@ export const COMMANDS_PAGE_LABELS = {
     required: "обязательный",
     optional: "необязательный",
     defaultIs: "По умолчанию",
+    oneOf: "Одно из",
     code: "Код",
     when: "Когда",
     success: "получилось",
@@ -71,8 +75,14 @@ export type CommandsPage = {
   text: CommandsPageText
 }
 
-/** A cell that will not break the table it sits in. */
-const cell = (text: string | undefined): string => (text ?? "").replace(/\|/g, "\\|").replace(/\n+/g, " ").trim()
+/** A cell that will not break the table it sits in; `~~struck~~` in a description would strike the row. */
+const cell = (text: string | undefined): string =>
+  (text ?? "").replace(/\|/g, "\\|").replace(/~/g, "\\~").replace(/\n+/g, " ").trim()
+
+const sentence = (text: string | undefined): string => {
+  const said = cell(text)
+  return said === "" || /[.!?]$/.test(said) ? said : `${said}.`
+}
 
 /**
  * The whole `docs/commands.md`: every command at any depth, every option and argument, the exit
@@ -80,23 +90,22 @@ const cell = (text: string | undefined): string => (text ?? "").replace(/\|/g, "
  * give the sentence a second home, and the one on screen is the one that gets corrected.
  */
 export const commandsPage = ({ cli, commands, options, labels, text }: CommandsPage): string => {
+  // What a value may be and what it is when left out: Commander keeps both out of the description.
+  const extras = ({ choices, default: fallback }: { choices?: readonly string[]; default?: unknown }) =>
+    [
+      choices ? ` ${labels.oneOf}: ${choices.map((choice) => `\`${choice}\``).join(", ")}.` : "",
+      fallback === undefined || fallback === false ? "" : ` ${labels.defaultIs}: \`${String(fallback)}\`.`,
+    ].join("")
+
   // The flags go through `cell` too: `--order <recent|name>` would otherwise split the row.
   const optionRows = (list: readonly OptionInfo[]) =>
-    list
-      .map((option) => {
-        const fallback =
-          option.default === undefined || option.default === false
-            ? ""
-            : ` ${labels.defaultIs}: \`${String(option.default)}\`.`
-        return `| \`${cell(option.flags)}\` | ${cell(option.description)}${fallback} |`
-      })
-      .join("\n")
+    list.map((option) => `| \`${cell(option.flags)}\` | ${sentence(option.description)}${extras(option)} |`).join("\n")
 
   const argumentRows = (list: readonly ArgumentInfo[]) =>
     list
       .map(
         (argument) =>
-          `| \`${cell(argument.name)}\` | ${argument.required ? labels.required : labels.optional} | ${cell(argument.description)} |`,
+          `| \`${cell(argument.name)}\` | ${argument.required ? labels.required : labels.optional} | ${sentence(argument.description)}${extras(argument)} |`,
       )
       .join("\n")
 
