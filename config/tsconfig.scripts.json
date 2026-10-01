@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "rootDir": "${configDir}",
+    "allowImportingTsExtensions": true
+  },
+  "include": ["${configDir}/scripts/**/*.ts"],
+  "exclude": []
+}

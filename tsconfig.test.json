@@ -1,13 +1,7 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": ["./tsconfig.json", "./config/tsconfig.test.json"],
   "compilerOptions": {
-    "composite": false,
-    "declaration": false,
-    "declarationMap": false,
-    "emitDeclarationOnly": false,
-    "noEmit": true,
     "rootDir": "."
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"],
-  "exclude": []
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
 }

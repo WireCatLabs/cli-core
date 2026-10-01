@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true
+  },
+  "include": ["${configDir}/src/**/*.ts"],
+  "exclude": []
+}
