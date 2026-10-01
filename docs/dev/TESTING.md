@@ -12,14 +12,16 @@ pnpm test:slow       # the 20 slowest tests and the 10 slowest files
 ```
 
 CI runs all but the last, plus a secret scan over the whole history —
-[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
+[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), which calls the same reusable
+[`node-ci.yml`](../../.github/workflows/node-ci.yml) the other CLIs call.
 
 ## The tests are typechecked
 
 `tsconfig.json` excludes the tests, because it builds `dist/`. `tsconfig.test.json` checks them with
-`noEmit`, and `tsconfig.scripts.json` checks `scripts/`.
+`noEmit`, and `tsconfig.scripts.json` checks `scripts/`. Both add the shared overlays in
+[`config/`](../../config) to `tsconfig.json`.
 
-⚠ Both carry `"exclude": []`, and that line is the whole point: `extends` inherits `exclude`, so
+⚠ Both overlays carry `"exclude": []`, and that line is the whole point: `extends` inherits `exclude`, so
 without it the test config still excludes every test file and passes having checked nothing
 (max-cli learned this — [its TESTING.md](https://github.com/leemour/max-cli/blob/main/docs/dev/TESTING.md#the-rule-a-skip-is-not-a-pass)).
 Checked on 2026-09-29 by putting a type error into a test and watching `pnpm typecheck` fail.

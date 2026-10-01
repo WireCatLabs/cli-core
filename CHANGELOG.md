@@ -7,6 +7,24 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## Unreleased
+
+### Added
+
+- **Shared configuration a CLI extends instead of copying.** `@leemour/cli-core/tsconfig.base.json`
+  (compiler options), `/tsconfig.test.json` and `/tsconfig.scripts.json` (the no-emit overlays for
+  tests and `scripts/`), `/biome` (formatter, linter, the `scripts/` console rule) and
+  `config/lefthook.yml` (the git hooks). Paths, file lists and import rules stay in each repository.
+  What to watch for: in lefthook, the extended file overrides your own `lefthook.yml`, not the other
+  way round. How to adopt each: [README](README.md#shared-tooling).
+- **`cli-dev`, a command for the development scripts every CLI carried a copy of:** `slow-tests`,
+  `next-version`, `version`, `docs-check` and `test-matrix`. Each prints what the script it replaces
+  printed; the test matrix page names `cli-dev` in its first line, so a repository regenerates and
+  commits that page once when it switches.
+- **`.github/workflows/node-ci.yml`, a reusable workflow:** install, lint, typecheck, test with
+  coverage, build, the extra checks a repository passes in, the Bun run and a gitleaks scan of the
+  whole history.
+
 ## 0.10.0 — 01.10.2026
 
 ### Added
