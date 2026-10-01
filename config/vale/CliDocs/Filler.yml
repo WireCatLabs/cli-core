@@ -1,0 +1,9 @@
+extends: existence
+message: "'%s' tells the reader nothing; say what happens instead."
+level: warning
+ignorecase: true
+nonword: true
+# \p{L}, not \w or \b: those match no Cyrillic, and the rule would pass Russian text silently.
+tokens:
+  - '(?<!\p{L})(?:simply|just|easily|obviously|of course|basically|really|very)(?!\p{L})'
+  - '(?<!\p{L})(?:просто|легко|очевидно|конечно|всего лишь|на самом деле|очень)(?!\p{L})'

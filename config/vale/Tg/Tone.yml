@@ -1,0 +1,7 @@
+extends: existence
+message: "'%s': tg is a Telegram client; state its limits as features, not as a risk."
+level: error
+ignorecase: true
+nonword: true
+tokens:
+  - '(?<!\p{L})(?:unofficial|at your own risk|banned|bans?|get blocked)(?!\p{L})'

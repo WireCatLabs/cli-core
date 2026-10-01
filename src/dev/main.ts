@@ -13,6 +13,7 @@ import {
   docsProblems,
   JOURNAL_IDS,
   markdownFiles,
+  structureProblems,
   versionScript,
 } from "../release/index.js"
 import { nextVersion } from "./next-version.js"
@@ -31,8 +32,9 @@ const USAGE = `usage: cli-dev <command> [options]
   next-version <wanted> <latest> <versions-json>
                                        the version bin/release publishes, given npm's answers
   version [--sync] [--file <path>]     package.json's version against src/version.ts
-  docs-check [--rules <module>] [--ids <A,B>]
-                                       links, anchors and the changelog's shape
+  docs-check [--rules <module>] [--ids <A,B>] [--pages]
+                                       links, anchors and the changelog's shape; --pages also
+                                       docs/ against docs/meta.json, the docs portal's structure
   test-matrix --program <module> --untested <module> --name <cli> [--page <path>] [--check]
                                        docs/dev/test-matrix.md from coverage/argv.jsonl`
 
@@ -47,7 +49,10 @@ const report = (io: DevIo, problems: readonly string[], ok: string) => {
 }
 
 const docsCheck = async (args: string[], io: DevIo) => {
-  const { values } = parseArgs({ args, options: { rules: { type: "string" }, ids: { type: "string" } } })
+  const { values } = parseArgs({
+    args,
+    options: { rules: { type: "string" }, ids: { type: "string" }, pages: { type: "boolean" } },
+  })
   const root = io.cwd
   let changelog: ChangelogRules
   let docs: DocsRules
@@ -70,6 +75,7 @@ const docsCheck = async (args: string[], io: DevIo) => {
     [
       ...changelogProblems(readFileSync(join(root, "CHANGELOG.md"), "utf8"), { ...changelog, release: false }),
       ...docsProblems(root, docs),
+      ...(values.pages ? structureProblems(root) : []),
     ],
     "docs: ok",
   )
