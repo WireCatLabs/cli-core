@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, statSync } from "node:fs"
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { Credentials, keyringService } from "./credentials.js"
+import { CliError } from "./errors.js"
 import { brokenKeyring, memoryKeyring } from "./keyring.js"
 
 const dir = () => mkdtempSync(join(tmpdir(), "cli-core-creds-"))
@@ -84,6 +85,40 @@ describe("Credentials", () => {
     )
     const written = readFileSync(join(configDir, "credentials.json"), "utf8")
     expect(JSON.parse(written)).toEqual({ default: { secret: "s3cret" } })
+  })
+})
+
+describe("a credentials file that cannot be parsed", () => {
+  const broken = '{"other":{"secret":"keep-me"'
+
+  for (const content of [broken, "null", "[]"]) {
+    it(`refuses to write over ${JSON.stringify(content)} and leaves it as it was`, () => {
+      const configDir = dir()
+      const path = join(configDir, "credentials.json")
+      writeFileSync(path, content)
+      const credentials = make({ configDir, keyring: brokenKeyring() })
+
+      const error = (() => {
+        try {
+          credentials.write("default", "s3cret")
+        } catch (caught) {
+          return caught
+        }
+      })()
+      expect(error).toBeInstanceOf(CliError)
+      expect((error as CliError).code).toBe("configuration_error")
+      expect((error as CliError).message).toContain(path)
+      expect((error as CliError).message).not.toContain("keep-me")
+      expect(readFileSync(path, "utf8")).toBe(content)
+      expect(credentials.read("default")).toBeUndefined()
+    })
+  }
+
+  it("removes nothing from it", () => {
+    const configDir = dir()
+    writeFileSync(join(configDir, "credentials.json"), broken)
+    expect(make({ configDir, storage: "file" }).remove("other")).toEqual([])
+    expect(readFileSync(join(configDir, "credentials.json"), "utf8")).toBe(broken)
   })
 })
 
