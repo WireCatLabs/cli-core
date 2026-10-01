@@ -14,7 +14,9 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 - **`@leemour/cli-core/skill` installs a CLI's SKILL.md and tells agents when to.** `skillCommand`
   is the `skill` command, moved down from cli-messaging, with a new `install [--for claude|agents|all]`
   that writes the file to `~/.claude/skills/<appName>/` and `~/.agents/skills/<appName>/` and records
-  the CLI's version in its frontmatter. `skillHint` is a once-a-day line for an agent whose copy is
+  the CLI's version as `metadata.version` in its frontmatter â€” the Agent Skills specification has no
+  top-level `version`. It refuses a SKILL.md whose `name` differs from `<appName>`, the directory it
+  writes to, which the specification requires to match. `skillHint` is a once-a-day line for an agent whose copy is
   missing or older than the CLI; `skillResource` serves the file to an MCP client as `<command>://skill`.
   An agent used to learn of the skill only by reading `--help`.
   What to watch for: `skillCommand` takes a third argument, the host's renderer, streams and `env`;

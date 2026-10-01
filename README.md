@@ -148,8 +148,8 @@ holding somebody's credentials must not change itself unasked.
 **A CLI's guide for coding agents is `@leemour/cli-core/skill`.** `skillCommand(app, skillUrl,
 environment)` is `<cli> skill show` — SKILL.md on stdout, even into a pipe, or `{ name, content }`
 with `--json` — and `<cli> skill install [--for claude|agents|all]`, which writes it to
-`~/.claude/skills/<appName>/` and `~/.agents/skills/<appName>/` with the CLI's version as `version:`
-in the frontmatter. `environment` is the host's own renderer, streams and `env` for that invocation.
+`~/.claude/skills/<appName>/` and `~/.agents/skills/<appName>/` with the CLI's version as
+`metadata.version` in the frontmatter, refusing a file whose `name` is not `<appName>`. `environment` is the host's own renderer, streams and `env` for that invocation.
 `skillHint` is one line, or `undefined`, for an agent (`AI_AGENT` or `CLAUDECODE` set) with no copy
 installed or an older one, at most once a day, through the same state file as `updateNotice`; the
 host prints it on stderr. `skillResource` is what an MCP server registers to serve the file as

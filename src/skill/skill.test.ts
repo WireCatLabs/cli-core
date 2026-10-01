@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { Command } from "commander"
 import { beforeEach, describe, expect, it } from "vitest"
+import { CliError } from "../errors.js"
 import { createRenderer } from "../renderer.js"
 import { captureStreams, fakeClock } from "../testing/index.js"
 import { readUpdateState, writeUpdateState } from "../update/index.js"
@@ -39,9 +40,9 @@ const run = async (args: string[]) => {
 }
 
 describe("withVersion", () => {
-  it("adds the version to the frontmatter and leaves every other byte alone", () => {
+  it("adds metadata.version as a string and leaves every other byte alone", () => {
     expect(withVersion(SKILL, "1.2.0")).toBe(
-      "---\nname: tg-cli\ndescription: Read Telegram.\nversion: 1.2.0\n---\n\n# tg\n\nBody.\n",
+      '---\nname: tg-cli\ndescription: Read Telegram.\nmetadata:\n  version: "1.2.0"\n---\n\n# tg\n\nBody.\n',
     )
   })
 
@@ -51,15 +52,32 @@ describe("withVersion", () => {
     expect(skillVersion(stamped)).toBe("1.2.0")
   })
 
+  it("keeps the other metadata and its indentation", () => {
+    const own = "---\nname: tg-cli\nmetadata:\n    author: a\nlicense: MIT\n---\n# tg\n"
+    expect(withVersion(own, "1.2.0")).toBe(
+      '---\nname: tg-cli\nmetadata:\n    version: "1.2.0"\n    author: a\nlicense: MIT\n---\n# tg\n',
+    )
+  })
+
   it("keeps Windows line endings", () => {
     const crlf = SKILL.replaceAll("\n", "\r\n")
     expect(withVersion(crlf, "1.2.0")).toBe(withVersion(SKILL, "1.2.0").replaceAll("\n", "\r\n"))
-    expect(skillVersion(withVersion(crlf, "1.2.0"))).toBe("1.2.0")
+    expect(skillVersion(withVersion(withVersion(crlf, "1.0.0"), "1.2.0"))).toBe("1.2.0")
   })
 
   it("gives a file with no frontmatter one", () => {
-    expect(withVersion("# tg\n", "1.2.0")).toBe("---\nversion: 1.2.0\n---\n# tg\n")
+    expect(withVersion("# tg\n", "1.2.0")).toBe('---\nmetadata:\n  version: "1.2.0"\n---\n# tg\n')
     expect(skillVersion("# tg\n")).toBeUndefined()
+  })
+
+  it("refuses metadata written on one line", () => {
+    expect(() => withVersion("---\nmetadata: {a: b}\n---\n", "1.2.0")).toThrow(CliError)
+  })
+})
+
+describe("skillVersion", () => {
+  it("still reads the top-level version a pre-release build wrote", () => {
+    expect(skillVersion("---\nname: tg-cli\nversion: 1.1.0\n---\n")).toBe("1.1.0")
   })
 })
 
@@ -94,6 +112,12 @@ describe("skill install", () => {
     await run(["skill", "install"])
     await run(["skill", "install"])
     expect(readFileSync(claude(), "utf8")).toBe(withVersion(SKILL, "1.2.0"))
+  })
+
+  it("refuses a SKILL.md whose name is not the directory it installs into", async () => {
+    writeFileSync(join(dir, "SKILL.md"), SKILL.replace("name: tg-cli", "name: tgcli"))
+    await expect(run(["skill", "install"])).rejects.toThrow(/"tgcli".*"tg-cli"/)
+    expect(() => readFileSync(claude())).toThrow()
   })
 
   it("installs for one agent when told which", async () => {
