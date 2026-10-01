@@ -49,6 +49,7 @@ streams.stderr // []
 | `/update` | keeping an install current: `installerOf`, `updateCommand`, `latestVersion`, `mayNotify`, `updateNotice`, `runUpdate` — see below |
 | `/codegen` | build time: an official API description → types, Valibot schemas, an operation manifest and a coverage page — see below |
 | `/release` | release time: `releaseCheck` and the checks it runs — changelog shape, links, package contents, version in step — see below |
+| `/skill` | the CLI's SKILL.md for coding agents: `skillCommand` (`show`, `install`), `skillHint`, `skillResource` — see below |
 
 **Nothing in the root export is HTTP.** Status classification, `Retry-After` parsing and the fetch
 seam live in `@leemour/cli-core/http`, so a CLI that speaks a socket never depends on a stack it
@@ -143,6 +144,16 @@ the command line, asks npm at most once a day through a state file the CLI names
 sentence or `undefined` — it never throws. `runUpdate` starts the package manager with its output on
 stderr (`spawnPlan` is the Windows `.cmd` rule). Nothing here updates or prints by itself — a CLI
 holding somebody's credentials must not change itself unasked.
+
+**A CLI's guide for coding agents is `@leemour/cli-core/skill`.** `skillCommand(app, skillUrl,
+environment)` is `<cli> skill show` — SKILL.md on stdout, even into a pipe, or `{ name, content }`
+with `--json` — and `<cli> skill install [--for claude|agents|all]`, which writes it to
+`~/.claude/skills/<appName>/` and `~/.agents/skills/<appName>/` with the CLI's version as
+`metadata.version` in the frontmatter, refusing a file whose `name` is not `<appName>`. `environment` is the host's own renderer, streams and `env` for that invocation.
+`skillHint` is one line, or `undefined`, for an agent (`AI_AGENT` or `CLAUDECODE` set) with no copy
+installed or an older one, at most once a day, through the same state file as `updateNotice`; the
+host prints it on stderr. `skillResource` is what an MCP server registers to serve the file as
+`<command>://skill`, plus a line for its `instructions` — the SDK stays the host's.
 
 **The release checks are `@leemour/cli-core/release`** — everything about a release that a program
 can decide. A check is `{ name, run }`, and `run` returns the problems it found, one line each; an
