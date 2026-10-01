@@ -11,6 +11,10 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ### Added
 
+- **`skillCommand(app, skill, environment, more)`**: `more` names skills a library ships for every CLI
+  built on it, and `skill show <name>` prints one, with `{{command}}` turned into the CLI's command.
+  cli-messaging ships one for linking conversations. They are printed, never installed â€” two CLIs
+  would install the same name. Without `more`, `skill show` takes no argument, as before.
 - **The shared pre-push hook runs `parity:check` after `typecheck`**, when the project has that
   script. tg-cli and max-cli check their commands and pages against cli-messaging's parity manifest
   before a push instead of a minute later in CI. A project without the script sees no change. Why in
