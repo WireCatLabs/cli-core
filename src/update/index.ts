@@ -107,22 +107,36 @@ export const mayNotify = ({
   !env.NO_UPDATE_NOTIFIER &&
   offVariables.every((name) => !env[name])
 
-const updateState = v.object({ checkedAt: v.number(), latest: v.optional(v.string()) })
+const updateState = v.object({
+  checkedAt: v.number(),
+  latest: v.optional(v.string()),
+  /** When the skill hint (`cli-core/skill`) was last shown — the other daily notice kept in this file. */
+  skillHintAt: v.optional(v.number()),
+})
 export type UpdateState = v.InferOutput<typeof updateState>
 
-/** What the last check found. A missing or unreadable file is "never checked", not an error. */
-export const readUpdateState = (path: string): UpdateState | undefined => {
+/** The file as it is, `checkedAt: 0` when it is missing or unreadable. */
+export const readNoticeState = (path: string): UpdateState => {
   try {
-    const state = loadConfigFile(path, updateState, () => ({ checkedAt: 0 }))
-    return state.checkedAt > 0 ? state : undefined
+    return loadConfigFile(path, updateState, () => ({ checkedAt: 0 }))
   } catch {
-    return undefined
+    return { checkedAt: 0 }
   }
 }
 
-export const writeUpdateState = (path: string, state: UpdateState): void => {
+/** What the last check found. A missing or unreadable file is "never checked", not an error. */
+export const readUpdateState = (path: string): UpdateState | undefined => {
+  const state = readNoticeState(path)
+  return state.checkedAt > 0 ? state : undefined
+}
+
+/**
+ * Merged into the file as it is at the moment of writing: the update notice reads before it asks
+ * npm and writes after, and the skill hint may have written in between.
+ */
+export const writeUpdateState = (path: string, state: Partial<UpdateState>): void => {
   try {
-    saveConfigFile(path, state)
+    saveConfigFile(path, { ...readNoticeState(path), ...state })
   } catch {
     // A state file that cannot be written means asking npm again tomorrow, nothing worse.
   }

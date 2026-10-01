@@ -9,6 +9,20 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ## Unreleased
 
+### Added
+
+- **`@leemour/cli-core/skill` installs a CLI's SKILL.md and tells agents when to.** `skillCommand`
+  is the `skill` command, moved down from cli-messaging, with a new `install [--for claude|agents|all]`
+  that writes the file to `~/.claude/skills/<appName>/` and `~/.agents/skills/<appName>/` and records
+  the CLI's version in its frontmatter. `skillHint` is a once-a-day line for an agent whose copy is
+  missing or older than the CLI; `skillResource` serves the file to an MCP client as `<command>://skill`.
+  An agent used to learn of the skill only by reading `--help`.
+  What to watch for: `skillCommand` takes a third argument, the host's renderer, streams and `env`;
+  it imports Commander at run time, so a CLI using `/skill` needs Commander installed, as all four do.
+- **The update state file keeps a second field, `skillHintAt`,** and `writeUpdateState` now merges
+  into the file as it is when written, instead of replacing it, so the two daily notices do not erase
+  each other. It accepts a partial state; `readNoticeState` reads the file whether or not npm was asked.
+
 ### Fixed
 
 - **`Credentials.write` refuses to replace a credentials file it cannot parse.** It used to read a

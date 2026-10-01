@@ -54,6 +54,10 @@
     "./release": {
       "types": "./dist/release/index.d.ts",
       "default": "./dist/release/index.js"
+    },
+    "./skill": {
+      "types": "./dist/skill/index.d.ts",
+      "default": "./dist/skill/index.js"
     }
   },
   "scripts": {
