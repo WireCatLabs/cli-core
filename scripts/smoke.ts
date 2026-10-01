@@ -15,6 +15,7 @@ import { Command } from "commander"
 import * as v from "valibot"
 import { annotate, describeProgram, flatten } from "../src/commands/index.js"
 import { suggest } from "../src/completion/index.js"
+import { main as cliDev } from "../src/dev/main.js"
 import {
   backoffMs,
   CliError,
@@ -126,6 +127,16 @@ check("completion suggests a command", suggest({ commands: describeProgram(tool)
 check(
   "update reads an installer and compares versions",
   installerOf("/x/lib/node_modules/p/dist/bin/p.js") === "npm" && isNewer("0.10.0", "0.9.0"),
+)
+
+const dev: string[] = []
+check(
+  "cli-dev picks the next free version",
+  (await cliDev(["next-version", "1.2.0", "1.2.0", '["1.2.0"]'], {
+    cwd: ".",
+    out: (t) => dev.push(t),
+    err: () => {},
+  })) === 0 && dev[0] === "1.3.0",
 )
 
 if (failures.length > 0) {
