@@ -86,6 +86,7 @@ export const probeStdio = async (
   }
   child.on("error", () => fail(new Error("the MCP server could not be started")))
   child.on("exit", () => fail(new Error("the MCP server exited before answering")))
+  child.stdin.on("error", () => fail(new Error("the MCP server closed its input")))
   child.stdout.setEncoding("utf8")
   child.stdout.on("data", (chunk: string) => {
     buffer += chunk
@@ -121,6 +122,7 @@ export const probeStdio = async (
       (item): item is { name: string; annotations?: { readOnlyHint?: boolean } } =>
         item !== null && typeof item === "object" && "name" in item && typeof item.name === "string",
     )
+    if (named.length !== tools.length) throw new Error("the MCP server returned an invalid tool list")
     return {
       tools: named.map((item) => item.name),
       potentialWrites: named.filter((item) => item.annotations?.readOnlyHint !== true).map((item) => item.name),
