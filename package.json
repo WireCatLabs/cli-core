@@ -1,6 +1,6 @@
 {
   "name": "@leemour/cli-core",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "The parts every command line tool needs: output modes, terminal rendering, error model, exit codes, credentials, clocks",
   "license": "MIT",
   "author": "Viacheslav Ptsarev",
@@ -63,6 +63,10 @@
       "types": "./dist/skill/index.d.ts",
       "default": "./dist/skill/index.js"
     },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "default": "./dist/mcp/index.js"
+    },
     "./biome": "./config/biome.base.json",
     "./tsconfig.base.json": "./config/tsconfig.base.json",
     "./tsconfig.test.json": "./config/tsconfig.test.json",
@@ -87,6 +91,7 @@
   },
   "dependencies": {
     "cli-table3": "^0.6.5",
+    "cross-spawn": "7.0.6",
     "env-paths": "^4.0.0",
     "picocolors": "^1.1.1",
     "pino": "^10.3.1",
@@ -97,6 +102,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
+    "@types/cross-spawn": "6.0.6",
     "@types/node": "^22.20.4",
     "@vitest/coverage-v8": "^5.0.2",
     "commander": "^15.0.0",

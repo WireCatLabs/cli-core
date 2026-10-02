@@ -31,10 +31,16 @@ import {
   resolvePaths,
   saveConfigFile,
 } from "../src/index.js"
+import { setupArguments } from "../src/mcp/index.js"
 import { fakeClock } from "../src/testing/index.js"
 import { installerOf, isNewer } from "../src/update/index.js"
 
 const ESCAPE = String.fromCharCode(27)
+checkMcpImport()
+function checkMcpImport() {
+  const args = setupArguments("codex", "smoke", { type: "stdio", command: "/bin/node", args: ["mcp"] })
+  if (args.join(" ") !== "mcp add smoke -- /bin/node mcp") throw new Error("MCP setup export failed")
+}
 const runtime = typeof (globalThis as { Bun?: unknown }).Bun === "undefined" ? "node" : "bun"
 const failures: string[] = []
 

@@ -7,6 +7,16 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## 0.16.0 — 02.10.2026
+
+### Added
+
+- **`@leemour/cli-core/mcp` installs and checks local stdio MCP entries.** A CLI can add its existing
+  MCP server to Codex or Claude Code through those clients' own commands and probe the handshake and
+  tool list without calling a tool. Existing entries are refused, so callers must remove one in the
+  client before changing it.
+  Client commands use `cross-spawn` so npm's Windows `.cmd` shims can be started.
+
 ## 0.15.0 — 01.10.2026
 
 ### Added
