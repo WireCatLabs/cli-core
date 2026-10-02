@@ -29,6 +29,7 @@ architecture proposal ([private repository](https://github.com/leemour/max-cli-p
 | `/codegen/runtime` | the number helpers generated schemas import | `valibot` |
 | `/release` | release checks a CLI runs before it publishes: `releaseCheck` and the checks it runs (changelog shape, document links, versions in step, package contents) | Node built-ins only |
 | `/skill` | the CLI's SKILL.md for agents: the `skill` command, the daily hint, the MCP resource | Commander **at run time** (the only entry point that is), `/update`'s state file, the root's `Renderer` and `Streams` types |
+| `/mcp` | local stdio MCP entry setup and a handshake probe | Node child processes; no messenger or MCP SDK dependency |
 | `/testing` | `captureStreams`, `memoryKeyring`, `brokenKeyring`, `fakeClock` | the root |
 
 Each is a separate `exports` entry in [`package.json`](../../package.json), built from

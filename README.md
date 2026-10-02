@@ -50,6 +50,7 @@ streams.stderr // []
 | `/codegen` | build time: an official API description → types, Valibot schemas, an operation manifest and a coverage page — see below |
 | `/release` | release time: `releaseCheck` and the checks it runs — changelog shape, links, package contents, version in step — see below |
 | `/skill` | the CLI's SKILL.md for coding agents: `skillCommand` (`show`, `install`), `skillHint`, `skillResource` — see below |
+| `/mcp` | local stdio MCP setup for Codex and Claude Code, plus a read-only handshake and tool-list probe |
 
 **Nothing in the root export is HTTP.** Status classification, `Retry-After` parsing and the fetch
 seam live in `@leemour/cli-core/http`, so a CLI that speaks a socket never depends on a stack it
