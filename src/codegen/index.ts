@@ -3,7 +3,13 @@
  * manifest and a coverage page. Build-time only, and format-neutral: it parses no file format and
  * adds no dependency. The adapter from OpenAPI, Postman or anything else lives in the consumer.
  */
-export { type CoverageOptions, coverageGenerator, type ManifestOperation, manifestGenerator } from "./manifest.js"
+export {
+  type CoverageOptions,
+  coverageGenerator,
+  definitionsGenerator,
+  type ManifestOperation,
+  manifestGenerator,
+} from "./manifest.js"
 export type {
   ApiBody,
   ApiModel,

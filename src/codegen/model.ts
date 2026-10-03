@@ -39,10 +39,17 @@ interface SchemaCommon {
 export type SchemaNode = SchemaCommon &
   (
     | { type: "ref"; ref: string }
-    | { type: "string"; enum?: readonly string[]; minLength?: number; maxLength?: number; pattern?: string }
+    | {
+        type: "string"
+        format?: "binary" | "file-reference"
+        enum?: readonly string[]
+        minLength?: number
+        maxLength?: number
+        pattern?: string
+      }
     | { type: "integer"; format?: "int32" | "int64"; minimum?: number; maximum?: number; enum?: readonly number[] }
     | { type: "number"; minimum?: number; maximum?: number }
-    | { type: "boolean" }
+    | { type: "boolean"; enum?: readonly boolean[] }
     | { type: "array"; items: SchemaNode; minItems?: number; maxItems?: number; uniqueItems?: boolean }
     | {
         type: "object"
@@ -50,6 +57,7 @@ export type SchemaNode = SchemaCommon &
         required: readonly string[]
         additionalProperties?: SchemaNode
       }
+    | { type: "union"; of: readonly SchemaNode[] }
     /** Inheritance: every member must resolve to an object, and the fields are merged. */
     | { type: "allOf"; of: readonly SchemaNode[] }
     /** Only where the source itself says "anything". An adapter never falls back to this. */
@@ -73,7 +81,7 @@ export interface ApiSchema {
 
 export interface ApiParameter {
   name: string
-  in: "path" | "query" | "header"
+  in: "path" | "query" | "header" | "body"
   required: boolean
   description?: string
   schema: SchemaNode

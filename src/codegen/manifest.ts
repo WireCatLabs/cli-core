@@ -14,7 +14,7 @@ export interface ManifestOperation {
   deprecated?: boolean
   parameters: readonly {
     name: string
-    in: "path" | "query" | "header"
+    in: "path" | "query" | "header" | "body"
     required: boolean
     description?: string
     schema: SchemaNode
@@ -61,6 +61,19 @@ export const manifestGenerator =
       "",
     ].join("\n")
     return [{ path: options.path, content }]
+  }
+
+export const definitionsGenerator =
+  (options: { path: string; coreImport?: string }): CodeGenerator =>
+  (model: ApiModel) => {
+    const tree = new SchemaTree(model)
+    const definitions = Object.fromEntries(tree.named.map(({ name, schema }) => [name, schema.schema]))
+    return [
+      {
+        path: options.path,
+        content: `import type { SchemaNode } from "${options.coreImport ?? "@leemour/cli-core/codegen"}"\n\nexport const definitions: Readonly<Record<string, SchemaNode>> = ${JSON.stringify(definitions, null, 2)}\n`,
+      },
+    ]
   }
 
 const cell = (text: string | undefined): string => (text ?? "").replace(/\s+/g, " ").replace(/\|/g, "\\|").trim()
