@@ -18,7 +18,7 @@ const model: ApiModel = {
   source: { kind: "other" },
   schemas: [
     { id: "Address", schema: { type: "union", of: [{ type: "integer", format: "int64" }, { type: "string" }] } },
-    { id: "File", schema: { type: "string", format: "binary" } },
+    { id: "File", schema: { type: "string", format: "binary", sensitive: true } },
     {
       id: "Node",
       schema: {
@@ -103,7 +103,7 @@ describe("generated unions", () => {
 
   it("emits runtime definitions with source formats and resolves response references", async () => {
     const { definitions } = await import(join(root, "definitions.ts"))
-    expect(definitions.File).toEqual({ type: "string", format: "binary" })
+    expect(definitions.File).toEqual({ type: "string", format: "binary", sensitive: true })
     const { operations } = await import(join(root, "manifest.ts"))
     expect(operations[0].response.schema).toBe("Node")
     expect(definitions.Node.type).toBe("union")

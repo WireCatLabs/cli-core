@@ -15,7 +15,7 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ### Added
 
-- API generators preserve explicit unions and Boolean literals, validate nested references, and emit schema definitions for shared command input traversal. RPC parameters can belong to the JSON body; multipart references retain their format.
+- API generators preserve explicit unions and Boolean literals, validate nested references, and emit schema definitions for shared command input traversal. RPC parameters can belong to the JSON body; multipart references retain their format. Source adapters can mark secret fields so consumers keep them out of generated CLI arguments.
 
 ## 0.16.0 â€” 02.10.2026
 

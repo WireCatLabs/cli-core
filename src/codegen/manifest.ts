@@ -15,6 +15,7 @@ export interface ManifestOperation {
   parameters: readonly {
     name: string
     in: "path" | "query" | "header" | "body"
+    sensitive?: boolean
     required: boolean
     description?: string
     schema: SchemaNode
