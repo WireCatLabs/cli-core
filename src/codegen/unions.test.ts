@@ -40,7 +40,7 @@ const model: ApiModel = {
       binding: { kind: "rpc", name: "readNode" },
       tags: [],
       parameters: [{ name: "address", in: "body", required: true, schema: { type: "ref", ref: "Address" } }],
-      response: { required: true, confidence: "contract", schema: { type: "ref", ref: "Node" } },
+      response: { required: true, confidence: "contract", schema: { type: "ref", ref: "Node", sensitive: true } },
       effect: "read",
       source: { location: "methods/readNode" },
     },
@@ -106,6 +106,7 @@ describe("generated unions", () => {
     expect(definitions.File).toEqual({ type: "string", format: "binary", sensitive: true })
     const { operations } = await import(join(root, "manifest.ts"))
     expect(operations[0].response.schema).toBe("Node")
+    expect(operations[0].response.sensitive).toBe(true)
     expect(definitions.Node.type).toBe("union")
   })
 
