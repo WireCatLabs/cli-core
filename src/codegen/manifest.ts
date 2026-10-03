@@ -15,12 +15,13 @@ export interface ManifestOperation {
   parameters: readonly {
     name: string
     in: "path" | "query" | "header" | "body"
+    sensitive?: boolean
     required: boolean
     description?: string
     schema: SchemaNode
   }[]
   request?: { required: boolean; confidence: Confidence; schema?: string }
-  response?: { confidence: Confidence; schema?: string }
+  response?: { confidence: Confidence; schema?: string; sensitive?: boolean }
 }
 
 const withoutUndefined = <T extends object>(value: T): T =>
@@ -45,7 +46,11 @@ const toManifest = (operation: ApiOperation, tree: SchemaTree): ManifestOperatio
         })
       : undefined,
     response: operation.response
-      ? withoutUndefined({ confidence: operation.response.confidence, schema: tree.responseName(operation.id) })
+      ? withoutUndefined({
+          confidence: operation.response.confidence,
+          schema: tree.responseName(operation.id),
+          sensitive: operation.response.schema?.sensitive,
+        })
       : undefined,
   })
 

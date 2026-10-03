@@ -1,6 +1,6 @@
 {
   "name": "@leemour/cli-core",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "The parts every command line tool needs: output modes, terminal rendering, error model, exit codes, credentials, clocks",
   "license": "MIT",
   "author": "Viacheslav Ptsarev",

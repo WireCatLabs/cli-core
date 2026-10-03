@@ -30,6 +30,7 @@ export interface RpcBinding {
 export type Binding = HttpBinding | RpcBinding
 
 interface SchemaCommon {
+  sensitive?: boolean
   description?: string
   nullable?: boolean
   deprecated?: boolean
@@ -82,6 +83,7 @@ export interface ApiSchema {
 export interface ApiParameter {
   name: string
   in: "path" | "query" | "header" | "body"
+  sensitive?: boolean
   required: boolean
   description?: string
   schema: SchemaNode

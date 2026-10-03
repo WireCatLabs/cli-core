@@ -18,7 +18,7 @@ const model: ApiModel = {
   source: { kind: "other" },
   schemas: [
     { id: "Address", schema: { type: "union", of: [{ type: "integer", format: "int64" }, { type: "string" }] } },
-    { id: "File", schema: { type: "string", format: "binary" } },
+    { id: "File", schema: { type: "string", format: "binary", sensitive: true } },
     {
       id: "Node",
       schema: {
@@ -40,7 +40,7 @@ const model: ApiModel = {
       binding: { kind: "rpc", name: "readNode" },
       tags: [],
       parameters: [{ name: "address", in: "body", required: true, schema: { type: "ref", ref: "Address" } }],
-      response: { required: true, confidence: "contract", schema: { type: "ref", ref: "Node" } },
+      response: { required: true, confidence: "contract", schema: { type: "ref", ref: "Node", sensitive: true } },
       effect: "read",
       source: { location: "methods/readNode" },
     },
@@ -103,9 +103,10 @@ describe("generated unions", () => {
 
   it("emits runtime definitions with source formats and resolves response references", async () => {
     const { definitions } = await import(join(root, "definitions.ts"))
-    expect(definitions.File).toEqual({ type: "string", format: "binary" })
+    expect(definitions.File).toEqual({ type: "string", format: "binary", sensitive: true })
     const { operations } = await import(join(root, "manifest.ts"))
     expect(operations[0].response.schema).toBe("Node")
+    expect(operations[0].response.sensitive).toBe(true)
     expect(definitions.Node.type).toBe("union")
   })
 
