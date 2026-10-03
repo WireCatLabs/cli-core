@@ -128,6 +128,8 @@ The generated schemas import `@leemour/cli-core/codegen/runtime` at run time —
 helpers, not the generator. Numbers are expected from a lossless JSON parser (`lossless-json`): a
 64-bit integer comes out as its exact decimal string, and any other integer that does not fit a JS
 number fails instead of rounding. Objects are loose, so a field the API added later passes through.
+Unions retain every alternative, including recursive references and Boolean literals.
+`definitionsGenerator` emits the same schema nodes for runtime input traversal; RPC parameters can be in the JSON body.
 Enums and discriminated unions are **strict**: a value or subtype the snapshot does not know fails,
 so decode a live stream (updates, webhooks) only where that is what you want.
 

@@ -46,6 +46,7 @@ const refsIn = (node: SchemaNode, found: string[] = []): string[] => {
       for (const property of Object.values(node.properties)) refsIn(property, found)
       if (node.additionalProperties) refsIn(node.additionalProperties, found)
       break
+    case "union":
     case "allOf":
       for (const member of node.of) refsIn(member, found)
       break
@@ -104,6 +105,24 @@ export const validateModel = (model: ApiModel): void => {
     if (!operation.effect) problems.push(`operation "${operation.id}" is not classified as read, write or destructive`)
   }
 
+  const validUnions = (node: SchemaNode, where: string): void => {
+    if ((node.type === "boolean" || node.type === "string" || node.type === "integer") && node.enum?.length === 0)
+      problems.push(`${where}: an enum has no values`)
+    if (node.type === "union" || node.type === "allOf") {
+      if (node.type === "union" && node.of.length === 0) problems.push(`${where}: a union has no members`)
+      for (const member of node.of) validUnions(member, where)
+    } else if (node.type === "array") validUnions(node.items, `${where}[]`)
+    else if (node.type === "object") {
+      for (const [name, property] of Object.entries(node.properties)) validUnions(property, `${where}.${name}`)
+      if (node.additionalProperties) validUnions(node.additionalProperties, where)
+    }
+  }
+  for (const schema of model.schemas) validUnions(schema.schema, `schema "${schema.id}"`)
+  for (const operation of model.operations) {
+    for (const parameter of operation.parameters) validUnions(parameter.schema, `operation "${operation.id}"`)
+    if (operation.requestBody?.schema) validUnions(operation.requestBody.schema, `operation "${operation.id}" request`)
+    if (operation.response?.schema) validUnions(operation.response.schema, `operation "${operation.id}" response`)
+  }
   const schemaIds = new Set(model.schemas.map((schema) => schema.id))
   const unresolved = (where: string, node: SchemaNode | undefined) => {
     if (!node) return

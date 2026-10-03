@@ -29,7 +29,9 @@ class TypeWriter {
       case "number":
         return "number"
       case "boolean":
-        return "boolean"
+        return node.enum ? node.enum.map(String).join(" | ") : "boolean"
+      case "union":
+        return `(${node.of.map((member) => this.node(member, where)).join(" | ")})`
       case "unknown":
         return "unknown"
       case "array": {

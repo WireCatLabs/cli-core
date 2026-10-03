@@ -34,6 +34,7 @@ class SchemaWriter {
       case "string": {
         if (node.enum) return `v.picklist(${JSON.stringify(node.enum)})`
         const actions: string[] = []
+        if (node.format === "binary") actions.push('v.startsWith("attach://")')
         if (node.minLength !== undefined) actions.push(`v.minLength(${node.minLength})`)
         if (node.maxLength !== undefined) actions.push(`v.maxLength(${node.maxLength})`)
         if (node.pattern !== undefined) {
@@ -58,7 +59,11 @@ class SchemaWriter {
         this.helpers.add("number")
         return `number(${range(node)})`
       case "boolean":
-        return "v.boolean()"
+        if (!node.enum) return "v.boolean()"
+        if (node.enum.length === 1) return `v.literal(${node.enum[0]})`
+        return `v.union([${node.enum.map((value) => `v.literal(${value})`).join(", ")}])`
+      case "union":
+        return `v.union([${node.of.map((member) => this.node(member, where)).join(", ")}])`
       case "unknown":
         return "v.unknown()"
       case "array": {
