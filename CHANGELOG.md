@@ -7,6 +7,16 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## Unreleased
+
+### Fixed
+
+- **`cli-dev docs-check` and `markdownFiles` skip what is not a file or a folder.** A device or a
+  pipe named `*.md` used to be read, and the check crashed. Claude Code's Bash sandbox lays devices
+  over names in the working folder (`.claude/loop.md`, `.claude/skills`), so the check failed in
+  every agent session with the sandbox on. A symbolic link to a file is still listed; a link to a
+  folder is still not followed.
+
 ## 0.17.0 — 03.10.2026
 
 ### Changed — may break callers
