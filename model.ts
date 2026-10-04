@@ -37,7 +37,7 @@ export class TaskError extends Error {
   }
 }
 
-export function close(task: Task, state: ClosedState, by: TaskOrigin, at: Date, reason?: string): Task {
+export function closeTask(task: Task, state: ClosedState, by: TaskOrigin, at: Date, reason?: string): Task {
   if (task.state !== "open") throw new TaskError("closed", `task ${task.id} is already ${task.state}`)
   return { ...task, state, closedAt: at, closedBy: by, ...(reason === undefined ? {} : { reason }) }
 }

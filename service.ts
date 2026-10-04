@@ -1,4 +1,4 @@
-import { close, type Task, TaskError, type TaskKind, type TaskOrigin } from "./model.js"
+import { type ClosedState, closeTask, type Task, TaskError, type TaskKind, type TaskOrigin } from "./model.js"
 import type { TaskFilter, TaskStore } from "./store.js"
 
 export interface NewTask {
@@ -9,6 +9,12 @@ export interface NewTask {
   kind: TaskKind
   origin: TaskOrigin
   dueAt?: Date
+}
+
+export interface CloseOptions {
+  as: ClosedState
+  by: TaskOrigin
+  reason?: string
 }
 
 export interface GroupStats {
@@ -37,25 +43,20 @@ export function createTaskService({
 
   return {
     /**
-     * One task per source in an account, whatever its state: a rule seeing the same message again
-     * gets the task it already made, and a dismissed one stays dismissed.
+     * A rule never makes a second task from a source it has seen, whatever that task's state, so a
+     * dismissed one stays dismissed. A person or an agent may add a task of another kind to it.
      */
     async add(input: NewTask): Promise<{ task: Task; created: boolean }> {
       const existing = await store.findBySource(input.account, input.source)
-      if (existing) return { task: existing, created: false }
+      const same = input.origin === "rule" ? existing[0] : existing.find((task) => task.kind === input.kind)
+      if (same) return { task: same, created: false }
       const task: Task = { ...input, id: newId(), state: "open", createdAt: now() }
       await store.insert(task)
       return { task, created: true }
     },
 
-    async done(id: string, by: TaskOrigin): Promise<Task> {
-      const task = close(await find(id), "done", by, now())
-      await store.update(task)
-      return task
-    },
-
-    async dismiss(id: string, by: TaskOrigin, reason: string): Promise<Task> {
-      const task = close(await find(id), "dismissed", by, now(), reason)
+    async close(id: string, { as, by, reason }: CloseOptions): Promise<Task> {
+      const task = closeTask(await find(id), as, by, now(), reason)
       await store.update(task)
       return task
     },

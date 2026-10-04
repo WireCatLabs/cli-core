@@ -11,7 +11,7 @@ export interface TaskFilter {
 /** What a host implements to keep tasks — in its own file, never inside a message store. */
 export interface TaskStore {
   get(id: string): Promise<Task | undefined>
-  findBySource(account: string, source: string): Promise<Task | undefined>
+  findBySource(account: string, source: string): Promise<Task[]>
   insert(task: Task): Promise<void>
   update(task: Task): Promise<void>
   list(filter: TaskFilter): Promise<Task[]>

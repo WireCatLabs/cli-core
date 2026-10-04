@@ -35,7 +35,7 @@ describe("adding", () => {
   it("never reopens a dismissed task", async () => {
     const { service } = setup()
     const { task } = await service.add(question)
-    await service.dismiss(task.id, "owner", "no-reply-needed")
+    await service.close(task.id, { as: "dismissed", by: "owner", reason: "no-reply-needed" })
 
     const again = await service.add(question)
 
@@ -51,6 +51,20 @@ describe("adding", () => {
 
     expect(a.task.id).not.toBe(b.task.id)
     expect(a.task.createdAt.getTime()).toBeGreaterThanOrEqual(before)
+  })
+
+  it("adds a hand-made task of another kind beside a closed one, but not a second of the same kind", async () => {
+    const { service } = setup()
+    const { task } = await service.add(question)
+    await service.close(task.id, { as: "dismissed", by: "owner", reason: "no-reply-needed" })
+
+    const promise = await service.add({ ...question, kind: "promise", origin: "owner" })
+    const again = await service.add({ ...question, kind: "promise", origin: "agent" })
+    const fromRule = await service.add({ ...question, kind: "mention" })
+
+    expect(promise).toMatchObject({ created: true, task: { kind: "promise", state: "open" } })
+    expect(again).toEqual({ task: promise.task, created: false })
+    expect(fromRule).toMatchObject({ created: false, task: { kind: "question", state: "dismissed" } })
   })
 
   it("keeps two accounts apart for the same locator", async () => {
@@ -69,7 +83,7 @@ describe("closing", () => {
     const { task } = await service.add(question)
     advance(60_000)
 
-    const done = await service.done(task.id, "agent")
+    const done = await service.close(task.id, { as: "done", by: "agent" })
 
     expect(done).toMatchObject({ state: "done", closedBy: "agent", closedAt: new Date("2026-10-04T10:01:00Z") })
     expect(done.reason).toBeUndefined()
@@ -78,15 +92,17 @@ describe("closing", () => {
   it("refuses to close a closed task again", async () => {
     const { service } = setup()
     const { task } = await service.add(question)
-    await service.done(task.id, "owner")
+    await service.close(task.id, { as: "done", by: "owner" })
 
-    await expect(service.dismiss(task.id, "owner", "no-reply-needed")).rejects.toMatchObject({ code: "closed" })
+    await expect(
+      service.close(task.id, { as: "dismissed", by: "owner", reason: "no-reply-needed" }),
+    ).rejects.toMatchObject({ code: "closed" })
   })
 
   it("names a task that does not exist", async () => {
     const { service } = setup()
 
-    const error = await service.done("missing", "owner").catch((caught: unknown) => caught)
+    const error = await service.close("missing", { as: "done", by: "owner" }).catch((caught: unknown) => caught)
 
     expect(error).toBeInstanceOf(TaskError)
     expect(error).toMatchObject({ code: "not_found", message: "no task missing" })
@@ -99,7 +115,7 @@ describe("listing", () => {
     const old = await service.add(question)
     advance(3_600_000)
     await service.add({ ...question, source: "msg:tg:chat-2:5", group: "chat-2", kind: "mention" })
-    await service.done(old.task.id, "owner")
+    await service.close(old.task.id, { as: "done", by: "owner" })
 
     const ids = async (filter: Parameters<typeof service.list>[0]) =>
       (await service.list(filter)).map((task: Task) => task.source)
@@ -118,11 +134,11 @@ describe("stats", () => {
     const b = await service.add({ ...question, source: "msg:2" })
     const c = await service.add({ ...question, source: "msg:3" })
     advance(1_000)
-    await service.done(a.task.id, "owner")
+    await service.close(a.task.id, { as: "done", by: "owner" })
     advance(2_000)
-    await service.done(b.task.id, "owner")
+    await service.close(b.task.id, { as: "done", by: "owner" })
     advance(5_000)
-    await service.dismiss(c.task.id, "owner", "no-reply-needed")
+    await service.close(c.task.id, { as: "dismissed", by: "owner", reason: "no-reply-needed" })
     await service.add({ ...question, source: "msg:4" })
     await service.add({ ...question, source: "msg:5", group: "chat-2" })
 
@@ -137,9 +153,9 @@ describe("stats", () => {
     const a = await service.add({ ...question, source: "msg:1" })
     const b = await service.add({ ...question, source: "msg:2" })
     advance(1_000)
-    await service.done(a.task.id, "owner")
+    await service.close(a.task.id, { as: "done", by: "owner" })
     advance(2_000)
-    await service.done(b.task.id, "owner")
+    await service.close(b.task.id, { as: "done", by: "owner" })
 
     expect(await service.stats()).toEqual([{ group: "chat-1", open: 0, medianCloseMs: 2_000 }])
   })

@@ -1,6 +1,6 @@
 export {
   type ClosedState,
-  close,
+  closeTask,
   TASK_KINDS,
   TASK_ORIGINS,
   TASK_STATES,
@@ -11,6 +11,7 @@ export {
   type TaskState,
 } from "./model.js"
 export {
+  type CloseOptions,
   createTaskService,
   type GroupStats,
   type NewTask,

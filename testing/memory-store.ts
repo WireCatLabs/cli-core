@@ -7,7 +7,9 @@ export function memoryTaskStore(initial: Task[] = []): TaskStore {
   return {
     get: async (id) => copy(tasks.get(id)),
     findBySource: async (account, source) =>
-      copy([...tasks.values()].find((task) => task.account === account && task.source === source)),
+      [...tasks.values()]
+        .filter((task) => task.account === account && task.source === source)
+        .map((task) => ({ ...task })),
     insert: async (task) => {
       if (tasks.has(task.id)) throw new Error(`task ${task.id} already exists`)
       tasks.set(task.id, { ...task })
