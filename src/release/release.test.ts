@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { execFileSync } from "node:child_process"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -165,6 +166,18 @@ describe("slug", () => {
   it("makes GitHub's anchor from a Russian heading with code in it", () => {
     expect(slug("Новые сообщения сразу: `max serve` и `max watch`")).toBe("новые-сообщения-сразу-max-serve-и-max-watch")
     expect(slug("Команды и чаты по `@`")).toBe("команды-и-чаты-по-")
+  })
+})
+
+describe("markdownFiles", () => {
+  it.skipIf(process.platform === "win32")("lists files and links, not a special file with a .md name", () => {
+    const root = mkdtempSync(join(tmpdir(), "markdown-files-"))
+    writeFileSync(join(root, "README.md"), "# x\n")
+    symlinkSync(join(root, "README.md"), join(root, "linked.md"))
+    execFileSync("mkfifo", [join(root, "loop.md")])
+
+    expect(markdownFiles(root).sort()).toEqual([join(root, "README.md"), join(root, "linked.md")])
+    rmSync(root, { recursive: true, force: true })
   })
 })
 

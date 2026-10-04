@@ -106,8 +106,11 @@ export const markdownFiles = (directory: string, skip: ReadonlySet<string> = new
     ? readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
         if (skip.has(entry.name)) return []
         const path = join(directory, entry.name)
-        if (entry.isDirectory()) return markdownFiles(path, skip)
-        return entry.name.endsWith(".md") ? [path] : []
+        // stat, not the entry's own type: Claude Code's sandbox mounts character devices over names
+        // like .claude/loop.md, and the directory listing still reports what lies underneath.
+        const stats = statSync(path, { throwIfNoEntry: false })
+        if (entry.isDirectory() && stats?.isDirectory()) return markdownFiles(path, skip)
+        return stats?.isFile() && entry.name.endsWith(".md") ? [path] : []
       })
     : []
 
