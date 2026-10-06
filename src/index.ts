@@ -7,7 +7,7 @@ export { brokenKeyring, type KeyringStore, memoryKeyring, systemKeyring } from "
 export { type Logger, noopLogger } from "./logger.js"
 export { createFileLogger, type FileLogger, type FileLoggerOptions, REDACTED_FIELDS } from "./logging.js"
 export { configFilePath, type Paths, type PathsOptions, pathsAreOverridden, resolvePaths } from "./paths.js"
-export { type PrettyOptions, renderPretty } from "./pretty.js"
+export { indent, type PrettyOptions, renderPretty } from "./pretty.js"
 export {
   createRenderer,
   RENDER_FORMATS,
