@@ -32,6 +32,13 @@ export const renderPretty = (value: unknown, options: PrettyOptions): string => 
   return renderJson(value)
 }
 
+/** Shifts every line right; an empty line stays empty, so no trailing spaces reach the terminal. */
+export const indent = (text: string, spaces: number): string =>
+  text
+    .split("\n")
+    .map((line) => (line === "" ? line : `${" ".repeat(spaces)}${line}`))
+    .join("\n")
+
 type Row = Record<string, unknown>
 
 const palette = (color: boolean) => ({
