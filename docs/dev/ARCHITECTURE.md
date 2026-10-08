@@ -14,7 +14,7 @@ self-update and code generation. What each export does is the table in the
 [README](../../README.md#what-is-in-it); this page is about the seams and how a change travels.
 
 Where each piece came from — and what was deliberately left in `brazecli` — is §4 of max-cli's
-architecture proposal ([private repository](https://github.com/leemour/max-cli-private/blob/main/plans/2026-09-19-architecture.md#4-the-inventory-what-braze-cli-has-and-where-each-piece-goes)).
+architecture proposal ([private repository](https://github.com/leemour/cli-private/blob/main/plans/2026-09-19-architecture.md#4-the-inventory-what-braze-cli-has-and-where-each-piece-goes)).
 
 ## Entry points
 
