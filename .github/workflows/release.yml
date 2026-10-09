@@ -52,7 +52,7 @@ jobs:
         run: |
           version=$(node -p 'require("./package.json").version')
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "${{ inputs.dry_run }}" != "true" ] && npm view "@leemour/cli-core@$version" version --prefer-online >/dev/null 2>&1; then
+          if [ "${{ inputs.dry_run }}" != "true" ] && npm view "@wirecat/cli-core@$version" version --prefer-online >/dev/null 2>&1; then
             echo "::error::$version is already on npm — raise the version first"
             exit 1
           fi
@@ -67,7 +67,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: package
-          path: leemour-cli-core-${{ steps.version.outputs.version }}.tgz
+          path: wirecat-cli-core-${{ steps.version.outputs.version }}.tgz
           if-no-files-found: error
           retention-days: 7
 
@@ -93,7 +93,7 @@ jobs:
 
       # npm, not pnpm: npm's trusted publishing is the documented path. A tarball runs no
       # lifecycle scripts, and nothing is installed here.
-      - run: npm publish "leemour-cli-core-$VERSION.tgz" --access public ${{ inputs.dry_run && '--dry-run --loglevel verbose' || '' }}
+      - run: npm publish "wirecat-cli-core-$VERSION.tgz" --access public ${{ inputs.dry_run && '--dry-run --loglevel verbose' || '' }}
 
       - name: wait for npm to show the version
         if: ${{ !inputs.dry_run }}
@@ -101,7 +101,7 @@ jobs:
           # The version's own document, not `npm view`: on 2026-10-01 the document answered while the
           # version list `npm view` reads was still stale, and two releases went untagged.
           for _ in $(seq 90); do
-            curl -sfo /dev/null "https://registry.npmjs.org/@leemour%2fcli-core/$VERSION" && exit 0
+            curl -sfo /dev/null "https://registry.npmjs.org/@wirecat%2fcli-core/$VERSION" && exit 0
             sleep 10
           done
           echo "::error::npm does not show $VERSION after fifteen minutes — not tagging; tag v$VERSION by hand once it does"

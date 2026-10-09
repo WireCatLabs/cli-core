@@ -2,7 +2,7 @@
  * The HTTP layer, deliberately behind its own entry point.
  *
  * A CLI that speaks a socket, a message bus or a local database has no business depending on
- * status-code semantics and `Retry-After` parsing. Import `@leemour/cli-core/http` only when
+ * status-code semantics and `Retry-After` parsing. Import `@wirecat/cli-core/http` only when
  * the thing on the other end is actually HTTP.
  */
 import type { ErrorCode } from "../errors.js"

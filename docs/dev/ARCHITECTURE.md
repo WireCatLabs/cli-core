@@ -10,7 +10,7 @@ self-update and code generation. What each export does is the table in the
 
 | Import | Owns | Depends on |
 |---|---|---|
-| `@leemour/cli-core` | streams, renderer, pretty, errors, exit codes, keyring, credentials, config, paths, logging, retry, time, sanitize | `env-paths`, `pino`, `cli-table3`, `picocolors`; `@napi-rs/keyring` loaded on first use |
+| `@wirecat/cli-core` | streams, renderer, pretty, errors, exit codes, keyring, credentials, config, paths, logging, retry, time, sanitize | `env-paths`, `pino`, `cli-table3`, `picocolors`; `@napi-rs/keyring` loaded on first use |
 | `/http` | status → error code, `Retry-After` and rate-limit parsing, the `fetch` seam | the root's `ErrorCode` and `WallClock` types |
 | `/commands` | the command tree as data (`describeProgram`, `annotate`, `flatten`), and the reference page written from it (`commandsPage`) | Commander, as a type only |
 | `/completion` | shell completion over that tree | `/commands` types |

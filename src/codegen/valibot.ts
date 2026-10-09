@@ -121,7 +121,7 @@ export const valibotGenerator =
       return `export const ${name}: v.GenericSchema<unknown, T.${name}> = ${expression}\n`
     })
     const helpers = [...writer.helpers].sort()
-    const runtime = options.runtimeImport ?? "@leemour/cli-core/codegen/runtime"
+    const runtime = options.runtimeImport ?? "@wirecat/cli-core/codegen/runtime"
     const packages = [
       `import * as v from "valibot"`,
       ...(helpers.length > 0 ? [`import { ${helpers.join(", ")} } from "${runtime}"`] : []),

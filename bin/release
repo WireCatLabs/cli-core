@@ -39,12 +39,12 @@ case "$top" in
 esac
 # `npm view` rather than the registry document, which a CDN serves stale for minutes.
 published() {
-  npm view "@leemour/cli-core@$version" version --prefer-online >/dev/null 2>&1
+  npm view "@wirecat/cli-core@$version" version --prefer-online >/dev/null 2>&1
 }
 
 # Two sessions preparing the same number is normal; the second takes the next free one (2026-09-29).
-latest=$(npm view @leemour/cli-core version --prefer-online 2>/dev/null || true)
-versions=$(npm view @leemour/cli-core versions --json --prefer-online 2>/dev/null || true)
+latest=$(npm view @wirecat/cli-core version --prefer-online 2>/dev/null || true)
+versions=$(npm view @wirecat/cli-core versions --json --prefer-online 2>/dev/null || true)
 next=$(node scripts/next-version.mjs "$version" "$latest" "$versions")
 if [ "$next" != "$version" ]; then
   if published; then why="$version is already on npm"; else why="$version is not above npm's latest $latest"; fi
@@ -88,7 +88,7 @@ if [ "$mode" = ci ]; then
   [ -n "$run" ] || { echo "the release workflow did not start within a minute — see gh run list --workflow release.yml" >&2; exit 1; }
   gh run watch "$run" --exit-status
   git fetch -q --tags origin
-  echo "published @leemour/cli-core@$version"
+  echo "published @wirecat/cli-core@$version"
   exit 0
 fi
 
@@ -114,4 +114,4 @@ done
 echo "== tag v$version =="
 git tag -a "v$version" -m "$version"
 git push -q origin "v$version"
-echo "published @leemour/cli-core@$version"
+echo "published @wirecat/cli-core@$version"
