@@ -7,6 +7,13 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## Unreleased
+
+### Fixed
+
+- **Display sanitization makes Unicode tags and byte-order marks visible.** Subdivision flag emoji
+  stay intact. CLI machine output continues to preserve original strings.
+
 ## 0.17.2 — 07.10.2026
 
 ### Added

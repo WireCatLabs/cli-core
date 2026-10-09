@@ -16,6 +16,9 @@ describe("visibleControls", () => {
     ["a directional isolate", "a\u2067b\u2069", "a\\u2067b\\u2069"],
     ["a zero-width space", "pay\u200bpal", "pay\\u200bpal"],
     ["a right-to-left mark", "a\u200fb", "a\\u200fb"],
+    ["a byte-order mark", "a\ufeffb", "a\\ufeffb"],
+    ["a tag character", "a\u{e0041}b", "a\\u{e0041}b"],
+    ["a stray cancel tag", "a\u{e007f}b", "a\\u{e007f}b"],
   ])("makes %s visible", (_name, input, expected) => {
     const output = visibleControls(input)
 
@@ -32,6 +35,7 @@ describe("visibleControls", () => {
     ["an emoji built with the zero-width joiner", "\u{1f468}\u200d\u{1f469}\u200d\u{1f467} family"],
     ["Persian with a zero-width non-joiner", "می\u200cخواهم"],
     ["an empty string", ""],
+    ["a subdivision flag", "\u{1f3f4}\u{e0067}\u{e0062}\u{e0065}\u{e006e}\u{e0067}\u{e007f}"],
   ])("leaves %s exactly as it was", (_name, input) => {
     expect(visibleControls(input)).toBe(input)
   })
