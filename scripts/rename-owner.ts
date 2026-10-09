@@ -122,6 +122,8 @@ export const SKIPPED_FILES = [
   /(^|\/)(pnpm-lock\.yaml|bun\.lockb?|package-lock\.json)$/,
   /(^|\/)(journal|plans|research|decisions|captures|releases|evaluations)\//,
   /(^|\/)agent-evals\/runs\//,
+  // Generated from upstream packages: they change when the source is regenerated, not by this pass.
+  /\.generated\.[a-z]+$/,
 ]
 
 export const rewrite = (text: string, rules: Rule[]): { text: string; counts: Map<string, number> } => {
