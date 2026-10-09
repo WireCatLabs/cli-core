@@ -23,7 +23,7 @@ CI runs all but the last, plus a secret scan over the whole history —
 
 ⚠ Both overlays carry `"exclude": []`, and that line is the whole point: `extends` inherits `exclude`, so
 without it the test config still excludes every test file and passes having checked nothing
-(max-cli learned this — [its TESTING.md](https://github.com/leemour/max-cli/blob/main/docs/dev/TESTING.md#the-rule-a-skip-is-not-a-pass)).
+(max-cli learned this — [its TESTING.md](https://github.com/WireCatLabs/max-cli/blob/main/docs/dev/TESTING.md#the-rule-a-skip-is-not-a-pass)).
 Checked on 2026-09-29 by putting a type error into a test and watching `pnpm typecheck` fail.
 
 ## No test reaches the real machine
