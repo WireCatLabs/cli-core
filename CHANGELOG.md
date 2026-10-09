@@ -9,6 +9,12 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ## Unreleased
 
+### Changed â€” may break callers
+
+- **Production dependency and workflow security checks run before releases.** Call the reusable
+  `release-checks.yml` workflow from each release workflow and require it before building. `node-ci.yml`
+  keeps lint, typecheck, coverage, build, Bun and secret scanning on changes.
+
 ### Fixed
 
 - **Display sanitization makes Unicode tags and byte-order marks visible.** Subdivision flag emoji
