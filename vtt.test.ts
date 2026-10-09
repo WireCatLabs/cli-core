@@ -25,6 +25,13 @@ describe("parseVtt", () => {
     expect(parseVtt(vtt)).toEqual([{ startMs: 3_600_000, endMs: 3_601_000, speaker: "Carol Test", text: "hi" }])
   })
 
+  it("skips header lines after WEBVTT", () => {
+    expect(parseVtt("WEBVTT\nKind: captions\nLanguage: en\n\n00:00:01.000 --> 00:00:02.000\nhi\n")).toEqual([
+      { startMs: 1000, endMs: 2000, speaker: null, text: "hi" },
+    ])
+    expect(parseVtt("WEBVTT")).toEqual([])
+  })
+
   it("takes a byte-order mark, CRLF line ends and minutes-only timestamps", () => {
     expect(parseVtt("﻿WEBVTT\r\n\r\n00:02.000 --> 00:03.000\r\nAlice Example: ok\r\n")).toEqual([
       { startMs: 2000, endMs: 3000, speaker: "Alice Example", text: "ok" },

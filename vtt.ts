@@ -28,7 +28,8 @@ export const parseVtt = (input: string): TranscriptLine[] => {
   if (!/^WEBVTT([ \t].*)?$/.test(lines[0] ?? "")) throw new VttError('line 1: a WebVTT file starts with "WEBVTT"')
 
   const cues: TranscriptLine[] = []
-  let i = 1
+  let i = lines.findIndex((line) => line.trim() === "")
+  if (i < 0) return []
   while (i < lines.length) {
     while (i < lines.length && lines[i]?.trim() === "") i++
     const start = i
