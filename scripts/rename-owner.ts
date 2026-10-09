@@ -55,7 +55,11 @@ export const RULES: Record<"github" | "npm", Rule[]> = {
       pattern: new RegExp(String.raw`github\\\.com\\/leemour\\/(${repo})${END}`, "g"),
       replace: String.raw`github\.com\/WireCatLabs\/$1`,
     },
-    { name: "templated repo path", pattern: /(?<![@\w.-])leemour\/(?=\$\{|<repo>)/g, replace: "WireCatLabs/" },
+    {
+      name: "templated repo path",
+      pattern: /(?<!home\/|[@\w.~-])leemour\/(?=\$\{|\$\w|<repo>)/g,
+      replace: "WireCatLabs/",
+    },
     {
       name: "trusted publisher owner",
       pattern: new RegExp(String.raw`\`leemour\`(?= / \`(?:${repo})\`)`, "g"),
@@ -121,9 +125,11 @@ export const SKIPPED_FILES = [
   /(^|\/)CHANGELOG\.md$/,
   /(^|\/)(pnpm-lock\.yaml|bun\.lockb?|package-lock\.json)$/,
   /(^|\/)(journal|plans|research|decisions|captures|releases|evaluations)\//,
-  /(^|\/)agent-evals\/runs\//,
+  /(^|\/)(agent-evals|security)\/runs\//,
   // Generated from upstream packages: they change when the source is regenerated, not by this pass.
   /\.generated\.[a-z]+$/,
+  // Its own fixtures are the old owner on purpose.
+  /(^|\/)scripts\/rename-owner(\.test)?\.ts$/,
 ]
 
 export const rewrite = (text: string, rules: Rule[]): { text: string; counts: Map<string, number> } => {
