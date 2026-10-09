@@ -20,6 +20,7 @@ describe("github pass", () => {
     ["gh pr list --repo leemour/cli-private", "gh pr list --repo WireCatLabs/cli-private"],
     ["`https://github.com/leemour/${cli}-cli.git`", "`https://github.com/WireCatLabs/${cli}-cli.git`"],
     ["gh api repos/leemour/<repo> --jq .state", "gh api repos/WireCatLabs/<repo> --jq .state"],
+    ['gh api "repos/leemour/$repo/code-scanning/alerts"', 'gh api "repos/WireCatLabs/$repo/code-scanning/alerts"'],
     ["names: `leemour` / `cli-messaging` / `release.yml`", "names: `WireCatLabs` / `cli-messaging` / `release.yml`"],
   ])("moves %s", (before, after) => {
     expect(github(before)).toBe(after)
@@ -28,6 +29,8 @@ describe("github pass", () => {
   it.each([
     '"@leemour/max-cli": "0.39.0"',
     "/home/leemour/Projects/AI/max-cli",
+    "/home/leemour/${dir}/max-cli",
+    "cd /home/leemour/$dir",
     "https://github.com/leemour/brazecli",
     "https://github.com/leemour/cli-messaging-archive",
   ])("leaves %s", (text) => {
