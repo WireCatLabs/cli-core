@@ -124,6 +124,8 @@ export const SKIPPED_FILES = [
   /(^|\/)agent-evals\/runs\//,
   // Generated from upstream packages: they change when the source is regenerated, not by this pass.
   /\.generated\.[a-z]+$/,
+  // Its own fixtures are the old owner on purpose.
+  /(^|\/)scripts\/rename-owner(\.test)?\.ts$/,
 ]
 
 export const rewrite = (text: string, rules: Rule[]): { text: string; counts: Map<string, number> } => {
