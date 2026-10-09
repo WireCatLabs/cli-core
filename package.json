@@ -6,7 +6,7 @@
   "author": "Viacheslav Ptsarev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/leemour/cli-core.git"
+    "url": "git+https://github.com/WireCatLabs/cli-core.git"
   },
   "type": "module",
   "engines": {

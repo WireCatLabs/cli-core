@@ -5,7 +5,7 @@ a renderer for people and for machines, a closed error model with stable exit co
 keyring behind a testable seam, and injectable clocks.
 
 Extracted from [`brazecli`](https://github.com/leemour/brazecli), where each piece earned its
-shape, and shared with [`max-cli`](https://github.com/leemour/max-cli).
+shape, and shared with [`max-cli`](https://github.com/WireCatLabs/max-cli).
 
 Published on npm and used by `max-cli`, `cli-messaging`, `tg-cli` and `brazecli`. What changed in
 each version is in [`CHANGELOG.md`](CHANGELOG.md); how the package is put together and released is in
@@ -296,7 +296,7 @@ vale README.md docs/*.md   # .vale.ini: StylesPath = node_modules/@leemour/cli-c
 ```
 
 `cli-dev docs-check --pages` adds the structure check: `docs/` against `docs/meta.json`, the
-sidebar of [the docs portal](https://github.com/leemour/cli-docs/blob/main/docs/STRUCTURE.md).
+sidebar of [the docs portal](https://github.com/WireCatLabs/cli-docs/blob/main/docs/STRUCTURE.md).
 Vale's styles are `CliDocs` (filler words, long sentences) and `Tg` (tg's tone: a Telegram client,
 never "unofficial"); its rules warn rather than fail until they are tuned.
 
@@ -306,7 +306,7 @@ scan of the whole history. Jobs only your repository needs stay beside it in you
 ```yaml
 jobs:
   ci:
-    uses: leemour/cli-core/.github/workflows/node-ci.yml@v<version>
+    uses: WireCatLabs/cli-core/.github/workflows/node-ci.yml@v<version>
     with:
       checks: |
         pnpm docs:check
@@ -333,7 +333,7 @@ publishes through npm's [trusted publishing](https://docs.npmjs.com/trusted-publ
 token in GitHub, and npm attaches provenance — and tags `v<version>` only once npm shows the new version.
 
 npm trusts the workflow **by file name**: the package's Trusted Publisher settings on npmjs.com name
-`leemour` / `cli-core` / `release.yml`. Rename the file and publishing stops until they are updated.
+`WireCatLabs` / `cli-core` / `release.yml`. Rename the file and publishing stops until they are updated.
 
 `bin/release --local` is the fallback: it runs the same checks here and publishes with the npm token
 from the keyring (`secret-tool`, service `npm`, account `leemour`) without printing it. The token

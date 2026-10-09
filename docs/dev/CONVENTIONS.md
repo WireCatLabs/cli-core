@@ -1,7 +1,7 @@
 # Conventions
 
 What is shared with the sibling CLIs is written once, in max-cli's
-[`CONVENTIONS.md`](https://github.com/leemour/max-cli/blob/main/docs/dev/CONVENTIONS.md): Biome decides
+[`CONVENTIONS.md`](https://github.com/WireCatLabs/max-cli/blob/main/docs/dev/CONVENTIONS.md): Biome decides
 formatting, strict TypeScript with no `any`, comments only for *why*, core takes its environment as
 arguments, one-shot means one-shot, never log a credential, documents state current facts. The
 MAX-specific rules there (wire names, protocol sources, Russian documents) do not apply here. This

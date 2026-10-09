@@ -55,9 +55,9 @@ adapter and a renderer; what is written, and where, is the host's call.
 
 | Repository | Subpaths used |
 |---|---|
-| [max-cli](https://github.com/leemour/max-cli) | root, `/commands`, `/codegen`, `/codegen/runtime`, `/http`, `/release`, `/update`, `/completion` |
-| [cli-messaging](https://github.com/leemour/cli-messaging) | root, `/commands`, `/completion`, `/update` |
-| [tg-cli](https://github.com/leemour/tg-cli) | root, `/commands`, `/http`, `/release`, `/update` |
+| [max-cli](https://github.com/WireCatLabs/max-cli) | root, `/commands`, `/codegen`, `/codegen/runtime`, `/http`, `/release`, `/update`, `/completion` |
+| [cli-messaging](https://github.com/WireCatLabs/cli-messaging) | root, `/commands`, `/completion`, `/update` |
+| [tg-cli](https://github.com/WireCatLabs/tg-cli) | root, `/commands`, `/http`, `/release`, `/update` |
 | [brazecli](https://github.com/leemour/brazecli) | root, `/commands`, `/completion`, `/http`, `/update` |
 
 Each consumer's pin is in its `package.json`; a caret on `0.x` does not cross a minor, so every pin is
