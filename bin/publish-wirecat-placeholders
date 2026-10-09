@@ -1,0 +1,55 @@
+#!/usr/bin/env sh
+# Publishes an empty 0.0.0 of every @wirecat package that is not on npm yet, so npm lets its trusted
+# publisher be set (npmjs.com → the package → Settings → Trusted publishing: GitHub Actions, WireCatLabs,
+# the repository and workflow printed below, environment npm, allow `npm publish`). Every real version
+# is published by that workflow, never from this machine.
+#
+#   bin/publish-wirecat-placeholders
+set -eu
+
+# package  repository  workflow  directory-in-repository
+packages="cli-core cli-core release.yml -
+cli-tasks cli-tasks release.yml -
+cli-messaging cli-messaging release.yml -
+cli-messaging-sqlite cli-messaging sqlite.yml packages/sqlite
+cli-messaging-onnx cli-messaging onnx.yml packages/onnx
+tg-cli tg-cli release.yml -
+max-cli max-cli release.yml -
+cli-memo cli-memo release.yml -"
+
+if [ -z "${NPM_TOKEN:-}" ]; then
+  NPM_TOKEN=$(secret-tool lookup service npm account leemour 2>/dev/null) || {
+    echo "no npm token: export NPM_TOKEN, or store one with: secret-tool store --label=npm service npm account leemour" >&2
+    exit 1
+  }
+fi
+[ -n "$NPM_TOKEN" ] || { echo "the npm token is empty" >&2; exit 1; }
+export NPM_TOKEN
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+# A config that names the variable, not the value: the token stays in the environment.
+printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$work/.npmrc"
+
+echo "$packages" | while read -r name repo workflow dir; do
+  package=@wirecat/$name
+  if npm view "$package" version >/dev/null 2>&1; then
+    echo "exists     $package"
+  else
+    rm -rf "$work/pkg" && mkdir "$work/pkg"
+    directory=""
+    [ "$dir" = "-" ] || directory=", \"directory\": \"$dir\""
+    cat > "$work/pkg/package.json" <<JSON
+{
+  "name": "$package",
+  "version": "0.0.0",
+  "description": "Placeholder: releases of $package are published from CI",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/WireCatLabs/$repo.git"$directory }
+}
+JSON
+    (cd "$work/pkg" && npm publish --access public --userconfig "$work/.npmrc" >/dev/null)
+    echo "published  $package@0.0.0"
+  fi
+  echo "           trusted publisher: WireCatLabs / $repo / $workflow / npm"
+done
