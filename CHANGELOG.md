@@ -8,6 +8,12 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## 0.18.1 — 10.10.2026
+
+### Fixed
+
+- **The shared spelling list knows `wirecat`.** `cspell` no longer flags the new package scope in READMEs.
+
 ## 0.18.0 — 10.10.2026
 
 ### Changed — may break callers
