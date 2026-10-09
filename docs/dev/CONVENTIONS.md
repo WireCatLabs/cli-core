@@ -3,7 +3,7 @@
 What is shared with the sibling CLIs is written once, in max-cli's
 [`CONVENTIONS.md`](https://github.com/leemour/max-cli/blob/main/docs/dev/CONVENTIONS.md): Biome decides
 formatting, strict TypeScript with no `any`, comments only for *why*, core takes its environment as
-arguments, one-shot means one-shot, never log a credential, correct documents in place. The
+arguments, one-shot means one-shot, never log a credential, documents state current facts. The
 MAX-specific rules there (wire names, protocol sources, Russian documents) do not apply here. This
 page adds only what differs.
 
@@ -26,7 +26,8 @@ has to do.
 
 English, like everything already here. `README.md` is the user page: current facts only, no
 correction marks, no dates of measurement, no backlog or decision ids. `docs/dev/` is for whoever
-works on the code, and a claim there that turns out wrong is corrected in place and marked.
+works on the code and states current facts too: a claim that turns out wrong is rewritten with no
+mark, and git keeps the old text. A finished plan is deleted.
 
 ## The changelog
 

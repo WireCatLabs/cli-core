@@ -1,20 +1,10 @@
 # Architecture
 
-**Status (2026-09-29):** describes `@leemour/cli-core` 0.8.0 as built. The consumer versions below
-were read from each repository's `package.json` on `origin/main` that day; they move with every release, so check
-them again before relying on them.
-
-**Correction 2026-10-01:** it describes 0.9.0, which added `/release`. The consumer pins below were
-read again that day.
-
 `cli-core` is the part of a command line tool that is not about any one service: the two output
 streams, the renderer, the error model and exit codes, the keyring and credentials, config and
 paths, clocks, retry, and — behind their own entry points — HTTP, the command registry, completion,
 self-update and code generation. What each export does is the table in the
 [README](../../README.md#what-is-in-it); this page is about the seams and how a change travels.
-
-Where each piece came from — and what was deliberately left in `brazecli` — is §4 of max-cli's
-architecture proposal ([private repository](https://github.com/leemour/cli-private/blob/main/plans/2026-09-19-architecture.md#4-the-inventory-what-braze-cli-has-and-where-each-piece-goes)).
 
 ## Entry points
 
@@ -63,28 +53,19 @@ adapter and a renderer; what is written, and where, is the host's call.
 
 ## Who consumes it
 
-| Repository | Pins | Subpaths used |
-|---|---|---|
-| [max-cli](https://github.com/leemour/max-cli) | `0.9.0` | root, `/commands`, `/codegen`, `/codegen/runtime`, `/http`, `/release`, `/update`, `/completion` |
-| [cli-messaging](https://github.com/leemour/cli-messaging) | `0.9.0` | root, `/commands`, `/completion`, `/update` |
-| [tg-cli](https://github.com/leemour/tg-cli) | `0.9.0` | root, `/commands`, `/http`, `/release`, `/update` |
-| [brazecli](https://github.com/leemour/brazecli) | `^0.6.0` | root, `/commands`, `/completion`, `/http`, `/update` |
+| Repository | Subpaths used |
+|---|---|
+| [max-cli](https://github.com/leemour/max-cli) | root, `/commands`, `/codegen`, `/codegen/runtime`, `/http`, `/release`, `/update`, `/completion` |
+| [cli-messaging](https://github.com/leemour/cli-messaging) | root, `/commands`, `/completion`, `/update` |
+| [tg-cli](https://github.com/leemour/tg-cli) | root, `/commands`, `/http`, `/release`, `/update` |
+| [brazecli](https://github.com/leemour/brazecli) | root, `/commands`, `/completion`, `/http`, `/update` |
 
-**Correction 2026-10-01:** the pins above were `0.8.0`, `0.7.0` and `0.7.0` on 2026-09-29, and
-max-cli and tg-cli did not list `/release`. brazecli still pins `^0.6.0`.
+Each consumer's pin is in its `package.json`; a caret on `0.x` does not cross a minor, so every pin is
+exact in effect. **A release reaches nobody until each consumer bumps its pin.**
 
-All four are exact versions in effect: a caret on `0.x` does not cross a minor (`^0.6.0` never picks up
-0.7.0). **A release reaches nobody until each consumer bumps its pin.**
-
-⚠ **cli-messaging carries its own copy.** It lists cli-core under `dependencies`, so max-cli, which
-pins 0.8.0 while cli-messaging pins 0.7.0, installs both — they are side by side in max-cli's
-`node_modules/.pnpm` today. tg-cli pins the same 0.7.0 and gets one. The types still line up
-(`CliError` has no private members), but `isCliError()` is an `instanceof` check, so a `CliError` made
-by one copy is not recognised by the other. Bump cli-messaging together with the CLIs.
-
-**Correction 2026-10-01:** there is one copy today. cli-messaging, max-cli and tg-cli all pin
-0.9.0, and so do the cli-messaging versions the two CLIs pin (0.79.0 and 0.82.0). The rule to bump
-them together stands.
+⚠ **cli-messaging carries its own copy** under `dependencies`. When a CLI and the cli-messaging it
+pins use different cli-core versions, both are installed, and `isCliError()` — an `instanceof` check —
+does not recognise a `CliError` made by the other copy. Bump cli-messaging together with the CLIs.
 
 ## How a change is published and picked up
 
