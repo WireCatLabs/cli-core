@@ -21,14 +21,14 @@ describe("installerOf", () => {
   it("reads the package manager from where the running file really lives", () => {
     expect(
       installerOf(
-        "/home/a/.local/share/pnpm/store/v11/links/@leemour/max-cli/0.6.0/abc/node_modules/@leemour/max-cli/dist/bin/max.js",
+        "/home/a/.local/share/pnpm/store/v11/links/@wirecat/max-cli/0.6.0/abc/node_modules/@wirecat/max-cli/dist/bin/max.js",
       ),
     ).toBe("pnpm")
-    expect(installerOf("/usr/local/lib/node_modules/@leemour/max-cli/dist/bin/max.js")).toBe("npm")
-    expect(installerOf("/home/a/.bun/install/global/node_modules/@leemour/max-cli/dist/bin/max.js")).toBe("bun")
-    expect(installerOf("/home/a/.npm/_npx/1a2b/node_modules/@leemour/max-cli/dist/bin/max.js")).toBe("npx")
+    expect(installerOf("/usr/local/lib/node_modules/@wirecat/max-cli/dist/bin/max.js")).toBe("npm")
+    expect(installerOf("/home/a/.bun/install/global/node_modules/@wirecat/max-cli/dist/bin/max.js")).toBe("bun")
+    expect(installerOf("/home/a/.npm/_npx/1a2b/node_modules/@wirecat/max-cli/dist/bin/max.js")).toBe("npx")
     expect(installerOf("/home/a/Projects/max-cli/dist/bin/max.js")).toBe("checkout")
-    expect(installerOf("C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\@leemour\\max-cli\\dist\\bin\\max.js")).toBe(
+    expect(installerOf("C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\@wirecat\\max-cli\\dist\\bin\\max.js")).toBe(
       "npm",
     )
   })
@@ -36,14 +36,14 @@ describe("installerOf", () => {
 
 describe("updateCommand", () => {
   it("names the package manager's own global install of the latest version", () => {
-    expect(updateCommand("pnpm", "@leemour/max-cli")).toEqual(["pnpm", "add", "-g", "@leemour/max-cli@latest"])
-    expect(updateCommand("npm", "@leemour/max-cli")).toEqual(["npm", "install", "-g", "@leemour/max-cli@latest"])
-    expect(updateCommand("bun", "@leemour/max-cli")).toEqual(["bun", "add", "-g", "@leemour/max-cli@latest"])
+    expect(updateCommand("pnpm", "@wirecat/max-cli")).toEqual(["pnpm", "add", "-g", "@wirecat/max-cli@latest"])
+    expect(updateCommand("npm", "@wirecat/max-cli")).toEqual(["npm", "install", "-g", "@wirecat/max-cli@latest"])
+    expect(updateCommand("bun", "@wirecat/max-cli")).toEqual(["bun", "add", "-g", "@wirecat/max-cli@latest"])
   })
 
   it("has nothing to run for a checkout, npx or an install it cannot place", () => {
     for (const installer of ["checkout", "npx", "unknown"] as const) {
-      expect(updateCommand(installer, "@leemour/max-cli")).toBeUndefined()
+      expect(updateCommand(installer, "@wirecat/max-cli")).toBeUndefined()
     }
   })
 })
@@ -64,7 +64,7 @@ describe("isNewer", () => {
 describe("latestVersion", () => {
   it("reads the version npm reports as latest", async () => {
     const fetch = async () => new Response(JSON.stringify({ version: "0.7.0" }))
-    expect(await latestVersion("@leemour/max-cli", fetch)).toBe("0.7.0")
+    expect(await latestVersion("@wirecat/max-cli", fetch)).toBe("0.7.0")
   })
 
   it("answers undefined, never throws, when npm fails, refuses or is too slow", async () => {

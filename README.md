@@ -1,4 +1,4 @@
-# @leemour/cli-core
+# @wirecat/cli-core
 
 The parts every command line tool needs and nobody enjoys writing twice: the two output streams,
 a renderer for people and for machines, a closed error model with stable exit codes, the OS
@@ -19,7 +19,7 @@ script or an agent depends on, and `captureStreams` exists so a test can prove n
 across.
 
 ```ts
-import { captureStreams, createRenderer } from "@leemour/cli-core"
+import { captureStreams, createRenderer } from "@wirecat/cli-core"
 
 const streams = captureStreams()
 createRenderer({ format: "json", color: false, streams }).result({ chats: 2 })
@@ -53,21 +53,21 @@ streams.stderr // []
 | `/mcp` | local stdio MCP setup for Codex and Claude Code, plus a read-only handshake and tool-list probe |
 
 **Nothing in the root export is HTTP.** Status classification, `Retry-After` parsing and the fetch
-seam live in `@leemour/cli-core/http`, so a CLI that speaks a socket never depends on a stack it
+seam live in `@wirecat/cli-core/http`, so a CLI that speaks a socket never depends on a stack it
 does not call:
 
 ```ts
-import { providerWaitMs, statusToCode } from "@leemour/cli-core/http"
+import { providerWaitMs, statusToCode } from "@wirecat/cli-core/http"
 ```
 
-**The command registry is `@leemour/cli-core/commands`** — the whole command tree as data, like
+**The command registry is `@wirecat/cli-core/commands`** — the whole command tree as data, like
 `rails routes`, for an agent to read instead of `--help` and for generated documentation. It walks
 the live [Commander](https://github.com/tj/commander.js) tree, so a command built in a loop from a
 catalog appears exactly like a handwritten one; `annotate` adds what the tree cannot say. Commander
 is a type here, not a runtime dependency — an optional peer, 15 or newer.
 
 ```ts
-import { annotate, describeProgram } from "@leemour/cli-core/commands"
+import { annotate, describeProgram } from "@wirecat/cli-core/commands"
 
 annotate(program.command("send"), { mutates: true, examples: ["max messages send 42 hi"] })
 annotate(generated, { origin: "generated", operationId: "campaigns.list" })
@@ -79,7 +79,7 @@ Each option says whether it `takesValue` and, separately, whether it is `mandato
 Commander's `required`, which means "takes a value when given" — plus its choices, default,
 environment variable, the options it `conflicts` with and the values it `implies`.
 
-**Shell completion is `@leemour/cli-core/completion`**, built on the registry. `suggest` takes the
+**Shell completion is `@wirecat/cli-core/completion`**, built on the registry. `suggest` takes the
 words typed so far and answers what may come next: a command, an action, an option, one of its
 values, or an argument's values from a source the CLI hands in — a local cache, never the network,
 because a shell calls it on every Tab. `formatSuggestions` writes the answer in the protocol of the
@@ -88,7 +88,7 @@ those scripts with tab and answers `<cli> complete -- <words>` with this; cli-co
 depend on tab.
 
 ```ts
-import { formatSuggestions, suggest } from "@leemour/cli-core/completion"
+import { formatSuggestions, suggest } from "@wirecat/cli-core/completion"
 
 const words = argv.slice(argv.indexOf("--") + 1)
 streams.data(formatSuggestions(suggest({ commands, globalOptions, words, sources: { arguments: { chat: chatNames } } })))
@@ -105,7 +105,7 @@ second line of defence, not the first.
 system keychain, `resolvePaths` without `env` reads `process.env`. Passing them is what makes a
 timeout test finish instantly and a keyring test incapable of reaching a real keychain.
 
-**Generating an API catalog is `@leemour/cli-core/codegen`**, a build-time tool. It reads a
+**Generating an API catalog is `@wirecat/cli-core/codegen`**, a build-time tool. It reads a
 format-neutral `ApiModel` — operations with a transport binding (`http` method and path, or `rpc`
 name), an `effect` (`read`, `write`, `destructive`) and how far the source can be trusted
 (`contract`, `example`, `inferred`, `override`) — and writes committed files. It parses no file
@@ -115,7 +115,7 @@ operation is not classified as a read or a write, an override matches nothing, a
 nowhere or a construct cannot be expressed; it never drops an operation or falls back to `any`.
 
 ```ts
-import { generate, manifestGenerator, typesGenerator, valibotGenerator, writeArtifacts } from "@leemour/cli-core/codegen"
+import { generate, manifestGenerator, typesGenerator, valibotGenerator, writeArtifacts } from "@wirecat/cli-core/codegen"
 
 const artifacts = generate(model, [typesGenerator({ path }), valibotGenerator({ path, typesImport }), manifestGenerator({ path })], {
   overrides: { answerOnCallback: { effect: "write", reason: "a POST that edits a message" } },
@@ -124,7 +124,7 @@ const artifacts = generate(model, [typesGenerator({ path }), valibotGenerator({ 
 const stale = writeArtifacts(artifacts, { root, check: process.argv.includes("--check") })
 ```
 
-The generated schemas import `@leemour/cli-core/codegen/runtime` at run time — a few number
+The generated schemas import `@wirecat/cli-core/codegen/runtime` at run time — a few number
 helpers, not the generator. Numbers are expected from a lossless JSON parser (`lossless-json`): a
 64-bit integer comes out as its exact decimal string, and any other integer that does not fit a JS
 number fails instead of rounding. Objects are loose, so a field the API added later passes through.
@@ -137,7 +137,7 @@ so decode a live stream (updates, webhooks) only where that is what you want.
 it back would put a string where the API expects a number. Validate a request with the schema, then
 send the original lossless value.
 
-**Keeping an install current is `@leemour/cli-core/update`.** `installerOf(realpath(script))` says
+**Keeping an install current is `@wirecat/cli-core/update`.** `installerOf(realpath(script))` says
 which package manager put the CLI there — pnpm, npm or bun, measured on real installs — and
 `updateCommand` gives the argv that updates it; a checkout or `npx` gets none. `latestVersion` asks
 npm with a timeout and answers `undefined` on any failure. `mayNotify` says whether a person is at a
@@ -148,7 +148,7 @@ sentence or `undefined` — it never throws. `runUpdate` starts the package mana
 stderr (`spawnPlan` is the Windows `.cmd` rule). Nothing here updates or prints by itself — a CLI
 holding somebody's credentials must not change itself unasked.
 
-**A CLI's guide for coding agents is `@leemour/cli-core/skill`.** `skillCommand(app, skillUrl,
+**A CLI's guide for coding agents is `@wirecat/cli-core/skill`.** `skillCommand(app, skillUrl,
 environment)` is `<cli> skill show` — SKILL.md on stdout, even into a pipe, or `{ name, content }`
 with `--json` — and `<cli> skill install [--for claude|agents|all]`, which writes it to
 `~/.claude/skills/<appName>/` and `~/.agents/skills/<appName>/` with the CLI's version as
@@ -158,7 +158,7 @@ installed or an older one, at most once a day, through the same state file as `u
 host prints it on stderr. `skillResource` is what an MCP server registers to serve the file as
 `<command>://skill`, plus a line for its `instructions` — the SDK stays the host's.
 
-**The release checks are `@leemour/cli-core/release`** — everything about a release that a program
+**The release checks are `@wirecat/cli-core/release`** — everything about a release that a program
 can decide. A check is `{ name, run }`, and `run` returns the problems it found, one line each; an
 empty list is a pass. `releaseCheck(checks, { version, log })` runs them all, even after a failure,
 prints `ok` or `FAIL` per check and returns how many failed — the caller exits. The checks every CLI
@@ -169,12 +169,12 @@ and `versionScript` — the whole of a `version:check` / `version:sync` script. 
 own headings, id prefixes and pages; the checks that belong to one messenger stay in that CLI.
 
 ```ts
-import { command, notOnNpm, packageVersion, releaseCheck } from "@leemour/cli-core/release"
+import { command, notOnNpm, packageVersion, releaseCheck } from "@wirecat/cli-core/release"
 
 const version = packageVersion(root)
 const failed = releaseCheck(
   [
-    { name: "version not on npm", run: notOnNpm(root, "@leemour/tg-cli", version) },
+    { name: "version not on npm", run: notOnNpm(root, "@wirecat/tg-cli", version) },
     { name: "lint", run: command(root, "pnpm", "lint") },
   ],
   { version, log: console.log },
@@ -234,15 +234,15 @@ resolves them against the file that declares them.
 ```jsonc
 // tsconfig.json
 {
-  "extends": "@leemour/cli-core/tsconfig.base.json",
+  "extends": "@wirecat/cli-core/tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "dist" },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }
 // tsconfig.test.json — checks every file under src/, tests included, without emitting
-{ "extends": ["./tsconfig.json", "@leemour/cli-core/tsconfig.test.json"] }
+{ "extends": ["./tsconfig.json", "@wirecat/cli-core/tsconfig.test.json"] }
 // tsconfig.scripts.json — checks scripts/
-{ "extends": ["./tsconfig.json", "@leemour/cli-core/tsconfig.scripts.json"] }
+{ "extends": ["./tsconfig.json", "@wirecat/cli-core/tsconfig.scripts.json"] }
 ```
 
 **Biome.** Formatter, linter and the rule that lets `scripts/` print. Your `files.includes` and
@@ -250,7 +250,7 @@ your own `overrides` (import boundaries) stay in your file; Biome adds them to t
 Write the specifier without `.json`: Biome reads anything ending in `.json` as a relative path.
 
 ```json
-{ "extends": ["@leemour/cli-core/biome"], "files": { "includes": ["**", "!**/dist", "!**/node_modules", "!pnpm-lock.yaml"] } }
+{ "extends": ["@wirecat/cli-core/biome"], "files": { "includes": ["**", "!**/dist", "!**/node_modules", "!pnpm-lock.yaml"] } }
 ```
 
 **lefthook.** Biome and gitleaks on staged files before a commit, `pnpm typecheck` before a push.
@@ -258,7 +258,7 @@ An extended file **overrides** your `lefthook.yml`; to change a shared hook, use
 
 ```yaml
 extends:
-  - node_modules/@leemour/cli-core/config/lefthook.yml
+  - node_modules/@wirecat/cli-core/config/lefthook.yml
 ```
 
 **`cli-dev`.** Installed with the package; `pnpm exec cli-dev help` lists the commands.
@@ -283,7 +283,7 @@ options are checked against the program by the parity check.
 // cspell.json — the dictionaries resolve from your node_modules, so you import them yourself
 {
   "version": "0.2",
-  "import": ["@leemour/cli-core/cspell", "@cspell/dict-en-gb/cspell-ext.json", "@cspell/dict-ru_ru/cspell-ext.json"],
+  "import": ["@wirecat/cli-core/cspell", "@cspell/dict-en-gb/cspell-ext.json", "@cspell/dict-ru_ru/cspell-ext.json"],
   "ignorePaths": ["docs/commands.md", "docs/dev/**", "CHANGELOG.md"],
   "words": []
 }
@@ -291,8 +291,8 @@ options are checked against the program by the parity check.
 
 ```sh
 cspell --no-progress README.md "docs/*.md"
-rumdl check --config node_modules/@leemour/cli-core/config/rumdl.toml README.md docs/*.md
-vale README.md docs/*.md   # .vale.ini: StylesPath = node_modules/@leemour/cli-core/config/vale
+rumdl check --config node_modules/@wirecat/cli-core/config/rumdl.toml README.md docs/*.md
+vale README.md docs/*.md   # .vale.ini: StylesPath = node_modules/@wirecat/cli-core/config/vale
 ```
 
 `cli-dev docs-check --pages` adds the structure check: `docs/` against `docs/meta.json`, the
@@ -337,7 +337,7 @@ npm trusts the workflow **by file name**: the package's Trusted Publisher settin
 
 `bin/release --local` is the fallback: it runs the same checks here and publishes with the npm token
 from the keyring (`secret-tool`, service `npm`, account `leemour`) without printing it. The token
-must be allowed to write `@leemour/cli-core`, not only `@leemour/max-cli`.
+must be allowed to write `@wirecat/cli-core`, not only `@wirecat/max-cli`.
 
 ## Licence
 

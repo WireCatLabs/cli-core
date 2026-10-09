@@ -60,7 +60,7 @@ export const manifestGenerator =
     const tree = new SchemaTree(model)
     const operations = model.operations.map((operation) => toManifest(operation, tree))
     const content = [
-      `import type { ManifestOperation } from "${options.coreImport ?? "@leemour/cli-core/codegen"}"`,
+      `import type { ManifestOperation } from "${options.coreImport ?? "@wirecat/cli-core/codegen"}"`,
       "",
       `export const operations: readonly ManifestOperation[] = ${JSON.stringify(operations, null, 2)}`,
       "",
@@ -76,7 +76,7 @@ export const definitionsGenerator =
     return [
       {
         path: options.path,
-        content: `import type { SchemaNode } from "${options.coreImport ?? "@leemour/cli-core/codegen"}"\n\nexport const definitions: Readonly<Record<string, SchemaNode>> = ${JSON.stringify(definitions, null, 2)}\n`,
+        content: `import type { SchemaNode } from "${options.coreImport ?? "@wirecat/cli-core/codegen"}"\n\nexport const definitions: Readonly<Record<string, SchemaNode>> = ${JSON.stringify(definitions, null, 2)}\n`,
       },
     ]
   }

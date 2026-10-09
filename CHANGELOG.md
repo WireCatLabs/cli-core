@@ -1,11 +1,21 @@
 # Changelog
 
-Notable changes to `@leemour/cli-core`, one section per version, newest first. Versions follow
-[semantic versioning](https://semver.org/); before `1.0.0` a minor release may change the API.
+Notable changes to `@wirecat/cli-core` (`@leemour/cli-core` up to 0.17.3), one section per version, newest
+first. Versions follow [semantic versioning](https://semver.org/); before `1.0.0` a minor release may change
+the API.
 Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/tags).
 
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
+
+## 0.18.0 — 10.10.2026
+
+### Changed — may break callers
+
+- **The package is now `@wirecat/cli-core`, and the repository is `WireCatLabs/cli-core`.** Install
+  `@wirecat/cli-core` and change imports from `@leemour/cli-core` (and its subpaths) to `@wirecat/cli-core`;
+  the code is the same as 0.17.3. `@leemour/cli-core` gets no new versions. Call the reusable workflows
+  as `WireCatLabs/cli-core/.github/workflows/...`.
 
 ## 0.17.3 — 09.10.2026
 
