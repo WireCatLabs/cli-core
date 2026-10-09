@@ -102,7 +102,7 @@ export const RULES: Record<"github" | "npm", Rule[]> = {
 export const KEPT: Rule[] = [
   { name: "home path", pattern: /\/home\/leemour\b|-home-leemour-/g, replace: "" },
   { name: "spelling word", pattern: /^\s*"leemour",$/g, replace: "" },
-  { name: "npm account page", pattern: /npmjs\.com\/settings\/leemour\//g, replace: "" },
+  { name: "npm account page", pattern: /\/settings\/leemour\/tokens\b/g, replace: "" },
   { name: "cloudflare account", pattern: /ModelRow leemour/g, replace: "" },
   { name: "test fixture package", pattern: /@leemour\/tool\b/g, replace: "" },
   { name: "keyring account", pattern: /account[ =`]+leemour\b/g, replace: "" },
