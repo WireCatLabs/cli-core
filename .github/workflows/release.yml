@@ -2,46 +2,50 @@ name: Release
 
 # Started by bin/release. npm trusts this file by name (trusted publishing), so there is no npm
 # token anywhere in this repository and renaming the file breaks publishing until npm is told.
+#
+# Three jobs so that the one able to publish runs no code from our dependencies: `build` installs
+# and tests everything and hands over the tarball; `publish` holds the OIDC permission and only
+# runs `npm publish` on that file; `tag` is the only one that may write to the repository.
 on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Run every check and npm publish --dry-run, which still asks npm for the publish token; publish and tag nothing"
+        description: "Build and pack, run npm publish --dry-run, do not tag"
         type: boolean
         default: false
 
-permissions:
-  contents: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  publish:
+  build:
     if: github.ref == 'refs/heads/main' || inputs.dry_run
     runs-on: ubuntu-latest
-    # npm's trusted publisher entry names this environment, as max-cli's does; without it npm
-    # answers the token exchange with "package not found" (BUG-57).
-    environment: npm
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           # npm's own guidance for release builds: no cache that could carry credentials in.
           package-manager-cache: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - name: version not yet on npm
-        if: ${{ !inputs.dry_run }}
+        id: version
         run: |
           version=$(node -p 'require("./package.json").version')
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-          if npm view "@leemour/cli-core@$version" version --prefer-online >/dev/null 2>&1; then
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.dry_run }}" != "true" ] && npm view "@leemour/cli-core@$version" version --prefer-online >/dev/null 2>&1; then
             echo "::error::$version is already on npm — raise the version first"
             exit 1
           fi
@@ -52,10 +56,37 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm smoke:bun
+      - run: npm pack
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package
+          path: leemour-cli-core-${{ steps.version.outputs.version }}.tgz
+          if-no-files-found: error
+          retention-days: 7
 
-      # npm, not pnpm: npm's trusted publishing is the documented path, and this package has no
-      # workspace: dependencies for pnpm to rewrite.
-      - run: npm publish --access public ${{ inputs.dry_run && '--dry-run --loglevel verbose' || '' }}
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # npm's trusted publisher entry names this environment, as max-cli's does; without it npm
+    # answers the token exchange with "package not found" (BUG-57).
+    environment: npm
+    permissions:
+      id-token: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: package
+
+      # npm, not pnpm: npm's trusted publishing is the documented path. A tarball runs no
+      # lifecycle scripts, and nothing is installed here.
+      - run: npm publish "leemour-cli-core-$VERSION.tgz" --access public ${{ inputs.dry_run && '--dry-run --loglevel verbose' || '' }}
 
       - name: wait for npm to show the version
         if: ${{ !inputs.dry_run }}
@@ -69,8 +100,18 @@ jobs:
           echo "::error::npm does not show $VERSION after fifteen minutes — not tagging; tag v$VERSION by hand once it does"
           exit 1
 
+  tag:
+    needs: [build, publish]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: tag
-        if: ${{ !inputs.dry_run }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
