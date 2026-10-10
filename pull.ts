@@ -29,7 +29,16 @@ const participantInput = (
     identityExternalId ??
     (p.email ? `email:${p.email.toLowerCase()}` : p.externalId) ??
     `name:${p.displayName ?? "unknown"}@${accountId}/${occurrenceId}:${position}`
-  return { ...fields, identity: { provider, externalId, name: p.displayName, metadata: p.metadata } }
+  return {
+    ...fields,
+    identity: {
+      provider,
+      externalId,
+      name: p.displayName,
+      metadata: p.metadata,
+      associatePerson: Boolean(identityExternalId?.trim() || p.email?.trim() || p.externalId?.trim()),
+    },
+  }
 }
 
 export const pull = async (source: MeetingSource, store: MeetingStore, options: PullOptions): Promise<RunReport> => {

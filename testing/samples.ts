@@ -54,7 +54,13 @@ export const sampleMeeting = (): MeetingSave & {
   },
   participants: [
     {
-      identity: { provider: "example", externalId: "alice-example", name: "Alice Example", metadata: null },
+      identity: {
+        provider: "example",
+        externalId: "alice-example",
+        name: "Alice Example",
+        metadata: null,
+        associatePerson: true,
+      },
       displayName: "Alice Example",
       email: "alice@example.com",
       role: "host",

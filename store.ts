@@ -14,6 +14,8 @@ import type {
 
 export type NewRecord<T> = Omit<T, "id" | "createdAt" | "updatedAt">
 export interface IdentityInput {
+  /** Explicit stable provider key; false or absent must not create a person association. */
+  associatePerson?: boolean
   provider: string
   externalId: string
   name: string | null
