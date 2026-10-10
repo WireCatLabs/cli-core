@@ -84,6 +84,22 @@ check(
     ),
 )
 cancelled.dispose()
+const immediate = createDeadline({ timeoutMs: 0 })
+let immediateBodyRan = false
+check("zero deadline aborts synchronously", immediate.signal.aborted)
+check(
+  "zero deadline never invokes its body",
+  (await immediate
+    .race(async () => {
+      immediateBodyRan = true
+      return 3
+    })
+    .then(
+      () => false,
+      (reason: unknown) => reason instanceof CliError && reason.code === "timeout",
+    )) && !immediateBodyRan,
+)
+immediate.dispose()
 
 const pretty = captureStreams()
 createRenderer({ format: "pretty", color: false, streams: pretty }).result([{ id: 1, title: "Family" }])

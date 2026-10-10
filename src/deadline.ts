@@ -29,7 +29,16 @@ export const createDeadline = ({ timeoutMs, signal, sleep = realSleep }: Deadlin
     abort(signal?.reason instanceof CliError ? signal.reason : new CliError("cancelled", "command cancelled"))
   if (signal?.aborted) onAbort()
   else signal?.addEventListener("abort", onAbort, { once: true })
-  if (timeoutMs !== undefined && !controller.signal.aborted) {
+  const expire = () =>
+    abort(
+      new CliError("timeout", "the command did not finish before its deadline", {
+        reason: "command_timeout",
+        timeoutMs,
+        retryable: false,
+      }),
+    )
+  if (timeoutMs === 0) expire()
+  if (timeoutMs !== undefined && timeoutMs > 0 && !controller.signal.aborted) {
     let waiting: Promise<void>
     try {
       waiting = sleep(timeoutMs, timer.signal, "timeout")
@@ -38,14 +47,7 @@ export const createDeadline = ({ timeoutMs, signal, sleep = realSleep }: Deadlin
     }
     void waiting.then(
       () => {
-        if (!disposed && !timer.signal.aborted)
-          abort(
-            new CliError("timeout", "the command did not finish before its deadline", {
-              reason: "command_timeout",
-              timeoutMs,
-              retryable: false,
-            }),
-          )
+        if (!disposed && !timer.signal.aborted) expire()
       },
       () => {
         if (!disposed && !timer.signal.aborted)

@@ -8,6 +8,14 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## Unreleased
+
+### Fixed
+
+- **Zero command deadlines abort synchronously** before a body can execute, matching the documented
+  immediate deadline instead of scheduling a timer that could lose to a fast command. They create
+  no sleep or timer; an already aborted parent retains its cancellation reason.
+
 ## 0.19.2 — 10.10.2026
 
 ### Added

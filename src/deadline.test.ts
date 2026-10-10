@@ -140,7 +140,7 @@ describe("portable command deadlines", () => {
     for (const timeoutMs of [-1, 0.5, Infinity, 2147483648])
       expect(() => createDeadline({ timeoutMs })).toThrow(/timeoutMs/)
     const deadline = createDeadline({
-      timeoutMs: 0,
+      timeoutMs: 1,
       sleep: async () => {
         throw new Error("Untrusted timer detail")
       },
@@ -179,4 +179,32 @@ it("never starts a body when cancellation arrives before its scheduled invocatio
   await expect(running).rejects.toMatchObject({ code: "cancelled" })
   expect(body).not.toHaveBeenCalled()
   deadline.dispose()
+})
+
+it("a zero deadline aborts synchronously with the real sleep default and never invokes its body", async () => {
+  const deadline = createDeadline({ timeoutMs: 0 })
+  const body = vi.fn(async () => "body ran")
+  try {
+    expect(deadline.signal.aborted).toBe(true)
+    await expect(deadline.race(body)).rejects.toMatchObject({ code: "timeout", details: { timeoutMs: 0 } })
+    expect(body).not.toHaveBeenCalled()
+  } finally {
+    deadline.dispose()
+  }
+})
+
+it("a zero deadline creates no timer, cleans its parent listener and preserves prior cancellation", async () => {
+  const sleep = vi.fn(async () => {})
+  const parent = new AbortController()
+  const remove = vi.spyOn(parent.signal, "removeEventListener")
+  const deadline = createDeadline({ timeoutMs: 0, signal: parent.signal, sleep })
+  expect(deadline.signal.reason).toMatchObject({ code: "timeout" })
+  expect(sleep).not.toHaveBeenCalled()
+  expect(remove).toHaveBeenCalledWith("abort", expect.any(Function))
+  deadline.dispose()
+  const reason = new CliError("cancelled", "Example prior cancellation")
+  const cancelled = createDeadline({ timeoutMs: 0, signal: AbortSignal.abort(reason), sleep })
+  expect(cancelled.signal.reason).toBe(reason)
+  expect(sleep).not.toHaveBeenCalled()
+  cancelled.dispose()
 })
