@@ -21,6 +21,7 @@ export type {
   TranscriptRow,
 } from "./model.js"
 export { type PullOptions, pull, type RunReport } from "./pull.js"
+export { MeetingError } from "./reads.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,
