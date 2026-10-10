@@ -28,8 +28,16 @@ Sparse, and only *why*. The global rule in `~/.claude/CLAUDE.md` applies.
 Conventional commits, a branch off `main` in a worktree, a pull request. Before committing:
 
 ```sh
-pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm docs:check
+pnpm standards:check && pnpm lint
 ```
 
 A change a caller can see gets a `CHANGELOG.md` entry under `## Unreleased`. Releasing is
 `bin/release` on `main` — [README](README.md#releasing).
+
+## Development check budget
+
+Keep commit and push hooks fast. Ordinary development and PRs use standards
+verification, lint, Markdown, and secret detection. Full typechecking, tests,
+coverage, builds, parity, browser and platform suites run for releases or an
+explicit manual validation. See the
+[shared policy](https://github.com/WireCatLabs/community/blob/main/standards/README.md#ci-and-hooks).
