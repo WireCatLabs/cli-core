@@ -15,9 +15,10 @@ export const transcriptInput = async (
   participants: ParticipantInput[],
   source: string,
   hashText = JSON.stringify(lines),
+  format: string | null = null,
 ): Promise<TranscriptInput> => ({
   source,
-  format: "vtt",
+  format,
   language: null,
   contentHash: await contentHash(hashText),
   externalCreatedAt: null,

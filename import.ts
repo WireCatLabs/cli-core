@@ -20,7 +20,7 @@ export const importFiles = async (files: ImportFile[], store: MeetingStore, now 
       const details = await store.saveMeeting({
         meeting: file.meeting,
         participants: file.participants,
-        transcripts: [await transcriptInput(lines, participants, file.source ?? "file", file.content)],
+        transcripts: [await transcriptInput(lines, participants, file.source ?? "file", file.content, "vtt")],
         now,
       })
       await linkEvent(store, details, now)

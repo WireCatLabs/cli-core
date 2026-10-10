@@ -11,7 +11,7 @@ interface State {
   cursors: Map<number, string>
 }
 const overlap = (start: number | null, end: number | null, from: number, to: number) =>
-  start !== null && end !== null && start <= to && end >= from
+  start !== null && start <= to && (end ?? start) >= from
 const filterMeetings = (rows: MeetingDetails[], filter: MeetingFilter = {}) => {
   if (filter.limit !== undefined && (!Number.isInteger(filter.limit) || filter.limit < 0))
     throw new Error("Invalid limit")

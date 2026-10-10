@@ -18,6 +18,7 @@ export interface SourceParticipant {
 export interface MeetingSource {
   readonly provider: string
   readonly name: string
+  readonly transcriptFormat?: string
   meetings(since: string): Promise<SourceMeeting[]>
   participants(occurrenceId: string): Promise<SourceParticipant[] | null>
   transcript(occurrenceId: string): Promise<TranscriptLine[] | null>

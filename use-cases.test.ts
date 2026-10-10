@@ -288,3 +288,24 @@ it("retains summary source, full content, links, provider times and metadata", a
     metadata: { edited: true },
   })
 })
+
+it("links equal-time occurrences even when the provider omits their end", async () => {
+  const store = memoryMeetingStore()
+  const input = sampleMeeting()
+  input.meeting.endedAt = null
+  const first = await linkEvent(store, await store.saveMeeting(input))
+  input.meeting.externalId = "second-example-record"
+  expect((await linkEvent(store, await store.saveMeeting(input)))?.id).toBe(first?.id)
+  input.meeting.externalId = "later-example-record"
+  input.meeting.startedAt = 2500
+  expect((await linkEvent(store, await store.saveMeeting(input)))?.id).not.toBe(first?.id)
+})
+
+it("keeps a provider's declared format without assuming WebVTT for normalized cues", async () => {
+  for (const format of [undefined, "json"]) {
+    const store = memoryMeetingStore()
+    await pull(fakeMeetingSource({ transcriptFormat: format }), store, options)
+    const [m] = await store.meetings()
+    expect((await store.meeting(m?.id ?? 0))?.transcripts[0]?.transcript.format).toBe(format ?? null)
+  }
+})

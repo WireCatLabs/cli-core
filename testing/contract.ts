@@ -191,6 +191,17 @@ export const meetingStoreContract = (make: () => MeetingStore | Promise<MeetingS
       assert.equal(second.participants[0]?.displayName, "Alice Renamed Example")
       assert.equal(original?.participants[0]?.identityId, second.participants[0]?.identityId)
     }),
+    test("events with an unknown end match their start instant", async (s) => {
+      const meeting = await s.saveMeeting(sampleMeeting())
+      const event = await s.createEvent({ ...sampleEvent(), endsAt: null }, 3000)
+      await s.linkMeeting(meeting.meeting.id, event.id, 3000)
+      const filter = { meetingSeriesId: null, joinUrl: "https://example.com/room", startsAt: 1000, endsAt: 1000 }
+      assert.deepEqual(
+        (await s.eventCandidates(filter)).map((e) => e.id),
+        [event.id],
+      )
+      assert.deepEqual(await s.eventCandidates({ ...filter, startsAt: 2000, endsAt: 2000 }), [])
+    }),
     test("failed saves leave no partial changes", async (s) => {
       const input = sampleMeeting()
       const before = await s.saveMeeting(input)

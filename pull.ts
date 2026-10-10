@@ -88,7 +88,10 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
           metadata: null,
           deletedAt: null,
         }
-      const transcripts = lines === null ? undefined : [await transcriptInput(lines, participants, source.name)]
+      const transcripts =
+        lines === null
+          ? undefined
+          : [await transcriptInput(lines, participants, source.name, undefined, source.transcriptFormat ?? null)]
       const details = await store.saveMeeting({
         meeting,
         participants: sourceParticipants === null ? undefined : participants,
