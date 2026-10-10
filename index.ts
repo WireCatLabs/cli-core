@@ -28,7 +28,7 @@ export type {
   TranscriptRow,
 } from "./model.js"
 export { type PullOptions, pull, type RunReport } from "./pull.js"
-export { MeetingError, meetingSummary, type TranscriptReadOptions } from "./reads.js"
+export { listed, MeetingError, meetingSummary, type TranscriptReadOptions } from "./reads.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,
@@ -47,3 +47,4 @@ export type {
   TranscriptRowInput,
 } from "./store.js"
 export { parseVtt, VttError } from "./vtt.js"
+export { type WatchOptions, type WatchSleep, watchMeetingIngestion } from "./watch.js"
