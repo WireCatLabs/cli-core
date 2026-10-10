@@ -1,3 +1,5 @@
+export { linkEvent } from "./events.js"
+export { type ImportFile, importFiles } from "./import.js"
 export type {
   Attachment,
   ChatLine,
@@ -18,7 +20,8 @@ export type {
   TranscriptLine,
   TranscriptRow,
 } from "./model.js"
-export type { MeetingSource } from "./source.js"
+export { type PullOptions, pull, type RunReport } from "./pull.js"
+export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,
   ContractCase,

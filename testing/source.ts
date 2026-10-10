@@ -2,6 +2,13 @@ import type { MeetingSource } from "../source.js"
 
 export const fakeMeetingSource = (overrides: Partial<MeetingSource> = {}): MeetingSource => ({
   provider: "example",
+  name: "api",
+  async participants() {
+    return null
+  },
+  async files() {
+    return null
+  },
   async meetings() {
     return [
       {

@@ -178,7 +178,19 @@ export interface Occurrence {
 }
 
 export interface SourceMeeting {
-  series: { id: string; provider: string; title: string | null }
+  description?: string | null
+  location?: string | null
+  joinUrl?: string | null
+  timezone?: string | null
+  metadata?: Metadata
+  series: {
+    id: string
+    provider: string
+    title: string | null
+    kind?: string
+    recurrence?: JsonValue
+    joinUrl?: string
+  } | null
   occurrence: Occurrence
 }
 
