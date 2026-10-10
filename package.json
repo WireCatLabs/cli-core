@@ -1,6 +1,6 @@
 {
   "name": "@wirecat/cli-core",
-  "version": "0.19.0",
+  "version": "0.19.1",
   "description": "The parts every command line tool needs: output modes, terminal rendering, error model, exit codes, credentials, clocks",
   "license": "Apache-2.0",
   "author": "Viacheslav Ptsarev",
