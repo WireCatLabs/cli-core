@@ -83,7 +83,7 @@ rendering and buffer the renderer's raw text. For core renderers, pass the line 
 when adapting `Streams.data`: `data: (text) => buffer.data(text + "\n")`.
 
 `createDeadline({ timeoutMs, signal, sleep })` supplies a command signal and `race(body)`. An omitted
-timeout creates no timer; zero is an immediate deadline, and the maximum is 2147483647 milliseconds.
+timeout creates no timer; zero aborts synchronously without calling sleep, and the maximum is 2147483647 milliseconds.
 Pass its signal to every cancellable operation and check it before writes. On timeout or parent
 cancellation, `race` waits for the body to settle before rejecting, so a caller can safely close
 resources afterwards. An operation ignoring its signal can delay completion; this helper never
