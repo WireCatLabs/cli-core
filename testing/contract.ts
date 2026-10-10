@@ -90,6 +90,31 @@ export const meetingStoreContract = (make: () => MeetingStore | Promise<MeetingS
       assert.equal(other.transcripts.length, 3)
       assert.equal(other.transcripts[2]?.rows[0]?.speakerParticipantId, null)
     }),
+    test("empty part lists preserve stored parts and omitted series", async (s) => {
+      const input = sampleMeeting()
+      const before = await s.saveMeeting(input)
+      const { series: _series, ...meeting } = input.meeting
+      const after = await s.saveMeeting({
+        meeting,
+        participants: [],
+        transcripts: [],
+        chat: [],
+        summaries: [],
+        attachments: [],
+        now: 4000,
+      })
+      assert.deepEqual(after.participants, before.participants)
+      assert.deepEqual(after.transcripts, before.transcripts)
+      assert.deepEqual(after.chat, before.chat)
+      assert.deepEqual(after.summaries, before.summaries)
+      assert.deepEqual(after.attachments, before.attachments)
+      assert.equal(after.series?.id, before.series?.id)
+      input.transcripts[0].rows[0].text = "Changed caller input"
+      const row = after.transcripts[0]?.rows[0]
+      assert.ok(row)
+      row.text = "Changed caller snapshot"
+      assert.equal((await s.meeting(before.meeting.id))?.transcripts[0]?.rows[0]?.text, "Ship the example plan.")
+    }),
     test("account keys, identities and same-time cues stay distinct", async (s) => {
       const input = sampleMeeting()
       const first = await s.saveMeeting(input)

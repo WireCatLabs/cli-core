@@ -14,6 +14,8 @@ export interface PullOptions {
   accountId: number
   since?: string
   now?: number
+  /** Revisit recent occurrences; integer milliseconds from 0 through 31 days. Defaults to 0. */
+  lookbackMs?: number
 }
 const participantInput = (
   p: SourceParticipant,
@@ -32,11 +34,15 @@ const participantInput = (
 
 export const pull = async (source: MeetingSource, store: MeetingStore, options: PullOptions): Promise<RunReport> => {
   const now = options.now ?? Date.now()
+  const lookbackMs = options.lookbackMs ?? 0
+  if (!Number.isSafeInteger(lookbackMs) || lookbackMs < 0 || lookbackMs > 31 * 86400000)
+    throw new Error("lookbackMs must be an integer from 0 through 31 days")
   const since = options.since ?? (await store.cursor(options.accountId)) ?? new Date(now - 30 * 86400000).toISOString()
   timestamp(since)
   const report: RunReport = { meetings: 0, participants: 0, transcriptRows: 0, summaries: 0, warnings: [] }
   let failed = false
-  const meetings = await source.meetings(since)
+  const from = timestamp(since) - lookbackMs
+  const meetings = await source.meetings(lookbackMs === 0 ? since : new Date(from).toISOString())
   for (const m of meetings) {
     const id = m.occurrence.id
     try {

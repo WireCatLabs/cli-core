@@ -102,7 +102,7 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
     const result = {
       error: {
         code: error instanceof MeetingError ? error.code : "generic_failure",
-        message: error instanceof Error ? error.message : "Meeting read failed",
+        message: error instanceof MeetingError ? error.message : "Meeting read failed",
       },
     }
     return {

@@ -135,7 +135,7 @@ describe("MCP meeting reads", () => {
       throw new Error("Read failed")
     }
     expect((await callMeetingTool(store, "meetings_list", {})).structuredContent).toEqual({
-      error: { code: "generic_failure", message: "Read failed" },
+      error: { code: "generic_failure", message: "Meeting read failed" },
     })
     store.meetings = async () => {
       throw "failure"

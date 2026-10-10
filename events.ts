@@ -6,7 +6,9 @@ export const linkEvent = async (
   details: MeetingDetails,
   now = Date.now(),
 ): Promise<Event | null> => {
-  const { meeting, series } = details
+  const current = await store.meeting(details.meeting.id)
+  if (!current) return null
+  const { meeting, series } = current
   if (meeting.eventId !== null) return (await store.events()).find((e) => e.id === meeting.eventId) ?? null
   const candidates =
     meeting.startedAt === null
@@ -41,5 +43,6 @@ export const linkEvent = async (
     )
   }
   await store.linkMeeting(meeting.id, event.id, now)
-  return event
+  const linked = await store.meeting(meeting.id)
+  return (await store.events()).find((e) => e.id === linked?.meeting.eventId) ?? null
 }

@@ -227,7 +227,7 @@ describe("events", () => {
     const created = await linkEvent(store, another)
     expect(created?.id).not.toBe(d.meeting.eventId)
     expect((await store.events()).length).toBe(4)
-    another.meeting.eventId = 999
+    store.events = async () => []
     expect(await linkEvent(store, another)).toBeNull()
   })
 })
