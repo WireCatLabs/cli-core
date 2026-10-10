@@ -5,6 +5,14 @@ const github = (text: string) => rewrite(text, RULES.github).text
 const npm = (text: string) => rewrite(text, RULES.npm).text
 
 describe("github pass", () => {
+  it.each(["cli-meetings", "cli-testing", "zoom-cli", "community", ".github"])("covers %s", (repo) => {
+    expect(github(`https://github.com/leemour/${repo}/blob/main/README.md`)).toBe(
+      `https://github.com/WireCatLabs/${repo}/blob/main/README.md`,
+    )
+  })
+  it("treats repository-name punctuation literally", () => {
+    expect(github("https://github.com/leemour/xgithub")).toBe("https://github.com/leemour/xgithub")
+  })
   it.each([
     ["https://github.com/leemour/max-cli/issues", "https://github.com/WireCatLabs/max-cli/issues"],
     ["git@github.com:leemour/tg-cli.git", "git@github.com:WireCatLabs/tg-cli.git"],
@@ -39,6 +47,9 @@ describe("github pass", () => {
 })
 
 describe("npm pass", () => {
+  it.each(["cli-meetings", "cli-testing", "zoom-cli"])("covers %s", (pkg) => {
+    expect(npm(`npm install -g @leemour/${pkg}`)).toBe(`npm install -g @wirecat/${pkg}`)
+  })
   it.each([
     ['import { CliError } from "@leemour/cli-core/commands"', 'import { CliError } from "@wirecat/cli-core/commands"'],
     ['"@leemour/cli-messaging-sqlite": "1.0.0"', '"@wirecat/cli-messaging-sqlite": "1.0.0"'],

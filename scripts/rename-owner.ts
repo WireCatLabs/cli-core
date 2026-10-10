@@ -19,6 +19,11 @@ export const REPOS = [
   "cli-memo",
   "cli-docs",
   "cli-private",
+  "cli-meetings",
+  "cli-testing",
+  "zoom-cli",
+  "community",
+  ".github",
 ]
 export const PACKAGES = [
   "cli-core",
@@ -29,10 +34,17 @@ export const PACKAGES = [
   "tg-cli",
   "max-cli",
   "cli-memo",
+  "cli-meetings",
+  "cli-testing",
+  "zoom-cli",
 ]
 
 // Longest first, so `cli-messaging` never takes the front of `cli-messaging-sqlite`.
-const alternation = (names: string[]) => [...names].sort((a, b) => b.length - a.length).join("|")
+const alternation = (names: string[]) =>
+  [...names]
+    .sort((a, b) => b.length - a.length)
+    .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|")
 const repo = alternation(REPOS)
 const pkg = alternation(PACKAGES)
 const END = String.raw`(?![\w-])`
