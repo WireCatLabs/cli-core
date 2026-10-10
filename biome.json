@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "extends": ["./config/biome.base.json"],
+  "extends": ["./config/wirecat/biome.base.json"],
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!pnpm-lock.yaml"]
+    "includes": ["**", "!**/dist", "!**/node_modules", "!pnpm-lock.yaml", "!**/.worktrees", "!config/wirecat"]
   }
 }
