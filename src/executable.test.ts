@@ -2,29 +2,20 @@ import { describe, expect, it } from "vitest"
 import { executableEnvironment, executableOnPath } from "./executable.js"
 
 describe("Windows executable selection", () => {
-  it("ignores the current directory and relative PATH entries, even with a planted command", () => {
-    const calls: string[] = []
-    const env = { Path: ';.;relative;"C:\\Trusted Tools"', PATHEXT: ".CMD;.EXE" }
-    const found = executableOnPath("npm", env, "win32", (path) => {
-      calls.push(path)
-      return path === "C:\\Trusted Tools\\npm.CMD"
-    })
-    expect(found).toBe("C:\\Trusted Tools\\npm.CMD")
-    expect(calls).toEqual(["C:\\Trusted Tools\\npm.CMD"])
+  it("supports relative PATH entries and explicit relative commands", () => {
+    const env = { Path: "relative;C:\\Trusted Tools", PATHEXT: ".CMD;.EXE" }
+    expect(executableOnPath("npm", env, "win32", (path) => path === "relative\\npm.CMD")).toBe("relative\\npm.CMD")
+    expect(executableOnPath(".\\tools\\npm.cmd", env, "win32")).toBe(".\\tools\\npm.cmd")
+    expect(executableOnPath("claude", {}, "win32", () => false)).toBe("claude")
   })
 
-  it("fails closed when only a relative command is available", () => {
-    expect(() => executableOnPath("claude", { PATH: ".;relative" }, "win32", () => true)).toThrow(
-      "absolute Windows PATH",
-    )
-  })
-
-  it("uses a fully-qualified command processor for shims", () => {
-    expect(executableEnvironment({ ComSpec: "cmd.exe", SystemRoot: "C:\\Windows" }, "win32")).toEqual({
+  it("preserves custom command processors and tolerates sanitized environments", () => {
+    expect(executableEnvironment({ ComSpec: "cmd.exe" }, "win32")).toEqual({ comspec: "cmd.exe" })
+    expect(executableEnvironment({ SystemRoot: "C:\\Windows" }, "win32")).toEqual({
       SystemRoot: "C:\\Windows",
       comspec: "C:\\Windows\\System32\\cmd.exe",
     })
-    expect(() => executableEnvironment({ ComSpec: "cmd.exe" }, "win32")).toThrow("absolute ComSpec")
+    expect(executableEnvironment({}, "win32")).toEqual({})
   })
 
   it("preserves explicit absolute programs and POSIX command behavior", () => {

@@ -8,6 +8,16 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## Unreleased
+
+### Fixed
+
+- Windows maintenance commands support portable relative PATH entries and custom or sanitized command-processor environments while preserving separate arguments.
+
+### Security
+
+- Release checks include source and secret analysis; critical production advisories and critical source findings block publication. Workflow findings are reported for review. PR security remains the fast secret scan.
+
 ## 0.19.0 — 10.10.2026
 
 ### Fixed
