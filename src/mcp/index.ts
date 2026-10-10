@@ -1,5 +1,6 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
+import type { ChildProcessWithoutNullStreams } from "node:child_process"
 import crossSpawn from "cross-spawn"
+import { executableEnvironment, executableOnPath } from "../executable.js"
 
 export type McpClient = "codex" | "claude-code"
 
@@ -20,7 +21,12 @@ export interface CommandResult {
 export type RunCommand = (file: string, args: string[]) => CommandResult
 
 const realRun: RunCommand = (file, args) => {
-  const result = crossSpawn.sync(file, args, { encoding: "utf8", timeout: 10_000, maxBuffer: 256_000 })
+  const result = crossSpawn.sync(executableOnPath(file, process.env), args, {
+    encoding: "utf8",
+    timeout: 10_000,
+    maxBuffer: 256_000,
+    env: executableEnvironment(process.env),
+  })
   return { status: result.status, error: result.error, stdout: result.stdout ?? "", stderr: result.stderr ?? "" }
 }
 
@@ -62,7 +68,11 @@ export const probeStdio = async (
   entry: StdioEntry,
   {
     timeoutMs = 10_000,
-    start = (file: string, args: string[], env: NodeJS.ProcessEnv) => spawn(file, args, { env, stdio: "pipe" }),
+    start = (file: string, args: string[], env: NodeJS.ProcessEnv) =>
+      crossSpawn(executableOnPath(file, env), args, {
+        env: executableEnvironment(env),
+        stdio: "pipe",
+      }) as ChildProcessWithoutNullStreams,
   }: {
     timeoutMs?: number
     start?: (file: string, args: string[], env: NodeJS.ProcessEnv) => ChildProcessWithoutNullStreams

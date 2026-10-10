@@ -6,7 +6,12 @@
  * somebody's credentials must not change itself unasked, and a line on the terminal is for a
  * person, never for a script or an agent reading JSON. The CLI asks and decides.
  */
-import { spawnSync } from "node:child_process"
+import { existsSync } from "node:fs"
+import crossSpawn from "cross-spawn"
+import { executableEnvironment, executableOnPath } from "../executable.js"
+
+export { executableEnvironment, executableOnPath } from "../executable.js"
+
 import * as v from "valibot"
 import { loadConfigFile, saveConfigFile } from "../config.js"
 import type { FetchLike } from "../http/index.js"
@@ -145,20 +150,22 @@ export const writeUpdateState = (path: string, state: Partial<UpdateState>): voi
 export const checkIsDue = (state: UpdateState | undefined, now: number): boolean =>
   state === undefined || now - state.checkedAt >= CHECK_EVERY_MS
 
-/**
- * npm and pnpm are `.cmd` shims on Windows, and Node starts a `.cmd` only through a shell. The
- * words are joined rather than passed as arguments, which Node 24 deprecates alongside `shell`;
- * that is safe only because they come from `updateCommand`, never from the person typing.
- */
-export const spawnPlan = ([command, ...args]: readonly string[], platform: NodeJS.Platform = process.platform) =>
-  platform === "win32"
-    ? { file: [command, ...args].join(" "), args: [] as string[], shell: true }
-    : { file: command as string, args, shell: false }
+/** Resolve Windows shims from explicit PATH entries; cross-spawn quotes them through the trusted shell. */
+export const spawnPlan = (
+  [command, ...args]: readonly string[],
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (path: string) => boolean = existsSync,
+) => ({ file: executableOnPath(command as string, env, platform, exists), args, shell: false })
 
 /** Runs the update and answers its exit code. stdout stays one result: the package manager's output goes to stderr. */
 export const runUpdate = (argv: readonly string[]): number => {
   const { file, args, shell } = spawnPlan(argv)
-  const { status, error } = spawnSync(file, args, { stdio: ["inherit", 2, 2], shell })
+  const { status, error } = crossSpawn.sync(file, args, {
+    stdio: ["inherit", 2, 2],
+    shell,
+    env: executableEnvironment(process.env),
+  })
   if (error) throw new Error(`could not start ${argv[0]}: ${error.message}`)
   return status ?? 1
 }
