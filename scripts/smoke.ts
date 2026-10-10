@@ -21,12 +21,16 @@ import {
   CliError,
   Credentials,
   captureStreams,
+  createDeadline,
   createFileLogger,
+  createOutputBuffer,
   createRenderer,
   DEFAULT_RETRY,
   exitCodeFor,
+  fieldsOf,
   loadConfigFile,
   memoryKeyring,
+  projectFields,
   realSleep,
   resolvePaths,
   saveConfigFile,
@@ -56,6 +60,30 @@ renderer.warn("something worth saying")
 check("json output is one value on stdout", streams.stdout.length === 1 && streams.stdout[0] === '{"chats":2}')
 check("diagnostics stay off stdout", streams.stderr.length === 1)
 check("no ANSI reaches stdout", !streams.stdout.join("").includes(ESCAPE))
+
+const projected = projectFields({ items: [{ id: 1, text: "Example" }], page: 2 }, fieldsOf("items.id"))
+check("field projection preserves the page envelope", JSON.stringify(projected) === '{"items":[{"id":1}],"page":2}')
+const buffered = createOutputBuffer({ maxOutputBytes: 7 })
+const bufferedText: string[] = []
+buffered.data("é\n")
+buffered.data("🙂")
+check("UTF-8 output waits for flush", buffered.bytes === 7 && bufferedText.length === 0)
+buffered.flush((text) => bufferedText.push(text))
+check("buffer flush preserves text", bufferedText.join("") === "é\n🙂")
+const deadline = createDeadline()
+check("deadline runs the real portable export", (await deadline.race(async () => 3)) === 3)
+deadline.dispose()
+const cancelled = createDeadline({ signal: AbortSignal.abort() })
+check(
+  "deadline classifies cancellation under the runtime",
+  await cancelled
+    .race(async () => 3)
+    .then(
+      () => false,
+      (reason: unknown) => reason instanceof CliError && reason.code === "cancelled",
+    ),
+)
+cancelled.dispose()
 
 const pretty = captureStreams()
 createRenderer({ format: "pretty", color: false, streams: pretty }).result([{ id: 1, title: "Family" }])
