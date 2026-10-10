@@ -25,19 +25,15 @@ Sparse, and only *why*. The global rule in `~/.claude/CLAUDE.md` applies.
 
 ## Committing
 
-Conventional commits, a branch off `main` in a worktree, a pull request. Before committing:
-
-```sh
-pnpm standards:check && pnpm lint
-```
+Conventional commits, a branch off `main` in a worktree, a pull request. The pre-commit hook checks staged lint and secrets; no other local checks are required by default.
 
 A change a caller can see gets a `CHANGELOG.md` entry under `## Unreleased`. Releasing is
 `bin/release` on `main` — [README](README.md#releasing).
 
 ## Development check budget
 
-Keep commit and push hooks fast. Ordinary development and PRs use standards
-verification, lint, Markdown, and secret detection. Full typechecking, tests,
+Local commits check only staged lint and secrets. There is no pre-push check.
+Config integrity, repository lint, Markdown, and secret detection run in PR CI. Full typechecking, tests,
 coverage, builds, parity, browser and platform suites run for releases or an
 explicit manual validation. See the
 [shared policy](https://github.com/WireCatLabs/community/blob/main/standards/README.md#ci-and-hooks).
