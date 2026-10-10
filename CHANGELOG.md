@@ -8,6 +8,16 @@ Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## 0.19.0 — 10.10.2026
+
+### Fixed
+
+- Windows updater and MCP setup commands resolve through absolute PATH entries and use an explicit command processor, avoiding accidental execution from the current folder. POSIX resolution is unchanged.
+
+### Added
+
+- `/update` exports `executableOnPath` and `executableEnvironment` for consumers using the same Windows command resolution.
+
 ## 0.18.2 — 10.10.2026
 
 ### Changed — may break callers

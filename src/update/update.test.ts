@@ -147,16 +147,18 @@ describe("the check's state", () => {
 })
 
 describe("spawnPlan and runUpdate", () => {
-  it("passes the words as arguments, and through a shell only on Windows", () => {
+  it("passes separate arguments and resolves Windows commands from trusted PATH entries", () => {
     expect(spawnPlan(["npm", "install", "-g", "x@latest"], "linux")).toEqual({
       file: "npm",
       args: ["install", "-g", "x@latest"],
       shell: false,
     })
-    expect(spawnPlan(["npm", "install", "-g", "x@latest"], "win32")).toEqual({
-      file: "npm install -g x@latest",
-      args: [],
-      shell: true,
+    expect(
+      spawnPlan(["npm", "install", "-g", "x@latest"], "win32", { PATH: "C:\\Tools", PATHEXT: ".CMD" }, () => true),
+    ).toEqual({
+      file: "C:\\Tools\\npm.CMD",
+      args: ["install", "-g", "x@latest"],
+      shell: false,
     })
   })
 
