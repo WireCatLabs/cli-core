@@ -19,6 +19,11 @@ const integer = (text: string) => {
     throw new InvalidArgumentError("expected a positive integer")
   return Number(text)
 }
+const lookbackDays = (text: string) => {
+  if (!/^(0|[1-9]\d*)$/.test(text) || Number(text) > 31)
+    throw new InvalidArgumentError("expected an integer from 0 through 31 days")
+  return Number(text)
+}
 const date = (text: string) => {
   if (!Number.isFinite(Date.parse(text))) throw new InvalidArgumentError("expected an ISO date or timestamp")
   return Date.parse(text)
@@ -81,13 +86,15 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       .description("fetch meeting records from the connected account"),
   )
     .option("--since <date>", "fetch occurrences starting at or after this date", date)
-    .action(async (opts: { since?: number }, command: Command) => {
+    .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays, 0)
+    .action(async (opts: { since?: number; lookbackDays: number }, command: Command) => {
       if (!deps.source) throw new MeetingError("configuration_error", "meeting source is unavailable")
       print(
         await pull(deps.source, deps.store, {
           accountId: deps.accountId,
           since: opts.since === undefined ? undefined : new Date(opts.since).toISOString(),
           now: deps.now?.(),
+          lookbackMs: opts.lookbackDays * 86400000,
         }),
         command,
       )
