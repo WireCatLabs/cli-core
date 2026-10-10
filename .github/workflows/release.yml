@@ -25,6 +25,8 @@ jobs:
     if: github.ref == 'refs/heads/main' || inputs.dry_run
     permissions:
       contents: read
+      actions: read
+      security-events: write
     uses: ./.github/workflows/release-checks.yml
 
   build:
