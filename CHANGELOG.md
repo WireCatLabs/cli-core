@@ -1,14 +1,19 @@
 # Changelog
 
-Notable changes to `@wirecat/cli-core` (`@leemour/cli-core` up to 0.17.3), one section per version, newest
+Notable changes to `@wirecat/cli-core`, one section per version, newest
 first. Versions follow [semantic versioning](https://semver.org/); before `1.0.0` a minor release may change
 the API.
-Versions before 0.8.0 are in the [git tags](https://github.com/leemour/cli-core/tags).
+Versions before 0.8.0 are in the [git tags](https://github.com/WireCatLabs/cli-core/tags).
 
 Every entry says what changed as a caller sees it, why, and what to watch for â€” the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
-## Unreleased
+## 0.19.4 â€” 11.10.2026
+
+### Changed
+
+- Package references, documentation and fixtures use the WireCat namespace throughout.
+
 
 ### Fixed
 
@@ -68,8 +73,8 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 ### Changed â€” may break callers
 
 - **The package is now `@wirecat/cli-core`, and the repository is `WireCatLabs/cli-core`.** Install
-  `@wirecat/cli-core` and change imports from `@leemour/cli-core` (and its subpaths) to `@wirecat/cli-core`;
-  the code is the same as 0.17.3. `@leemour/cli-core` gets no new versions. Call the reusable workflows
+  `@wirecat/cli-core` and change imports from `@wirecat/cli-core` (and its subpaths) to `@wirecat/cli-core`;
+  the code is the same as 0.17.3. `@wirecat/cli-core` gets no new versions. Call the reusable workflows
   as `WireCatLabs/cli-core/.github/workflows/...`.
 
 ## 0.17.3 â€” 09.10.2026
@@ -116,7 +121,7 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ### Added
 
-- **`@leemour/cli-core/mcp` installs and checks local stdio MCP entries.** A CLI can add its existing
+- **`@wirecat/cli-core/mcp` installs and checks local stdio MCP entries.** A CLI can add its existing
   MCP server to Codex or Claude Code through those clients' own commands and probe the handshake and
   tool list without calling a tool. Existing entries are refused, so callers must remove one in the
   client before changing it.
@@ -137,7 +142,7 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ### Added
 
-- **Shared settings for checking docs**: `@leemour/cli-core/cspell` (spelling in English, British
+- **Shared settings for checking docs**: `@wirecat/cli-core/cspell` (spelling in English, British
   English and Russian, with the shared word list; code and links are not checked),
   `config/rumdl.toml` (Markdown form) and `config/vale/` (prose: filler words and long sentences in
   both languages, and tg's tone). A repository installs the tools itself â€” [README](README.md#shared-tooling).
@@ -173,7 +178,7 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ### Added
 
-- **Shared configuration a CLI extends instead of copying.** `@leemour/cli-core/tsconfig.base.json`
+- **Shared configuration a CLI extends instead of copying.** `@wirecat/cli-core/tsconfig.base.json`
   (compiler options), `/tsconfig.test.json` and `/tsconfig.scripts.json` (the no-emit overlays for
   tests and `scripts/`), `/biome` (formatter, linter, the `scripts/` console rule) and
   `config/lefthook.yml` (the git hooks). Paths, file lists and import rules stay in each repository.
@@ -191,7 +196,7 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ### Added
 
-- **`@leemour/cli-core/skill` installs a CLI's SKILL.md and tells agents when to.** `skillCommand`
+- **`@wirecat/cli-core/skill` installs a CLI's SKILL.md and tells agents when to.** `skillCommand`
   is the `skill` command, moved down from cli-messaging, with a new `install [--for claude|agents|all]`
   that writes the file to `~/.claude/skills/<appName>/` and `~/.agents/skills/<appName>/` and records
   the CLI's version as `metadata.version` in its frontmatter â€” the Agent Skills specification has no
@@ -204,12 +209,12 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 - **The update state file keeps a second field, `skillHintAt`,** and `writeUpdateState` now merges
   into the file as it is when written, instead of replacing it, so the two daily notices do not erase
   each other. It accepts a partial state; `readNoticeState` reads the file whether or not npm was asked.
-- **`commandsPage` in `@leemour/cli-core/commands` writes a CLI's whole `docs/commands.md`** from
+- **`commandsPage` in `@wirecat/cli-core/commands` writes a CLI's whole `docs/commands.md`** from
   the command tree: every command at any depth, its usage, arguments and options with defaults, and
   the exit codes. The table labels come in English and Russian (`COMMANDS_PAGE_LABELS`); the CLI
   passes its own title, introduction and closing words. It is max-cli's generator, moved here so
   tg-cli gets the same page from the same code; max-cli's page comes out byte for byte the same.
-- **`structureProblems` in `@leemour/cli-core/release` checks a docs folder against its
+- **`structureProblems` in `@wirecat/cli-core/release` checks a docs folder against its
   `meta.json`**, the sidebar the docs portal reads: every listed page exists, every page is listed
   once, the required pages are there (`REQUIRED_PAGES`), `meta.json` holds only Fumadocs' keys,
   and each page has exactly one `# ` heading, first. `README.md` in the folder is left out â€” it is
@@ -233,7 +238,7 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ### Added
 
-- **`@leemour/cli-core/release` holds the release checks that max-cli and tg-cli share.** A runner,
+- **`@wirecat/cli-core/release` holds the release checks that max-cli and tg-cli share.** A runner,
   `releaseCheck`, that runs every check and prints one `ok` or `FAIL` line each, and the checks a
   program can decide: a command that must exit 0, the version not yet on npm, the package contents,
   the changelog's shape, links and anchors in the documents, and the version in `package.json` and
@@ -244,7 +249,7 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ### Added
 
-- **`@leemour/cli-core/codegen` generates an API catalog from an official description, at build
+- **`@wirecat/cli-core/codegen` generates an API catalog from an official description, at build
   time.** It reads a format-neutral `ApiModel` â€” each operation with an `http` or `rpc` binding, an
   effect (`read`, `write`, `destructive`) and how far its source can be trusted â€” and writes
   TypeScript types, Valibot schemas, an operation manifest and a coverage page. `writeArtifacts`
@@ -255,7 +260,7 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
   classified as a read or a write, an override that matches nothing, an unknown reference or a
   construct it cannot express â€” it never drops an operation or falls back to `any`. No parser ships:
   the OpenAPI or Postman adapter lives in the CLI that owns the source.
-- **`@leemour/cli-core/codegen/runtime`**, the few number helpers the generated schemas import at run
+- **`@wirecat/cli-core/codegen/runtime`**, the few number helpers the generated schemas import at run
   time. A 64-bit integer comes out as its exact decimal string from a `lossless-json` number; any
   other integer that does not fit a JS number fails instead of rounding.
   What to watch for: the schemas decode, they do not encode â€” validate a request with the schema,
