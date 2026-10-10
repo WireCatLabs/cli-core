@@ -46,5 +46,6 @@ export type {
   TranscriptInput,
   TranscriptRowInput,
 } from "./store.js"
+export type { MeetingTranscriptStore, TranscriptAppend, UnlinkedTranscriptInput } from "./transcript-store.js"
 export { parseVtt, VttError } from "./vtt.js"
 export { type WatchOptions, type WatchSleep, watchMeetingIngestion } from "./watch.js"

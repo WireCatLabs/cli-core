@@ -1,5 +1,7 @@
 import type { Event, EventSeries, MeetingSeries } from "../model.js"
+import { MeetingError, positiveInteger } from "../reads.js"
 import type { MeetingDetails, MeetingFilter, MeetingSave, MeetingStore, SearchHit } from "../store.js"
+import type { MeetingTranscriptStore, TranscriptAppend } from "../transcript-store.js"
 
 interface State {
   nextId: number
@@ -31,7 +33,7 @@ const filterMeetings = (rows: MeetingDetails[], filter: MeetingFilter = {}) => {
     .slice(filter.offset ?? 0, filter.limit === undefined ? undefined : (filter.offset ?? 0) + filter.limit)
 }
 
-export const memoryMeetingStore = (): MeetingStore => {
+export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
   let state: State = {
     nextId: 1,
     meetings: [],
@@ -47,6 +49,49 @@ export const memoryMeetingStore = (): MeetingStore => {
     return details
   }
   return {
+    async appendTranscripts(input) {
+      validateAppend(input)
+      const draft = structuredClone(state)
+      const copied = structuredClone(input)
+      let details = draft.meetings.find(
+        (item) => item.meeting.accountId === copied.accountId && item.meeting.externalId === copied.externalId,
+      )
+      if (details && details.meeting.deletedAt !== null) throw new MeetingError("not_found", "Meeting not found")
+      if (!details) {
+        if (!copied.create) throw new MeetingError("not_found", "Meeting not found")
+        details = save(draft, {
+          meeting: {
+            accountId: copied.accountId,
+            externalId: copied.externalId,
+            title: copied.create.title,
+            startedAt: copied.create.startedAt,
+            timezone: copied.create.timezone,
+            description: null,
+            location: null,
+            joinUrl: null,
+            endedAt: null,
+            durationMs: null,
+            hostIdentityId: null,
+            participantsCount: null,
+            metadata: null,
+            deletedAt: null,
+          },
+          now: copied.now,
+        })
+      }
+      saveTranscripts(
+        draft,
+        details,
+        copied.transcripts.map((transcript) => ({
+          ...transcript,
+          rows: transcript.rows.map((row) => ({ ...row, speakerParticipantPosition: null })),
+        })),
+        () => null,
+        copied.now,
+      )
+      state = draft
+      return structuredClone(details)
+    },
     async saveMeeting(input) {
       const draft = structuredClone(state)
       const saved = save(draft, structuredClone(input))
@@ -236,37 +281,7 @@ const save = (state: State, input: MeetingSave): MeetingDetails => {
     if (id === undefined) throw new Error("Invalid participant position")
     return id
   }
-  for (const { rows, ...transcript } of input.transcripts ?? []) {
-    if (
-      transcript.contentHash !== null &&
-      details.transcripts.some(
-        (t) => t.transcript.source === transcript.source && t.transcript.contentHash === transcript.contentHash,
-      )
-    )
-      continue
-    const positions = new Set<number>()
-    for (const row of rows) {
-      if (!Number.isSafeInteger(row.position) || row.position < 0 || positions.has(row.position))
-        throw new Error("Invalid transcript position")
-      positions.add(row.position)
-    }
-    for (const old of details.transcripts)
-      if (old.transcript.source === transcript.source && old.transcript.supersededAt === null) {
-        old.transcript.supersededAt = now
-        old.transcript.updatedAt = now
-      }
-    const stored = { ...transcript, id: state.nextId++, meetingId, supersededAt: null, createdAt: now, updatedAt: now }
-    details.transcripts.push({
-      transcript: stored,
-      rows: rows.map(({ speakerParticipantPosition, ...r }) => ({
-        ...r,
-        id: state.nextId++,
-        meetingTranscriptId: stored.id,
-        speakerParticipantId: participantId(speakerParticipantPosition),
-        createdAt: now,
-      })),
-    })
-  }
+  saveTranscripts(state, details, input.transcripts ?? [], participantId, now)
   for (const { senderParticipantPosition, ...line } of input.chat ?? []) {
     let old = details.chat.find((r) =>
       line.externalId !== null
@@ -299,4 +314,71 @@ const save = (state: State, input: MeetingSave): MeetingDetails => {
       })
   }
   return details
+}
+
+const saveTranscripts = (
+  state: State,
+  details: MeetingDetails,
+  transcripts: NonNullable<MeetingSave["transcripts"]>,
+  participantId: (position: number | null) => number | null,
+  now: number,
+): void => {
+  for (const { rows, ...transcript } of transcripts) {
+    if (
+      transcript.contentHash !== null &&
+      details.transcripts.some(
+        (t) => t.transcript.source === transcript.source && t.transcript.contentHash === transcript.contentHash,
+      )
+    )
+      continue
+    const positions = new Set<number>()
+    for (const row of rows) {
+      if (!Number.isSafeInteger(row.position) || row.position < 0 || positions.has(row.position))
+        throw new Error("Invalid transcript position")
+      positions.add(row.position)
+    }
+    for (const old of details.transcripts)
+      if (old.transcript.source === transcript.source && old.transcript.supersededAt === null) {
+        old.transcript.supersededAt = now
+        old.transcript.updatedAt = now
+      }
+    const stored = {
+      ...transcript,
+      id: state.nextId++,
+      meetingId: details.meeting.id,
+      supersededAt: null,
+      createdAt: now,
+      updatedAt: now,
+    }
+    details.transcripts.push({
+      transcript: stored,
+      rows: rows.map(({ speakerParticipantPosition, ...r }) => ({
+        ...r,
+        id: state.nextId++,
+        meetingTranscriptId: stored.id,
+        speakerParticipantId: participantId(speakerParticipantPosition),
+        createdAt: now,
+      })),
+    })
+  }
+}
+
+const validateAppend = (input: TranscriptAppend): void => {
+  positiveInteger(input.accountId)
+  if (!input.externalId?.trim() || !Number.isSafeInteger(input.now) || input.transcripts.length === 0)
+    throw new MeetingError("validation_error", "Invalid transcript append")
+  if (
+    input.create &&
+    (!Number.isSafeInteger(input.create.startedAt) || Math.abs(input.create.startedAt) > 8640000000000000)
+  )
+    throw new MeetingError("validation_error", "Invalid meeting start")
+  const sources = new Set<string>()
+  for (const transcript of input.transcripts) {
+    if (!transcript.source.trim() || !transcript.contentHash.trim() || sources.has(transcript.source))
+      throw new MeetingError("validation_error", "Expected distinct transcript sources and nonempty hashes")
+    sources.add(transcript.source)
+    for (const row of transcript.rows)
+      if ("speakerParticipantPosition" in row || "speakerParticipantId" in row)
+        throw new MeetingError("validation_error", "Appended transcript rows must be unlinked")
+  }
 }
