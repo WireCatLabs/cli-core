@@ -182,7 +182,7 @@ describe("updateNotice", () => {
 
   const request = (overrides: Partial<Parameters<typeof updateNotice>[0]> = {}) => ({
     argv: ["campaigns", "list"],
-    packageName: "@leemour/tool",
+    packageName: "@wirecat/tool",
     command: "tool",
     version: "1.0.0",
     statePath: join(mkdtempSync(join(tmpdir(), "cli-core-notice-")), "update-check.json"),
