@@ -10,12 +10,10 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ## 0.19.4 â€” 11.10.2026
 
-### Changed
+### Fixed
 
 - Package references, documentation and fixtures use the WireCat namespace throughout.
 
-
-### Fixed
 
 - The owner-migration helper covers meetings, testing, Zoom and the shared organization repositories, so their links and package names migrate with the original CLIs.
 
