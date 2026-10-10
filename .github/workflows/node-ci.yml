@@ -1,4 +1,4 @@
-# The checks every CLI on cli-core runs on a pull request, called from each repository's ci.yml:
+# Full release, monthly and manual checks, called from each repository's ci.yml:
 #
 #   jobs:
 #     ci:
@@ -12,7 +12,19 @@ name: Node CI
 
 on:
   workflow_call:
+    outputs:
+      package-sha256:
+        description: SHA-256 of the tarball produced after validation
+        value: ${{ jobs.check.outputs.package-sha256 }}
     inputs:
+      pack:
+        description: Pack the validated build for a release, without rerunning lifecycle scripts
+        type: boolean
+        default: false
+      pack-checks:
+        description: Release-only checks before packing; full checks have already passed
+        type: string
+        default: ""
       node-version:
         type: string
         default: "24"
@@ -35,6 +47,8 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    outputs:
+      package-sha256: ${{ steps.package.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -52,6 +66,28 @@ jobs:
         env:
           CHECKS: ${{ inputs.checks }}
         run: bash -eo pipefail -c "$CHECKS"
+
+      - name: Release-only artifact checks
+        if: inputs.pack && inputs.pack-checks != ''
+        env:
+          PACK_CHECKS: ${{ inputs.pack-checks }}
+        run: bash -eo pipefail -c "$PACK_CHECKS"
+      - name: Pack the validated build
+        if: inputs.pack
+        id: package
+        run: |
+          npm pack --ignore-scripts
+          set -- ./*.tgz
+          [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "Expected exactly one package tarball"; exit 1; }
+          digest=$(sha256sum "$1" | cut -d ' ' -f 1)
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: inputs.pack
+        with:
+          name: validated-package
+          path: ./*.tgz
+          if-no-files-found: error
+          retention-days: 7
 
   bun:
     if: inputs.bun

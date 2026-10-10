@@ -2,6 +2,13 @@ name: Full validation
 
 on:
   workflow_call:
+    inputs:
+      pack:
+        type: boolean
+        default: false
+    outputs:
+      package-sha256:
+        value: ${{ jobs.ci.outputs.package-sha256 }}
   workflow_dispatch:
 
 permissions:
@@ -11,6 +18,7 @@ jobs:
   ci:
     uses: ./.github/workflows/node-ci.yml
     with:
+      pack: ${{ inputs.pack || false }}
       checks: |
         pnpm docs:check
 
