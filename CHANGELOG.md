@@ -10,6 +10,15 @@ Every entry says what changed as a caller sees it, why, and what to watch for â€
 
 ## 0.19.1 â€” 10.10.2026
 
+### Added
+
+- **Portable command control helpers** expose `fieldsOf`, `projectFields`, `createOutputBuffer`
+  and `createDeadline` from the root export. Field projection retains list and operation metadata;
+  a bounded UTF-8 buffer delays data until hosts finish cleanup. Deadlines use injected sleep and
+  cancellation, waiting for the body to settle before callers close resources. Callers must propagate
+  the signal, dispose the deadline and discard buffered output on failure; no provider/store lifecycle
+  or automatic retries are imported.
+
 ### Fixed
 
 - Windows maintenance commands support portable relative PATH entries and custom or sanitized command-processor environments while preserving separate arguments.

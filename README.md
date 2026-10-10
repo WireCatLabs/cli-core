@@ -36,6 +36,9 @@ streams.stderr // []
 | `renderer` · `pretty` | `pretty` / `json` / `jsonl`; tables for lists, labelled lines for objects; `quiet` keeps only failures on stderr |
 | `errors` · `exit-codes` | 14 closed error codes, one exit number each, so a script can branch on `$?` |
 | `keyring` | `KeyringStore` with the system, memory and deliberately-broken implementations |
+| `fieldsOf` · `projectFields` | validated field selection preserving list metadata and operation identifiers |
+| `createOutputBuffer` | bounded UTF-8 output held until successful completion and resource cleanup |
+| `createDeadline` | cooperative command cancellation with injected sleep and a parent abort signal |
 | `time` | monotonic and wall clocks, and the one sleep that both timeouts and backoff use |
 | `logger` | the four-method interface a host adapts Pino to — this package logs nothing itself |
 | `paths` | `env-paths` for config, state and cache, each overridable by environment variable |
@@ -59,6 +62,34 @@ does not call:
 ```ts
 import { providerWaitMs, statusToCode } from "@wirecat/cli-core/http"
 ```
+
+**Portable command control stays independent of provider and store lifetimes.**
+`fieldsOf("id,speaker.id")` parses up to 128 field paths; `projectFields(value, paths)` selects data
+from objects or list items while preserving the list envelope and `operationId` / `sendId`.
+`items.id` also works for bare objects and JSONL items. Unknown fields are omitted; parent selections
+win over their children. Unsafe prototype paths are refused, including when paths are passed directly.
+
+`createOutputBuffer({ maxOutputBytes })` retains raw output chunks until `flush(write)` or `discard()`.
+Its default limit is 4 MiB; zero disables the limit. It counts actual UTF-8 bytes, including delimiters
+the caller passes, and adds no newlines. Use a new buffer for each command and flush only after resource
+cleanup succeeds; discard on failure. A flush consumes the buffer even when its writer throws.
+The `bytes` property reports the cumulative accepted byte count. A writer failure can leave partial
+output; buffering only guarantees no output before flushing.
+
+Optional `{ fields, format: "json" | "jsonl" }` projects before counting bytes. With projection,
+each `data(text)` must contain a complete JSON value or complete JSONL lines; fragments fail before
+buffering. Without projection, arbitrary text chunks work. Hosts can instead project values before
+rendering and buffer the renderer's raw text. For core renderers, pass the line delimiter explicitly
+when adapting `Streams.data`: `data: (text) => buffer.data(text + "\n")`.
+
+`createDeadline({ timeoutMs, signal, sleep })` supplies a command signal and `race(body)`. An omitted
+timeout creates no timer; zero is an immediate deadline, and the maximum is 2147483647 milliseconds.
+Pass its signal to every cancellable operation and check it before writes. On timeout or parent
+cancellation, `race` waits for the body to settle before rejecting, so a caller can safely close
+resources afterwards. An operation ignoring its signal can delay completion; this helper never
+abandons it in the background. A body's more precise `outcome_unknown` error survives interruption.
+Call `dispose()` in `finally` to remove the timer and parent listener. There are no process signal
+handlers, retries, automatic resource cleanup or HTTP behavior in these helpers.
 
 **The command registry is `@wirecat/cli-core/commands`** — the whole command tree as data, like
 `rails routes`, for an agent to read instead of `--help` and for generated documentation. It walks

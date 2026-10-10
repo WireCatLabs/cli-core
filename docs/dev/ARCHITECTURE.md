@@ -10,7 +10,7 @@ self-update and code generation. What each export does is the table in the
 
 | Import | Owns | Depends on |
 |---|---|---|
-| `@wirecat/cli-core` | streams, renderer, pretty, errors, exit codes, keyring, credentials, config, paths, logging, retry, time, sanitize | `env-paths`, `pino`, `cli-table3`, `picocolors`; `@napi-rs/keyring` loaded on first use |
+| `@wirecat/cli-core` | streams, renderer, pretty, errors, exit codes, keyring, credentials, config, paths, logging, retry, time, sanitize, field projection, output buffering, deadlines | `env-paths`, `pino`, `cli-table3`, `picocolors`; `@napi-rs/keyring` loaded on first use |
 | `/http` | status → error code, `Retry-After` and rate-limit parsing, the `fetch` seam | the root's `ErrorCode` and `WallClock` types |
 | `/commands` | the command tree as data (`describeProgram`, `annotate`, `flatten`), and the reference page written from it (`commandsPage`) | Commander, as a type only |
 | `/completion` | shell completion over that tree | `/commands` types |
@@ -50,6 +50,24 @@ and makes the keyring unreachable from a test ([`TESTING.md`](TESTING.md)). The 
 
 **cli-core logs nothing and prints nothing by itself.** It hands a host a `Logger` interface, a Pino
 adapter and a renderer; what is written, and where, is the host's call.
+
+## Portable command control
+
+`result-fields` preserves the existing messaging projection behavior without importing its runner.
+It validates both parsed and directly supplied paths, preserves page envelopes, and retains operation
+identifiers. A host chooses rendering and JSONL framing; projection never selects a messenger profile.
+
+`output-buffer` holds raw rendered chunks until the host has completed its operation and closed
+resources. The byte limit applies after optional complete-value JSON/JSONL projection, including
+caller-supplied delimiters. It is a one-use buffer; flush consumes all chunks even on a writer failure.
+It does not impose renderer framing or conceal partial output from a failing writer.
+
+`deadline` uses an injected `SleepLike` and optional parent signal, never process-wide signal handlers.
+It cancels cooperatively and waits for the body to settle on interruption. This preserves resource
+lifetimes at the cost of delayed completion when a body ignores cancellation. `outcome_unknown`
+from the body takes precedence over timeout/cancellation; other body failures remain unchanged when
+there was no interruption. Hosts own close ordering and provider mutation policy. Dispose the scope
+in `finally`; timers and listeners do not belong to the store or a messenger execution shell.
 
 ## Who consumes it
 
