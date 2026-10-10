@@ -19,4 +19,20 @@ export type {
   TranscriptRow,
 } from "./model.js"
 export type { MeetingSource } from "./source.js"
+export type {
+  ChatInput,
+  ContractCase,
+  EventCandidateFilter,
+  IdentityInput,
+  MeetingDetails,
+  MeetingFilter,
+  MeetingInput,
+  MeetingSave,
+  MeetingStore,
+  NewRecord,
+  ParticipantInput,
+  SearchHit,
+  TranscriptInput,
+  TranscriptRowInput,
+} from "./store.js"
 export { parseVtt, VttError } from "./vtt.js"
