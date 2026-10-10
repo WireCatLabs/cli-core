@@ -1,4 +1,4 @@
-import type { ChatLine, Meeting, Summary, TranscriptLine } from "./model.js"
+import type { SourceChatLine, SourceMeeting, SummaryContent, TranscriptLine } from "./model.js"
 
 /**
  * What a provider implements, once per way in: its API, files the user downloaded, or a browser.
@@ -7,8 +7,8 @@ import type { ChatLine, Meeting, Summary, TranscriptLine } from "./model.js"
 export interface MeetingSource {
   readonly provider: string
   /** Occurrences that started at or after `since` (ISO 8601). */
-  meetings(since: string): Promise<Meeting[]>
+  meetings(since: string): Promise<SourceMeeting[]>
   transcript(occurrenceId: string): Promise<TranscriptLine[] | null>
-  chat(occurrenceId: string): Promise<ChatLine[] | null>
-  summary(occurrenceId: string): Promise<Summary | null>
+  chat(occurrenceId: string): Promise<SourceChatLine[] | null>
+  summary(occurrenceId: string): Promise<SummaryContent | null>
 }

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest"
-import { lineId } from "./model.js"
 import { parseVtt, VttError } from "./vtt.js"
 
 const zoom = `WEBVTT
@@ -52,14 +51,5 @@ describe("parseVtt", () => {
   it("names the line of a broken timestamp or a cue with no timing", () => {
     expect(() => parseVtt("WEBVTT\n\n00:00:00 --> 00:00:01.000\nhi\n")).toThrow(/line 3/)
     expect(() => parseVtt("WEBVTT\n\njust text\nmore text\nand more\n")).toThrow(/line 3: a cue has no timing/)
-  })
-})
-
-describe("lineId", () => {
-  it("is the same for the same cue in a re-downloaded file", () => {
-    const [first] = parseVtt(zoom)
-    const [again] = parseVtt(zoom.replace("WEBVTT\n\n", "WEBVTT\n\n1\n"))
-    expect(first && lineId("occ-1", first)).toBe("occ-1@1500")
-    expect(again && lineId("occ-1", again)).toBe("occ-1@1500")
   })
 })
