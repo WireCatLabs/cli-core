@@ -1,4 +1,4 @@
-import type { Task, TaskKind, TaskState } from "./model.js"
+import type { Task, TaskKind, TaskState, TaskVerdict } from "./model.js"
 
 export interface TaskFilter {
   account?: string
@@ -15,6 +15,10 @@ export interface TaskStore {
   insert(task: Task): Promise<void>
   update(task: Task): Promise<void>
   list(filter: TaskFilter): Promise<Task[]>
+  /** A question's answer: its text, and the locator it came from when there is one. */
+  answer(id: string, input: { resolution: string; by?: string }): Promise<void>
+  /** The owner's judgement of a task a rule or an agent raised; `null` takes it back. */
+  judge(id: string, verdict: TaskVerdict | null): Promise<void>
 }
 
 export function matches(task: Task, filter: TaskFilter): boolean {

@@ -1,10 +1,12 @@
 export const TASK_KINDS = ["question", "request", "mention", "promise"] as const
 export const TASK_STATES = ["open", "done", "dismissed"] as const
 export const TASK_ORIGINS = ["rule", "agent", "owner"] as const
+export const TASK_VERDICTS = ["useful", "not_useful"] as const
 
 export type TaskKind = (typeof TASK_KINDS)[number]
 export type TaskState = (typeof TASK_STATES)[number]
 export type TaskOrigin = (typeof TASK_ORIGINS)[number]
+export type TaskVerdict = (typeof TASK_VERDICTS)[number]
 export type ClosedState = Exclude<TaskState, "open">
 
 /**
