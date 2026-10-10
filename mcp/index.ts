@@ -1,7 +1,9 @@
+import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import {
   listed,
   MeetingError,
   meetingShow,
+  meetingSummary,
   meetingsList,
   meetingsSearch,
   meetingTranscript,
@@ -11,7 +13,13 @@ import type { MeetingFilter, MeetingStore } from "../store.js"
 
 const integer = { type: "integer", minimum: 1 }
 const text = { type: "string", minLength: 1 }
-const filters = { account_id: integer, since: { type: "number" }, until: { type: "number" } }
+const filters = {
+  account_id: integer,
+  event_id: integer,
+  series_id: integer,
+  since: { type: "number" },
+  until: { type: "number" },
+}
 export const meetingTools = [
   {
     name: "meetings_list",
@@ -22,14 +30,31 @@ export const meetingTools = [
   {
     name: "meeting_show",
     description: "show a stored meeting",
-    properties: { meeting: integer },
+    properties: { meeting: integer, account_id: integer },
     required: ["meeting"],
   },
   {
     name: "meeting_transcript",
     description: "show current meeting transcripts",
-    properties: { meeting: integer },
+    properties: { meeting: integer, account_id: integer, history: { type: "boolean" } },
     required: ["meeting"],
+  },
+  {
+    name: "meeting_summary",
+    description: "show stored meeting summaries",
+    properties: { meeting: integer, account_id: integer },
+    required: ["meeting"],
+  },
+  {
+    name: "meeting_export",
+    description: "export stored meeting content without writing a file",
+    properties: {
+      meeting: integer,
+      account_id: integer,
+      format: { type: "string", enum: ["markdown", "vtt"] },
+      transcript_id: integer,
+    },
+    required: ["meeting", "format"],
   },
   {
     name: "meetings_search",
@@ -60,7 +85,12 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
   for (const key of tool.inputSchema.required)
     if (!Object.hasOwn(args, key)) throw new MeetingError("validation_error", `missing argument: ${key}`)
   for (const [key, value] of Object.entries(args)) {
-    if (["account_id", "meeting", "limit", "page"].includes(key)) positiveInteger(value)
+    if (["account_id", "event_id", "series_id", "transcript_id", "meeting", "limit", "page"].includes(key))
+      positiveInteger(value)
+    else if (key === "history" && typeof value !== "boolean")
+      throw new MeetingError("validation_error", "history must be a boolean")
+    else if (key === "format" && value !== "markdown" && value !== "vtt")
+      throw new MeetingError("validation_error", "export format must be markdown or vtt")
     else if (key === "query" && (typeof value !== "string" || !value.trim()))
       throw new MeetingError("validation_error", "query must not be empty")
     else if (["since", "until"].includes(key) && (typeof value !== "number" || !Number.isFinite(value)))
@@ -73,6 +103,8 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
     const args = argumentsOf(name, input)
     const filter: MeetingFilter = {
       accountId: args.account_id as number | undefined,
+      eventId: args.event_id as number | undefined,
+      meetingSeriesId: args.series_id as number | undefined,
       since: args.since as number | undefined,
       until: args.until as number | undefined,
     }
@@ -86,10 +118,22 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
         )
         break
       case "meeting_show":
-        result = await meetingShow(store, args.meeting as number)
+        result = await meetingShow(store, args.meeting as number, filter.accountId)
         break
       case "meeting_transcript":
-        result = await meetingTranscript(store, args.meeting as number)
+        result = await meetingTranscript(store, args.meeting as number, filter.accountId, {
+          history: args.history as boolean | undefined,
+        })
+        break
+      case "meeting_summary":
+        result = await meetingSummary(store, args.meeting as number, filter.accountId)
+        break
+      case "meeting_export":
+        result = await exportMeeting(store, args.meeting as number, {
+          accountId: filter.accountId,
+          format: args.format as MeetingExportFormat,
+          transcriptId: args.transcript_id as number | undefined,
+        })
         break
       case "meetings_search":
         result = await meetingsSearch(store, args.query as string, filter)

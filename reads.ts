@@ -42,12 +42,24 @@ export const meetingsList = async (store: MeetingStore, filter: MeetingFilter = 
   const rows = await store.meetings({ ...filter, limit: limit + 1, offset })
   return { items: rows.slice(0, limit), page, limit, hasMore: rows.length > limit }
 }
-export const meetingTranscript = async (store: MeetingStore, id: number, accountId?: number) => {
+export interface TranscriptReadOptions {
+  history?: boolean
+}
+export const meetingTranscript = async (
+  store: MeetingStore,
+  id: number,
+  accountId?: number,
+  options: TranscriptReadOptions = {},
+) => {
   const details = await meetingShow(store, id, accountId)
   return listed(
-    details.transcripts.filter((t) => t.transcript.supersededAt === null && t.transcript.deletedAt === null),
+    details.transcripts.filter(
+      (t) => (options.history || t.transcript.supersededAt === null) && t.transcript.deletedAt === null,
+    ),
   )
 }
+export const meetingSummary = async (store: MeetingStore, id: number, accountId?: number) =>
+  listed((await meetingShow(store, id, accountId)).summaries)
 export const meetingsSearch = async (store: MeetingStore, query: string, filter: MeetingFilter = {}) => {
   validateFilter(filter)
   if (!query.trim()) throw new MeetingError("validation_error", "query must not be empty")

@@ -1,4 +1,11 @@
 export { linkEvent } from "./events.js"
+export {
+  exportMeeting,
+  type MeetingExport,
+  type MeetingExportFormat,
+  type MeetingExportOptions,
+  serializeVtt,
+} from "./export.js"
 export { type ImportFile, importFiles } from "./import.js"
 export type {
   Attachment,
@@ -21,7 +28,7 @@ export type {
   TranscriptRow,
 } from "./model.js"
 export { type PullOptions, pull, type RunReport } from "./pull.js"
-export { MeetingError } from "./reads.js"
+export { MeetingError, meetingSummary, type TranscriptReadOptions } from "./reads.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,

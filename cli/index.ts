@@ -1,7 +1,16 @@
-import { type Command, InvalidArgumentError } from "commander"
+import { type Command, InvalidArgumentError, Option } from "commander"
+import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
 import { pull } from "../pull.js"
-import { listed, MeetingError, meetingShow, meetingsList, meetingsSearch, meetingTranscript } from "../reads.js"
+import {
+  listed,
+  MeetingError,
+  meetingShow,
+  meetingSummary,
+  meetingsList,
+  meetingsSearch,
+  meetingTranscript,
+} from "../reads.js"
 import type { MeetingSource } from "../source.js"
 import type { MeetingStore } from "../store.js"
 
@@ -11,6 +20,7 @@ export interface MeetingCommandDeps {
   rootIngestion?: boolean
   source?: MeetingSource
   readFiles?: (folder: string) => Promise<ImportFile[]>
+  writeFile?: (path: string, content: string) => Promise<void>
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
   now?: () => number
 }
@@ -66,15 +76,75 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     group
       .command("transcript")
       .description("show current meeting transcripts")
-      .argument("<meeting>", "stored meeting id", integer),
-  ).action(async (id: number, _opts: unknown, command: Command) => {
-    print(await meetingTranscript(deps.store, id, deps.accountId), command)
+      .argument("<meeting>", "stored meeting id", integer)
+      .option("--history", "include superseded transcript versions"),
+  ).action(async (id: number, opts: { history?: boolean }, command: Command) => {
+    print(await meetingTranscript(deps.store, id, deps.accountId, { history: opts.history }), command)
   })
   output(
-    group.command("search").description("search stored transcripts, chat and summaries").argument("<query>"),
-  ).action(async (query: string, _opts: unknown, command: Command) => {
-    print(await meetingsSearch(deps.store, query, { accountId: deps.accountId }), command)
+    group
+      .command("summary")
+      .description("show stored meeting summaries")
+      .argument("<meeting>", "stored meeting id", integer),
+  ).action(async (id: number, _opts: unknown, command: Command) => {
+    print(await meetingSummary(deps.store, id, deps.accountId), command)
   })
+  output(
+    group
+      .command("export")
+      .description("export a meeting as Markdown or one transcript as WebVTT")
+      .argument("<meeting>", "stored meeting id", integer)
+      .addOption(new Option("--format <format>", "export format").choices(["markdown", "vtt"]).default("markdown"))
+      .option("--transcript-id <id>", "export a specific transcript version", integer)
+      .option("--output <file>", "write content to a file through the host's writer"),
+  ).action(
+    async (
+      id: number,
+      opts: { format: MeetingExportFormat; transcriptId?: number; output?: string },
+      command: Command,
+    ) => {
+      if (opts.output !== undefined && !opts.output.trim())
+        throw new MeetingError("validation_error", "output path must not be empty")
+      if (opts.output !== undefined && !deps.writeFile)
+        throw new MeetingError("configuration_error", "the host has no export file writer")
+      const result = await exportMeeting(deps.store, id, {
+        accountId: deps.accountId,
+        format: opts.format,
+        transcriptId: opts.transcriptId,
+      })
+      if (opts.output !== undefined) {
+        await deps.writeFile?.(opts.output, result.content)
+        print({ meetingId: result.meetingId, format: result.format, output: opts.output }, command)
+      } else print(result, command)
+    },
+  )
+  output(
+    group
+      .command("search")
+      .description("search stored transcripts, chat and summaries")
+      .argument("<query>")
+      .option("--since <date>", "meetings starting at or after this date", date)
+      .option("--until <date>", "meetings starting at or before this date", date)
+      .option("--event-id <id>", "only meetings linked to this stored event", integer)
+      .option("--series-id <id>", "only meetings in this stored series", integer),
+  ).action(
+    async (
+      query: string,
+      opts: { since?: number; until?: number; eventId?: number; seriesId?: number },
+      command: Command,
+    ) => {
+      print(
+        await meetingsSearch(deps.store, query, {
+          accountId: deps.accountId,
+          since: opts.since,
+          until: opts.until,
+          eventId: opts.eventId,
+          meetingSeriesId: opts.seriesId,
+        }),
+        command,
+      )
+    },
+  )
   output(group.command("people").description("find meeting participants by name or email").argument("<query>")).action(
     async (query: string, _opts: unknown, command: Command) => {
       print(listed(await deps.store.participants(query, deps.accountId)), command)
