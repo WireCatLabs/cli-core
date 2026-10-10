@@ -90,7 +90,8 @@
     "prepublishOnly": "pnpm build",
     "standards:check": "node config/wirecat/check.mjs",
     "docs:lint": "markdownlint-cli2",
-    "docs:spell": "cspell lint --config cspell.json --no-progress README.md"
+    "docs:spell": "cspell lint --config cspell.json --no-progress README.md",
+    "ci:quick": "pnpm typecheck"
   },
   "dependencies": {
     "cli-table3": "^0.6.5",
