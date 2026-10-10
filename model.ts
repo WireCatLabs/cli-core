@@ -118,6 +118,12 @@ export interface ChatLine extends RecordTimes {
 }
 
 export interface SummaryContent {
+  source?: string
+  content?: string | null
+  docUrl?: string | null
+  externalCreatedAt?: number | null
+  externalUpdatedAt?: number | null
+  metadata?: Metadata
   title: string | null
   overview: string | null
   sections: { label: string; text: string }[]

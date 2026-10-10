@@ -109,12 +109,12 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
             : [
                 {
                   ...summary,
-                  source: source.name,
-                  content: null,
-                  docUrl: null,
-                  externalCreatedAt: null,
-                  externalUpdatedAt: null,
-                  metadata: null,
+                  source: summary.source ?? source.name,
+                  content: summary.content ?? null,
+                  docUrl: summary.docUrl ?? null,
+                  externalCreatedAt: summary.externalCreatedAt ?? null,
+                  externalUpdatedAt: summary.externalUpdatedAt ?? null,
+                  metadata: summary.metadata ?? null,
                 },
               ],
         attachments: attachments ?? undefined,

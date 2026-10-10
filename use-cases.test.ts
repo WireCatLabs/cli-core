@@ -254,3 +254,37 @@ it("rejects reversed times and isolates fallback names across accounts", async (
   expect(people[0]?.identityId).not.toBe(people[1]?.identityId)
   expect(people[0]).not.toHaveProperty("identityExternalId")
 })
+
+it("retains summary source, full content, links, provider times and metadata", async () => {
+  const store = memoryMeetingStore()
+  await pull(
+    fakeMeetingSource({
+      async summary() {
+        return {
+          title: "Example summary",
+          overview: "Example overview",
+          sections: [],
+          nextSteps: [],
+          source: "example-ai",
+          content: "Example complete summary",
+          docUrl: "https://example.com/summary",
+          externalCreatedAt: 500,
+          externalUpdatedAt: 600,
+          metadata: { edited: true },
+        }
+      },
+    }),
+    store,
+    options,
+  )
+  const [meeting] = await store.meetings()
+  const details = await store.meeting(meeting?.id ?? 0)
+  expect(details?.summaries[0]).toMatchObject({
+    source: "example-ai",
+    content: "Example complete summary",
+    docUrl: "https://example.com/summary",
+    externalCreatedAt: 500,
+    externalUpdatedAt: 600,
+    metadata: { edited: true },
+  })
+})
