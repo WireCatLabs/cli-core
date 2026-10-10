@@ -8,6 +8,7 @@ import type { MeetingStore } from "../store.js"
 export interface MeetingCommandDeps {
   store: MeetingStore
   accountId: number
+  rootIngestion?: boolean
   source?: MeetingSource
   readFiles?: (folder: string) => Promise<ImportFile[]>
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
@@ -74,7 +75,11 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       print(listed(await deps.store.participants(query, deps.accountId)), command)
     },
   )
-  output(group.command("pull").description("fetch meeting records from the connected account"))
+  output(
+    (deps.rootIngestion ? program : group)
+      .command("pull")
+      .description("fetch meeting records from the connected account"),
+  )
     .option("--since <date>", "fetch occurrences starting at or after this date", date)
     .action(async (opts: { since?: number }, command: Command) => {
       if (!deps.source) throw new MeetingError("configuration_error", "meeting source is unavailable")
@@ -87,15 +92,18 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
         command,
       )
     })
-  output(group.command("import").description("import downloaded meeting transcripts").argument("<folder>")).action(
-    async (folder: string, _opts: unknown, command: Command) => {
-      if (!deps.readFiles) throw new MeetingError("configuration_error", "file reader is unavailable")
-      const files = await deps.readFiles(folder)
-      if (files.some((file) => file.meeting.accountId !== deps.accountId))
-        throw new MeetingError("validation_error", "file account differs from selected account")
-      print(await importFiles(files, deps.store, deps.now?.()), command)
-    },
-  )
+  output(
+    (deps.rootIngestion ? program : group)
+      .command("import")
+      .description("import downloaded meeting transcripts")
+      .argument("<folder>"),
+  ).action(async (folder: string, _opts: unknown, command: Command) => {
+    if (!deps.readFiles) throw new MeetingError("configuration_error", "file reader is unavailable")
+    const files = await deps.readFiles(folder)
+    if (files.some((file) => file.meeting.accountId !== deps.accountId))
+      throw new MeetingError("validation_error", "file account differs from selected account")
+    print(await importFiles(files, deps.store, deps.now?.()), command)
+  })
   output(
     program
       .command("events")

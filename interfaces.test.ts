@@ -159,3 +159,11 @@ it("pagination detects the next page and readers validate arguments", async () =
   if (!saved) throw new Error("Missing meeting")
   await expect(meetingShow(store, saved.meeting.id, 2)).rejects.toThrow(/not found/)
 })
+
+it("mounts ingestion at the root without duplicate nested paths", async () => {
+  const { run, outputs } = await setup({ rootIngestion: true })
+  await run(["pull"])
+  await run(["import", "example-folder"])
+  expect(outputs.length).toBe(2)
+  await expect(run(["meetings", "pull"])).rejects.toThrow()
+})
