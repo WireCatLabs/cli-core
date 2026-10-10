@@ -341,4 +341,4 @@ must be allowed to write `@wirecat/cli-core`, not only `@wirecat/max-cli`.
 
 ## Licence
 
-MIT.
+[Apache License 2.0](LICENSE).
