@@ -238,3 +238,19 @@ it("speaker matching accepts only one match", () => {
   expect(speakerPosition("Alice Example", [participants[0], participants[0]])).toBeNull()
   expect(timestamp("1970-01-01T00:00:00Z")).toBe(0)
 })
+
+it("rejects reversed times and isolates fallback names across accounts", async () => {
+  const source = fakeMeetingSource()
+  const base = (await source.meetings(""))[0]
+  if (!base) throw new Error("Missing fake meeting")
+  source.meetings = async () => [{ ...base, occurrence: { ...base.occurrence, endedAt: "1970-01-01T00:00:00Z" } }]
+  expect((await pull(source, memoryMeetingStore(), options)).warnings[0]?.message).toMatch(/ends before/)
+  source.meetings = async () => [base]
+  source.participants = async () => [participant({ identityExternalId: null })]
+  const store = memoryMeetingStore()
+  await pull(source, store, options)
+  await pull(source, store, { ...options, accountId: 2 })
+  const people = await store.participants("Alice")
+  expect(people[0]?.identityId).not.toBe(people[1]?.identityId)
+  expect(people[0]).not.toHaveProperty("identityExternalId")
+})

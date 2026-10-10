@@ -191,6 +191,8 @@ const save = (state: State, input: MeetingSave): MeetingDetails => {
       state.series.push(series)
     }
   }
+  if (series)
+    for (const stored of state.meetings) if (stored.meeting.meetingSeriesId === series.id) stored.series = series
   if (details) Object.assign(details.meeting, meeting, { updatedAt: now, meetingSeriesId: series?.id ?? null })
   else {
     details = {

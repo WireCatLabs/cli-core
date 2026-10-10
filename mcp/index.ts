@@ -76,7 +76,7 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
       since: args.since as number | undefined,
       until: args.until as number | undefined,
     }
-    let result: unknown
+    let result: object
     switch (name) {
       case "meetings_list":
         result = await meetingsList(

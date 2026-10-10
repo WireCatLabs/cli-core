@@ -174,6 +174,23 @@ export const meetingStoreContract = (make: () => MeetingStore | Promise<MeetingS
       await assert.rejects(s.setEventSeries(d.series.id, 999, 1))
       await assert.rejects(s.createEvent({ ...sampleEvent(), eventSeriesId: 999 }, 1))
     }),
+    test("renames preserve meeting names and return the current series", async (s) => {
+      const input = sampleMeeting()
+      const first = await s.saveMeeting(input)
+      assert.ok(first.series)
+      const eventSeries = await s.createEventSeries({ title: "Example series", recurrence: null, origin: "auto" }, 3000)
+      await s.setEventSeries(first.series.id, eventSeries.id, 4000)
+      input.meeting.externalId = "renamed-occurrence"
+      assert.ok(input.meeting.series)
+      input.meeting.series.title = "Updated series"
+      input.participants[0].displayName = "Alice Renamed Example"
+      const second = await s.saveMeeting(input)
+      const original = await s.meeting(first.meeting.id)
+      assert.equal(original?.series?.title, "Updated series")
+      assert.equal(original?.participants[0]?.displayName, "Alice Example")
+      assert.equal(second.participants[0]?.displayName, "Alice Renamed Example")
+      assert.equal(original?.participants[0]?.identityId, second.participants[0]?.identityId)
+    }),
     test("failed saves leave no partial changes", async (s) => {
       const input = sampleMeeting()
       const before = await s.saveMeeting(input)
