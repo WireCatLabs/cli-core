@@ -4,6 +4,13 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- Hints that point to importing mail name the account: `memo mail <account> import --since <date>`.
+  memo refuses the old `memo mail import` form without an account.
+
 ## 0.251.0 — 11.10.2026
 
 ### Added

@@ -14,7 +14,7 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 
 Этот профиль — для всех команд `search`: `search all` (сообщения, почта и заметки сразу — с неё
 начинать, если неизвестно, где написано), `search messages` (только сообщения мессенджеров), `search mail`
-(только почта, импортированная `memo mail import`, во всех почтовых аккаунтах сразу, а `--account <адрес>` —
+(только почта, импортированная `memo mail <account> import`, во всех почтовых аккаунтах сразу, а `--account <адрес>` —
 в одном; `chat:` и `--chat` там — тред по id или теме, полей `kind` и
 `topic` нет; только у почты — `to:`, `cc:`, `bcc:` (человек, как в `from:`), `subject:` (слова темы) и
 `mailbox:` (папка или ярлык по id или имени; `label:` — то же самое), `is:unread`, `is:read` и `is:starred`
