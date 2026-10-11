@@ -21,6 +21,7 @@ import {
   messageTranscripts,
   syncRanges,
 } from "./schema.js"
+import { ensureTag } from "./tags.js"
 import { json, parsed, present, toIso, toMs } from "./values.js"
 
 /** The chat's own id, when the store key is a chat of this account. */
@@ -352,13 +353,7 @@ export const replaceAutoTags = (
   db.prepare("DELETE FROM taggings WHERE taggable_type='chat' AND taggable_id=? AND source='auto'").run(pk)
   db.prepare("DELETE FROM auto_tag_claims WHERE chat_id=?").run(pk)
   for (const match of matches) {
-    const tagId = Number(
-      db
-        .prepare(
-          "INSERT INTO tags (name, created_at, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET updated_at=excluded.updated_at RETURNING id",
-        )
-        .get(match.tag, context.now(), context.now())?.id,
-    )
+    const tagId = ensureTag(context, match.tag).id
     db.prepare(
       "INSERT INTO auto_tag_claims (chat_id, tag_id, algorithm, score, fields, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     ).run(pk, tagId, algorithm, match.score, JSON.stringify(match.fields), context.now(), context.now())
