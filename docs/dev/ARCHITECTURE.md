@@ -274,8 +274,8 @@ Its messages take the same server step as `search messages` (`--backend`, defaul
 
 `searchAllIncludingMeetings` (`src/services/search-all-meetings.ts`) is a separate opt-in service.
 It delegates the legacy search unchanged, then blends its ordered result with one explicit meeting
-account's prefix matches. Meeting hits use numeric source identities rather than unsupported
-canonical references. It resolves the account through `storedAccount` and never registers one.
+account's prefix matches. Meeting hits carry their numeric source identities and `ref`, the
+`meeting:<accountId>/<meetingId>` reference of `formatMeetingReference` that memo takes as evidence. It resolves the account through `storedAccount` and never registers one.
 Because `MeetingStore.search` pages meetings before matching their rows, the service visits
 candidate meetings serially and keeps a source cursor inside a meeting's hit list. Sparse pages
 can report unknown `hasMore` at the scan limit. The candidate bound does not bound the store's raw
