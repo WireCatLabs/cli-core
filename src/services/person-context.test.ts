@@ -8,6 +8,7 @@ import type { SendGuard } from "../sends/guard.js"
 import { historyStartKey, type MessageStore, openStore } from "../store/store.js"
 import { type ServiceDeps, storedDeps } from "./deps.js"
 import { peopleService } from "./people.js"
+import { identityIn } from "./person-context.js"
 
 const tg = { provider: "telegram", account: "500" }
 const max = { provider: "max", account: "900" }
@@ -233,3 +234,47 @@ describe("contacts context in named chats", () => {
 })
 
 const chat_ = (id: string) => chat(id, "group", "Club")
+
+describe("identityIn", () => {
+  it("reads a person: reference as that person's identity in the asked messenger, and says when there is none", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "person-ref-")), "store.db") })
+    try {
+      const telegram = { provider: "telegram", account: "1" }
+      await store.savePeople(telegram, [{ id: "101", name: "Ana Example" }])
+      const mail = { provider: "email", account: "owner@example.test" }
+      const accountId = await store.saveAccount(mail, { name: null })
+      await store.mail.saveThread({
+        accountId,
+        externalId: "thread-1",
+        now: Date.UTC(2026, 0, 2),
+        emails: [
+          {
+            externalId: "<one@example.test>",
+            subject: "Hello",
+            from: { address: "ana@example.test", name: "Ana Example" },
+            sentAt: Date.UTC(2026, 0, 1),
+            bodyText: "Synthetic body",
+          },
+        ],
+      })
+      const person = await store.linkIdentities(
+        { provider: "email", id: "ana@example.test" },
+        { provider: "telegram", id: "101" },
+        { method: "manual", by: "owner" },
+      )
+
+      expect(await identityIn(store, telegram, `person:${person.uid}`)).toEqual({ provider: "telegram", id: "101" })
+      expect(await identityIn(store, mail, `person:${person.uid}`)).toEqual({
+        provider: "email",
+        id: "ana@example.test",
+      })
+      await expect(identityIn(store, { provider: "max", account: "7" }, `person:${person.uid}`)).rejects.toMatchObject({
+        code: "not_found",
+        message: expect.stringContaining("has no max identity"),
+      })
+      await expect(identityIn(store, telegram, "person:999999")).rejects.toMatchObject({ code: "not_found" })
+    } finally {
+      await store.close()
+    }
+  })
+})
