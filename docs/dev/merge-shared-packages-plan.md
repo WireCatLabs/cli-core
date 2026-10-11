@@ -1,8 +1,8 @@
 # Merge cli-tasks and cli-meetings into cli-messaging
 
-Status: plan, not started. Owner's call (2026-10-11): fold the shared layers into cli-messaging and keep
-modules apart with lint rules, not with packages. Whether cli-core folds in too is still open (see
-[cli-core](#cli-core-stays-out-unless-the-owner-says-otherwise)).
+Status: plan, not started. Owner's calls (2026-10-11): fold cli-tasks and cli-meetings into cli-messaging
+and keep modules apart with lint rules, not with packages; cli-core stays a separate package; then rename
+cli-core → **cli-base** and cli-messaging → **cli-core** ([Naming](#naming)).
 
 ## Why
 
@@ -77,7 +77,7 @@ Each phase is one PR in cli-messaging, released before the next starts.
    `npm deprecate` on both names.
 2. Archive the two GitHub repositories; their local checkouts and worktrees go to CLEANUP.md.
 
-## cli-core stays out, unless the owner says otherwise
+## Why cli-core stays out
 
 cli-core is not a thin layer like the other two:
 
@@ -91,8 +91,8 @@ cli-core is not a thin layer like the other two:
   cli-messaging release.
 - cli-core is not in the chain that hurts: 79 commits in its life against cli-messaging's 1,208.
 
-So the plan stops at two shared packages: cli-core (framework and tooling) and cli-messaging (everything
-the messenger CLIs share). Folding cli-core in later is the same three phases.
+So the plan stops at two shared packages: the framework and tooling, and everything the messenger CLIs
+share. After [Naming](#naming) they are `cli-base` and `cli-core`.
 
 ## Connector authors
 
@@ -101,8 +101,44 @@ light package saves them nothing. The public surface is a documented subpath ins
 `@wirecat/cli-messaging/sdk` re-exports the ports (`MessengerAdapter`, `MeetingSource`, `MeetingStore`,
 the task store), the models and the errors. Added in phase 2, when all ports live here.
 
+## Naming
+
+The framework becomes `cli-base`, and cli-messaging takes the freed name `cli-core`. Both the GitHub
+repository name and the npm name are reused, and each reuse has a trap:
+
+- **GitHub.** Renaming `cli-core` to `cli-base` leaves a redirect from the old name, and GitHub's
+  [renaming docs](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)
+  say a new repository under the old name ends it: "do not reuse the original name of the renamed
+  repository … redirects to the renamed repository will no longer work." Once cli-messaging is renamed
+  to `cli-core`, every old link to `WireCatLabs/cli-core` (235 files across the repositories today) opens
+  the messenger repository, and every local checkout of the framework (about 10 with worktrees) fetches
+  the wrong history unless its remote is changed first.
+- **npm.** `@wirecat/cli-core` keeps its framework versions (0.19.x) and then publishes the messenger
+  package above them, continuing cli-messaging's numbers (0.23x). Pins such as `0.19.4` or
+  `>=0.19.2 <0.20.0` never cross over; a bare `npm install @wirecat/cli-core` does.
+
+So the order is strict, and each step finishes everywhere before the next:
+
+**Phase 4 — the framework becomes cli-base.**
+1. Rename the GitHub repository `cli-core` → `cli-base`; publish the same code as `@wirecat/cli-base`.
+2. Every repository switches `@wirecat/cli-core` → `@wirecat/cli-base` (imports, `biome.json` extends,
+   tsconfig extends, lefthook, release scripts) and its links to `WireCatLabs/cli-core` → `cli-base`. One
+   script, run per repository, one PR each; about 12,000 file references, nearly all import lines.
+3. Every local checkout and worktree of the framework: `git remote set-url origin …/cli-base.git`.
+4. Last framework release under the old name: none. `@wirecat/cli-core` is not deprecated; it is about
+   to be reused.
+
+**Phase 5 — cli-messaging becomes cli-core.** Only after phase 4 is released in every app.
+1. Rename the GitHub repository `cli-messaging` → `cli-core`. GitHub redirects the old messenger name;
+   the old framework links stop redirecting, which is why phase 4 rewrote them all.
+2. Publish the package as `@wirecat/cli-core`, next version above the last cli-messaging release.
+3. Apps switch `@wirecat/cli-messaging` → `@wirecat/cli-core`. A last `@wirecat/cli-messaging` release
+   re-exports `@wirecat/cli-core`; then `npm deprecate`.
+4. Local checkouts of cli-messaging change their remote to `cli-core.git`.
+
 ## Done when
 
 - cli-messaging has no `@wirecat/cli-tasks` or `@wirecat/cli-meetings` dependency.
 - The boundary rules reject a forbidden import in CI.
 - zoom-cli builds on the new paths; the old package names are deprecated on npm.
+- No repository references `@wirecat/cli-messaging` or links to the framework as `WireCatLabs/cli-core`.
