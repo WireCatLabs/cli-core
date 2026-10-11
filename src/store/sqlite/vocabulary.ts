@@ -4,6 +4,7 @@ import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName, vocabularySimilarity } from "../../domain/vocabulary.js"
 import { atomic } from "./atomic.js"
 import type { StoreContext } from "./open.js"
+import { tagCreationReview } from "./tag-creation.js"
 
 export type VocabularyKind = "project" | "tag" | "topic"
 export interface VocabularyTarget {
@@ -45,6 +46,7 @@ export interface VocabularyAliasReceipt {
   changed: boolean
 }
 export interface TagPreflight {
+  creationFingerprint: string
   name: string
   kind: "tag" | "topic"
   disposition: "reuse" | "create" | "review"
@@ -304,41 +306,43 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
         cancelled(options.signal)
         return { target: { kind: entry.kind, id: entry.id }, alias: held, changed: true }
       }),
-    tagPreflight: async (name, options = {}) => {
-      const kind = options.kind ?? "tag"
-      if (kind !== "tag" && kind !== "topic") throw new CliError("validation_error", "choose tag or topic")
-      const current = catalog({ ...options, kind: undefined, scope: undefined })
-      const entries = current.entries.filter((entry) => entry.kind !== "project")
-      const found = matches(entries, name)
-      if (found.length > 1) throw new CliError("configuration_error", "the label resolves ambiguously")
-      const existing = found[0] ?? null
-      if (existing && existing.kind !== kind)
-        throw new CliError("validation_error", `this name is already a ${existing.kind}`)
-      if (!existing) normalizeTag(name)
-      const suggestions = existing
-        ? []
-        : entries
-            .map((entry) => ({
-              entry,
-              similarity: Math.max(
-                ...[entry.name, ...entry.aliases.map((alias) => alias.name)].map((value) =>
-                  storedName(value) === null ? 0 : vocabularySimilarity(name, value),
+    tagPreflight: async (name, options = {}) =>
+      snapshot(() => {
+        const kind = options.kind ?? "tag"
+        if (kind !== "tag" && kind !== "topic") throw new CliError("validation_error", "choose tag or topic")
+        const current = catalog({ ...options, kind: undefined, scope: undefined })
+        const entries = current.entries.filter((entry) => entry.kind !== "project")
+        const found = matches(entries, name)
+        if (found.length > 1) throw new CliError("configuration_error", "the label resolves ambiguously")
+        const existing = found[0] ?? null
+        if (existing && existing.kind !== kind)
+          throw new CliError("validation_error", `this name is already a ${existing.kind}`)
+        if (!existing) normalizeTag(name)
+        const suggestions = existing
+          ? []
+          : entries
+              .map((entry) => ({
+                entry,
+                similarity: Math.max(
+                  ...[entry.name, ...entry.aliases.map((alias) => alias.name)].map((value) =>
+                    storedName(value) === null ? 0 : vocabularySimilarity(name, value),
+                  ),
                 ),
-              ),
-              by: "lexical" as const,
-            }))
-            .filter((value) => value.similarity >= 0.65)
-            .sort((a, b) => b.similarity - a.similarity || Number(a.entry.id) - Number(b.entry.id))
-            .slice(0, 10)
-      return {
-        name,
-        kind,
-        disposition: existing ? "reuse" : suggestions.length ? "review" : "create",
-        existing,
-        suggestions,
-        fingerprint: current.fingerprint,
-        semantic: "not-requested",
-      }
-    },
+                by: "lexical" as const,
+              }))
+              .filter((value) => value.similarity >= 0.65)
+              .sort((a, b) => b.similarity - a.similarity || Number(a.entry.id) - Number(b.entry.id))
+              .slice(0, 10)
+        return {
+          creationFingerprint: tagCreationReview(context, name, kind).creationFingerprint,
+          name,
+          kind,
+          disposition: existing ? "reuse" : suggestions.length ? "review" : "create",
+          existing,
+          suggestions,
+          fingerprint: current.fingerprint,
+          semantic: "not-requested",
+        }
+      }),
   }
 }

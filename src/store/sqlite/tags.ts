@@ -8,6 +8,7 @@ import type { AccountKey } from "../store.js"
 import type { Actor } from "./actors.js"
 import type { EntityType } from "./entity-types.js"
 import type { StoreContext } from "./open.js"
+import { guardTagCreation, type TagCreationOptions } from "./tag-creation.js"
 import { emailOf, emailThreadOf, type Thing } from "./things.js"
 import { toIso } from "./values.js"
 
@@ -124,11 +125,13 @@ export const canonicalTagNamed = (database: CacheDatabase, name: string): TagRow
  * owner makes a topic — an agent's topic is a proposed action the owner approves.
  */
 export const createTag = (
-  { database, now }: StoreContext,
+  context: StoreContext,
   name: string,
   kind: TagKind,
   by: "owner" | "agent",
+  options: TagCreationOptions = {},
 ): TagRow => {
+  const { database, now } = context
   if (!TAG_KINDS.includes(kind))
     throw new CliError("validation_error", `a tag's kind is one of ${TAG_KINDS.join(", ")}`)
   if (kind === "topic" && by !== "owner")
@@ -142,22 +145,15 @@ export const createTag = (
       held.kind === kind ? `the ${kind} "${name}" exists` : `"${name}" is a ${held.kind}; one name is never both`,
       { reason: held.kind === kind ? "tag_exists" : "tag_name_clash" },
     )
+  guardTagCreation(context, name, kind, by, options)
   const at = now()
   database.prepare("INSERT INTO tags (name, kind, created_at, updated_at) VALUES (?, ?, ?, ?)").run(name, kind, at, at)
   return tagNamed(database, name) as TagRow
 }
 
 /** The tag of that name, made as a plain tag when no tag or topic holds the name yet. */
-export const ensureTag = ({ database, now }: StoreContext, name: string): TagRow => {
-  const held = canonicalTagNamed(database, name)
-  if (held) return held
-  const at = now()
-  database
-    .prepare(
-      "INSERT INTO tags (name, kind, created_at, updated_at) VALUES (?, 'tag', ?, ?) ON CONFLICT (name) DO NOTHING",
-    )
-    .run(name, at, at)
-  return tagNamed(database, name) as TagRow
+export const ensureTag = (context: StoreContext, name: string): TagRow => {
+  return canonicalTagNamed(context.database, name) ?? createTag(context, name, "tag", "owner")
 }
 
 /** The tags it did not have before, in the order given; a tag the owner adds becomes the owner's. */

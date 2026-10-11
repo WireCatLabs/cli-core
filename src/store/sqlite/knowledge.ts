@@ -12,6 +12,7 @@ import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
   canonicalTagNamed,
@@ -22,7 +23,6 @@ import {
   setMainTopic,
   type TagKind,
   type TagRow,
-  tagNamed,
 } from "./tags.js"
 import { inboxKey, taskAccountOf, taskIdOf, taskRowOf } from "./tasks.js"
 import { referenceOfThing, stateOfThing, storedThing, type Thing, type ThingState, thingOf } from "./things.js"
@@ -131,7 +131,7 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
    * A new tag or topic. Only the owner makes a topic (an agent proposes one: `actions.propose`), and a
    * name held by a tag cannot become a topic, nor the other way round.
    */
-  createTag(name: string, options?: { kind?: TagKind; by?: "owner" | "agent" }): Promise<TagRow>
+  createTag(name: string, options?: { kind?: TagKind; by?: "owner" | "agent" } & TagCreationOptions): Promise<TagRow>
   /** Marks a topic as the thing's main one, or clears it with `null`; one per thing. */
   setMainTopic(key: KnowledgeScope, target: KnowledgeTarget, topic: string | null): Promise<void>
   /** Every labelled note, document, person, organization, project, task and folder. */
@@ -531,7 +531,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       return atomic(database, () =>
         names.filter((name) => {
           if (subfolderLabels(thing.id, path).includes(name)) return false
-          const tag = tagNamed(database, name) ?? createTag(context, name, "tag", "owner")
+          const tag = canonicalTagNamed(database, name) ?? createTag(context, name, "tag", "owner")
           const at = now()
           database
             .prepare(
@@ -558,8 +558,8 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
             .run(thing.id, path, name).changes > 0,
       )
     },
-    createTag: async (name, { kind = "tag", by = "owner" } = {}) =>
-      atomic(database, () => createTag(context, canonicalTagName(name), kind, by)),
+    createTag: async (name, { kind = "tag", by = "owner", ...options } = {}) =>
+      atomic(database, () => createTag(context, canonicalTagName(name), kind, by, options)),
     setMainTopic: async (key, target, topic) => {
       const thing = available(key, target)
       atomic(database, () => setMainTopic(context, thing, topic === null ? null : canonicalTagName(topic)))

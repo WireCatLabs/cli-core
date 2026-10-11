@@ -37,10 +37,21 @@ stale-preview checks. Creating a project cannot shadow an existing project alias
 main-topic selection and label filters resolve an exact tag/topic alias to its canonical name.
 
 `tagPreflight(name, { kind?, maxEntries?, maxReadBytes?, signal? })` returns `reuse`, `create` or
-`review`, with lexical candidates and a fingerprint. Similarity suggests review; it never selects a
-synonym, changes a tag or loads a model. This API supplies a creation preflight; existing callers
-must invoke it to review likely synonyms. Native automatic tag creation still creates unknown
-labels, so universal duplicate protection and reviewed merges require a further rollout.
+`review`, with lexical candidates and a vocabulary fingerprint. Its separate `creationFingerprint`
+binds owner approval to the requested name, kind and current label/alias metadata. Similarity suggests
+review; it never selects a synonym, changes a tag or loads a model.
+
+Every native new-label path checks tags, topics and their aliases before insertion, including implicit
+knowledge labels, note-file imports and automatic chat tagging. A lexical score of at least 0.65
+refuses creation with `tag_review_required` and up to ten candidates. The whole enclosing write rolls
+back. Existing exact names and explicit aliases still reuse their canonical label.
+
+Reuse an existing label or add an owner-reviewed alias when the names mean the same thing. For a
+purposefully distinct label, call `createTag(name, { kind?, expectedCreationFingerprint })` with the
+current preflight receipt. This owner-only acceptance is checked under the write lock and refuses
+stale or differently targeted receipts. There is no force bypass. The creation check bounds input to
+5,000 labels, 100,000 aliases and 4 MiB of names, and fails before hydration if those limits are exceeded.
+Semantic synonym detection and reviewed merges remain separate work.
 
 ## Meeting-project membership
 

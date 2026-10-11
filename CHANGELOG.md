@@ -4,6 +4,16 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **New tags and topics require review when similar labels exist.** Knowledge tagging, note-file
+  imports and automatic chat tags now share the native creation guard; a refused batch rolls back.
+  Reuse an existing canonical label or explicit alias, or accept a distinct name through owner
+  `createTag` with the current `tagPreflight` creation fingerprint. Stale approvals are refused.
+  The lexical check loads no model and never merges labels automatically.
+
 ## 0.244.0 — 11.10.2026
 
 ### Changed — may break callers
