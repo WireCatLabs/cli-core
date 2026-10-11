@@ -498,6 +498,31 @@ describe("the stems", () => {
     expect(stderr.join("\n")).toContain("changes every profile")
   })
 
+  it("**saves an account group store-wide, shows it, and removes it**", async () => {
+    const env = envFor()
+    const set = await call(
+      ["config", "set", "accountGroups.work", "telegram:102, email:me@work.example", "--json"],
+      env,
+    )
+    expect(set.answer).toMatchObject({
+      setting: "accountGroups.work",
+      value: ["telegram:102", "email:me@work.example"],
+    })
+    const shown = (await call(["config", "show", "--json"], env)).answer.storeSettings
+    expect(shown).toContainEqual({
+      setting: "accountGroups.work",
+      value: "telegram:102,email:me@work.example",
+      from: "store",
+      scope: "store",
+    })
+    await call(["config", "unset", "accountGroups.work", "--json"], env)
+    const after = (await call(["config", "show", "--json"], env)).answer.storeSettings
+    expect(after.map(({ setting }: { setting: string }) => setting)).not.toContain("accountGroups.work")
+    const nested = await call(["config", "set", "accountGroups.all-work", "group:work", "--json"], env)
+    expect(nested.code).not.toBe(0)
+    expect(nested.stderr.join("\n")).toContain("not other groups")
+  })
+
   it("**refuses a stemmer of the other script**, naming the allowed ones", async () => {
     const env = envFor()
     const { code, stderr } = await call(["config", "set", "searchStemmers.cyrillic", "english", "--json"], env)

@@ -19,7 +19,7 @@ import {
 } from "../store/store.js"
 import { mailAround, mergeMail, withMailThreads } from "./mail-search.js"
 import { chatAmong, type SearchFound, type SearchQuery, senderAmong } from "./messages.js"
-import { accountsOfKind, MAIL } from "./search-kind.js"
+import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
 
 const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox"])
 
@@ -136,15 +136,19 @@ export const prepareLucene = async (
   const leaves = walkQuery(ast.root)
   const sources = positiveSources(ast.root).map((value) => sourceOf("in:", value, providers))
   for (const leaf of leaves.filter(({ field }) => field === "in")) sourceOf("in:", leaf.value, providers)
-  const source = request.source === undefined ? undefined : sourceOf("--source", request.source, providers)
+  const listed = await listedAccounts(store, account, request.source, messenger.app)
+  const source = request.source === undefined || listed ? undefined : sourceOf("--source", request.source, providers)
   if (request.accounts !== undefined && (request.source !== undefined || sources.length > 0))
     throw new CliError("validation_error", "this search reads the accounts it was given — not with in: or --source")
+  if (listed && sources.length > 0)
+    throw new CliError("validation_error", "--source names the accounts — leave in: out, or put it in the list")
   if (request.accounts?.length === 0) throw new CliError("validation_error", "a search names at least one account")
   if (request.senders !== undefined && leaves.some(({ field }) => field === "from"))
     throw new CliError("validation_error", "--from and from: together — name the people once")
   const accounts = accountsOfKind(
     request.kind,
     request.accounts ??
+      listed ??
       (source !== undefined
         ? held.filter(({ provider }) => inSource(source, provider))
         : sources.length
@@ -154,6 +158,7 @@ export const prepareLucene = async (
     source ?? (sources.includes("email") ? "email" : sources[0]),
     messenger.app?.command,
     request.mailAccount,
+    listed !== undefined,
   )
   const scopeAccounts = accounts.map(({ provider, account }) => ({ provider, account }))
   const chatLookup = scopeAccounts.some(({ provider }) => provider === MAIL) ? withMailThreads(store) : store

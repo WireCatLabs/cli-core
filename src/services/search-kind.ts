@@ -1,5 +1,8 @@
 import { CliError } from "@wirecat/cli-core"
-import type { AccountKey } from "../store/store.js"
+import type { AppIdentity } from "../cli/app.js"
+import { profilesWithAccounts, recalledAccount } from "../cli/messenger/accounts.js"
+import { accountsOfList, isAccountList } from "../search/account-list.js"
+import type { AccountKey, MessageStore } from "../store/store.js"
 
 export type SearchKind = "messages" | "mail"
 
@@ -8,6 +11,31 @@ export const NO_MAIL = "no_mail"
 export const MAIL = "email"
 /** Notes stored as messages before store version 25: `search notes` reads their own table now. */
 const OLD_NOTES = "notes"
+
+/** `--source` as a list of accounts and groups: `undefined` when it is a bare word like `all` or `telegram`. */
+export const listedAccounts = async (
+  store: MessageStore,
+  account: AccountKey,
+  source: string | undefined,
+  app: AppIdentity | undefined,
+): Promise<AccountKey[] | undefined> => {
+  if (source === undefined || !isAccountList(source)) return undefined
+  const stored = await store.storedAccounts()
+  const held = stored.some((one) => one.provider === account.provider && one.account === account.account)
+    ? stored
+    : [...stored, { id: 0, ...account, name: null, scope: "personal" as const }]
+  return accountsOfList(source, {
+    held,
+    groups: await store.accountGroups(),
+    running: { provider: account.provider, ...(app ? { command: app.command } : {}) },
+    ...(app
+      ? {
+          profile: (name: string) => recalledAccount(app, account.provider, name, process.env)?.account,
+          profiles: () => profilesWithAccounts(app, process.env),
+        }
+      : {}),
+  })
+}
 
 /**
  * The accounts a `search messages` or `search mail` reads, from those the query chose. `explicit` is the
@@ -20,6 +48,7 @@ export const accountsOfKind = (
   explicit: string | undefined,
   command = "tg",
   mailAccount?: string,
+  listed = false,
 ): AccountKey[] => {
   if (mailAccount !== undefined && kind !== "mail")
     throw new CliError("validation_error", "--account names a mail account — search mail reads it")
@@ -27,14 +56,22 @@ export const accountsOfKind = (
   if (kind === "messages") {
     if (explicit === MAIL)
       throw new CliError("validation_error", `mail is searched with \`${command} search mail\`, not search messages`)
-    return chosen.filter(({ provider }) => provider !== MAIL && provider !== OLD_NOTES)
+    const messages = chosen.filter(({ provider }) => provider !== MAIL && provider !== OLD_NOTES)
+    if (listed && messages.length === 0)
+      throw new CliError(
+        "validation_error",
+        `the accounts named are mailboxes only — \`${command} search mail\` reads them`,
+      )
+    return messages
   }
   if (explicit !== undefined && explicit !== MAIL && explicit !== "all")
     throw new CliError(
       "validation_error",
       `search mail reads mail only — \`${command} search messages\` searches ${explicit}`,
     )
-  const mail = held.filter(({ provider }) => provider === MAIL)
+  const mail = (listed ? chosen : held).filter(({ provider }) => provider === MAIL)
+  if (listed && mail.length === 0)
+    throw new CliError("validation_error", "the accounts named hold no mailbox — search mail reads mail only")
   if (mail.length === 0)
     throw new CliError("not_found", "no mail in the store yet — `memo mail import --since <date>` imports it", {
       reason: NO_MAIL,

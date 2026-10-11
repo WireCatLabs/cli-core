@@ -41,7 +41,7 @@ import {
   type SearchAllWithMeetingsRequest,
   searchAllWithMeetings,
 } from "./search-all-meetings.js"
-import { accountsOfKind, type SearchKind } from "./search-kind.js"
+import { accountsOfKind, listedAccounts, type SearchKind } from "./search-kind.js"
 import { refreshSearch, type SearchRefreshed, type SyncOptions, withRefresh } from "./search-refresh.js"
 import { type SearchParams, searchRecordOf } from "./searches.js"
 import {
@@ -1031,12 +1031,15 @@ export const scopeOf = async (
   if (chat !== undefined && parsed.chat !== undefined && parsed.chat !== chat) {
     throw new CliError("validation_error", `--chat and chat: name different chats: "${chat}" and "${parsed.chat}"`)
   }
-  const sourced = source === undefined ? undefined : sourceOf("--source", source, providers)
+  const listed = await listedAccounts(store, account, source, messenger.app)
+  if (listed && parsed.in !== undefined)
+    throw new CliError("validation_error", "--source names the accounts — leave in: out, or put it in the list")
+  const sourced = source === undefined || listed ? undefined : sourceOf("--source", source, providers)
   if (sourced !== undefined && parsed.in !== undefined && sourced !== parsed.in) {
     throw new CliError("validation_error", `--source and in: name different messengers: ${sourced} and ${parsed.in}`)
   }
   const wanted = parsed.in ?? sourced
-  if (given !== undefined && wanted !== undefined) {
+  if (given !== undefined && (wanted !== undefined || listed)) {
     throw new CliError("validation_error", "this search reads the accounts it was given — not with in: or --source")
   }
   if (given?.length === 0) throw new CliError("validation_error", "a search names at least one account")
@@ -1046,12 +1049,15 @@ export const scopeOf = async (
   const accounts = accountsOfKind(
     kind,
     given ??
+      listed ??
       (wanted === undefined || held.length === 0
         ? [account]
         : held.filter(({ provider }) => inSource(wanted, provider))),
     held,
     wanted,
     messenger.app?.command,
+    undefined,
+    listed !== undefined,
   )
   const named = parsed.chat ?? chat
   const scope: SearchScope = { accounts }

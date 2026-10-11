@@ -767,7 +767,8 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
     )
     .option(
       "--source <source>",
-      "accounts to search: personal, bots, all, or a provider; defaults to the active account",
+      "accounts to search: personal, bots, all, a provider, or a list like group:work,telegram:Alice,email:me@example.com; " +
+        "defaults to the active account",
     )
     .option("--timezone <zone>", "IANA timezone for filter dates; system timezone by default")
     .option("--limit <n>", "how many", positiveCount("--limit"))

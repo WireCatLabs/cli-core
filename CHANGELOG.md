@@ -21,7 +21,16 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   email are dropped with their vectors on the first index pass, and every thread is cut again, so mail is embedded
   once more.
 
-## 0.237.0 — 11.10.2026
+## Unreleased
+
+### Added
+
+- **`--source` takes a list of accounts and groups**: `--source group:work,telegram:Alice,max:202,email:me@work.example`
+  searches exactly those accounts in `search messages`, `search mail` and `search conversations`. An entry is a
+  group, `messenger:account` — the account's id, its name, or a profile of the app running — or a bare `--source`
+  word. `config set accountGroups.<name> <list>` saves a group in the store for tg, max and memo alike; `config
+  unset` removes it and `config show` lists it. From a list `search messages` skips mailboxes and `search mail`
+  keeps only them. `MessageStore` gains `accountGroups` and `saveAccountGroup`. — 11.10.2026
 
 ### Fixed
 

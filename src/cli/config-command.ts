@@ -86,13 +86,16 @@ export const configCommand = (
 
   for (const action of ["set", "unset"] as const) {
     const sub = annotate(command.command(action), { mutates: true, local: true })
-      .argument("<setting>", `one of: ${[...config.allSettings, ...STORE_SETTINGS].join(", ")}`)
+      .argument("<setting>", `one of: ${[...config.allSettings, ...STORE_SETTINGS, "accountGroups.<name>"].join(", ")}`)
       .option("--defaults", "change what every profile gets, rather than this profile")
       .option("--personal", "only for personal accounts — the personal section of the file")
       .option("--bot", "only for bots — the bot section of the file")
     if (action === "set")
       sub
-        .argument("<value>", "a number, true or false, or for allow a list like send,reaction")
+        .argument(
+          "<value>",
+          "a number, true or false, or for allow a list like send,reaction; for a group tg:work,max:Alice,email:me@x",
+        )
         .description("save a setting to the configuration file")
     else sub.description("remove a setting from the configuration file")
 
