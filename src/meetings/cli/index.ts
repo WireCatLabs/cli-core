@@ -11,6 +11,7 @@ import {
   meetingsSearch,
   meetingTranscript,
 } from "../reads.js"
+import { SAVE_HELP } from "../save-hints.js"
 import type { MeetingSource } from "../source.js"
 import type { MeetingStore } from "../store.js"
 
@@ -68,7 +69,11 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       )
     })
   output(
-    group.command("show").description("show a stored meeting").argument("<meeting>", "stored meeting id", integer),
+    group
+      .command("show")
+      .description("show a stored meeting")
+      .argument("<meeting>", "stored meeting id", integer)
+      .addHelpText("after", SAVE_HELP),
   ).action(async (id: number, _opts: unknown, command: Command) => {
     print(await meetingShow(deps.store, id, deps.accountId), command)
   })
@@ -77,7 +82,8 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       .command("transcript")
       .description("show current meeting transcripts")
       .argument("<meeting>", "stored meeting id", integer)
-      .option("--history", "include superseded transcript versions"),
+      .option("--history", "include superseded transcript versions")
+      .addHelpText("after", SAVE_HELP),
   ).action(async (id: number, opts: { history?: boolean }, command: Command) => {
     print(await meetingTranscript(deps.store, id, deps.accountId, { history: opts.history }), command)
   })
@@ -126,7 +132,8 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       .option("--since <date>", "meetings starting at or after this date", date)
       .option("--until <date>", "meetings starting at or before this date", date)
       .option("--event-id <id>", "only meetings linked to this stored event", integer)
-      .option("--series-id <id>", "only meetings in this stored series", integer),
+      .option("--series-id <id>", "only meetings in this stored series", integer)
+      .addHelpText("after", SAVE_HELP),
   ).action(
     async (
       query: string,

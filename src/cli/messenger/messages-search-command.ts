@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-core"
 import { Command } from "commander"
 import { parseLocator } from "../../domain/locator.js"
+import { SAVE_HELP } from "../../meetings/index.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
 import type { SearchFound } from "../../services/messages.js"
@@ -72,6 +73,7 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
     command.option("--language <lucene|legacy>", "the query language: strict Lucene or legacy discovery", languageOf)
   }
   command.option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
+  command.addHelpText("after", SAVE_HELP)
   if (mail) return command.action(searchAction(messenger, kind))
   return command
     .addHelpText(

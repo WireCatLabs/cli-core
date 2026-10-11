@@ -9,6 +9,7 @@ import {
   meetingTranscript,
   positiveInteger,
 } from "../reads.js"
+import { SAVE_NEXT_STEPS } from "../save-hints.js"
 import type { MeetingFilter, MeetingStore } from "../store.js"
 
 const integer = { type: "integer", minimum: 1 }
@@ -73,6 +74,8 @@ export const meetingTools = [
   inputSchema: { type: "object", properties, required, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }))
+const CONTENT_READS = new Set(["meeting_show", "meeting_transcript", "meeting_summary", "meetings_search"])
+
 const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
   const tool = meetingTools.find((t) => t.name === name)
   if (!tool) throw new MeetingError("validation_error", "unknown meeting tool")
@@ -141,6 +144,7 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
       default:
         result = listed(await store.participants(args.query as string, filter.accountId))
     }
+    if (CONTENT_READS.has(name)) result = { ...result, next_steps: SAVE_NEXT_STEPS }
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
   } catch (error) {
     const result = {

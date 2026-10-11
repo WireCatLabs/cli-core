@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-core"
 import { Command } from "commander"
 import { isLocator, parseLocator } from "../../domain/locator.js"
+import { SAVE_HELP } from "../../meetings/index.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
 import { modelWith } from "../../speech/hearing.js"
@@ -38,6 +39,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages
     .command("list")
     .description("a chat's messages, oldest to newest")
+    .addHelpText("after", SAVE_HELP)
     .argument("<chat>", messenger.chatArgument)
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--before-id <id>", "only messages older than this message id")
@@ -156,6 +158,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
 
   threadOptions(messages.command("context"))
     .description("a message and what came either side of it, oldest first")
+    .addHelpText("after", SAVE_HELP)
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")
     .option("--before-n <n>", "how many before it", count, 5)

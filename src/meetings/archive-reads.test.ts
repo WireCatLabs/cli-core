@@ -207,14 +207,17 @@ it("shares summary/history/export between CLI and MCP and writes files only thro
   }
   const id = String(second.meeting.id)
   await run("meetings", "summary", id)
-  expect(values.at(-1)).toEqual(
-    (await callMeetingTool(store, "meeting_summary", { meeting: second.meeting.id, account_id: 1 })).structuredContent,
-  )
-  await run("meetings", "transcript", id, "--history")
-  expect(values.at(-1)).toEqual(
-    (await callMeetingTool(store, "meeting_transcript", { meeting: second.meeting.id, history: true }))
+  expect(values.at(-1)).toEqual({
+    ...(await callMeetingTool(store, "meeting_summary", { meeting: second.meeting.id, account_id: 1 }))
       .structuredContent,
-  )
+    next_steps: undefined,
+  })
+  await run("meetings", "transcript", id, "--history")
+  expect(values.at(-1)).toEqual({
+    ...(await callMeetingTool(store, "meeting_transcript", { meeting: second.meeting.id, history: true }))
+      .structuredContent,
+    next_steps: undefined,
+  })
   await run("meetings", "export", id, "--format", "vtt")
   expect(values.at(-1)).toEqual(
     (await callMeetingTool(store, "meeting_export", { meeting: second.meeting.id, format: "vtt" })).structuredContent,

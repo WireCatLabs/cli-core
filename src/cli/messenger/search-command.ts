@@ -1,5 +1,6 @@
 import { CliError, singleLine } from "@wirecat/cli-core"
 import { Command } from "commander"
+import { SAVE_HELP } from "../../meetings/index.js"
 import { searchNotes } from "../../services/notes-search.js"
 import type { SearchedResource } from "../../services/search-all.js"
 import {
@@ -67,6 +68,7 @@ const allCommand = (messenger: Messenger): Command => {
         "kind with all its fields",
     )
     .argument("<query...>", 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges')
+    .addHelpText("after", SAVE_HELP)
     .option(
       "--only <resources>",
       "only these resources, separated by commas: messages, mail, notes; meetings with --meetings",
