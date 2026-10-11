@@ -13,6 +13,10 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   neither `is:read` nor `is:unread`. `label:` is the same as `mailbox:`. They are mail fields: a search that holds
   no mail account refuses them, since messenger messages keep no read state per message; in a search across
   messengers and mail they match mail only.
+- **Search takes the Elasticsearch spelling of a comparison.** `date:>=2026-01-01` (and `:>`, `:<`, `:<=`) is the same
+  open range as `date>=2026-01-01`; before, the colon form failed with `invalid_syntax`. A refused `after:` or `before:`
+  now names the replacement built from its own value — `after:2026-09-01` says `use date>=2026-09-01`; the error
+  code stays `legacy_date_field`.
 
 ## 0.242.0 — 11.10.2026
 

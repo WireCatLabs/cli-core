@@ -185,7 +185,8 @@ export const parseLucene = (
     if (peek().kind === "term" && [":", "=", "<", ">", "<=", ">="].includes(tokens[at + 1]?.kind ?? "")) {
       const token = take()
       field = decodeEscapes(token.raw, token.span)
-      const operator = take()
+      let operator = take()
+      if (operator.kind === ":" && ["<", ">", "<=", ">="].includes(peek().kind)) operator = take()
       if (["<", ">", "<=", ">="].includes(operator.kind)) {
         const value = take()
         if (!["term", "number", "quoted"].includes(value.kind)) queryError("invalid_syntax", value.span)

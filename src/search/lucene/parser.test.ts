@@ -55,6 +55,12 @@ describe("Lucene 9.12.3 grammar port", () => {
     expect(reason(() => parseLucene('"unterminated'))).toBe("unclosed_literal")
     expect(reason(() => parseLucene("alpha [TO wrong TO]"))).toBe("invalid_syntax")
   })
+  it.each([">", ">=", "<", "<="])("reads the Elasticsearch spelling date:%s as the colon-less comparison", (op) => {
+    const { span, ...colon } = parseLucene(`date:${op}2026-10-10`).root
+    const { span: plainSpan, ...plain } = parseLucene(`date${op}2026-10-10`).root
+    expect(colon).toEqual(plain)
+    expect(span).toEqual({ start: 0, end: plainSpan.end + 1 })
+  })
 })
 describe("versioned structured AST and field registry", () => {
   it("round-trips the same AST, typed range and field group", () => {
@@ -75,6 +81,18 @@ describe("versioned structured AST and field registry", () => {
     ["text:[a TO b]", "unsupported_operator"],
     ['from:""', "missing_value"],
   ])("validates %s", (query, expected) => expect(reason(() => validateFields(parseLucene(query)))).toBe(expected))
+  it.each([
+    ["after:2026-09-01", "use date>=2026-09-01"],
+    ["before:2026-09-01", "use date<2026-09-01"],
+    ["after:[a TO b]", "use date>=YYYY-MM-DD or date:[a TO b]"],
+  ])("refuses %s and names the replacement", (query, alternative) => {
+    try {
+      validateFields(parseLucene(query))
+      expect.unreachable()
+    } catch (error) {
+      expect((error as CliError).details).toMatchObject({ reason: "legacy_date_field", alternative })
+    }
+  })
   it("rejects malicious structured inputs rather than trusting casts", () => {
     const ast = parseLucene("alpha")
     for (const input of [

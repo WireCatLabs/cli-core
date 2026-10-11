@@ -279,7 +279,7 @@ tg search messages 'content:"оплата до" NOT text:оплата' --timezon
 | field group | `from:(alice OR bob)` | Поле наследуется внутри группы |
 | field equality | `kind=group` | Стандартный синоним записи kind:group |
 | range | `date:[2026-01-01 TO 2026-02-01}` | Inclusive [ ], exclusive { }, смешанные границы и * |
-| comparison | `date>=2026-01-01` | Стандартный typed open range |
+| comparison | `date>=2026-01-01` | Стандартный typed open range; `date:>=2026-01-01` — то же самое в записи Elasticsearch |
 | wildcard | `text:invo*` | Полный term; * — любое число символов, ? — один |
 | regex | `text:/pass(port)?/` | Полный term; bounded subset Lucene RegExp; буквы text приводятся как в индексе |
 | fuzzy / proximity | `invoice~1` | unsupported_operator; опечатки исправляет `--language legacy`, формы слова ловит prefix `word*` |
