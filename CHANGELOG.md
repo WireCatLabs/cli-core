@@ -6,12 +6,12 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
-### Changed
+### Changed — may break callers
 
 - **Purging an account also removes the people only that account had seen**: their identity, profile history,
   link and person go with it. An identity stays while another account, a tag, a note or any other record points
   at it, or while its person is kept: the owner, a person something points at, or one linked to an identity that
-  stays.
+  stays. A caller that expected those people to survive a purge now finds them gone.
 
 ## 0.237.0 — 11.10.2026
 
