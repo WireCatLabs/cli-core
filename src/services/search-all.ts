@@ -1,7 +1,9 @@
 import { CliError } from "@wirecat/cli-core"
 import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
+import type { MailFields } from "../domain/models.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import { excerpt } from "./excerpt.js"
 import { type SearchFound, type SearchQuery, searchStore } from "./messages.js"
 import { RRF_K, searchNotes } from "./notes-search.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
@@ -19,7 +21,14 @@ export interface SearchAllItem {
   /** The chat, the mail thread's subject or the note's title. */
   title: string | null
   timestamp: string
+  /** An excerpt around the match: a note's matching line, about 240 characters of a message or mail. */
   text: string
+  /** Who wrote it; `ref` is the `person:` reference where the store has one. A note has none. */
+  from?: { name: string | null; ref: string | null }
+  /** A mail's people, labels and thread, as `search mail` gives them. */
+  email?: MailFields
+  /** Which search found it: words, meaning or both. */
+  foundBy: ("words" | "meaning")[]
 }
 
 export interface SearchAllFound {
@@ -47,8 +56,6 @@ export interface SearchAllRequest {
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
 }
-
-const MAX_TEXT = 2000
 
 /** A query a resource cannot answer is skipped with its reason, never a failure of the whole search. */
 const skippable = (error: unknown): error is CliError =>
@@ -109,7 +116,12 @@ export const searchAll = async (
         account: at.account,
         title: hit.chatTitle,
         timestamp: hit.timestamp,
-        text: (hit.text ?? "").slice(0, MAX_TEXT),
+        text: hit.excerpt ?? excerpt(hit.text ?? "", request.text),
+        from: hit.email?.from
+          ? { name: hit.email.from.name ?? hit.email.from.address, ref: hit.email.from.ref }
+          : { name: hit.senderName, ref: null },
+        ...(hit.email ? { email: hit.email } : {}),
+        foundBy: ["words"],
       }
     })
   }
@@ -138,6 +150,7 @@ export const searchAll = async (
             title: hit.title,
             timestamp: hit.modifiedAt,
             text: hit.line,
+            foundBy: hit.foundBy,
           })),
         )
       } else lists.push(await messagesOf(resource))

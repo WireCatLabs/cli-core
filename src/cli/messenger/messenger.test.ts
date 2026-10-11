@@ -1824,6 +1824,12 @@ describe("the shared read commands", () => {
     const mail = all.items.find(({ kind }: { kind: string }) => kind === "mail")
     expect(mail.ref).toBe("msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E")
     expect(mail.title).toBe("Reading group")
+    expect(mail).toMatchObject({
+      text: "Reading group Which chapter next?",
+      from: { name: "Alice Example", ref: expect.stringMatching(/^person:\d+$/) },
+      email: { thread: "chat:email/owner%40example.test/thread-7" },
+      foundBy: ["words"],
+    })
 
     const kinds = JSON.parse(
       (await call(["search", "all", "chapter kind:group", "--json"], never, env)).stdout[0] ?? "",

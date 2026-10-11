@@ -8,6 +8,9 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **`search all` says who wrote each hit, what a mail was between and how it was found.** A message or mail item
+  carries `from` (`name`, and `ref` as `person:` where the store links one), a mail item `email` as `search mail`
+  gives it, and every item `foundBy` (`words`, `meaning`). The terminal line names the sender.
 - **`messages show` and `messages context` open an email by its `msg:email/…` locator**, and so does the
   `messages_context` tool: the whole email with its people, labels and thread, and with `--before-n`/`--after-n`
   (`before_n`/`after_n`) the emails of its thread either side, read from the stored mail without connecting. Search
@@ -18,6 +21,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 - Hints that point to importing mail name the account: `memo mail <account> import --since <date>`.
   memo refuses the old `memo mail import` form without an account.
+
+### Changed — may break callers
+
+- **`search all` answers an excerpt of a message or mail in `text`**, about 240 characters around the match, where it
+  gave the first 2,000 characters; `messages show <ref>` opens the whole message or email.
 
 ## 0.251.0 — 11.10.2026
 
