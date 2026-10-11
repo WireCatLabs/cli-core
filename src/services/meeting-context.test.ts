@@ -55,13 +55,13 @@ it("shares meeting notes, tags and memories with existing records and retains or
   expect(await store.knowledge.tags(account, { type: "meeting", id: String(id) })).toEqual(["example", "planning"])
   await service.change(id, { action: "tags.remove", tags: ["planning"] }, { apply: true })
   expect(await store.knowledge.tags(account, { type: "meeting", id: String(id) })).toEqual(["example"])
-  const memory = await service.change(
+  const fact = await service.change(
     id,
-    { action: "memory.add", body: "Invented decision", kind: "fact", scope: "work", evidence: [cue] },
+    { action: "fact.add", statement: "Invented decision", type: "decision", scope: "work", evidence: [cue] },
     { apply: true },
   )
-  expect(memory.result).toMatchObject({
-    type: "fact",
+  expect(fact.result).toMatchObject({
+    type: "decision",
     subject: root,
     evidence: [cue],
     status: "accepted",
@@ -115,7 +115,7 @@ it("denies foreign/deleted meeting and memory evidence before writing", async ()
     await expect(
       service.change(
         details.meeting.id,
-        { action: "memory.add", body: "Example", kind: "fact", scope: "work", evidence: [reference] },
+        { action: "fact.add", statement: "Example", type: "fact", scope: "work", evidence: [reference] },
         { apply: true },
       ),
     ).rejects.toThrow()
@@ -124,9 +124,9 @@ it("denies foreign/deleted meeting and memory evidence before writing", async ()
     service.change(
       details.meeting.id,
       {
-        action: "memory.add",
-        body: "Example",
-        kind: "fact",
+        action: "fact.add",
+        statement: "Example",
+        type: "fact",
         scope: "work",
         evidence: [root],
         subject: `meeting:${otherId}/${foreign.meeting.id}`,
