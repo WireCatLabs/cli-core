@@ -8,6 +8,9 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **`search messages`, `search mail` and `search all` page with `--offset`** (`offset` on `search_messages`,
+  `search_mail` and `search_all`), and answer `nextOffset` while there are more hits, up to an offset of 1,000. A
+  page reads the hits before it again, so deep pages cost more. `search all` with meetings does not page yet.
 - **A `person:` reference names a person wherever a command or tool takes one** (`contacts context`, `contacts link`,
   memo's `context`, …): it is read as that person's identity in the messenger asked, the one the account has seen
   when they have several there. Search results give mail people as `person:` references, so they can be passed on

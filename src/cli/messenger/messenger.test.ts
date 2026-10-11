@@ -1964,6 +1964,50 @@ describe("the shared read commands", () => {
     expect((await call(["search", "mail", "chapter", "--brief", "--full", "--json"], never, env)).code).toBe(2)
   })
 
+  it("**search mail** and **search all** page with --offset and say where the next page starts", async () => {
+    const root = mkdtempSync(join(tmpdir(), "search-offset-"))
+    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
+    for (const day of [1, 2, 3])
+      await store.mail.saveThread({
+        accountId,
+        externalId: `thread-${day}`,
+        now: Date.UTC(2026, 0, 9),
+        emails: [
+          {
+            externalId: `<${day}@example.test>`,
+            subject: `Lighthouse ${day}`,
+            from: { address: "alice@example.test", name: "Alice Example" },
+            sentAt: Date.UTC(2026, 0, day),
+            bodyText: "Lighthouse notes",
+          },
+        ],
+      })
+    await store.close()
+    const never = vi.fn(async (): Promise<MessengerAdapter> => {
+      throw new Error("search must never connect")
+    })
+    const page = async (...args: string[]) =>
+      JSON.parse((await call([...args, "--limit", "1", "--json", "--brief"], never, env)).stdout[0] ?? "")
+
+    const seen: string[] = []
+    let next: number | undefined = 0
+    while (next !== undefined) {
+      const found = await page("search", "mail", "lighthouse", "--newest", "--offset", String(next))
+      seen.push(...found.items.map(({ locator }: { locator: string }) => locator))
+      next = found.nextOffset
+    }
+    expect(seen).toHaveLength(3)
+    expect(new Set(seen).size).toBe(3)
+    const second = await page("search", "all", "lighthouse", "--only", "mail", "--offset", "1")
+    expect(second).toMatchObject({ hasMore: true, nextOffset: 2 })
+    expect(second.items).toHaveLength(1)
+    const last = await page("search", "all", "lighthouse", "--only", "mail", "--offset", "2")
+    expect(last.nextOffset).toBeUndefined()
+  })
+
   it("**search all** finds a message, a mail and a note with one query, each typed, and says what it skipped", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-"))
     const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }

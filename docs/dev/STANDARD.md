@@ -487,7 +487,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--notify` |  | tell the chat's members about the pin |  | `bot messages pin`, `messages pin` |
 | `--ocr` |  | explicitly call models.ocr for bulk image and scanned-PDF text extraction; agents normally transcribe files themselves |  | `attachments extract` |
 | `--offline` |  | answer from what was recorded and never connect; fails if nothing was |  | every command |
-| `--offset` | `<n>` | skip this many, for the next page |  | `search notes` |
+| `--offset` | `<n>` | skip this many, for the next page |  | `search all` (planned), `search mail` (planned), `search messages` (planned), `search notes` |
 | `--offset-bytes` | `<n>` | start byte offset in a retained attachment | `0` | `attachments show` |
 | `--older-than` | `<duration>` | minimum age of a question without an observed qualifying answer |  | `stats messages unanswered` |
 | `--once` | `<when>` | one run: a duration from now or an ISO 8601 time |  | `schedule agent`, `schedule command` |

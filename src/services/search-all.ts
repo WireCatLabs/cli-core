@@ -4,7 +4,7 @@ import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
-import { type SearchFound, type SearchQuery, searchStore } from "./messages.js"
+import { MAX_SEARCH_OFFSET, type SearchFound, type SearchQuery, searchStore } from "./messages.js"
 import { RRF_K, searchNotes } from "./notes-search.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
@@ -35,6 +35,8 @@ export interface SearchAllFound {
   query: string
   items: SearchAllItem[]
   hasMore: boolean
+  /** Where the next page starts, as `offset`; absent on the last page. */
+  nextOffset?: number
   searched: SearchedResource[]
   /** A resource the query could not be asked of, and why: a field it lacks, or nothing stored yet. */
   skipped: { resource: SearchedResource; reason: string }[]
@@ -47,6 +49,8 @@ export interface SearchAllFound {
 export interface SearchAllRequest {
   text: string
   limit: number
+  /** Skip this many of the merged hits: the `nextOffset` of the page before. */
+  offset?: number
   only?: readonly SearchedResource[]
   exact?: boolean
   timezone?: string
@@ -75,6 +79,11 @@ export const searchAll = async (
     searchStore(store, account, query, messenger),
 ): Promise<SearchAllFound> => {
   if (!request.text.trim()) throw new CliError("validation_error", "say what to find")
+  const offset = request.offset ?? 0
+  if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
+    throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
+  // Each resource is read deep enough for the merged page, then the merge is cut.
+  const window = offset + request.limit
   const only = request.only ?? RESOURCES_SEARCHED
   const command = messenger.app?.command ?? "tg"
   const lists: SearchAllItem[][] = []
@@ -97,7 +106,7 @@ export const searchAll = async (
             ...(request.server === undefined ? {} : { server: request.server }),
           }
         : {}),
-      limit: request.limit,
+      limit: window,
       ...(request.exact ? { exact: true } : {}),
       ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
       ...(request.signal === undefined ? {} : { signal: request.signal }),
@@ -130,7 +139,7 @@ export const searchAll = async (
     try {
       if (resource === "notes") {
         const found = await searchNotes(store, request.text, {
-          limit: request.limit,
+          limit: window,
           command,
           ...(request.exact ? { exact: true } : {}),
           ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
@@ -169,10 +178,12 @@ export const searchAll = async (
       ranked.set(item.ref, held)
     })
   const ordered = [...ranked.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
+  const more = hasMore || ordered.length > window
   return {
     query: request.text,
-    items: ordered.slice(0, request.limit),
-    hasMore: hasMore || ordered.length > request.limit,
+    items: ordered.slice(offset, window),
+    hasMore: more,
+    ...(more && window <= MAX_SEARCH_OFFSET ? { nextOffset: window } : {}),
     searched,
     skipped,
     ...(notes === undefined ? {} : { notes }),
