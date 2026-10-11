@@ -55,7 +55,7 @@ import { type ConversationEligibility, conversationEligibility } from "./sqlite/
 import * as conversationQueries from "./sqlite/conversations.js"
 import { applyCounterObservations, type CounterTarget, counterStates, counterTargets } from "./sqlite/counters.js"
 import { type DecisionsStore, decisionsStoreOver } from "./sqlite/decisions.js"
-import { drainEmailIndex, type MailStore, mailStoreOver } from "./sqlite/emails.js"
+import { drainEmailIndex, type MailStore, mailStoreOver, threadConversation } from "./sqlite/emails.js"
 import * as identities from "./sqlite/identities.js"
 import { drainInvolvementQueue } from "./sqlite/involvement-queue.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
@@ -1209,17 +1209,7 @@ const storeOver = (context: StoreContext): MessageStore => {
                 ...(since === undefined ? {} : { since: Date.parse(since) }),
               })
             ).map((hit) => ({
-              summary: {
-                id: `email:${hit.emailId}`,
-                chatId: hit.threadExternalId,
-                firstMessageId: hit.threadFirstExternalId,
-                firstAt: new Date(hit.threadFirstAt ?? 0).toISOString(),
-                lastAt: new Date(hit.threadLastAt ?? hit.threadFirstAt ?? 0).toISOString(),
-                messageCount: hit.threadEmails,
-                senders: hit.threadSenders,
-                builtAt: new Date(context.now()).toISOString(),
-                algorithmVersion: 0,
-              },
+              summary: threadConversation(hit, context.now()),
               chunk: { firstMessageId: hit.externalId, lastMessageId: hit.externalId },
               score: hit.score,
               stale: false,
@@ -1711,7 +1701,7 @@ export {
 export { pendingNormalization } from "./sqlite/backfill.js"
 export { CHAT_LIST_KEY, type ChatCompleteness, fetchedKey, historyStartKey } from "./sqlite/completeness.js"
 export type { CounterTarget } from "./sqlite/counters.js"
-export { messageOfEmail } from "./sqlite/emails.js"
+export { messageOfEmail, threadConversation } from "./sqlite/emails.js"
 export { orphanPointers } from "./sqlite/entity-types.js"
 export { involvementStoreOver } from "./sqlite/involvements.js"
 export type { MeetingReadCapabilities } from "./sqlite/meeting-reads.js"

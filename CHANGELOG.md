@@ -7,12 +7,22 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Added
+
+- **`store.mail.setFlags`** sets read and flagged on emails already stored, as the source shows them now, so an
+  importer can keep them current without saving the whole email again. `store.mail.inThreads` places stored emails
+  in their threads.
+- **`search conversations` finds mail of the mail tables by words too.** Its word half now reads them for an email
+  account and ranks each email, as its thread, with the messages; before, such mail was found by meaning only.
+
 ### Fixed
 
 - **`messages list --limit` returns as many messages as it was asked for.** A messenger hands out its history a
   page at a time (Telegram at most 100), and `--limit 500` used to stop after one page with `hasMore: true`. It now
   reads on from the page's edge until the limit or the start of the chat: back, from `--before-time`, or forward
   with `--after-id` or `--after-time`. Messengers that page by send time (MAX) still return one page.
+- **Purging an email account that holds mail failed** (`store.purge` stopped on the accounts foreign key); it now
+  deletes the account's emails, threads, mailboxes and their tags, attachments and pieces first.
 
 ## 0.234.0 — 11.10.2026
 

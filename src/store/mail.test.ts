@@ -255,6 +255,17 @@ describe("mail store", () => {
     expect((await mail.search("roadmap")).map(({ externalId }) => externalId)).toEqual(["<first@example.com>"])
   })
 
+  it("sets read and flagged on stored emails, leaving a flag that is not given", async () => {
+    const { mail } = await seeded()
+    await mail.saveThread(thread([email({ read: false, flagged: false })]))
+    expect(await mail.setFlags(1, new Map([["<first@example.com>", { read: true }]]), 3000)).toBe(1)
+    expect(await mail.email(1, "<first@example.com>")).toMatchObject({ read: true, flagged: false })
+    expect(await mail.setFlags(1, new Map([["<first@example.com>", { read: true, flagged: true }]]), 4000)).toBe(1)
+    expect(await mail.email(1, "<first@example.com>")).toMatchObject({ read: true, flagged: true, updatedAt: 4000 })
+    expect(await mail.setFlags(1, new Map([["<first@example.com>", { read: true, flagged: true }]]), 5000)).toBe(0)
+    expect(await mail.setFlags(1, new Map([["<missing@example.com>", { read: true }]]), 5000)).toBe(0)
+  })
+
   it("refuses an empty key and leaves nothing behind", async () => {
     const { mail } = await seeded()
     await expect(mail.saveThread(thread([email(), email({ externalId: "" })]))).rejects.toThrow("Invalid email key")

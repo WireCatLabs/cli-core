@@ -7,11 +7,18 @@ import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirector
 import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel } from "../embeddings/models.js"
 import { type RemoteModel, remoteKey } from "../embeddings/remote.js"
 import { QUERY_LIMITS, queryError } from "../search/lucene/types.js"
-import type { AccountKey, ConversationHit, ConversationSummary, StoredReadiness } from "../store/store.js"
+import {
+  type AccountKey,
+  type ConversationHit,
+  type ConversationSummary,
+  type StoredReadiness,
+  threadConversation,
+} from "../store/store.js"
 import { type Built, conversationsService } from "./conversations.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./messages.js"
 import { type Prepared, prepareLucene } from "./messages-search.js"
+import { MAIL } from "./search-kind.js"
 import { refreshSearch, type SearchRefreshed, type SyncOptions } from "./search-refresh.js"
 
 /** A local model by id (the default when nothing is given), or a remote one with the user's key (E11). */
@@ -315,12 +322,54 @@ export const embeddingsService = (deps: ServiceDeps): EmbeddingsService => {
       })
       outside.set(JSON.stringify(account), { account, chats })
     }
-    const seen = new Set<string>()
-    const hits = items.flatMap(({ id }, index) => {
+    const ranked = items.flatMap(({ id, score }, index) => {
       const summary = summaries.get(index)
-      if (!summary || seen.has(summary.id)) return []
+      return summary ? [{ summary, chunk: { firstMessageId: id, lastMessageId: id }, score }] : []
+    })
+    // Mail in its own tables has no conversations: each email answers as its thread, ranked with the messages.
+    const mailAccounts = prepared.scopeAccounts.filter(({ provider }) => provider === MAIL)
+    if (mailAccounts.length && conversations === undefined) {
+      const mail = await store
+        .matchQuery({
+          ...lexical.execution,
+          accounts: mailAccounts,
+          corpus: "mail",
+          ...(prepared.selectedChat ? { chat: prepared.selectedChat } : {}),
+        })
+        .catch((error: unknown) => {
+          if (error instanceof CliError && error.code === "validation_error") return { items: [] }
+          throw error
+        })
+      for (const account of mailAccounts) {
+        const found = mail.items.filter((hit) => {
+          const at = parseLocator(hit.locator)
+          return at.account === account.account && (since === undefined || hit.timestamp >= since)
+        })
+        if (!found.length) continue
+        const { id } = await store.storedAccount(account)
+        const places = new Map(
+          (
+            await store.mail.inThreads(
+              id,
+              found.map((hit) => hit.id),
+            )
+          ).map((place) => [place.externalId, place]),
+        )
+        for (const hit of found) {
+          const place = places.get(hit.id)
+          if (!place) continue
+          const summary = threadConversation(place, Date.now())
+          sources.set(summary.id, account)
+          ranked.push({ summary, chunk: { firstMessageId: hit.id, lastMessageId: hit.id }, score: hit.score })
+        }
+      }
+      ranked.sort((a, b) => (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY))
+    }
+    const seen = new Set<string>()
+    const hits = ranked.flatMap(({ summary, chunk }) => {
+      if (seen.has(summary.id)) return []
       seen.add(summary.id)
-      return [{ summary, chunk: { firstMessageId: id, lastMessageId: id } }]
+      return [{ summary, chunk }]
     })
     return { hits, outside, sources }
   }
