@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-messaging/main/docs/images/cli-core-banner.png" alt="Built on cli-core: the foundation for agent-ready CLIs" width="100%">
+</p>
+
 # @wirecat/cli-messaging
 
 The messenger-neutral half of a messaging command line tool, shared by
