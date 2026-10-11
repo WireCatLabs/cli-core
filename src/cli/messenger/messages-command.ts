@@ -1,9 +1,11 @@
 import { CliError } from "@wirecat/cli-core"
 import { Command } from "commander"
 import { isLocator, parseLocator } from "../../domain/locator.js"
+import type { Message } from "../../domain/models.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
+import { readMail } from "../../services/mail-search.js"
 import { modelWith } from "../../speech/hearing.js"
 import { listed, positiveCount } from "../paging.js"
 import { listStart } from "./after.js"
@@ -130,6 +132,15 @@ export const messagesCommand = (messenger: Messenger): Command => {
         window,
       ),
     )
+    printWindow(context, found, window)
+  }
+
+  const readMailWindow = async (command: Command, locator: string, window: Window) => {
+    const context = messengerContext(command, messenger)
+    printWindow(context, await context.withStore((store) => readMail(store, locator, window)), window)
+  }
+
+  const printWindow = (context: ReturnType<typeof messengerContext>, found: Message[], window: Window) => {
     if (context.format === "pretty") {
       context.streams.data(
         renderMessages(found, {
@@ -153,6 +164,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")
     .action(async function (this: Command, chat: string, message: string | undefined) {
+      if (isMailLocator(chat, message)) return await readMailWindow(this, chat, { before: 0, after: 0 })
       await readWindow(this, chat, message, { before: 0, after: 0 })
     })
 
@@ -165,6 +177,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
     .option("--after-n <n>", "how many after it", count, 5)
     .action(async function (this: Command, chat: string, message: string | undefined) {
       const { beforeN: before, afterN: after } = this.opts<{ beforeN: number; afterN: number }>()
+      if (isMailLocator(chat, message)) return await readMailWindow(this, chat, { before, after })
       const requested = threadRequest(this).thread
       if (requested) {
         const context = messengerContext(this, messenger)
@@ -216,6 +229,10 @@ export const messagesCommand = (messenger: Messenger): Command => {
 }
 
 type Window = { before: number; after: number }
+
+/** Mail lives in the mail tables of the store, whichever messenger CLI reads it. */
+const isMailLocator = (chat: string, message: string | undefined) =>
+  message === undefined && isLocator(chat) && parseLocator(chat).provider === "email"
 
 const count = (value: string): number => {
   const parsed = Number(value)

@@ -249,6 +249,8 @@ export interface MailStore {
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<{ hash: string; text: string }[]>
   /** Live emails of one account by Message-ID, each placed in its thread; an unknown one is left out. */
   inThreads(accountId: number, externalIds: string[]): Promise<EmailInThread[]>
+  /** A thread's live emails, oldest first, as search hits: whole text, people, labels and locator. */
+  threadHits(accountId: number, threadExternalId: string): Promise<StoredHit[]>
   /** The emails of one account nearest in meaning to `query`, each by its best chunk, best first. */
   nearest(
     model: string,
@@ -1075,6 +1077,17 @@ export const mailStoreOver = (
       const place = inThread(database, emailId)
       return place ? [{ ...place, score }] : []
     })
+  },
+  async threadHits(accountId, threadExternalId) {
+    const ids = database
+      .prepare(
+        `SELECT e.id FROM emails e JOIN email_threads t ON t.id = e.email_thread_id
+          WHERE t.account_id = ? AND t.external_id = ? AND e.deleted_at IS NULL
+          ORDER BY coalesce(e.sent_at, e.received_at), e.id`,
+      )
+      .all(accountId, threadExternalId)
+      .map(({ id }) => Number(id))
+    return emailHitsByPk(database, ids)
   },
   async inThreads(accountId, externalIds) {
     const id = database.prepare("SELECT id FROM emails WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL")

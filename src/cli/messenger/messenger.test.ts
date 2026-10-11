@@ -1846,6 +1846,51 @@ describe("the shared read commands", () => {
     expect(unheld.stderr.join("\n")).toContain("owner@example.test")
   })
 
+  it("**messages show** and **messages context** open an email by its locator, whole, with its thread", async () => {
+    const root = mkdtempSync(join(tmpdir(), "mail-show-"))
+    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
+    const body = `${"A long note about the reading group. ".repeat(20)}End.`
+    const sent = (externalId: string, day: number, bodyText: string) => ({
+      externalId,
+      subject: "Reading group",
+      from: { address: "alice@example.test", name: "Alice Example" },
+      to: [{ address: "owner@example.test", name: null }],
+      sentAt: Date.UTC(2026, 0, day),
+      receivedAt: Date.UTC(2026, 0, day),
+      bodyText,
+    })
+    await store.mail.saveThread({
+      accountId,
+      externalId: "thread-9",
+      now: Date.UTC(2026, 0, 9),
+      emails: [sent("<a@example.test>", 1, body), sent("<b@example.test>", 2, "The third one.")],
+    })
+    await store.close()
+    const never = vi.fn(async (): Promise<MessengerAdapter> => {
+      throw new Error("reading mail must never connect")
+    })
+    const locator = "msg:email/owner%40example.test/thread-9/%3Ca%40example.test%3E"
+
+    const shown = await call(["messages", "show", locator, "--json"], never, env)
+    expect(shown.code).toBe(0)
+    const email = JSON.parse(shown.stdout[0] ?? "")
+    expect(email).toMatchObject({ id: "<a@example.test>", locator, anchor: true })
+    expect(email.text).toContain(body)
+    expect(email.email.from).toMatchObject({ address: "alice@example.test", ref: expect.stringMatching(/^person:/) })
+
+    const around = await call(["messages", "context", locator, "--after-n", "1", "--json"], never, env)
+    expect(JSON.parse(around.stdout[0] ?? "").items.map(({ id }: { id: string }) => id)).toEqual([
+      "<a@example.test>",
+      "<b@example.test>",
+    ])
+    const missing = await call(["messages", "show", locator.replace("%3Ca", "%3Cz"), "--json"], never, env)
+    expect(missing.code).not.toBe(0)
+    expect(missing.stderr.join("\n")).toContain("no stored email")
+  })
+
   it("**search mail** answers each email with its people, labels and thread, at the detail asked", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-mail-detail-"))
     const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
