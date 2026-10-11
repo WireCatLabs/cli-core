@@ -14,6 +14,7 @@ import {
   recordingWindows,
   syncRecordingArchive,
 } from "./recording-sync.js"
+import { recordingSyncCheckpointStoreContract } from "./testing/recording-sync-contract.js"
 import { memoryRecordingSyncCheckpointStore } from "./testing/recording-sync-memory.js"
 
 const file = (change: Partial<RecordingAsset> = {}): RecordingAsset => ({
@@ -613,3 +614,9 @@ it("never merges discovery gaps and retains successful metadata overlapping pend
   ).rejects.toThrow("Example interrupted backlog")
   expect((await read(store))?.entries[0]?.externalId).toBe(current.entries[0].externalId)
 })
+
+for (const contract of recordingSyncCheckpointStoreContract(() => {
+  const store = memoryRecordingSyncCheckpointStore()
+  return { store, reopen: async () => store }
+}))
+  it(contract.name, contract.run)
