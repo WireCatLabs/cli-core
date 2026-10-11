@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-core"
 import { expect, it, vi } from "vitest"
 import type {
   RecordingArchiveResult,
@@ -114,7 +115,7 @@ it("refetches active windows without persisting cursors and checkpoints before d
   const opts = options(store, { to: "2026-01-31" })
   const run = syncRecordingArchive(catalog, opts)
   expect((await run.next()).value).toMatchObject({ availability: "unknown", checkpointRevision: 2 })
-  await expect(store.acquire("AliceExample-backup")).rejects.toMatchObject({ code: "conflict" })
+  await expect(store.acquire("AliceExample-backup")).rejects.toMatchObject({ code: "configuration_error" })
   await run.return()
   expect((await read(store))?.windows).toEqual([])
   expect(await collect(syncRecordingArchive(catalog, opts))).toHaveLength(1)
@@ -193,20 +194,20 @@ it("rejects cross-account/config checkpoints and CAS or foreign lease writes", a
     { checkpoint: { store, jobId: "AliceExample-backup", configKey: "changed" } },
   ])
     await expect(collect(syncRecordingArchive(source(), options(store, change)))).rejects.toMatchObject({
-      code: "conflict",
+      code: "configuration_error",
     })
   const lease = await store.acquire("AliceExample-backup")
   const current = await store.read("AliceExample-backup", lease.token)
   if (!current) throw new Error("missing synthetic checkpoint")
-  await expect(store.read("AliceExample-backup", "foreign")).rejects.toMatchObject({ code: "conflict" })
+  await expect(store.read("AliceExample-backup", "foreign")).rejects.toMatchObject({ code: "configuration_error" })
   await expect(store.save("AliceExample-backup", lease.token, null, current)).rejects.toMatchObject({
-    code: "conflict",
+    code: "configuration_error",
   })
   await expect(store.save("AliceExample-backup", lease.token, current.revision, current)).rejects.toMatchObject({
-    code: "conflict",
+    code: "configuration_error",
   })
   await lease.release()
-  await expect(lease.release()).rejects.toMatchObject({ code: "conflict" })
+  await expect(lease.release()).rejects.toMatchObject({ code: "configuration_error" })
 })
 it("validates dates, scopes, bounds and clock before I/O", async () => {
   const catalog = source(vi.fn(async () => ({ items: [], nextCursor: null })))
@@ -632,4 +633,11 @@ it("refuses exhausted revision counters before checkpoint writes", async () => {
     collect(syncRecordingArchive(source(), options(store, { from: "2026-03-01", to: "2026-03-31" }))),
   ).rejects.toThrow(/metadata limit/)
   expect(save).not.toHaveBeenCalled()
+})
+
+it("uses the shared CLI error identity and closed standard error taxonomy", () => {
+  const error = new RecordingSyncError("configuration_error", "Example lease conflict")
+  expect(error).toBeInstanceOf(CliError)
+  expect(error.code).toBe("configuration_error")
+  expect(error.name).toBe("RecordingSyncError")
 })

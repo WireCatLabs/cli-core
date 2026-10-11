@@ -10,11 +10,12 @@ export function memoryRecordingSyncCheckpointStore(): RecordingSyncCheckpointSto
   const leases = new Map<string, string>()
   let sequence = 0
   const own = (jobId: string, token: string): void => {
-    if (leases.get(jobId) !== token) throw new RecordingSyncError("conflict", "archive checkpoint lease is not owned")
+    if (leases.get(jobId) !== token)
+      throw new RecordingSyncError("configuration_error", "archive checkpoint lease is not owned")
   }
   return {
     async acquire(jobId): Promise<RecordingSyncLease> {
-      if (leases.has(jobId)) throw new RecordingSyncError("conflict", "archive job is already active")
+      if (leases.has(jobId)) throw new RecordingSyncError("configuration_error", "archive job is already active")
       const token = String(++sequence)
       leases.set(jobId, token)
       return {
@@ -35,7 +36,7 @@ export function memoryRecordingSyncCheckpointStore(): RecordingSyncCheckpointSto
         (checkpoints.get(jobId)?.revision ?? null) !== expectedRevision ||
         state.revision !== (expectedRevision ?? 0) + 1
       )
-        throw new RecordingSyncError("conflict", "archive checkpoint revision changed")
+        throw new RecordingSyncError("configuration_error", "archive checkpoint revision changed")
       checkpoints.set(jobId, structuredClone(state))
     },
   }

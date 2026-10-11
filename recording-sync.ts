@@ -1,3 +1,4 @@
+import { CliError, type ErrorCode } from "@wirecat/cli-core"
 import type {
   RecordingArchiveResult,
   RecordingAsset,
@@ -7,12 +8,9 @@ import type {
   RecordingWindow,
 } from "./recording-source.js"
 
-export class RecordingSyncError extends Error {
-  constructor(
-    readonly code: "validation_error" | "invalid_response" | "conflict" | "cancelled",
-    message: string,
-  ) {
-    super(message)
+export class RecordingSyncError extends CliError {
+  constructor(code: ErrorCode, message: string) {
+    super(code, message)
     this.name = "RecordingSyncError"
   }
 }
@@ -327,7 +325,7 @@ export async function* syncRecordingArchive(
       state.scope.account !== selectedScope.account ||
       state.configKey !== (checkpoint?.configKey ?? "ephemeral")
     )
-      return fail("archive checkpoint belongs to another account or configuration", "conflict")
+      return fail("archive checkpoint belongs to another account or configuration", "configuration_error")
     const save = async (next: RecordingSyncCheckpoint): Promise<void> => {
       const updated = { ...next, revision: state.revision + 1, updatedAt: clock() }
       if (
