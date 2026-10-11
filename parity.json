@@ -3148,6 +3148,13 @@
             "tg": "each CLI’s next cli-messaging bump"
           }
         },
+        "--offset": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
+          }
+        },
         "--only": "all",
         "--server-time": {
           "in": [],
@@ -3213,6 +3220,13 @@
         "--exact": "all",
         "--limit": "all",
         "--newest": "all",
+        "--offset": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
+          }
+        },
         "--timezone": "all"
       }
     },
@@ -3235,6 +3249,13 @@
           "in": "all"
         },
         "--newest": "all",
+        "--offset": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
+          }
+        },
         "--regex": "all",
         "--saved": {
           "in": "all"

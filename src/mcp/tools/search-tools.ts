@@ -16,6 +16,7 @@ import {
   type MessagesSearchArgs,
   mailSearchInput,
   messagesSearchInput,
+  offset,
 } from "./search.js"
 
 const text = v.pipe(v.string(), v.minLength(1), v.description("the query, in the strict Lucene language"))
@@ -47,6 +48,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       // Typed as present so the answer code reads them; offered only where the server can search.
       ...((messenger.serverSearch ? backendInputs : {}) as typeof backendInputs),
       text,
+      offset,
       only: v.optional(
         v.pipe(
           v.array(v.picklist(RESOURCES_SEARCHED_WITH_MEETINGS)),
@@ -79,12 +81,15 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
         throw new CliError("validation_error", "only: meetings needs meetings")
       if (meetings === undefined && args.max_meetings !== undefined)
         throw new CliError("validation_error", "max_meetings needs meetings")
+      if (meetings !== undefined && args.offset !== undefined)
+        throw new CliError("validation_error", "offset pages messages, mail and notes; not with meetings yet")
       const meetingAccount = typeof meetings === "string" ? meetingAccountOf(meetings) : undefined
       const network = Boolean(messenger.serverSearch) && args.backend !== "archive"
       const services = searchServices(messenger, store, account, defaults, network ? connect : undefined)
       const request = {
         text: args.text,
         limit: args.limit ?? defaults.limit,
+        ...(args.offset === undefined ? {} : { offset: args.offset }),
         ...(args.exact ? { exact: true } : {}),
         ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
         ...backendArgs(args),

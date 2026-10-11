@@ -1136,6 +1136,11 @@ describe("the MCP server", () => {
     expect(brief.body.items[0]).not.toHaveProperty("email")
     const full = await call("chat_search_mail", { text: "chapter", account: "bob@example.test", detail: "full" })
     expect(full.body.items[0].text).toBe("Reading group\n\nWhich chapter next?")
+    const first = await call("chat_search_mail", { text: "chapter", limit: 1 })
+    expect(first.body.nextOffset).toBe(1)
+    const rest = await call("chat_search_mail", { text: "chapter", limit: 1, offset: first.body.nextOffset })
+    expect(rest.body.items[0].id).not.toBe(first.body.items[0].id)
+    expect(rest.body.nextOffset).toBeUndefined()
     const opened = await call("chat_messages_context", { chat: one.body.items[0].locator })
     expect(opened.body.items).toEqual([
       expect.objectContaining({ id: "<bob@example.test>", anchor: true, text: "Reading group\n\nWhich chapter next?" }),

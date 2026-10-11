@@ -13,7 +13,7 @@ import type { Note } from "../../store/index.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { conversationsSearchCommand } from "./conversations-command.js"
-import { messagesSearchCommand } from "./messages-search-command.js"
+import { messagesSearchCommand, wholeCount } from "./messages-search-command.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { topicsSearchCommand } from "./topics-command.js"
 
@@ -84,15 +84,17 @@ const allCommand = (messenger: Messenger): Command => {
       maxMeetingsOf,
     )
     .option("--limit <n>", "how many", positiveCount("--limit"))
+    .option("--offset <n>", "skip this many, for the next page", wholeCount)
     .option("--exact", "bare words and quotes match their exact form only, as exact:word does")
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
   return backendOptions(command, messenger).action(async function (this: Command, words: string[]) {
     const context = messengerContext(this, messenger)
-    const { only, meetings, maxMeetings, limit, exact, timezone } = this.opts<{
+    const { only, meetings, maxMeetings, limit, offset, exact, timezone } = this.opts<{
       only?: ResourceWithMeetings[]
       meetings?: string | true
       maxMeetings?: number | "all"
       limit?: number
+      offset?: number
       exact?: boolean
       timezone?: string
     }>()
@@ -100,10 +102,13 @@ const allCommand = (messenger: Messenger): Command => {
       throw new CliError("validation_error", "--only meetings needs --meetings")
     if (meetings === undefined && maxMeetings !== undefined)
       throw new CliError("validation_error", "--max-meetings needs --meetings")
+    if (meetings !== undefined && offset !== undefined)
+      throw new CliError("validation_error", "--offset pages messages, mail and notes; not with --meetings yet")
     const meetingAccount = typeof meetings === "string" ? accountAfterQuery(meetings) : undefined
     const request = {
       text: words.join(" "),
       limit: limit ?? context.settings.limit,
+      ...(offset === undefined ? {} : { offset }),
       ...(exact ? { exact: true } : {}),
       ...(timezone === undefined ? {} : { timezone }),
       ...backendRequest(this),

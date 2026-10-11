@@ -59,6 +59,7 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
       .option("--type <text|voice|file>", "only messages of this type: text alone, a voice message, or a file", typeOf)
   command
     .option("--limit <n>", "how many", positiveCount("--limit"))
+    .option("--offset <n>", "skip this many, for the next page", wholeCount)
     .option("--newest", "newest first instead of best first")
     .option(
       "--exact",
@@ -107,6 +108,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       exact,
       context: around,
       limit: typedLimit,
+      offset,
       saved,
     } = this.opts<{
       chat?: string
@@ -120,6 +122,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       exact?: boolean
       context?: number
       limit?: number
+      offset?: number
       saved?: string
     }>()
     if (saved === undefined && words.length === 0)
@@ -155,6 +158,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
             ...typed,
             ...(pattern ? { pattern } : { text: words.join(" ") }),
             limit,
+            ...(offset === undefined ? {} : { offset }),
             signal,
             language: language ?? (pattern ? "legacy" : "lucene"),
             newest: newest === true,
@@ -174,6 +178,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
           ...(params.source === undefined ? {} : { source: params.source }),
           ...(params.timezone === undefined ? {} : { timezone: params.timezone }),
           limit,
+          ...(offset === undefined ? {} : { offset }),
           signal,
           language: params.language ?? (pattern ? "legacy" : "lucene"),
           newest: params.newest === true,

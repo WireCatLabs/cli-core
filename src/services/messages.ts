@@ -99,6 +99,8 @@ export interface SearchQuery {
   /** Any of these senders, already resolved by the caller; not with `from:`. */
   senders?: { provider: Provider; id: Id }[]
   limit: number
+  /** Skip this many hits: the `nextOffset` of the page before. */
+  offset?: number
   /** Newest first instead of best first. */
   newest?: boolean
   /** Bare words and quotes match their exact form only: the default field becomes `exact`. */
@@ -120,6 +122,8 @@ export type FoundMessage = StoredHit & {
 }
 
 export interface SearchFound extends Page<FoundMessage> {
+  /** Where the next page starts, as `offset`; absent on the last page. */
+  nextOffset?: number
   refreshed?: SearchRefreshed
   server?: ServerSearched
   query?: QueryMetadata
@@ -770,11 +774,35 @@ const topUp = async (store: MessageStore) => {
   await store.fillStems({ until: () => Date.now() >= stop })
 }
 
+/** How deep a search pages: each page reads every hit before it again. */
+export const MAX_SEARCH_OFFSET = 1000
+
+/**
+ * Search the store, one page at a time: `offset` skips the hits a page before held, and `nextOffset` says where
+ * the next page starts. A page is the hits up to `offset + limit` read again and cut, so deep pages cost more.
+ */
 export const searchStore = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
   messenger: Saved = {},
+): Promise<SearchFound> => {
+  const offset = request.offset ?? 0
+  if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
+    throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
+  const found = await searchPage(store, account, { ...request, limit: request.limit + offset }, messenger)
+  return {
+    ...found,
+    items: found.items.slice(offset),
+    ...(found.hasMore && offset + request.limit <= MAX_SEARCH_OFFSET ? { nextOffset: offset + request.limit } : {}),
+  }
+}
+
+const searchPage = async (
+  store: MessageStore,
+  account: AccountKey,
+  request: SearchQuery,
+  messenger: Saved,
 ): Promise<SearchFound> => {
   const { text, pattern, chat, source, accounts, senders, limit, newest = false, context = 0 } = request
   if (request.signal?.aborted)

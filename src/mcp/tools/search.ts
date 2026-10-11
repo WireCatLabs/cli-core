@@ -4,6 +4,7 @@ import type { Messenger } from "../../cli/messenger/context.js"
 import { parseDuration } from "../../cli/settings.js"
 import { DETAILS } from "../../output-detail.js"
 import type { MessagesService } from "../../services/messages.js"
+import { MAX_SEARCH_OFFSET } from "../../services/messages.js"
 import type { SearchKind } from "../../services/search-kind.js"
 import type { SearchesService, SearchParams } from "../../services/searches.js"
 import { syncInputs } from "../search-sync.js"
@@ -34,8 +35,19 @@ export const backendArgs = (args: { backend?: "archive" | "server" | "both"; ser
   ...(args.server_time === undefined ? {} : { server: { timeMs: parseDuration(args.server_time, "server_time") } }),
 })
 
+export const offset = v.optional(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(MAX_SEARCH_OFFSET),
+    v.description("skip this many hits: the nextOffset of the page before"),
+  ),
+)
+
 export const messagesSearchInput = (messenger: Messenger) =>
   v.object({
+    offset,
     detail: v.optional(
       v.pipe(
         v.picklist(DETAILS),
@@ -95,6 +107,7 @@ export const messagesSearchInput = (messenger: Messenger) =>
 /** `search_mail`: the mailboxes in the local store; no server, no fetching, no saved searches. */
 export const mailSearchInput = (messenger: Messenger) =>
   v.object({
+    offset,
     detail: v.optional(
       v.pipe(
         v.picklist(DETAILS),
@@ -191,6 +204,7 @@ export const answerMessagesSearch = async (
       signal: defaults.signal,
       ...(params.timezone === undefined ? {} : { timezone: params.timezone }),
       limit: size,
+      ...(args.offset === undefined ? {} : { offset: args.offset }),
       newest: params.newest === true,
       ...(params.exact ? { exact: true } : {}),
       context: params.context ?? 0,
@@ -215,6 +229,7 @@ export const answerMessagesSearch = async (
     signal: defaults.signal,
     ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
     limit: size,
+    ...(args.offset === undefined ? {} : { offset: args.offset }),
     newest: args.newest === true,
     ...(args.exact ? { exact: true } : {}),
     context: args.context ?? 0,
