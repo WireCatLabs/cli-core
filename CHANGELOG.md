@@ -4,6 +4,17 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Mail pieces overlap, and the mail cleaner cuts less.** Each piece of a thread after the first opens with up
+  to `CHUNK_OVERLAP` characters from the end of the email before it (`cutChunks` takes the carry as an option;
+  messenger conversations are cut as before). Only RFC 3676's `-- ` starts a signature now, not a bare `--`, which
+  newsletters use between sections; a greeting is dropped only when the line is the greeting and a name; a line
+  after a sign-off that is a postscript, a question or a sentence keeps the sign-off and what follows. Mail
+  pieces change once more, so mail is embedded again.
+
 ## 0.239.0 — 11.10.2026
 
 ### Changed — may break callers

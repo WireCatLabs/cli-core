@@ -1,5 +1,5 @@
 const GREETING =
-  /^(hi|hello|hey|dear|greetings|good (morning|afternoon|evening)|привет|здравствуй(те)?|добр(ый|ое|ого) (день|вечер|утро|утра|дня)|hola|buen(os|as) (días|dias|tardes|noches)|estimad[oa]s?|querid[oa]s?)(?![\p{L}\p{N}])[^\n]{0,40}$/iu
+  /^(hi|hello|hey|dear|greetings|good (morning|afternoon|evening)|привет|здравствуй(те)?|добр(ый|ое|ого) (день|вечер|утро|утра|дня)|hola|buen(os|as) (días|dias|tardes|noches)|estimad[oa]s?|querid[oa]s?)(?![\p{L}\p{N}])([\s,]+\p{L}[\p{L}.'’-]*){0,3}\s*[,!.:]?$/iu
 
 const SIGN_OFF =
   /^(best|best regards|best wishes|kind regards|warm regards|regards|thanks|thanks again|thanks a lot|thank you|many thanks|cheers|sincerely|yours|yours truly|yours sincerely|br|с уважением|спасибо|заранее спасибо|всего доброго|всего хорошего|un saludo|saludos|saludos cordiales|atentamente|gracias|muchas gracias)[\s,.!]*$/iu
@@ -7,6 +7,8 @@ const SIGN_OFF =
 const ATTRIBUTION = /(wrote|написал[аи]?|escribió|a écrit|schrieb)\s*:\s*$/iu
 const OUTLOOK = /^(-{2,}\s*original message\s*-{2,}|-{2,}\s*исходное сообщение\s*-{2,}|from:\s.+)$/iu
 const SENT_FROM = /^(sent from my |отправлено с |enviado desde mi )/iu
+/** A line after a sign-off that is still the message: a postscript, a question, a sentence rather than a name. */
+const CONTENT = /^p\.?\s?s\b|\?|(\S+\s+){8}\S/iu
 
 const unquoted = (line: string) => line.replace(/^(\s*>)+\s?/, "")
 const squash = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim()
@@ -69,12 +71,13 @@ const withoutGreeting = (lines: string[]): string[] =>
   lines.length > 1 && GREETING.test((lines[0] ?? "").trim()) ? trimEdges(lines.slice(1)) : lines
 
 const withoutSignOff = (lines: string[]): string[] => {
-  const separator = lines.findIndex((line) => line === "-- " || line === "--")
+  // Only RFC 3676's "-- ": a bare "--" is as often a divider inside a newsletter, with the text going on after it.
+  const separator = lines.indexOf("-- ")
   let kept = separator > 0 ? trimEdges(lines.slice(0, separator)) : lines
   kept = kept.filter((line) => !SENT_FROM.test(line.trim()))
   for (let i = kept.length - 1; i >= Math.max(1, kept.length - 6); i--) {
     const tail = kept.slice(i + 1)
-    if (tail.length > 4 || tail.some((line) => line.trim().length > 50)) break
+    if (tail.length > 4 || tail.some((line) => line.trim().length > 50 || CONTENT.test(line))) break
     if (SIGN_OFF.test((kept[i] ?? "").trim())) return trimEdges(kept.slice(0, i))
   }
   return kept

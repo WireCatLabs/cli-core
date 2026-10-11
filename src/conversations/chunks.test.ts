@@ -63,6 +63,25 @@ describe("cutChunks", () => {
     expect(ranges.at(-1)?.end).toBe(text.length)
   })
 
+  it("opens each chunk with the end of the message before it when asked, and a new message changes no closed chunk", () => {
+    const line = (id: string, text: string) => ({ id, sender: "Alice", text })
+    const lines = ["first point about the venue", "second point about the budget", "third point on travel"].map(
+      (text, n) => line(String(n), text),
+    )
+    const chunks = cutChunks(lines, 70, undefined, 12)
+    expect(chunks.map(({ text }) => text)).toEqual([
+      "Alice: first point about the venue",
+      "Alice: the venue\nAlice: second point about the budget",
+      "Alice: the budget\nAlice: third point on travel",
+    ])
+    const more = cutChunks([...lines, line("3", "fourth point on food")], 70, undefined, 12)
+    expect(more.slice(0, 2)).toEqual(chunks.slice(0, 2))
+    expect(cutChunks(lines, 70).map(({ firstId, lastId }) => [firstId, lastId])).toEqual([
+      ["0", "0"],
+      ["1", "2"],
+    ])
+  })
+
   it("keeps the sender on every piece, within the limit", () => {
     const pieces = cutChunks([{ id: "1", sender: "Rin", text: "word ".repeat(100) }], 120)
 
