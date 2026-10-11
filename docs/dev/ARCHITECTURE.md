@@ -599,8 +599,11 @@ meeting notes, tags and memory commands, so providers reuse these records instea
 another knowledge system.
 
 `searchHits` pages inside one occurrence with an account/query-bound continuation and stored text
-byte budgets. `indexSearch` explicitly maintains a bounded account queue batch; reads do not drain
-global queues. Coverage reports pending indexing and unknown archive completeness. Append receipts
+byte budgets. Each term matches a literal prefix or a configured shared Snowball stem variant;
+English, Spanish, Russian and disabled stemming follow existing store settings. Tokens longer than
+1024 characters match literally. `indexSearch` explicitly maintains a bounded account queue batch;
+read pages do not drain queues. Write transactions keep the bounded shared involvement queue current.
+Coverage reports pending indexing and unknown archive completeness. Append receipts
 count new occurrences, inserted/replayed revisions and superseded revisions in the same transaction.
 Their legacy full meeting snapshot still hydrates retained history; compact CLI receipts do not
 change that store limitation.

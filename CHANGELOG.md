@@ -13,9 +13,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   chosen participant identity with a manual audit and account observation. Shared context services
   reuse existing notes, tags and memories; native writes recheck live ownership and optional prior
   values in one transaction. Existing memo commands remain the knowledge interface.
-- **Bounded meeting hit pages and explicit indexing** match configured English/Spanish/Russian word forms and support continuation inside a large meeting,
-  account/query-bound cursors, stored text byte budgets and small account indexing batches. Coverage
-  reports pending indexing and unknown archive completeness; read pages do not drain queues.
+- **Bounded meeting hit pages and explicit indexing** match configured English/Spanish/Russian
+  word forms and support continuation inside a large meeting, account/query-bound cursors, stored
+  text byte budgets and small account indexing batches. Coverage reports pending indexing and
+  unknown archive completeness; read pages do not drain queues. Tokens longer than 1024 characters
+  match literally, without morphology, to keep processing bounded.
 - **Exact transcript append receipts** count occurrence creation, inserted/replayed revisions and
   superseded revisions in the same transaction. The old append port is unchanged; the receipt's
   full meeting snapshot still hydrates retained history.
