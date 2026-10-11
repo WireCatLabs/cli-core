@@ -2,7 +2,7 @@
  * The built package opens the store through bundled Drizzle, never through `node_modules`, where
  * `drizzle-orm` is only a development dependency. Run after `pnpm build`, under Node and under Bun.
  */
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -145,3 +145,41 @@ if (
 if (!readFileSync(join(root, "charts/fonts/OFL.txt"), "utf8").includes("SIL OPEN FONT LICENSE"))
   throw new Error("the chart font license is absent from dist")
 console.log("dist: ./charts renders dark PNG with the bundled Cyrillic font")
+
+const { openOrdinaryFile, syncDirectory } = await import("@wirecat/cli-messaging/files")
+const { preflightWavAudio, openWavAudio } = await import("@wirecat/cli-messaging/speech/wav")
+const mediaFolder = mkdtempSync(join(tmpdir(), "cli-messaging-dist-media-"))
+const mediaPath = join(mediaFolder, "AliceExample.wav")
+const pcm = Buffer.alloc(44 + 32000)
+pcm.write("RIFF", 0)
+pcm.writeUInt32LE(pcm.length - 8, 4)
+pcm.write("WAVEfmt ", 8)
+pcm.writeUInt32LE(16, 16)
+pcm.writeUInt16LE(1, 20)
+pcm.writeUInt16LE(1, 22)
+pcm.writeUInt32LE(16000, 24)
+pcm.writeUInt32LE(32000, 28)
+pcm.writeUInt16LE(2, 32)
+pcm.writeUInt16LE(16, 34)
+pcm.write("data", 36)
+pcm.writeUInt32LE(32000, 40)
+writeFileSync(mediaPath, pcm)
+await syncDirectory(mediaFolder)
+const ordinary = await openOrdinaryFile(mediaPath)
+try {
+  if ((await ordinary.stat()).size !== pcm.length) throw new Error("public ordinary-file helper failed")
+} finally {
+  await ordinary.close()
+}
+const mediaBudget = { maxBytes: 65536, maxDurationMs: 1000 }
+const mediaPlan = await preflightWavAudio(mediaPath, mediaBudget)
+const audio = await openWavAudio(mediaPlan, mediaBudget)
+let sampleCount = 0
+try {
+  for await (const window of audio.windows()) sampleCount += window.samples.length
+} finally {
+  await audio.close()
+}
+if (sampleCount !== 16000 || mediaPlan.media.durationMs !== 1000 || JSON.stringify(mediaPlan).includes(mediaPath))
+  throw new Error("public WAV streaming or path redaction failed from dist")
+console.log("dist: ./files and ./speech/wav verify and decode an invented bounded file")

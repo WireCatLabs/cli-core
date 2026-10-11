@@ -144,6 +144,26 @@ Hit continuation bounds rows inside one meeting. Its coverage reports pending in
 archive completeness. It is a live view, not a snapshot across modifications between calls. Exact
 append receipts do not imply bounded legacy meeting-history hydration in a producer adapter.
 
+## Native file and WAV helpers
+
+Native connectors can import `openOrdinaryFile` and `syncDirectory` from
+`@wirecat/cli-messaging/files`, and `preflightWavAudio` and `openWavAudio` from
+`@wirecat/cli-messaging/speech/wav`. These host helpers sit outside the pure meeting module and
+import no store, provider or speech engine.
+
+WAV preflight takes explicit byte and duration budgets (at most 4 GiB and 24 hours), validates PCM16
+mono/stereo at 16 or 48 kHz, and hashes the complete file. Its frozen plan omits the path and must
+stay in the same process: reconstructing it from JSON is refused. Opening verifies file identity,
+layout and content again; a single-use iterator produces at most 30 seconds of 16 kHz mono samples
+per window. Consuming the entire iterator verifies the bytes read against the preflight hash.
+Close the source in a `finally` block, and commit recognition only after successful completion.
+Neither helper installs a model or converts compressed audio/video.
+
+`openOrdinaryFile` rejects a symlink at the selected path and verifies ordinary-file identity before
+returning its read handle; callers close that handle. Directory syncing persists POSIX publication
+entries and propagates failures; Windows returns without directory syncing. Hosts remain responsible
+for trusted parent directories, destination names and provider-specific publication journals.
+
 ## Verify adapters
 
 The testing entry point exports runner-independent contracts using invented fixtures:

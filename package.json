@@ -103,6 +103,14 @@
     "./skill-validation": {
       "types": "./dist/skills/validate.d.ts",
       "import": "./dist/skills/validate.js"
+    },
+    "./files": {
+      "types": "./dist/files/index.d.ts",
+      "default": "./dist/files/index.js"
+    },
+    "./speech/wav": {
+      "types": "./dist/speech/wav.d.ts",
+      "default": "./dist/speech/wav.js"
     }
   },
   "scripts": {
