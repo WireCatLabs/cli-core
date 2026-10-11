@@ -72,6 +72,14 @@
       "types": "./dist/charts/index.d.ts",
       "default": "./dist/charts/index.js"
     },
+    "./tasks": {
+      "types": "./dist/tasks/index.d.ts",
+      "default": "./dist/tasks/index.js"
+    },
+    "./tasks/testing": {
+      "types": "./dist/tasks/testing/index.d.ts",
+      "default": "./dist/tasks/testing/index.js"
+    },
     "./models": {
       "types": "./dist/models/index.d.ts",
       "default": "./dist/models/index.js"
@@ -120,7 +128,6 @@
     "@wirecat/cli-meetings": "0.4.1",
     "@wirecat/cli-messaging-onnx": "1.0.1",
     "@wirecat/cli-messaging-sqlite": "1.0.1",
-    "@wirecat/cli-tasks": "0.3.1",
     "@xmldom/xmldom": "0.9.12",
     "chardet": "2.2.0",
     "echarts": "6.1.0",

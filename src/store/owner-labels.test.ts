@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createTaskService } from "@wirecat/cli-tasks"
 import { afterEach, describe, expect, it } from "vitest"
 import { searchNotesQuery } from "../services/notes-search.js"
+import { createTaskService } from "../tasks/index.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
 
 const telegram: AccountKey = { provider: "telegram", account: "500" }

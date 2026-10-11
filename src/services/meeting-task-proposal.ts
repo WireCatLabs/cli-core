@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-core"
-import { TASK_KINDS, type TaskKind } from "@wirecat/cli-tasks"
 import { formatMeetingReference } from "../domain/meeting-reference.js"
+import { TASK_KINDS, type TaskKind } from "../tasks/index.js"
 import { type MeetingReadStore, resolveMeetingReference } from "./meeting-reference.js"
 
 export interface MeetingTaskProposal {

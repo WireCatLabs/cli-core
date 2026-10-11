@@ -42,6 +42,10 @@
                   {
                     "group": ["drizzle-orm", "drizzle-orm/*"],
                     "message": "drizzle-orm is a development dependency, bundled into dist at build time: import it through src/store/sqlite/drizzle/ (add what you need to core.ts), or tg and max crash at runtime"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
                   }
                 ]
               }
@@ -79,6 +83,10 @@
                   {
                     "group": ["**/store/sqlite/**"],
                     "message": "a command, a service or an MCP tool reaches the store through src/store/store.ts, never a table module under src/store/sqlite/: import from store.ts, and re-export there what is new"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
                   }
                 ]
               }
@@ -107,6 +115,10 @@
                   {
                     "group": ["**/store/sqlite/**"],
                     "message": "a command, a service or an MCP tool reaches the store through src/store/store.ts, never a table module under src/store/sqlite/: import from store.ts, and re-export there what is new"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
                   }
                 ]
               }
@@ -126,6 +138,78 @@
                 "patterns": [
                   {
                     "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
+                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/tasks/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "node:fs": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts",
+                  "node:fs/promises": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts",
+                  "node:sqlite": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts",
+                  "bun:sqlite": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts"
+                },
+                "patterns": [
+                  {
+                    "group": ["../**"],
+                    "message": "src/tasks/ depends on nothing else in cli-messaging: the rest of the package calls it, never the other way round"
+                  },
+                  {
+                    "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],
+                    "message": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts"
+                  },
+                  {
+                    "group": ["@mtcute/*", "ws"],
+                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/tasks/testing/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "node:fs": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts",
+                  "node:fs/promises": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts",
+                  "node:sqlite": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts",
+                  "bun:sqlite": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts"
+                },
+                "patterns": [
+                  {
+                    "group": ["../../**"],
+                    "message": "src/tasks/ depends on nothing else in cli-messaging: the rest of the package calls it, never the other way round"
+                  },
+                  {
+                    "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],
+                    "message": "src/tasks/ touches no database and no file: the store implements TaskStore in src/store/sqlite/tasks.ts"
+                  },
+                  {
+                    "group": ["@mtcute/*", "ws"],
                     "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
                   }
                 ]

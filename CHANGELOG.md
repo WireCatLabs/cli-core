@@ -4,6 +4,16 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Tasks are part of this package: `@wirecat/cli-tasks` moved into `src/tasks/`.** Import
+  `@wirecat/cli-messaging/tasks` instead of `@wirecat/cli-tasks`, and `@wirecat/cli-messaging/tasks/testing`
+  instead of `@wirecat/cli-tasks/testing`; the names they export are the same (cli-tasks 0.3.1). This package no
+  longer depends on `@wirecat/cli-tasks`. `biome.json` keeps the module apart: `src/tasks/` imports nothing else
+  in the package and no database or file, and the rest of the package imports only its two entry points.
+
 ## 0.238.0 — 11.10.2026
 
 ### Changed — may break callers

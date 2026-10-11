@@ -3,9 +3,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-core"
 import { sampleMeeting } from "@wirecat/cli-meetings/testing"
-import { createTaskService } from "@wirecat/cli-tasks"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
+import { createTaskService } from "../tasks/index.js"
 import { createTaskFromMeeting, type MeetingTaskStore, readMeetingTask } from "./meeting-tasks.js"
 
 const handles: MessageStore[] = []

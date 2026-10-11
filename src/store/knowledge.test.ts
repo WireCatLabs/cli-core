@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createTaskService } from "@wirecat/cli-tasks"
 import { afterEach, describe, expect, it } from "vitest"
 import { formatLocator } from "../domain/locator.js"
+import { createTaskService } from "../tasks/index.js"
 import { openCache } from "./open.js"
 import { type MessageStore, openStore } from "./store.js"
 

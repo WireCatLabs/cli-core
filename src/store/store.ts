@@ -609,7 +609,7 @@ export interface MessageStore {
   deleteSearch(reference: string): Promise<StoredSearch>
   /** Drops the unnamed runs; answers how many. */
   clearSearchHistory(): Promise<number>
-  /** Open tasks waiting on the owner, for `@wirecat/cli-tasks`'s service. */
+  /** Open tasks waiting on the owner, for the task service in `src/tasks/`. */
   readonly botUpdates: BotUpdateStore
   readonly involvements: InvolvementStore
   readonly tasks: StoreTaskStore

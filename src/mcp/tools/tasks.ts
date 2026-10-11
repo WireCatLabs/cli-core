@@ -1,4 +1,3 @@
-import { TASK_KINDS, TASK_STATES } from "@wirecat/cli-tasks"
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { listed } from "../../cli/paging.js"
@@ -6,6 +5,7 @@ import type { SendGuard } from "../../sends/guard.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
+import { TASK_KINDS, TASK_STATES } from "../../tasks/index.js"
 import { type AnyTool, chatOf, limit, READ, tool } from "../tool.js"
 
 const LOCAL = { readOnlyHint: false, openWorldHint: false }
