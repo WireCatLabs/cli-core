@@ -1,0 +1,119 @@
+#!/usr/bin/env sh
+# A live check of the task rules on a real test chat: the second account joins the chat by its invite link
+# if it is not a member yet, then asks a question, the owner's
+# review opens a task, the owner's reply closes it on the next review. Both messages are deleted after,
+# each by its own sender with the id its own send returned. Run it from a terminal, with the owner's yes.
+#
+#   bin/live-tasks tg      # Telegram, through the installed `tg` (TG_BIN to use another)
+#   bin/live-tasks max     # MAX, through the installed `max` (MAX_BIN to use another)
+#
+# The chats and accounts are in .live/cast.env, which git ignores; the first run writes a template.
+# It prints step names, exit codes and counts — never a chat id, a name or a message's text.
+set -eu
+
+cd "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+cast=.live/cast.env
+if [ ! -f "$cast" ]; then
+  mkdir -p .live
+  cat > "$cast" <<'TEMPLATE'
+# Kept out of git (.gitignore: /.live/). Profiles are each CLI's profile names.
+TG_CHAT=
+TG_OWNER=
+TG_SECOND=tgtest
+MAX_CHAT=
+MAX_OWNER=
+MAX_SECOND=
+TEMPLATE
+  chmod 600 "$cast"
+  echo "wrote $cast — fill it in, then run again" >&2
+  exit 1
+fi
+. "./$cast"
+
+case "${1:-}" in
+  tg) cli=${TG_BIN:-tg}; chat=${TG_CHAT:-}; owner=${TG_OWNER:-}; second=${TG_SECOND:-} ;;
+  max) cli=${MAX_BIN:-max}; chat=${MAX_CHAT:-}; owner=${MAX_OWNER:-}; second=${MAX_SECOND:-} ;;
+  *) echo "usage: bin/live-tasks tg|max" >&2; exit 2 ;;
+esac
+[ -n "$chat" ] && [ -n "$owner" ] && [ -n "$second" ] ||
+  { echo "$1: the chat, the owner's profile and the second profile must all be set in $cast" >&2; exit 1; }
+command -v jq >/dev/null || { echo "needs jq" >&2; exit 1; }
+"$cli" "$owner" tasks --help >/dev/null 2>&1 || { echo "this $cli has no tasks command — update it first" >&2; exit 1; }
+
+stamp=$(date +%s)
+question=""
+answer=""
+remove() {
+  [ -n "$3" ] || return 0
+  if "$cli" "$1" messages delete "$chat" "$3" --for-everyone --json >/dev/null 2>&1; then
+    echo "cleanup: $2 deleted"
+  else
+    echo "cleanup: FAILED to delete $2 — delete it by hand, from that same profile"
+  fi
+}
+cleanup() {
+  remove "$owner" "the owner's reply" "$answer"
+  remove "$second" "the question" "$question"
+}
+trap cleanup EXIT
+
+step() { printf '%-40s' "$1"; }
+fail() { echo "FAIL ($1)"; exit 1; }
+
+step "two different accounts"
+out=$("$cli" "$owner" account show --json) || fail "$owner: exit $?"
+owner_id=$(printf '%s' "$out" | jq -r '.id')
+out=$("$cli" "$second" account show --json) || fail "$second: exit $?"
+second_id=$(printf '%s' "$out" | jq -r '.id')
+# The owner's own question opens no task, so the run would fail three steps later without saying why.
+[ "$owner_id" != "$second_id" ] || fail "$owner and $second are the same account"
+echo "ok"
+
+step "second account is in the chat"
+out=$("$cli" "$owner" chats members list "$chat" --all --json) || fail "exit $?"
+if printf '%s' "$out" | jq -e --arg id "$second_id" 'any(.items[]; .id == $id)' >/dev/null; then
+  echo "ok"
+else
+  out=$("$cli" "$owner" chats link show "$chat" --json) || fail "no invite link: exit $?"
+  link=$(printf '%s' "$out" | jq -r '.link')
+  "$cli" "$second" chats join "$link" --json >/dev/null || fail "join: exit $?"
+  echo "ok, joined by the invite link"
+fi
+
+step "second account asks"
+out=$("$cli" "$second" messages send "$chat" "live-check $stamp: who has the keys? (test, deleted after)" --json) || fail "exit $?"
+question=$(printf '%s' "$out" | jq -r '.message.id')
+echo "ok"
+sleep 3
+
+step "owner's review opens a task"
+out=$("$cli" "$owner" review --chat "$chat" --since-time 15m --json) || fail "exit $?"
+echo "ok, opened $(printf '%s' "$out" | jq -r '.tasks.added // 0')"
+
+step "tasks list shows it open"
+out=$("$cli" "$owner" tasks list --chat "$chat" --state open --json) || fail "exit $?"
+task=$(printf '%s' "$out" | jq -r --arg id "$question" '[.items[] | select(.source | endswith("/" + $id))][0].id // empty')
+[ -n "$task" ] || fail "no open task for the question"
+echo "ok"
+
+step "owner replies"
+out=$("$cli" "$owner" messages send "$chat" "live-check $stamp: I do (test, deleted after)" --reply-to "$question" --json) \
+  || fail "exit $?"
+answer=$(printf '%s' "$out" | jq -r '.message.id')
+echo "ok"
+sleep 3
+
+step "owner's review closes it"
+out=$("$cli" "$owner" review --chat "$chat" --since-time 15m --json) || fail "exit $?"
+echo "ok, closed $(printf '%s' "$out" | jq -r '.tasks.closed // 0')"
+
+step "the task is done"
+out=$("$cli" "$owner" tasks list --chat "$chat" --json) || fail "exit $?"
+state=$(printf '%s' "$out" | jq -r --arg id "$task" '[.items[] | select(.id == $id)][0].state // empty')
+[ "$state" = "done" ] || fail "state is ${state:-missing}"
+echo "ok"
+
+step "tasks stats answers"
+"$cli" "$owner" tasks stats --chat "$chat" --json >/dev/null || fail "exit $?"
+echo "ok"
+echo "PASS $1"
