@@ -45,6 +45,15 @@ On 2026-09-29 the slowest test here took 57 ms. The waits that exist are reached
 
 A new wait in the code gets a seam like these, never a longer timeout in the test.
 
+## Live checks
+
+The suites never contact a messenger. [`bin/live-tasks`](../../bin/live-tasks) `tg|max`, run by the owner
+from a terminal, checks the task rules on a real test chat: the second account must be a different account, and
+joins the chat by its invite link if it is not a member; then it asks, the owner's `review` opens a task, the
+owner's reply closes it, and both messages are deleted by their own senders. The chat and both profiles are in
+`.live/cast.env`, which git ignores; no profile is assumed. The script prints no id and no text. It came from
+cli-tasks, retired 2026-10-11.
+
 ## Parity evidence
 
 [Detailed parity audit](PARITY-AUDIT.md) runs fresh isolated consumer checks and records every schema/source/coverage difference. `scripts/parity/evidence.test.ts` checks MCP framing, timeout/exit/errors and mixed mounting evidence; `src/parity/deep.test.ts` checks direct structural differences and exemptions.
