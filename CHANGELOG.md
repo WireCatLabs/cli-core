@@ -4,6 +4,29 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Mail pieces overlap, and the mail cleaner cuts less.** Each piece of a thread after the first opens with up
+  to `CHUNK_OVERLAP` characters from the end of the email before it (`cutChunks` takes the carry as an option;
+  messenger conversations are cut as before). Only RFC 3676's `-- ` starts a signature now, not a bare `--`, which
+  newsletters use between sections; a greeting is dropped only when the line is the greeting and a name; a line
+  after a sign-off that is a postscript, a question or a sentence keeps the sign-off and what follows. Mail
+  pieces change once more, so mail is embedded again.
+
+### Added
+
+- **Canonical project and label aliases (store version 3).** `store.knowledge.vocabulary`,
+  `resolveVocabulary`, `addVocabularyAlias` and `removeVocabularyAlias` reuse the existing aliases
+  table for owner projects and tags/topics. Exact Unicode aliases resolve to stable IDs; ambiguous
+  names and collisions are reported. Catalog reads have entry/byte budgets, cancellation and
+  preview fingerprints; owner alias writes check those fingerprints transactionally.
+- **Tag creation preflight.** `store.knowledge.tagPreflight` returns an existing canonical label or
+  lexical similarity suggestions for review. It loads no model and never merges similar labels.
+  Knowledge tagging, main-topic selection and label filters resolve exact aliases; project creation
+  rejects names or keys that would shadow an existing project alias.
+
 ## 0.239.0 — 11.10.2026
 
 ### Changed — may break callers
@@ -41,20 +64,6 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   <list>` saves a group store-wide; `config unset` removes it and `config show` lists it. From a list `search
   messages` skips mailboxes and `search mail` keeps only them. `MessageStore` gains `accountGroups`,
   `saveAccountGroup`, `profiles` and `saveProfile`.
-
-## Unreleased
-
-### Added
-
-- **Canonical project and label aliases (store version 3).** `store.knowledge.vocabulary`,
-  `resolveVocabulary`, `addVocabularyAlias` and `removeVocabularyAlias` reuse the existing aliases
-  table for owner projects and tags/topics. Exact Unicode aliases resolve to stable IDs; ambiguous
-  names and collisions are reported. Catalog reads have entry/byte budgets, cancellation and
-  preview fingerprints; owner alias writes check those fingerprints transactionally.
-- **Tag creation preflight.** `store.knowledge.tagPreflight` returns an existing canonical label or
-  lexical similarity suggestions for review. It loads no model and never merges similar labels.
-  Knowledge tagging, main-topic selection and label filters resolve exact aliases; project creation
-  rejects names or keys that would shadow an existing project alias.
 
 ## 0.237.0 — 11.10.2026
 

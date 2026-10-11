@@ -81,19 +81,36 @@ export const chunkHash = (text: string): string => createHash("sha256").update(t
  * characters. A message longer than the limit is split into overlapping pieces, a chunk each, so the
  * model reads all of a long note or mail rather than its beginning. Messages with no text add nothing,
  * and a conversation of only those has no chunk.
+ *
+ * With `carry`, each chunk after the first opens with up to that many characters from the end of the
+ * message before it, so a reply is read with what it answers; such a chunk may run `carry` over `limit`.
+ * A chunk depends only on the messages before it, so a new message never changes a chunk already closed.
  */
-export const cutChunks = (members: ChunkLine[], limit = CHUNK_CHARS, check?: () => void): Chunk[] => {
+export const cutChunks = (members: ChunkLine[], limit = CHUNK_CHARS, check?: () => void, carry = 0): Chunk[] => {
   const chunks: Chunk[] = []
   let open: ChunkLine[] = []
   let size = 0
+  let seeded = false
+  const seed = (member: ChunkLine) => {
+    if (carry === 0) return
+    const from = Math.max(0, member.text.length - carry)
+    const word = from === 0 ? 0 : member.text.slice(from).search(/\s\S/) + 1
+    const text = member.text.slice(from + Math.max(0, word)).trim()
+    if (!text) return
+    open = [{ ...member, text }]
+    size = lineOf(open[0] as ChunkLine).length
+    seeded = true
+  }
   const close = () => {
     const first = open[0]
     const last = open.at(-1)
-    if (!first || !last) return
+    if (!first || !last || (seeded && open.length === 1)) return
     const text = chunkTextOf(open)
     chunks.push({ firstId: first.id, lastId: last.id, text, hash: chunkHash(text) })
     open = []
     size = 0
+    seeded = false
+    seed(last)
   }
   for (const member of members) {
     check?.()
@@ -101,14 +118,18 @@ export const cutChunks = (members: ChunkLine[], limit = CHUNK_CHARS, check?: () 
     const length = lineOf(member).length
     if (length > limit) {
       close()
+      open = []
+      size = 0
+      seeded = false
       const room = Math.max(Math.floor(limit / 2), limit - (lineOf(member).length - member.text.length))
       for (const range of splitText(member.text, room, CHUNK_OVERLAP, check)) {
         const text = chunkTextOf([member], range)
         if (text) chunks.push({ firstId: member.id, lastId: member.id, range, text, hash: chunkHash(text) })
       }
+      seed(member)
       continue
     }
-    if (open.length > 0 && size + 1 + length > limit) close()
+    if (open.length > 0 && !(seeded && open.length === 1) && size + 1 + length > limit) close()
     size += (open.length > 0 ? 1 : 0) + length
     open.push(member)
   }

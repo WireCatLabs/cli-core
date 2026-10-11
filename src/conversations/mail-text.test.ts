@@ -46,4 +46,19 @@ describe("mailCore", () => {
     expect(mailCore("Добрый день!\n\nДоговор подписан.\n\nС уважением,\nИван", [])).toBe("Договор подписан.")
     expect(mailCore("Hola Ana,\n\nLa reunión es el lunes.\n\nUn saludo,\nLuis", [])).toBe("La reunión es el lunes.")
   })
+
+  it("keeps a greeting line that goes on with the message", () => {
+    expect(mailCore("Hi Bob, can you send the report today?", [])).toBe("Hi Bob, can you send the report today?")
+    expect(mailCore("Здравствуйте, Иван Петров. Вы получили:\n- счёт", [])).toContain("Вы получили:")
+  })
+
+  it("keeps the text after a bare -- divider, which newsletters use between sections", () => {
+    const issue = "Top story: the venue moved.\n--\nSecond story: the budget doubled for the offsite."
+    expect(mailCore(issue, [])).toBe(issue)
+  })
+
+  it("keeps a postscript, a question or a sentence after the sign-off", () => {
+    expect(mailCore("See you there.\n\nThanks,\nAlice\nP.S. the room is now B12", [])).toContain("P.S. the room")
+    expect(mailCore("See you there.\n\nCheers,\nAlice\nCan you bring the cables?", [])).toContain("bring the cables")
+  })
 })

@@ -1,5 +1,13 @@
 import type { Attachment, Metadata } from "@wirecat/cli-meetings"
-import { CHUNK_CHARS, type Chunk, type ChunkLine, chunkHash, cutChunks, splitText } from "../../conversations/chunks.js"
+import {
+  CHUNK_CHARS,
+  CHUNK_OVERLAP,
+  type Chunk,
+  type ChunkLine,
+  chunkHash,
+  cutChunks,
+  splitText,
+} from "../../conversations/chunks.js"
 import { mailCore } from "../../conversations/mail-text.js"
 import { formatLocator } from "../../domain/locator.js"
 import type { Message } from "../../domain/models.js"
@@ -465,7 +473,10 @@ const threadText = (database: CacheDatabase, threadId: number): ThreadText => {
  * piece before it keeps its text, its hash and so its vector.
  */
 const threadPieces = (database: CacheDatabase, threadId: number): Chunk[] =>
-  cutChunks(threadText(database, threadId).lines)
+  cutThread(threadText(database, threadId).lines)
+
+/** The one cut of a thread: what is stored, what is embedded and what a hit is read back from must agree. */
+const cutThread = (lines: ChunkLine[]): Chunk[] => cutChunks(lines, CHUNK_CHARS, undefined, CHUNK_OVERLAP)
 
 const chunkThread = (database: CacheDatabase, threadId: number, now: number) => {
   const before = database
@@ -482,7 +493,7 @@ const chunkThread = (database: CacheDatabase, threadId: number, now: number) => 
       `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope, account_id,
          occurred_at, created_at, updated_at) VALUES ('email_thread', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    for (const [position, piece] of cutChunks(lines).entries())
+    for (const [position, piece] of cutThread(lines).entries())
       insert.run(
         threadId,
         position,
