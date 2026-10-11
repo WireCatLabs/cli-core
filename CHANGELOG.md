@@ -6,6 +6,16 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Added
+
+- **Content reads point at memo.** Agent reads of messages, mail, notes, conversations and meetings
+  (`search all`, `search messages`, `search mail`, `search notes`, `messages list`, `messages context`,
+  `conversations show`, `meeting_show`, `meeting_transcript`, `meeting_summary`, `meetings_search`) add a
+  fixed `next_steps` line: if memo's server is connected, propose a decision, promise or preference with
+  `facts_add` or `memories_add`. The matching commands' `--help` names `memo facts add` and
+  `memo memories add`. The messenger server instructions mention it once. Exported as `SAVE_NEXT_STEPS`
+  and `SAVE_HELP` from `@wirecat/cli-messaging/meetings`.
+
 ## 0.248.0 — 11.10.2026
 
 ### Fixed

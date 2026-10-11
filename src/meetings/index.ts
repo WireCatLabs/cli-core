@@ -106,6 +106,7 @@ export {
   strongRecordingValidator,
   transferRecording,
 } from "./recording-transfer.js"
+export { SAVE_HELP, SAVE_NEXT_STEPS } from "./save-hints.js"
 export type {
   MeetingSearchIndexInput,
   MeetingSearchIndexReceipt,

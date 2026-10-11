@@ -5,6 +5,7 @@ import type { Messenger } from "../../cli/messenger/context.js"
 import { capability } from "../../cli/messenger/port.js"
 import { listed } from "../../cli/paging.js"
 import { isLocator } from "../../domain/locator.js"
+import { SAVE_NEXT_STEPS } from "../../meetings/index.js"
 import { readEvidencePacket } from "../../services/index.js"
 import { heard, hearForTool, modelWith } from "../../speech/hearing.js"
 import { searchServices } from "../search-sync.js"
@@ -44,6 +45,7 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
     }),
 
     messages_list: tool({
+      nextSteps: SAVE_NEXT_STEPS,
       title: "Read a chat",
       description:
         "Recent messages in a chat, oldest first. Does not mark anything read. For older messages pass " +
@@ -145,6 +147,7 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
     }),
 
     messages_context: tool({
+      nextSteps: SAVE_NEXT_STEPS,
       title: "Show a message",
       description:
         "One message by id, and optionally the messages either side of it, oldest first. The one asked for " +

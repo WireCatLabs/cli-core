@@ -93,6 +93,8 @@ interface Tool<S extends Input> {
   /** Over the session's connection. */
   online?: (adapter: MessengerAdapter, args: v.InferOutput<S>, defaults: Defaults) => Promise<object>
   outputLimit?: (args: Record<string, unknown>, defaults: Defaults) => number
+  /** Content reads only: added to the answer as `next_steps`. */
+  nextSteps?: string
   storedWhen?: (args: v.InferOutput<S>) => boolean
   /** Uses the local store; an explicit network option may use the retained session. */
   stored?: (
@@ -282,6 +284,11 @@ export const entryRunner = (registration: Registration): RunEntry => {
   }
 }
 
+const withNextSteps = (definition: AnyTool, result: object): object =>
+  definition.nextSteps === undefined || result instanceof Picture || result instanceof BinaryResource
+    ? result
+    : { ...result, next_steps: definition.nextSteps }
+
 const callRunner = ({ messenger, session, withStore, withServices, defaults, around }: Registration): RunEntry => {
   const where = { profile: defaults.settings.profile, env: defaults.env }
   return async (key, definition, args, ctx) => {
@@ -304,10 +311,13 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
           throw new CliError("permission_error", "messages.sync-first is not allowed by this profile")
         if (definition.custom) {
           const result = await definition.custom(args, { ...defaults, signal: ctx.mcpReq.signal }, ctx)
-          return answered(result, definition.outputLimit?.(args, defaults))
+          return answered(withNextSteps(definition, result), definition.outputLimit?.(args, defaults))
         }
         if (definition.local)
-          return answered(await definition.local(args, defaults), definition.outputLimit?.(args, defaults))
+          return answered(
+            withNextSteps(definition, await definition.local(args, defaults)),
+            definition.outputLimit?.(args, defaults),
+          )
         const { online, stored: local, served } = definition
         const stored = local && (!definition.storedWhen || definition.storedWhen(args)) ? local : undefined
         const result = stored
@@ -359,7 +369,7 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
                 : await session.use(run, (adapter, release) =>
                     (online as NonNullable<typeof online>)(adapter, args, { ...defaults, release }),
                   )
-        return answered(result, definition.outputLimit?.(args, defaults))
+        return answered(withNextSteps(definition, result), definition.outputLimit?.(args, defaults))
       }
       return around ? await around(key, definition, execute) : await execute()
     } catch (error) {

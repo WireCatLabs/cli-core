@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { addMeetingCommands, type MeetingCommandDeps } from "./cli/index.js"
 import { callMeetingTool, meetingTools } from "./mcp/index.js"
 import { meetingShow, meetingsList, meetingsSearch } from "./reads.js"
+import { SAVE_NEXT_STEPS } from "./save-hints.js"
 import { fakeMeetingSource, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
 
 const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
@@ -97,14 +98,15 @@ describe("MCP meeting reads", () => {
       await meetingsList(store, { accountId: 1, limit: 1, since: 0, until: 2000 }, 1),
     )
     const show = await callMeetingTool(store, "meeting_show", { meeting: d.meeting.id })
-    expect(show.structuredContent).toEqual(d)
-    expect(JSON.parse(show.content[0]?.text ?? "null")).toEqual(d)
+    expect(show.structuredContent).toEqual({ ...d, next_steps: SAVE_NEXT_STEPS })
+    expect(JSON.parse(show.content[0]?.text ?? "null")).toEqual({ ...d, next_steps: SAVE_NEXT_STEPS })
     expect(
       (await callMeetingTool(store, "meeting_transcript", { meeting: d.meeting.id })).structuredContent,
     ).toMatchObject({ items: d.transcripts })
-    expect((await callMeetingTool(store, "meetings_search", { query: "example" })).structuredContent).toEqual(
-      await meetingsSearch(store, "example"),
-    )
+    expect((await callMeetingTool(store, "meetings_search", { query: "example" })).structuredContent).toEqual({
+      ...(await meetingsSearch(store, "example")),
+      next_steps: SAVE_NEXT_STEPS,
+    })
     expect(
       (await callMeetingTool(store, "meeting_people", { query: "Alice", account_id: 1 })).structuredContent,
     ).toMatchObject({ items: d.participants })

@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-core"
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { SAVE_NEXT_STEPS } from "../../meetings/index.js"
 import { searchNotes } from "../../services/notes-search.js"
 import type { SearchedResource } from "../../services/search-all.js"
 import { meetingAccountOf, RESOURCES_SEARCHED_WITH_MEETINGS } from "../../services/search-all-meetings.js"
@@ -25,6 +26,7 @@ const timezone = v.optional(v.pipe(v.string(), v.description("the IANA timezone 
 /** One tool per `search` leaf; `search_all` is the one an agent reaches for first. */
 export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
   search_all: tool({
+    nextSteps: SAVE_NEXT_STEPS,
     title: "Search messages, mail and notes",
     description:
       "Messenger messages, mail and notes held in the local store, merged best first — only these three kinds, and " +
@@ -105,6 +107,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
   }),
 
   search_messages: tool({
+    nextSteps: SAVE_NEXT_STEPS,
     title: "Search messenger messages",
     description: MESSAGES_SEARCH_DESCRIPTION,
     input: messagesSearchInput(messenger),
@@ -117,6 +120,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
   }),
 
   search_mail: tool({
+    nextSteps: SAVE_NEXT_STEPS,
     title: "Search mail",
     description:
       "Search the mail imported into the local store (memo mail import), in the same query language as " +
@@ -130,6 +134,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
   }),
 
   search_notes: tool({
+    nextSteps: SAVE_NEXT_STEPS,
     title: "Search notes",
     description:
       "Search the notes — written in memo, or imported from a notes folder — by words and, with the local text " +

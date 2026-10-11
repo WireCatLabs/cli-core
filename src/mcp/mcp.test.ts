@@ -22,6 +22,7 @@ import { settingsFor } from "../cli/settings.js"
 import { skillCommand } from "../cli/skill-command.js"
 import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
+import { SAVE_NEXT_STEPS } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { parseLucene } from "../search/lucene/parser.js"
 import type { SendGuard } from "../sends/guard.js"
@@ -958,6 +959,7 @@ describe("the MCP server", () => {
       page: 1,
       limit: 20,
       hasMore: false,
+      next_steps: SAVE_NEXT_STEPS,
     })
     expect((await call("chat_status")).body.account).toBe("500")
     expect(telegram.opened()).toBe(1)
@@ -1324,7 +1326,7 @@ describe("the MCP server", () => {
     expect(located.body).toEqual(context.body)
     expect((await call("chat_messages_context", { chat: "msg:chat/600/7/5", thread: true })).isError).toBe(true)
     const search = await call("chat_search_messages", { text: 'text:"synthetic graph message 5"', thread: true })
-    expect(search.body.items[0].thread).toEqual(context.body)
+    expect(search.body.items[0].thread).toEqual({ ...context.body, next_steps: undefined })
     const capped = await call("chat_messages_context", { chat: "7", message: "5", thread: true, thread_hops: 0 })
     expect(capped.body).toMatchObject({ items: [{ id: "5" }], stopped: ["hops"] })
     expect(markRead).not.toHaveBeenCalled()
@@ -1340,7 +1342,7 @@ describe("the MCP server", () => {
           {} as SendGuard,
         ),
       )
-      expect(await direct.messages.thread("7", "5")).toEqual(context.body)
+      expect(await direct.messages.thread("7", "5")).toEqual({ ...context.body, next_steps: undefined })
     } finally {
       await store.close()
     }
