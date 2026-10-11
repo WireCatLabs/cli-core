@@ -12,6 +12,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   cli-core 0.20.0's code. The peer is now `@wirecat/cli-base >=0.21.0 <0.22.0`. A CLI moves its own imports,
   `biome.json` and tsconfig `extends` to `@wirecat/cli-base` together with this version, or it installs two
   framework copies and `instanceof CliError` fails between them.
+- **`search all` answers an excerpt of a message or mail in `text`**, about 240 characters around the match, where it
+  gave the first 2,000 characters; `messages show <ref>` opens the whole message or email.
 
 ### Added
 
@@ -28,11 +30,6 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 - Hints that point to importing mail name the account: `memo mail <account> import --since <date>`.
   memo refuses the old `memo mail import` form without an account.
-
-### Changed — may break callers
-
-- **`search all` answers an excerpt of a message or mail in `text`**, about 240 characters around the match, where it
-  gave the first 2,000 characters; `messages show <ref>` opens the whole message or email.
 
 ## 0.251.0 — 11.10.2026
 
