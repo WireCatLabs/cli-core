@@ -28,7 +28,7 @@ import { meetingIdentityPk } from "./identities.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
-import { type MeetingReadCapabilities, meetingReadsOver } from "./meeting-reads.js"
+import { type MeetingReadCapabilities, meetingReadSnapshot, meetingReadsOver } from "./meeting-reads.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
@@ -543,6 +543,25 @@ export const indexedText = (database: CacheDatabase, type: string, id: number): 
  * Indexes what the queue holds, words only. A superseded transcript or a deleted meeting stays indexed and is
  * left out when searching, so changing them does not have to queue every row again.
  */
+const legacyTextBytes = (database: CacheDatabase, type: string, id: number): number => {
+  const columns = type === "meeting_summary" ? ["title", "overview", "sections", "next_steps", "content"] : ["text"]
+  const table =
+    type === "meeting_transcript_row"
+      ? "meeting_transcript_rows"
+      : type === "meeting_chat_message"
+        ? "meeting_chat_messages"
+        : "meeting_summaries"
+  const expression = columns.map((column) => `coalesce(length(CAST(${column} AS BLOB)),0)`).join("+")
+  return Number(database.prepare(`SELECT ${expression} AS bytes FROM ${table} WHERE id=?`).get(id)?.bytes ?? 0)
+}
+const legacyBudget = (size: number): void => {
+  if (!Number.isSafeInteger(size) || size < 0 || size > 64 * 1024 ** 2)
+    throw new CliError(
+      "validation_error",
+      "Meeting text exceeds legacy search limits; use bounded searchHits/indexSearch pages",
+    )
+}
+
 export const drainMeetingIndex = (database: CacheDatabase, batch = 500): number => {
   const next = database.prepare("SELECT indexable_type, id FROM meeting_index_pending LIMIT ?")
   const drop = database.prepare("DELETE FROM meeting_words WHERE rowid = ?")
@@ -555,6 +574,7 @@ export const drainMeetingIndex = (database: CacheDatabase, batch = 500): number 
       for (const { indexable_type: type, id } of queued) {
         const kind = String(type)
         if (kind in INDEX_CODES) {
+          legacyBudget(legacyTextBytes(database, kind, Number(id)))
           invalidateMeetingStems(database, kind, Number(id))
           const rowid = meetingRowid(kind as Indexable, Number(id))
           drop.run(rowid)
@@ -583,38 +603,55 @@ const search = (database: CacheDatabase, query: string, filter?: MeetingFilter):
   const match = wordsQuery(query)
   if (match === null) return []
   drainMeetingIndex(database)
-  const picked = filtered(filter)
-  const rows = database
-    .prepare(
-      `WITH hit AS (SELECT rowid AS r FROM meeting_words WHERE meeting_words MATCH ?),
+  return meetingReadSnapshot(database, () => {
+    const picked = filtered(filter)
+    const rows = database
+      .prepare(
+        `WITH hit AS (SELECT rowid AS r FROM meeting_words WHERE meeting_words MATCH ?),
        picked AS (SELECT id, row_number() OVER (ORDER BY coalesce(started_at, 0) DESC, id) AS n FROM (${picked.sql}))
-       SELECT p.n, 0 AS kind, t.id AS a, r.position AS b, r.id, t.meeting_id, r.start_ms, r.text
+       SELECT p.n, 0 AS kind, t.id AS a, r.position AS b, r.id, t.meeting_id, r.start_ms, coalesce(length(CAST(r.text AS BLOB)),0) AS bytes
          FROM hit h JOIN meeting_transcript_rows r ON h.r % 4 = 1 AND r.id = h.r / 4
          JOIN meeting_transcripts t ON t.id = r.meeting_transcript_id
            AND t.superseded_at IS NULL AND t.deleted_at IS NULL
          JOIN picked p ON p.id = t.meeting_id
        UNION ALL
-       SELECT p.n, 1, c.id, 0, c.id, c.meeting_id, NULL, c.text
+       SELECT p.n, 1, c.id, 0, c.id, c.meeting_id, NULL, coalesce(length(CAST(c.text AS BLOB)),0)
          FROM hit h JOIN meeting_chat_messages c ON h.r % 4 = 2 AND c.id = h.r / 4
          JOIN picked p ON p.id = c.meeting_id
        UNION ALL
-       SELECT p.n, 2, s.id, 0, s.id, s.meeting_id, NULL, NULL
+       SELECT p.n, 2, s.id, 0, s.id, s.meeting_id, NULL, coalesce(length(CAST(s.title AS BLOB)),0)+coalesce(length(CAST(s.overview AS BLOB)),0)+coalesce(length(CAST(s.sections AS BLOB)),0)+coalesce(length(CAST(s.next_steps AS BLOB)),0)+coalesce(length(CAST(s.content AS BLOB)),0)
          FROM hit h JOIN meeting_summaries s ON h.r % 4 = 3 AND s.id = h.r / 4
          JOIN picked p ON p.id = s.meeting_id
-       ORDER BY 1, 2, 3, 4`,
-    )
-    .all(`normalized_text : (${match})`, ...picked.params)
-  const summary = database.prepare("SELECT * FROM meeting_summaries WHERE id = ?")
-  const scopes = ["transcript", "chat", "summary"] as const
-  return rows.map((row) => {
-    const scope = scopes[Number(row.kind)] as SearchHit["scope"]
-    return {
-      meetingId: Number(row.meeting_id),
-      scope,
-      id: Number(row.id),
-      text: scope === "summary" ? summaryText(summaryOf(summary.get(Number(row.id)) as Row)) : String(row.text),
-      startMs: int(row.start_ms),
+       ORDER BY 1, 2, 3, 4 LIMIT 10001`,
+      )
+      .all(`normalized_text : (${match})`, ...picked.params)
+    if (rows.length > 10000)
+      throw new CliError("validation_error", "Meeting search exceeds 10000 legacy hits; use bounded searchHits pages")
+    let total = 0
+    for (const row of rows) {
+      total += Number(row.bytes)
+      legacyBudget(total)
     }
+    const scopes = ["transcript", "chat", "summary"] as const
+    return rows.map((row) => {
+      const scope = scopes[Number(row.kind)] as SearchHit["scope"]
+      return {
+        meetingId: Number(row.meeting_id),
+        scope,
+        id: Number(row.id),
+        text:
+          indexedText(
+            database,
+            scope === "transcript"
+              ? "meeting_transcript_row"
+              : scope === "chat"
+                ? "meeting_chat_message"
+                : "meeting_summary",
+            Number(row.id),
+          ) ?? "",
+        startMs: int(row.start_ms),
+      }
+    })
   })
 }
 
