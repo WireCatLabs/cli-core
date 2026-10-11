@@ -67,9 +67,13 @@ export const accountsOfKind = (
   if (listed && mail.length === 0)
     throw new CliError("validation_error", "the accounts named hold no mailbox — search mail reads mail only")
   if (mail.length === 0)
-    throw new CliError("not_found", "no mail in the store yet — `memo mail import --since <date>` imports it", {
-      reason: NO_MAIL,
-    })
+    throw new CliError(
+      "not_found",
+      "no mail in the store yet — `memo mail <account> import --since <date>` imports it",
+      {
+        reason: NO_MAIL,
+      },
+    )
   const address = mailAccount?.trim().toLowerCase()
   const chosenMail = address === undefined ? mail : mail.filter(({ account }) => account === address)
   if (chosenMail.length === 0)

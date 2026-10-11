@@ -1745,7 +1745,7 @@ describe("the shared read commands", () => {
     expect(mail.code).toBe(0)
     expect(mail.stderr.join("\n")).not.toContain("store fetch")
     expect(mail.stderr.join("\n").match(/mail search covers imported messages only/g)).toHaveLength(1)
-    expect(mail.stderr.join("\n")).toContain("memo mail import --since <date>")
+    expect(mail.stderr.join("\n")).toContain("memo mail <account> import --since <date>")
     const answer = JSON.parse(mail.stdout[0] ?? "")
     expect(answer.items).toHaveLength(2)
     expect(answer.items.every(({ locator }: { locator: string }) => locator.startsWith("msg:email/"))).toBe(true)
