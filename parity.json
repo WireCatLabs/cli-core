@@ -3854,13 +3854,13 @@
     "tasks add": {
       "in": "all",
       "options": {
-        "--type": {
-          "in": "all"
-        },
         "--check": "all",
         "--description": "all",
         "--due": "all",
-        "--title": "all"
+        "--title": "all",
+        "--type": {
+          "in": "all"
+        }
       }
     },
     "tasks agenda": {
