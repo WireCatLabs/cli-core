@@ -1,10 +1,16 @@
 #!/usr/bin/env sh
-# Marks every version of each @leemour package as moved to its @wirecat name, once the @wirecat package has
+# Marks packages in an explicit source scope as moved to WireCat, once the destination package has
 # a real release (not only the 0.0.0 placeholder). Deprecated versions still install; npm prints the
 # message. Never unpublishes. Safe to run again: it skips what is not ready and repeats what is.
 #
-#   bin/deprecate-leemour
+#   bin/deprecate-scope @previous-scope
 set -eu
+
+source_scope=${1:-}
+if [ "$#" -ne 1 ] || [ "$source_scope" = "@wirecat" ] || ! printf '%s\n' "$source_scope" | grep -Eq '^@[a-z0-9][a-z0-9-]*$'; then
+  echo "usage: bin/deprecate-scope @previous-scope (the destination scope cannot be deprecated)" >&2
+  exit 2
+fi
 
 packages="cli-core cli-tasks cli-messaging cli-messaging-sqlite cli-messaging-onnx tg-cli max-cli cli-memo"
 
@@ -25,8 +31,8 @@ printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$work/.npmrc"
 for name in $packages; do
   latest=$(npm view "@wirecat/$name" version --prefer-online 2>/dev/null || true)
   case "$latest" in
-    "" | 0.0.0) echo "waiting    @leemour/$name — @wirecat/$name has no release yet"; continue ;;
+    "" | 0.0.0) echo "waiting    $source_scope/$name — @wirecat/$name has no release yet"; continue ;;
   esac
-  npm deprecate "@leemour/$name" "Moved to @wirecat/$name: npm install @wirecat/$name" --userconfig "$work/.npmrc"
-  echo "deprecated @leemour/$name → @wirecat/$name@$latest"
+  npm deprecate "$source_scope/$name" "Moved to @wirecat/$name: npm install @wirecat/$name" --userconfig "$work/.npmrc"
+  echo "deprecated $source_scope/$name → @wirecat/$name@$latest"
 done
