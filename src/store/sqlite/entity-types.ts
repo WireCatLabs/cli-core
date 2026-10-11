@@ -42,7 +42,7 @@ export interface OrphanPointers {
 }
 
 /** Each `<name>_type` + `<name>_id` pair in the store, found from the tables so a new one is checked too. */
-const pointerPairs = (database: CacheDatabase): { table: string; pointer: string }[] =>
+export const pointerPairs = (database: CacheDatabase): { table: string; pointer: string }[] =>
   database
     .prepare(
       "SELECT m.name AS tbl, substr(c.name, 1, length(c.name) - 5) AS pointer FROM sqlite_master m " +

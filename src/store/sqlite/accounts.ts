@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-core"
+import type { CacheDatabase } from "../driver.js"
 import type { AccountKey, StoredAccount } from "../store.js"
 import { and, asc, eq, inArray, sql } from "./drizzle/core.js"
+import { pointerPairs } from "./entity-types.js"
 import type { StoreContext } from "./open.js"
 import {
   accountIdentities,
@@ -92,7 +94,8 @@ export const storedAccount = ({ orm }: StoreContext, { provider, account }: Acco
 }
 
 /** Everything the account holds, children before parents: the foreign keys are enforced. */
-export const purgeAccount = ({ orm }: StoreContext, accountKey: number): void => {
+export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number): void => {
+  const unseenBefore = unreferenced(database, "identities")
   const chatsOf = orm.select({ pk: chats.id }).from(chats).where(eq(chats.accountId, accountKey))
   const messagesOf = orm.select({ pk: messages.id }).from(messages).where(eq(messages.accountId, accountKey))
   orm.delete(botUpdates).where(eq(botUpdates.accountId, accountKey)).run()
@@ -150,8 +153,80 @@ export const purgeAccount = ({ orm }: StoreContext, accountKey: number): void =>
   // The inbox project and its tasks are the owner's; only the tie to the account goes.
   orm.update(projects).set({ accountId: null }).where(eq(projects.accountId, accountKey)).run()
   orm.delete(accounts).where(eq(accounts.id, accountKey)).run()
+  dropOrphanPeople(database, unseenBefore)
   orm.run(
     sql`DELETE FROM embeddings WHERE content_hash IN (SELECT value FROM json_each(${JSON.stringify(hashes)}))
       AND NOT EXISTS (SELECT 1 FROM chunks k WHERE k.content_hash = embeddings.content_hash)`,
   )
+}
+
+/** Identity and person rows a person's own record keeps, not evidence that anyone saw them. */
+const OWN = new Set(["identity_links", "identity_link_events", "identity_revisions"])
+
+/** Every row that points at `table`: foreign keys and `<name>_type` pointers, read from the store so a new one counts. */
+const referencesTo = (database: CacheDatabase, table: "identities" | "persons", skip: Set<string>): string => {
+  const keys = database
+    .prepare(
+      `SELECT m.name AS tbl, f."from" AS col FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
+        WHERE m.type = 'table' AND f."table" = ?`,
+    )
+    .all(table)
+    .filter((row) => !skip.has(String(row.tbl)))
+    .map((row) => `SELECT "${String(row.col)}" AS id FROM "${String(row.tbl)}"`)
+  const type = table === "identities" ? "identity" : "person"
+  const pointers = pointerPairs(database).map(
+    ({ table: tbl, pointer }) => `SELECT ${pointer}_id AS id FROM "${tbl}" WHERE ${pointer}_type = '${type}'`,
+  )
+  return [...keys, ...pointers].join(" UNION ")
+}
+
+const unreferenced = (database: CacheDatabase, table: "identities"): Set<number> =>
+  new Set(
+    database
+      .prepare(
+        `SELECT id FROM ${table} WHERE id NOT IN (SELECT id FROM (${referencesTo(database, table, OWN)}) WHERE id IS NOT NULL)`,
+      )
+      .all()
+      .map(({ id }) => Number(id)),
+  )
+
+/**
+ * People only the purged account had seen go with it. An identity stays while anything else points at it
+ * (another account, a tag, a note, a link), or while its person is kept: the owner, a person something
+ * points at, or one linked to an identity that stays.
+ */
+const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<number>) => {
+  const orphans = [...unreferenced(database, "identities")].filter((id) => !unseenBefore.has(id))
+  if (orphans.length === 0) return
+  const ids = JSON.stringify(orphans)
+  const personRefs = referencesTo(database, "persons", OWN)
+  const kept = new Set(
+    database
+      .prepare(
+        `SELECT DISTINCT l.identity_id AS id FROM identity_links l JOIN persons p ON p.id = l.person_id
+          WHERE l.identity_id IN (SELECT value FROM json_each(?)) AND (p.owner <> 0
+            OR p.id IN (SELECT id FROM (${personRefs}) WHERE id IS NOT NULL)
+            OR EXISTS (SELECT 1 FROM identity_links o WHERE o.person_id = p.id
+              AND o.identity_id NOT IN (SELECT value FROM json_each(?))))`,
+      )
+      .all(ids, ids)
+      .map(({ id }) => Number(id)),
+  )
+  const gone = JSON.stringify(orphans.filter((id) => !kept.has(id)))
+  const persons = database
+    .prepare(
+      "SELECT DISTINCT person_id AS id FROM identity_links WHERE identity_id IN (SELECT value FROM json_each(?))",
+    )
+    .all(gone)
+    .map(({ id }) => Number(id))
+  for (const table of ["identity_revisions", "identity_link_events", "identity_links"])
+    database.prepare(`DELETE FROM ${table} WHERE identity_id IN (SELECT value FROM json_each(?))`).run(gone)
+  database.prepare("DELETE FROM identities WHERE id IN (SELECT value FROM json_each(?))").run(gone)
+  database
+    .prepare(
+      `DELETE FROM persons WHERE id IN (SELECT value FROM json_each(?)) AND owner = 0
+        AND NOT EXISTS (SELECT 1 FROM identity_links l WHERE l.person_id = persons.id)
+        AND id NOT IN (SELECT id FROM (${referencesTo(database, "persons", new Set(["identity_links"]))}) WHERE id IS NOT NULL)`,
+    )
+    .run(JSON.stringify(persons))
 }
