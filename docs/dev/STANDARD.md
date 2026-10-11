@@ -72,6 +72,11 @@ guessable from the others.
    A namespace groups one cross-resource purpose; `stats` groups statistics. Subresources are
    allowed when they identify a part of the resource (`chats members list`), not an implementation
    detail. A group without a leaf command shows help, never runs a hidden default action.
+   **The profile is chosen, never assumed.** A command that acts for one of several accounts or
+   profiles takes it explicitly (the first word, or the tool's profile variable); none given is an
+   error that lists the profiles — never the first in the config, never an implicit `default`. A read
+   across accounts covers all of them and says so. The owner's rule since 2026-10-11; today tg and
+   max still fall back to `default`, an existing gap.
    The resource is a noun: **plural** for a
    collection (`chats`, `contacts`, `messages`, `polls`, `reactions`, `recipients`, `replies`, `sends`,
    `runs`, `topics`, `models`, `tags`, `searches`, `copies`, `attachments`, `tasks`), **singular** for what a profile has exactly
