@@ -114,7 +114,7 @@
     }
   },
   "scripts": {
-    "build": "tsc --build && node scripts/bundle-drizzle.ts && node scripts/copy-snowball.ts && node scripts/copy-chart-fonts.ts",
+    "build": "tsc --build --force && node scripts/bundle-drizzle.ts && node scripts/copy-snowball.ts && node scripts/copy-chart-fonts.ts",
     "check:dist": "node scripts/check-dist.ts",
     "typecheck": "tsc --build --force --emitDeclarationOnly && tsc -p tsconfig.test.json && tsc -p tsconfig.scripts.json",
     "lint": "biome check .",
