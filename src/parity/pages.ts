@@ -1,4 +1,4 @@
-import type { CommandInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { type Cli, type CommandsJson, expected, type Manifest } from "./manifest.js"
 
 const optionsOf = (flags: string): string[] => flags.match(/--[a-z][a-z-]*/g) ?? []

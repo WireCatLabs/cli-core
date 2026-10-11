@@ -1,6 +1,6 @@
 import { constants } from "node:fs"
 import { type FileHandle, lstat, open } from "node:fs/promises"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 // Node 22's Windows path stat uses a 64-bit volume serial; handle stat uses its low DWORD.
 const deviceOf = (dev: bigint) => (process.platform === "win32" ? BigInt.asUintN(32, dev) : dev)

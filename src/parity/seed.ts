@@ -1,4 +1,4 @@
-import type { CommandInfo, OptionInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo, OptionInfo } from "@wirecat/cli-base/commands"
 import {
   type Cli,
   type CommandRow,

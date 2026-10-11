@@ -1,4 +1,4 @@
-import { Credentials, pathsAreOverridden, resolvePaths } from "@wirecat/cli-core"
+import { Credentials, pathsAreOverridden, resolvePaths } from "@wirecat/cli-base"
 import { type AppIdentity, envName } from "./app.js"
 
 /**

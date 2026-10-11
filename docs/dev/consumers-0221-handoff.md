@@ -9,7 +9,7 @@ pin 0.218.0. Separately, `biome.json` in tg-cli, max-cli, cli-memo, cli-tasks an
 `!**/.worktrees`, which also matches a worktree's own path, so lint inside a worktree checks no file. The fix is
 checked and sits uncommitted in a worktree of each repository. This work needs a session allowed to write in
 those repositories; a session started from cli-meetings is not (its edit hook allows cli-meetings, cli-messaging
-and cli-core only).
+and cli-base only).
 
 ## 2. Orient in one call
 

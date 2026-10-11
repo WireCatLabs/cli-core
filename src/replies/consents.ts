@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-core"
+import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { AppIdentity } from "../cli/app.js"
 

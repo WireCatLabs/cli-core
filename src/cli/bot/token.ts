@@ -5,7 +5,7 @@ import {
   type KeyringStore,
   pathsAreOverridden,
   resolvePaths,
-} from "@wirecat/cli-core"
+} from "@wirecat/cli-base"
 import { type AppIdentity, envName } from "../app.js"
 
 export interface BotTokenStoreOptions {

@@ -1,6 +1,6 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { resolvePaths } from "@wirecat/cli-core"
+import { resolvePaths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import { withFileLock } from "./file-lock.js"
 

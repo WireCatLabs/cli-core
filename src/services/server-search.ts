@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { capability, type MessengerAdapter, type ServerQuery } from "../cli/messenger/port.js"
 import type { Chat, Id, MessageHit } from "../domain/models.js"
 import type { ResolvedNode } from "../search/lucene/resolved.js"

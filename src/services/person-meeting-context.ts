@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference } from "../domain/meeting-reference.js"
 import type { MessageStore } from "../store/store.js"
 import { checkMeetingCancelled, type MeetingEvidenceCue, readMeetingEvidence } from "./meeting-evidence.js"

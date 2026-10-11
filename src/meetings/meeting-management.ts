@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
 
 export interface ManagedMeeting {

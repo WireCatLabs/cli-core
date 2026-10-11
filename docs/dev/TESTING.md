@@ -10,7 +10,7 @@ pnpm test:slow      # the 20 slowest tests and the 10 slowest files
 pnpm smoke:bun      # the SQLite seam, the store and run records, executed under Bun
 ```
 
-CI runs all of them except `test:slow`, plus `pnpm build` and a secret scan — [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), through cli-core's shared `node-ci.yml`.
+CI runs all of them except `test:slow`, plus `pnpm build` and a secret scan — [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), through cli-base's shared `node-ci.yml`.
 
 ## No test touches the owner's store
 

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { listStart } from "../../cli/messenger/after.js"
 import type { Messenger } from "../../cli/messenger/context.js"

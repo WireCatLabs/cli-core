@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { type EvidencePacket, prepareEvidencePacket } from "./evidence.js"

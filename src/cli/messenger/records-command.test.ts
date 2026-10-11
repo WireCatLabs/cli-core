@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-core"
+import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { CallRecord, Chat, Message } from "../../domain/models.js"
 import { run } from "../program.js"

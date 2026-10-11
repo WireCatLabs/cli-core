@@ -1,4 +1,4 @@
-import type { CommandInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
 import type { CommandsJson, Manifest } from "./manifest.js"
 import { pageProblems } from "./pages.js"

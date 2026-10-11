@@ -318,7 +318,7 @@ export const mountingEvidence = (root: string, groups: string[], sources: Source
       : undefined
     const entries = sources.filter((one) => one.file === file)
     const sharedReferences = entries.filter(
-      (one) => one.kind === "import" && /@wirecat\/(?:cli-messaging|cli-core)/.test(one.text),
+      (one) => one.kind === "import" && /@wirecat\/(?:cli-messaging|cli-base)/.test(one.text),
     )
     const localRegistrations = entries.filter((one) => one.kind === "registration")
     return {

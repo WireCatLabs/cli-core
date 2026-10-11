@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { type CacheDatabase, PRAGMAS } from "./driver.js"
 
 /**

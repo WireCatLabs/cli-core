@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { contentHash } from "./ingest.js"
 import { dispatchMeetingMutation, type MeetingMutationOptions } from "./meeting-management.js"
 import type {

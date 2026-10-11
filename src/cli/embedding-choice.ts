@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { type AISettings, endpoint } from "../analysis/settings.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import { remoteModel } from "../embeddings/remote.js"

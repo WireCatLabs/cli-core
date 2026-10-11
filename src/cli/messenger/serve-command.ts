@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { holdLock, lockPath, releaseLock, takeLock } from "../../background/lock.js"
 import type { ChatKind, Message, MessageEvent } from "../../domain/models.js"

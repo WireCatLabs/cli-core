@@ -22,7 +22,7 @@ export interface RequestEvent {
   counts?: Record<string, number>
   durationMs?: number
   outcome?: "ok" | "error"
-  /** cli-core's code — `timeout`, `provider_error`. Never the message: a messenger quotes our payload. */
+  /** cli-base's code — `timeout`, `provider_error`. Never the message: a messenger quotes our payload. */
   errorCode?: string
   /** The messenger's own name for a refusal, when it is shaped like one (`providerErrorKey`). */
   providerError?: string

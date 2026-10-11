@@ -1,6 +1,6 @@
 import { lstat, readdir, realpath } from "node:fs/promises"
 import { basename, join, relative, sep } from "node:path"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import { NOT_FILES } from "../domain/attachments.js"
 import { refusedPlace } from "../sends/upload.js"

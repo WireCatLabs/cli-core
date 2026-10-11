@@ -1,4 +1,4 @@
-import { CliError, type ErrorCode } from "@wirecat/cli-core"
+import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { snapshotMeetingScope } from "./provider.js"
 import type {
   RecordingArchiveResult,

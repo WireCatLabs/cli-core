@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { servingProfiles } from "../../background/lock.js"
 import type { AdminRight, Chat, GroupSettings, Id, Provider } from "../../domain/models.js"

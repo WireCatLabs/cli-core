@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import type { Settings } from "../cli/settings.js"
 import type { Id } from "../domain/models.js"

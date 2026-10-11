@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 const AGO = /^(\d+)(m|h|d)$/
 const AGO_MS: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000 }

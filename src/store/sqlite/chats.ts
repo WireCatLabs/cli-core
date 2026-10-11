@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../../domain/channel-tags.js"
 import type { Chat, Id, Member, Page } from "../../domain/models.js"
 import type { AccountKey, StoredChatFilter } from "../store.js"

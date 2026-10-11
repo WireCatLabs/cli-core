@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import type { StatsPeriod } from "../../services/chat-stats.js"
 import { EVENTS_DAYS } from "../../services/chats.js"

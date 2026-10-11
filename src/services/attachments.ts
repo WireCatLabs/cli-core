@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { constants } from "node:fs"
 import { open, readFile, stat } from "node:fs/promises"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { directoryPaths } from "../attachments/directory.js"
 import { documentExtractor, documentKind } from "../attachments/documents.js"
 import {

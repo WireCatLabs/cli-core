@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { CounterState } from "../../domain/counters.js"
 import {
   RANKING_GRAPH_LIMITS,

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { recalledAccount } from "../cli/messenger/accounts.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { MessengerAdapter } from "../cli/messenger/port.js"

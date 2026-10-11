@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import type { ServiceDeps } from "./deps.js"
 import { embeddingsService, type Refreshed } from "./embeddings.js"

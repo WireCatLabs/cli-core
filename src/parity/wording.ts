@@ -1,4 +1,4 @@
-import type { CommandInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { type CommandsJson, type Entry, expected, longName, type Manifest } from "./manifest.js"
 
 const descriptions = (program: CommandsJson): Map<string, string> => {

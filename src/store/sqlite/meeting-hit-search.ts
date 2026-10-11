@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { endpoint } from "./endpoint.js"
 import { openai } from "./openai.js"
 import { type ModelAdapter, type ModelAnswer, type ModelRequest, type ModelTarget, validateImages } from "./types.js"

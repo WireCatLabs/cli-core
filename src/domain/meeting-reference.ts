@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 /** Durable within this store: a cue belongs to one retained transcript revision. */
 export interface MeetingReference {

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Attachment, ChatKind, Id, Message, Page, WindowedMessage } from "../../domain/models.js"
 import type { ChatActivity, ChatStats, SenderChatStats } from "../store.js"
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or, type SQL, sql } from "./drizzle/core.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Chat, Message, Provider } from "../../domain/models.js"
 import { isBotProvider } from "../../search/query.js"
 import type { AccountKey, IngestedVia, MessageStore, PersonFacts } from "../../store/index.js"

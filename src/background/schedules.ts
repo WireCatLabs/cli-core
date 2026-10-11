@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { CliError, writeSecurely } from "@wirecat/cli-core"
+import { CliError, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import type { ServerSystem } from "./system.js"
 

@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError, captureStreams } from "@wirecat/cli-core"
+import { CliError, captureStreams } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it } from "vitest"
 import { rememberAccount } from "../cli/messenger/accounts.js"
 import { contactsCommand } from "../cli/messenger/contacts-command.js"

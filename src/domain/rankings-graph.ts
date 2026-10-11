@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { rankingQuestion } from "./rankings-options.js"
 
 export interface RankingGraphLink {

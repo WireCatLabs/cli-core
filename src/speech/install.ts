@@ -4,7 +4,7 @@ import { rename, rm } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
-import { CliError, resolvePaths } from "@wirecat/cli-core"
+import { CliError, resolvePaths } from "@wirecat/cli-base"
 import { type ModelFile, type SpeechModel, VAD } from "./models.js"
 
 /**

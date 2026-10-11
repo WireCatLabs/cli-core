@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { endpoint } from "./endpoint.js"
 import type { ModelTarget } from "./types.js"

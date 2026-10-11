@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { capability, type ProfileChange } from "../cli/messenger/port.js"
 import type { Account, AccountSession, Id, PrivacySettings } from "../domain/models.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"

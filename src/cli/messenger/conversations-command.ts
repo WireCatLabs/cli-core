@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { analysisConsents } from "../../analysis/consents.js"
 import { openAnalysis, providerIdentity } from "../../analysis/provider.js"

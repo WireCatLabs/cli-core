@@ -1,5 +1,5 @@
-import { CliError } from "@wirecat/cli-core"
-import { annotate } from "@wirecat/cli-core/commands"
+import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Argument, Command } from "commander"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"

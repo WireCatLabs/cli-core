@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream"
-import { CliError, captureStreams } from "@wirecat/cli-core"
-import { annotate as described } from "@wirecat/cli-core/commands"
+import { CliError, captureStreams } from "@wirecat/cli-base"
+import { annotate as described } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { readSecret } from "../terminal/prompt.js"

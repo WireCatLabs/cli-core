@@ -1,5 +1,5 @@
-import { captureStreams } from "@wirecat/cli-core"
-import { annotate } from "@wirecat/cli-core/commands"
+import { captureStreams } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { commandsCommand } from "./commands-command.js"

@@ -1,4 +1,4 @@
-import type { Renderer, RenderFormat } from "@wirecat/cli-core"
+import type { Renderer, RenderFormat } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { type PackageUpgradePorts, type PackageUpgradeResult, upgradePackage } from "../services/package-upgrade.js"
 import type { AppIdentity } from "./app.js"

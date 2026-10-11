@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 export const RETENTION_TOLERANCE = 86_400_000
 export interface RetentionOptions {

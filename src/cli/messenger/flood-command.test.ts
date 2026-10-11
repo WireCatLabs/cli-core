@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-core"
+import { captureStreams } from "@wirecat/cli-base"
 import { expect, it } from "vitest"
 import { FloodMemory } from "../../sends/flood.js"
 import { run } from "../program.js"

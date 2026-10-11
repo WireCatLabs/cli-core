@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError, captureStreams } from "@wirecat/cli-core"
+import { CliError, captureStreams } from "@wirecat/cli-base"
 import { Command, Option } from "commander"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { baseContext, environmentOf } from "./context.js"
@@ -13,7 +13,7 @@ import { settingsFor } from "./settings.js"
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "A test CLI", version: "1.2.3" }
 const { resolveSettings } = settingsFor(app)
 
-/** An error as another copy of cli-core builds it: the same name and code, a different class. */
+/** An error as another copy of cli-base builds it: the same name and code, a different class. */
 const foreignFailure = (code: string, message: string) =>
   Object.assign(new Error(message), { name: "CliError", code, details: { candidates: [{ id: "1" }] } })
 
@@ -35,7 +35,7 @@ const call = async (argv: string[], action: (command: Command) => Promise<void> 
 }
 
 describe("running a messenger CLI", () => {
-  it("**knows a CliError built by another copy of cli-core**, and keeps its code and details", async () => {
+  it("**knows a CliError built by another copy of cli-base**, and keeps its code and details", async () => {
     const { code, stdout, stderr } = await call(["chats", "list"], async () => {
       throw foreignFailure("validation_error", '"Va" matches 2 chats')
     })

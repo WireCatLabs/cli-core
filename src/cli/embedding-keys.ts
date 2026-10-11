@@ -1,4 +1,4 @@
-import { type CredentialSource, Credentials, pathsAreOverridden, resolvePaths } from "@wirecat/cli-core"
+import { type CredentialSource, Credentials, pathsAreOverridden, resolvePaths } from "@wirecat/cli-base"
 import { type AppIdentity, envName } from "./app.js"
 
 export const endpointKeyName = (baseUrl: string): string => {

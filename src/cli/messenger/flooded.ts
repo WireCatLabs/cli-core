@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { FloodMemory } from "../../sends/flood.js"
 import type { Pacer } from "../../sends/pace.js"
 import { isCliFailure } from "../failures.js"

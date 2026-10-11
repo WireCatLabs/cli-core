@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import { normalize } from "../normalize.js"
 import { type Actor, botNamed, ownerPerson } from "./actors.js"

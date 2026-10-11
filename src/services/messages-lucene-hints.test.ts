@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { CliError } from "@wirecat/cli-core"
+import type { CliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it } from "vitest"
 import type { AppIdentity } from "../cli/app.js"
 import type { Message } from "../domain/models.js"

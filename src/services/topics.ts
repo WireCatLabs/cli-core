@@ -1,4 +1,4 @@
-import { CliError, isCliError } from "@wirecat/cli-core"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { capability, type ForumState } from "../cli/messenger/port.js"
 import type { Chat, Topic, TopicChange } from "../domain/models.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"

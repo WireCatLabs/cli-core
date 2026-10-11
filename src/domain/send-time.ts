@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 const MINUTE = 60_000
 const YEAR = 365 * 24 * 60 * MINUTE

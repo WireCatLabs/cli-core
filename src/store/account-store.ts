@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Page } from "../domain/models.js"
 import type { Meeting, MeetingDetails, MeetingFilter, SearchHit } from "../meetings/index.js"
 import type { AttachmentTextEntry } from "./sqlite/attachment-texts.js"

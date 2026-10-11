@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from "node:fs"
 import { join } from "node:path"
-import { CliError, EXIT_CODES, exitCodeFor, resolvePaths, writeSecurely } from "@wirecat/cli-core"
+import { CliError, EXIT_CODES, exitCodeFor, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { lockPath, readLock } from "../../background/lock.js"
 import { alive, carries } from "../../background/processes.js"

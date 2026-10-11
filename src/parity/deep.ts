@@ -1,4 +1,4 @@
-import type { CommandInfo, OptionInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo, OptionInfo } from "@wirecat/cli-base/commands"
 import { type CommandsJson, longName } from "./manifest.js"
 
 export interface Difference {

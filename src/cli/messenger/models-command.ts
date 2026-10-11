@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command, Option } from "commander"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, TEXT_MODELS, textModel } from "../../embeddings/models.js"

@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs"
 import { extname, resolve } from "node:path"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { chartKindOf, chartPeriodOf, chatChart } from "../../charts/chat.js"
 import { CHART_SIZE, type ChartKind, type ChartPeriod } from "../../charts/model.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { RegistryOptions } from "../botcheck/registries.js"
 import { botCheckService } from "../botcheck/service.js"
 import { capability, type MessengerAdapter } from "../cli/messenger/port.js"

@@ -11,7 +11,7 @@ import { sandboxEnvironment } from "./evidence.ts"
 const cli = process.argv[2],
   repo = process.argv[3],
   require = createRequire(`${repo}/package.json`)
-const { captureStreams, memoryKeyring } = await import(require.resolve("@wirecat/cli-core"))
+const { captureStreams, memoryKeyring } = await import(require.resolve("@wirecat/cli-base"))
 const { seedSearchRecipes, mcpCommandsClient } = await import(require.resolve("@wirecat/cli-messaging/testing"))
 const { servicesFor, storedDeps } = await import(require.resolve("@wirecat/cli-messaging/services"))
 const { openStore } = await import(require.resolve("@wirecat/cli-messaging/store"))

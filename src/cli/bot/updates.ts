@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs"
-import { writeSecurely } from "@wirecat/cli-core"
+import { writeSecurely } from "@wirecat/cli-base"
 import type { BotPress } from "./port.js"
 
 /**

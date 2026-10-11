@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { capability, type MessengerAdapter } from "../cli/messenger/port.js"
 import type { Id } from "../domain/models.js"
 import { type CheckRow, type Finding, gather, MAX_ACTIONS, type Moderator } from "../moderation/check.js"

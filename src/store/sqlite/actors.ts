@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 
 /** Who made or owns something: the store's polymorphic actor pair. */

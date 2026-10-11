@@ -1,6 +1,6 @@
-import { CliError } from "@wirecat/cli-core"
-import type { ManifestOperation, SchemaNode } from "@wirecat/cli-core/codegen"
-import { annotate } from "@wirecat/cli-core/commands"
+import { CliError } from "@wirecat/cli-base"
+import type { ManifestOperation, SchemaNode } from "@wirecat/cli-base/codegen"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { apiFlagOf, apiOptionKey, readApiBody } from "./api-input.js"
 

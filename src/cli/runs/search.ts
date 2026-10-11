@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { momentOf } from "../../services/moment.js"
 import { findRun, listRuns, readEvents } from "./run.js"
 

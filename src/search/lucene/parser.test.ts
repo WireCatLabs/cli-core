@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { parseLucene } from "./parser.js"
 import { QUERY_FIELDS, validateAst, validateFields } from "./registry.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import type { Backend, ServerOptions, ServerSearched } from "../../services/server-search.js"
 import { parseDuration } from "../settings.js"

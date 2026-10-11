@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { RecordingAssetLocator } from "./recording-source.js"
 import {

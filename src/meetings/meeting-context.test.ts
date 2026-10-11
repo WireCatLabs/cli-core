@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import { createMeetingContext, type MeetingContextChange, validateMeetingContextChange } from "./meeting-context.js"
 

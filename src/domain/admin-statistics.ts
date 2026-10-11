@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "./locator.js"
 import { RANKING_GRAPH_LIMITS, type RankingGraphNode, rankReplyGraph } from "./rankings-graph.js"
 import { rankingQuestion } from "./rankings-options.js"

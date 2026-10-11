@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
 import { levelFor } from "../../sends/permissions.js"

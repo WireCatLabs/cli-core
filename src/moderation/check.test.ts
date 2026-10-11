@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { ChatEvent, GroupMember, Message } from "../domain/models.js"
 import { fakeAdapter } from "../kit/fake.js"

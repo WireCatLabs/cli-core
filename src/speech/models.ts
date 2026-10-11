@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 /**
  * The speech models `messages transcribe --local` can use, each **pinned to one commit** and checked by

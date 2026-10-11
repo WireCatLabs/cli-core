@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import { memoryMeetingStore } from "./testing/memory.js"
 import { sampleMeeting } from "./testing/samples.js"

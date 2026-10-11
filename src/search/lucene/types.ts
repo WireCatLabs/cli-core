@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 export const QUERY_VERSION = 1
 export const QUERY_LIMITS = {

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 import type { AccountKey, StoredAccount } from "../store.js"
 import { and, asc, eq, inArray, sql } from "./drizzle/core.js"

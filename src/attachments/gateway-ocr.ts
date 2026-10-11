@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import { embeddingKeys, endpointKeyName } from "../cli/embedding-keys.js"
 import { type ModelSettings, modelGateway, modelTarget } from "../models/index.js"

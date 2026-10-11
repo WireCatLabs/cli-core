@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { MessengerAdapter, NewPoll, Sent } from "../cli/messenger/port.js"
 import { capability } from "../cli/messenger/port.js"
 import { threadIdOf } from "../cli/messenger/thread.js"

@@ -1,5 +1,5 @@
-import { CliError } from "@wirecat/cli-core"
-import { annotate } from "@wirecat/cli-core/commands"
+import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, MAX_ACTIONS } from "../../moderation/check.js"
 import { RULE_KEYS } from "../../moderation/rules.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import { accountsOfList, isAccountList } from "../search/account-list.js"
 import type { AccountKey, MessageStore } from "../store/store.js"

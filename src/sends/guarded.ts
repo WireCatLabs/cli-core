@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import type { SendGuard } from "./guard.js"
 import type { SendEntry } from "./journal.js"

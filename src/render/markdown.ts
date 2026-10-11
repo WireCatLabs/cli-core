@@ -1,4 +1,4 @@
-import { singleLine, visibleControls } from "@wirecat/cli-core"
+import { singleLine, visibleControls } from "@wirecat/cli-base"
 import type { Attachment, Message, QuotedMessage } from "../domain/models.js"
 
 /**

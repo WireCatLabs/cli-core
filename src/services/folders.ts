@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { capability, type MessengerAdapter } from "../cli/messenger/port.js"
 import type { Chat, Folder, FolderKind, FolderRules, FolderSkip, Id } from "../domain/models.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { imageSize } from "image-size"
 import { isCliFailure } from "../cli/failures.js"
 import { withRecovery } from "../cli/recovery.js"

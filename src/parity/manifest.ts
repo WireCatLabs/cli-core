@@ -1,4 +1,4 @@
-import type { CommandInfo, OptionInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo, OptionInfo } from "@wirecat/cli-base/commands"
 
 /** A name from the manifest's `clis`: `max`, `tg`, and whichever CLI joins next. */
 export type Cli = string

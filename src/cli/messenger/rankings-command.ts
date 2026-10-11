@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command, Option } from "commander"
 import {
   AUTHOR_MEASURES,

@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-core"
+import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
 import { messagesCommand } from "../cli/messenger/messages-command.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Id, Page, Provider } from "../../domain/models.js"
 import type { Term } from "../../search/query.js"
 import type { SqlValue } from "../driver.js"

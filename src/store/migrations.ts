@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "./driver.js"
 import { generatedMigrations } from "./sqlite/manifest.js"
 

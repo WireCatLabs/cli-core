@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs"
-import { CliError, configFilePath, loadConfigFile, resolvePaths, saveConfigFile } from "@wirecat/cli-core"
+import { CliError, configFilePath, loadConfigFile, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
 import {

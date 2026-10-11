@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { TASK_KINDS, TASK_STATES, type TaskState, type TaskVerdict } from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { Actor } from "./actors.js"

@@ -1,4 +1,4 @@
-import { CliError, isCliError } from "@wirecat/cli-core"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import { capability, type MessengerAdapter, type RemoteFile, type Transcript } from "../cli/messenger/port.js"
 import { fromFile, type Settings } from "../cli/settings.js"

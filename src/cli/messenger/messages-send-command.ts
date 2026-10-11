@@ -1,5 +1,5 @@
-import { CliError } from "@wirecat/cli-core"
-import { annotate } from "@wirecat/cli-core/commands"
+import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { sendTime } from "../../domain/send-time.js"
 import { typedSendAs } from "../../sends/send-as.js"

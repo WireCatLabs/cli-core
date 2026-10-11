@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { isCliFailure } from "../cli/failures.js"
 import { capability } from "../cli/messenger/port.js"
 import type { Chat, Contact, Id, Member, Page, PersonCard, PersonProfile, PhoneBookEntry } from "../domain/models.js"

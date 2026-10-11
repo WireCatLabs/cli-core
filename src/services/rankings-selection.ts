@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { type RankingInput, type RankingTarget, rankingOptions } from "../domain/rankings-options.js"
 import { timezoneOf } from "../search/lucene/dates.js"
 import { FIELD_VERSION, validateAst } from "../search/lucene/registry.js"

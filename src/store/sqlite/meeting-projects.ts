@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference } from "../../domain/meeting-reference.js"
 import type { AccountKey } from "../store.js"
 import { atomic } from "./atomic.js"

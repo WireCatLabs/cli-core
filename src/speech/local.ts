@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { isAbsolute } from "node:path"
 import { setImmediate } from "node:timers/promises"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { isInstalled, modelPath, modelsDirectory, vadPath } from "./install.js"
 import { type SpeechModel, speechModel, VAD } from "./models.js"
 

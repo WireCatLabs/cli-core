@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchIndexStore } from "../../meetings/index.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import { checkMeetingCancelled, meetingWriteSnapshot } from "./meeting-operation.js"

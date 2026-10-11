@@ -1,4 +1,4 @@
-import { CliError, singleLine } from "@wirecat/cli-core"
+import { CliError, singleLine } from "@wirecat/cli-base"
 import type { StoreContext } from "./open.js"
 import { toIso } from "./values.js"
 

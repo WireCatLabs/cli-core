@@ -1,4 +1,4 @@
-import { CliError, singleLine } from "@wirecat/cli-core"
+import { CliError, singleLine } from "@wirecat/cli-base"
 
 export const TAG_TYPES = ["chat", "contact", "message"] as const
 export type TagType = (typeof TAG_TYPES)[number]
