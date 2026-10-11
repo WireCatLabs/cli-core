@@ -4,6 +4,14 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## 0.250.1 — 11.10.2026
+
+### Fixed
+
+- **`schedule` is housekeeping for permissions**, like `server`: a CLI that maps every command to a permission
+  key finds it, and what a schedule runs is still checked by its own key when it runs. `schedule exec`, what a
+  timer runs, is listed in help like every other subcommand.
+
 ## 0.250.0 — 11.10.2026
 
 ### Added
