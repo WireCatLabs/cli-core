@@ -4,6 +4,16 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Added
+
+- **A `person:` reference names a person wherever a command or tool takes one** (`contacts context`, `contacts link`,
+  memo's `context`, …): it is read as that person's identity in the messenger asked, the one the account has seen
+  when they have several there. Search results give mail people as `person:` references, so they can be passed on
+  as they are. A person with no identity in that messenger, or several the account has seen, is an error that
+  lists them.
+
 ## 0.253.0 — 11.10.2026
 
 ### Changed — may break callers

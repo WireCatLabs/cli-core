@@ -236,10 +236,31 @@ const withinBytes = (lists: Record<"direct" | "groups" | "mentions", ContextMess
 /** `max:Ana` names a person in another messenger of this store; a reference with no prefix, this one. */
 export const identityIn = async (store: MessageStore, asked: AccountKey, reference: string): Promise<IdentityRef> => {
   const prefixed = /^([a-z][a-z0-9-]*):(.+)$/.exec(reference.trim())
+  if (prefixed?.[1] === "person") return identityOfPerson(store, asked, prefixed[2] as string)
   const provider = prefixed?.[1] ?? asked.provider
   const typed = prefixed?.[2] ?? reference
   const people = await store.people(provider, provider === asked.provider ? { account: asked.account } : {})
   return { provider, id: pickPerson(typed, people).id }
+}
+
+/**
+ * A `person:` reference, as search results give it, read as that person's identity in the asked messenger: the one
+ * the asked account has seen when they have several there. None, or several the account has seen, is said, not guessed.
+ */
+const identityOfPerson = async (store: MessageStore, asked: AccountKey, uid: string): Promise<IdentityRef> => {
+  const person = await store.personByUid(uid)
+  if (!person) throw new CliError("not_found", `no person:${uid} in the store`)
+  const here = person.identities.filter(({ provider }) => provider === asked.provider)
+  const seen = here.length > 1 ? here.filter(({ accounts }) => accounts.includes(asked.account)) : here
+  const [only] = seen
+  if (seen.length === 1 && only) return { provider: only.provider, id: only.id }
+  const all = person.identities.map(({ provider, id }) => `${provider}:${id}`).join(", ")
+  throw new CliError(
+    seen.length === 0 ? "not_found" : "validation_error",
+    seen.length === 0
+      ? `person:${uid} has no ${asked.provider} identity — they are ${all || "nobody linked"}`
+      : `person:${uid} has ${seen.length} ${asked.provider} identities — name one: ${seen.map(({ id }) => `${asked.provider}:${id}`).join(", ")}`,
+  )
 }
 
 export const CHAT_MESSAGES = 20
