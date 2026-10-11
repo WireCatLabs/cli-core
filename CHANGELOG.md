@@ -12,11 +12,6 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   link and person go with it. An identity stays while another account, a tag, a note or any other record points
   at it, or while its person is kept: the owner, a person something points at, or one linked to an identity that
   stays. A caller that expected those people to survive a purge now finds them gone.
-
-## Unreleased
-
-### Changed — may break callers
-
 - **Mail is cut into pieces for search by meaning by thread, not email by email.** A thread's emails, oldest first,
   are packed into pieces of up to `CHUNK_CHARS` as a messenger conversation is, so a short reply shares a piece with
   its neighbours and a new reply changes only the last piece: every earlier piece keeps its hash and its vector.
