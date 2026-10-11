@@ -199,6 +199,41 @@ describe("search mail over the mail tables", () => {
     )
   })
 
+  it("filters by read and starred state, and label: as mailbox:", async () => {
+    const { store, accountId } = await seeded()
+    await store.mail.saveThread({
+      accountId,
+      externalId: "thread-3",
+      now: at(12),
+      emails: [
+        email("<four@example.com>", {
+          read: false,
+          flagged: true,
+          mailboxes: [{ externalId: "Label_1", name: "Projects", kind: "label" }],
+        }),
+        email("<five@example.com>", { read: true, flagged: false }),
+      ],
+    })
+    const sorted = async (text: string) => (await found(store, text)).sort()
+
+    expect(await sorted("is:unread")).toEqual(["<four@example.com>"])
+    expect(await sorted("is:read")).toEqual(["<five@example.com>"])
+    expect(await sorted("is:starred")).toEqual(["<four@example.com>"])
+    expect(await sorted("roadmap -is:unread")).toEqual([
+      "<five@example.com>",
+      "<one@example.com>",
+      "<zero@example.com>",
+    ])
+    expect(await sorted("label:projects")).toEqual(["<four@example.com>"])
+    expect(await sorted("label:Label_1")).toEqual(["<four@example.com>"])
+    await expect(search(store, "is:important")).rejects.toThrow("is takes unread, read, starred")
+
+    const TG: AccountKey = { provider: "tg", account: "1" }
+    await expect(searchStore(store, TG, { text: "is:unread", language: "lucene", limit: 5 })).rejects.toThrow(
+      "is: is a mail field",
+    )
+  })
+
   it("refuses messenger-only fields", async () => {
     const { store } = await seeded()
     await expect(search(store, "kind:group")).rejects.toThrow("mail has no kind")

@@ -96,6 +96,12 @@ FROM attachment_words WHERE attachment_words MATCH ?))`; term и phrase, normali
 не задаёт fts, поэтому слова файлов не входят в bm25-ранжирование (оно AND-ит все обязательные слова
 против message_words) и не правятся опечатками. Точное условие, поэтому NOT content точен.
 FIELD_VERSION не меняется: новое поле, ничего не переименовано.
+Поля почты (to/cc/bcc/subject/mailbox/label/is): поиск без почтового аккаунта отвергает их
+(`unsupported_field`), в поиске по мессенджерам и почте сразу они совпадают только с почтой. label — синоним
+mailbox. is: `unread` — `emails.read = 0`, `read` — `emails.read = 1`, `starred` — `emails.flagged = 1`;
+NULL (импорт не знал состояния) не совпадает ни с одним значением, а NOT is:unread его включает (NOT coalesce).
+У сообщений мессенджеров нет состояния прочтения по сообщению (только `chats.unread_count` на чат),
+поэтому is: для них — поле почты, а не догадка по счётчику. FIELD_VERSION не меняется: поля новые.
 
 ## SQL compiler и порядок
 

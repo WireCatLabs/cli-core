@@ -59,7 +59,7 @@ const MESSAGES: Corpus = {
 // subject, a blank line, then the body, so `subject:` reads the subject back from it.
 const MAIL: Corpus = {
   rows: `(SELECT id, account_id, email_thread_id AS chat_id, external_id, deleted_at, from_identity_id AS sender_identity_id,
-    outgoing, coalesce(sent_at, received_at) AS sent_at,
+    outgoing, read, flagged, coalesce(sent_at, received_at) AS sent_at,
     coalesce(subject, '') || char(10, 10) || coalesce(body_text, '') AS text FROM emails)`,
   threads: "(SELECT id, account_id, external_id, subject AS title, 1 AS searchable FROM email_threads)",
   words: "email_words",
@@ -389,7 +389,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
             who.id,
           )
         : bound("0")
-    } else if (field === "mailbox") {
+    } else if (field === "mailbox" || field === "label") {
       fragment = mail
         ? bound(
             `m.id IN (SELECT em.email_id FROM email_mailboxes em JOIN mailboxes b ON b.id = em.mailbox_id
@@ -398,6 +398,13 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
             value,
           )
         : bound("0")
+    } else if (field === "is") {
+      const state = value.toLowerCase()
+      fragment = !mail
+        ? bound("0")
+        : state === "starred"
+          ? bound("m.flagged = 1")
+          : bound("m.read = ?", state === "read" ? 1 : 0)
     } else if (field === "subject") {
       const wanted = normalize(value)
       const words = wanted.match(/[\p{L}\p{N}]+/gu) ?? []

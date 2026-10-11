@@ -14,6 +14,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   provide bounded reads; follow-up and related links do not block work. A blocker must be done:
   dismissing or deleting it does not silently release dependent work. Generic note links cannot
   bypass dependency validation. No additional store migration is needed.
+- **Mail search filters by read and starred state, and takes `label:`.** `is:unread`, `is:read` and `is:starred`
+  match the read and flagged state mail import stores; an email whose state the import never learned matches
+  neither `is:read` nor `is:unread`. `label:` is the same as `mailbox:`. They are mail fields: a search that holds
+  no mail account refuses them, since messenger messages keep no read state per message; in a search across
+  messengers and mail they match mail only.
 
 ### Changed — may break callers
 

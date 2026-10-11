@@ -17,8 +17,10 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 (только почта, импортированная `memo mail import`, во всех почтовых аккаунтах сразу, а `--account <адрес>` —
 в одном; `chat:` и `--chat` там — тред по id или теме, полей `kind` и
 `topic` нет; только у почты — `to:`, `cc:`, `bcc:` (человек, как в `from:`), `subject:` (слова темы) и
-`mailbox:` (папка или ярлык по id или имени)) и `search notes` (заметки всех папок сразу, `--folder <id>` —
-только одной; у них только поля `text`, `exact`, `body`, `tag`, `date`, `in`), и для их MCP-инструментов
+`mailbox:` (папка или ярлык по id или имени; `label:` — то же самое), `is:unread`, `is:read` и `is:starred`
+(письмо не прочитано, прочитано, помечено флагом — как их показал почтовый ящик при импорте; письмо, для которого
+импорт этого не узнал, не находит ни `is:read`, ни `is:unread`)) и `search notes` (заметки всех папок сразу,
+`--folder <id>` — только одной; у них только поля `text`, `exact`, `body`, `tag`, `date`, `in`), и для их MCP-инструментов
 `search_*` (`account` у `search_mail`, `folders` у `search_notes`). Поле, которого у вида нет,
 в `search all` пропускает этот вид, и ответ называет причину в `skipped`. `bot search messages`
 сохраняет legacy discovery; строгий поиск общего архива выбирает bot accounts через `in:bots`.
@@ -345,6 +347,8 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `bcc` | person | account-scoped resolution; mail only | `bcc:"Alice Synthetic"` | term, phrase |
 | `subject` | text | every word, folded as text is; mail only | `subject:"quarterly planning"` | term, phrase |
 | `mailbox` | keyword | a folder or label by its id or name, ASCII case folded; mail only | `mailbox:INBOX OR mailbox:"[Gmail]/Sent Mail"` | term, phrase |
+| `label` | keyword | the same as mailbox:; mail only | `label:Projects` | term, phrase |
+| `is` | enum | unread, read, starred | `is:unread` | term, phrase |
 | `chat` | chat | account-scoped resolution | `chat:"Work fixture"` | term, phrase |
 | `date` | timestamp | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
 | `kind` | enum | private, saved, bot, service, group, channel, unknown | `kind:private` | term, phrase |
