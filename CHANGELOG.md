@@ -8,6 +8,13 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
+- **On macOS the CLIs keep their files where they do on Linux** (cli-core 0.20.0): `~/.config/<app>`,
+  `~/.local/share/<app>` and `~/.cache/<app>` instead of `~/Library/…`. The peer range is now
+  `@wirecat/cli-core >=0.20.0 <0.21.0`. A CLI calls `migrateFolders(app)` from `@wirecat/cli-messaging/background`
+  first thing at start: it moves the CLI's folders, the shared store's (`cli-messaging`) and the shared cache's
+  (`cli-common`) out of `~/Library`, and points an installed `serve` agent's log at the new state folder. A move
+  that cannot happen now — a `serve` or MCP server still running there — never stops the command: it prints one
+  warning, and that run keeps using the old folders, so the next run tries again.
 - **Mail pieces overlap, and the mail cleaner cuts less.** Each piece of a thread after the first opens with up
   to `CHUNK_OVERLAP` characters from the end of the email before it (`cutChunks` takes the carry as an option;
   messenger conversations are cut as before). Only RFC 3676's `-- ` starts a signature now, not a bare `--`, which
