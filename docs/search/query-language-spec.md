@@ -44,6 +44,8 @@ suffix/functions. Не заявляется полная Lucene compatibility д
 Predicate nodes: field/operator/value/range endpoints/inclusivity/span. Boolean nodes:
 clauses с `must|should|mustNot` и root spans. Raw AST reconstruct/validation отвергает malformed,
 unknown fields, illegal combinations, версии и budgets; caller resolution/SQL/authority не доверяются.
+Comparison `field>=value` также принимается в записи Elasticsearch `field:>=value` (и `:>`, `:<`, `:<=`) —
+тот же range node; это сознательное расширение pinned grammar, другого синтаксиса оно не добавляет.
 
 CLI и MCP явно выбирают language=lucene по умолчанию; exported `MessagesService.search` и
 `searchStore` без language сохраняют legacy-v1 semantics для старых SDK consumers. Новые callers

@@ -275,8 +275,14 @@ export const parseBytes = (value: string, span: Span): number => {
 
 export const validatePredicate = (node: Predicate): void => {
   const field = QUERY_FIELDS.find(({ name }) => name === node.field)
-  if (!field && ["after", "before"].includes(node.field))
-    queryError("legacy_date_field", node.span, "use --language legacy or standard date ranges")
+  if (!field && ["after", "before"].includes(node.field)) {
+    const plain = ["term", "phrase"].includes(node.operator) && /^[\w:.+-]+$/u.test(node.value)
+    queryError(
+      "legacy_date_field",
+      node.span,
+      plain ? `use date${node.field === "after" ? ">=" : "<"}${node.value}` : "use date>=YYYY-MM-DD or date:[a TO b]",
+    )
+  }
   if (!field) queryError("unknown_field", node.span, "use a field from the search field reference")
   if (!(field.operators as readonly string[]).includes(node.operator))
     queryError("unsupported_operator", node.span, `${field.name} takes ${field.operators.join(", ")}`)
@@ -401,7 +407,11 @@ export const QUERY_OPERATORS = [
     example: "date:[2026-01-01 TO 2026-02-01}",
     semantics: "Inclusive [ ], exclusive { }, смешанные границы и *",
   },
-  { name: "comparison", example: "date>=2026-01-01", semantics: "Стандартный typed open range" },
+  {
+    name: "comparison",
+    example: "date>=2026-01-01",
+    semantics: "Стандартный typed open range; `date:>=2026-01-01` — то же самое в записи Elasticsearch",
+  },
   { name: "wildcard", example: "text:invo*", semantics: "Полный term; * — любое число символов, ? — один" },
   {
     name: "regex",
