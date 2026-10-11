@@ -166,6 +166,61 @@ describe("tasks", () => {
     expect([refused.code === 0, refused.stderr]).toEqual([false, expect.stringContaining("tasks.add")])
   })
 
+  it("**plans, links and shows a task, and lists it on the agenda**, from flags as typed", async () => {
+    const call = await setup()
+    const added = json(
+      await call(
+        "tasks",
+        "add",
+        PROMISE,
+        "--type",
+        "promise",
+        "--title",
+        "Send the invoice",
+        "--due",
+        "2d",
+        "--check",
+        "1d",
+        "--json",
+      ),
+    )
+    expect(added.card).toMatchObject({
+      title: "Send the invoice",
+      dueAt: expect.any(String),
+      nextCheckAt: expect.any(String),
+    })
+
+    const planned = json(await call("tasks", "plan", added.id, "--due", "none", "--check", "2026-01-01", "--json"))
+    expect(planned).toMatchObject({ dueAt: null, nextCheckAt: "2026-01-01T00:00:00.000Z" })
+    expect((await call("tasks", "plan", added.id)).code).not.toBe(0)
+    expect((await call("tasks", "plan", added.id, "--due", "soon")).stderr).toContain("--due takes")
+
+    const linked = json(
+      await call(
+        "tasks",
+        "link",
+        added.id,
+        "https://example.com/invoice",
+        "--chat",
+        "7",
+        "--kind",
+        "evidence",
+        "--json",
+      ),
+    )
+    expect(
+      linked.links.map(({ to, targetText }: { to: string | null; targetText: string | null }) => to ?? targetText),
+    ).toEqual(["https://example.com/invoice", "chat:chat/500/7"])
+    expect(json(await call("tasks", "show", planned.key, "--json")).links).toHaveLength(2)
+
+    const agenda = json(await call("tasks", "agenda", "--due", "1d", "--within", "3650d", "--json"))
+    expect(agenda.tasks).toMatchObject([{ id: added.id, reasons: ["check"] }])
+    expect((await call("tasks", "agenda", "--waiting", "soon")).stderr).toContain("--waiting takes")
+    const printed = (await call.pretty("tasks", "agenda", "--within", "3650d")).stdout.join("")
+    expect(printed).toContain("Send the invoice")
+    expect(printed).toContain("unsynced — moved, newest message not stored")
+  })
+
   it("prints for a person, and says so when there is nothing", async () => {
     const call = (await setup()).pretty
     expect((await call("tasks", "list")).stderr).toContain("no tasks")

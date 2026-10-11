@@ -37,6 +37,8 @@ export interface TaskFields {
   /** A task reference (`task:<id>`) or id in the same project; `null` makes it top-level. */
   parent?: string | null
   dueAt?: Date | null
+  /** When an agent should look at the task again; unlike a reminder, it never reaches the owner. */
+  nextCheckAt?: Date | null
   status?: TaskState
   reason?: string | null
 }
@@ -69,6 +71,7 @@ export interface TaskDetails {
   /** What a task found in a message points at; null for a task made here. */
   source: string | null
   dueAt: string | null
+  nextCheckAt: string | null
   closedAt: string | null
   reason: string | null
   verdict: TaskVerdict | null
@@ -185,6 +188,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
       parent: row.parent_id == null ? null : reference(Number(row.parent_id)),
       source: row.source_locator == null ? null : String(row.source_locator),
       dueAt: iso(row.due_at),
+      nextCheckAt: iso(row.next_check_at),
       closedAt: iso(row.closed_at),
       reason: row.close_reason == null ? null : String(row.close_reason),
       verdict: row.verdict == null ? null : (row.verdict as TaskVerdict),
@@ -219,6 +223,9 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
     if (fields.parent !== undefined)
       change("parent_id", fields.parent === null ? null : parentOf(task, Number(before.project_id), fields.parent))
     if (fields.dueAt !== undefined) change("due_at", fields.dueAt === null ? null : fields.dueAt.getTime(), "due")
+    // Moved on every look, so no event: the history would be mostly check-ins.
+    if (fields.nextCheckAt !== undefined)
+      change("next_check_at", fields.nextCheckAt === null ? null : fields.nextCheckAt.getTime())
     if (fields.status !== undefined) {
       if (!TASK_STATES.includes(fields.status))
         throw new CliError("validation_error", `a task's status is one of ${TASK_STATES.join(", ")}`)

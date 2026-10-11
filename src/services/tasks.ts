@@ -1,6 +1,7 @@
 import { CliError, singleLine } from "@wirecat/cli-core"
 import { isLocator, parseLocator } from "../domain/locator.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+import { formatReference } from "../domain/references.js"
+import type { AccountKey, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
 import {
   type ClosedState,
   createTaskService,
@@ -33,12 +34,48 @@ export interface TaskListFilter {
   limit?: number
 }
 
+/**
+ * What the owner or an agent adds to a task beyond its source. A description is written, never copied
+ * from a message: the message stays a link, so deleting it leaves no copy here.
+ */
+export interface TaskPlan {
+  title?: string
+  description?: string | null
+  dueAt?: Date | null
+  nextCheckAt?: Date | null
+}
+
+/** What a task may be linked to: what it is about, what shows it, what it came from. */
+export const TASK_LINK_KINDS = ["related-to", "evidence", "created-from"] as const
+export type TaskLinkKind = (typeof TASK_LINK_KINDS)[number]
+
+export interface TaskCard extends TaskDetails {
+  links: ThingLink[]
+}
+
 /** What waits on the owner, kept in the local store by `src/tasks/`; nothing here reaches the messenger. */
 export interface TasksService {
   list(filter?: TaskListFilter): Promise<TaskView[]>
-  add(message: string, type: TaskKind, origin: TaskOrigin): Promise<{ task: TaskView; created: boolean }>
+  add(
+    message: string,
+    type: TaskKind,
+    origin: TaskOrigin,
+    plan?: TaskPlan,
+  ): Promise<{ task: TaskView; created: boolean; card?: TaskCard }>
   close(id: string, options: { as: ClosedState; reason?: string; by: TaskOrigin }): Promise<TaskView>
   stats(filter?: { chat?: string; type?: TaskKind }): Promise<GroupStats[]>
+  /** Title, description, due date and next check; `null` clears one. */
+  plan(id: string, plan: TaskPlan, by: TaskOrigin): Promise<TaskCard>
+  /**
+   * Links a task to stored things (`msg:`, `chat:`, `person:`, `document:`…) or, for what the store does
+   * not hold, to the text as written — a URL, a message not saved yet.
+   */
+  link(
+    id: string,
+    targets: { references?: readonly string[]; chats?: readonly string[] },
+    options: { kind: TaskLinkKind; by: TaskOrigin },
+  ): Promise<TaskCard>
+  show(id: string): Promise<TaskCard>
 }
 
 export const PREVIEW = 200
@@ -57,6 +94,7 @@ const oneOf =
 export const taskTypeOf = oneOf(TASK_KINDS, "task type", "--type")
 export const taskStateOf = oneOf(TASK_STATES, "task state", "--state")
 export const closedStateOf = oneOf(["done", "dismissed"] as const, "way to close a task", "--as")
+export const taskLinkKindOf = oneOf(TASK_LINK_KINDS, "link kind", "--kind")
 export const taskTypesOf = (typed: string): TaskKind[] => [
   ...new Set(
     typed
@@ -74,6 +112,24 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
   const groupOf = async (store: MessageStore, account: AccountKey, chat: string | undefined) =>
     chat === undefined ? undefined : storedChatId(deps.messenger, chat, store, account)
 
+  const owned = async (store: MessageStore, account: AccountKey, id: string): Promise<Task> => {
+    const existing = await store.tasks.get(id)
+    if (!existing || existing.account !== taskAccount(account))
+      throw new CliError("not_found", `no task ${singleLine(id)} for this account — tasks list shows the ids`)
+    return existing
+  }
+  const cardOf = async (store: MessageStore, id: string): Promise<TaskCard> => {
+    const details = await store.tasks.details(id)
+    return { ...details, links: await store.notes.links({ from: details.ref }) }
+  }
+  const planOf = async (store: MessageStore, id: string, plan: TaskPlan, by: TaskOrigin) => {
+    const open = (await store.tasks.get(id))?.state === "open"
+    if (!open && (plan.dueAt != null || plan.nextCheckAt != null))
+      throw new CliError("validation_error", "a closed task takes no due date or next check; it stays closed")
+    await store.tasks.edit(id, plan, by === "owner" ? "owner" : { bot: by })
+    return cardOf(store, id)
+  }
+
   return {
     list: (filter = {}) =>
       inStore(async (store, account) => {
@@ -89,7 +145,7 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
         return Promise.all(shown.map((task) => taskView(store, account, task)))
       }),
 
-    add: (message, type, origin) =>
+    add: (message, type, origin, plan = {}) =>
       inStore(async (store, account) => {
         const source = message.trim()
         const native = isNoteReference(source)
@@ -123,8 +179,12 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
           group: note ? note.ref : (locator as ReturnType<typeof parseLocator>).chat,
           kind: type,
           origin,
+          ...(plan.dueAt ? { dueAt: plan.dueAt } : {}),
         })
-        return { task: await taskView(store, account, task), created }
+        // A source that already has a task keeps its plan: adding again is not editing.
+        if (!created || Object.keys(plan).length === 0) return { task: await taskView(store, account, task), created }
+        const card = await planOf(store, task.id, plan, origin)
+        return { task: await taskView(store, account, task), created, card }
       }),
 
     close: (id, { as, reason, by }) =>
@@ -140,6 +200,47 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
             throw new CliError("validation_error", `${error.message}; a closed task stays closed`)
           throw error
         }
+      }),
+
+    plan: (id, plan, by) =>
+      inStore(async (store, account) => {
+        await owned(store, account, id)
+        return planOf(store, id, plan, by)
+      }),
+
+    link: (id, { references = [], chats = [] }, { kind, by }) =>
+      inStore(async (store, account) => {
+        await owned(store, account, id)
+        const from = (await store.tasks.details(id)).ref
+        const chatRefs = await Promise.all(
+          chats.map(async (chat) =>
+            formatReference({
+              type: "chat",
+              provider: account.provider,
+              account: account.account,
+              chat: await storedChatId(deps.messenger, chat, store, account),
+            }),
+          ),
+        )
+        const origin = by === "owner" ? "owner" : "suggested"
+        for (const target of [...references.map((one) => one.trim()), ...chatRefs]) {
+          if (!target) continue
+          try {
+            await store.notes.addLink({ from, to: target, kind, origin })
+          } catch (error) {
+            // Only text that names nothing typed, or a message not saved yet; a mistyped `person:9` is refused.
+            const unsaved = error instanceof CliError && error.code === "not_found" && target.startsWith("msg:")
+            if (!unsaved && !(error instanceof CliError && error.code === "validation_error")) throw error
+            await store.notes.addLink({ from, targetText: target, kind, origin })
+          }
+        }
+        return cardOf(store, id)
+      }),
+
+    show: (id) =>
+      inStore(async (store, account) => {
+        await owned(store, account, id)
+        return cardOf(store, id)
       }),
 
     stats: (filter = {}) =>

@@ -315,6 +315,8 @@ const NAMED_WRITE_KEYS = [
   "tags.remove",
   "tasks.add",
   "tasks.close",
+  "tasks.link",
+  "tasks.plan",
   "topics.create",
   "topics.edit",
   "topics.enable",

@@ -83,6 +83,7 @@ const ACCOUNT_METHODS = [
   "updateCounterObservations",
   "markRange",
   "chatStats",
+  "chatActivity",
   "senderStats",
   "personNames",
   "ranges",

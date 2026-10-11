@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-core"
 import type { Attachment, ChatKind, Id, Message, Page, WindowedMessage } from "../../domain/models.js"
-import type { ChatStats, SenderChatStats } from "../store.js"
+import type { ChatActivity, ChatStats, SenderChatStats } from "../store.js"
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or, type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
 import { attachments, chats, identities, messageRevisions, messages } from "./schema.js"
@@ -333,3 +333,44 @@ const toMessage = (row: MessageRow, attachments: Attachment[]): Message => {
     ...present({ providerMetadata: parsed(row.providerMetadata), mentions: parsed(row.mentions) }),
   } as Message
 }
+
+/**
+ * Each chat that spoke since `since` (ms): its newest message — by the chat list or by what is stored,
+ * whichever is later — and, when that message is stored, which it is and whether the owner sent it;
+ * never the text. A dialog has no title, so it takes the name its other side last wrote under.
+ * `storedAt` is when the store last saved any message of the account.
+ */
+export const chatActivity = (
+  { database }: StoreContext,
+  accountKey: number,
+  since: number,
+): { chats: ChatActivity[]; storedAt: string | null } => ({
+  chats: database
+    .prepare(
+      "SELECT c.external_id AS chat, c.kind, c.last_message_at AS listed, m.external_id AS message, m.sent_at, m.outgoing, " +
+        "coalesce(c.title, (SELECT sender_name FROM messages WHERE chat_id = c.id AND outgoing = 0 AND deleted_at IS NULL " +
+        "ORDER BY sent_at DESC LIMIT 1)) AS title " +
+        "FROM chats c LEFT JOIN messages m ON m.id = (SELECT id FROM messages WHERE chat_id = c.id AND deleted_at IS NULL " +
+        "ORDER BY sent_at DESC, id DESC LIMIT 1) " +
+        "WHERE c.account_id = ? AND max(coalesce(m.sent_at, 0), coalesce(c.last_message_at, 0)) >= ?",
+    )
+    .all(accountKey, since)
+    .map((row) => {
+      const sent = row.sent_at == null ? null : Number(row.sent_at)
+      const listed = row.listed == null ? null : Number(row.listed)
+      const stored = sent !== null && (listed === null || sent >= listed)
+      return {
+        chatId: String(row.chat),
+        title: row.title == null ? null : String(row.title),
+        kind: String(row.kind) as ChatKind,
+        lastMessageAt: toIso(Math.max(sent ?? 0, listed ?? 0)) as string,
+        lastMessageId: stored ? String(row.message) : null,
+        lastFromOwner: stored && row.outgoing != null ? Number(row.outgoing) === 1 : null,
+      }
+    })
+    .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt)),
+  storedAt: toIso(
+    Number(database.prepare("SELECT max(created_at) AS at FROM messages WHERE account_id = ?").get(accountKey)?.at) ||
+      null,
+  ),
+})

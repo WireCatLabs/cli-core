@@ -25,3 +25,18 @@ export const momentOf = (reference: string, flag = "--since", now = Date.now()):
   }
   return time
 }
+
+/**
+ * A time ahead, for a due date or the next check: ISO 8601, or `30m`, `2h`, `3d` from now. `none`
+ * is not a time; a caller that clears a date checks for it first.
+ */
+export const aheadOf = (reference: string, flag: string, now = Date.now()): number => {
+  const wanted = reference.trim()
+  const [, amount, unit] = AGO.exec(wanted) ?? []
+  const time =
+    amount && unit ? now + Number(amount) * (AGO_MS[unit] ?? 0) : DATE.test(wanted) ? Date.parse(wanted) : Number.NaN
+  if (Number.isNaN(time)) {
+    throw new CliError("validation_error", `${flag} takes an ISO 8601 time or 30m, 2h, 3d from now — not "${wanted}"`)
+  }
+  return time
+}

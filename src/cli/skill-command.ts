@@ -20,5 +20,6 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command =>
 
 /** Skills this package ships for every CLI on it, printed by `skill show <name>`: `skills/` beside `dist/` and `src/`. */
 const SHARED_SKILLS = {
+  "follow-ups": new URL("../../skills/follow-ups/SKILL.md", import.meta.url),
   "link-conversations": new URL("../../skills/link-conversations/SKILL.md", import.meta.url),
 }
