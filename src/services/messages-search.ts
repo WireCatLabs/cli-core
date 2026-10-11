@@ -21,7 +21,7 @@ import { mailAround, mergeMail, withMailThreads } from "./mail-search.js"
 import { chatAmong, type SearchFound, type SearchQuery, senderAmong } from "./messages.js"
 import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
 
-const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox"])
+const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is"])
 
 import type { SearchRefreshed } from "./search-refresh.js"
 

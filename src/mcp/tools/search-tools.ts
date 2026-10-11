@@ -30,7 +30,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "Messenger messages, mail and notes held in the local store, merged best first — only these three kinds, and " +
       "one meeting account with `meetings`; tasks, people, memories, projects, organizations and decisions are not " +
       "searched here. Use it when you do not know where something was written. When you know the kind, call its own " +
-      "tool: search_mail (with from:, to:, cc:, subject:, mailbox:), search_messages, search_notes, or " +
+      "tool: search_mail (with from:, to:, cc:, subject:, mailbox:, is:unread), search_messages, search_notes, or " +
       "search_conversations to find by meaning. An empty answer means none of the three holds it: try the kind's own " +
       "tool, looser words or search by meaning before you conclude it was never written. Where the messenger's server can search, it is asked for messages too, as search_messages asks it " +
       "(backend=both by default; archive for the local store only; server for the server's hits only) — mail and " +
