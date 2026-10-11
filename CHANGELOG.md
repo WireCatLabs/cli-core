@@ -26,6 +26,13 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   cc and bcc are now in `email`. Mail search no longer answers `coverage`, and its `completeness` is empty: both
   described messenger chats fetched from a server, never mail.
 
+## 0.250.2 — 11.10.2026
+
+### Fixed
+
+- **The parity manifest lists `schedule`** and its options, now that max and tg register it: their release
+  checks compare their commands with this list.
+
 ## 0.250.1 — 11.10.2026
 
 ### Fixed
