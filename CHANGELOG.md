@@ -7,6 +7,29 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Added
+
+- **Facts: what happened, beside memories, what was derived (store version 2).** `store.facts` records a
+  `fact`, `statement`, `question`, `decision` or `promise` (`FACT_TYPES`) with its evidence, author and
+  model, and an optional subject, project, scope and time; `add`, `get`, `list` (by type, project, subject,
+  status), `accept` and `reverse`. An agent's fact waits as `proposed`, the owner's is `accepted` at once
+  (`FACT_STATUSES`); only a decision supersedes another or is reversed. `fact:<id>` is a reference.
+  Upgrading moves every memory of kind `fact` into `facts` — confirmed as accepted, proposed and stale as
+  proposed, superseded as an accepted fact marked deleted (only a decision is superseded) — with the links
+  from and to it, the notes about it and its tags; the memory row stays, marked deleted, and `memories.get`
+  answers `not_found` for it.
+- **Assignments have one home, `task_assignments`.** Upgrading copies every confirmed `assigned-to` link from
+  a task to a person into `task_assignments` with role `assignee`, once per task and person; the links stay.
+
+### Changed — may break callers
+
+- **`store.decisions`, `Decision`, `DecisionInput` and `DecisionsStore` are gone**; a decision is
+  `store.facts.add({ type: "decision", … })`. `decision:` is no longer a reference. Nothing wrote the
+  `decisions` table, which stays empty.
+- **`MEMORY_KINDS` no longer holds `fact`**: `summary`, `digest`, `preference`. A meeting context's
+  `memory.add` of kind `fact` (cli-meetings still offers it) records a fact; `MeetingContextServiceStore`
+  now picks `facts` too.
+
 ## 0.235.0 — 11.10.2026
 
 ### Added
@@ -16,7 +39,6 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   in their threads.
 - **`search conversations` finds mail of the mail tables by words too.** Its word half now reads them for an email
   account and ranks each email, as its thread, with the messages; before, such mail was found by meaning only.
-
 ### Fixed
 
 - **`messages list --limit` returns as many messages as it was asked for.** A messenger hands out its history a

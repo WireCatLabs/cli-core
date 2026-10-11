@@ -43,7 +43,7 @@ describe("memories", () => {
     const store = await open()
     const note = await store.notes.addNote({ text: "Bob Sample moved the review to Fridays" })
     const first = await store.memories.add({
-      kind: "fact",
+      kind: "summary",
       body: "The review is on Fridays",
       scope: "work",
       evidence: [note.ref],
@@ -55,7 +55,7 @@ describe("memories", () => {
     expect(await store.memories.search("friday", { scope: "personal" })).toEqual([])
 
     const newer = await store.memories.add({
-      kind: "fact",
+      kind: "summary",
       body: "The review is on Mondays",
       scope: "work",
       evidence: [note.ref],
@@ -70,8 +70,8 @@ describe("memories", () => {
   })
 })
 
-describe("decisions", () => {
-  it("wait as proposed from an agent, hold once accepted, and stop holding when replaced", async () => {
+describe("facts", () => {
+  it("wait as proposed from an agent, hold once accepted, and a decision stops holding when replaced", async () => {
     const store = await open()
     const project = await store.knowledge.addProject({ name: "Lighthouse", type: "work" })
     const note = await store.notes.addNote({ text: "We agreed on Postgres" })
@@ -82,7 +82,8 @@ describe("decisions", () => {
       evidence: [note.ref],
       author: agent,
     })
-    const proposed = await store.decisions.add({
+    const proposed = await store.facts.add({
+      type: "decision",
       statement: "Use Postgres",
       by: agent,
       project: project.ref,
@@ -90,20 +91,59 @@ describe("decisions", () => {
       createdFrom: memory.ref,
     })
     expect(proposed).toMatchObject({
+      type: "decision",
       status: "proposed",
       confirmedBy: null,
+      author: { type: "bot" },
+      model: "synthetic-model-1",
       evidence: [note.ref],
       project: project.ref,
     })
-    expect(await store.decisions.accept(proposed.ref)).toMatchObject({
+    expect(await store.facts.accept(proposed.ref)).toMatchObject({
       status: "accepted",
       confirmedBy: { type: "person" },
     })
 
-    const replacement = await store.decisions.add({ statement: "Use SQLite", by: "owner", supersedes: proposed.ref })
+    const replacement = await store.facts.add({
+      type: "decision",
+      statement: "Use SQLite",
+      by: "owner",
+      supersedes: proposed.ref,
+    })
     expect(replacement.status).toBe("accepted")
-    expect(await store.decisions.get(proposed.ref)).toMatchObject({ status: "superseded" })
-    expect((await store.decisions.list({ project: project.ref })).map(({ ref }) => ref)).toEqual([proposed.ref])
-    expect(await store.decisions.reverse(replacement.ref)).toMatchObject({ status: "reversed" })
+    expect(await store.facts.get(proposed.ref)).toMatchObject({ status: "superseded" })
+    expect((await store.facts.list({ project: project.ref })).map(({ ref }) => ref)).toEqual([proposed.ref])
+    expect(await store.facts.reverse(replacement.ref)).toMatchObject({ status: "reversed" })
+  })
+
+  it("supersede and reverse only decisions, and list by type and subject", async () => {
+    const store = await open()
+    const note = await store.notes.addNote({ text: "Bob Sample asked when the review is" })
+    const person = await store.knowledge.addProject({ name: "Review", type: "work" })
+    const question = await store.facts.add({
+      type: "question",
+      statement: "When is the review?",
+      by: "owner",
+      subject: note.ref,
+      evidence: [note.ref],
+      scope: "work",
+    })
+    const statement = await store.facts.add({ type: "statement", statement: "The review moved", by: agent })
+    expect(question).toMatchObject({ status: "accepted", subject: note.ref, scope: "work" })
+    expect(statement.status).toBe("proposed")
+    await expect(store.facts.reverse(question.ref)).rejects.toMatchObject({ code: "validation_error" })
+    await expect(
+      store.facts.add({ type: "statement", statement: "x", by: "owner", supersedes: question.ref }),
+    ).rejects.toMatchObject({ code: "validation_error" })
+    await expect(
+      store.facts.add({ type: "decision", statement: "x", by: "owner", supersedes: question.ref }),
+    ).rejects.toMatchObject({ code: "validation_error" })
+    await expect(store.facts.add({ type: "rumour" as "fact", statement: "x", by: "owner" })).rejects.toMatchObject({
+      code: "validation_error",
+    })
+    expect((await store.facts.list({ type: "question" })).map(({ ref }) => ref)).toEqual([question.ref])
+    expect((await store.facts.list({ subject: note.ref })).map(({ ref }) => ref)).toEqual([question.ref])
+    expect((await store.facts.list({ status: "proposed" })).map(({ ref }) => ref)).toEqual([statement.ref])
+    expect(await store.facts.list({ project: person.ref })).toEqual([])
   })
 })

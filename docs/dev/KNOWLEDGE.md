@@ -58,11 +58,14 @@ receipts. Closing a task cancels pending/leased reminders through a trigger. Sta
 Delivery is a host decision: this store makes no outbound messenger/email call and sets no system timer.
 An import timer does not authorize outbound reminder delivery.
 
-## Decisions, memories and what agents do
+## Facts, memories and what agents do
 
-`decisions` holds choices with their evidence (`links` of kind `evidence`): an agent's waits as proposed,
-the owner's is accepted at once, and accepting one that supersedes another ends the older. `memories`
-holds what agents concluded — summary, digest, fact, preference — with author bot and model, confidence,
+A memory is what was derived; a fact is what happened. `facts` holds a `fact`, `statement`, `question`,
+`decision` or `promise` with its evidence (`links` of kind `evidence`), author and an optional subject,
+project and scope: an agent's waits as proposed, the owner's is accepted at once. Only a decision is
+superseded (accepting one that replaces another ends the older) or reversed; a question's answer is a
+`links` row of kind `answered-by`. `fact:<id>` names one. `memories`
+holds what agents concluded — summary, digest, preference — with author bot and model, confidence,
 status and a scope that has no default: a memory without scope or evidence is refused. Memories have their
 own words index. `proposedActions` keeps what an agent wants done outside the store until the owner
 approves or rejects it; `list` filters by status. `approveAsTask` (`./services`) approves one as a `request`

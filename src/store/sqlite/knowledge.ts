@@ -285,7 +285,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     if (parsed.type === "message") return { type: "message", locator: reference }
     if (parsed.type === "chat") return { type: "chat", id: parsed.chat }
     if (parsed.type === "folder") return { type: "folder", id: parsed.id, path: parsed.path }
-    if (parsed.type === "entity" || parsed.type === "memory" || parsed.type === "decision" || parsed.type === "bot")
+    if (parsed.type === "entity" || parsed.type === "memory" || parsed.type === "fact" || parsed.type === "bot")
       return undefined
     return { type: parsed.type, id: parsed.id }
   }

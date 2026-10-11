@@ -7,7 +7,7 @@ import { openCache } from "./open.js"
 import { referenceOfThing, stateOfThing, thingOf } from "./sqlite/things.js"
 import { openStore } from "./store.js"
 
-it("persists canonical meeting, retained revision and actual cue references as memory and decision evidence", async () => {
+it("persists canonical meeting, retained revision and actual cue references as memory and fact evidence", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-things-example-")), "store.db")
   let store = await openStore({ path })
   const accountId = await store.saveAccount(
@@ -24,17 +24,22 @@ it("persists canonical meeting, retained revision and actual cue references as m
   const cue = `${revision}/7`
   const refs = [root, revision, cue]
   const memory = await store.memories.add({
-    kind: "fact",
+    kind: "summary",
     body: "Alice Example will review",
     scope: "work",
     author: "owner",
     evidence: refs,
     subject: root,
   })
-  const decision = await store.decisions.add({ statement: "Bob Sample reviews next", by: "owner", evidence: [cue] })
+  const decision = await store.facts.add({
+    type: "decision",
+    statement: "Bob Sample reviews next",
+    by: "owner",
+    evidence: [cue],
+  })
   await expect(
     store.memories.add({
-      kind: "fact",
+      kind: "summary",
       body: "Foreign scope",
       scope: "work",
       author: "owner",
@@ -43,7 +48,7 @@ it("persists canonical meeting, retained revision and actual cue references as m
   ).rejects.toMatchObject({ code: "not_found" })
   await expect(
     store.memories.add({
-      kind: "fact",
+      kind: "summary",
       body: "Missing cue",
       scope: "work",
       author: "owner",
@@ -58,7 +63,7 @@ it("persists canonical meeting, retained revision and actual cue references as m
   try {
     expect((await store.memories.get(memory.ref)).evidence).toEqual(refs)
     expect((await store.memories.get(memory.ref)).subject).toBe(root)
-    expect((await store.decisions.get(decision.ref)).evidence).toEqual([cue])
+    expect((await store.facts.get(decision.ref)).evidence).toEqual([cue])
     expect((await store.notes.links({ to: cue })).map((link) => link.from).sort()).toEqual(
       [memory.ref, decision.ref].sort(),
     )
@@ -80,7 +85,7 @@ it("persists canonical meeting, retained revision and actual cue references as m
       db.close()
     }
     await expect(
-      store.memories.add({ kind: "fact", body: "Deleted example", scope: "work", author: "owner", evidence: [cue] }),
+      store.memories.add({ kind: "summary", body: "Deleted example", scope: "work", author: "owner", evidence: [cue] }),
     ).rejects.toMatchObject({ code: "not_found" })
   } finally {
     await store.close()

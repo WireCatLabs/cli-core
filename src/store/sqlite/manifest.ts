@@ -16,7 +16,11 @@ export interface ManifestEntry {
 }
 
 /** One migration creates the whole schema; every later one is added as the next version. */
-export const MANIFEST: ManifestEntry[] = [{ name: "20261010184427_initial", version: 1, minCompatible: 1 }]
+export const MANIFEST: ManifestEntry[] = [
+  { name: "20261010184427_initial", version: 1, minCompatible: 1 },
+  { name: "20261011035353_version-2-facts", version: 2, minCompatible: 1 },
+  { name: "20261011035430_version-2-facts-from-memories", version: 2, minCompatible: 1 },
+]
 
 export const generatedMigrations = (
   manifest: ManifestEntry[] = MANIFEST,

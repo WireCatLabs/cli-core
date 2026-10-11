@@ -302,5 +302,29 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "-- The actors a task names before any messenger has saved anyone: the owner, and the bots a rule and an\n-- unnamed agent act as. A note about nothing in particular is about this owner row.\nINSERT INTO persons (name, owner, created_at, updated_at)\n  VALUES (NULL, 1, CAST(unixepoch('subsec') * 1000 AS INTEGER), CAST(unixepoch('subsec') * 1000 AS INTEGER));",
       "INSERT INTO bots (name, kind, created_at, updated_at)\n  VALUES ('rule', 'script', CAST(unixepoch('subsec') * 1000 AS INTEGER), CAST(unixepoch('subsec') * 1000 AS INTEGER)),\n         ('agent', 'agent', CAST(unixepoch('subsec') * 1000 AS INTEGER), CAST(unixepoch('subsec') * 1000 AS INTEGER));"
     ]
+  },
+  {
+    "name": "20261011035353_version-2-facts",
+    "statements": [
+      "CREATE TABLE `facts` (\n\t`id` integer PRIMARY KEY,\n\t`type` text NOT NULL,\n\t`statement` text NOT NULL,\n\t`status` text NOT NULL,\n\t`project_id` integer,\n\t`subject_type` text,\n\t`subject_id` integer,\n\t`occurred_at` integer,\n\t`supersedes_id` integer,\n\t`author_type` text NOT NULL,\n\t`author_id` integer NOT NULL,\n\t`model` text,\n\t`confirmed_by_type` text,\n\t`confirmed_by_id` integer,\n\t`scope` text,\n\t`source` text NOT NULL,\n\t`metadata` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_facts_project_id_projects_id_fk` FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`),\n\tCONSTRAINT `fk_facts_supersedes_id_facts_id_fk` FOREIGN KEY (`supersedes_id`) REFERENCES `facts`(`id`)\n);",
+      "ALTER TABLE `memories` ADD `deleted_at` integer;",
+      "CREATE INDEX `facts_by_project_id` ON `facts` (`project_id`);",
+      "CREATE INDEX `facts_by_subject_type_subject_id` ON `facts` (`subject_type`,`subject_id`);",
+      "CREATE INDEX `facts_by_supersedes_id` ON `facts` (`supersedes_id`);",
+      "CREATE INDEX `facts_by_author_type_author_id` ON `facts` (`author_type`,`author_id`);",
+      "CREATE INDEX `facts_by_confirmed_by_type_confirmed_by_id` ON `facts` (`confirmed_by_type`,`confirmed_by_id`);"
+    ]
+  },
+  {
+    "name": "20261011035430_version-2-facts-from-memories",
+    "statements": [
+      "-- A memory of kind `fact` becomes a fact: what happened is a fact, not a conclusion. Its id rides in\n-- `metadata.memory` so its links can follow; the memory row stays, marked deleted.\nINSERT INTO facts (type, statement, status, subject_type, subject_id, author_type, author_id, model,\n  confirmed_by_type, confirmed_by_id, scope, source, metadata, created_at, updated_at, deleted_at)\nSELECT 'fact', m.body,\n  CASE m.status WHEN 'proposed' THEN 'proposed' WHEN 'stale' THEN 'proposed' ELSE 'accepted' END,\n  m.subject_type, m.subject_id, m.author_type, m.author_id, m.model,\n  CASE m.status WHEN 'confirmed' THEN 'person' END,\n  CASE m.status WHEN 'confirmed' THEN (SELECT id FROM persons WHERE owner = 1 ORDER BY id LIMIT 1) END,\n  m.scope, 'memory',\n  json_object('memory', m.id, 'memory_status', m.status, 'confidence', m.confidence,\n    'last_verified_at', m.last_verified_at),\n  m.created_at, m.updated_at,\n  CASE m.status WHEN 'superseded' THEN m.updated_at END\nFROM memories m WHERE m.kind = 'fact' AND m.deleted_at IS NULL ORDER BY m.id;",
+      "UPDATE links SET from_type = 'fact', from_id = (\n  SELECT f.id FROM facts f WHERE f.source = 'memory' AND json_extract(f.metadata, '$.memory') = links.from_id)\nWHERE from_type = 'memory' AND from_id IN (SELECT id FROM memories WHERE kind = 'fact' AND deleted_at IS NULL);",
+      "UPDATE links SET to_type = 'fact', to_id = (\n  SELECT f.id FROM facts f WHERE f.source = 'memory' AND json_extract(f.metadata, '$.memory') = links.to_id)\nWHERE to_type = 'memory' AND to_id IN (SELECT id FROM memories WHERE kind = 'fact' AND deleted_at IS NULL);",
+      "UPDATE notes SET notable_type = 'fact', notable_id = (\n  SELECT f.id FROM facts f WHERE f.source = 'memory' AND json_extract(f.metadata, '$.memory') = notes.notable_id)\nWHERE notable_type = 'memory' AND notable_id IN (SELECT id FROM memories WHERE kind = 'fact' AND deleted_at IS NULL);",
+      "UPDATE taggings SET taggable_type = 'fact', taggable_id = (\n  SELECT f.id FROM facts f WHERE f.source = 'memory' AND json_extract(f.metadata, '$.memory') = taggings.taggable_id)\nWHERE taggable_type = 'memory' AND taggable_id IN (SELECT id FROM memories WHERE kind = 'fact' AND deleted_at IS NULL);",
+      "UPDATE memories SET deleted_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000\nWHERE kind = 'fact' AND deleted_at IS NULL;",
+      "-- An assignment's one home is task_assignments; the assigned-to links stay until their readers move.\nINSERT OR IGNORE INTO task_assignments (task_id, assignee_type, assignee_id, role, created_at, updated_at)\nSELECT l.from_id, 'person', l.to_id, 'assignee', l.created_at, l.updated_at FROM links l\nWHERE l.kind = 'assigned-to' AND l.confirmed = 1 AND l.from_type = 'task' AND l.to_type = 'person'\n  AND EXISTS (SELECT 1 FROM tasks t WHERE t.id = l.from_id) AND EXISTS (SELECT 1 FROM persons p WHERE p.id = l.to_id)\nORDER BY l.id;"
+    ]
   }
 ]

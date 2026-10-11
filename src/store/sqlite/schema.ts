@@ -849,6 +849,7 @@ export const memories = sqliteTable(
     scope: text("scope").notNull(),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
   },
   (table) => [
     index("memories_by_subject_type_subject_id").on(table.subjectType, table.subjectId),
@@ -1243,6 +1244,39 @@ export const decisions = sqliteTable(
     index("decisions_by_project_id").on(table.projectId),
     index("decisions_by_supersedes_id").on(table.supersedesId),
     index("decisions_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+  ],
+)
+
+export const facts = sqliteTable(
+  "facts",
+  {
+    id: integer("id").primaryKey(),
+    type: text("type").notNull(),
+    statement: text("statement").notNull(),
+    status: text("status").notNull(),
+    projectId: integer("project_id").references(() => projects.id),
+    subjectType: text("subject_type"),
+    subjectId: integer("subject_id"),
+    occurredAt: integer("occurred_at"),
+    supersedesId: integer("supersedes_id").references((): AnySQLiteColumn => facts.id),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    confirmedByType: text("confirmed_by_type"),
+    confirmedById: integer("confirmed_by_id"),
+    scope: text("scope"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    index("facts_by_project_id").on(table.projectId),
+    index("facts_by_subject_type_subject_id").on(table.subjectType, table.subjectId),
+    index("facts_by_supersedes_id").on(table.supersedesId),
+    index("facts_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("facts_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
   ],
 )
 

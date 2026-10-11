@@ -9,7 +9,6 @@ export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
 export type { BotUpdate, BotUpdateStore } from "./sqlite/bot-updates.js"
 export type { ChatMetadata } from "./sqlite/chats.js"
-export type { Decision, DecisionInput, DecisionsStore } from "./sqlite/decisions.js"
 export type {
   Email,
   EmailAddress,
@@ -27,6 +26,8 @@ export type {
   ThreadDetails,
   ThreadSave,
 } from "./sqlite/emails.js"
+export type { Fact, FactInput, FactsStore } from "./sqlite/facts.js"
+export { FACT_STATUSES, FACT_TYPES } from "./sqlite/facts.js"
 export type { Involvement, InvolvementStore } from "./sqlite/involvements.js"
 export type {
   Annotation,

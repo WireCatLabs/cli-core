@@ -261,7 +261,7 @@ const EDITS = {
       ["updated_at", "integer", { notnull: true }],
     ],
     keys: ["INDEX (target_folded) WHERE to_id IS NULL"],
-    doc: "Every connection between two things that no column holds. Kinds: `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a decision or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.",
+    doc: "Every connection between two things that no column holds. Kinds: `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.",
     note: "String references → polymorphic columns, type as a string (owner).",
   },
   chunk_vectors: {
@@ -609,10 +609,10 @@ const NEW = {
     queue("note_index_pending", "notes"),
     {
       name: "memories",
-      doc: "What an agent concluded: a summary, a daily digest, a fact, a preference. Derived and fallible, so it carries its evidence (`links` of kind `evidence`), its confidence and its status; notes are what a person wrote.",
+      doc: "What an agent concluded: a summary, a daily digest, a preference. Derived and fallible, so it carries its evidence (`links` of kind `evidence`), its confidence and its status; notes are what a person wrote.",
       cols: [
         id(),
-        c("kind", "text", { notnull: true, note: "summary, digest, fact, preference" }),
+        c("kind", "text", { notnull: true, note: "summary, digest, preference" }),
         c("body", "text", { notnull: true }),
         c("subject_type", "text", {
           note: "what it is about: `person`, `chat`, `meeting`, `project`, …; null for a general fact",
@@ -626,6 +626,7 @@ const NEW = {
         fk("supersedes_id", "memories", { note: "the memory this one replaces" }),
         c("scope", "text", { notnull: true, note: "personal or work, from its evidence" }),
         ...ts(),
+        c("deleted_at", "integer", { note: "when it stopped being a memory: a `fact` memory moved to `facts`" }),
       ],
     },
     fts("memory_words", "Word index over memories.", "normalized_text, scope"),
@@ -1050,7 +1051,7 @@ const NEW = {
     },
     {
       name: "decisions",
-      doc: "A choice that was made and holds until replaced: why we do something. Its evidence — the message, transcript row or document — is `links` of kind `evidence`; a decision an agent proposed links back to that memory with `created-from`.",
+      doc: "Replaced by `facts` (a decision is a fact of type `decision`) in store version 2. Nothing writes it; it stays, empty, until a version that may drop tables.",
       cols: [
         id(),
         fk("project_id", "projects"),
@@ -1060,6 +1061,32 @@ const NEW = {
         fk("supersedes_id", "decisions", { note: "the decision this one replaces" }),
         ...actor("confirmed_by", { note: "who accepted it; null while proposed" }),
         c("source", "text", { notnull: true, note: "owner, agent, an import" }),
+        meta(),
+        ...ts(),
+        del(),
+      ],
+    },
+    {
+      name: "facts",
+      doc: "What happened, as its evidence shows: a fact, a statement, a question, a decision or a promise. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. Replaces `decisions`, which stays empty.",
+      cols: [
+        id(),
+        c("type", "text", { notnull: true, note: "fact, statement, question, decision, promise" }),
+        c("statement", "text", { notnull: true, note: "what happened, in one sentence" }),
+        c("status", "text", {
+          notnull: true,
+          note: "proposed, accepted; a decision also superseded or reversed",
+        }),
+        fk("project_id", "projects", { note: "the `project` it belongs to" }),
+        c("subject_type", "text", { note: "who or what it is about: `person`, `chat`, `meeting`, `project`, …" }),
+        c("subject_id", "integer"),
+        c("occurred_at", "integer", { note: "when it happened, as the evidence shows" }),
+        fk("supersedes_id", "facts", { note: "the decision this decision replaces" }),
+        ...actor("author", { notnull: true }),
+        c("model", "text", { note: "the model that wrote it, for an agent's" }),
+        ...actor("confirmed_by", { note: "who accepted it; null while proposed" }),
+        c("scope", "text", { note: "personal or work, when its writer said" }),
+        c("source", "text", { notnull: true, note: "owner, agent, memory, an import" }),
         meta(),
         ...ts(),
         del(),
@@ -1211,7 +1238,7 @@ const GROUPS = [
   [
     "tasks",
     "Tasks",
-    "A task and ticket system for people and agents: projects with keys, typed and prioritised tasks, assignees that are people or bots, and the decisions made along the way. A promise is a task of type `promise`; a question is a task of type `question` whose answer is linked.",
+    "A task and ticket system for people and agents: projects with keys, typed and prioritised tasks, assignees that are people or bots, and the facts recorded along the way (`facts`). A promise is a task of type `promise`; a question is a task of type `question` whose answer is linked.",
     ["reminders:knowledge_reminders"],
     NEW.tasks,
   ],

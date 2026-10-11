@@ -60,7 +60,13 @@ it("shares meeting notes, tags and memories with existing records and retains or
     { action: "memory.add", body: "Invented decision", kind: "fact", scope: "work", evidence: [cue] },
     { apply: true },
   )
-  expect(memory.result).toMatchObject({ subject: root, evidence: [cue], status: "confirmed", scope: "work" })
+  expect(memory.result).toMatchObject({
+    type: "fact",
+    subject: root,
+    evidence: [cue],
+    status: "accepted",
+    scope: "work",
+  })
   input.transcripts[0].contentHash = "example-corrected"
   input.transcripts[0].rows[0].text = "Bob Sample proposed a different plan"
   await store.meetings.saveMeeting(input)
@@ -76,11 +82,12 @@ it("shares meeting notes, tags and memories with existing records and retains or
     },
     { apply: true },
   )
-  expect(await store.memories.list({ subject: root })).toHaveLength(2)
+  expect(await store.memories.list({ subject: root })).toHaveLength(1)
+  expect(await store.facts.list({ subject: root })).toHaveLength(1)
   const reopened = await openStore({ path, env })
   handles.push(reopened)
   expect((await reopened.notes.notes({ about: root })).items[0]?.text).toBe("Invented memo")
-  expect(await reopened.memories.list({ subject: root })).toHaveLength(2)
+  expect(await reopened.memories.list({ subject: root })).toHaveLength(1)
   expect(
     (
       await reopened.meetings.transcriptMetadata({
@@ -128,6 +135,7 @@ it("denies foreign/deleted meeting and memory evidence before writing", async ()
     ),
   ).rejects.toMatchObject({ code: "not_found" })
   expect(await store.memories.list()).toHaveLength(0)
+  expect(await store.facts.list()).toHaveLength(0)
   expect((await store.notes.notes({ about: root })).items).toHaveLength(0)
   input.meeting.deletedAt = 6000
   await store.meetings.saveMeeting(input)
