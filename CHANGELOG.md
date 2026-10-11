@@ -8,6 +8,12 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## 0.248.0 — 11.10.2026
 
+### Fixed
+
+- **Task follow-up command parity** now lists the published task plan, link, card and agenda
+  commands and their options for both messengers. The standard catalog describes task date and
+  review options; upgrading Telegram or MAX no longer reveals missing manifest rows.
+
 ### Added
 
 - **Portable native meeting host helpers** expose ordinary-file identity checks and POSIX directory
