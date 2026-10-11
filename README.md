@@ -51,7 +51,13 @@ purposefully distinct label, call `createTag(name, { kind?, expectedCreationFing
 current preflight receipt. This owner-only acceptance is checked under the write lock and refuses
 stale or differently targeted receipts. There is no force bypass. The creation check bounds input to
 5,000 labels, 100,000 aliases and 4 MiB of names, and fails before hydration if those limits are exceeded.
-Semantic synonym detection and reviewed merges remain separate work.
+`auditVocabulary({ kind?, scope?, minSimilarity?, maxComparisons?, limit?, maxEntries?, maxReadBytes?, signal? })`
+reports pairs of distinct canonical records with lexical similarity. It compares projects with projects,
+and tags/topics with labels, including explicit aliases. Defaults are similarity 0.65, 10,000 name
+comparisons and 20 pairs; maximums are 100,000 comparisons and 200 pairs. `complete: false` means a
+budget stopped the scan, not that remaining names are unique. The fingerprint identifies the reviewed
+catalog. Names in output are capped at 300 characters with an explicit truncation flag. This read does
+not accept a synonym, mutate tags or load a model. Semantic detection and reviewed merges remain separate work.
 
 ## Meeting-project membership
 

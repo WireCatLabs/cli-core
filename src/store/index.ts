@@ -89,6 +89,8 @@ export type {
   TagPreflight,
   VocabularyAlias,
   VocabularyAliasReceipt,
+  VocabularyAudit,
+  VocabularyAuditOptions,
   VocabularyCatalog,
   VocabularyEntry,
   VocabularyKind,
