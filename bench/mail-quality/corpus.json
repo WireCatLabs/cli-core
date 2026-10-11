@@ -1,0 +1,1883 @@
+{
+  "threads": [
+    {
+      "id": "en-t01",
+      "subject": "Invoice EL-2026-0718 for July freight services",
+      "emails": [
+        {
+          "id": "en-t01e1",
+          "from": "Bob Sample",
+          "at": "2026-08-03T09:12:00Z",
+          "body": "Hi Alice,\n\nPlease find attached invoice EL-2026-0718 for July freight services. The total is EUR 14,280.00 and covers 37 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 2 September 2026 by bank transfer to the usual account.\n\nLet me know if anything looks off.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142"
+        },
+        {
+          "id": "en-t01e2",
+          "from": "Alice Example",
+          "at": "2026-08-04T10:30:00Z",
+          "body": "Hi Bob,\n\nThanks, received. Our controller noticed that two shipments from 14 July (lines 22 and 23) seem to be billed twice, same pallet ids and same weight. Could you check before we approve the invoice?\n\nKind regards,\nAlice Example\nAccounts Payable | Brightfield Example Co\nProcurement | Invoices | Shipping\n\nOn Mon, 3 Aug 2026 at 09:12, Bob Sample <bob@example.com> wrote:\n> Hi Alice,\n>\n> Please find attached invoice EL-2026-0718 for July freight services. The total is EUR 14,280.00 and covers 37 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 2 September 2026 by bank transfer to the usual account.\n>\n> Let me know if anything looks off.\n>\n> Best regards,\n> Bob Sample\n> Senior Procurement Manager | Example Logistics\n> Procurement | Invoices | Shipping\n> Phone 555-0142"
+        },
+        {
+          "id": "en-t01e3",
+          "from": "Bob Sample",
+          "at": "2026-08-05T08:05:00Z",
+          "body": "Hi Alice,\n\nYou are right, lines 22 and 23 are duplicates caused by a scanner resync. I am issuing credit note CN-0412 for EUR 760.00 against invoice EL-2026-0718, so the July balance becomes EUR 13,520.00. Apologies for the trouble.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142\n\nOn Tue, 4 Aug 2026 at 10:30, Alice Example <alice@example.com> wrote:\n> Hi Bob,\n>\n> Thanks, received. Our controller noticed that two shipments from 14 July (lines 22 and 23) seem to be billed twice, same pallet ids and same weight. Could you check before we approve the invoice?\n>\n> Kind regards,\n> Alice Example\n> Accounts Payable | Brightfield Example Co\n> Procurement | Invoices | Shipping\n>\n> On Mon, 3 Aug 2026 at 09:12, Bob Sample <bob@example.com> wrote:\n> > Hi Alice,\n> >\n> > Please find attached invoice EL-2026-0718 for July freight services. The total is EUR 14,280.00 and covers 37 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 2 September 2026 by bank transfer to the usual account.\n> >\n> > Let me know if anything looks off.\n> >\n> > Best regards,\n> > Bob Sample\n> > Senior Procurement Manager | Example Logistics\n> > Procurement | Invoices | Shipping\n> > Phone 555-0142"
+        },
+        {
+          "id": "en-t01e4",
+          "from": "Alice Example",
+          "at": "2026-08-06T14:20:00Z",
+          "body": "Credit note CN-0412 received and matched. We paid the corrected July amount of EUR 13,520.00 today, 6 August, value date 7 August.\n\nSent from my phone\n\nOn Wed, 5 Aug 2026 at 08:05, Bob Sample <bob@example.com> wrote:\n> Hi Alice,\n>\n> You are right, lines 22 and 23 are duplicates caused by a scanner resync. I am issuing credit note CN-0412 for EUR 760.00 against invoice EL-2026-0718, so the July balance becomes EUR 13,520.00. Apologies for the trouble.\n>\n> Best regards,\n> Bob Sample\n> Senior Procurement Manager | Example Logistics\n> Procurement | Invoices | Shipping\n> Phone 555-0142\n>\n> On Tue, 4 Aug 2026 at 10:30, Alice Example <alice@example.com> wrote:\n> > Hi Bob,\n> >\n> > Thanks, received. Our controller noticed that two shipments from 14 July (lines 22 and 23) seem to be billed twice, same pallet ids and same weight. Could you check before we approve the invoice?\n> >\n> > Kind regards,\n> > Alice Example\n> > Accounts Payable | Brightfield Example Co\n> > Procurement | Invoices | Shipping\n> >\n> > On Mon, 3 Aug 2026 at 09:12, Bob Sample <bob@example.com> wrote:\n> > > Hi Alice,\n> > >\n> > > Please find attached invoice EL-2026-0718 for July freight services. The total is EUR 14,280.00 and covers 37 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 2 September 2026 by bank transfer to the usual account.\n> > >\n> > > Let me know if anything looks off.\n> > >\n> > > Best regards,\n> > > Bob Sample\n> > > Senior Procurement Manager | Example Logistics\n> > > Procurement | Invoices | Shipping\n> > > Phone 555-0142"
+        }
+      ]
+    },
+    {
+      "id": "en-t02",
+      "subject": "Invoice EL-2026-0821 for August freight services",
+      "emails": [
+        {
+          "id": "en-t02e1",
+          "from": "Bob Sample",
+          "at": "2026-09-02T09:05:00Z",
+          "body": "Hi Alice,\n\nPlease find attached invoice EL-2026-0821 for August freight services. The total is EUR 15,940.00 and covers 41 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 1 October 2026 by bank transfer to the usual account.\n\nLet me know if anything looks off.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142"
+        },
+        {
+          "id": "en-t02e2",
+          "from": "Alice Example",
+          "at": "2026-09-03T11:00:00Z",
+          "body": "Hi Bob,\n\nThanks, received. Our controller noticed that the fuel surcharge on this invoice is 4.5% while July was billed at 3%. Could you explain the change before we approve it?\n\nKind regards,\nAlice Example\nAccounts Payable | Brightfield Example Co\nProcurement | Invoices | Shipping\n\nOn Wed, 2 Sep 2026 at 09:05, Bob Sample <bob@example.com> wrote:\n> Hi Alice,\n>\n> Please find attached invoice EL-2026-0821 for August freight services. The total is EUR 15,940.00 and covers 41 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 1 October 2026 by bank transfer to the usual account.\n>\n> Let me know if anything looks off.\n>\n> Best regards,\n> Bob Sample\n> Senior Procurement Manager | Example Logistics\n> Procurement | Invoices | Shipping\n> Phone 555-0142"
+        },
+        {
+          "id": "en-t02e3",
+          "from": "Bob Sample",
+          "at": "2026-09-04T08:40:00Z",
+          "body": "Hi Alice,\n\nThe surcharge follows clause 7.2 of our framework contract: it is indexed to the regional diesel price, which rose above the 1.60 EUR per litre threshold in late July. From 1 August the surcharge moved from 3% to 4.5%, which adds EUR 680.00 to the August invoice. The index sheet is attached.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142\n\nOn Thu, 3 Sep 2026 at 11:00, Alice Example <alice@example.com> wrote:\n> Hi Bob,\n>\n> Thanks, received. Our controller noticed that the fuel surcharge on this invoice is 4.5% while July was billed at 3%. Could you explain the change before we approve it?\n>\n> Kind regards,\n> Alice Example\n> Accounts Payable | Brightfield Example Co\n> Procurement | Invoices | Shipping\n>\n> On Wed, 2 Sep 2026 at 09:05, Bob Sample <bob@example.com> wrote:\n> > Hi Alice,\n> >\n> > Please find attached invoice EL-2026-0821 for August freight services. The total is EUR 15,940.00 and covers 41 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 1 October 2026 by bank transfer to the usual account.\n> >\n> > Let me know if anything looks off.\n> >\n> > Best regards,\n> > Bob Sample\n> > Senior Procurement Manager | Example Logistics\n> > Procurement | Invoices | Shipping\n> > Phone 555-0142"
+        },
+        {
+          "id": "en-t02e4",
+          "from": "Alice Example",
+          "at": "2026-09-05T15:10:00Z",
+          "body": "Understood, the clause checks out. The August invoice EL-2026-0821 is approved and the payment of EUR 15,940.00 is scheduled for 25 September.\n\nSent from my phone\n\nOn Fri, 4 Sep 2026 at 08:40, Bob Sample <bob@example.com> wrote:\n> Hi Alice,\n>\n> The surcharge follows clause 7.2 of our framework contract: it is indexed to the regional diesel price, which rose above the 1.60 EUR per litre threshold in late July. From 1 August the surcharge moved from 3% to 4.5%, which adds EUR 680.00 to the August invoice. The index sheet is attached.\n>\n> Best regards,\n> Bob Sample\n> Senior Procurement Manager | Example Logistics\n> Procurement | Invoices | Shipping\n> Phone 555-0142\n>\n> On Thu, 3 Sep 2026 at 11:00, Alice Example <alice@example.com> wrote:\n> > Hi Bob,\n> >\n> > Thanks, received. Our controller noticed that the fuel surcharge on this invoice is 4.5% while July was billed at 3%. Could you explain the change before we approve it?\n> >\n> > Kind regards,\n> > Alice Example\n> > Accounts Payable | Brightfield Example Co\n> > Procurement | Invoices | Shipping\n> >\n> > On Wed, 2 Sep 2026 at 09:05, Bob Sample <bob@example.com> wrote:\n> > > Hi Alice,\n> > >\n> > > Please find attached invoice EL-2026-0821 for August freight services. The total is EUR 15,940.00 and covers 41 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 1 October 2026 by bank transfer to the usual account.\n> > >\n> > > Let me know if anything looks off.\n> > >\n> > > Best regards,\n> > > Bob Sample\n> > > Senior Procurement Manager | Example Logistics\n> > > Procurement | Invoices | Shipping\n> > > Phone 555-0142"
+        }
+      ]
+    },
+    {
+      "id": "en-t03",
+      "subject": "Invoice EL-2026-0915 for September freight services",
+      "emails": [
+        {
+          "id": "en-t03e1",
+          "from": "Bob Sample",
+          "at": "2026-10-01T09:20:00Z",
+          "body": "Hi Alice,\n\nPlease find attached invoice EL-2026-0915 for September freight services. The total is EUR 12,410.00 and covers 32 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 31 October 2026 by bank transfer to the usual account.\n\nLet me know if anything looks off.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142"
+        },
+        {
+          "id": "en-t03e2",
+          "from": "Alice Example",
+          "at": "2026-10-02T10:15:00Z",
+          "body": "Hi Bob,\n\nThanks, received. Starting this quarter our finance team books freight per cost center. Could you split this invoice between the Valencia warehouse and the Lyon depot so each part carries its own cost center?\n\nKind regards,\nAlice Example\nAccounts Payable | Brightfield Example Co\nProcurement | Invoices | Shipping\n\nOn Thu, 1 Oct 2026 at 09:20, Bob Sample <bob@example.com> wrote:\n> Hi Alice,\n>\n> Please find attached invoice EL-2026-0915 for September freight services. The total is EUR 12,410.00 and covers 32 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 31 October 2026 by bank transfer to the usual account.\n>\n> Let me know if anything looks off.\n>\n> Best regards,\n> Bob Sample\n> Senior Procurement Manager | Example Logistics\n> Procurement | Invoices | Shipping\n> Phone 555-0142"
+        },
+        {
+          "id": "en-t03e3",
+          "from": "Bob Sample",
+          "at": "2026-10-05T08:30:00Z",
+          "body": "Hi Alice,\n\nDone. Invoice EL-2026-0915 is cancelled and replaced by two invoices: EL-2026-0915A for EUR 8,100.00 on cost center 4410 (Valencia warehouse) and EL-2026-0915B for EUR 4,310.00 on cost center 4420 (Lyon depot). The total stays EUR 12,410.00.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142\n\nOn Fri, 2 Oct 2026 at 10:15, Alice Example <alice@example.com> wrote:\n> Hi Bob,\n>\n> Thanks, received. Starting this quarter our finance team books freight per cost center. Could you split this invoice between the Valencia warehouse and the Lyon depot so each part carries its own cost center?\n>\n> Kind regards,\n> Alice Example\n> Accounts Payable | Brightfield Example Co\n> Procurement | Invoices | Shipping\n>\n> On Thu, 1 Oct 2026 at 09:20, Bob Sample <bob@example.com> wrote:\n> > Hi Alice,\n> >\n> > Please find attached invoice EL-2026-0915 for September freight services. The total is EUR 12,410.00 and covers 32 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 31 October 2026 by bank transfer to the usual account.\n> >\n> > Let me know if anything looks off.\n> >\n> > Best regards,\n> > Bob Sample\n> > Senior Procurement Manager | Example Logistics\n> > Procurement | Invoices | Shipping\n> > Phone 555-0142"
+        },
+        {
+          "id": "en-t03e4",
+          "from": "Alice Example",
+          "at": "2026-10-06T13:45:00Z",
+          "body": "Thanks Bob, both parts are booked. We will pay EL-2026-0915A and EL-2026-0915B together on 20 October.\n\nSent from my phone\n\nOn Mon, 5 Oct 2026 at 08:30, Bob Sample <bob@example.com> wrote:\n> Hi Alice,\n>\n> Done. Invoice EL-2026-0915 is cancelled and replaced by two invoices: EL-2026-0915A for EUR 8,100.00 on cost center 4410 (Valencia warehouse) and EL-2026-0915B for EUR 4,310.00 on cost center 4420 (Lyon depot). The total stays EUR 12,410.00.\n>\n> Best regards,\n> Bob Sample\n> Senior Procurement Manager | Example Logistics\n> Procurement | Invoices | Shipping\n> Phone 555-0142\n>\n> On Fri, 2 Oct 2026 at 10:15, Alice Example <alice@example.com> wrote:\n> > Hi Bob,\n> >\n> > Thanks, received. Starting this quarter our finance team books freight per cost center. Could you split this invoice between the Valencia warehouse and the Lyon depot so each part carries its own cost center?\n> >\n> > Kind regards,\n> > Alice Example\n> > Accounts Payable | Brightfield Example Co\n> > Procurement | Invoices | Shipping\n> >\n> > On Thu, 1 Oct 2026 at 09:20, Bob Sample <bob@example.com> wrote:\n> > > Hi Alice,\n> > >\n> > > Please find attached invoice EL-2026-0915 for September freight services. The total is EUR 12,410.00 and covers 32 pallet shipments between our Valencia hub and the Lyon depot. Payment is due on 31 October 2026 by bank transfer to the usual account.\n> > >\n> > > Let me know if anything looks off.\n> > >\n> > > Best regards,\n> > > Bob Sample\n> > > Senior Procurement Manager | Example Logistics\n> > > Procurement | Invoices | Shipping\n> > > Phone 555-0142"
+        }
+      ]
+    },
+    {
+      "id": "en-t04",
+      "subject": "[INC-4117] Checkout API outage on 2 September 2026",
+      "emails": [
+        {
+          "id": "en-t04e1",
+          "from": "Dana Placeholder",
+          "at": "2026-09-02T15:30:00Z",
+          "body": "Hi all,\n\nIncident INC-4117 is resolved. The checkout API returned errors from 14:05 UTC on 2 September 2026 for 47 minutes. About 1,900 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n\n-- \nDana Placeholder\nSite Reliability Engineering | Brightfield Example Co\nOn call: 555-0117"
+        },
+        {
+          "id": "en-t04e2",
+          "from": "Erik Muster",
+          "at": "2026-09-02T16:10:00Z",
+          "body": "Thanks Dana. Who owns the follow-up on INC-4117, and do we have an action item yet? I need it for the weekly ops review.\n\nErik\n\nOn Wed, 2 Sep 2026 at 15:30, Dana Placeholder <dana@example.com> wrote:\n> Hi all,\n>\n> Incident INC-4117 is resolved. The checkout API returned errors from 14:05 UTC on 2 September 2026 for 47 minutes. About 1,900 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n>\n> -- \n> Dana Placeholder\n> Site Reliability Engineering | Brightfield Example Co\n> On call: 555-0117"
+        },
+        {
+          "id": "en-t04e3",
+          "from": "Dana Placeholder",
+          "at": "2026-09-04T10:00:00Z",
+          "body": "Hi Erik,\n\nPostmortem for INC-4117 (the 47-minute checkout outage) is done. Root cause: the TLS certificate on the internal payment gateway expired because its renewal job had been disabled during a migration. Follow-up owner is Gita Beispiel. Action item: re-enable automatic renewal and add an alert 14 days before any certificate expires.\n\n-- \nDana Placeholder\nSite Reliability Engineering | Brightfield Example Co\nOn call: 555-0117\n\nOn Wed, 2 Sep 2026 at 16:10, Erik Muster <erik@example.com> wrote:\n> Thanks Dana. Who owns the follow-up on INC-4117, and do we have an action item yet? I need it for the weekly ops review.\n>\n> Erik\n>\n> On Wed, 2 Sep 2026 at 15:30, Dana Placeholder <dana@example.com> wrote:\n> > Hi all,\n> >\n> > Incident INC-4117 is resolved. The checkout API returned errors from 14:05 UTC on 2 September 2026 for 47 minutes. About 1,900 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n> >\n> > -- \n> > Dana Placeholder\n> > Site Reliability Engineering | Brightfield Example Co\n> > On call: 555-0117"
+        }
+      ]
+    },
+    {
+      "id": "en-t05",
+      "subject": "[INC-4121] Checkout API outage on 9 September 2026",
+      "emails": [
+        {
+          "id": "en-t05e1",
+          "from": "Dana Placeholder",
+          "at": "2026-09-09T11:20:00Z",
+          "body": "Hi all,\n\nIncident INC-4121 is resolved. The checkout API returned errors from 10:40 UTC on 9 September 2026 for 23 minutes. About 850 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n\n-- \nDana Placeholder\nSite Reliability Engineering | Brightfield Example Co\nOn call: 555-0117"
+        },
+        {
+          "id": "en-t05e2",
+          "from": "Erik Muster",
+          "at": "2026-09-09T12:00:00Z",
+          "body": "Thanks Dana. Who owns the follow-up on INC-4121, and do we have an action item yet? I need it for the weekly ops review.\n\nErik\n\nOn Wed, 9 Sep 2026 at 11:20, Dana Placeholder <dana@example.com> wrote:\n> Hi all,\n>\n> Incident INC-4121 is resolved. The checkout API returned errors from 10:40 UTC on 9 September 2026 for 23 minutes. About 850 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n>\n> -- \n> Dana Placeholder\n> Site Reliability Engineering | Brightfield Example Co\n> On call: 555-0117"
+        },
+        {
+          "id": "en-t05e3",
+          "from": "Dana Placeholder",
+          "at": "2026-09-11T09:30:00Z",
+          "body": "Hi Erik,\n\nPostmortem for INC-4121 (the 23-minute checkout outage) is done. Root cause: the database connection pool was exhausted after a config deploy lowered the pool size from 50 to 5. Follow-up owner is Hugo Exemplo. Action item: add a config validation check that rejects pool sizes below 20 and load-test every pool change in staging.\n\n-- \nDana Placeholder\nSite Reliability Engineering | Brightfield Example Co\nOn call: 555-0117\n\nOn Wed, 9 Sep 2026 at 12:00, Erik Muster <erik@example.com> wrote:\n> Thanks Dana. Who owns the follow-up on INC-4121, and do we have an action item yet? I need it for the weekly ops review.\n>\n> Erik\n>\n> On Wed, 9 Sep 2026 at 11:20, Dana Placeholder <dana@example.com> wrote:\n> > Hi all,\n> >\n> > Incident INC-4121 is resolved. The checkout API returned errors from 10:40 UTC on 9 September 2026 for 23 minutes. About 850 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n> >\n> > -- \n> > Dana Placeholder\n> > Site Reliability Engineering | Brightfield Example Co\n> > On call: 555-0117"
+        }
+      ]
+    },
+    {
+      "id": "en-t06",
+      "subject": "[INC-4130] Checkout API outage on 17 September 2026",
+      "emails": [
+        {
+          "id": "en-t06e1",
+          "from": "Dana Placeholder",
+          "at": "2026-09-17T08:30:00Z",
+          "body": "Hi all,\n\nIncident INC-4130 is resolved. The checkout API returned errors from 07:15 UTC on 17 September 2026 for 61 minutes. About 2,600 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n\n-- \nDana Placeholder\nSite Reliability Engineering | Brightfield Example Co\nOn call: 555-0117"
+        },
+        {
+          "id": "en-t06e2",
+          "from": "Erik Muster",
+          "at": "2026-09-17T09:05:00Z",
+          "body": "Thanks Dana. Who owns the follow-up on INC-4130, and do we have an action item yet? I need it for the weekly ops review.\n\nErik\n\nOn Thu, 17 Sep 2026 at 08:30, Dana Placeholder <dana@example.com> wrote:\n> Hi all,\n>\n> Incident INC-4130 is resolved. The checkout API returned errors from 07:15 UTC on 17 September 2026 for 61 minutes. About 2,600 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n>\n> -- \n> Dana Placeholder\n> Site Reliability Engineering | Brightfield Example Co\n> On call: 555-0117"
+        },
+        {
+          "id": "en-t06e3",
+          "from": "Dana Placeholder",
+          "at": "2026-09-19T11:15:00Z",
+          "body": "Hi Erik,\n\nPostmortem for INC-4130 (the 61-minute checkout outage) is done. Root cause: a DNS record kept a 24-hour TTL after the migration, so half of the traffic still went to the retired load balancer. Follow-up owner is Ivan Primerov. Action item: lower TTLs to 300 seconds a week before every migration and add a DNS check to the cutover runbook.\n\n-- \nDana Placeholder\nSite Reliability Engineering | Brightfield Example Co\nOn call: 555-0117\n\nOn Thu, 17 Sep 2026 at 09:05, Erik Muster <erik@example.com> wrote:\n> Thanks Dana. Who owns the follow-up on INC-4130, and do we have an action item yet? I need it for the weekly ops review.\n>\n> Erik\n>\n> On Thu, 17 Sep 2026 at 08:30, Dana Placeholder <dana@example.com> wrote:\n> > Hi all,\n> >\n> > Incident INC-4130 is resolved. The checkout API returned errors from 07:15 UTC on 17 September 2026 for 61 minutes. About 2,600 customers saw a failed payment page during that window. Root cause is still under investigation; a postmortem follows this week.\n> >\n> > -- \n> > Dana Placeholder\n> > Site Reliability Engineering | Brightfield Example Co\n> > On call: 555-0117"
+        }
+      ]
+    },
+    {
+      "id": "en-t07",
+      "subject": "Office move to Calle Ejemplo 12 - planning",
+      "emails": [
+        {
+          "id": "en-t07e1",
+          "from": "Carmen Prueba",
+          "at": "2026-09-07T08:30:00Z",
+          "body": "Hi everyone,\n\nAs announced at the all-hands, we are moving from the current office to the new building at Calle Ejemplo 12. The move happens over the weekend of 24 and 25 October, and the first working day in the new office is Monday 26 October.\n\nEach team lead, please send me by 18 September how many moving crates you need, whether you have anything fragile or oversized, and who on your team will be the contact person during the move weekend.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163"
+        },
+        {
+          "id": "en-t07e2",
+          "from": "Hugo Exemplo",
+          "at": "2026-09-08T09:10:00Z",
+          "body": "Hi Carmen,\n\nFor IT: we need to move 40 desktops, 12 monitors that are not on desks, and the server rack with the network core. The rack cannot travel with the general furniture; it needs its own slot and a room with cooling and a dedicated circuit. Where does the server room go in the new building?\n\nHugo Exemplo\nIT Operations | Brightfield Example Co\n\nOn Mon, 7 Sep 2026 at 08:30, Carmen Prueba <carmen@example.com> wrote:\n> Hi everyone,\n>\n> As announced at the all-hands, we are moving from the current office to the new building at Calle Ejemplo 12. The move happens over the weekend of 24 and 25 October, and the first working day in the new office is Monday 26 October.\n>\n> Each team lead, please send me by 18 September how many moving crates you need, whether you have anything fragile or oversized, and who on your team will be the contact person during the move weekend.\n>\n> -- \n> Carmen Prueba\n> Facilities Coordinator | Brightfield Example Co\n> Phone 555-0163"
+        },
+        {
+          "id": "en-t07e3",
+          "from": "Carmen Prueba",
+          "at": "2026-09-10T16:45:00Z",
+          "body": "Hi Hugo, and copying all team leads because this answers several of your questions at once.\n\nFirst, thanks to everyone who already replied with crate counts. So far we have requests for 210 crates in total, and Example Removals confirmed they can deliver up to 250, so there is still room if a team forgot something. Please label every crate with your team colour and the room number from the floor plan I will circulate next week. Unlabelled crates go to the ground floor storage and will be sorted only after everyone else is settled, so it is worth the extra two minutes.\n\nOn the building itself: the server room will be on the fourth floor, room 4.12, next to the north stairwell; it has its own cooling unit and a dedicated 32 A circuit that the landlord installed in August. Hugo, the rack therefore travels separately, as you asked.\n\nKitchen, meeting rooms and the reception are on the ground floor. Finance and procurement sit on the second floor, sales and customer support on the third, IT and engineering on the fourth. The quiet room and the mothers' room are on the second floor next to the lifts.\n\nFurniture: desks and chairs stay in the old office and are replaced by new ones in the new building, except for the ergonomic chairs that people bought with a medical note, which move with their owners. Please tag those chairs with a yellow sticker that I will hand out.\n\nTimeline: the empty crates are delivered to the old office on Monday 19 October, packing is done by Friday 23 October at 17:00, and nobody should work from the old office on that Friday afternoon.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163"
+        },
+        {
+          "id": "en-t07e4",
+          "from": "Alice Example",
+          "at": "2026-09-14T10:05:00Z",
+          "body": "Hi Carmen,\n\nFinance has 30 archive boxes from 2019 to 2023 that we do not need on site. Can they go straight to the external archive instead of the new building?\n\nAlice\n\nOn Thu, 10 Sep 2026 at 16:45, Carmen Prueba <carmen@example.com> wrote:\n> Hi Hugo, and copying all team leads because this answers several of your questions at once.\n>\n> First, thanks to everyone who already replied with crate counts. So far we have requests for 210 crates in total, and Example Removals confirmed they can deliver up to 250, so there is still room if a team forgot something. Please label every crate with your team colour and the room number from the floor plan I will circulate next week. Unlabelled crates go to the ground floor storage and will be sorted only after everyone else is settled, so it is worth the extra two minutes.\n>\n> On the building itself: the server room will be on the fourth floor, room 4.12, next to the north stairwell; it has its own cooling unit and a dedicated 32 A circuit that the landlord installed in August. Hugo, the rack therefore travels separately, as you asked.\n>\n> Kitchen, meeting rooms and the reception are on the ground floor. Finance and procurement sit on the second floor, sales and customer support on the third, IT and engineering on the fourth. The quiet room and the mothers' room are on the second floor next to the lifts.\n>\n> Furniture: desks and chairs stay in the old office and are replaced by new ones in the new building, except for the ergonomic chairs that people bought with a medical note, which move with their owners. Please tag those chairs with a yellow sticker that I will hand out.\n>\n> Timeline: the empty crates are delivered to the old office on Monday 19 October, packing is done by Friday 23 October at 17:00, and nobody should work from the old office on that Friday afternoon.\n>\n> -- \n> Carmen Prueba\n> Facilities Coordinator | Brightfield Example Co\n> Phone 555-0163"
+        },
+        {
+          "id": "en-t07e5",
+          "from": "Carmen Prueba",
+          "at": "2026-09-16T11:20:00Z",
+          "body": "Hi Alice,\n\nYes, Example Storage will collect the 30 archive boxes from the old office on Thursday 22 October and keep them in their external archive; you will get a box inventory by email.\n\nFor everyone: Example Removals will pick up the keys to the new building at 07:30 on Saturday 24 October from the security desk at the main entrance, and start unloading at 08:00. Hugo, your rack slot is Sunday 25 October, first thing in the morning.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163"
+        },
+        {
+          "id": "en-t07e6",
+          "from": "Bob Sample",
+          "at": "2026-09-21T09:00:00Z",
+          "body": "Hi Carmen,\n\nTwo practical questions from procurement: where do suppliers' delivery vans park at the new building, and how many staff parking spaces do we get? Several people drive in from the coast.\n\nBob\n\nOn Wed, 16 Sep 2026 at 11:20, Carmen Prueba <carmen@example.com> wrote:\n> Hi Alice,\n>\n> Yes, Example Storage will collect the 30 archive boxes from the old office on Thursday 22 October and keep them in their external archive; you will get a box inventory by email.\n>\n> For everyone: Example Removals will pick up the keys to the new building at 07:30 on Saturday 24 October from the security desk at the main entrance, and start unloading at 08:00. Hugo, your rack slot is Sunday 25 October, first thing in the morning.\n>\n> -- \n> Carmen Prueba\n> Facilities Coordinator | Brightfield Example Co\n> Phone 555-0163"
+        },
+        {
+          "id": "en-t07e7",
+          "from": "Carmen Prueba",
+          "at": "2026-09-23T14:30:00Z",
+          "body": "Hi Bob,\n\nThe landlord gives us 18 parking permits for the underground garage. Since we have more drivers than permits, we will assign them by lottery on 9 October, with priority for colleagues with a disability badge. Supplier vans use loading bay B on the side street and may stay there for up to 30 minutes.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163"
+        },
+        {
+          "id": "en-t07e8",
+          "from": "Hugo Exemplo",
+          "at": "2026-09-24T08:15:00Z",
+          "body": "Thanks Carmen. I have booked the IT window on Sunday 25 October from 08:00 to 14:00; the network will be down in the new building during that window and back before Monday.\n\nHugo Exemplo\nIT Operations | Brightfield Example Co\n\nOn Wed, 23 Sep 2026 at 14:30, Carmen Prueba <carmen@example.com> wrote:\n> Hi Bob,\n>\n> The landlord gives us 18 parking permits for the underground garage. Since we have more drivers than permits, we will assign them by lottery on 9 October, with priority for colleagues with a disability badge. Supplier vans use loading bay B on the side street and may stay there for up to 30 minutes.\n>\n> -- \n> Carmen Prueba\n> Facilities Coordinator | Brightfield Example Co\n> Phone 555-0163"
+        }
+      ]
+    },
+    {
+      "id": "en-t08",
+      "subject": "Renewal of Example Workspace licenses 2027",
+      "emails": [
+        {
+          "id": "en-t08e1",
+          "from": "Frank Sampleton",
+          "at": "2026-09-15T10:00:00Z",
+          "body": "Dear Alice Example,\n\nYour Example Workspace subscription for 120 seats ends on 31 December 2026. For the renewal we propose EUR 42 per seat per month on a one-year term, which includes the standard 5% annual uplift.\n\nHappy to discuss on a call.\n\n-- \nFrank Sampleton\nAccount Manager | Example Software Ltd\nPhone 555-0188\nThis message is confidential and intended only for the addressee."
+        },
+        {
+          "id": "en-t08e2",
+          "from": "Alice Example",
+          "at": "2026-09-17T09:30:00Z",
+          "body": "Hi Frank,\n\nThanks for the offer. We would consider a longer term if the price reflects it. What discount can you give for a three-year commitment, and can you improve the support terms? Our current plan only covers business hours.\n\nKind regards,\nAlice Example\nAccounts Payable | Brightfield Example Co\nProcurement | Invoices | Shipping\n\nOn Tue, 15 Sep 2026 at 10:00, Frank Sampleton <frank@example.com> wrote:\n> Dear Alice Example,\n>\n> Your Example Workspace subscription for 120 seats ends on 31 December 2026. For the renewal we propose EUR 42 per seat per month on a one-year term, which includes the standard 5% annual uplift.\n>\n> Happy to discuss on a call.\n>\n> -- \n> Frank Sampleton\n> Account Manager | Example Software Ltd\n> Phone 555-0188\n> This message is confidential and intended only for the addressee."
+        },
+        {
+          "id": "en-t08e3",
+          "from": "Frank Sampleton",
+          "at": "2026-09-22T13:15:00Z",
+          "body": "Hi Alice,\n\nFor a three-year term I can offer 10% off the list price, so EUR 37.80 per seat per month. I will come back on support separately.\n\n-- \nFrank Sampleton\nAccount Manager | Example Software Ltd\nPhone 555-0188\nThis message is confidential and intended only for the addressee.\n\n________________________________\nFrom: Alice Example <alice@example.com>\nSent: Thu, 17 Sep 2026, 09:30\nTo: Frank Sampleton <frank@example.com>\nSubject: RE: Renewal of Example Workspace licenses 2027\n\nHi Frank,\n\nThanks for the offer. We would consider a longer term if the price reflects it. What discount can you give for a three-year commitment, and can you improve the support terms? Our current plan only covers business hours.\n\nKind regards,\nAlice Example\nAccounts Payable | Brightfield Example Co\nProcurement | Invoices | Shipping\n\nOn Tue, 15 Sep 2026 at 10:00, Frank Sampleton <frank@example.com> wrote:\n> Dear Alice Example,\n>\n> Your Example Workspace subscription for 120 seats ends on 31 December 2026. For the renewal we propose EUR 42 per seat per month on a one-year term, which includes the standard 5% annual uplift.\n>\n> Happy to discuss on a call.\n>\n> -- \n> Frank Sampleton\n> Account Manager | Example Software Ltd\n> Phone 555-0188\n> This message is confidential and intended only for the addressee."
+        },
+        {
+          "id": "en-t08e4",
+          "from": "Frank Sampleton",
+          "at": "2026-09-24T09:45:00Z",
+          "body": "Hi Alice,\n\nOn support: with the three-year term you move to Premier Support. Priority 1 tickets get a response within 1 hour, 24 hours a day and 7 days a week; priority 2 tickets within 4 business hours; everything else within one business day. Premier Support also includes a named technical contact.\n\nI also checked with my manager and can go to 15% for three years.\n\n-- \nFrank Sampleton\nAccount Manager | Example Software Ltd\nPhone 555-0188\nThis message is confidential and intended only for the addressee.\n\nOn Tue, 22 Sep 2026 at 13:15, Frank Sampleton <frank@example.com> wrote:\n> Hi Alice,\n>\n> For a three-year term I can offer 10% off the list price, so EUR 37.80 per seat per month. I will come back on support separately.\n>\n> -- \n> Frank Sampleton\n> Account Manager | Example Software Ltd\n> Phone 555-0188\n> This message is confidential and intended only for the addressee.\n>\n> ________________________________\n> From: Alice Example <alice@example.com>\n> Sent: Thu, 17 Sep 2026, 09:30\n> To: Frank Sampleton <frank@example.com>\n> Subject: RE: Renewal of Example Workspace licenses 2027\n>\n> Hi Frank,\n>\n> Thanks for the offer. We would consider a longer term if the price reflects it. What discount can you give for a three-year commitment, and can you improve the support terms? Our current plan only covers business hours.\n>\n> Kind regards,\n> Alice Example\n> Accounts Payable | Brightfield Example Co\n> Procurement | Invoices | Shipping\n>\n> On Tue, 15 Sep 2026 at 10:00, Frank Sampleton <frank@example.com> wrote:\n> > Dear Alice Example,\n> >\n> > Your Example Workspace subscription for 120 seats ends on 31 December 2026. For the renewal we propose EUR 42 per seat per month on a one-year term, which includes the standard 5% annual uplift.\n> >\n> > Happy to discuss on a call.\n> >\n> > -- \n> > Frank Sampleton\n> > Account Manager | Example Software Ltd\n> > Phone 555-0188\n> > This message is confidential and intended only for the addressee."
+        },
+        {
+          "id": "en-t08e5",
+          "from": "Alice Example",
+          "at": "2026-09-29T11:00:00Z",
+          "body": "Hi Frank,\n\nPremier Support works for us. On price, our budget committee wants 20% and a written cap on yearly price increases; otherwise the three-year term is too risky for us. Can you meet us somewhere in between?\n\nKind regards,\nAlice Example\nAccounts Payable | Brightfield Example Co\nProcurement | Invoices | Shipping"
+        },
+        {
+          "id": "en-t08e6",
+          "from": "Frank Sampleton",
+          "at": "2026-10-02T16:20:00Z",
+          "body": "Hi Alice,\n\nFinal offer after internal approval: 18% discount on the list price for a three-year term starting 1 January 2027, and any annual price increase is capped at 4%. The offer is valid if the contract is signed by 31 October 2026.\n\n-- \nFrank Sampleton\nAccount Manager | Example Software Ltd\nPhone 555-0188\nThis message is confidential and intended only for the addressee.\n\nOn Tue, 29 Sep 2026 at 11:00, Alice Example <alice@example.com> wrote:\n> Hi Frank,\n>\n> Premier Support works for us. On price, our budget committee wants 20% and a written cap on yearly price increases; otherwise the three-year term is too risky for us. Can you meet us somewhere in between?\n>\n> Kind regards,\n> Alice Example\n> Accounts Payable | Brightfield Example Co\n> Procurement | Invoices | Shipping"
+        },
+        {
+          "id": "en-t08e7",
+          "from": "Alice Example",
+          "at": "2026-10-05T08:50:00Z",
+          "body": "Hi Frank,\n\nAgreed. Our legal team will send the signed order form this week.\n\nKind regards,\nAlice Example\nAccounts Payable | Brightfield Example Co\nProcurement | Invoices | Shipping\n\nOn Fri, 2 Oct 2026 at 16:20, Frank Sampleton <frank@example.com> wrote:\n> Hi Alice,\n>\n> Final offer after internal approval: 18% discount on the list price for a three-year term starting 1 January 2027, and any annual price increase is capped at 4%. The offer is valid if the contract is signed by 31 October 2026.\n>\n> -- \n> Frank Sampleton\n> Account Manager | Example Software Ltd\n> Phone 555-0188\n> This message is confidential and intended only for the addressee.\n>\n> On Tue, 29 Sep 2026 at 11:00, Alice Example <alice@example.com> wrote:\n> > Hi Frank,\n> >\n> > Premier Support works for us. On price, our budget committee wants 20% and a written cap on yearly price increases; otherwise the three-year term is too risky for us. Can you meet us somewhere in between?\n> >\n> > Kind regards,\n> > Alice Example\n> > Accounts Payable | Brightfield Example Co\n> > Procurement | Invoices | Shipping"
+        }
+      ]
+    },
+    {
+      "id": "en-t09",
+      "subject": "Q3 warehouse operations report",
+      "emails": [
+        {
+          "id": "en-t09e1",
+          "from": "Erik Muster",
+          "at": "2026-10-07T07:45:00Z",
+          "body": "Hi team,\n\nHere is the Q3 summary for the Valencia warehouse, ahead of Thursday's review. It is longer than usual because several contracts come up for renewal this quarter, so please read to the end.\n\nVolumes first. We shipped 11,840 orders in Q3, up 9% on Q2, with September as the busiest month since the warehouse opened. Inbound volume grew less, by 4%, because two large suppliers moved to consolidated weekly deliveries. Average dock-to-stock time stayed at 5.5 hours, which is within target even with the September peak.\n\nQuality improved after the scanner rollout in July: pick accuracy rose to 99.2% in Q3, from 98.1% in Q2, and returns caused by wrong items fell by about a third. Damaged-in-transit claims are flat at 0.4% of orders. Thanks to the night shift for testing the new scanners before the rollout.\n\nPeople. We ended the quarter with 34 people in the warehouse team, including 6 seasonal staff who stay until the end of January. Overtime was high in September, an average of 7 hours per person; I want to bring that down in Q4 by moving the second wave of picking earlier.\n\nEquipment and contracts. The forklift lease with Example Machines ends on 30 November and we will not renew it; from December we switch to the electric fleet from Example Motion, which is already on site for training. The conveyor maintenance contract renews automatically in January unless we cancel by 1 December, and I suggest we keep it.\n\nSafety. One minor incident in August, a strained back during manual unloading; no lost days. The new lifting aids arrive in October and every picker gets refresher training before the peak season.\n\nCosts. Cost per order fell from EUR 3.10 to EUR 2.85, mostly thanks to fewer mispicks and better carton sizing. Energy costs rose 6% because of the summer heat and the extra cooling in the chilled zone.\n\nPlans for Q4: prepare for the November peak, finish the electric fleet switch, and pilot a second shift for returns processing from 1 November.\n\nSee you on Thursday.\n\nErik Muster\nHead of Warehouse Operations | Brightfield Example Co"
+        }
+      ]
+    },
+    {
+      "id": "en-t10",
+      "subject": "Welcome to Brightfield - your first week",
+      "emails": [
+        {
+          "id": "en-t10e1",
+          "from": "Carmen Prueba",
+          "at": "2026-09-28T07:00:00Z",
+          "body": "Dear Alice Example,\n\nWelcome to Brightfield Example Co! This email collects everything you need for your first week, so you do not have to hunt for it on the intranet. Please keep it somewhere handy; most new colleagues come back to it more than once.\n\nYour first day starts at 09:30. Come to the reception on the ground floor and ask for me; I will walk you to your desk and introduce you to your team. If you arrive earlier, the coffee machine next to the reception is free for everyone.\n\nYour access badge is ready: pick it up at the security desk at the main entrance, bring a photo ID, and sign the key register. The badge opens the main door, your floor and the garage if you have a parking permit.\n\nYour laptop will be on your desk with a temporary password taped to the screen. Change it at your first login; the new password must be at least 14 characters long. The laptop already has the mail client, the chat app and the expense tool installed. If you need extra software, request it through the service portal, never install it yourself.\n\nWorking from home: to reach internal systems from home you need the VPN. It uses the Example Connect client, which is already installed, and a hardware token; ask the IT service desk at extension 4471 for the token in your first week, because they hand them out only on Tuesdays and Thursdays.\n\nLunch: the canteen on the ground floor is open from 12:30 to 15:00. Your badge works as a payment card there, and the company pays half of every lunch.\n\nTraining: in your first week you have three mandatory short courses in the learning portal: data protection, information security and workplace safety. Each takes about 30 minutes; please finish them by Friday.\n\nYour buddy is Bob Sample from procurement. He has been with us for six years and knows how everything works; ask him anything, there are no silly questions.\n\nOnce again, welcome aboard!\n\nCarmen Prueba\nPeople and Facilities | Brightfield Example Co"
+        }
+      ]
+    },
+    {
+      "id": "en-t11",
+      "subject": "Updated travel and expense policy from 1 November",
+      "emails": [
+        {
+          "id": "en-t11e1",
+          "from": "Erik Muster",
+          "at": "2026-10-08T09:00:00Z",
+          "body": "Hello all,\n\nThe board has approved an updated travel and expense policy. It applies to all trips that start on or after 1 November 2026. Trips that are already booked under the old policy stay as they are, even if they take place later. The full document is on the intranet; below are the changes that matter most in day-to-day travel, so please read this summary even if you travel only once or twice a year.\n\nAccommodation. Booking still goes through the travel portal, and the portal shows the cap for each city. We listened to the complaints about hotel prices in big cities: the hotel cap rises to EUR 160 per night in Tier 1 cities, which are Madrid, Barcelona, Paris, London and Milan. In all other cities the cap stays at EUR 110 per night. Breakfast is included in the cap if the hotel offers it.\n\nMeals. The daily meal allowance stays at EUR 45 for full travel days and EUR 25 for the day of departure and the day of return. Alcohol is never reimbursed, also not at client dinners. Tips are reimbursed up to 10% of the bill, and only when the receipt shows them separately, which most restaurants do on request.\n\nReceipts. This is the change that causes the most trouble in practice, so please pay attention: receipts must be uploaded to the expense tool within 30 days of the end of the trip. After 30 days the tool locks the trip and only your director can unlock it, which takes time for everyone. Photos of paper receipts are fine; keep the paper copy for three months.\n\nTransport. Train is the default for trips under four hours. Economy class is the default for flights; business class is allowed only for flights longer than 6 hours and only with the approval of your director before booking. Taxis are reimbursed when public transport is not reasonable, for example late at night or with heavy equipment. Rental cars need prior approval and must be the smallest category that fits the trip.\n\nPer diem countries. For trips outside the EU, the per diem tables from the tax authority apply instead of the EUR 45 allowance; the expense tool picks the right rate automatically from the destination.\n\nCorporate card. Everyone who travels more than four times a year can request a corporate card from finance. Personal expenses on the corporate card are not allowed, even if you pay them back.\n\nQuestions go to the finance helpdesk, not to your manager, so we answer them consistently.\n\nBest,\nErik Muster\nFinance Operations | Brightfield Example Co"
+        }
+      ]
+    },
+    {
+      "id": "en-t12",
+      "subject": "Example Logistics Monthly - October 2026",
+      "emails": [
+        {
+          "id": "en-t12e1",
+          "from": "Example Logistics News",
+          "at": "2026-10-01T06:00:00Z",
+          "body": "EXAMPLE LOGISTICS MONTHLY | October 2026\nProcurement | Invoices | Shipping\n\n--\nHUB UPDATES\nOur Valencia hub will be closed for planned maintenance on Saturday 31 October. Shipments booked for that day leave on Monday 2 November instead; the Lyon depot works as usual.\n\n--\nNEW PALLET LABELS\nFrom 2 November every pallet gets a label with a QR code instead of the old barcode label. Your scanners need firmware 4.2 or later to read the new labels; the update is free and available in the customer portal.\n\n--\nPEOPLE\nWe welcome three new account managers in the Valencia sales team. Your current contact stays the same unless we tell you otherwise.\n\n--\nYou receive this newsletter because you are a customer or employee of an Example group company. To unsubscribe, use the preference centre link in your account settings. Example Logistics S.L., Calle Ficticia 1, 46000 Valencia. Registered in the Commercial Register of Example, sheet V-00000. This message may contain confidential information. If you received it in error, please delete it and notify the sender. We process personal data in line with our privacy notice at example.com/privacy."
+        }
+      ]
+    },
+    {
+      "id": "en-t13",
+      "subject": "Brightfield Wellness Digest - November",
+      "emails": [
+        {
+          "id": "en-t13e1",
+          "from": "Brightfield People Team",
+          "at": "2026-10-09T07:00:00Z",
+          "body": "BRIGHTFIELD WELLNESS DIGEST | November edition\n\n--\nFLU SEASON\nFree flu vaccinations for all staff take place on Friday 6 November from 09:00 to 13:00 in meeting room 2B. No appointment is needed; bring your badge.\n\n--\nERGONOMICS\nWant a standing desk? Fill in the facilities request form on the intranet. No medical note is needed, and requests are approved within 10 working days.\n\n--\nMOVE MORE CHALLENGE\nThe step challenge runs through November. Teams of five, prizes for the top three teams.\n\n--\nThis digest is sent to all Brightfield Example Co employees. It does not constitute medical advice. Brightfield Example Co, Calle Ejemplo 12, Valencia. Internal use only; do not forward outside the company."
+        }
+      ]
+    },
+    {
+      "id": "en-t14",
+      "subject": "Signed lease for the guest flat",
+      "emails": [
+        {
+          "id": "en-t14e1",
+          "from": "Alice Example",
+          "at": "2026-10-05T08:10:00Z",
+          "body": "Hi Bob, can you send the signed lease for the guest flat by Friday 9 October? The landlord needs it before he releases the keys.\n\nThanks,\nAlice"
+        },
+        {
+          "id": "en-t14e2",
+          "from": "Bob Sample",
+          "at": "2026-10-07T12:00:00Z",
+          "body": "Hi Alice,\n\nSigned it today and sent the original by courier to the landlord this afternoon.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142\n\nOn Mon, 5 Oct 2026 at 08:10, Alice Example <alice@example.com> wrote:\n> Hi Bob, can you send the signed lease for the guest flat by Friday 9 October? The landlord needs it before he releases the keys.\n>\n> Thanks,\n> Alice"
+        },
+        {
+          "id": "en-t14e3",
+          "from": "Alice Example",
+          "at": "2026-10-09T15:30:00Z",
+          "body": "Hi Bob,\n\nThe landlord confirmed receipt. Key handover for the guest flat is on Sunday 1 November at 10:00 at the flat itself, Calle Muestra 5, apartment 3B.\n\nAlice\n\nSent from my phone\n\nOn Wed, 7 Oct 2026 at 12:00, Bob Sample <bob@example.com> wrote:\n> Hi Alice,\n>\n> Signed it today and sent the original by courier to the landlord this afternoon.\n>\n> Best regards,\n> Bob Sample\n> Senior Procurement Manager | Example Logistics\n> Procurement | Invoices | Shipping\n> Phone 555-0142\n>\n> On Mon, 5 Oct 2026 at 08:10, Alice Example <alice@example.com> wrote:\n> > Hi Bob, can you send the signed lease for the guest flat by Friday 9 October? The landlord needs it before he releases the keys.\n> >\n> > Thanks,\n> > Alice"
+        }
+      ]
+    },
+    {
+      "id": "en-t15",
+      "subject": "Autumn team dinner",
+      "emails": [
+        {
+          "id": "en-t15e1",
+          "from": "Carmen Prueba",
+          "at": "2026-09-25T10:00:00Z",
+          "body": "Hi Hugo,\n\nCould you take over the venue and catering for the autumn team dinner on Friday 23 October? Budget is EUR 55 per person including drinks.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163"
+        },
+        {
+          "id": "en-t15e2",
+          "from": "Hugo Exemplo",
+          "at": "2026-09-30T17:20:00Z",
+          "body": "Hi Carmen,\n\nSure. The venue is booked: the terrace of the Example Bistro by the harbour, from 19:30. The menu is a set three-course dinner with a vegetarian and a vegan option, within the budget.\n\nCheers,\nHugo\n\nP.S. The caterer needs the final headcount by 15 October; right now we are at 42 people.\n\nOn Fri, 25 Sep 2026 at 10:00, Carmen Prueba <carmen@example.com> wrote:\n> Hi Hugo,\n>\n> Could you take over the venue and catering for the autumn team dinner on Friday 23 October? Budget is EUR 55 per person including drinks.\n>\n> -- \n> Carmen Prueba\n> Facilities Coordinator | Brightfield Example Co\n> Phone 555-0163"
+        },
+        {
+          "id": "en-t15e3",
+          "from": "Carmen Prueba",
+          "at": "2026-10-01T09:00:00Z",
+          "body": "Great, thank you Hugo! I will remind the team to sign up.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163\n\nOn Wed, 30 Sep 2026 at 17:20, Hugo Exemplo <hugo@example.com> wrote:\n> Hi Carmen,\n>\n> Sure. The venue is booked: the terrace of the Example Bistro by the harbour, from 19:30. The menu is a set three-course dinner with a vegetarian and a vegan option, within the budget.\n>\n> Cheers,\n> Hugo\n>\n> P.S. The caterer needs the final headcount by 15 October; right now we are at 42 people.\n>\n> On Fri, 25 Sep 2026 at 10:00, Carmen Prueba <carmen@example.com> wrote:\n> > Hi Hugo,\n> >\n> > Could you take over the venue and catering for the autumn team dinner on Friday 23 October? Budget is EUR 55 per person including drinks.\n> >\n> > -- \n> > Carmen Prueba\n> > Facilities Coordinator | Brightfield Example Co\n> > Phone 555-0163"
+        }
+      ]
+    },
+    {
+      "id": "en-t16",
+      "subject": "Supplier audit by Example Assurance",
+      "emails": [
+        {
+          "id": "en-t16e1",
+          "from": "Carmen Prueba",
+          "at": "2026-10-06T09:00:00Z",
+          "body": "Hi Bob, hi Alice,\n\nThe annual supplier audit by Example Assurance is coming up. Bob, can you confirm the dates with them? Alice, please prepare the finance documents they asked for.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163"
+        },
+        {
+          "id": "en-t16e2",
+          "from": "Bob Sample",
+          "at": "2026-10-07T10:30:00Z",
+          "body": "Hi Carmen,\n\nConfirmed: two auditors from Example Assurance arrive at 09:00 on Wednesday 21 October and stay for two days. They will start with procurement contracts and then go through invoices and shipping records.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142\n\nOn Tue, 6 Oct 2026 at 09:00, Carmen Prueba <carmen@example.com> wrote:\n> Hi Bob, hi Alice,\n>\n> The annual supplier audit by Example Assurance is coming up. Bob, can you confirm the dates with them? Alice, please prepare the finance documents they asked for.\n>\n> -- \n> Carmen Prueba\n> Facilities Coordinator | Brightfield Example Co\n> Phone 555-0163"
+        },
+        {
+          "id": "en-t16e3",
+          "from": "Alice Example",
+          "at": "2026-10-08T11:15:00Z",
+          "body": "Hi Bob,\n\nThe finance documents are ready in the shared audit folder.\n\nThanks,\nCould you also book meeting room 3A for the auditors on both days?\n\nOn Wed, 7 Oct 2026 at 10:30, Bob Sample <bob@example.com> wrote:\n> Hi Carmen,\n>\n> Confirmed: two auditors from Example Assurance arrive at 09:00 on Wednesday 21 October and stay for two days. They will start with procurement contracts and then go through invoices and shipping records.\n>\n> Best regards,\n> Bob Sample\n> Senior Procurement Manager | Example Logistics\n> Procurement | Invoices | Shipping\n> Phone 555-0142\n>\n> On Tue, 6 Oct 2026 at 09:00, Carmen Prueba <carmen@example.com> wrote:\n> > Hi Bob, hi Alice,\n> >\n> > The annual supplier audit by Example Assurance is coming up. Bob, can you confirm the dates with them? Alice, please prepare the finance documents they asked for.\n> >\n> > -- \n> > Carmen Prueba\n> > Facilities Coordinator | Brightfield Example Co\n> > Phone 555-0163"
+        }
+      ]
+    },
+    {
+      "id": "en-t17",
+      "subject": "Fire safety walkthrough",
+      "emails": [
+        {
+          "id": "en-t17e1",
+          "from": "Carmen Prueba",
+          "at": "2026-10-05T08:00:00Z",
+          "body": "Hi Bob,\n\nThe annual fire safety walkthrough with the building inspector is planned for Tuesday 13 October at 10:00. As fire warden for the second floor you need to be there.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163"
+        },
+        {
+          "id": "en-t17e2",
+          "from": "Bob Sample",
+          "at": "2026-10-05T09:30:00Z",
+          "body": "I am at a supplier site all day on Tuesday, sorry.\n\nBob"
+        },
+        {
+          "id": "en-t17e3",
+          "from": "Carmen Prueba",
+          "at": "2026-10-05T10:05:00Z",
+          "body": "Can we do it on Thursday at 15:00 instead?"
+        },
+        {
+          "id": "en-t17e4",
+          "from": "Bob Sample",
+          "at": "2026-10-05T10:12:00Z",
+          "body": "Yes, Thursday works."
+        },
+        {
+          "id": "en-t17e5",
+          "from": "Carmen Prueba",
+          "at": "2026-10-05T10:40:00Z",
+          "body": "Booked with the inspector. Please bring the evacuation plan for your floor.\n\n-- \nCarmen Prueba\nFacilities Coordinator | Brightfield Example Co\nPhone 555-0163"
+        }
+      ]
+    },
+    {
+      "id": "en-t18",
+      "subject": "Container EXMU 4410287 held at customs",
+      "emails": [
+        {
+          "id": "en-t18e1",
+          "from": "Ivan Primerov",
+          "at": "2026-10-08T07:30:00Z",
+          "body": "Hello Bob,\n\nContainer EXMU 4410287 with your packaging material arrived at Valencia port on 6 October but is held at customs: the commercial invoice has no HS codes for the goods, so customs cannot classify them. Please send a corrected commercial invoice with HS codes as soon as possible; every extra day in the port adds storage charges.\n\n-- \nIvan Primerov\nOcean Freight Desk | Example Freight\nPhone 555-0175"
+        },
+        {
+          "id": "en-t18e2",
+          "from": "Bob Sample",
+          "at": "2026-10-08T08:15:00Z",
+          "body": "Alice, see below from our forwarder. Can you send Ivan the corrected commercial invoice with HS codes today?\n\nBob\n\n________________________________\nFrom: Ivan Primerov <ivan@example.com>\nSent: Thu, 8 Oct 2026, 07:30\nTo: Bob Sample <bob@example.com>\nSubject: Container EXMU 4410287 held at customs\n\nHello Bob,\n\nContainer EXMU 4410287 with your packaging material arrived at Valencia port on 6 October but is held at customs: the commercial invoice has no HS codes for the goods, so customs cannot classify them. Please send a corrected commercial invoice with HS codes as soon as possible; every extra day in the port adds storage charges.\n\n-- \nIvan Primerov\nOcean Freight Desk | Example Freight\nPhone 555-0175"
+        },
+        {
+          "id": "en-t18e3",
+          "from": "Alice Example",
+          "at": "2026-10-08T13:40:00Z",
+          "body": "Ivan, Bob, the corrected commercial invoice with HS codes for all lines is attached.\n\nAlice\n\n________________________________\nFrom: Bob Sample <bob@example.com>\nSent: Thu, 8 Oct 2026, 08:15\nTo: Alice Example <alice@example.com>\nSubject: RE: Container EXMU 4410287 held at customs\n\nAlice, see below from our forwarder. Can you send Ivan the corrected commercial invoice with HS codes today?\n\nBob\n\n________________________________\nFrom: Ivan Primerov <ivan@example.com>\nSent: Thu, 8 Oct 2026, 07:30\nTo: Bob Sample <bob@example.com>\nSubject: Container EXMU 4410287 held at customs\n\nHello Bob,\n\nContainer EXMU 4410287 with your packaging material arrived at Valencia port on 6 October but is held at customs: the commercial invoice has no HS codes for the goods, so customs cannot classify them. Please send a corrected commercial invoice with HS codes as soon as possible; every extra day in the port adds storage charges.\n\n-- \nIvan Primerov\nOcean Freight Desk | Example Freight\nPhone 555-0175"
+        },
+        {
+          "id": "en-t18e4",
+          "from": "Ivan Primerov",
+          "at": "2026-10-12T09:00:00Z",
+          "body": "Hello Bob,\n\nThanks for the corrected invoice. Customs released the container this morning. It will arrive at your Valencia warehouse on Monday 19 October, morning slot 08:00 to 10:00. Note that the four extra days in the port caused EUR 1,150 in demurrage.\n\n-- \nIvan Primerov\nOcean Freight Desk | Example Freight\nPhone 555-0175\n\nOn Thu, 8 Oct 2026 at 13:40, Alice Example <alice@example.com> wrote:\n> Ivan, Bob, the corrected commercial invoice with HS codes for all lines is attached.\n>\n> Alice\n>\n> ________________________________\n> From: Bob Sample <bob@example.com>\n> Sent: Thu, 8 Oct 2026, 08:15\n> To: Alice Example <alice@example.com>\n> Subject: RE: Container EXMU 4410287 held at customs\n>\n> Alice, see below from our forwarder. Can you send Ivan the corrected commercial invoice with HS codes today?\n>\n> Bob\n>\n> ________________________________\n> From: Ivan Primerov <ivan@example.com>\n> Sent: Thu, 8 Oct 2026, 07:30\n> To: Bob Sample <bob@example.com>\n> Subject: Container EXMU 4410287 held at customs\n>\n> Hello Bob,\n>\n> Container EXMU 4410287 with your packaging material arrived at Valencia port on 6 October but is held at customs: the commercial invoice has no HS codes for the goods, so customs cannot classify them. Please send a corrected commercial invoice with HS codes as soon as possible; every extra day in the port adds storage charges.\n>\n> -- \n> Ivan Primerov\n> Ocean Freight Desk | Example Freight\n> Phone 555-0175"
+        },
+        {
+          "id": "en-t18e5",
+          "from": "Bob Sample",
+          "at": "2026-10-12T11:25:00Z",
+          "body": "Hi Ivan,\n\nThe missing HS codes were our mistake, so Brightfield accepts the EUR 1,150 demurrage. Please invoice it to Brightfield Example Co, cost center 4410, not to the supplier.\n\nBest regards,\nBob Sample\nSenior Procurement Manager | Example Logistics\nProcurement | Invoices | Shipping\nPhone 555-0142\n\nOn Mon, 12 Oct 2026 at 09:00, Ivan Primerov <ivan@example.com> wrote:\n> Hello Bob,\n>\n> Thanks for the corrected invoice. Customs released the container this morning. It will arrive at your Valencia warehouse on Monday 19 October, morning slot 08:00 to 10:00. Note that the four extra days in the port caused EUR 1,150 in demurrage.\n>\n> -- \n> Ivan Primerov\n> Ocean Freight Desk | Example Freight\n> Phone 555-0175\n>\n> On Thu, 8 Oct 2026 at 13:40, Alice Example <alice@example.com> wrote:\n> > Ivan, Bob, the corrected commercial invoice with HS codes for all lines is attached.\n> >\n> > Alice\n> >\n> > ________________________________\n> > From: Bob Sample <bob@example.com>\n> > Sent: Thu, 8 Oct 2026, 08:15\n> > To: Alice Example <alice@example.com>\n> > Subject: RE: Container EXMU 4410287 held at customs\n> >\n> > Alice, see below from our forwarder. Can you send Ivan the corrected commercial invoice with HS codes today?\n> >\n> > Bob\n> >\n> > ________________________________\n> > From: Ivan Primerov <ivan@example.com>\n> > Sent: Thu, 8 Oct 2026, 07:30\n> > To: Bob Sample <bob@example.com>\n> > Subject: Container EXMU 4410287 held at customs\n> >\n> > Hello Bob,\n> >\n> > Container EXMU 4410287 with your packaging material arrived at Valencia port on 6 October but is held at customs: the commercial invoice has no HS codes for the goods, so customs cannot classify them. Please send a corrected commercial invoice with HS codes as soon as possible; every extra day in the port adds storage charges.\n> >\n> > -- \n> > Ivan Primerov\n> > Ocean Freight Desk | Example Freight\n> > Phone 555-0175"
+        }
+      ]
+    },
+    {
+      "id": "ru-t01",
+      "subject": "Счёт за аренду офиса — июль 2026",
+      "emails": [
+        {
+          "id": "ru-t01e1",
+          "from": "Мария Образцова",
+          "at": "2026-07-28T09:12:00Z",
+          "body": "Добрый день, Иван!\n\nНаправляю счёт № 0714 за аренду офиса на июль 2026 года. Сумма к оплате — 184 500 руб., в том числе НДС. Оплатить нужно до 10 августа. Счёт и акт во вложении, оригиналы передадим курьером вместе с остальными документами.\n\nС уважением,\nМария Образцова\nГлавный бухгалтер | ООО «Пример»\nБухгалтерия: счета, оплата аренды и сверка\nТел. +7 555 0142"
+        },
+        {
+          "id": "ru-t01e2",
+          "from": "Иван Примеров",
+          "at": "2026-07-28T13:40:00Z",
+          "body": "Мария, добрый день!\n\nСчёт получил, спасибо. Подскажите, пожалуйста, когда вы увидите поступление, если мы отправим платёж в начале августа?\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\nivan@example.org\n\nвт, 28 июл. 2026 г. в 09:12, Мария Образцова <maria@example.com>:\n> Добрый день, Иван!\n>\n> Направляю счёт № 0714 за аренду офиса на июль 2026 года. Сумма к оплате — 184 500 руб., в том числе НДС. Оплатить нужно до 10 августа. Счёт и акт во вложении, оригиналы передадим курьером вместе с остальными документами.\n>\n> С уважением,\n> Мария Образцова\n> Главный бухгалтер | ООО «Пример»\n> Бухгалтерия: счета, оплата аренды и сверка\n> Тел. +7 555 0142"
+        },
+        {
+          "id": "ru-t01e3",
+          "from": "Мария Образцова",
+          "at": "2026-08-08T10:05:00Z",
+          "body": "Иван, здравствуйте!\n\nОплату по счёту № 0714 получили 8 августа, платёжное поручение № 552. Акт сверки за июль пришлём в конце месяца.\n\nС уважением,\nМария Образцова\nГлавный бухгалтер | ООО «Пример»\nБухгалтерия: счета, оплата аренды и сверка\nТел. +7 555 0142\n\nвт, 28 июл. 2026 г. в 13:40, Иван Примеров <ivan@example.org>:\n> Мария, добрый день!\n>\n> Счёт получил, спасибо. Подскажите, пожалуйста, когда вы увидите поступление, если мы отправим платёж в начале августа?\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117\n> ivan@example.org"
+        }
+      ]
+    },
+    {
+      "id": "ru-t02",
+      "subject": "Счёт за аренду офиса — август 2026",
+      "emails": [
+        {
+          "id": "ru-t02e1",
+          "from": "Мария Образцова",
+          "at": "2026-08-27T09:12:00Z",
+          "body": "Добрый день, Иван!\n\nНаправляю счёт № 0815 за аренду офиса на август 2026 года. Сумма к оплате — 191 200 руб., в том числе НДС. Оплатить нужно до 10 сентября. Счёт и акт во вложении, оригиналы передадим курьером вместе с остальными документами.\n\nС уважением,\nМария Образцова\nГлавный бухгалтер | ООО «Пример»\nБухгалтерия: счета, оплата аренды и сверка\nТел. +7 555 0142"
+        },
+        {
+          "id": "ru-t02e2",
+          "from": "Иван Примеров",
+          "at": "2026-08-27T13:40:00Z",
+          "body": "Мария, добрый день!\n\nСчёт получил, спасибо. Сумма получилась выше, чем в июле. Можете пояснить, откуда разница?\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\nivan@example.org\n\nчт, 27 авг. 2026 г. в 09:12, Мария Образцова <maria@example.com>:\n> Добрый день, Иван!\n>\n> Направляю счёт № 0815 за аренду офиса на август 2026 года. Сумма к оплате — 191 200 руб., в том числе НДС. Оплатить нужно до 10 сентября. Счёт и акт во вложении, оригиналы передадим курьером вместе с остальными документами.\n>\n> С уважением,\n> Мария Образцова\n> Главный бухгалтер | ООО «Пример»\n> Бухгалтерия: счета, оплата аренды и сверка\n> Тел. +7 555 0142"
+        },
+        {
+          "id": "ru-t02e3",
+          "from": "Мария Образцова",
+          "at": "2026-08-28T08:30:00Z",
+          "body": "Иван, здравствуйте!\n\nРазница в 6 700 руб. — это доплата за два дополнительных места на подземной парковке, которые ваш отдел арендовал с 5 августа. Остальные строки счёта без изменений.\n\nС уважением,\nМария Образцова\nГлавный бухгалтер | ООО «Пример»\nБухгалтерия: счета, оплата аренды и сверка\nТел. +7 555 0142\n\nчт, 27 авг. 2026 г. в 13:40, Иван Примеров <ivan@example.org>:\n> Мария, добрый день!\n>\n> Счёт получил, спасибо. Сумма получилась выше, чем в июле. Можете пояснить, откуда разница?\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117\n> ivan@example.org"
+        }
+      ]
+    },
+    {
+      "id": "ru-t03",
+      "subject": "Счёт за аренду офиса — сентябрь 2026",
+      "emails": [
+        {
+          "id": "ru-t03e1",
+          "from": "Мария Образцова",
+          "at": "2026-09-25T09:12:00Z",
+          "body": "Добрый день, Иван!\n\nНаправляю счёт № 0916 за аренду офиса на сентябрь 2026 года. Сумма к оплате — 176 900 руб., в том числе НДС. Оплатить нужно до 10 октября. Счёт и акт во вложении, оригиналы передадим курьером вместе с остальными документами.\n\nС уважением,\nМария Образцова\nГлавный бухгалтер | ООО «Пример»\nБухгалтерия: счета, оплата аренды и сверка\nТел. +7 555 0142"
+        },
+        {
+          "id": "ru-t03e2",
+          "from": "Иван Примеров",
+          "at": "2026-09-25T13:40:00Z",
+          "body": "Мария, добрый день!\n\nСчёт получил, спасибо. Если мы оплатим раньше срока, есть ли какая-то скидка, как обсуждали весной?\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\nivan@example.org\n\nпт, 25 сент. 2026 г. в 09:12, Мария Образцова <maria@example.com>:\n> Добрый день, Иван!\n>\n> Направляю счёт № 0916 за аренду офиса на сентябрь 2026 года. Сумма к оплате — 176 900 руб., в том числе НДС. Оплатить нужно до 10 октября. Счёт и акт во вложении, оригиналы передадим курьером вместе с остальными документами.\n>\n> С уважением,\n> Мария Образцова\n> Главный бухгалтер | ООО «Пример»\n> Бухгалтерия: счета, оплата аренды и сверка\n> Тел. +7 555 0142"
+        },
+        {
+          "id": "ru-t03e3",
+          "from": "Мария Образцова",
+          "at": "2026-09-26T07:50:00Z",
+          "body": "Иван, здравствуйте!\n\nДа, при оплате до 1 октября действует скидка 5% за досрочную оплату, то есть к оплате будет 168 055 руб. Скорректированный счёт пришлю отдельным письмом, номер останется тот же.\n\nС уважением,\nМария Образцова\nГлавный бухгалтер | ООО «Пример»\nБухгалтерия: счета, оплата аренды и сверка\nТел. +7 555 0142\n\nпт, 25 сент. 2026 г. в 13:40, Иван Примеров <ivan@example.org>:\n> Мария, добрый день!\n>\n> Счёт получил, спасибо. Если мы оплатим раньше срока, есть ли какая-то скидка, как обсуждали весной?\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117\n> ivan@example.org"
+        }
+      ]
+    },
+    {
+      "id": "ru-t04",
+      "subject": "Ремонт переговорной на 3 этаже: смета и план работ",
+      "emails": [
+        {
+          "id": "ru-t04e1",
+          "from": "Иван Примеров",
+          "at": "2026-09-07T08:15:00Z",
+          "body": "Добрый день, Пётр!\n\nКак договаривались по телефону, высылаю план переговорной на третьем этаже: площадь около 32 кв. м, два окна, фальшпотолок. Нужно заменить напольное покрытие, перекрасить стены, поставить акустические панели и перенести розетки под стол. Пришлите, пожалуйста, смету и ориентировочный срок.\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117"
+        },
+        {
+          "id": "ru-t04e2",
+          "from": "Пётр Тестов",
+          "at": "2026-09-08T11:30:00Z",
+          "body": "Здравствуйте, Иван!\n\nСмету подготовили, она во вложении: 412 000 руб. с материалами. Работы займут 9 рабочих дней, начать можем с 21 сентября. Пол кладём кварцвинил, стены — моющаяся краска, панели стандартные, класс поглощения C.\n\nС уважением,\nПётр Тестов\nПрораб | ООО «Ремстрой-Образец»\nРемонт офисов и переговорных под ключ\nТел. +7 555 0163\n\nпн, 7 сент. 2026 г. в 08:15, Иван Примеров <ivan@example.org>:\n> Добрый день, Пётр!\n>\n> Как договаривались по телефону, высылаю план переговорной на третьем этаже: площадь около 32 кв. м, два окна, фальшпотолок. Нужно заменить напольное покрытие, перекрасить стены, поставить акустические панели и перенести розетки под стол. Пришлите, пожалуйста, смету и ориентировочный срок.\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117"
+        },
+        {
+          "id": "ru-t04e3",
+          "from": "Иван Примеров",
+          "at": "2026-09-09T07:45:00Z",
+          "body": "Пётр, спасибо за смету. По срокам нам подходит. Хотелось бы перед началом посмотреть объект вместе с вами и нашим офис-менеджером Ольгой, чтобы согласовать расположение розеток и цвет стен.\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\n\nвт, 8 сент. 2026 г. в 11:30, Пётр Тестов <petr@remstroy.example.com>:\n> Здравствуйте, Иван!\n>\n> Смету подготовили, она во вложении: 412 000 руб. с материалами. Работы займут 9 рабочих дней, начать можем с 21 сентября. Пол кладём кварцвинил, стены — моющаяся краска, панели стандартные, класс поглощения C.\n>\n> С уважением,\n> Пётр Тестов\n> Прораб | ООО «Ремстрой-Образец»\n> Ремонт офисов и переговорных под ключ\n> Тел. +7 555 0163"
+        },
+        {
+          "id": "ru-t04e4",
+          "from": "Пётр Тестов",
+          "at": "2026-09-10T09:05:00Z",
+          "body": "Иван, хорошо. Предлагаю встретиться на объекте в четверг, 17 сентября, в 10:00. Вам удобно?\n\nС уважением,\nПётр Тестов\nПрораб | ООО «Ремстрой-Образец»\nРемонт офисов и переговорных под ключ\nТел. +7 555 0163\n\nср, 9 сент. 2026 г. в 07:45, Иван Примеров <ivan@example.org>:\n> Пётр, спасибо за смету. По срокам нам подходит. Хотелось бы перед началом посмотреть объект вместе с вами и нашим офис-менеджером Ольгой, чтобы согласовать расположение розеток и цвет стен.\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117"
+        },
+        {
+          "id": "ru-t04e5",
+          "from": "Иван Примеров",
+          "at": "2026-09-10T09:20:00Z",
+          "body": "Да, четверг подходит. Ольгу предупрежу, пропуск на вас закажем на ресепшене.\n\nОтправлено с iPhone\n\nчт, 10 сент. 2026 г. в 09:05, Пётр Тестов <petr@remstroy.example.com>:\n> Иван, хорошо. Предлагаю встретиться на объекте в четверг, 17 сентября, в 10:00. Вам удобно?\n>\n> С уважением,\n> Пётр Тестов\n> Прораб | ООО «Ремстрой-Образец»\n> Ремонт офисов и переговорных под ключ\n> Тел. +7 555 0163"
+        },
+        {
+          "id": "ru-t04e6",
+          "from": "Пётр Тестов",
+          "at": "2026-09-14T15:10:00Z",
+          "body": "Иван, добрый день!\n\nОтвечаю на вопрос из бухгалтерии, который вы переслали: на все работы даём гарантию 24 месяца с даты подписания акта, на напольное покрытие отдельно действует гарантия производителя. Договор подряда с этим пунктом пришлю завтра.\n\nС уважением,\nПётр Тестов\nПрораб | ООО «Ремстрой-Образец»\nРемонт офисов и переговорных под ключ\nТел. +7 555 0163\n\nчт, 10 сент. 2026 г. в 09:20, Иван Примеров <ivan@example.org>:\n> Да, четверг подходит. Ольгу предупрежу, пропуск на вас закажем на ресепшене.\n>\n> Отправлено с iPhone"
+        },
+        {
+          "id": "ru-t04e7",
+          "from": "Пётр Тестов",
+          "at": "2026-09-17T12:40:00Z",
+          "body": "Иван, Ольга, спасибо за встречу. Фиксирую, что решили на объекте: розетки переносим к восточной стене, цвет стен — светло-серый. Акустические панели по просьбе Ольги заменяем на модель с классом поглощения A — это плюс 38 000 руб. к смете, итого 450 000 руб.\n\nС уважением,\nПётр Тестов\nПрораб | ООО «Ремстрой-Образец»\nРемонт офисов и переговорных под ключ\nТел. +7 555 0163\n\nпн, 14 сент. 2026 г. в 15:10, Пётр Тестов <petr@remstroy.example.com>:\n> Иван, добрый день!\n>\n> Отвечаю на вопрос из бухгалтерии, который вы переслали: на все работы даём гарантию 24 месяца с даты подписания акта, на напольное покрытие отдельно действует гарантия производителя. Договор подряда с этим пунктом пришлю завтра.\n>\n> С уважением,\n> Пётр Тестов\n> Прораб | ООО «Ремстрой-Образец»\n> Ремонт офисов и переговорных под ключ\n> Тел. +7 555 0163"
+        },
+        {
+          "id": "ru-t04e8",
+          "from": "Иван Примеров",
+          "at": "2026-09-18T08:00:00Z",
+          "body": "Пётр, всё верно, итоговую сумму согласовали с финансовым директором. Начинаем 21 сентября, как планировали. Ключи от переговорной заберёте у охраны на первом этаже.\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\n\nчт, 17 сент. 2026 г. в 12:40, Пётр Тестов <petr@remstroy.example.com>:\n> Иван, Ольга, спасибо за встречу. Фиксирую, что решили на объекте: розетки переносим к восточной стене, цвет стен — светло-серый. Акустические панели по просьбе Ольги заменяем на модель с классом поглощения A — это плюс 38 000 руб. к смете, итого 450 000 руб.\n>\n> С уважением,\n> Пётр Тестов\n> Прораб | ООО «Ремстрой-Образец»\n> Ремонт офисов и переговорных под ключ\n> Тел. +7 555 0163"
+        }
+      ]
+    },
+    {
+      "id": "ru-t05",
+      "subject": "Итоги поставки офисной мебели для второго этажа",
+      "emails": [
+        {
+          "id": "ru-t05e1",
+          "from": "Ольга Демонстрова",
+          "at": "2026-09-24T14:20:00Z",
+          "body": "Коллеги, добрый день!\n\nПодвожу итоги поставки офисной мебели для нового крыла на втором этаже. Поставщик — ООО «Мебель-Пример», договор № М-114 от 3 августа. Всего по спецификации заказано 46 позиций: 24 рабочих стола, 24 кресла, 6 шкафов для документов, 4 тумбы, стол для переговорной и стеллажи для архива.\n\nЧто уже приехало. Столы доставили 14 сентября, все 24 штуки, без повреждений, сборку закончили 16 сентября. Шкафы и тумбы пришли вместе со столами. Стол для переговорной пока ждёт окончания ремонта, монтировать его будем после 2 октября.\n\nЧто задерживается. Кресла модели «Опора-2» застряли на складе поставщика в Твери из-за ошибки в маркировке партии, и привезти их обещают не раньше 2 октября. До этого сотрудники работают на старых креслах из переговорной, неудобство временное. Поставщик признал ошибку и предложил компенсацию: бесплатную доставку и сборку кресел.\n\nДокументы. Товарные накладные по первой части поставки подписаны. Счёт-фактуру на остаток поставщик выставит после отгрузки кресел. Оплата прошла в два этапа: аванс 50% в августе и 40% после первой доставки, оставшиеся 10% переводим после полной комплектации.\n\nПриёмка. Финальный акт приёмки мебели подпишет Анна Пробная как ответственная за административно-хозяйственную часть, потому что я с 5 по 16 октября в отпуске. Анне я передал копию спецификации и список замечаний, а также контакты менеджера поставщика.\n\nЗамечания к поставщику. Два стола пришли с другим оттенком столешницы, чем в образце. Поставщик предлагает либо заменить столешницы в течение месяца, либо дать скидку 3% на эти две позиции. Я склоняюсь к замене, но решение пусть примет Анна вместе с руководителем отдела продаж, так как столы стоят в их зоне.\n\nУтилизация старой мебели. Старые столы и шкафы со второго этажа вывезут 9 октября силами управляющей компании, это бесплатно по договору аренды. До этого их сложат в коридоре у лифта, просьба не загромождать проход.\n\nЕсли появятся вопросы по поставке, пишите Анне или мне до 4 октября.\n\nС уважением,\nОльга Демонстрова\nОфис-менеджер | ООО «Пример»\nЗакупки мебели и оборудования, приёмка поставок\nТел. +7 555 0129"
+        }
+      ]
+    },
+    {
+      "id": "ru-t06",
+      "subject": "Новый порядок оформления отпусков с 1 октября",
+      "emails": [
+        {
+          "id": "ru-t06e1",
+          "from": "Анна Пробная",
+          "at": "2026-09-21T07:30:00Z",
+          "body": "Здравствуйте, коллеги!\n\nС 1 октября 2026 года в ООО «Пример» начинает действовать новый порядок оформления отпусков. Ниже описано, что меняется, что остаётся как раньше и к кому обращаться с вопросами. Пожалуйста, прочитайте письмо полностью, даже если вы уже запланировали отпуск на этот год.\n\n1. График отпусков. График на 2027 год формируется, как и раньше, до 15 декабря. Руководители отделов собирают пожелания сотрудников и передают их в отдел кадров одной таблицей.\n\n2. Неиспользованные дни. Неиспользованные дни отпуска за 2026 год можно перенести на следующий год только до 31 марта 2027 года, после этого они сгорают и компенсируются лишь при увольнении. Чтобы перенести дни, напишите руководителю и отделу кадров до 20 декабря.\n\n3. Отпуск без сохранения зарплаты. Такие отпуска по-прежнему согласуются с руководителем отдела и директором по персоналу. Срок рассмотрения заявки — до пяти рабочих дней.\n\n4. Изменение дат. Если вы хотите сдвинуть отпуск относительно графика, согласуйте новые даты с руководителем, а затем оформите новое заявление. Старое заявление отзывать не нужно, система сделает это сама.\n\n5. Подача заявления. Главное изменение: заявление на ежегодный отпуск теперь подаётся только через кадровый портал и не позднее чем за 14 календарных дней до начала отпуска. Бумажные заявления больше не принимаются. Если заявление подано позже, отпуск переносится на ближайшую возможную дату.\n\n6. Отпускные. Отпускные выплачиваются за три дня до начала отпуска, расчётный лист приходит на корпоративную почту. Если выплата не пришла вовремя, напишите в бухгалтерию, указав номер заявления с портала.\n\n7. Учебные отпуска. Для учебного отпуска к заявлению прикладывается справка-вызов из учебного заведения. Справку можно загрузить на портал в виде скана, оригинал передайте в отдел кадров в течение недели.\n\n8. Вопросы. По всем вопросам пишите на hr@example.com или приходите в кабинет 214. Инструкция по работе с порталом с картинками лежит в базе знаний в разделе «Кадры».\n\nСпасибо за внимание!\n\n-- \nАнна Пробная\nДиректор по персоналу | ООО «Пример»\nОтпуска, кадровый портал, заявления\nТел. +7 555 0108"
+        }
+      ]
+    },
+    {
+      "id": "ru-t07",
+      "subject": "Новости Примера — сентябрь 2026",
+      "emails": [
+        {
+          "id": "ru-t07e1",
+          "from": "Рассылка «Новости Примера»",
+          "at": "2026-09-15T06:00:00Z",
+          "body": "Новости Примера — сентябрь 2026\nЕжемесячная рассылка для сотрудников ООО «Пример»\n--\nНОВОСТИ КОМПАНИИ\nВ сентябре к нам присоединились одиннадцать новых сотрудников, большинство — в отдел продаж. Поздравляем отдел логистики с запуском нового склада в Подольске-Примерном.\n--\nОБУЧЕНИЕ\nВебинар «Сводные таблицы в Excel для начинающих» пройдёт 24 сентября в 15:00 по Москве. Записаться можно в базе знаний, ссылка на трансляцию придёт за час до начала.\n--\nСТОЛОВАЯ\nС понедельника в меню появились постные обеды и салат-бар. Комплексный обед по-прежнему стоит 390 руб.\n--\nПАРКОВКА\nС 1 октября въезд на парковку бизнес-центра будет только по QR-коду из приложения «Пример.Пропуск». Пластиковые карты перестанут работать 30 сентября, сдайте их на ресепшене.\n--\nВы получили это письмо, потому что работаете в ООО «Пример». Отписаться от рассылки: news@example.com"
+        }
+      ]
+    },
+    {
+      "id": "ru-t08",
+      "subject": "Договор поставки № П-27",
+      "emails": [
+        {
+          "id": "ru-t08e1",
+          "from": "Мария Образцова",
+          "at": "2026-09-14T08:10:00Z",
+          "body": "Привет, Иван, пришли, пожалуйста, подписанный договор до пятницы, 18 сентября — без него бухгалтерия не сможет провести предоплату поставщику.\n\nС уважением,\nМария Образцова\nГлавный бухгалтер | ООО «Пример»\nДоговоры, предоплата и закрывающие документы\nТел. +7 555 0142"
+        },
+        {
+          "id": "ru-t08e2",
+          "from": "Иван Примеров",
+          "at": "2026-09-14T10:25:00Z",
+          "body": "Мария, привет!\n\nПодпишу, но сначала уточню у поставщика две правки: срок поставки в пункте 4.2 и штраф за просрочку. Как только ответят, сразу отправлю.\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\n\nпн, 14 сент. 2026 г. в 08:10, Мария Образцова <maria@example.com>:\n> Привет, Иван, пришли, пожалуйста, подписанный договор до пятницы, 18 сентября — без него бухгалтерия не сможет провести предоплату поставщику.\n>\n> С уважением,\n> Мария Образцова\n> Главный бухгалтер | ООО «Пример»\n> Договоры, предоплата и закрывающие документы\n> Тел. +7 555 0142"
+        },
+        {
+          "id": "ru-t08e3",
+          "from": "Мария Образцова",
+          "at": "2026-09-16T12:00:00Z",
+          "body": "Иван, поставщик ответил мне напрямую: правки по пункту 4.2 принимают, срок поставки — 21 календарный день с даты предоплаты, штраф 0,1% в день просрочки. Можно подписывать.\n\nС уважением,\nМария Образцова\nГлавный бухгалтер | ООО «Пример»\nДоговоры, предоплата и закрывающие документы\nТел. +7 555 0142\n\nпн, 14 сент. 2026 г. в 10:25, Иван Примеров <ivan@example.org>:\n> Мария, привет!\n>\n> Подпишу, но сначала уточню у поставщика две правки: срок поставки в пункте 4.2 и штраф за просрочку. Как только ответят, сразу отправлю.\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117"
+        },
+        {
+          "id": "ru-t08e4",
+          "from": "Иван Примеров",
+          "at": "2026-09-17T16:45:00Z",
+          "body": "Отправил скан подписанного договора, оригинал уйдёт курьером завтра утром.\n\nОтправлено с iPhone\n\nср, 16 сент. 2026 г. в 12:00, Мария Образцова <maria@example.com>:\n> Иван, поставщик ответил мне напрямую: правки по пункту 4.2 принимают, срок поставки — 21 календарный день с даты предоплаты, штраф 0,1% в день просрочки. Можно подписывать.\n>\n> С уважением,\n> Мария Образцова\n> Главный бухгалтер | ООО «Пример»\n> Договоры, предоплата и закрывающие документы\n> Тел. +7 555 0142"
+        }
+      ]
+    },
+    {
+      "id": "ru-t09",
+      "subject": "Корпоратив в октябре",
+      "emails": [
+        {
+          "id": "ru-t09e1",
+          "from": "Ольга Демонстрова",
+          "at": "2026-09-28T09:00:00Z",
+          "body": "Всем привет!\n\nВ октябре отмечаем десятилетие компании. Заполните, пожалуйста, форму участия до 9 октября: придёте ли вы и есть ли ограничения по еде. Подробности про место пришлю позже.\n\n-- \nОльга Демонстрова\nОфис-менеджер | ООО «Пример»\nМероприятия, корпоративы, сбор и встреча гостей\nТел. +7 555 0129"
+        },
+        {
+          "id": "ru-t09e2",
+          "from": "Иван Примеров",
+          "at": "2026-09-28T11:30:00Z",
+          "body": "Ольга, привет! А можно прийти со второй половиной? И какой бюджет на человека, чтобы понимать формат?\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\n\nпн, 28 сент. 2026 г. в 09:00, Ольга Демонстрова <olga@example.org>:\n> Всем привет!\n>\n> В октябре отмечаем десятилетие компании. Заполните, пожалуйста, форму участия до 9 октября: придёте ли вы и есть ли ограничения по еде. Подробности про место пришлю позже.\n>\n> -- \n> Ольга Демонстрова\n> Офис-менеджер | ООО «Пример»\n> Мероприятия, корпоративы, сбор и встреча гостей\n> Тел. +7 555 0129"
+        },
+        {
+          "id": "ru-t09e3",
+          "from": "Ольга Демонстрова",
+          "at": "2026-09-29T08:15:00Z",
+          "body": "Иван, привет!\n\nДа, со второй половиной можно, только отметь это в форме до 9 октября. Бюджет на человека — 4 000 руб., алкоголь в него входит.\n\nДо встречи!\nОльга\n\n-- \nОльга Демонстрова\nОфис-менеджер | ООО «Пример»\nМероприятия, корпоративы, сбор и встреча гостей\nТел. +7 555 0129\n\nP.S. Ресторан «Пример на набережной» забронирован на 16 октября, сбор в 19:00 у главного входа, автобус от офиса не нужен.\n\nпн, 28 сент. 2026 г. в 11:30, Иван Примеров <ivan@example.org>:\n> Ольга, привет! А можно прийти со второй половиной? И какой бюджет на человека, чтобы понимать формат?\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117"
+        }
+      ]
+    },
+    {
+      "id": "ru-t10",
+      "subject": "Доступ к CRM для новых сотрудников",
+      "emails": [
+        {
+          "id": "ru-t10e1",
+          "from": "Иван Примеров",
+          "at": "2026-09-22T07:40:00Z",
+          "body": "Здравствуйте, Сергей!\n\nВ мой отдел вышли два новых сотрудника, Елена Пробная и Алиса Пример. Им нужен доступ к CRM. Что для этого нужно сделать?\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117"
+        },
+        {
+          "id": "ru-t10e2",
+          "from": "Сергей Тестовый",
+          "at": "2026-09-22T09:10:00Z",
+          "body": "Иван, добрый день!\n\nНужна заявка в сервис-деске с типом «Новый доступ», руководитель отдела её согласует, и в течение одного рабочего дня я создаю учётную запись. Логин приходит сотруднику на корпоративную почту. Для Елены и Алисы заявки я уже завёл сам, осталось ваше согласование.\n\n-- \nСергей Тестовый\nСистемный администратор | ООО «Пример»\nДоступы, учётные записи, CRM и почта\nТел. +7 555 0151\n\nвт, 22 сент. 2026 г. в 07:40, Иван Примеров <ivan@example.org>:\n> Здравствуйте, Сергей!\n>\n> В мой отдел вышли два новых сотрудника, Елена Пробная и Алиса Пример. Им нужен доступ к CRM. Что для этого нужно сделать?\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117"
+        },
+        {
+          "id": "ru-t10e3",
+          "from": "Иван Примеров",
+          "at": "2026-09-23T08:05:00Z",
+          "body": "Сергей, согласовал, у обеих всё заработало.\n\nСпасибо, а можно Елене Пробной ещё дать права на выгрузку отчётов из CRM в CSV?\n\nвт, 22 сент. 2026 г. в 09:10, Сергей Тестовый <sergey@example.org>:\n> Иван, добрый день!\n>\n> Нужна заявка в сервис-деске с типом «Новый доступ», руководитель отдела её согласует, и в течение одного рабочего дня я создаю учётную запись. Логин приходит сотруднику на корпоративную почту. Для Елены и Алисы заявки я уже завёл сам, осталось ваше согласование.\n>\n> -- \n> Сергей Тестовый\n> Системный администратор | ООО «Пример»\n> Доступы, учётные записи, CRM и почта\n> Тел. +7 555 0151"
+        }
+      ]
+    },
+    {
+      "id": "ru-t11",
+      "subject": "Закупка ноутбуков для отдела продаж",
+      "emails": [
+        {
+          "id": "ru-t11e1",
+          "from": "Иван Примеров",
+          "at": "2026-09-02T08:00:00Z",
+          "body": "Добрый день, Дмитрий!\n\nНам нужно 12 ноутбуков для отдела продаж: 14 дюймов, 16 ГБ памяти, SSD от 512 ГБ. Пришлите, пожалуйста, коммерческое предложение с ценой за штуку и сроком поставки.\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117"
+        },
+        {
+          "id": "ru-t11e2",
+          "from": "Дмитрий Образцов",
+          "at": "2026-09-03T10:15:00Z",
+          "body": "Здравствуйте, Иван!\n\nПредлагаем модель «Пример Бук 14»: 97 500 руб. за штуку, стандартная гарантия 1 год, поставка за 7 рабочих дней со склада в Москве.\n\nС уважением,\nДмитрий Образцов\nМенеджер по продажам | ООО «Техника-Пример»\nНоутбуки, гарантия и сервис для бизнеса\nТел. +7 555 0174\n\nср, 2 сент. 2026 г. в 08:00, Иван Примеров <ivan@example.org>:\n> Добрый день, Дмитрий!\n>\n> Нам нужно 12 ноутбуков для отдела продаж: 14 дюймов, 16 ГБ памяти, SSD от 512 ГБ. Пришлите, пожалуйста, коммерческое предложение с ценой за штуку и сроком поставки.\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117"
+        },
+        {
+          "id": "ru-t11e3",
+          "from": "Иван Примеров",
+          "at": "2026-09-04T07:30:00Z",
+          "body": "Дмитрий, цена выше нашего бюджета. Конкурент даёт аналог за 91 000. Можете ли вы снизить цену и что можете предложить по гарантии и срокам?\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\n\nчт, 3 сент. 2026 г. в 10:15, Дмитрий Образцов <dmitry@technika.example.com>:\n> Здравствуйте, Иван!\n>\n> Предлагаем модель «Пример Бук 14»: 97 500 руб. за штуку, стандартная гарантия 1 год, поставка за 7 рабочих дней со склада в Москве.\n>\n> С уважением,\n> Дмитрий Образцов\n> Менеджер по продажам | ООО «Техника-Пример»\n> Ноутбуки, гарантия и сервис для бизнеса\n> Тел. +7 555 0174"
+        },
+        {
+          "id": "ru-t11e4",
+          "from": "Дмитрий Образцов",
+          "at": "2026-09-04T12:50:00Z",
+          "body": "Иван, по цене уточняю у руководителя, отвечу в понедельник. Расширенную гарантию до 3 лет можем дать бесплатно, это я согласовал сразу.\n\nОтправлено с iPhone\n\nпт, 4 сент. 2026 г. в 07:30, Иван Примеров <ivan@example.org>:\n> Дмитрий, цена выше нашего бюджета. Конкурент даёт аналог за 91 000. Можете ли вы снизить цену и что можете предложить по гарантии и срокам?\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117"
+        },
+        {
+          "id": "ru-t11e5",
+          "from": "Дмитрий Образцов",
+          "at": "2026-09-07T09:40:00Z",
+          "body": "Иван, добрый день!\n\nРуководитель согласовал: итоговая цена — 89 900 руб. за ноутбук при заказе всех 12 штук, доставка за 3 рабочих дня, гарантия 3 года, как обещал. Счёт выставим после вашего подтверждения.\n\nС уважением,\nДмитрий Образцов\nМенеджер по продажам | ООО «Техника-Пример»\nНоутбуки, гарантия и сервис для бизнеса\nТел. +7 555 0174\n\nпт, 4 сент. 2026 г. в 12:50, Дмитрий Образцов <dmitry@technika.example.com>:\n> Иван, по цене уточняю у руководителя, отвечу в понедельник. Расширенную гарантию до 3 лет можем дать бесплатно, это я согласовал сразу.\n>\n> Отправлено с iPhone"
+        }
+      ]
+    },
+    {
+      "id": "ru-t12",
+      "subject": "Командировка на выставку «Офис-Экспо» в Новосибирске",
+      "emails": [
+        {
+          "id": "ru-t12e1",
+          "from": "Анна Пробная",
+          "at": "2026-09-08T08:30:00Z",
+          "body": "Добрый день, Иван!\n\nПодтверждаю вашу командировку на выставку «Офис-Экспо» в Новосибирске с 6 по 9 октября. Билеты купим сами, пришлите, пожалуйста, паспортные данные через защищённую форму на портале.\n\n-- \nАнна Пробная\nДиректор по персоналу | ООО «Пример»\nКомандировки, суточные, авансовые отчёты\nТел. +7 555 0108"
+        },
+        {
+          "id": "ru-t12e2",
+          "from": "Иван Примеров",
+          "at": "2026-09-08T12:00:00Z",
+          "body": "Анна, спасибо! А жильё тоже бронируете вы? Хотелось бы недалеко от выставочного центра.\n\n-- \nИван Примеров\nРуководитель отдела закупок | ООО «Пример»\nТел. +7 555 0117\n\nвт, 8 сент. 2026 г. в 08:30, Анна Пробная <anna@example.org>:\n> Добрый день, Иван!\n>\n> Подтверждаю вашу командировку на выставку «Офис-Экспо» в Новосибирске с 6 по 9 октября. Билеты купим сами, пришлите, пожалуйста, паспортные данные через защищённую форму на портале.\n>\n> -- \n> Анна Пробная\n> Директор по персоналу | ООО «Пример»\n> Командировки, суточные, авансовые отчёты\n> Тел. +7 555 0108"
+        },
+        {
+          "id": "ru-t12e3",
+          "from": "Анна Пробная",
+          "at": "2026-09-09T07:20:00Z",
+          "body": "Иван, да. Забронировали гостиницу «Пример-Сити» в десяти минутах пешком от выставки, три ночи с 6 по 9 октября, завтрак включён.\n\n-- \nАнна Пробная\nДиректор по персоналу | ООО «Пример»\nКомандировки, суточные, авансовые отчёты\nТел. +7 555 0108\n\nвт, 8 сент. 2026 г. в 12:00, Иван Примеров <ivan@example.org>:\n> Анна, спасибо! А жильё тоже бронируете вы? Хотелось бы недалеко от выставочного центра.\n>\n> -- \n> Иван Примеров\n> Руководитель отдела закупок | ООО «Пример»\n> Тел. +7 555 0117"
+        },
+        {
+          "id": "ru-t12e4",
+          "from": "Иван Примеров",
+          "at": "2026-09-09T09:45:00Z",
+          "body": "Отлично. И ещё вопрос: какие суточные положены и когда придут деньги на расходы?\n\nОтправлено с iPhone\n\nср, 9 сент. 2026 г. в 07:20, Анна Пробная <anna@example.org>:\n> Иван, да. Забронировали гостиницу «Пример-Сити» в десяти минутах пешком от выставки, три ночи с 6 по 9 октября, завтрак включён.\n>\n> -- \n> Анна Пробная\n> Директор по персоналу | ООО «Пример»\n> Командировки, суточные, авансовые отчёты\n> Тел. +7 555 0108"
+        },
+        {
+          "id": "ru-t12e5",
+          "from": "Анна Пробная",
+          "at": "2026-09-10T08:10:00Z",
+          "body": "Иван, суточные составляют 2 500 руб. в день, за четыре дня поездки — 10 000 руб. Аванс переведём на зарплатную карту до 20 сентября. Чеки за такси сохраняйте, их компенсируют по авансовому отчёту.\n\n-- \nАнна Пробная\nДиректор по персоналу | ООО «Пример»\nКомандировки, суточные, авансовые отчёты\nТел. +7 555 0108\n\nср, 9 сент. 2026 г. в 09:45, Иван Примеров <ivan@example.org>:\n> Отлично. И ещё вопрос: какие суточные положены и когда придут деньги на расходы?\n>\n> Отправлено с iPhone"
+        }
+      ]
+    },
+    {
+      "id": "es-t01",
+      "subject": "Presupuesto reforma cocina – Reformas Ejemplo S.L.",
+      "emails": [
+        {
+          "id": "es-t01e1",
+          "from": "Carmen Prueba",
+          "at": "2026-09-07T08:30:00Z",
+          "body": "Buenos días, Javier:\n\nEstamos preparando la reforma de la cocina de la oficina de la calle Ejemplo 12 (unos 18 m²). Necesitamos cambiar muebles, encimera, fregadero y la instalación eléctrica de esa zona. ¿Podríais visitarla esta semana y enviarnos un presupuesto con plazo de obra, fecha de inicio y garantía?\n\nUn saludo,\nCarmen Prueba\nOficina Técnica | Ejemplo S.L.\nTel. +34 555 0110"
+        },
+        {
+          "id": "es-t01e2",
+          "from": "Javier Ejemplo",
+          "at": "2026-09-08T14:20:00Z",
+          "body": "Hola Carmen,\n\nGracias por recibirnos ayer. Te adjunto el presupuesto PR-2026-118 para la reforma integral de la cocina.\n\nResumen:\n- Importe total: 14.800 € + IVA (incluye muebles, encimera de cuarzo, fregadero de acero e instalación eléctrica nueva).\n- Plazo de ejecución: cinco semanas.\n- Fecha de inicio prevista: lunes 5 de octubre de 2026.\n- Garantía: dos años sobre mano de obra y materiales.\n- Forma de pago: 40 % al firmar, 60 % a la entrega.\n\nEl presupuesto es válido durante 30 días. Cualquier duda, me llamas.\n\nUn saludo,\n-- \nJavier Ejemplo\nJefe de Obra | Reformas Ejemplo S.L.\nTel. +34 555 0142\njavier@reformas-ejemplo.example.com"
+        },
+        {
+          "id": "es-t01e3",
+          "from": "Carmen Prueba",
+          "at": "2026-09-09T09:05:00Z",
+          "body": "Gracias, Javier. Lo revisamos con dirección esta semana y te decimos algo antes del día 25.\n\nUn saludo,\nCarmen\n\nEl mar, 8 sept 2026 a las 16:20, Javier Ejemplo <javier@reformas-ejemplo.example.com> escribió:\n> Hola Carmen,\n> \n> Gracias por recibirnos ayer. Te adjunto el presupuesto PR-2026-118 para la reforma integral de la cocina.\n> \n> Resumen:\n> - Importe total: 14.800 € + IVA (incluye muebles, encimera de cuarzo, fregadero de acero e instalación eléctrica nueva).\n> - Plazo de ejecución: cinco semanas.\n> - Fecha de inicio prevista: lunes 5 de octubre de 2026.\n> - Garantía: dos años sobre mano de obra y materiales.\n> - Forma de pago: 40 % al firmar, 60 % a la entrega.\n> \n> El presupuesto es válido durante 30 días. Cualquier duda, me llamas.\n> \n> Un saludo,\n> -- \n> Javier Ejemplo\n> Jefe de Obra | Reformas Ejemplo S.L.\n> Tel. +34 555 0142\n> javier@reformas-ejemplo.example.com"
+        }
+      ]
+    },
+    {
+      "id": "es-t02",
+      "subject": "Presupuesto reforma cocina – Construcciones Muestra S.L.",
+      "emails": [
+        {
+          "id": "es-t02e1",
+          "from": "Carmen Prueba",
+          "at": "2026-09-07T08:32:00Z",
+          "body": "Buenos días, Lucía:\n\nEstamos preparando la reforma de la cocina de la oficina de la calle Ejemplo 12 (unos 18 m²). Necesitamos cambiar muebles, encimera, fregadero y la instalación eléctrica de esa zona. ¿Podríais visitarla esta semana y enviarnos un presupuesto con plazo de obra, fecha de inicio y garantía?\n\nUn saludo,\nCarmen Prueba\nOficina Técnica | Ejemplo S.L.\nTel. +34 555 0110"
+        },
+        {
+          "id": "es-t02e2",
+          "from": "Lucía Muestra",
+          "at": "2026-09-10T09:40:00Z",
+          "body": "Hola Carmen,\n\nGracias por recibirnos ayer. Te adjunto el presupuesto PR-2026-131 para la reforma integral de la cocina.\n\nResumen:\n- Importe total: 16.250 € + IVA (incluye muebles, encimera de cuarzo, fregadero de acero e instalación eléctrica nueva).\n- Plazo de ejecución: tres semanas.\n- Fecha de inicio prevista: lunes 19 de octubre de 2026.\n- Garantía: dos años sobre mano de obra y materiales.\n- Forma de pago: 40 % al firmar, 60 % a la entrega.\n\nEl presupuesto es válido durante 30 días. Cualquier duda, me llamas.\n\nUn saludo,\n-- \nLucía Muestra\nJefe de Obra | Construcciones Muestra S.L.\nTel. +34 555 0157\nlucia@muestra.example.org"
+        },
+        {
+          "id": "es-t02e3",
+          "from": "Carmen Prueba",
+          "at": "2026-09-10T15:10:00Z",
+          "body": "Gracias, Lucía. Lo revisamos con dirección esta semana y te decimos algo antes del día 25.\n\nUn saludo,\nCarmen\n\nEl jue, 10 sept 2026 a las 11:40, Lucía Muestra <lucia@muestra.example.org> escribió:\n> Hola Carmen,\n> \n> Gracias por recibirnos ayer. Te adjunto el presupuesto PR-2026-131 para la reforma integral de la cocina.\n> \n> Resumen:\n> - Importe total: 16.250 € + IVA (incluye muebles, encimera de cuarzo, fregadero de acero e instalación eléctrica nueva).\n> - Plazo de ejecución: tres semanas.\n> - Fecha de inicio prevista: lunes 19 de octubre de 2026.\n> - Garantía: dos años sobre mano de obra y materiales.\n> - Forma de pago: 40 % al firmar, 60 % a la entrega.\n> \n> El presupuesto es válido durante 30 días. Cualquier duda, me llamas.\n> \n> Un saludo,\n> -- \n> Lucía Muestra\n> Jefe de Obra | Construcciones Muestra S.L.\n> Tel. +34 555 0157\n> lucia@muestra.example.org"
+        }
+      ]
+    },
+    {
+      "id": "es-t03",
+      "subject": "Presupuesto reforma cocina – Obras Ficticia S.L.",
+      "emails": [
+        {
+          "id": "es-t03e1",
+          "from": "Carmen Prueba",
+          "at": "2026-09-07T08:35:00Z",
+          "body": "Buenos días, Andrés:\n\nEstamos preparando la reforma de la cocina de la oficina de la calle Ejemplo 12 (unos 18 m²). Necesitamos cambiar muebles, encimera, fregadero y la instalación eléctrica de esa zona. ¿Podríais visitarla esta semana y enviarnos un presupuesto con plazo de obra, fecha de inicio y garantía?\n\nUn saludo,\nCarmen Prueba\nOficina Técnica | Ejemplo S.L.\nTel. +34 555 0110"
+        },
+        {
+          "id": "es-t03e2",
+          "from": "Andrés Ficticio",
+          "at": "2026-09-11T08:15:00Z",
+          "body": "Hola Carmen,\n\nGracias por recibirnos ayer. Te adjunto el presupuesto PR-2026-142 para la reforma integral de la cocina.\n\nResumen:\n- Importe total: 13.900 € + IVA (incluye muebles, encimera de cuarzo, fregadero de acero e instalación eléctrica nueva).\n- Plazo de ejecución: seis semanas.\n- Fecha de inicio prevista: lunes 2 de noviembre de 2026.\n- Garantía: tres años sobre mano de obra y materiales.\n- Forma de pago: 40 % al firmar, 60 % a la entrega.\n\nEl presupuesto es válido durante 30 días. Cualquier duda, me llamas.\n\nUn saludo,\n-- \nAndrés Ficticio\nJefe de Obra | Obras Ficticia S.L.\nTel. +34 555 0163\nandres@obrasficticia.example.com"
+        },
+        {
+          "id": "es-t03e3",
+          "from": "Carmen Prueba",
+          "at": "2026-09-11T12:30:00Z",
+          "body": "Gracias, Andrés. Lo revisamos con dirección esta semana y te decimos algo antes del día 25.\n\nUn saludo,\nCarmen\n\nEl vie, 11 sept 2026 a las 10:15, Andrés Ficticio <andres@obrasficticia.example.com> escribió:\n> Hola Carmen,\n> \n> Gracias por recibirnos ayer. Te adjunto el presupuesto PR-2026-142 para la reforma integral de la cocina.\n> \n> Resumen:\n> - Importe total: 13.900 € + IVA (incluye muebles, encimera de cuarzo, fregadero de acero e instalación eléctrica nueva).\n> - Plazo de ejecución: seis semanas.\n> - Fecha de inicio prevista: lunes 2 de noviembre de 2026.\n> - Garantía: tres años sobre mano de obra y materiales.\n> - Forma de pago: 40 % al firmar, 60 % a la entrega.\n> \n> El presupuesto es válido durante 30 días. Cualquier duda, me llamas.\n> \n> Un saludo,\n> -- \n> Andrés Ficticio\n> Jefe de Obra | Obras Ficticia S.L.\n> Tel. +34 555 0163\n> andres@obrasficticia.example.com"
+        }
+      ]
+    },
+    {
+      "id": "es-t04",
+      "subject": "Jornada de equipo 23 de octubre – Masía Ejemplo",
+      "emails": [
+        {
+          "id": "es-t04e1",
+          "from": "Carmen Prueba",
+          "at": "2026-09-29T08:10:00Z",
+          "body": "Hola Marta,\n\nTe escribo desde Ejemplo S.L. Estamos organizando una jornada de equipo para unas 40 personas el viernes 23 de octubre y nos han hablado muy bien de la Masía Ejemplo.\n\nNecesitaríamos:\n- Una sala con proyector y sonido para la mañana (de 10:00 a 14:00).\n- Comida para todo el grupo, con al menos 8 menús vegetarianos y 2 sin gluten.\n- Algún espacio exterior para actividades por la tarde.\n\n¿Tenéis disponibilidad ese día? ¿Qué precio tendría?\n\nMuchas gracias,\nCarmen Prueba\nOficina Técnica | Ejemplo S.L.\nTel. +34 555 0110"
+        },
+        {
+          "id": "es-t04e2",
+          "from": "Marta Demo",
+          "at": "2026-09-30T08:12:00Z",
+          "body": "Buenos días, Carmen:\n\nSí, el viernes 23 de octubre tenemos libre la sala Albufera, con capacidad para 50 personas, proyector, pantalla y megafonía incluidos.\n\nEl menú de grupo cuesta 45 € por persona e incluye entrantes para compartir, principal a elegir (carne, pescado o vegetariano), postre y bebida. Los menús sin gluten no tienen suplemento. Por la tarde podéis usar el jardín del olivar sin coste adicional.\n\nPara bloquear la fecha pedimos una señal del 30 % del total estimado antes del 9 de octubre.\n\nUn saludo cordial,\n-- \nMarta Demo\nEventos | Masía Ejemplo\nTel. +34 555 0171\neventos@masia.example.org"
+        },
+        {
+          "id": "es-t04e3",
+          "from": "Carmen Prueba",
+          "at": "2026-09-30T15:45:00Z",
+          "body": "Perfecto, Marta, nos encaja. Dos preguntas más: ¿hay aparcamiento en la masía? Y muchos compañeros no tienen coche, ¿organizáis transporte desde el centro de Valencia?\n\nGracias,\nCarmen\n\nEl mié, 30 sept 2026 a las 10:12, Marta Demo <eventos@masia.example.org> escribió:\n> Buenos días, Carmen:\n> \n> Sí, el viernes 23 de octubre tenemos libre la sala Albufera, con capacidad para 50 personas, proyector, pantalla y megafonía incluidos.\n> \n> El menú de grupo cuesta 45 € por persona e incluye entrantes para compartir, principal a elegir (carne, pescado o vegetariano), postre y bebida. Los menús sin gluten no tienen suplemento. Por la tarde podéis usar el jardín del olivar sin coste adicional.\n> \n> Para bloquear la fecha pedimos una señal del 30 % del total estimado antes del 9 de octubre.\n> \n> Un saludo cordial,\n> -- \n> Marta Demo\n> Eventos | Masía Ejemplo\n> Tel. +34 555 0171\n> eventos@masia.example.org"
+        },
+        {
+          "id": "es-t04e4",
+          "from": "Marta Demo",
+          "at": "2026-10-01T07:30:00Z",
+          "body": "Hola Carmen,\n\nTenemos 30 plazas de aparcamiento gratuitas junto a la entrada principal.\n\nPara el transporte trabajamos con una empresa de autocares: un autobús de 55 plazas saldría a las 9:15 desde la Plaza Ejemplo y volvería a las 18:30. El precio es de 380 € ida y vuelta, que se añadiría a la factura final.\n\nUn saludo,\nMarta\n\nEl mié, 30 sept 2026 a las 17:45, Carmen Prueba <carmen@example.com> escribió:\n> Perfecto, Marta, nos encaja. Dos preguntas más: ¿hay aparcamiento en la masía? Y muchos compañeros no tienen coche, ¿organizáis transporte desde el centro de Valencia?\n> \n> Gracias,\n> Carmen"
+        },
+        {
+          "id": "es-t04e5",
+          "from": "Javier Ejemplo",
+          "at": "2026-10-07T08:05:00Z",
+          "body": "Hola a las dos:\n\nDesde Compras os confirmo que el presupuesto de la jornada está aprobado: hasta 2.600 € en total, autobús incluido. He abierto el pedido de compra OC-2026-0388.\n\nLa señal del 30 % (540 €) se pagó ayer, 6 de octubre, por transferencia bancaria con la referencia TR-55871. Marta, si necesitas el justificante para vuestra contabilidad, dímelo y te lo reenvío.\n\nUn saludo,\nJavier Ejemplo\nResponsable de Compras | Ejemplo S.L.\nTel. +34 555 0142\n\nEl jue, 1 oct 2026 a las 9:30, Marta Demo <eventos@masia.example.org> escribió:\n> Hola Carmen,\n> \n> Tenemos 30 plazas de aparcamiento gratuitas junto a la entrada principal.\n> \n> Para el transporte trabajamos con una empresa de autocares: un autobús de 55 plazas saldría a las 9:15 desde la Plaza Ejemplo y volvería a las 18:30. El precio es de 380 € ida y vuelta, que se añadiría a la factura final.\n> \n> Un saludo,\n> Marta"
+        },
+        {
+          "id": "es-t04e6",
+          "from": "Marta Demo",
+          "at": "2026-10-07T10:20:00Z",
+          "body": "Recibida la señal, muchas gracias, Javier.\n\nCarmen, ¿os iría bien venir a ver la sala el jueves 15 por la mañana? Así cerramos la distribución de las mesas.\n\nMarta"
+        },
+        {
+          "id": "es-t04e7",
+          "from": "Carmen Prueba",
+          "at": "2026-10-07T10:34:00Z",
+          "body": "Sí, el jueves me va bien. Llegaremos a las 11 con Javier.\n\nEnviado desde mi iPhone"
+        }
+      ]
+    },
+    {
+      "id": "es-t05",
+      "subject": "Traslado a la nueva oficina – instrucciones",
+      "emails": [
+        {
+          "id": "es-t05e1",
+          "from": "Pablo Muestra",
+          "at": "2026-10-05T07:45:00Z",
+          "body": "Hola a todos:\n\nOs resumo cómo va a ser el traslado a la nueva oficina de la avenida Muestra 48, para que cada departamento pueda organizarse con tiempo.\n\n1. Embalaje\n\nLa semana del 26 de octubre recibiréis cajas numeradas en vuestro puesto. Cada caja lleva una etiqueta con el color de la planta de destino: azul para la planta 2 y verde para la planta 3. Meted solo lo que vayáis a usar; lo demás se queda para destrucción confidencial o reciclaje.\n\n2. Calendario del traslado\n\nLa empresa de mudanzas, Traslados Ejemplo S.L., hará el trabajo en dos fases. El archivo en papel y las cajas del departamento de administración se recogerán el martes 3 de noviembre a partir de las 8:00, y los equipos informáticos se trasladarán el miércoles 4 por la tarde, cuando el equipo de sistemas haya hecho la copia de seguridad.\n\n3. Accesos y seguridad\n\nEl nuevo edificio tiene control de accesos en la entrada y en cada planta. Recepción del edificio nos dará una tarjeta personal a cada uno, que sirve también para la cafetería y el aparcamiento. Las tarjetas se entregan en la conserjería de la planta baja entre el 2 y el 4 de noviembre, de 9:00 a 14:00, y hay que recogerlas en persona. Para eso, cada uno tendrá que llevar su DNI o NIE original; no vale una fotocopia ni una foto en el móvil. Quien esté de vacaciones esas fechas, que me avise y lo gestionamos aparte.\n\n4. Aparcamiento\n\nTenemos asignadas 10 plazas de garaje en el sótano -1. Se repartirán por turnos semanales; Recursos Humanos enviará el cuadrante la semana que viene. Las bicicletas pueden dejarse en el cuarto de bicis de la planta baja.\n\n5. Dudas\n\nCualquier pregunta sobre el traslado, escribidme a mí o a Carmen Prueba. Haremos una reunión rápida el lunes 26 a las 12:00 en la sala grande para resolver lo que quede.\n\nGracias a todos por la paciencia,\n\nPablo Muestra\nServicios Generales | Ejemplo S.L.\nTel. +34 555 0125"
+        },
+        {
+          "id": "es-t05e2",
+          "from": "Pablo Muestra",
+          "at": "2026-10-06T08:00:00Z",
+          "body": "Hola de nuevo:\n\nUna corrección al correo de ayer: finalmente la propiedad nos asigna 12 plazas de garaje en el sótano -1, no 10. Recursos Humanos ya lo ha tenido en cuenta para el cuadrante de turnos.\n\nTodo lo demás sigue igual.\n\nPablo"
+        }
+      ]
+    },
+    {
+      "id": "es-t06",
+      "subject": "Renovación contrato mantenimiento climatización 2027",
+      "emails": [
+        {
+          "id": "es-t06e1",
+          "from": "Rosa Ejemplo",
+          "at": "2026-10-05T08:02:00Z",
+          "body": "Estimado Javier:\n\nComo cada año por estas fechas, le enviamos la propuesta de renovación del contrato de mantenimiento de climatización para sus oficinas de la calle Ejemplo 12. Hemos revisado el histórico de avisos de los últimos doce meses y ajustado algunas condiciones para que el servicio se adapte mejor a su uso real.\n\nAlcance del servicio\n\nEl contrato cubre las 14 unidades interiores, las 3 unidades exteriores de la cubierta. Incluye cuatro visitas preventivas al año, limpieza de filtros y el informe anual que exige la normativa.\n\nAverías y tiempos de respuesta\n\nPara averías urgentes, entendidas como la pérdida total de frío o calor en una planta, garantizamos la presencia de un técnico en un máximo de 4 horas laborables desde el aviso. Las averías no urgentes se atenderán en 48 horas. La mano de obra de las reparaciones está incluida; las piezas se facturan aparte con un 10 % de descuento sobre tarifa.\n\nPrecio y facturación\n\nLa cuota anual para 2027 será de 3.960 € + IVA, que se facturará en cuatro recibos trimestrales de 990 €.\n\nDuración y cancelación\n\nEl contrato tendrá una duración de un año y se renovará automáticamente salvo aviso por escrito con dos meses de antelación. Si deciden cancelarlo antes de que termine el año, la penalización por cancelación anticipada será del 15 % de las cuotas pendientes hasta el final del periodo. No se aplicará penalización si la cancelación se debe a un incumplimiento nuestro de los tiempos de respuesta.\n\nLe agradecería que nos devolviera la propuesta firmada antes del 30 de noviembre, para poder planificar las visitas del primer trimestre.\n\nAtentamente,\n-- \nRosa Ejemplo\nDepartamento Comercial | Clima Ejemplo S.L.\nTel. +34 555 0188\nrosa@climaejemplo.example.com"
+        },
+        {
+          "id": "es-t06e2",
+          "from": "Javier Ejemplo",
+          "at": "2026-10-06T10:30:00Z",
+          "body": "Hola Rosa,\n\nGracias por la propuesta. En general nos parece bien. Antes de firmar, ¿podrías decirme quién sería el técnico que nos haría las visitas preventivas y qué día de la semana suelen ser? El año pasado cambió tres veces y fue un poco caótico.\n\nUn saludo,\nJavier Ejemplo\nResponsable de Compras | Ejemplo S.L.\nTel. +34 555 0142\n\nEl lun, 5 oct 2026 a las 10:02, Rosa Ejemplo <rosa@climaejemplo.example.com> escribió:\n> Estimado Javier:\n> \n> Como cada año por estas fechas, le enviamos la propuesta de renovación del contrato de mantenimiento de climatización para sus oficinas de la calle Ejemplo 12. Hemos revisado el histórico de avisos de los últimos doce meses y ajustado algunas condiciones para que el servicio se adapte mejor a su uso real.\n> \n> Alcance del servicio\n> \n> El contrato cubre las 14 unidades interiores, las 3 unidades exteriores de la cubierta. Incluye cuatro visitas preventivas al año, limpieza de filtros y el informe anual que exige la normativa.\n> \n> Averías y tiempos de respuesta\n> \n> Para averías urgentes, entendidas como la pérdida total de frío o calor en una planta, garantizamos la presencia de un técnico en un máximo de 4 horas laborables desde el aviso. Las averías no urgentes se atenderán en 48 horas. La mano de obra de las reparaciones está incluida; las piezas se facturan aparte con un 10 % de descuento sobre tarifa.\n> \n> Precio y facturación\n> \n> La cuota anual para 2027 será de 3.960 € + IVA, que se facturará en cuatro recibos trimestrales de 990 €.\n> \n> Duración y cancelación\n> \n> El contrato tendrá una duración de un año y se renovará automáticamente salvo aviso por escrito con dos meses de antelación. Si deciden cancelarlo antes de que termine el año, la penalización por cancelación anticipada será del 15 % de las cuotas pendientes hasta el final del periodo. No se aplicará penalización si la cancelación se debe a un incumplimiento nuestro de los tiempos de respuesta.\n> \n> Le agradecería que nos devolviera la propuesta firmada antes del 30 de noviembre, para poder planificar las visitas del primer trimestre.\n> \n> Atentamente,\n> -- \n> Rosa Ejemplo\n> Departamento Comercial | Clima Ejemplo S.L.\n> Tel. +34 555 0188\n> rosa@climaejemplo.example.com"
+        },
+        {
+          "id": "es-t06e3",
+          "from": "Rosa Ejemplo",
+          "at": "2026-10-07T09:15:00Z",
+          "body": "Hola Javier,\n\nLo entiendo perfectamente. Para 2027 el técnico asignado a vuestras oficinas será Tomás Prueba, que ya conoce la instalación. Las visitas preventivas serán el segundo martes de enero, abril, julio y octubre, por la mañana.\n\nSi algún día no pudiera ir él, os avisaríamos con antelación.\n\nUn saludo,\nRosa\n\nEl mar, 6 oct 2026 a las 12:30, Javier Ejemplo <javier@example.com> escribió:\n> Hola Rosa,\n> \n> Gracias por la propuesta. En general nos parece bien. Antes de firmar, ¿podrías decirme quién sería el técnico que nos haría las visitas preventivas y qué día de la semana suelen ser? El año pasado cambió tres veces y fue un poco caótico.\n> \n> Un saludo,\n> Javier Ejemplo\n> Responsable de Compras | Ejemplo S.L.\n> Tel. +34 555 0142"
+        }
+      ]
+    },
+    {
+      "id": "es-t07",
+      "subject": "Boletín interno – octubre 2026",
+      "emails": [
+        {
+          "id": "es-t07e1",
+          "from": "Comunicación Interna",
+          "at": "2026-10-01T07:00:00Z",
+          "body": "BOLETÍN INTERNO EJEMPLO S.L. · OCTUBRE 2026\n\nNovedades\nDamos la bienvenida a las cuatro personas que se incorporan este mes a los equipos de Ventas y Atención al Cliente. El nuevo portal del empleado ya está disponible en intranet.example.com con las nóminas de los últimos dos años.\n--\nFormación\nEste trimestre abrimos un curso de Excel avanzado (tablas dinámicas, Power Query y macros sencillas). Empieza el martes 20 de octubre, son seis sesiones de dos horas por la tarde. Las plazas son limitadas y la inscripción está abierta hasta el jueves 15 de octubre en el portal del empleado.\n--\nBienestar\nA partir de noviembre, una fisioterapeuta vendrá a la oficina todos los miércoles de 15:00 a 19:00. Las sesiones de 30 minutos son gratuitas; podéis reservar hueco en la sala 3 desde la agenda compartida.\n--\nCalendario\nLa oficina permanecerá cerrada el lunes 12 de octubre por la fiesta nacional. El horario intensivo de verano termina oficialmente el 30 de septiembre.\n--\nPara darte de baja de este boletín, escribe a comunicacion@example.com.\nComunicación Interna | Ejemplo S.L."
+        }
+      ]
+    },
+    {
+      "id": "es-t08",
+      "subject": "Contrato de colaboración firmado",
+      "emails": [
+        {
+          "id": "es-t08e1",
+          "from": "Carmen Prueba",
+          "at": "2026-10-06T07:12:00Z",
+          "body": "Hola Javier, ¿puedes enviarme el contrato de colaboración firmado antes del viernes? Lo necesita la gestoría para cerrar el expediente.\n\nUn saludo,\nCarmen"
+        },
+        {
+          "id": "es-t08e2",
+          "from": "Javier Ejemplo",
+          "at": "2026-10-06T09:40:00Z",
+          "body": "Hola Carmen,\n\nSí, sin problema. Lo firma mañana la directora y te lo mando escaneado el jueves.\n\nJavier\n\nEl mar, 6 oct 2026 a las 9:12, Carmen Prueba <carmen@example.com> escribió:\n> Hola Javier, ¿puedes enviarme el contrato de colaboración firmado antes del viernes? Lo necesita la gestoría para cerrar el expediente.\n> \n> Un saludo,\n> Carmen"
+        },
+        {
+          "id": "es-t08e3",
+          "from": "Javier Ejemplo",
+          "at": "2026-10-08T11:05:00Z",
+          "body": "Hola Carmen,\n\nTe adjunto el contrato de colaboración firmado por ambas partes en PDF.\n\nUn saludo,\nJavier Ejemplo\nResponsable de Compras | Ejemplo S.L.\nTel. +34 555 0142\n\nP.D.: El segundo original en papel lo lleva Nuria por mensajería; llegará el lunes 12 con el número de envío ENV-30412."
+        },
+        {
+          "id": "es-t08e4",
+          "from": "Carmen Prueba",
+          "at": "2026-10-08T12:20:00Z",
+          "body": "Recibido, gracias Javier. Se lo paso a la gestoría hoy mismo.\n\nCarmen\n\nEl jue, 8 oct 2026 a las 13:05, Javier Ejemplo <javier@example.com> escribió:\n> Hola Carmen,\n> \n> Te adjunto el contrato de colaboración firmado por ambas partes en PDF.\n> \n> Un saludo,\n> Javier Ejemplo\n> Responsable de Compras | Ejemplo S.L.\n> Tel. +34 555 0142\n> \n> P.D.: El segundo original en papel lo lleva Nuria por mensajería; llegará el lunes 12 con el número de envío ENV-30412."
+        }
+      ]
+    },
+    {
+      "id": "es-t09",
+      "subject": "Factura material de oficina septiembre",
+      "emails": [
+        {
+          "id": "es-t09e1",
+          "from": "Lucía Sample",
+          "at": "2026-10-02T06:50:00Z",
+          "body": "Buenos días,\n\nAdjuntamos la factura FAC-2026-0917 correspondiente al pedido de material de oficina del 28 de septiembre (papel, tóner y carpetas), por un importe de 642,30 € IVA incluido. Vencimiento a 30 días.\n\nAtentamente,\n-- \nLucía Sample\nAdministración | Papelería Ejemplo S.L.\nTel. +34 555 0194"
+        },
+        {
+          "id": "es-t09e2",
+          "from": "Carmen Prueba",
+          "at": "2026-10-02T09:15:00Z",
+          "body": "Hola Lucía,\n\nLa factura lleva un CIF que no es el nuestro. El correcto es B-00000000 (Ejemplo S.L.). ¿Podéis emitir una rectificativa?\n\nUn saludo,\nCarmen Prueba\nOficina Técnica | Ejemplo S.L.\n\nEl vie, 2 oct 2026 a las 8:50, Lucía Sample <admin@papeleria.example.org> escribió:\n> Buenos días,\n> \n> Adjuntamos la factura FAC-2026-0917 correspondiente al pedido de material de oficina del 28 de septiembre (papel, tóner y carpetas), por un importe de 642,30 € IVA incluido. Vencimiento a 30 días.\n> \n> Atentamente,\n> -- \n> Lucía Sample\n> Administración | Papelería Ejemplo S.L.\n> Tel. +34 555 0194"
+        },
+        {
+          "id": "es-t09e3",
+          "from": "Lucía Sample",
+          "at": "2026-10-05T07:40:00Z",
+          "body": "Disculpa el error, Carmen. Te envío la factura rectificativa FAC-2026-0917-R con el CIF corregido; el importe no cambia.\n\nLucía\n\nEnviado desde mi iPhone\n\nEl vie, 2 oct 2026 a las 11:15, Carmen Prueba <carmen@example.com> escribió:\n> Hola Lucía,\n> \n> La factura lleva un CIF que no es el nuestro. El correcto es B-00000000 (Ejemplo S.L.). ¿Podéis emitir una rectificativa?\n> \n> Un saludo,\n> Carmen Prueba\n> Oficina Técnica | Ejemplo S.L."
+        },
+        {
+          "id": "es-t09e4",
+          "from": "Carmen Prueba",
+          "at": "2026-10-09T08:30:00Z",
+          "body": "Perfecto, Lucía. La rectificativa ya está pagada: hicimos la transferencia el jueves 8 de octubre.\n\nGracias,\n¿Podéis añadir 20 cajas de archivo definitivo al próximo pedido?"
+        }
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "id": "en-q01",
+      "split": "dev",
+      "lang": "en",
+      "category": "distractor",
+      "text": "credit note amount for the July shipments that were billed twice",
+      "relevant": [
+        "en-t01e3"
+      ]
+    },
+    {
+      "id": "en-q02",
+      "split": "test",
+      "lang": "en",
+      "category": "distractor",
+      "text": "why did the fuel surcharge go up on the August freight bill",
+      "relevant": [
+        "en-t02e3"
+      ]
+    },
+    {
+      "id": "en-q03",
+      "split": "dev",
+      "lang": "en",
+      "category": "distractor",
+      "text": "which cost center gets the bigger part of the September freight invoice",
+      "relevant": [
+        "en-t03e3"
+      ]
+    },
+    {
+      "id": "en-q04",
+      "split": "test",
+      "lang": "en",
+      "category": "exact-detail",
+      "text": "payment date scheduled for the August logistics invoice",
+      "relevant": [
+        "en-t02e4"
+      ]
+    },
+    {
+      "id": "en-q05",
+      "split": "test",
+      "lang": "en",
+      "category": "distractor",
+      "text": "who owns the follow-up for the outage caused by an expired certificate",
+      "relevant": [
+        "en-t04e3"
+      ]
+    },
+    {
+      "id": "en-q06",
+      "split": "dev",
+      "lang": "en",
+      "category": "distractor",
+      "text": "action items after checkout ran out of database connections",
+      "relevant": [
+        "en-t05e3"
+      ]
+    },
+    {
+      "id": "en-q07",
+      "split": "dev",
+      "lang": "en",
+      "category": "exact-detail",
+      "text": "how many customers were affected by INC-4130",
+      "relevant": [
+        "en-t06e1"
+      ]
+    },
+    {
+      "id": "en-q08",
+      "split": "test",
+      "lang": "en",
+      "category": "distractor",
+      "text": "what caused the hour-long checkout outage in mid September",
+      "relevant": [
+        "en-t06e3"
+      ]
+    },
+    {
+      "id": "en-q09",
+      "split": "dev",
+      "lang": "en",
+      "category": "deep-reply",
+      "text": "what time do the movers collect the keys to the new office",
+      "relevant": [
+        "en-t07e5"
+      ]
+    },
+    {
+      "id": "en-q10",
+      "split": "test",
+      "lang": "en",
+      "category": "deep-reply",
+      "text": "how many staff parking permits do we get at the new building",
+      "relevant": [
+        "en-t07e7"
+      ]
+    },
+    {
+      "id": "en-q11",
+      "split": "dev",
+      "lang": "en",
+      "category": "boundary",
+      "text": "which floor and room will the server room be in after the move",
+      "relevant": [
+        "en-t07e3"
+      ]
+    },
+    {
+      "id": "en-q12",
+      "split": "dev",
+      "lang": "en",
+      "category": "deep-reply",
+      "text": "final discount and yearly price cap agreed for the license renewal",
+      "relevant": [
+        "en-t08e6"
+      ]
+    },
+    {
+      "id": "en-q13",
+      "split": "test",
+      "lang": "en",
+      "category": "deep-reply",
+      "text": "how fast does support respond to priority one tickets under the new contract",
+      "relevant": [
+        "en-t08e4"
+      ]
+    },
+    {
+      "id": "en-q14",
+      "split": "dev",
+      "lang": "en",
+      "category": "boundary",
+      "text": "how much did pick accuracy improve after the new scanners",
+      "relevant": [
+        "en-t09e1"
+      ]
+    },
+    {
+      "id": "en-q15",
+      "split": "test",
+      "lang": "en",
+      "category": "boundary",
+      "text": "when does the forklift lease end and will it be renewed",
+      "relevant": [
+        "en-t09e1"
+      ]
+    },
+    {
+      "id": "en-q16",
+      "split": "dev",
+      "lang": "en",
+      "category": "long-email",
+      "text": "how many people were on the warehouse team at the end of Q3",
+      "relevant": [
+        "en-t09e1"
+      ]
+    },
+    {
+      "id": "en-q17",
+      "split": "dev",
+      "lang": "en",
+      "category": "boundary",
+      "text": "how do new hires get a VPN token to work from home",
+      "relevant": [
+        "en-t10e1"
+      ]
+    },
+    {
+      "id": "en-q18",
+      "split": "test",
+      "lang": "en",
+      "category": "long-email",
+      "text": "where do new starters pick up their access badge",
+      "relevant": [
+        "en-t10e1"
+      ]
+    },
+    {
+      "id": "en-q19",
+      "split": "test",
+      "lang": "en",
+      "category": "boundary",
+      "text": "deadline for uploading travel receipts to the expense tool",
+      "relevant": [
+        "en-t11e1"
+      ]
+    },
+    {
+      "id": "en-q20",
+      "split": "dev",
+      "lang": "en",
+      "category": "long-email",
+      "text": "maximum hotel price per night in big cities under the new policy",
+      "relevant": [
+        "en-t11e1"
+      ]
+    },
+    {
+      "id": "en-q21",
+      "split": "test",
+      "lang": "en",
+      "category": "long-email",
+      "text": "when is business class allowed on work flights",
+      "relevant": [
+        "en-t11e1"
+      ]
+    },
+    {
+      "id": "en-q22",
+      "split": "dev",
+      "lang": "en",
+      "category": "paraphrase",
+      "text": "when is the Valencia hub shut for maintenance",
+      "relevant": [
+        "en-t12e1"
+      ]
+    },
+    {
+      "id": "en-q23",
+      "split": "test",
+      "lang": "en",
+      "category": "paraphrase",
+      "text": "scanner firmware needed for the new QR pallet labels",
+      "relevant": [
+        "en-t12e1"
+      ]
+    },
+    {
+      "id": "en-q24",
+      "split": "dev",
+      "lang": "en",
+      "category": "paraphrase",
+      "text": "when and where can staff get a free flu jab",
+      "relevant": [
+        "en-t13e1"
+      ]
+    },
+    {
+      "id": "en-q25",
+      "split": "test",
+      "lang": "en",
+      "category": "paraphrase",
+      "text": "how to request a standing desk and how long approval takes",
+      "relevant": [
+        "en-t13e1"
+      ]
+    },
+    {
+      "id": "en-q26",
+      "split": "dev",
+      "lang": "en",
+      "category": "edge-cleaning",
+      "text": "deadline for sending the signed guest flat lease",
+      "relevant": [
+        "en-t14e1"
+      ]
+    },
+    {
+      "id": "en-q27",
+      "split": "test",
+      "lang": "en",
+      "category": "edge-cleaning",
+      "text": "how many people the caterer needs to plan for and by when",
+      "relevant": [
+        "en-t15e2"
+      ]
+    },
+    {
+      "id": "en-q28",
+      "split": "dev",
+      "lang": "en",
+      "category": "edge-cleaning",
+      "text": "which meeting room to book for the auditors",
+      "relevant": [
+        "en-t16e3"
+      ]
+    },
+    {
+      "id": "en-q29",
+      "split": "test",
+      "lang": "en",
+      "category": "boundary",
+      "text": "new day and time for the fire safety walkthrough",
+      "relevant": [
+        "en-t17e3",
+        "en-t17e4"
+      ]
+    },
+    {
+      "id": "en-q30",
+      "split": "dev",
+      "lang": "en",
+      "category": "exact-detail",
+      "text": "when will the container released by customs reach our warehouse",
+      "relevant": [
+        "en-t18e4"
+      ]
+    },
+    {
+      "id": "en-q31",
+      "split": "test",
+      "lang": "en",
+      "category": "exact-detail",
+      "text": "why was the packaging container held at customs in the port",
+      "relevant": [
+        "en-t18e1"
+      ]
+    },
+    {
+      "id": "en-q32",
+      "split": "dev",
+      "lang": "en",
+      "category": "deep-reply",
+      "text": "who pays the demurrage for the container stuck in port",
+      "relevant": [
+        "en-t18e5"
+      ]
+    },
+    {
+      "id": "en-q33",
+      "split": "test",
+      "lang": "en",
+      "category": "paraphrase",
+      "text": "when can we pick up the keys for the guest flat",
+      "relevant": [
+        "en-t14e3"
+      ]
+    },
+    {
+      "id": "en-q34",
+      "split": "test",
+      "lang": "en",
+      "category": "deep-reply",
+      "text": "when was the corrected July freight invoice paid",
+      "relevant": [
+        "en-t01e4"
+      ]
+    },
+    {
+      "id": "en-q35",
+      "split": "dev",
+      "lang": "en",
+      "category": "exact-detail",
+      "text": "date both parts of the split September invoice get paid",
+      "relevant": [
+        "en-t03e4"
+      ]
+    },
+    {
+      "id": "en-q36",
+      "split": "test",
+      "lang": "en",
+      "category": "paraphrase",
+      "text": "how many auditors are coming and when do they arrive",
+      "relevant": [
+        "en-t16e2"
+      ]
+    },
+    {
+      "id": "en-q37",
+      "split": "dev",
+      "lang": "es",
+      "category": "cross-language",
+      "text": "¿Cuándo cierra el centro de Valencia por mantenimiento?",
+      "relevant": [
+        "en-t12e1"
+      ]
+    },
+    {
+      "id": "en-q38",
+      "split": "dev",
+      "lang": "ru",
+      "category": "cross-language",
+      "text": "Какую скидку в итоге согласовали на продление лицензий?",
+      "relevant": [
+        "en-t08e6"
+      ]
+    },
+    {
+      "id": "en-q39",
+      "split": "test",
+      "lang": "es",
+      "category": "cross-language",
+      "text": "límite de precio de hotel por noche en ciudades grandes",
+      "relevant": [
+        "en-t11e1"
+      ]
+    },
+    {
+      "id": "en-q40",
+      "split": "test",
+      "lang": "ru",
+      "category": "cross-language",
+      "text": "когда заканчивается аренда погрузчиков на складе",
+      "relevant": [
+        "en-t09e1"
+      ]
+    },
+    {
+      "id": "ru-q01",
+      "split": "dev",
+      "lang": "ru",
+      "category": "distractor",
+      "text": "до какого числа надо оплатить счёт за аренду за июль",
+      "relevant": [
+        "ru-t01e1"
+      ]
+    },
+    {
+      "id": "ru-q02",
+      "split": "dev",
+      "lang": "ru",
+      "category": "distractor",
+      "text": "почему счёт за офис в августе вышел дороже обычного",
+      "relevant": [
+        "ru-t02e3"
+      ]
+    },
+    {
+      "id": "ru-q03",
+      "split": "dev",
+      "lang": "ru",
+      "category": "boundary",
+      "text": "в какой день договорились осмотреть переговорную вместе с прорабом",
+      "relevant": [
+        "ru-t04e4",
+        "ru-t04e5"
+      ]
+    },
+    {
+      "id": "ru-q04",
+      "split": "dev",
+      "lang": "ru",
+      "category": "deep-reply",
+      "text": "какой гарантийный срок дал подрядчик на ремонт переговорной",
+      "relevant": [
+        "ru-t04e6"
+      ]
+    },
+    {
+      "id": "ru-q05",
+      "split": "dev",
+      "lang": "ru",
+      "category": "long-email",
+      "text": "из-за чего задерживаются новые офисные кресла и когда их ждать",
+      "relevant": [
+        "ru-t05e1"
+      ]
+    },
+    {
+      "id": "ru-q06",
+      "split": "dev",
+      "lang": "ru",
+      "category": "edge-cleaning",
+      "text": "к какому дню нужно прислать подписанный договор поставки",
+      "relevant": [
+        "ru-t08e1"
+      ]
+    },
+    {
+      "id": "ru-q07",
+      "split": "dev",
+      "lang": "ru",
+      "category": "edge-cleaning",
+      "text": "где и во сколько собираемся на юбилейный корпоратив",
+      "relevant": [
+        "ru-t09e3"
+      ]
+    },
+    {
+      "id": "ru-q08",
+      "split": "dev",
+      "lang": "ru",
+      "category": "paraphrase",
+      "text": "когда на парковку начнут пускать только через приложение",
+      "relevant": [
+        "ru-t07e1"
+      ]
+    },
+    {
+      "id": "ru-q09",
+      "split": "dev",
+      "lang": "ru",
+      "category": "deep-reply",
+      "text": "на какой цене за ноутбук в итоге сошлись с поставщиком",
+      "relevant": [
+        "ru-t11e5"
+      ]
+    },
+    {
+      "id": "ru-q10",
+      "split": "dev",
+      "lang": "ru",
+      "category": "exact-detail",
+      "text": "номер платёжного поручения по оплате июльской аренды",
+      "relevant": [
+        "ru-t01e3"
+      ]
+    },
+    {
+      "id": "ru-q11",
+      "split": "dev",
+      "lang": "ru",
+      "category": "paraphrase",
+      "text": "где будем жить во время поездки на выставку в Новосибирск",
+      "relevant": [
+        "ru-t12e3"
+      ]
+    },
+    {
+      "id": "ru-q12",
+      "split": "dev",
+      "lang": "ru",
+      "category": "exact-detail",
+      "text": "какой срок поставки согласовали в договоре П-27",
+      "relevant": [
+        "ru-t08e3"
+      ]
+    },
+    {
+      "id": "ru-q13",
+      "split": "test",
+      "lang": "ru",
+      "category": "distractor",
+      "text": "номер счёта на аренду офиса за сентябрь",
+      "relevant": [
+        "ru-t03e1"
+      ]
+    },
+    {
+      "id": "ru-q14",
+      "split": "test",
+      "lang": "ru",
+      "category": "distractor",
+      "text": "сколько платить за сентябрьскую аренду, если оплатить раньше срока",
+      "relevant": [
+        "ru-t03e3"
+      ]
+    },
+    {
+      "id": "ru-q15",
+      "split": "test",
+      "lang": "ru",
+      "category": "deep-reply",
+      "text": "во сколько обойдётся замена акустических панелей на более поглощающие",
+      "relevant": [
+        "ru-t04e7"
+      ]
+    },
+    {
+      "id": "ru-q16",
+      "split": "test",
+      "lang": "ru",
+      "category": "long-email",
+      "text": "за сколько дней до отпуска теперь подавать заявление",
+      "relevant": [
+        "ru-t06e1"
+      ]
+    },
+    {
+      "id": "ru-q17",
+      "split": "test",
+      "lang": "ru",
+      "category": "long-email",
+      "text": "до какого срока можно перенести неотгулянные дни отпуска за 2026 год",
+      "relevant": [
+        "ru-t06e1"
+      ]
+    },
+    {
+      "id": "ru-q18",
+      "split": "test",
+      "lang": "ru",
+      "category": "edge-cleaning",
+      "text": "кому из новых сотрудников нужен экспорт отчётов CRM в CSV",
+      "relevant": [
+        "ru-t10e3"
+      ]
+    },
+    {
+      "id": "ru-q19",
+      "split": "test",
+      "lang": "ru",
+      "category": "deep-reply",
+      "text": "сколько суточных платят в командировке на выставку",
+      "relevant": [
+        "ru-t12e5"
+      ]
+    },
+    {
+      "id": "ru-q20",
+      "split": "test",
+      "lang": "ru",
+      "category": "paraphrase",
+      "text": "когда обучение по сводным таблицам Excel",
+      "relevant": [
+        "ru-t07e1"
+      ]
+    },
+    {
+      "id": "ru-q21",
+      "split": "test",
+      "lang": "ru",
+      "category": "deep-reply",
+      "text": "дадут ли бесплатно расширенную гарантию на ноутбуки",
+      "relevant": [
+        "ru-t11e4"
+      ]
+    },
+    {
+      "id": "ru-q22",
+      "split": "test",
+      "lang": "ru",
+      "category": "paraphrase",
+      "text": "как новому сотруднику получить учётную запись в CRM",
+      "relevant": [
+        "ru-t10e2"
+      ]
+    },
+    {
+      "id": "ru-q23",
+      "split": "test",
+      "lang": "ru",
+      "category": "boundary",
+      "text": "кто подпишет финальный акт приёмки мебели вместо офис-менеджера",
+      "relevant": [
+        "ru-t05e1"
+      ]
+    },
+    {
+      "id": "ru-q24",
+      "split": "test",
+      "lang": "ru",
+      "category": "exact-detail",
+      "text": "сколько рабочих дней займёт ремонт переговорной по смете",
+      "relevant": [
+        "ru-t04e2"
+      ]
+    },
+    {
+      "id": "ru-q25",
+      "split": "dev",
+      "lang": "en",
+      "category": "cross-language",
+      "text": "When does parking access switch to QR codes only?",
+      "relevant": [
+        "ru-t07e1"
+      ]
+    },
+    {
+      "id": "ru-q26",
+      "split": "test",
+      "lang": "en",
+      "category": "cross-language",
+      "text": "What is the daily allowance for the trade show business trip?",
+      "relevant": [
+        "ru-t12e5"
+      ]
+    },
+    {
+      "id": "es-q01",
+      "split": "dev",
+      "lang": "es",
+      "category": "distractor",
+      "text": "presupuesto de cocina que podía empezar a principios de octubre",
+      "relevant": [
+        "es-t01e2"
+      ]
+    },
+    {
+      "id": "es-q02",
+      "split": "test",
+      "lang": "es",
+      "category": "distractor",
+      "text": "qué empresa terminaba la reforma de la cocina en solo tres semanas",
+      "relevant": [
+        "es-t02e2"
+      ]
+    },
+    {
+      "id": "es-q03",
+      "split": "dev",
+      "lang": "es",
+      "category": "distractor",
+      "text": "oferta de reforma de cocina con garantía de tres años",
+      "relevant": [
+        "es-t03e2"
+      ]
+    },
+    {
+      "id": "es-q04",
+      "split": "dev",
+      "lang": "es",
+      "category": "deep-reply",
+      "text": "referencia de la transferencia de la señal de la masía",
+      "relevant": [
+        "es-t04e5"
+      ]
+    },
+    {
+      "id": "es-q05",
+      "split": "dev",
+      "lang": "es",
+      "category": "boundary",
+      "text": "a qué hora vamos a ver la sala de la masía el jueves",
+      "relevant": [
+        "es-t04e6",
+        "es-t04e7"
+      ]
+    },
+    {
+      "id": "es-q06",
+      "split": "dev",
+      "lang": "es",
+      "category": "long-email",
+      "text": "qué día se llevan el archivo en papel a la oficina nueva",
+      "relevant": [
+        "es-t05e1"
+      ]
+    },
+    {
+      "id": "es-q07",
+      "split": "test",
+      "lang": "es",
+      "category": "boundary",
+      "text": "qué documento hay que llevar para recoger la tarjeta de acceso del edificio nuevo",
+      "relevant": [
+        "es-t05e1"
+      ]
+    },
+    {
+      "id": "es-q08",
+      "split": "test",
+      "lang": "es",
+      "category": "long-email",
+      "text": "cuánto cuesta cancelar antes de tiempo el mantenimiento del aire acondicionado",
+      "relevant": [
+        "es-t06e1"
+      ]
+    },
+    {
+      "id": "es-q09",
+      "split": "dev",
+      "lang": "es",
+      "category": "exact-detail",
+      "text": "hasta cuándo puedo apuntarme al curso de Excel avanzado",
+      "relevant": [
+        "es-t07e1"
+      ]
+    },
+    {
+      "id": "es-q10",
+      "split": "test",
+      "lang": "es",
+      "category": "paraphrase",
+      "text": "qué día de la semana viene la fisio a la oficina",
+      "relevant": [
+        "es-t07e1"
+      ]
+    },
+    {
+      "id": "es-q11",
+      "split": "dev",
+      "lang": "es",
+      "category": "edge-cleaning",
+      "text": "quién pidió el contrato de colaboración firmado antes del viernes",
+      "relevant": [
+        "es-t08e1"
+      ]
+    },
+    {
+      "id": "es-q12",
+      "split": "test",
+      "lang": "es",
+      "category": "edge-cleaning",
+      "text": "cuándo llega por mensajería el original en papel del contrato",
+      "relevant": [
+        "es-t08e3"
+      ]
+    },
+    {
+      "id": "es-q13",
+      "split": "dev",
+      "lang": "es",
+      "category": "edge-cleaning",
+      "text": "cuántas cajas de archivo pedimos añadir al próximo pedido de papelería",
+      "relevant": [
+        "es-t09e4"
+      ]
+    },
+    {
+      "id": "es-q14",
+      "split": "test",
+      "lang": "es",
+      "category": "exact-detail",
+      "text": "número de la factura rectificativa del material de oficina",
+      "relevant": [
+        "es-t09e3"
+      ]
+    },
+    {
+      "id": "es-q15",
+      "split": "test",
+      "lang": "es",
+      "category": "paraphrase",
+      "text": "precio del autocar desde el centro de Valencia para la jornada de equipo",
+      "relevant": [
+        "es-t04e4"
+      ]
+    },
+    {
+      "id": "es-q16",
+      "split": "test",
+      "lang": "es",
+      "category": "deep-reply",
+      "text": "qué día pagamos la factura corregida de la papelería",
+      "relevant": [
+        "es-t09e4"
+      ]
+    },
+    {
+      "id": "es-q17",
+      "split": "dev",
+      "lang": "es",
+      "category": "exact-detail",
+      "text": "nombre del técnico que hará las visitas de mantenimiento de climatización",
+      "relevant": [
+        "es-t06e3"
+      ]
+    },
+    {
+      "id": "es-q18",
+      "split": "test",
+      "lang": "es",
+      "category": "paraphrase",
+      "text": "cuántas plazas de aparcamiento nos tocan en el edificio nuevo",
+      "relevant": [
+        "es-t05e2"
+      ]
+    },
+    {
+      "id": "es-q19",
+      "split": "dev",
+      "lang": "en",
+      "category": "cross-language",
+      "text": "price per person of the group lunch menu at the team day venue",
+      "relevant": [
+        "es-t04e2"
+      ]
+    },
+    {
+      "id": "es-q20",
+      "split": "test",
+      "lang": "en",
+      "category": "cross-language",
+      "text": "how fast must a technician show up for an urgent air conditioning failure",
+      "relevant": [
+        "es-t06e1"
+      ]
+    }
+  ]
+}

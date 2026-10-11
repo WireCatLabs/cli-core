@@ -11,10 +11,7 @@ Open work only. A finished item is deleted; its record is the merged pull reques
 - **Chat briefs and news digests** — decisions, requests and open questions per chat for a time window,
   and a cited digest of selected news feeds, prepared for the owner's agent. Not designed beyond a
   proposal; needs the owner's scope before a plan.
-- **Mail embedding: measure what works best** — mail is cut by thread with a 150-character overlap and
-  greetings, sign-offs and re-quotes left out, chosen as common practice, not measured. Extend
-  [bench/search-quality](../../bench/search-quality/README.md) with a synthetic mail corpus (reply-heavy
-  threads, quotes, signatures, newsletters; en/ru/es) and labelled queries, and compare: per email vs per
-  thread; piece size 600/1200/2000; overlap 0/150/300; cleaning off/rules/a model-based line classifier.
-  Report recall@5, MRR, pieces and vectors, embedding time and store size. Committed numbers stay
-  synthetic; a run on the owner's mailbox stays in cli-private.
+- **Mail embedding: cut per email again?** Measured in [bench/mail-quality](../../bench/mail-quality/README.md):
+  thread pieces find the right email for 24–25 of 43 queries, per-email pieces for 39–40, and both find the
+  right thread equally often. Waiting for the owner's decision. Not measured yet: a model-based line
+  classifier for cleaning, and a run on the owner's own mailbox, which would stay in cli-private.
