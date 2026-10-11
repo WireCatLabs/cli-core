@@ -39,9 +39,6 @@ importers:
       '@wirecat/cli-messaging-sqlite':
         specifier: 1.0.1
         version: 1.0.1
-      '@wirecat/cli-tasks':
-        specifier: 0.3.1
-        version: 0.3.1
       '@xmldom/xmldom':
         specifier: 0.9.12
         version: 0.9.12
@@ -1290,10 +1287,6 @@ packages:
 
   '@wirecat/cli-messaging-sqlite@1.0.1':
     resolution: {integrity: sha512-hnB4eL6ER/++nTPrlSCAUzDJH7MN3V+Obx9B2xXMwBN1KrLkJHIrybQCikfNOnwnyrkultSkLulM7vd+qSG5Hg==}
-
-  '@wirecat/cli-tasks@0.3.1':
-    resolution: {integrity: sha512-sNjtlKnhKSjswSH9Zg5hdu+0eHglhpAC0HrPzKn4LAk5dWRK3PRu9TJSgIiTqlX8AnKKxEaCfSeQWpuU5f109w==}
-    engines: {node: '>=22'}
 
   '@xmldom/xmldom@0.8.15':
     resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
@@ -3522,8 +3515,6 @@ snapshots:
       onnxruntime-common: 1.30.0
 
   '@wirecat/cli-messaging-sqlite@1.0.1': {}
-
-  '@wirecat/cli-tasks@0.3.1': {}
 
   '@xmldom/xmldom@0.8.15': {}
 

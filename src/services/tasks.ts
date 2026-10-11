@@ -1,4 +1,6 @@
 import { CliError, singleLine } from "@wirecat/cli-core"
+import { isLocator, parseLocator } from "../domain/locator.js"
+import type { AccountKey, MessageStore } from "../store/store.js"
 import {
   type ClosedState,
   createTaskService,
@@ -9,9 +11,7 @@ import {
   type TaskKind,
   type TaskOrigin,
   type TaskState,
-} from "@wirecat/cli-tasks"
-import { isLocator, parseLocator } from "../domain/locator.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+} from "../tasks/index.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./messages.js"
 import { taskAccount } from "./task-rules.js"
@@ -33,7 +33,7 @@ export interface TaskListFilter {
   limit?: number
 }
 
-/** What waits on the owner, kept in the local store by `@wirecat/cli-tasks`; nothing here reaches the messenger. */
+/** What waits on the owner, kept in the local store by `src/tasks/`; nothing here reaches the messenger. */
 export interface TasksService {
   list(filter?: TaskListFilter): Promise<TaskView[]>
   add(message: string, type: TaskKind, origin: TaskOrigin): Promise<{ task: TaskView; created: boolean }>

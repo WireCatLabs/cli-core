@@ -9,7 +9,7 @@ import {
   type Task,
   type TaskFilter,
   type TaskStore,
-} from "@wirecat/cli-tasks"
+} from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { actorOfOrigin, originOfActor } from "./actors.js"
 import { atomic } from "./atomic.js"
@@ -20,7 +20,7 @@ import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
 
 export { taskIdOf, taskRowOf } from "./things.js"
 
-/** `TaskStore` for `@wirecat/cli-tasks`, plus a way from its task ids to the store's rows. */
+/** `TaskStore` for `src/tasks/`, plus a way from its task ids to the store's rows. */
 export interface StoreTaskStore extends TaskStore, WorkTasks {
   /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
   rowOf(id: string): number | undefined

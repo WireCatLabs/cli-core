@@ -79,7 +79,7 @@ guessable from the others.
    named with a verb. `tags` and `searches` are the owner's own records in the local store, never
    sent; their writes have their own keys (`tags.add`), so a read-only profile hides them.
    `tasks` are what waits on the owner — a question nobody answered, a mention, a request, a promise —
-   kept in the local store by `@wirecat/cli-tasks` and never sent: `tasks list|add|close|stats`, the
+   kept in the local store by `src/tasks/` and never sent: `tasks list|add|close|stats`, the
    type of a task is `--type` (`question`, `request`, `mention`, `promise`), and closing is
    `tasks close <task> --as done|dismissed [--reason <text>]`. The owner chose these on 2026-10-06.
    `attachments` are the files of stored messages: their text, read or written back, is kept in the

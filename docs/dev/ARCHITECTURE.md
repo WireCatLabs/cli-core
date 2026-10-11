@@ -377,7 +377,8 @@ A migration is frozen once released: fix a mistake with the next version, never 
 
 ### Open tasks
 
-Tasks waiting on the owner belong to `@wirecat/cli-tasks`, which knows no messenger and no SQLite.
+Tasks waiting on the owner belong to `src/tasks/` (exported as `./tasks`), which knows no messenger and
+no SQLite; `biome.json` holds it to that and lets the rest of the package import only its entry points.
 The store implements its `TaskStore` as `store.tasks`, in the `tasks` table (store version 20,
 `src/store/sqlite/tasks.ts`), so backup, restore and export carry tasks with the messages, and a task
 joins its message in one query. A task holds a locator, never the message text; `kind`, `state` and

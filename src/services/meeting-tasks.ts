@@ -1,4 +1,6 @@
 import { CliError } from "@wirecat/cli-core"
+import { canonicalMeetingReference, formatMeetingReference } from "../domain/meeting-reference.js"
+import type { AccountKey, MessageStore } from "../store/store.js"
 import {
   createTaskService,
   TASK_KINDS,
@@ -6,9 +8,7 @@ import {
   type Task,
   type TaskKind,
   type TaskOrigin,
-} from "@wirecat/cli-tasks"
-import { canonicalMeetingReference, formatMeetingReference } from "../domain/meeting-reference.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+} from "../tasks/index.js"
 import { resolveMeetingReference } from "./meeting-reference.js"
 import { taskAccount } from "./task-rules.js"
 

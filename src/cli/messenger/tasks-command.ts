@@ -18,7 +18,7 @@ const line = ({ id, state, kind, group, createdAt, message, note }: TaskView) =>
         : "(not in the store)",
   ].join("  ")
 
-/** What waits on the owner — kept in the local store by `@wirecat/cli-tasks`; nothing here reaches the messenger. */
+/** What waits on the owner — kept in the local store by `src/tasks/`; nothing here reaches the messenger. */
 export const tasksCommand = (messenger: Messenger): Command => {
   const tasks = new Command("tasks").description(
     "what waits on you — unanswered questions, mentions, requests, promises — kept in the local store; review and serve add them",

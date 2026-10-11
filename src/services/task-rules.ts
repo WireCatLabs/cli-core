@@ -1,7 +1,7 @@
-import { createTaskService, type TaskKind, type TaskStore } from "@wirecat/cli-tasks"
 import { formatLocator } from "../domain/locator.js"
 import type { Id, Message, ReviewChat } from "../domain/models.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import { createTaskService, type TaskKind, type TaskStore } from "../tasks/index.js"
 import { questions } from "./questions.js"
 
 export interface RuleResult {

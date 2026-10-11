@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-core"
-import { TASK_KINDS, TASK_STATES, type TaskState, type TaskVerdict } from "@wirecat/cli-tasks"
+import { TASK_KINDS, TASK_STATES, type TaskState, type TaskVerdict } from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { Actor } from "./actors.js"
 import { atomic } from "./atomic.js"
