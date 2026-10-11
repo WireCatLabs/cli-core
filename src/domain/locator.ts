@@ -1,4 +1,4 @@
-import { CliError, singleLine } from "@wirecat/cli-core"
+import { CliError, singleLine } from "@wirecat/cli-base"
 import type { Id, Provider } from "./models.js"
 
 /**

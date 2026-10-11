@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { isCliFailure } from "../cli/failures.js"
 import { RULES_VERSION } from "../conversations/link.js"
 import { formatLocator } from "../domain/locator.js"

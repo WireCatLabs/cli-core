@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { CHUNK_CHARS, chunkHash, chunkTextOf } from "../conversations/chunks.js"
 import { RULES_VERSION } from "../conversations/link.js"
 import { formatLocator, parseLocator } from "../domain/locator.js"

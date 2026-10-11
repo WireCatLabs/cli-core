@@ -1,4 +1,4 @@
-import { CliError, singleLine } from "@wirecat/cli-core"
+import { CliError, singleLine } from "@wirecat/cli-base"
 import type { MediaOption, Messenger } from "../cli/messenger/context.js"
 import { type After, capability, type Download, type MessengerAdapter, type Sent } from "../cli/messenger/port.js"
 import { threadIdOf } from "../cli/messenger/thread.js"

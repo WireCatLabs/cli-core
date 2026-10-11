@@ -1,4 +1,4 @@
-import { isCliError } from "@wirecat/cli-core"
+import { isCliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { CacheDatabase } from "./driver.js"
 import { assertStoreCapable, openCache } from "./open.js"

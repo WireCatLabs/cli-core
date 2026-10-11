@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { ConversationsService } from "../services/conversations.js"
 import type { AgentAnswer } from "../store/store.js"
 import type { AnalysisRequest } from "./provider.js"

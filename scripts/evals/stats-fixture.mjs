@@ -37,7 +37,7 @@ if (priorSeed && priorSeed.version !== JSON.parse(readFileSync(join(subject, "pa
   throw new Error("fixture SDK version changed after seeding")
 const require = createRequire(join(realpathSync(subject), "package.json"))
 const load = (path) => import(pathToFileURL(join(subject, "dist", path)).href)
-const { captureStreams } = require("@wirecat/cli-core")
+const { captureStreams } = require("@wirecat/cli-base")
 const { Command } = require("commander")
 const { openStore } = await load("store/store.js")
 const { run, createProgram } = await load("cli/program.js")

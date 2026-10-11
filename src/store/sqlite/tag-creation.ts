@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { normalizeVocabularyName, vocabularySimilarity } from "../../domain/vocabulary.js"
 import type { StoreContext } from "./open.js"
 

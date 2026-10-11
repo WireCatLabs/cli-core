@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { MeetingContextStore, ParticipantPersonInput } from "../../meetings/index.js"
 import { checkMeetingCancelled, meetingWriteSnapshot } from "./meeting-operation.js"
 import { meetingReadSnapshot, positiveReadInteger } from "./meeting-reads.js"

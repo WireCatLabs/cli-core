@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import { type AccountKey, historyStartKey, type Range } from "../store/store.js"
 import { abortable, archiveService, FETCHING, type Fetched } from "./archive.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 export const threadIdOf = (value: string | undefined): string | undefined => {
   if (value === undefined) return undefined

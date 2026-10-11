@@ -1,4 +1,4 @@
-import { annotate } from "@wirecat/cli-core/commands"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { CounterQuery } from "../../services/counters.js"
 import { environmentOf } from "../context.js"

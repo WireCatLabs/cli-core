@@ -1,9 +1,9 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
 import { realpathSync } from "node:fs"
 import { join } from "node:path"
-import { CliError, resolvePaths, visibleControls } from "@wirecat/cli-core"
-import { annotate } from "@wirecat/cli-core/commands"
-import { installerOf } from "@wirecat/cli-core/update"
+import { CliError, resolvePaths, visibleControls } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
+import { installerOf } from "@wirecat/cli-base/update"
 import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
 import { type AppIdentity, envName } from "../app.js"
@@ -187,7 +187,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
       })
       const [name, entry] = Object.entries(configuration.config.mcpServers)[0] ?? []
       if (!name || !entry) throw new CliError("validation_error", "the MCP entry is empty")
-      const { installStdioEntry, probeStdio } = await import("@wirecat/cli-core/mcp")
+      const { installStdioEntry, probeStdio } = await import("@wirecat/cli-base/mcp")
       try {
         const server = entry as Parameters<typeof probeStdio>[0]
         const { potentialWrites } = await probeStdio(server)
@@ -218,7 +218,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
         })
         const entry = Object.values(configuration.config.mcpServers)[0]
         if (!entry) throw new CliError("validation_error", "the MCP entry is empty")
-        const { probeStdio } = await import("@wirecat/cli-core/mcp")
+        const { probeStdio } = await import("@wirecat/cli-base/mcp")
         const stderr = stderrTail()
         try {
           const { tools, potentialWrites } = await probeStdio(entry as Parameters<typeof probeStdio>[0], {

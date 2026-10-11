@@ -1,4 +1,4 @@
-import { captureStreams } from "@wirecat/cli-core"
+import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { resolveOutput } from "./output.js"
 

@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it } from "vitest"
 import { MeetingError } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"

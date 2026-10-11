@@ -1,4 +1,4 @@
-import { CliError, singleLine } from "@wirecat/cli-core"
+import { CliError, singleLine } from "@wirecat/cli-base"
 import type { AdminReport } from "../domain/admin-statistics.js"
 import type { RankingInput, RankingTarget } from "../domain/rankings-options.js"
 import { parseLucene } from "../search/lucene/parser.js"

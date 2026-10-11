@@ -1,4 +1,4 @@
-import { CliError, visibleControls } from "@wirecat/cli-core"
+import { CliError, visibleControls } from "@wirecat/cli-base"
 
 export interface TextSpan {
   type:

@@ -1,4 +1,4 @@
-import type { CommandInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
 import { commandMap, comparePrograms, compareTools, inlineJson, matrixRows, valueDifferences } from "./deep.js"
 import type { CommandsJson } from "./manifest.js"

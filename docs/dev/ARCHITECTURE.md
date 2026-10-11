@@ -625,9 +625,9 @@ registry configuration; importing the descriptor requires no installed files.
 
 ## Shared result projection
 
-The CLI's `fieldsOf` export is cli-core's parser, and `projectFields` delegates to core's projection.
+The CLI's `fieldsOf` export is cli-base's parser, and `projectFields` delegates to core's projection.
 List envelopes, operation identifiers, parent selections and `items.id` semantics remain unchanged.
 A thin wrapper preserves empty direct selections as metadata-only output. Parsed paths retain the
 existing limits of 128 paths and 256 characters each; direct invalid paths now reject before traversal.
-The runtime peer and development pin require cli-core 0.19.2 so every consumer has these exports.
+The runtime peer and development pin require cli-base 0.19.2 so every consumer has these exports.
 The messenger runner retains its own write and resource lifetime policy; no store schema is involved.

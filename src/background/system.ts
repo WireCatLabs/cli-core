@@ -2,7 +2,7 @@ import { execFile, spawn } from "node:child_process"
 import { closeSync, mkdirSync, openSync, realpathSync } from "node:fs"
 import { dirname } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 export interface Ran {
   code: number

@@ -5,8 +5,8 @@ import {
   pathsAreOverridden,
   resolvePaths,
   saveConfigFile,
-} from "@wirecat/cli-core"
-import { annotate } from "@wirecat/cli-core/commands"
+} from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
 import { type AppIdentity, envName } from "./app.js"

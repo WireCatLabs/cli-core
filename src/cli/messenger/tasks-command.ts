@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import type { Agenda } from "../../services/agenda.js"
 import { kindsOf } from "../../services/inbox.js"

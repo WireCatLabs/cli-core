@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { capability } from "../cli/messenger/port.js"
 import type {
   AdminRight,

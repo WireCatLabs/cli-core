@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { isLocator, parseLocator } from "../../domain/locator.js"
 import { SAVE_HELP } from "../../meetings/index.js"

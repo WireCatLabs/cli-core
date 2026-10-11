@@ -1,6 +1,6 @@
 import { setImmediate as tick } from "node:timers/promises"
 import { crc32 } from "node:zlib"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { DOMParser, type Document, type Element, type Node } from "@xmldom/xmldom"
 import { Unzip, UnzipInflate } from "fflate"
 import { decodeXml } from "./encoding.js"

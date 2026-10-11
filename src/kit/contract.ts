@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import type { ErrorCode } from "@wirecat/cli-core"
+import type { ErrorCode } from "@wirecat/cli-base"
 import { isCliFailure } from "../cli/failures.js"
 import { capability, type HistoryBatch, type MessengerAdapter, type ServerReads } from "../cli/messenger/port.js"
 import type { Chat, Id, Message } from "../domain/models.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { chunkHash, cutChunks } from "../../conversations/chunks.js"
 import { atomic } from "./atomic.js"
 import { meetingReadSnapshot, positiveReadInteger } from "./meeting-reads.js"

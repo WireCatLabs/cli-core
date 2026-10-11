@@ -1,6 +1,6 @@
 import { appendFileSync } from "node:fs"
-import { CliError, captureStreams } from "@wirecat/cli-core"
-import { annotate } from "@wirecat/cli-core/commands"
+import { CliError, captureStreams } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { commandsCommand } from "../../dist/cli/commands-command.js"
 import { outputFor } from "../../dist/cli/context.js"

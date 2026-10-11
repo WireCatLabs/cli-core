@@ -1,4 +1,4 @@
-import { visibleControls } from "@wirecat/cli-core"
+import { visibleControls } from "@wirecat/cli-base"
 
 export const agentJson = (value: unknown): string =>
   JSON.stringify(value, (_key, item: unknown) => {

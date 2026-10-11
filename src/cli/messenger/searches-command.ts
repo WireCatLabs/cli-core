@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { isAdminSelection } from "../../services/admin-statistics.js"
 import { readRankingSelection } from "../../services/rankings-selection.js"

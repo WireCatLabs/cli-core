@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import type { FileHandle } from "node:fs/promises"
 import { basename, resolve } from "node:path"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { openOrdinaryFile } from "../files/index.js"
 
 export interface WavAudioDescriptor {

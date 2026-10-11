@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command, Option } from "commander"
 import type { AppIdentity } from "../app.js"
 import { environmentOf, outputFor } from "../context.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { parseLocator } from "../../domain/locator.js"
 import { formatMeetingReference } from "../../domain/meeting-reference.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"

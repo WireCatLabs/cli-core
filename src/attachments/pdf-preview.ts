@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { imageSize } from "image-size"
 import { importEngine, type LoadEngine } from "./extract.js"
 import { pdfPreviewLimits } from "./limits.js"

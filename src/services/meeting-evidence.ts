@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference, parseMeetingReference } from "../domain/meeting-reference.js"
 import type { Transcript, TranscriptRow } from "../meetings/index.js"
 import { authorizedMeetingMetadata, type MeetingReadStore } from "./meeting-reference.js"

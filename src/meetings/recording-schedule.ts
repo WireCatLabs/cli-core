@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { snapshotMeetingScope } from "./provider.js"
 import type { RecordingScope, RecordingWindow } from "./recording-source.js"
 import { recordingWindows } from "./recording-sync.js"

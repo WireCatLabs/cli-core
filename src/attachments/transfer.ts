@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { constants } from "node:fs"
 import { lstat, open } from "node:fs/promises"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { attachmentMaxBytes } from "./limits.js"
 
 export const MAX_CHUNK_BYTES = 1024 * 1024

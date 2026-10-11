@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 const invalid = () =>
   new CliError("validation_error", "local transcription needs a complete mono or stereo Ogg Opus recording")

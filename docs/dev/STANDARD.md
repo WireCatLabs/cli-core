@@ -240,7 +240,7 @@ The naming pull request answers these questions before implementation:
 The owner approves new wording in this naming pull request. The review checklist applies these
 questions to every subsequent command addition; they are not specific to rankings.
 
-Generated `bot api` commands use cli-core's generators and one command assembler in cli-messaging.
+Generated `bot api` commands use cli-base's generators and one command assembler in cli-messaging.
 Only the source-specification adapter, transport and provider capabilities stay in the consumer.
 Common inputs are `--body <json>` and `--body-file <path>`; `-` reads stdin. A native `timeout`
 parameter is `--poll-timeout`, so it cannot replace the command's `--timeout` deadline.
@@ -627,7 +627,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
    `{ "error": { "code", "message" } }` — stdout stays empty, and the exit code says which kind of
    failure it was. Commander's own parse errors (a missing argument, a missing required option)
    still print a text line and exit 1; they move to `validation_error` and 2. The codes are
-   cli-core's and the same in both tools:
+   cli-base's and the same in both tools:
 
    | Code | Meaning |
    |---|---|

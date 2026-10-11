@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { expect, it, vi } from "vitest"
 import { batchProgress } from "./batch.js"
 import { safeName, saveFiles } from "./file-download.js"

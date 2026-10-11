@@ -1,4 +1,4 @@
-import { captureStreams } from "@wirecat/cli-core"
+import { captureStreams } from "@wirecat/cli-base"
 import type { ProgramDefinition, RunOptions } from "./program.js"
 import { run } from "./program.js"
 

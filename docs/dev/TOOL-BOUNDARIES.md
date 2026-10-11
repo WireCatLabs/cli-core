@@ -11,7 +11,7 @@ memo repeats some of them, and this package holds everything. Each tool gets one
 |---|---|---|
 | **Source tool** | tg, max, zm | Its own service: log in, sync it into the shared local store, act there (send, reply, react, read a chat) |
 | **Knowledge tool** | memo, to be renamed | The whole store across sources: search everywhere, a person across messengers and mail, tasks, notes, memories, facts, projects, reminders, vocabulary. Note-folder and mail import are its own sources |
-| **Library** | this package (later `@wirecat/cli-core`) | The store, the services, the adapter kit and the shared command builders. No product commands of its own |
+| **Library** | this package (later `@wirecat/cli-base`) | The store, the services, the adapter kit and the shared command builders. No product commands of its own |
 
 **The rule: a command lives where its data comes from.** Data one source brings in is that source tool's.
 Data that spans sources, or that no messenger brought in, is the knowledge tool's.

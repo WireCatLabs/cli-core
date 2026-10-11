@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline"
 import { Writable } from "node:stream"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { bufferedInput, inputPolicy, MAX_SECRET_INPUT } from "../cli/input-policy.js"
 
 export interface SecretInput {

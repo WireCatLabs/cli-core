@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../../domain/locator.js"
 import type { Message, Page } from "../../domain/models.js"
 import { exhausted, QUERY_LIMITS } from "../../search/lucene/types.js"

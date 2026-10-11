@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import type { ThreadOptions } from "../../services/thread-context.js"
 import { environmentOf } from "../context.js"

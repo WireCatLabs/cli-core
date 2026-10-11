@@ -6,7 +6,7 @@ their pages, their live accounts, and whether the owner signs a report.
 
 A release is reliable when two halves agree: **`pnpm release:check`**, everything a program can
 decide, and **the judgement half**, the steps below. The automatic half is
-[`@wirecat/cli-core/release`](https://github.com/WireCatLabs/cli-base#readme). Both CLIs run the same
+[`@wirecat/cli-base/release`](https://github.com/WireCatLabs/cli-base#readme). Both CLIs run the same
 checks from it and add their own.
 
 ## What changed
@@ -18,7 +18,7 @@ gh pr list --state merged --base main --search "merged:>=$(git log -1 --format=%
 git diff "$prev"..origin/main -- docs/commands.md       # generated: the exact commands and options that changed
 ```
 
-The last diff drives everything below. A dependency release (cli-messaging, cli-core) can change
+The last diff drives everything below. A dependency release (cli-messaging, cli-base) can change
 commands without touching this repository's code. The `docs/commands.md` diff shows it, and
 `release:check` fails "tree unchanged" until the page is regenerated.
 

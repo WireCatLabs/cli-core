@@ -1,5 +1,5 @@
-import { CliError, EXIT_CODES, GENERIC_FAILURE } from "@wirecat/cli-core"
-import { type CommandInfo, describeOptions, describeProgram, flatten } from "@wirecat/cli-core/commands"
+import { CliError, EXIT_CODES, GENERIC_FAILURE } from "@wirecat/cli-base"
+import { type CommandInfo, describeOptions, describeProgram, flatten } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { AppIdentity } from "./app.js"
 import { commandContract, findCommand } from "./command-contract.js"

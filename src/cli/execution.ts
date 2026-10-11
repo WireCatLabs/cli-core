@@ -1,4 +1,4 @@
-import { CliError, type Streams } from "@wirecat/cli-core"
+import { CliError, type Streams } from "@wirecat/cli-base"
 import { stopWrites, type WriteInFlight, withWriteScope } from "../sends/guarded.js"
 import type { Closeable } from "./deadline.js"
 import { fieldsOf, projectFields } from "./result-fields.js"

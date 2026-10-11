@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 export const MESSAGE_MEASURES = ["views", "reactions", "forwards", "comments", "replies", "thread-size"] as const
 export const AUTHOR_MEASURES = [

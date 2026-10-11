@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-core"
+import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { Argument, Command, Option } from "commander"
 import {
   describeWhen,

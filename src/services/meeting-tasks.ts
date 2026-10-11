@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { canonicalMeetingReference, formatMeetingReference } from "../domain/meeting-reference.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import {

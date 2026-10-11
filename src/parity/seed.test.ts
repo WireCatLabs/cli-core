@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import type { CommandInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
 import { type CommandsJson, type Manifest, manifestProblems, parityProblems } from "./manifest.js"
 import { formatManifest, seedCli, seedPrograms } from "./seed.js"

@@ -1,6 +1,6 @@
 import type { CallToolResult, McpServer, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
 import { toStandardJsonSchema } from "@valibot/to-json-schema"
-import { CliError, errorCodes } from "@wirecat/cli-core"
+import { CliError, errorCodes } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { AISettings } from "../analysis/settings.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"

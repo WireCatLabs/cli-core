@@ -1,4 +1,4 @@
-import { annotate } from "@wirecat/cli-core/commands"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { registriesCover } from "../../botcheck/registries.js"
 import { AUDIT_BUDGET, AUDIT_MIN_SCORE, AUDIT_PAGE } from "../../services/members-audit.js"

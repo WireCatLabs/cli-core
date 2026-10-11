@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { mkdtemp, rename, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { expect, it } from "vitest"
 import { openWavAudio, preflightWavAudio } from "./wav.js"
 

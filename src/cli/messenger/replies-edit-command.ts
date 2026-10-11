@@ -1,4 +1,4 @@
-import { annotate } from "@wirecat/cli-core/commands"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type AudienceEdits, addRule, editAudience, editRule, type RuleEdits, switchRule } from "../../replies/edit.js"
 import { audienceWarnings, repliesPathFor } from "../../replies/rules.js"

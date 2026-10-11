@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import type { OfficialChatStats, OfficialPerson, OfficialValue } from "../../domain/models.js"
 import { type Messenger, messengerContext } from "./context.js"

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { AnalysisProvider } from "../analysis/provider.js"
 import { endpoint } from "../analysis/settings.js"
 import type { AppIdentity } from "./app.js"

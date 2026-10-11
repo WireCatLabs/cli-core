@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { Readable } from "node:stream"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Id, Message } from "../../domain/models.js"
 import { checkFor, type PasswordCheck, passes, seal } from "../../sealed.js"
 import type { AccountKey } from "../../store/store.js"

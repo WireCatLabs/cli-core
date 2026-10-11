@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import type { SendGuard } from "../sends/guard.js"
 import { guardedWrite } from "../sends/guarded.js"

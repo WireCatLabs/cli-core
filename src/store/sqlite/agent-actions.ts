@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Actor } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"

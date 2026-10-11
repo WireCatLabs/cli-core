@@ -13,7 +13,7 @@ import {
 import { type Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { createGunzip, createGzip } from "node:zlib"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 /**
  * A file compressed and then encrypted with a password, by Node alone — no outside tool, no

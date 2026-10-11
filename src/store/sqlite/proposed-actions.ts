@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { AccountKey } from "../store.js"
 import type { Actor } from "./actors.js"
 import { atomic } from "./atomic.js"

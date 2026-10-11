@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../domain/locator.js"
 import type { ChatKind, Id, Message, Provider } from "../domain/models.js"
 import { pickPerson } from "../resolve.js"

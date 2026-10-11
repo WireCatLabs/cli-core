@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { normalize } from "../store/normalize.js"
 import EnglishStemmer from "./snowball/english-stemmer.js"
 import RussianStemmer from "./snowball/russian-stemmer.js"

@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Fetching } from "../cli/messenger/context.js"
 import { capability } from "../cli/messenger/port.js"
 import type { ActionableError } from "../cli/recovery.js"

@@ -1,4 +1,4 @@
-import { fieldsOf as coreFieldsOf, projectFields as coreProjectFields } from "@wirecat/cli-core"
+import { fieldsOf as coreFieldsOf, projectFields as coreProjectFields } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { fieldsOf, projectFields } from "./result-fields.js"
 

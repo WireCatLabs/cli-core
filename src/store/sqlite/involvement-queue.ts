@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 
 /** One SELECT per way of taking part: the subject's kind, the column that holds its id, and the query. */

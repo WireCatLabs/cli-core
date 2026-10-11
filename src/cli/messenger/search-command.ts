@@ -1,4 +1,4 @@
-import { CliError, singleLine } from "@wirecat/cli-core"
+import { CliError, singleLine } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { SAVE_HELP } from "../../meetings/index.js"
 import { searchNotes } from "../../services/notes-search.js"

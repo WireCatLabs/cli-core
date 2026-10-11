@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { fetchInto } from "../../services/archive.js"
 import { momentOf } from "../../services/moment.js"

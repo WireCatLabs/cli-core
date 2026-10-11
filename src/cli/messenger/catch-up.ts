@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Id, Message } from "../../domain/models.js"
 import type { MarkedRead } from "../../services/chats.js"
 import type { Services } from "../../services/index.js"

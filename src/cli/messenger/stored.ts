@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import { isId, pickPerson } from "../../resolve.js"
 import type { AccountKey, DeletionScope, MessageStore } from "../../store/store.js"

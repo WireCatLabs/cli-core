@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../store.js"
 import type { StoreContext } from "./open.js"

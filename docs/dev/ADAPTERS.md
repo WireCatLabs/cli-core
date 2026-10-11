@@ -102,7 +102,7 @@ Each `send` gets a `sendId`. It is the send's identity.
 
 ## Errors
 
-Throw a `CliError` from `@wirecat/cli-core` with a code from its closed list: `validation_error`,
+Throw a `CliError` from `@wirecat/cli-base` with a code from its closed list: `validation_error`,
 `authentication_error`, `permission_error`, `not_found`, `rate_limited`, `timeout`,
 `network_error`, `provider_error`, `provider_unavailable`, `invalid_response`, `outcome_unknown` and
 the others in `errorCodes`.
@@ -114,7 +114,7 @@ the others in `errorCodes`.
 - A name that matches more than one chat is `validation_error`, and lists the candidates. Use
   `pickChat` and `pickPerson`: they already do this.
 - Shared code recognises an error by its name and code, not by its class. So a CLI with its own
-  copy of cli-core still works.
+  copy of cli-base still works.
 
 ## What never crosses the adapter
 

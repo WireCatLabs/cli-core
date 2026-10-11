@@ -1,7 +1,7 @@
 import { openSync } from "node:fs"
 import { createInterface } from "node:readline"
 import { ReadStream } from "node:tty"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import type { Asker } from "../../sends/guard.js"
 import { skipFlagFor } from "../../sends/permissions.js"

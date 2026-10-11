@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
-import { CliError, resolvePaths } from "@wirecat/cli-core"
+import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import { storePath } from "../store/path.js"
 

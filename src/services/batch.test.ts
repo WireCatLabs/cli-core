@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { expect, it } from "vitest"
 import { batchProgress } from "./batch.js"
 

@@ -4,7 +4,14 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
-## Unreleased
+## 0.253.0 — 11.10.2026
+
+### Changed — may break callers
+
+- **Built on `@wirecat/cli-base` instead of `@wirecat/cli-core`.** The framework was renamed; cli-base 0.21.0 is
+  cli-core 0.20.0's code. The peer is now `@wirecat/cli-base >=0.21.0 <0.22.0`. A CLI moves its own imports,
+  `biome.json` and tsconfig `extends` to `@wirecat/cli-base` together with this version, or it installs two
+  framework copies and `instanceof CliError` fails between them.
 
 ### Fixed
 

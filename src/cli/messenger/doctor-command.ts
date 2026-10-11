@@ -1,5 +1,5 @@
 import { dirname, resolve } from "node:path"
-import { writeSecurely } from "@wirecat/cli-core"
+import { writeSecurely } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"

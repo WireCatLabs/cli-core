@@ -70,7 +70,7 @@ zone. Adapters map these fields into their own API bodies and handle provider li
 Mutations return `applied: false` by default and call no port. Literal `apply: true` dispatches once;
 `dryRun: true` overrides it. Cancellation before dispatch prevents a write. After dispatch, the
 adapter must distinguish confirmed success from `outcome_unknown`; the SDK preserves its error and
-never retries. Common errors extend cli-core `CliError` and keep its codes. HTTP status translation
+never retries. Common errors extend cli-base `CliError` and keep its codes. HTTP status translation
 and provider-specific error details remain in the host adapter.
 
 ## Recording transfer and archive jobs

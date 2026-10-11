@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-messaging/main/docs/images/cli-core-banner.png" alt="Built on cli-core: the foundation for agent-ready CLIs" width="100%">
+  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-messaging/main/docs/images/cli-core-banner.png" alt="Built on cli-base: the foundation for agent-ready CLIs" width="100%">
 </p>
 
 # @wirecat/cli-messaging
 
 The messenger-neutral half of a messaging command line tool, shared by
 [`tg-cli`](https://github.com/WireCatLabs/tg-cli) and [`max-cli`](https://github.com/WireCatLabs/max-cli).
-Built on [`@wirecat/cli-core`](https://github.com/WireCatLabs/cli-base), a peer dependency: the CLI installs
+Built on [`@wirecat/cli-base`](https://github.com/WireCatLabs/cli-base), a peer dependency: the CLI installs
 it itself, so the install holds one copy.
 
 **Status: on npm** — what each version changed is in [CHANGELOG.md](CHANGELOG.md). The domain model, message locators, message rendering, name
@@ -110,12 +110,12 @@ provider has travels in `providerMetadata`.
 | `./meetings` (`/cli`, `/mcp`, `/testing`) | events and meetings: the model, the WebVTT parser, the `MeetingSource` port a provider implements, `MeetingStore`, pull and import, the meeting commands and MCP reads; the testing entry adds a memory store, a fake source and the contract cases. Was `@wirecat/cli-meetings` — see [Meetings](docs/dev/MEETINGS.md) |
 
 ⚠ **Errors are recognised by shape, not by class** (`isCliFailure`). A package linked during
-development brings its own copy of cli-core, and an error built by one copy is not an `instanceof`
+development brings its own copy of cli-base, and an error built by one copy is not an `instanceof`
 the other's class.
 
-Field selection uses cli-core's `fieldsOf` and `projectFields`; list envelopes and operation IDs
+Field selection uses cli-base's `fieldsOf` and `projectFields`; list envelopes and operation IDs
 stay intact. Direct empty field lists keep only operation metadata, preserving the existing helper
-contract. Direct invalid or unsafe paths are rejected before projection. cli-core 0.19.2 or newer
+contract. Direct invalid or unsafe paths are rejected before projection. cli-base 0.19.2 or newer
 within the 0.19 series is required.
 
 `searchAllIncludingMeetings` from `./services` adds one selected meeting account to the existing

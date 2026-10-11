@@ -23,7 +23,7 @@ event_series ◄── events ◄── meetings ── transcripts → utteranc
 ## Who depends on whom
 
 ```text
-cli-core ← cli-messaging (src/meetings/ ← the rest of src/) ← zoom-cli (zm)
+cli-base ← cli-messaging (src/meetings/ ← the rest of src/) ← zoom-cli (zm)
 ```
 
 - **`src/meetings/`** — the model, the WebVTT parser, source and store ports, and what runs on them: pull,

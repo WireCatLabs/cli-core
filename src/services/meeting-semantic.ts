@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference } from "../domain/meeting-reference.js"
 import type { MeetingVectors } from "../store/store.js"
 import type { MeetingEmbedder, MeetingEmbeddingModel } from "./meeting-model.js"

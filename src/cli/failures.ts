@@ -1,8 +1,8 @@
-import { type CliError, errorCodes } from "@wirecat/cli-core"
+import { type CliError, errorCodes } from "@wirecat/cli-base"
 
 /**
  * **By shape, not by class.** A package linked during development brings its own copy of
- * cli-core, and an error built with one copy is not an `instanceof` the other's `CliError` —
+ * cli-base, and an error built with one copy is not an `instanceof` the other's `CliError` —
  * measured 2026-09-27: an ambiguous chat name from `pickChat` reached tg-cli's `run` as an unknown
  * failure, exit 1, and lost its list of candidates. A name and a code from the closed list
  * identify one in every install layout.

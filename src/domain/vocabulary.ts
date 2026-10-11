@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 
 /** Search accent folding would make distinct names equal; canonical aliases retain their letters. */
 export const normalizeVocabularyName = (input: string): string => {

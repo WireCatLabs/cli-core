@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-core"
+import { captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { openStore } from "../../store/store.js"

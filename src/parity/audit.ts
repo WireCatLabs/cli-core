@@ -1,4 +1,4 @@
-import type { CommandInfo } from "@wirecat/cli-core/commands"
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { type CommandsJson, longName, type Manifest, parityProblems } from "./manifest.js"
 import { pageProblems } from "./pages.js"
 import { wordingProblems } from "./wording.js"
@@ -157,7 +157,7 @@ export const renderAudit = (input: AuditInput): string => {
   }
 
   section("Shared package pinned")
-  for (const name of ["@wirecat/cli-messaging", "@wirecat/cli-core"]) {
+  for (const name of ["@wirecat/cli-messaging", "@wirecat/cli-base"]) {
     const latest = name === "@wirecat/cli-messaging" ? input.shared.version : undefined
     const pins = each((side) => side.pins[name])
     const same = pins.every((pin) => pin === pins[0]) && (latest === undefined || pins[0] === latest)

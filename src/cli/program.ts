@@ -7,8 +7,8 @@ import {
   resolvePaths,
   type Streams,
   visibleControls,
-} from "@wirecat/cli-core"
-import { skillHint } from "@wirecat/cli-core/skill"
+} from "@wirecat/cli-base"
+import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
 import { type AppIdentity, envName } from "./app.js"
 import { commandPathOf } from "./command-contract.js"

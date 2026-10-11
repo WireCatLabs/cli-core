@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { resolvePaths } from "@wirecat/cli-core"
+import { resolvePaths } from "@wirecat/cli-base"
 
 /**
  * One file for every messenger and account. `MESSAGING_STORE` is read here and nowhere else: the

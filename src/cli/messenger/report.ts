@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto"
 import { join } from "node:path"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { SendEntry } from "../../sends/journal.js"
 import { findRun, listRuns, type RunMetadata, readEvents } from "../runs/run.js"
 

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { CliError, legacyMacPaths, migrateLegacyMacPaths, type Paths } from "@wirecat/cli-core"
+import { CliError, legacyMacPaths, migrateLegacyMacPaths, type Paths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import { readLock } from "./lock.js"
 import { alive } from "./processes.js"

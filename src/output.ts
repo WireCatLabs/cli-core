@@ -5,7 +5,7 @@ import {
   type RenderFormat,
   type Streams,
   singleLine,
-} from "@wirecat/cli-core"
+} from "@wirecat/cli-base"
 import { fieldsOf, projectFields } from "./cli/result-fields.js"
 import { agentJson as serializeAgentJson } from "./mcp/text.js"
 import { atDetail, type Detail } from "./output-detail.js"

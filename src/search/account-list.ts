@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Provider } from "../domain/models.js"
 import type { AccountKey, StoredAccount } from "../store/store.js"
 import { inSource, type Source } from "./query.js"

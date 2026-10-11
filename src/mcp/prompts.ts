@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import type { GetPromptResult, McpServer } from "@modelcontextprotocol/server"
 import { toStandardJsonSchema } from "@valibot/to-json-schema"
-import { visibleControls } from "@wirecat/cli-core"
+import { visibleControls } from "@wirecat/cli-base"
 import * as v from "valibot"
 
 /** What every prompt ends with: a prompt reads as if the owner typed it, and must not pass on what others wrote. */

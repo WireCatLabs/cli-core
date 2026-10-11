@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { SearchHit } from "../meetings/index.js"
 import { parseLucene } from "../search/lucene/parser.js"

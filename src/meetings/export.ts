@@ -1,4 +1,4 @@
-import { singleLine, visibleControls } from "@wirecat/cli-core"
+import { singleLine, visibleControls } from "@wirecat/cli-base"
 import type { TranscriptLine } from "./model.js"
 import { MeetingError, meetingShow, positiveInteger } from "./reads.js"
 import type { MeetingDetails, MeetingStore } from "./store.js"

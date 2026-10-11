@@ -1,5 +1,5 @@
 import { freemem } from "node:os"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { defaultThreads, type Embedder, openEmbedder } from "./embed.js"
 import type { TextModel } from "./models.js"
 

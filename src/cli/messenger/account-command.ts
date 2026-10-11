@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs"
-import { annotate } from "@wirecat/cli-core/commands"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { readUpload } from "../../sends/upload.js"
 import { maskedAccount } from "../../services/people.js"

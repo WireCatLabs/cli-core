@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { readSecret } from "../../terminal/prompt.js"
 import { environmentOf } from "../context.js"

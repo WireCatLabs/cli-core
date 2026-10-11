@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { Readable } from "node:stream"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import type { Id } from "../../domain/models.js"
 import { toMarkdown } from "../../render/markdown.js"

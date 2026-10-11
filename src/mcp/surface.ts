@@ -1,6 +1,6 @@
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server"
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { agentArguments } from "./text.js"
 import {

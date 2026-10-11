@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { resolvePaths, writeSecurely } from "@wirecat/cli-core"
+import { resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { Provider } from "../../domain/models.js"
 import type { AccountKey } from "../../store/store.js"
 import type { AppIdentity } from "../app.js"
