@@ -80,6 +80,8 @@ export const createProgram = (
     .option("--max-input-bytes <bytes>", "maximum buffered input bytes (default: 16777216)")
     .option("--max-output-bytes <bytes>", "maximum machine output bytes (default: 4194304; 0 disables)")
     .option("--fields <paths>", "comma-separated item or object fields: id,text; preserve pagination and operation ids")
+    .option("--brief", "found messages and mail as reference, title, time, sender and excerpt only")
+    .option("--full", "found messages and mail with their whole text and every provider field")
     .option("--dry-run", "preview parsed arguments and permissions before running the action")
     .option("--yes", "go ahead without the question an ask level puts before a write")
     .option("--record", "keep this run — ids and timings, never message content")

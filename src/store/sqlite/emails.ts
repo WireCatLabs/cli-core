@@ -1,7 +1,8 @@
 import { CHUNK_CHARS, type Chunk, type ChunkLine, chunkHash, cutChunks, splitText } from "../../conversations/chunks.js"
 import { mailCore } from "../../conversations/mail-text.js"
 import { formatLocator } from "../../domain/locator.js"
-import type { Message } from "../../domain/models.js"
+import type { MailFields, MailPerson, Message } from "../../domain/models.js"
+import { formatReference } from "../../domain/references.js"
 import type { Attachment, Metadata } from "../../meetings/index.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
@@ -753,6 +754,41 @@ export const messageOfEmail = (email: Email, thread: string): Message => {
   }
 }
 
+/**
+ * An email's people, labels and thread for a reader. memo's import once filed every Cc address under To as well,
+ * so an address in Cc is shown in Cc only.
+ */
+const mailFieldsOf = (database: CacheDatabase, email: Email, thread: string, key: AccountRow): MailFields => {
+  const personOf = database.prepare("SELECT person_id AS person FROM identity_links WHERE identity_id = ?")
+  const person = (identityId: number | null, address: string, name: string | null): MailPerson => {
+    const found = identityId === null ? undefined : personOf.get(identityId)
+    return { name, address, ref: found ? `person:${found.person}` : null }
+  }
+  const of = (role: EmailRecipient["role"]) =>
+    email.recipients
+      .filter((recipient) => recipient.role === role)
+      .map(({ identityId, address, name }) => person(identityId, address, name))
+  const cc = of("cc")
+  const copied = new Set(cc.map(({ address }) => address.toLowerCase()))
+  return {
+    subject: email.subject,
+    from: email.fromAddress === null ? null : person(email.fromIdentityId, email.fromAddress, email.fromName),
+    to: of("to").filter(({ address }) => !copied.has(address.toLowerCase())),
+    cc,
+    bcc: of("bcc"),
+    replyTo: of("reply_to"),
+    labels: email.mailboxes.map(({ name }) => name),
+    thread: formatReference({ type: "chat", provider: key.provider, account: key.account, chat: thread }),
+    read: email.read,
+    flagged: email.flagged,
+  }
+}
+
+interface AccountRow {
+  provider: string
+  account: string
+}
+
 /** Emails as search hits, in the order of `pks`: the thread is the chat, so a hit's locator is the one mail had as messages. */
 export const emailHitsByPk = (database: CacheDatabase, pks: number[]): StoredHit[] => {
   const read = database.prepare(
@@ -764,11 +800,14 @@ export const emailHitsByPk = (database: CacheDatabase, pks: number[]): StoredHit
     const row = read.get(pk)
     if (!row) return []
     const thread = String(row.thread)
-    const message = messageOfEmail(emailOf(database, row), thread)
+    const email = emailOf(database, row)
+    const message = messageOfEmail(email, thread)
+    const key = { provider: String(row.provider), account: String(row.account) }
     return [
       {
         ...message,
         chatTitle: str(row.thread_subject),
+        email: mailFieldsOf(database, email, thread, key),
         locator: formatLocator({
           provider: String(row.provider),
           account: String(row.account),

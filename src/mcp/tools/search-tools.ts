@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-core"
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { SAVE_NEXT_STEPS } from "../../meetings/index.js"
+import { atDetail } from "../../output-detail.js"
 import { searchNotes } from "../../services/notes-search.js"
 import type { SearchedResource } from "../../services/search-all.js"
 import { meetingAccountOf, RESOURCES_SEARCHED_WITH_MEETINGS } from "../../services/search-all-meetings.js"
@@ -115,7 +116,9 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
     stored: (store, account, args, defaults, connect) => {
       const network = args.sync_first || (Boolean(messenger.serverSearch) && args.backend !== "archive")
       const services = searchServices(messenger, store, account, defaults, network ? connect : undefined)
-      return answerMessagesSearch(services.messages, args, defaults, services.searches)
+      return answerMessagesSearch(services.messages, args, defaults, services.searches).then((found) =>
+        atDetail(found, args.detail),
+      )
     },
   }),
 
@@ -129,7 +132,9 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
     annotations: { ...READ, openWorldHint: false },
     stored: (store, account, args, defaults) => {
       const services = searchServices(messenger, store, account, defaults)
-      return answerMessagesSearch(services.messages, args as MessagesSearchArgs, defaults, undefined, "mail")
+      return answerMessagesSearch(services.messages, args as MessagesSearchArgs, defaults, undefined, "mail").then(
+        (found) => atDetail(found, args.detail),
+      )
     },
   }),
 

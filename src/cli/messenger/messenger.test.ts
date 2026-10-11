@@ -1749,7 +1749,8 @@ describe("the shared read commands", () => {
     const answer = JSON.parse(mail.stdout[0] ?? "")
     expect(answer.items).toHaveLength(2)
     expect(answer.items.every(({ locator }: { locator: string }) => locator.startsWith("msg:email/"))).toBe(true)
-    expect(answer.completeness.every(({ state }: { state: string }) => state === "unknown")).toBe(true)
+    expect(answer.completeness).toEqual([])
+    expect(answer).not.toHaveProperty("coverage")
 
     for (const language of ["lucene", "legacy"]) {
       const args = ["search", "messages", "chapter", "--language", language, "--json"]
@@ -1843,6 +1844,73 @@ describe("the shared read commands", () => {
     const unheld = await call(["search", "mail", "chapter", "--account", "other@example.test", "--json"], never, env)
     expect(unheld.code).not.toBe(0)
     expect(unheld.stderr.join("\n")).toContain("owner@example.test")
+  })
+
+  it("**search mail** answers each email with its people, labels and thread, at the detail asked", async () => {
+    const root = mkdtempSync(join(tmpdir(), "search-mail-detail-"))
+    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
+    const kai = { address: "kai@example.test", name: "Kai Sample" }
+    const body = `${"Notes from the reading group. ".repeat(12)}We agreed the third chapter is next.`
+    await store.mail.saveThread({
+      accountId,
+      externalId: "thread-8",
+      now: Date.UTC(2026, 0, 9),
+      emails: [
+        {
+          externalId: "<c@example.test>",
+          subject: "Reading group",
+          from: { address: "alice@example.test", name: "Alice Example" },
+          to: [{ address: "bob@example.test", name: "Bob Sample" }, kai],
+          cc: [kai],
+          bcc: [{ address: "dana@example.test", name: null }],
+          sentAt: Date.UTC(2026, 0, 1),
+          bodyText: body,
+          read: false,
+          flagged: true,
+          mailboxes: [{ externalId: "starred", name: "Starred", kind: null }],
+        },
+      ],
+    })
+    await store.close()
+    const never = vi.fn(async (): Promise<MessengerAdapter> => {
+      throw new Error("search must never connect")
+    })
+    const search = async (...flags: string[]) =>
+      JSON.parse((await call(["search", "mail", "chapter", "--json", ...flags], never, env)).stdout[0] ?? "")
+
+    const answer = await search()
+    expect(answer).not.toHaveProperty("coverage")
+    const [hit] = answer.items
+    expect(hit).not.toHaveProperty("text")
+    expect(hit).not.toHaveProperty("providerMetadata")
+    expect(hit).not.toHaveProperty("replyTo")
+    expect(hit.excerpt).toContain("third chapter")
+    expect(hit.excerpt.length).toBeLessThan(260)
+    expect(hit.email).toEqual({
+      subject: "Reading group",
+      from: { name: "Alice Example", address: "alice@example.test", ref: expect.stringMatching(/^person:\d+$/) },
+      to: [{ name: "Bob Sample", address: "bob@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
+      cc: [{ name: "Kai Sample", address: "kai@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
+      bcc: [{ name: null, address: "dana@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
+      replyTo: [],
+      labels: ["Starred"],
+      thread: "chat:email/owner%40example.test/thread-8",
+      read: false,
+      flagged: true,
+    })
+
+    const [brief] = (await search("--brief")).items
+    expect(Object.keys(brief).sort()).toEqual(["chatTitle", "excerpt", "locator", "score", "senderName", "timestamp"])
+    const [full] = (await search("--full")).items
+    expect(full.text).toContain(body)
+    expect(full.providerMetadata).toBeDefined()
+    expect(full.email.labels).toEqual(["Starred"])
+    const [picked] = (await search("--fields", "locator,text")).items
+    expect(picked.text).toContain(body)
+    expect((await call(["search", "mail", "chapter", "--brief", "--full", "--json"], never, env)).code).toBe(2)
   })
 
   it("**search all** finds a message, a mail and a note with one query, each typed, and says what it skipped", async () => {

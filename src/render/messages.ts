@@ -2,7 +2,16 @@ import { styleText } from "node:util"
 import { singleLine, visibleControls } from "@wirecat/cli-core"
 import stringWidth from "string-width"
 import wrapAnsi from "wrap-ansi"
-import type { Attachment, Message, MessageHit, QuotedMessage, Reactions, WindowedMessage } from "../domain/models.js"
+import type {
+  Attachment,
+  MailFields,
+  MailPerson,
+  Message,
+  MessageHit,
+  QuotedMessage,
+  Reactions,
+  WindowedMessage,
+} from "../domain/models.js"
 
 export interface RenderOptions {
   /** 0 — the conversation; 1 — the ids worth searching by; 2 — everything the model knows. */
@@ -60,6 +69,8 @@ export const renderMessage = (message: Message | MessageHit | WindowedMessage, o
   const lines = [`${paint("dim", time(message.timestamp))}  ${senderOf(message, options)}${chat}${mark}`]
   const body = (text: string) => wrapAnsi(visibleControls(text), room, { hard: true }).split("\n")
 
+  const email = (message as Partial<MessageHit>).email
+  if (email) lines.push(paint("dim", mailLine(email)))
   if (message.replyTo) lines.push(paint("dim", preview("↳", message.replyTo, room, options)))
   if (message.forwardedFrom) {
     lines.push(paint("dim", `↪ ${nameOf(message.forwardedFrom, options)}`))
@@ -98,6 +109,14 @@ export const renderMessage = (message: Message | MessageHit | WindowedMessage, o
   }
 
   return lines.map((line, index) => (index === 0 || line === "" ? line : `${INDENT}${line}`)).join("\n")
+}
+
+/** Who else an email went to, and where it is filed: `to Ana, bob@example.com · cc Kai · Inbox, Starred`. */
+const mailLine = ({ to, cc, labels }: MailFields): string => {
+  const names = (people: MailPerson[]) => people.map(({ name, address }) => singleLine(name ?? address)).join(", ")
+  return [to.length ? `to ${names(to)}` : "", cc.length ? `cc ${names(cc)}` : "", labels.join(", ")]
+    .filter(Boolean)
+    .join(" · ")
 }
 
 const painter =
