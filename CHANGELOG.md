@@ -4,6 +4,18 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Meetings are part of this package: `@wirecat/cli-meetings` moved into `src/meetings/`.** Import
+  `@wirecat/cli-messaging/meetings`, `/meetings/cli`, `/meetings/mcp` and `/meetings/testing` instead of
+  `@wirecat/cli-meetings`, `/cli`, `/mcp` and `/testing`; the names they export are the same (cli-meetings 0.4.2).
+  This package no longer depends on `@wirecat/cli-meetings`. `biome.json` keeps the module apart: `src/meetings/`
+  imports nothing else in the package, no database, no file and no provider, and the rest of the package imports
+  only its four entry points. Its design notes are [Meetings](docs/dev/MEETINGS.md) and
+  [provider integration](docs/dev/MEETING-PROVIDERS.md).
+
 ## 0.243.0 — 11.10.2026
 
 ### Added

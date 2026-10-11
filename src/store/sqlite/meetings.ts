@@ -18,8 +18,8 @@ import type {
   Summary,
   TranscriptAppend,
   TranscriptAppendReceipt,
-} from "@wirecat/cli-meetings"
-import { MeetingError } from "@wirecat/cli-meetings"
+} from "../../meetings/index.js"
+import { MeetingError } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import * as eventQueries from "./events.js"
@@ -669,7 +669,7 @@ const participants = (database: CacheDatabase, query: string, accountId?: number
     .filter((p) => `${p.displayName ?? ""} ${p.email ?? ""}`.toLocaleLowerCase().includes(term))
 }
 
-/** The `MeetingStore` of `@wirecat/cli-meetings` over the shared store. */
+/** The `MeetingStore` of `src/meetings/` over the shared store. */
 export const meetingStoreOver = (
   context: StoreContext,
 ): MeetingStore &

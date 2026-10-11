@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { TranscriptAppend } from "@wirecat/cli-meetings"
-import { sampleMeeting } from "@wirecat/cli-meetings/testing"
 import { afterEach, describe, expect, it } from "vitest"
+import type { TranscriptAppend } from "../meetings/index.js"
+import { sampleMeeting } from "../meetings/testing/index.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 

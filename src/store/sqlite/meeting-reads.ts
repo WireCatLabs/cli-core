@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-core"
-import type { Meeting, Transcript, TranscriptRow } from "@wirecat/cli-meetings"
+import type { Meeting, Transcript, TranscriptRow } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"

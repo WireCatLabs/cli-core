@@ -1,8 +1,8 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { sampleMeeting } from "@wirecat/cli-meetings/testing"
 import { describe, expect, it } from "vitest"
+import { sampleMeeting } from "../meetings/testing/index.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 

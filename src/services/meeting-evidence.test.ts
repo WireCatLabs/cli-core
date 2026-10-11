@@ -2,14 +2,14 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-core"
-import type { MeetingSave } from "@wirecat/cli-meetings"
-import { sampleMeeting } from "@wirecat/cli-meetings/testing"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   canonicalMeetingReference,
   formatMeetingReference,
   parseMeetingReference,
 } from "../domain/meeting-reference.js"
+import type { MeetingSave } from "../meetings/index.js"
+import { sampleMeeting } from "../meetings/testing/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { readMeetingEvidence } from "./meeting-evidence.js"
 import { type MeetingReadStore, resolveMeetingReference } from "./meeting-reference.js"

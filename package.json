@@ -80,6 +80,22 @@
       "types": "./dist/tasks/testing/index.d.ts",
       "default": "./dist/tasks/testing/index.js"
     },
+    "./meetings": {
+      "types": "./dist/meetings/index.d.ts",
+      "default": "./dist/meetings/index.js"
+    },
+    "./meetings/cli": {
+      "types": "./dist/meetings/cli/index.d.ts",
+      "default": "./dist/meetings/cli/index.js"
+    },
+    "./meetings/mcp": {
+      "types": "./dist/meetings/mcp/index.d.ts",
+      "default": "./dist/meetings/mcp/index.js"
+    },
+    "./meetings/testing": {
+      "types": "./dist/meetings/testing/index.d.ts",
+      "default": "./dist/meetings/testing/index.js"
+    },
     "./models": {
       "types": "./dist/models/index.d.ts",
       "default": "./dist/models/index.js"
@@ -125,7 +141,6 @@
     "@modelcontextprotocol/server": "2.1.0",
     "@resvg/resvg-js": "2.6.2",
     "@valibot/to-json-schema": "1.8.0",
-    "@wirecat/cli-meetings": "0.4.2",
     "@wirecat/cli-messaging-onnx": "1.0.1",
     "@wirecat/cli-messaging-sqlite": "1.0.1",
     "@xmldom/xmldom": "0.9.12",

@@ -1,4 +1,3 @@
-import type { Attachment, Metadata } from "@wirecat/cli-meetings"
 import {
   CHUNK_CHARS,
   CHUNK_OVERLAP,
@@ -11,6 +10,7 @@ import {
 import { mailCore } from "../../conversations/mail-text.js"
 import { formatLocator } from "../../domain/locator.js"
 import type { Message } from "../../domain/models.js"
+import type { Attachment, Metadata } from "../../meetings/index.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"

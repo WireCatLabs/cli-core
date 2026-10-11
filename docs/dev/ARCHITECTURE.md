@@ -45,6 +45,8 @@ conformance or imply that planned command paths are already implemented.
 | `./sqlite-runtime` | `src/sqlite-runtime.ts` | `ensureSqlite`, the first thing `tg` and `max` run: restarts the command with the bundled SQLite when the system's lacks FTS5 — see [The store](#the-store) |
 | `./parity` | `src/parity/` | the command manifest, page and wording checks behind `cli-messaging-parity`, which compares `tg` and `max` |
 | `./testing` | `src/kit/` | the adapter kit: a fake adapter, the contract cases and their seed — see [the adapter guide](ADAPTERS.md). `src/testing/` is this repository's own test setup and is not published |
+| `./tasks`, `./tasks/testing` | `src/tasks/` | open tasks: model, `TaskStore` port and service — see [Open tasks](#open-tasks) |
+| `./meetings`, `/meetings/cli`, `/meetings/mcp`, `/meetings/testing` | `src/meetings/` | events and meetings, the provider and store ports, pull, import, commands and MCP reads — see [Meetings](MEETINGS.md) and [provider integration](MEETING-PROVIDERS.md) |
 
 The README's table lists what each export offers; this page does not repeat it.
 
@@ -594,10 +596,11 @@ CLI commands and the existing three-tool MCP frontend share this service. See [s
 
 ## Meeting integration capabilities
 
-The meeting SDK 0.4.0 supplies optional ports alongside the unchanged base meeting store. Native
-event and participant association writes check the selected account, live target and optional
-previous value in one transaction. Participant association moves only one identity and records its
-manual audit and account observation; it never merges entire people from display names.
+The meetings module (`src/meetings/`, once `@wirecat/cli-meetings` 0.4.0) supplies optional ports
+alongside the unchanged base meeting store. Native event and participant association writes check the
+selected account, live target and optional previous value in one transaction. Participant association
+moves only one identity and records its manual audit and account observation; it never merges entire
+people from display names.
 
 `createMeetingContextService` reuses existing notes, knowledge and memory stores with canonical
 meeting references. It validates account ownership and evidence on preview and again before apply.
