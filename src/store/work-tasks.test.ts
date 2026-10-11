@@ -63,6 +63,7 @@ describe("tasks made in the store", () => {
       ["status", { status: ["open", "done"] }],
     ])
     expect((await store.tasks.find({ project: "LH", type: "bug" })).map((task) => task.id)).toEqual(["LH-1"])
+    expect((await store.tasks.find({ assignee: "person:21" })).map((task) => task.id)).toEqual(["LH-1"])
     await store.close()
   })
 

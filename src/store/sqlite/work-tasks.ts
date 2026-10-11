@@ -80,7 +80,14 @@ export interface WorkTasks {
   assign(id: string, assignment: TaskAssignment, by: Author): Promise<TaskDetails>
   unassign(id: string, assignment: TaskAssignment, by: Author): Promise<TaskDetails>
   details(id: string): Promise<TaskDetails>
-  find(filter: { project?: string; type?: TaskType; status?: TaskState; limit?: number }): Promise<TaskDetails[]>
+  find(filter: {
+    project?: string
+    type?: TaskType
+    status?: TaskState
+    /** `person:<id>`, in any role. */
+    assignee?: string
+    limit?: number
+  }): Promise<TaskDetails[]>
   events(id: string): Promise<TaskEvent[]>
 }
 
@@ -302,14 +309,17 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
       return details(task)
     },
     details: async (id) => details(required(id)),
-    find: async ({ project, type, status, limit = 100 }) => {
+    find: async ({ project, type, status, assignee, limit = 100 }) => {
       if (type !== undefined && !TASK_TYPES.includes(type))
         throw new CliError("validation_error", `a task's type is one of ${TASK_TYPES.join(", ")}`)
       const projectId = project === undefined ? null : projectOf(project)
+      const person = assignee === undefined ? null : personOf(assignee)
       return database
         .prepare(
-          "SELECT * FROM tasks WHERE deleted_at IS NULL AND (? IS NULL OR project_id = ?) AND (? IS NULL OR type = ?) " +
-            "AND (? IS NULL OR status = ?) ORDER BY coalesce(priority, 5), created_at, id LIMIT ?",
+          "SELECT * FROM tasks t WHERE deleted_at IS NULL AND (? IS NULL OR project_id = ?) AND (? IS NULL OR type = ?) " +
+            "AND (? IS NULL OR status = ?) AND (? IS NULL OR EXISTS (SELECT 1 FROM task_assignments a " +
+            "WHERE a.task_id = t.id AND a.assignee_type = 'person' AND a.assignee_id = ?)) " +
+            "ORDER BY coalesce(priority, 5), created_at, id LIMIT ?",
         )
         .all(
           projectId,
@@ -318,6 +328,8 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
           type ?? null,
           status ?? null,
           status ?? null,
+          person,
+          person,
           Math.min(Math.max(limit, 1), 500),
         )
         .map(detailsOf)
