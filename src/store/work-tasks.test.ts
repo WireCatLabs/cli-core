@@ -1,0 +1,119 @@
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { createTaskService } from "@wirecat/cli-tasks"
+import { describe, expect, it } from "vitest"
+import { openCache } from "./open.js"
+import { openStore } from "./store.js"
+
+const fresh = () => join(mkdtempSync(join(tmpdir(), "work-tasks-")), "messages.db")
+
+const withProject = async () => {
+  const path = fresh()
+  const store = await openStore({ path })
+  const project = await store.knowledge.addProject({ name: "Lighthouse", key: "LH", type: "work" })
+  const database = await openCache(path)
+  database.exec("INSERT INTO persons (id, name, owner, created_at, updated_at) VALUES (21, 'Bob Sample', 0, 0, 0)")
+  database.close()
+  return { path, store, project }
+}
+
+describe("tasks made in the store", () => {
+  it("creates a bug in a project with its fields, and records each change as an event", async () => {
+    const { store, project } = await withProject()
+    const bug = await store.tasks.create(
+      { project: "lh", title: "Export drops the last row", type: "bug", priority: 1, description: "Seen on CSV" },
+      "owner",
+    )
+    expect(bug).toMatchObject({
+      id: "LH-1",
+      ref: "task:LH-1",
+      project: project.ref,
+      type: "bug",
+      status: "open",
+      priority: 1,
+      description: "Seen on CSV",
+      source: null,
+    })
+
+    const sub = await store.tasks.create(
+      { project: project.ref, title: "Add a test", type: "chore", parent: bug.ref },
+      {
+        bot: "planner",
+      },
+    )
+    expect(sub.parent).toBe("task:LH-1")
+    await store.tasks.assign(bug.id, { to: "person:21", role: "assignee" }, "owner")
+    await store.tasks.assign(bug.id, { to: "person:21", role: "assignee" }, "owner")
+    await store.tasks.edit(bug.id, { priority: 0, dueAt: new Date("2026-10-20T00:00:00Z") }, "owner")
+    const done = await store.tasks.edit(bug.id, { status: "done", reason: "fixed" }, "owner")
+
+    expect(done).toMatchObject({
+      status: "done",
+      reason: "fixed",
+      assignments: [{ to: "person:21", role: "assignee" }],
+    })
+    expect(done.closedAt).not.toBeNull()
+    expect((await store.tasks.events(bug.id)).map((event) => [event.kind, event.changes])).toEqual([
+      ["created", null],
+      ["priority", { priority: [null, 1] }],
+      ["assigned", { assignee: [null, "person:21"] }],
+      ["priority", { priority: [1, 0] }],
+      ["due", { due_at: [null, Date.parse("2026-10-20T00:00:00Z")] }],
+      ["status", { status: ["open", "done"] }],
+    ])
+    expect((await store.tasks.find({ project: "LH", type: "bug" })).map((task) => task.id)).toEqual(["LH-1"])
+    expect((await store.tasks.find({ assignee: "person:21" })).map((task) => task.id)).toEqual(["LH-1"])
+    await store.close()
+  })
+
+  it("refuses a message kind, a bad priority, a parent elsewhere and a cycle", async () => {
+    const { store } = await withProject()
+    await store.knowledge.addProject({ name: "Other", key: "OT" })
+    const top = await store.tasks.create({ project: "LH", title: "Top", type: "feature" }, "owner")
+    const child = await store.tasks.create({ project: "LH", title: "Child", type: "chore", parent: top.id }, "owner")
+    const elsewhere = await store.tasks.create({ project: "OT", title: "Else", type: "chore" }, "owner")
+
+    await expect(
+      store.tasks.create({ project: "LH", title: "Q", type: "question" as never }, "owner"),
+    ).rejects.toMatchObject({ code: "validation_error" })
+    await expect(store.tasks.edit(top.id, { priority: 7 }, "owner")).rejects.toMatchObject({ code: "validation_error" })
+    await expect(store.tasks.edit(top.id, { parent: elsewhere.id }, "owner")).rejects.toMatchObject({
+      code: "validation_error",
+    })
+    await expect(store.tasks.edit(top.id, { parent: child.id }, "owner")).rejects.toMatchObject({
+      code: "validation_error",
+    })
+    await expect(store.tasks.create({ project: "NOPE", title: "x", type: "bug" }, "owner")).rejects.toMatchObject({
+      code: "not_found",
+    })
+    await store.close()
+  })
+
+  it("stays out of the task package's reads, while message tasks get fields and events too", async () => {
+    const { store } = await withProject()
+    const bug = await store.tasks.create({ project: "LH", title: "Crash", type: "bug" }, "owner")
+    const service = createTaskService({ store: store.tasks, newId: () => "t1" })
+    const { task } = await service.add({
+      source: "msg:telegram:100:-1001:42",
+      sourceKind: "message",
+      account: "telegram:100",
+      group: "-1001",
+      kind: "question",
+      origin: "rule",
+    })
+
+    expect(await store.tasks.get(bug.id)).toBeUndefined()
+    expect((await store.tasks.list({})).map((listed) => listed.id)).toEqual(["t1"])
+    await service.close(task.id, { as: "done", by: "owner" })
+    expect(await store.tasks.edit(task.id, { priority: 2, title: "Answer Bob Sample" }, "owner")).toMatchObject({
+      id: "t1",
+      type: "question",
+      priority: 2,
+      title: "Answer Bob Sample",
+      source: "msg:telegram:100:-1001:42",
+    })
+    expect((await store.tasks.events(task.id)).map((event) => event.kind)).toEqual(["created", "status", "priority"])
+    await store.close()
+  })
+})

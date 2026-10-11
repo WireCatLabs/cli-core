@@ -35,9 +35,9 @@ duplicate owner annotations, labels or relationships attached to a different per
 
 `addOrganization` creates a company, team, family or community; `addProject` a project with its task key
 (made from the name when none is given) and type. `relate` records manual `member-of`
-or `related-to` links between explicit references, with optional role/evidence. `assigned-to` links
-a task in the selected account to an explicit canonical person UID, including document tasks whose
-account has no contact roster. A relationship is a confirmed owner statement or an explicitly
+or `related-to` links between explicit references, with optional role/evidence. Who works on a task is
+`store.tasks.assign` (`task_assignments`: assignee, reviewer or watcher), not a link; store version 2 copied
+the old `assigned-to` links there. A relationship is a confirmed owner statement or an explicitly
 unconfirmed weak suggestion with provenance. `confirmRelation` records owner acceptance; weak
 suggestions are excluded from confirmed person/task context. Domain matching never links identities.
 Listing/removal are account-scoped. Repeating the same relation preserves

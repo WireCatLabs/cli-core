@@ -658,11 +658,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     relate: async (key, input) => {
       const from = related(key, input.from)
       const to = related(key, input.to)
-      if (
-        (from.type === to.type && from.id === to.id) ||
-        !RELATION_KINDS.includes(input.kind) ||
-        (input.kind === "assigned-to" && (from.type !== "task" || to.type !== "person"))
-      )
+      if ((from.type === to.type && from.id === to.id) || !RELATION_KINDS.includes(input.kind))
         throw new CliError("validation_error", "a relationship needs distinct references and a supported kind")
       const existing = database
         .prepare(`${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=?`)

@@ -81,6 +81,17 @@ export {
 } from "./sqlite/search-index.js"
 export type { TagKind, TagRow } from "./sqlite/tags.js"
 export type { StoreTaskStore } from "./sqlite/tasks.js"
+export type {
+  NewWorkTask,
+  TaskAssignment,
+  TaskDetails,
+  TaskEvent,
+  TaskFields,
+  TaskRole,
+  TaskType,
+  WorkTaskType,
+} from "./sqlite/work-tasks.js"
+export { TASK_EVENT_KINDS, TASK_ROLES, TASK_TYPES, WORK_TASK_TYPES } from "./sqlite/work-tasks.js"
 export {
   type AccountKey,
   type AccountMessageFilter,

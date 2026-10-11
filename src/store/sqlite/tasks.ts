@@ -14,12 +14,14 @@ import type { CacheDatabase, SqlValue } from "../driver.js"
 import { actorOfOrigin, originOfActor } from "./actors.js"
 import { atomic } from "./atomic.js"
 import { linkKind } from "./link-kinds.js"
+import type { StoreContext } from "./open.js"
 import { taskRowOf, thingOf } from "./things.js"
+import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
 
 export { taskIdOf, taskRowOf } from "./things.js"
 
 /** `TaskStore` for `@wirecat/cli-tasks`, plus a way from its task ids to the store's rows. */
-export interface StoreTaskStore extends TaskStore {
+export interface StoreTaskStore extends TaskStore, WorkTasks {
   /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
   rowOf(id: string): number | undefined
 }
@@ -48,7 +50,8 @@ export const taskAccountOf = (database: CacheDatabase, rowId: number): string | 
   return row && String(row.key) === inboxKey(String(row.name)) ? String(row.name) : undefined
 }
 
-export const taskStoreOver = (database: CacheDatabase, now: () => number = Date.now): StoreTaskStore => {
+export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
+  const { database, now } = context
   const inbox = (account: string, create: boolean): number | undefined => {
     const key = inboxKey(account)
     const found = database.prepare("SELECT id FROM projects WHERE key = ?").get(key)
@@ -76,8 +79,11 @@ export const taskStoreOver = (database: CacheDatabase, now: () => number = Date.
         .get(key, account, `What waits on the owner in ${account}`, accountId, at, at)?.id,
     )
   }
+  // A task made here has no package id and may be a type the package does not know; the package never sees it.
   const select = (where: string) =>
-    database.prepare(`SELECT ${COLUMNS} FROM tasks t JOIN projects p ON p.id = t.project_id WHERE ${where}`)
+    database.prepare(
+      `SELECT ${COLUMNS} FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.package_id IS NOT NULL AND ${where}`,
+    )
   const toTask = (row: Record<string, unknown>): Task => {
     const task: Task = {
       id: String(row.package_id),
@@ -104,6 +110,7 @@ export const taskStoreOver = (database: CacheDatabase, now: () => number = Date.
   }
 
   return {
+    ...workTasksOver(context),
     rowOf: (id) => taskRowOf(database, id),
     get: async (id) => {
       const row = taskRowOf(database, id)
@@ -129,13 +136,13 @@ export const taskStoreOver = (database: CacheDatabase, now: () => number = Date.
         const number = Number(counted?.tasks_count)
         const author = actorOfOrigin(database, task.origin)
         const closedBy = task.closedBy ? actorOfOrigin(database, task.closedBy) : undefined
-        database
+        const made = database
           .prepare(
             "INSERT INTO tasks (project_id, number, key, title, type, status, due_at, closed_at, closed_by_type, closed_by_id, " +
               "close_reason, author_type, author_id, source, package_id, source_locator, source_kind, source_group, created_at, updated_at) " +
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
           )
-          .run(
+          .get(
             project,
             number,
             `${String(counted?.key)}-${number}`,
@@ -157,27 +164,39 @@ export const taskStoreOver = (database: CacheDatabase, now: () => number = Date.
             task.createdAt.getTime(),
             now(),
           )
+        recordTaskEvent(database, Number(made?.id), author, "created", null, task.createdAt.getTime())
       })
     },
     update: async (task) => {
       const row = taskRowOf(database, task.id)
       if (row === undefined) throw new CliError("not_found", `no task ${task.id}`)
       const closedBy = task.closedBy ? actorOfOrigin(database, task.closedBy) : undefined
-      database
-        .prepare(
-          "UPDATE tasks SET status = ?, close_reason = ?, due_at = ?, closed_at = ?, closed_by_type = ?, closed_by_id = ?, " +
-            "updated_at = ? WHERE id = ?",
-        )
-        .run(
-          task.state,
-          task.reason ?? null,
-          time(task.dueAt),
-          time(task.closedAt),
-          closedBy?.type ?? null,
-          closedBy?.id ?? null,
-          now(),
-          row,
-        )
+      atomic(database, () => {
+        const before = database.prepare("SELECT status, due_at FROM tasks WHERE id = ?").get(row) as Record<
+          string,
+          unknown
+        >
+        const at = now()
+        database
+          .prepare(
+            "UPDATE tasks SET status = ?, close_reason = ?, due_at = ?, closed_at = ?, closed_by_type = ?, closed_by_id = ?, " +
+              "updated_at = ? WHERE id = ?",
+          )
+          .run(
+            task.state,
+            task.reason ?? null,
+            time(task.dueAt),
+            time(task.closedAt),
+            closedBy?.type ?? null,
+            closedBy?.id ?? null,
+            at,
+            row,
+          )
+        if (before.status !== task.state)
+          recordTaskEvent(database, row, closedBy ?? null, "status", { status: [before.status, task.state] }, at)
+        if ((before.due_at ?? null) !== time(task.dueAt))
+          recordTaskEvent(database, row, null, "due", { due_at: [before.due_at ?? null, time(task.dueAt)] }, at)
+      })
     },
     list: async (filter) => listTasks(filter, select, toTask, inbox),
     answer: async (id, { resolution, by }) => {
