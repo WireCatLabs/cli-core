@@ -4,6 +4,14 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Changed
+
+- **Purging an account also removes the people only that account had seen**: their identity, profile history,
+  link and person go with it. An identity stays while another account, a tag, a note or any other record points
+  at it, or while its person is kept: the owner, a person something points at, or one linked to an identity that
+  stays.
 
 ## 0.237.0 — 11.10.2026
 

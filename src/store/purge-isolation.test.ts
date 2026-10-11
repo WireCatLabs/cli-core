@@ -15,6 +15,7 @@ afterEach(async () => {
 const MAIL_A: AccountKey = { provider: "email", account: "alice@example.com" }
 const MAIL_B: AccountKey = { provider: "email", account: "bob@example.com" }
 const TG: AccountKey = { provider: "tg", account: "1" }
+const TG_2: AccountKey = { provider: "tg", account: "2" }
 const MEET_A: AccountKey = { provider: "example", account: "meet-a" }
 const MEET_B: AccountKey = { provider: "example", account: "meet-b" }
 const MODEL = "test:model:2"
@@ -187,5 +188,39 @@ describe("purging one account", () => {
     expect(others(db, tg)).toEqual(before)
     expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
     expect(orphanVectors(db)).toBe(0)
+  })
+
+  it("removes the people only that account had seen, and keeps the tagged and the shared ones", async () => {
+    const { store, db } = await seeded()
+    await store.saveAccount(TG_2, { name: null })
+    await store.savePeople(TG, [
+      { id: "21", name: "Dave Example" },
+      { id: "22", name: "Erin Example" },
+      { id: "23", name: "Carol Example" },
+    ])
+    await store.savePeople(TG_2, [{ id: "22", name: "Erin Example" }])
+    const dave = await store.personOf({ provider: "tg", id: "21" })
+    await store.knowledge.addTags(null, { type: "person", id: dave?.uid as string }, ["client"])
+    await store.linkIdentities(
+      { provider: "tg", id: "23" },
+      { provider: "email", id: "carol@example.com" },
+      { method: "manual", by: "owner" },
+    )
+    const carol = await store.personOf({ provider: "tg", id: "9" })
+    expect(carol).toBeDefined()
+    const persons = Number(db.prepare("SELECT count(*) AS n FROM persons").get()?.n)
+
+    await store.purge(TG)
+
+    const tgIds = db
+      .prepare("SELECT external_id AS id FROM identities WHERE provider = 'tg' ORDER BY external_id")
+      .all()
+      .map(({ id }) => String(id))
+    expect(tgIds).toEqual(["21", "22", "23"])
+    expect(await store.personOf({ provider: "tg", id: "9" })).toBeUndefined()
+    expect(Number(db.prepare("SELECT count(*) AS n FROM persons").get()?.n)).toBe(persons - 1)
+    expect((await store.people("email", {})).get("carol@example.com")).toBeDefined()
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([])
+    expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
   })
 })
