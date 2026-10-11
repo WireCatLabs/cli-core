@@ -7,6 +7,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+## 0.236.0 — 11.10.2026
+
 ### Added
 
 - **Facts: what happened, beside memories, what was derived (store version 2).** `store.facts` records a
