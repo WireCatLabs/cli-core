@@ -45,7 +45,7 @@ it("upgrades schema 2 aliases additively and keeps person aliases independent of
   }
   const upgraded = await openCache(path)
   try {
-    expect(upgraded.prepare("SELECT max(version) AS version FROM schema_migrations").get()?.version).toBe(3)
+    expect(upgraded.prepare("SELECT count(*) AS count FROM schema_migrations WHERE version=3").get()?.count).toBe(1)
     expect(upgraded.prepare("SELECT min_compatible FROM schema_migrations WHERE version=3").get()?.min_compatible).toBe(
       1,
     )
