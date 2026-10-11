@@ -9,7 +9,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
-- **Meeting SDK 0.4.0 integration** adds scoped explicit event/person associations, moving only the
+- **Meeting SDK 0.4.1 integration** adds scoped explicit event/person associations, moving only the
   chosen participant identity with a manual audit and account observation. Shared context services
   reuse existing notes, tags and memories; native writes recheck live ownership and optional prior
   values in one transaction. Existing memo commands remain the knowledge interface.
