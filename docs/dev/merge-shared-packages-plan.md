@@ -153,7 +153,17 @@ So the order is strict, and each step finishes everywhere before the next:
 2. Publish the package as `@wirecat/cli-core`, next version above the last cli-messaging release.
 3. Apps switch `@wirecat/cli-messaging` → `@wirecat/cli-core`. A last `@wirecat/cli-messaging` release
    re-exports `@wirecat/cli-core`; then `npm deprecate`.
-4. Local checkouts of cli-messaging change their remote to `cli-core.git`.
+4. Local checkouts of cli-messaging change their remote to `cli-core.git`. Before step 1, local checkouts of the
+   framework must already point at `cli-base.git` (one `remote set-url`: they share one `.git`), since a new
+   `cli-core` ends the redirect.
+5. The two native add-ons move with it (owner, 2026-10-11): `@wirecat/cli-messaging-sqlite` →
+   `@wirecat/cli-core-sqlite`, `@wirecat/cli-messaging-onnx` → `@wirecat/cli-core-onnx`, under
+   `packages/sqlite` and `packages/onnx` as now. Only this package depends on them, so no app changes. Each new
+   name is published empty once from the owner's machine (as `bin/publish-sqlite` did), then its trusted
+   publisher names `WireCatLabs/cli-core` and `sqlite.yml` / `onnx.yml`; the old names get a last version and
+   `npm deprecate`.
+6. npm's trusted publisher for `@wirecat/cli-core` still names the framework's old repository: the owner points
+   it at the new `cli-core` before the first release from it.
 
 ## Done when
 
