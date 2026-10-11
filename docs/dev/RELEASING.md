@@ -6,7 +6,7 @@ their pages, their live accounts, and whether the owner signs a report.
 
 A release is reliable when two halves agree: **`pnpm release:check`**, everything a program can
 decide, and **the judgement half**, the steps below. The automatic half is
-[`@wirecat/cli-core/release`](https://github.com/WireCatLabs/cli-core#readme). Both CLIs run the same
+[`@wirecat/cli-core/release`](https://github.com/WireCatLabs/cli-base#readme). Both CLIs run the same
 checks from it and add their own.
 
 ## What changed
