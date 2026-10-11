@@ -214,7 +214,8 @@
       "value": "<ids>"
     },
     "--check": {
-      "meaning": "say whether a newer version exists, and install nothing"
+      "meaning": "say whether a newer version exists, and install nothing",
+      "note": "tasks add and tasks plan instead take a time or duration for the next review; none clears it"
     },
     "--checkpoints": {
       "value": "<durations>",
@@ -294,7 +295,8 @@
     },
     "--description": {
       "value": "<text>",
-      "meaning": "the new about text — of a chat or of your account"
+      "meaning": "the new about text — of a chat or of your account",
+      "note": "tasks add and tasks plan use Markdown for task details, completion criteria and next steps"
     },
     "--dims": {
       "value": "<n>",
@@ -313,6 +315,11 @@
     "--dry-run": {
       "meaning": "judge and plan; do nothing",
       "note": "A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview."
+    },
+    "--due": {
+      "value": "<when>",
+      "meaning": "when a task must be done: an ISO 8601 time or a duration from now; none clears it",
+      "note": "tasks agenda instead takes a duration such as 1d to select tasks due within that interval"
     },
     "--emoji": {
       "value": "<emoji>",
@@ -1047,7 +1054,8 @@
     },
     "--title": {
       "value": "<title>",
-      "meaning": "the new name — of a chat, a folder or a forum topic"
+      "meaning": "the new name — of a chat, a folder or a forum topic",
+      "note": "tasks add and tasks plan use this for the action and its object, in one line"
     },
     "--to": {
       "value": "<chat>",
@@ -1109,6 +1117,11 @@
     "--voice": {
       "value": "<file>",
       "meaning": "send an Ogg Opus file as a voice message, alone, with no text"
+    },
+    "--waiting": {
+      "value": "<span>",
+      "meaning": "only chats where the owner wrote last at least this long ago",
+      "default": "7d"
     },
     "--weights": {
       "value": "<json>",
@@ -3841,9 +3854,23 @@
     "tasks add": {
       "in": "all",
       "options": {
+        "--check": "all",
+        "--description": "all",
+        "--due": "all",
+        "--title": "all",
         "--type": {
           "in": "all"
         }
+      }
+    },
+    "tasks agenda": {
+      "in": "all",
+      "options": {
+        "--due": "all",
+        "--kind": "all",
+        "--unanswered": "all",
+        "--waiting": "all",
+        "--within": "all"
       }
     },
     "tasks close": {
@@ -3855,6 +3882,13 @@
         "--reason": {
           "in": "all"
         }
+      }
+    },
+    "tasks link": {
+      "in": "all",
+      "options": {
+        "--chat": "all",
+        "--kind": "all"
       }
     },
     "tasks list": {
@@ -3876,6 +3910,18 @@
           "in": "all"
         }
       }
+    },
+    "tasks plan": {
+      "in": "all",
+      "options": {
+        "--check": "all",
+        "--description": "all",
+        "--due": "all",
+        "--title": "all"
+      }
+    },
+    "tasks show": {
+      "in": "all"
     },
     "topics": {
       "in": ["tg"],
