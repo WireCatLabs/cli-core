@@ -16,6 +16,16 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   `memo memories add`. The messenger server instructions mention it once. Exported as `SAVE_NEXT_STEPS`
   and `SAVE_HELP` from `@wirecat/cli-messaging/meetings`.
 
+### Changed — may break callers
+
+- **Mail is cut into pieces for search by meaning email by email again, cleaning kept.** A piece never spans two
+  emails, so `mail.nearest` answers the email that holds the match, not the newest email of a piece. Measured in
+  [bench/mail-quality](bench/mail-quality/README.md): on a synthetic reply-heavy corpus the right email reached the
+  top five for 39–40 of 43 queries, against 24–25 with pieces across a thread; the right thread equally often.
+  Re-quoted text, greetings, sign-offs and signatures still stay out, and every piece now opens with the subject.
+  A store cut the older ways is cut again on its next index run, once, and the vectors of pieces it no longer
+  has are dropped, so mail is embedded again.
+
 ## 0.248.0 — 11.10.2026
 
 ### Fixed

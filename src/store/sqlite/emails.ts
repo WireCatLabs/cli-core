@@ -1,12 +1,4 @@
-import {
-  CHUNK_CHARS,
-  CHUNK_OVERLAP,
-  type Chunk,
-  type ChunkLine,
-  chunkHash,
-  cutChunks,
-  splitText,
-} from "../../conversations/chunks.js"
+import { CHUNK_CHARS, type Chunk, type ChunkLine, chunkHash, cutChunks, splitText } from "../../conversations/chunks.js"
 import { mailCore } from "../../conversations/mail-text.js"
 import { formatLocator } from "../../domain/locator.js"
 import type { Message } from "../../domain/models.js"
@@ -443,7 +435,7 @@ interface ThreadText {
   at: Map<string, number | null>
 }
 
-/** A thread's live emails, oldest first, each as what it adds: its subject when that changes, then its own text. */
+/** A thread's live emails, oldest first, each as what it adds: its subject, then its own text. */
 const threadText = (database: CacheDatabase, threadId: number): ThreadText => {
   const rows = database
     .prepare(
@@ -454,14 +446,12 @@ const threadText = (database: CacheDatabase, threadId: number): ThreadText => {
     .all(threadId)
   const earlier: string[] = []
   const at = new Map<string, number | null>()
-  let topic: string | null = null
   const lines = rows.map((row) => {
     const body = String(row.body)
     const core = mailCore(body, earlier)
     earlier.push(body)
     const subject = titleOf(str(row.subject))
-    const text = subject && subject !== topic ? `${subject}\n\n${core}` : core
-    topic = subject ?? topic
+    const text = subject ? `${subject}\n\n${core}` : core
     at.set(String(row.id), int(row.at) ?? null)
     return { id: String(row.id), sender: str(row.sender), text }
   })
@@ -469,14 +459,14 @@ const threadText = (database: CacheDatabase, threadId: number): ThreadText => {
 }
 
 /**
- * The thread cut greedily from its oldest email, so a new reply changes only the last piece or adds one: every
- * piece before it keeps its text, its hash and so its vector.
+ * A thread's pieces, email by email: a piece never spans two emails, so a hit names the email that holds it
+ * (bench/mail-quality). A new reply adds its own pieces; every earlier one keeps its hash and so its vector.
  */
 const threadPieces = (database: CacheDatabase, threadId: number): Chunk[] =>
   cutThread(threadText(database, threadId).lines)
 
 /** The one cut of a thread: what is stored, what is embedded and what a hit is read back from must agree. */
-const cutThread = (lines: ChunkLine[]): Chunk[] => cutChunks(lines, CHUNK_CHARS, undefined, CHUNK_OVERLAP)
+const cutThread = (lines: ChunkLine[]): Chunk[] => lines.flatMap((line) => cutChunks([line], CHUNK_CHARS))
 
 const chunkThread = (database: CacheDatabase, threadId: number, now: number) => {
   const before = database
@@ -794,14 +784,17 @@ export const emailHitsByPk = (database: CacheDatabase, pks: number[]): StoredHit
  * Indexes the queued emails as the notes are indexed, words and stems of the subject, then the body; then cuts
  * the threads they belong to into pieces for search by meaning.
  */
+const MAIL_CUT = "mail_pieces_cut"
+const CUT = "email"
+
 export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: Stemmers) => Stemmer): number => {
-  // Mail was once cut email by email; those pieces go once, and every thread is cut again.
-  const single = database
-    .prepare("SELECT DISTINCT content_hash AS hash FROM chunks WHERE chunkable_type = 'email'")
-    .all()
-    .map(({ hash }) => String(hash))
-  if (single.length)
+  // Mail was once cut without cleaning, then across the emails of a thread; a store cut either way is cut again.
+  if (database.prepare("SELECT value FROM store_settings WHERE key = ?").get(MAIL_CUT)?.value !== CUT)
     inBatch(database, () => {
+      const single = database
+        .prepare("SELECT DISTINCT content_hash AS hash FROM chunks WHERE chunkable_type = 'email'")
+        .all()
+        .map(({ hash }) => String(hash))
       database.prepare("DELETE FROM chunks WHERE chunkable_type = 'email'").run()
       queueThreads(
         database,
@@ -811,6 +804,9 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
           .map(({ id }) => Number(id)),
       )
       purgeUnused(database, single)
+      database
+        .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+        .run(MAIL_CUT, CUT, Date.now())
     })
   database
     .prepare(
@@ -1021,7 +1017,6 @@ export const mailStoreOver = (
       if (rows.length < 500) break
       after = Number(rows.at(-1)?.id)
     }
-    // A thread piece stands for the newest email in it: the one whose arrival made the piece what it is.
     const threads = new Map<number, Chunk[]>()
     const emails = new Map<number, number>()
     for (const [key, score] of [...best.entries()].sort(([, a], [, b]) => b - a)) {

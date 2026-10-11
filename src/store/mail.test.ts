@@ -284,29 +284,33 @@ describe("mail store", () => {
     expect(pieces()).toBe(1)
   })
 
-  it("replaces pieces cut email by email with pieces of the thread, and drops their vectors", async () => {
+  it("cuts a store cut the older ways again, and drops the vectors of the pieces it no longer has", async () => {
     const { database, mail } = await seeded()
     await mail.saveThread(thread([email()]))
     await mail.chunksToEmbed("test:model:2", { limit: 10 })
     const id = Number((await mail.email(1, "<first@example.com>"))?.id)
+    const current = () =>
+      database
+        .prepare("SELECT chunkable_type AS type, content_hash AS hash FROM chunks ORDER BY type, hash")
+        .all()
+        .map(({ type, hash }) => `${type}:${hash}`)
+    const cut = current()
+    database.prepare("UPDATE chunks SET content_hash = 'thread-hash' WHERE chunkable_type = 'email_thread'").run()
     database
       .prepare(
         `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, account_id,
-           created_at, updated_at) VALUES ('email', ?, 0, 0, 10, 'old-hash', 1, 1, 1)`,
+           created_at, updated_at) VALUES ('email', ?, 0, 0, 10, 'email-hash', 1, 1, 1)`,
       )
       .run(id)
-    database
-      .prepare(
-        "INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at) VALUES ('m', 'old-hash', 2, x'00', 1, 1)",
-      )
-      .run()
-    const types = () =>
+    for (const hash of ["thread-hash", "email-hash"])
       database
-        .prepare("SELECT chunkable_type AS type FROM chunks ORDER BY type")
-        .all()
-        .map(({ type }) => type)
+        .prepare(
+          "INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at) VALUES ('m', ?, 2, x'00', 1, 1)",
+        )
+        .run(hash)
+    database.prepare("DELETE FROM store_settings WHERE key = 'mail_pieces_cut'").run()
     await mail.chunksToEmbed("test:model:2", { limit: 10 })
-    expect(types()).toEqual(["email_thread"])
+    expect(current()).toEqual(cut)
     expect(database.prepare("SELECT count(*) AS n FROM embeddings").get()?.n).toBe(0)
   })
 

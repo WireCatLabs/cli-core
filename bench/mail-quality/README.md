@@ -1,8 +1,8 @@
 # Mail meaning search: how to cut and clean email
 
-Mail is embedded per thread, in pieces of 1,200 characters that overlap by 150, with greetings,
+Mail was embedded per thread, in pieces of 1,200 characters that overlap by 150, with greetings,
 sign-offs, signatures and re-quoted text left out ([mail-text.ts](../../src/conversations/mail-text.ts)).
-Those were common practice, not measured. This benchmark compares them with the alternatives on an
+Those were common practice, not measured; after this measurement mail is cut per email, cleaning kept. This benchmark compares them with the alternatives on an
 entirely synthetic mail set: [corpus.json](corpus.json), invented people and companies only.
 
 ## Variants
@@ -30,8 +30,8 @@ No account is opened and no network request is made. Each query ranks every piec
 - **thread** — threads by their best piece.
 
 Recall@5 and MRR are averages over the queries of one split; every query has an answer. The runner
-asserts that the production variant (thread, 1,200, 150, rules) cuts exactly the pieces the store
-cuts for the same mail, so the benchmark cannot drift from production unnoticed.
+asserts that the production variant (email, 1,200, 150, rules; thread until the switch) cuts exactly
+the pieces the store cuts for the same mail, so the benchmark cannot drift from production unnoticed.
 
 Pieces, characters and pieces longer than the model's 512 tokens (whose end the model never reads)
 are counted per variant. Vector bytes are calculated, pieces × 384 × 4, not measured. Vectors are
@@ -73,7 +73,8 @@ Hits in the top five, out of 43 queries per split, with cleaning by rules:
 | email | 1,200 | 150 | 142 | 40 | 39 | 0.759 / 0.830 | 42 | 39 |
 | email | 2,000 | 150 | 134 | 40 | 39 | 0.746 / 0.817 | 40 | 39 |
 
-The first row is production. All 36 variants are in the JSON.
+The first row was production when measured; the fifth is production now. All 36 variants are in the
+JSON.
 
 **Per email finds the right email far more often; per thread finds the right thread no more often.**
 Production found the email that holds the answer for 24 and 25 queries; the same size cut per email
