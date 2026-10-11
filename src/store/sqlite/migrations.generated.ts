@@ -326,5 +326,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "UPDATE memories SET deleted_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000\nWHERE kind = 'fact' AND deleted_at IS NULL;",
       "-- An assignment's one home is task_assignments; the assigned-to links stay until their readers move.\nINSERT OR IGNORE INTO task_assignments (task_id, assignee_type, assignee_id, role, created_at, updated_at)\nSELECT l.from_id, 'person', l.to_id, 'assignee', l.created_at, l.updated_at FROM links l\nWHERE l.kind = 'assigned-to' AND l.confirmed = 1 AND l.from_type = 'task' AND l.to_type = 'person'\n  AND EXISTS (SELECT 1 FROM tasks t WHERE t.id = l.from_id) AND EXISTS (SELECT 1 FROM persons p WHERE p.id = l.to_id)\nORDER BY l.id;"
     ]
+  },
+  {
+    "name": "20261011115708_version-3-vocabulary",
+    "statements": [
+      "CREATE UNIQUE INDEX `aliases_by_aliasable_type_aliasable_id_name_folded` ON `aliases` (`aliasable_type`,`aliasable_id`,`name_folded`) WHERE account_id IS NULL AND aliasable_type = 'project' OR account_id IS NULL AND aliasable_type = 'tag';"
+    ]
   }
 ]

@@ -82,6 +82,18 @@ export {
 export type { TagKind, TagRow } from "./sqlite/tags.js"
 export type { StoreTaskStore } from "./sqlite/tasks.js"
 export type {
+  TagPreflight,
+  VocabularyAlias,
+  VocabularyAliasReceipt,
+  VocabularyCatalog,
+  VocabularyEntry,
+  VocabularyKind,
+  VocabularyOptions,
+  VocabularyResolution,
+  VocabularyStore,
+  VocabularyTarget,
+} from "./sqlite/vocabulary.js"
+export type {
   NewWorkTask,
   TaskAssignment,
   TaskDetails,

@@ -42,6 +42,20 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   messages` skips mailboxes and `search mail` keeps only them. `MessageStore` gains `accountGroups`,
   `saveAccountGroup`, `profiles` and `saveProfile`.
 
+## Unreleased
+
+### Added
+
+- **Canonical project and label aliases (store version 3).** `store.knowledge.vocabulary`,
+  `resolveVocabulary`, `addVocabularyAlias` and `removeVocabularyAlias` reuse the existing aliases
+  table for owner projects and tags/topics. Exact Unicode aliases resolve to stable IDs; ambiguous
+  names and collisions are reported. Catalog reads have entry/byte budgets, cancellation and
+  preview fingerprints; owner alias writes check those fingerprints transactionally.
+- **Tag creation preflight.** `store.knowledge.tagPreflight` returns an existing canonical label or
+  lexical similarity suggestions for review. It loads no model and never merges similar labels.
+  Knowledge tagging, main-topic selection and label filters resolve exact aliases; project creation
+  rejects names or keys that would shadow an existing project alias.
+
 ## 0.237.0 — 11.10.2026
 
 ### Fixed

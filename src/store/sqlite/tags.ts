@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-core"
 import { formatLocator } from "../../domain/locator.js"
 import type { Id } from "../../domain/models.js"
 import type { TagType } from "../../domain/tags.js"
+import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { AccountKey } from "../store.js"
 import type { Actor } from "./actors.js"
@@ -102,6 +103,22 @@ export const tagNamed = (database: CacheDatabase, name: string): TagRow | undefi
   return row ? { id: Number(row.id), name: String(row.name), kind: row.kind as TagKind } : undefined
 }
 
+/** An explicit alias reuses its target; similarity never chooses a canonical label. */
+export const canonicalTagNamed = (database: CacheDatabase, name: string): TagRow | undefined => {
+  const normalized = normalizeVocabularyName(name)
+  const direct = tagNamed(database, normalized)
+  const aliases = database
+    .prepare(
+      "SELECT DISTINCT t.id,t.name,t.kind FROM aliases a JOIN tags t ON t.id=a.aliasable_id " +
+        "WHERE a.aliasable_type='tag' AND a.account_id IS NULL AND a.name_folded=? LIMIT 2",
+    )
+    .all(normalized)
+  if (aliases.length > 1 || (direct && aliases.some((row) => Number(row.id) !== direct.id)))
+    throw new CliError("configuration_error", "the label name has conflicting canonical targets")
+  const row = aliases[0]
+  return direct ?? (row ? { id: Number(row.id), name: String(row.name), kind: row.kind as TagKind } : undefined)
+}
+
 /**
  * A new tag or topic. A name is one or the other, never both, so a clash names what holds it; only the
  * owner makes a topic — an agent's topic is a proposed action the owner approves.
@@ -118,7 +135,7 @@ export const createTag = (
     throw new CliError("permission_error", "only the owner creates a topic — propose it for the owner to approve", {
       reason: "owner_only_topic",
     })
-  const held = tagNamed(database, name)
+  const held = canonicalTagNamed(database, name)
   if (held)
     throw new CliError(
       "validation_error",
@@ -132,6 +149,8 @@ export const createTag = (
 
 /** The tag of that name, made as a plain tag when no tag or topic holds the name yet. */
 export const ensureTag = ({ database, now }: StoreContext, name: string): TagRow => {
+  const held = canonicalTagNamed(database, name)
+  if (held) return held
   const at = now()
   database
     .prepare(

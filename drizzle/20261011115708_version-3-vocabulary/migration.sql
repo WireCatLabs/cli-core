@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `aliases_by_aliasable_type_aliasable_id_name_folded` ON `aliases` (`aliasable_type`,`aliasable_id`,`name_folded`) WHERE account_id IS NULL AND aliasable_type = 'project' OR account_id IS NULL AND aliasable_type = 'tag';

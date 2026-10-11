@@ -74,7 +74,14 @@ const EDITS = {
         },
       ],
       ["name", "text", { notnull: true, note: "the alias as written: a nickname, a short name, a former name" }],
-      ["name_folded", "text", { notnull: true, note: "`name` folded for matching: lower case, accents removed" }],
+      [
+        "name_folded",
+        "text",
+        {
+          notnull: true,
+          note: "normalized for matching; person/contact aliases use accent-insensitive search folding, canonical project/tag aliases retain accents",
+        },
+      ],
       [
         "display",
         "integer",
@@ -86,6 +93,7 @@ const EDITS = {
     ],
     keys: [
       "UNIQUE (aliasable_type, aliasable_id, ifnull(account_id, 0)) WHERE display = 1",
+      "UNIQUE (aliasable_type, aliasable_id, name_folded) WHERE account_id IS NULL AND aliasable_type = 'project' OR account_id IS NULL AND aliasable_type = 'tag'",
       "INDEX (aliasable_type, aliasable_id)",
     ],
     doc: "Other names for anything: a person's nickname, a contact's name in one messenger, a project's short name. Search and name matching read them.",
