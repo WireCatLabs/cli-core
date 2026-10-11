@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest"
 import { openCache } from "../open.js"
 import { openStore } from "../store.js"
 import { ENTITY_TABLES, isEntityType } from "./entity-types.js"
+import { INDEX_CODES } from "./meetings.js"
 
 const sources = (directory: string): string[] =>
   readdirSync(directory, { recursive: true, encoding: "utf8" })
@@ -22,11 +23,22 @@ describe("the entity types a pointer may hold", () => {
     const written = new Set<string>()
     for (const text of [...sources("src/store"), ...sources("drizzle")])
       for (const pattern of POINTER_LITERALS)
-        for (const [, found = ""] of text.matchAll(pattern))
-          for (const type of found.match(/\w+/g) ?? []) written.add(type)
+        for (const match of text.matchAll(pattern))
+          for (const type of (match[1] ?? "").match(/\w+/g) ?? []) {
+            // Meeting FTS queue kinds are a separate closed registry, not polymorphic entity pointers.
+            if (/^indexable_type\b/.test(match[0]) && Object.hasOwn(INDEX_CODES, type)) continue
+            written.add(type)
+          }
 
     expect(written.size).toBeGreaterThan(10)
     expect([...written].filter((type) => !isEntityType(type))).toEqual([])
+  })
+
+  it("keeps meeting search discriminators separate from polymorphic entity pointers", () => {
+    expect(INDEX_CODES).toHaveProperty("meeting_chat_message")
+    expect(INDEX_CODES).toHaveProperty("meeting_summary")
+    expect(isEntityType("meeting_chat_message")).toBe(false)
+    expect(isEntityType("meeting_summary")).toBe(false)
   })
 
   it("each name a table keyed by id", async () => {

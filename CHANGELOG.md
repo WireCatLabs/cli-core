@@ -5,6 +5,35 @@ version, newest first. Versions follow [semver](https://semver.org/); before `1.
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
 
+## 0.234.0 — 11.10.2026
+
+### Added
+
+- **Meeting SDK 0.4.1 integration** adds scoped explicit event/person associations, moving only the
+  chosen participant identity with a manual audit and account observation. Shared context services
+  reuse existing notes, tags and memories; native writes recheck live ownership and optional prior
+  values in one transaction. Existing memo commands remain the knowledge interface.
+- **Bounded meeting hit pages and explicit indexing** match configured English/Spanish/Russian
+  word forms and support continuation inside a large meeting, account/query-bound cursors, stored
+  text byte budgets and small account indexing batches. Coverage reports pending indexing and
+  unknown archive completeness; read pages do not drain queues. Tokens longer than 1024 characters
+  match literally, without morphology, to keep processing bounded.
+- **Exact transcript append receipts** count occurrence creation, inserted/replayed revisions and
+  superseded revisions in the same transaction. The old append port is unchanged; the receipt's
+  full meeting snapshot still hydrates retained history.
+- **Installed-only local speech recognition** exposes the existing engine through bounded mono PCM
+  windows and output text, with pinned model provenance and cancellation between synchronous
+  windows. Importing the speech entry point loads no engine and installs no model.
+
+### Changed — may break callers
+
+- **Legacy meeting search refuses oversized results before loading text.** More than 10000 hits or
+  64 MiB of stored match text requires bounded hit paging; individual legacy indexing entries over
+  64 MiB require bounded index maintenance. Normal prefix results below these caps are unchanged.
+- **Native meeting capabilities widen the typed store.** Hand-written stores typed as MessageStore
+  provide the new scoped association, hit/index page and append receipt methods; the base SDK
+  MeetingStore and older append interfaces are unchanged.
+
 ## 0.233.0 — 11.10.2026
 
 ### Added
