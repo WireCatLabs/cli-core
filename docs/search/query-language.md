@@ -394,6 +394,17 @@ accounts провайдера/класса, включая `all`. Отрицат
 а не свежестью данных. Чат, запрещённый для общего поиска, читается лишь при обязательном
 явном chat scope. Left/unknown history не объявляется полной автоматически.
 
+`--source` принимает и список через запятую: `--source group:work,telegram:Alice,max:202,email:me@work.example`.
+Элемент — группа (`group:<name>`), `app-или-messenger:account` (id аккаунта в хранилище, профиль любого
+приложения — `max:default` работает и из tg, — или имя аккаунта; `tg:` — то же, что `telegram:`) или голое слово
+`--source` (`max`, `all`). Профиль известен всем приложениям, как только его приложение что-то сохранило: при первой
+записи оно отмечает в хранилище (`store_settings`, ключ `profiles`), какой аккаунт у профиля.
+Группа хранится в хранилище для всех приложений: `config set accountGroups.work tg:tg2,max:Alice,email:me@work.example`,
+`config unset accountGroups.work`, видна в `config show`. Группа не включает другие группы.
+Из списка `search messages` берёт аккаунты сообщений и пропускает почтовые ящики, `search mail` — только почтовые
+ящики, `search conversations` — все; если подходящих не осталось — ошибка. Список и положительный `in:` вместе
+отвергаются. Неизвестная группа или аккаунт — ошибка со списком того, что есть.
+
 ## Regex: term и body
 
 `text:/alpha/` совпадает с термом alpha внутри текста, но не с alphabeta.
@@ -687,7 +698,7 @@ max search conversations 'deployment' --source all --filter 'kind:group'
 
 A conversation is eligible when **any of its current, undeleted messages matches the whole filter**. The matching message can be outside the chunk nearest in meaning. The filter constrains both word and vector retrieval before ranking; the question is embedded unchanged. `--since-time` additionally constrains when the conversation was last active.
 
-Search uses the active account by default. `--source personal|bots|all` (or a stored provider) explicitly widens it, with the same account rules as message search, including `in:`. Hits include `source` and a qualified message `locator`; readiness covers only eligible chats and reports separate account scopes when widened. Vectors of different embedding models never mix. A missing local model falls back to words under the same filter.
+Search uses the active account by default. `--source personal|bots|all` (or a stored provider, or a list of accounts and groups such as `group:work,telegram:Alice`) explicitly widens it, with the same account rules as message search, including `in:`. Hits include `source` and a qualified message `locator`; readiness covers only eligible chats and reports separate account scopes when widened. Vectors of different embedding models never mix. A missing local model falls back to words under the same filter.
 
 MCP `search_conversations` accepts `filter`, `source`, and `timezone` with the same semantics. `--refresh` cannot yet be combined with `--filter` or `--source`; build and embed the chosen chats separately. These SDK options reach each CLI at its next dependency bump.
 

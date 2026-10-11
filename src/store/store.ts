@@ -30,6 +30,7 @@ import type {
 } from "../domain/models.js"
 import type { RetentionOptions } from "../domain/retention.js"
 import type { PeopleLookup } from "../resolve.js"
+import { ACCOUNT_GROUPS, type AccountGroups, type Profiles } from "../search/account-list.js"
 import type { QueryExecution } from "../search/lucene/resolved.js"
 import type { Stemmers } from "../search/stem.js"
 import { type AccountStore, bindAccount } from "./account-store.js"
@@ -37,6 +38,7 @@ import { migrate } from "./migrations.js"
 import { removeOldStore } from "./old-store.js"
 import { storeCapable } from "./open.js"
 import { storePath } from "./path.js"
+import { accountGroupsOf, profilesOf, saveProfile } from "./sqlite/account-groups.js"
 import * as accounts from "./sqlite/accounts.js"
 import { type AdminStoreRequest, type AdminStoreResult, adminStatisticsQuery } from "./sqlite/admin-statistics.js"
 import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
@@ -497,6 +499,14 @@ export interface MessageStore {
   stemmers(): Promise<Stemmers | null | undefined>
   /** Saves them; stems built by other choices wait for `store reindex` or `store migrate`. */
   saveStemmers(stemmers: Stemmers): Promise<void>
+  /** The account groups `--source group:<name>` reads: each group's entries as saved, store-wide. */
+  accountGroups(): Promise<AccountGroups>
+  /** Saves one group's entries; `undefined` removes the group. */
+  saveAccountGroup(name: string, members: string[] | undefined): Promise<void>
+  /** Per app command, each profile's account: how `--source max:default` finds a profile of another app. */
+  profiles(): Promise<Profiles>
+  /** Records which account a profile of `app` is; a no-op when the store already says so. */
+  saveProfile(app: string, profile: string, key: AccountKey): Promise<void>
   savePeople(key: AccountKey, people: PersonFacts[]): Promise<void>
   /**
    * The people this account has a one-to-one chat with — as far as the saved member lists go —
@@ -1464,6 +1474,23 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     saveStemmers: async (stemmers) => inTransaction(() => stems.saveStoreStemmers(database, stemmers, context.now())),
 
+    accountGroups: async () => accountGroupsOf(database),
+
+    profiles: async () => profilesOf(database),
+
+    saveProfile: async (app, profile, key) =>
+      inTransaction(() => saveProfile(database, app, profile, key, context.now())),
+
+    saveAccountGroup: async (name, members) =>
+      inTransaction(() => {
+        const groups = accountGroupsOf(database)
+        if (members === undefined) delete groups[name]
+        else groups[name] = members
+        database
+          .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+          .run(ACCOUNT_GROUPS, JSON.stringify(groups), context.now())
+      }),
+
     contacts: async (key, options) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) return { items: [], hasMore: false }
@@ -1690,6 +1717,7 @@ const storeOver = (context: StoreContext): MessageStore => {
 
 export type { CounterField, CounterObservations, CounterState } from "../domain/counters.js"
 export type { RetentionOptions } from "../domain/retention.js"
+export { accountGroupsOf } from "./sqlite/account-groups.js"
 export type { AdminStoreRequest, AdminStoreResult } from "./sqlite/admin-statistics.js"
 export {
   type AttachmentTextEntry,

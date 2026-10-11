@@ -52,7 +52,8 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
     command
       .option(
         "--source <messenger>",
-        "every account of this messenger held in the store; personal, bots or all — the same as in: in the query",
+        "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; " +
+          "or a list: group:work,telegram:Alice,email:me@example.com",
       )
       .option("--type <text|voice|file>", "only messages of this type: text alone, a voice message, or a file", typeOf)
   command

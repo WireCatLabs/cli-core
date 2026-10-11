@@ -254,6 +254,7 @@ export const connected = (
         ? adapter
         : stored(adapter, {
             account: { provider, account: self },
+            profile: { app: app.command, name: settings.profile },
             store: () => {
               store ??= openStore({ env, command: app.command })
               return store
