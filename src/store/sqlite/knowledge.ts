@@ -9,6 +9,7 @@ import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { atomic } from "./atomic.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
+import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import {
@@ -110,7 +111,7 @@ export interface Reminder {
 
 export type LabelledType = "note" | "document" | "person" | "organization" | "project" | "task" | "meeting" | "folder"
 
-export interface KnowledgeStore extends VocabularyStore {
+export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
   taskIds(
     key: AccountKey,
     options?: { state?: "open" | "done" | "dismissed"; limit?: number; offset?: number; sources?: string[] },
@@ -431,6 +432,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
 
   return {
     ...vocabularyStoreOver(context),
+    ...meetingProjectsStoreOver(context),
     taskIds: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       if (options.state !== undefined && !["open", "done", "dismissed"].includes(options.state))
