@@ -4,7 +4,7 @@ Several sessions work on cli-messaging, tg-cli and max-cli at once. This page is
 
 ## Store migrations
 
-**The next free migration version is 2.** Versions are the `version` field of `MANIFEST` in
+**The next free migration version is 3.** Version 2 is the `facts` table (`feat/store-facts`). Versions are the `version` field of `MANIFEST` in
 `src/store/sqlite/manifest.ts`; the initial migration is 1. Take the next one by editing this line in a pull
 request of its own, merged before the migration: the runner skips every version at or below the file's, so two
 branches holding the same version would leave one migration unapplied on stores that ran the other.
