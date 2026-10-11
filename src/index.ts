@@ -5,6 +5,12 @@ export { createDeadline, type Deadline, type DeadlineOptions } from "./deadline.
 export { CliError, type CliErrorDetails, type ErrorCode, errorCodes, isCliError } from "./errors.js"
 export { EXIT_CODES, exitCodeFor, GENERIC_FAILURE } from "./exit-codes.js"
 export { brokenKeyring, type KeyringStore, memoryKeyring, systemKeyring } from "./keyring.js"
+export {
+  type LegacyMove,
+  legacyMacPaths,
+  type MigrateLegacyPathsOptions,
+  migrateLegacyMacPaths,
+} from "./legacy-paths.js"
 export { type Logger, noopLogger } from "./logger.js"
 export { createFileLogger, type FileLogger, type FileLoggerOptions, REDACTED_FIELDS } from "./logging.js"
 export { createOutputBuffer, type OutputBuffer, type OutputBufferOptions } from "./output-buffer.js"

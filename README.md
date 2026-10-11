@@ -41,7 +41,7 @@ streams.stderr // []
 | `createDeadline` | cooperative command cancellation with injected sleep and a parent abort signal |
 | `time` | monotonic and wall clocks, and the one sleep that both timeouts and backoff use |
 | `logger` | the four-method interface a host adapts Pino to — this package logs nothing itself |
-| `paths` | `env-paths` for config, state and cache, each overridable by environment variable |
+| `paths` | config, state and cache in the XDG layout on Linux and macOS (`~/.config`, `~/.local/share`, `~/.cache`) and the `AppData` one on Windows, each overridable by environment variable; `migrateLegacyMacPaths` moves an older release's `~/Library` folders once |
 | `config` | JSON config loading that names the bad field, and an atomic write that locks the directory down |
 | `credentials` | environment → keyring → file, warning once and falling through when the keyring refuses |
 | `logging` | a Pino adapter writing JSON lines with secrets redacted by field name; a file that cannot be written is reported to `onError`, never thrown |
