@@ -2186,7 +2186,7 @@ describe("the shared read commands", () => {
     expect(kinds(only)).toEqual(new Set(["meeting"]))
 
     const pretty = await call(["search", "all", "chapter", "--meetings"], never, env, { tty: true })
-    expect(pretty.stdout.join("")).toContain("meeting · zoom · Reading circle  zoom:zm-profile:alice")
+    expect(pretty.stdout.join("")).toMatch(/meeting · zoom · Reading circle {2}meeting:\d+\/\d+/)
 
     const unasked = await call(["search", "all", "chapter", "--only", "meetings", "--json"], never, env)
     expect(unasked.code).toBe(2)

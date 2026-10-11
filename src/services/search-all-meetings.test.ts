@@ -99,7 +99,7 @@ describe("opt-in meeting-inclusive search", () => {
     expect(meetingSearch).not.toHaveBeenCalled()
   })
 
-  it("uses the real scoped account id and preserves unknown timestamps without inventing references", async () => {
+  it("uses the real scoped account id, names the meeting by its meeting: reference and keeps unknown timestamps", async () => {
     const { store, accountId, save } = await fixture()
     await save("other-account", "needle private invented", 2000, { accountId: 1 })
     const saved = await save("selected", "needle selected", null, { title: null })
@@ -122,7 +122,7 @@ describe("opt-in meeting-inclusive search", () => {
         text: "needle selected",
       }),
     ])
-    expect(found.items[0]).not.toHaveProperty("ref")
+    expect(found.items[0]).toHaveProperty("ref", `meeting:${accountId}/${saved.meeting.id}`)
     expect(found.meetings).toMatchObject({ accountId, complete: true, meetingsScanned: 1 })
     expect(found.hasMore).toBe(false)
   })

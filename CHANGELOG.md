@@ -8,6 +8,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **A meeting found by `search all --meetings` carries `ref`**, its `meeting:<accountId>/<meetingId>` reference, the
+  one memo's notes, facts and memories take as evidence; the terminal line shows it.
 - **`search messages`, `search mail` and `search all` page with `--offset`** (`offset` on `search_messages`,
   `search_mail` and `search_all`), and answer `nextOffset` while there are more hits, up to an offset of 1,000. A
   page reads the hits before it again, so deep pages cost more. `search all` with meetings does not page yet.

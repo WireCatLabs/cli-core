@@ -30,7 +30,7 @@ const onlyOf = (value: string): ResourceWithMeetings[] => {
 
 const lineOf = (item: SearchAllIncludingMeetingsFound["items"][number]): string =>
   item.kind === "meeting"
-    ? `meeting · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.provider}:${item.account}\n  ${item.timestamp ?? "time unknown"}  ${singleLine(item.text).slice(0, 200)}\n`
+    ? `meeting · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}\n  ${item.timestamp ?? "time unknown"}  ${singleLine(item.text).slice(0, 200)}\n`
     : `${item.kind} · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}\n  ${item.timestamp}${item.from?.name ? `  ${singleLine(item.from.name)}` : ""}  ${singleLine(item.text)}\n`
 
 /** Commander gives `--meetings` the next word, so `--meetings budget` before the query takes the query's first word. */

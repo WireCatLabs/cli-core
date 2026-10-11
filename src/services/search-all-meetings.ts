@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
+import { formatMeetingReference } from "../domain/meeting-reference.js"
 import type { SearchHit } from "../meetings/index.js"
 import { parseLucene } from "../search/lucene/parser.js"
 import type { QueryNode } from "../search/lucene/types.js"
@@ -20,6 +21,8 @@ export const RESOURCES_SEARCHED_WITH_MEETINGS = [...RESOURCES_SEARCHED, "meeting
 export type ResourceWithMeetings = (typeof RESOURCES_SEARCHED_WITH_MEETINGS)[number]
 export interface MeetingSearchItem {
   kind: "meeting"
+  /** `meeting:<account id>/<meeting id>`, the reference memo's notes, facts and memories cite as evidence. */
+  ref: string
   provider: string
   account: string
   accountId: number
@@ -157,6 +160,7 @@ const collectMeetings = async (
         before: position(),
         item: {
           kind: "meeting",
+          ref: formatMeetingReference({ type: "meeting", accountId: selected.id, meetingId: hit.meetingId }),
           provider: selected.provider,
           account: selected.account,
           accountId: selected.id,
