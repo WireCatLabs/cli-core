@@ -28,6 +28,8 @@ export interface Corpus {
   table: string
   /** Title and body as `title`/`body`, whether it is live, and its scope, for one row by `id`. */
   read: string
+  /** False when the corpus cuts its own pieces for search by meaning, as mail does by thread. */
+  pieces?: false
 }
 
 export const CORPORA = {
@@ -58,6 +60,7 @@ export const CORPORA = {
     read:
       "SELECT e.subject AS title, coalesce(e.body_text, '') AS body, e.deleted_at IS NULL AS live, a.scope, e.account_id FROM emails e " +
       "JOIN accounts a ON a.id = e.account_id WHERE e.id = ?",
+    pieces: false,
   },
 } as const satisfies Record<string, Corpus>
 
@@ -123,7 +126,7 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
     const stems = text ? stemmer.indexText(text) : ""
     if (stems !== "") statements.stems.run(id, stems, scope)
     const after = new Set<string>()
-    if (text.trim()) {
+    if (text.trim() && corpus.pieces !== false) {
       const at = Date.now()
       splitText(text, CHUNK_CHARS).forEach(({ start, end }, position) => {
         const hash = chunkHash(text.slice(start, end))
