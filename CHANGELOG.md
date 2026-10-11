@@ -24,6 +24,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **Scoped meeting-project membership.** `store.knowledge.linkMeetingProject` links a meeting to a
+  live owner project with an idempotent receipt. Agent links remain proposed; owner confirmation
+  checks the proposal fingerprint. `meetingProjects` pages confirmed or proposed membership in an
+  explicitly selected account, excluding deleted meetings/projects. No extra schema is required.
+
 - **Canonical project and label aliases (store version 3).** `store.knowledge.vocabulary`,
   `resolveVocabulary`, `addVocabularyAlias` and `removeVocabularyAlias` reuse the existing aliases
   table for owner projects and tags/topics. Exact Unicode aliases resolve to stable IDs; ambiguous

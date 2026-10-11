@@ -38,6 +38,20 @@ synonym, changes a tag or loads a model. This API supplies a creation preflight;
 must invoke it to review likely synonyms. Native automatic tag creation still creates unknown
 labels, so universal duplicate protection and reviewed merges require a further rollout.
 
+## Meeting-project membership
+
+`store.knowledge.linkMeetingProject(account, meetingId, projectId, options)` records one `member-of`
+link in the shared relationship table. Meetings are checked against the explicit provider/account;
+projects must be live owner projects. `by: "agent"` creates a proposed link; it cannot confirm one.
+An owner accepts a proposal by passing its `expectedFingerprint`, preserving its recorded provenance.
+Replaying an existing link returns `changed: false`; stale review fails before writing.
+
+`meetingProjects(account, { meetingId?, projectId?, confirmed?, limit?, offset?, signal? })` lists
+membership in that account, with canonical references and fingerprints. Reads take at most 500 rows
+and 2000 provenance characters per row; deleted/foreign meetings and deleted/account projects are
+excluded. Title/alias similarity never creates membership. These are shared store APIs; a command
+surface and project-selected transcript retrieval are separate consumer work.
+
 ## The rule this package keeps
 
 **Nothing here knows a messenger.** An adapter translates its provider's objects into these types,
