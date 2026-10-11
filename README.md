@@ -265,7 +265,7 @@ additional coordination. Proposal generation never calls this helper.
 200 text characters. A deleted source returns `state: "unavailable"` and `source: null`; other source
 errors propagate. The task itself retains its reference rather than transcript text.
 
-Canonical meeting, revision and cue references can also be stored in memory and decision evidence
+Canonical meeting, revision and cue references can also be stored in memory and fact evidence
 and in note links. Cue references use the actual cue position, and keep pointing to their retained
 revision after a correction. Deleted parents refuse new links; existing evidence retains its source
 reference so callers can report that it is unavailable.
@@ -287,7 +287,7 @@ and ranks only those candidates. Its `ranking: "scanned-candidates"`, `scanned`,
 pages do not promise a global ranking. Vector writes and scans additionally cap payloads at 16 MiB.
 
 These helpers add no CLI or MCP command. Persisting meeting references through existing memory
-or decision evidence links needs separate store integration.
+or fact evidence links needs separate store integration.
 
 ## Charts from statistics
 

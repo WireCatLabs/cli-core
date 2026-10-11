@@ -54,8 +54,8 @@ import * as completeness from "./sqlite/completeness.js"
 import { type ConversationEligibility, conversationEligibility } from "./sqlite/conversation-eligibility.js"
 import * as conversationQueries from "./sqlite/conversations.js"
 import { applyCounterObservations, type CounterTarget, counterStates, counterTargets } from "./sqlite/counters.js"
-import { type DecisionsStore, decisionsStoreOver } from "./sqlite/decisions.js"
 import { drainEmailIndex, type MailStore, mailStoreOver, threadConversation } from "./sqlite/emails.js"
+import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import * as identities from "./sqlite/identities.js"
 import { drainInvolvementQueue } from "./sqlite/involvement-queue.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
@@ -607,7 +607,7 @@ export interface MessageStore {
   /** Notes, the links between anything and anything, and the owner's organisations and projects. */
   readonly notes: NotesStore
   /** Choices that hold until replaced, each with its evidence. */
-  readonly decisions: DecisionsStore
+  readonly facts: FactsStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
   readonly memories: MemoriesStore
   /** What an agent wants done outside the store, waiting for the owner's approval. */
@@ -850,7 +850,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   let tasks: MessageStore["tasks"] | undefined
   let knowledge: MessageStore["knowledge"] | undefined
   let notes: MessageStore["notes"] | undefined
-  let decisions: MessageStore["decisions"] | undefined
+  let facts: MessageStore["facts"] | undefined
   let memories: MessageStore["memories"] | undefined
   let proposedActions: MessageStore["proposedActions"] | undefined
   let agentActions: MessageStore["agentActions"] | undefined
@@ -1654,9 +1654,9 @@ const storeOver = (context: StoreContext): MessageStore => {
       notes ??= { ...notesStoreOver(context), ...noteSearchOver(context) }
       return notes
     },
-    get decisions() {
-      decisions ??= decisionsStoreOver(context)
-      return decisions
+    get facts() {
+      facts ??= factsStoreOver(context)
+      return facts
     },
     get memories() {
       memories ??= memoriesStoreOver(context)

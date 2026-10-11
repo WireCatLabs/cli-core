@@ -10,7 +10,7 @@ import type { StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
 import { referenceOfThing, storedThing } from "./things.js"
 
-export const MEMORY_KINDS = ["summary", "digest", "fact", "preference"] as const
+export const MEMORY_KINDS = ["summary", "digest", "preference"] as const
 export const MEMORY_STATUSES = ["proposed", "confirmed", "stale", "superseded"] as const
 export const MEMORY_SCOPES = ["personal", "work"] as const
 
@@ -140,7 +140,9 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
   const rowOf = (reference: string): Row => {
     const thing = requiredThing(database, reference.includes(":") ? reference : `memory:${reference}`, "the memory")
     if (thing.type !== "memory") throw new CliError("validation_error", `${reference} is not a memory`)
-    return database.prepare("SELECT * FROM memories WHERE id = ?").get(thing.id) as Row
+    const row = database.prepare("SELECT * FROM memories WHERE id = ?").get(thing.id) as Row
+    if (row.deleted_at != null) throw new CliError("not_found", `${reference} is a fact now: store.facts holds it`)
+    return row
   }
   const setStatus = (reference: string, status: Memory["status"], verified: boolean) => {
     const row = rowOf(reference)
@@ -214,7 +216,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
       return database
         .prepare(
-          "SELECT * FROM memories WHERE (? IS NULL OR (subject_type = ? AND subject_id = ?)) AND (? IS NULL OR kind = ?) " +
+          "SELECT * FROM memories WHERE deleted_at IS NULL AND (? IS NULL OR (subject_type = ? AND subject_id = ?)) AND (? IS NULL OR kind = ?) " +
             "AND (? IS NULL OR status = ?) AND (? IS NULL OR scope = ?) ORDER BY created_at DESC, id DESC LIMIT ?",
         )
         .all(
@@ -243,7 +245,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       return database
         .prepare(
           "SELECT m.* FROM memory_words w JOIN memories m ON m.id = w.rowid WHERE memory_words MATCH ? " +
-            "AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ?",
+            "AND m.deleted_at IS NULL AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ?",
         )
         .all(match, scope ?? null, scope ?? null, Math.min(Math.max(limit, 1), 200))
         .map(memoryOf)

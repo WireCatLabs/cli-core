@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-78 tables, 16 full-text indexes.
+79 tables, 16 full-text indexes.
 
 ## Conventions
 
@@ -845,12 +845,12 @@ Rows of notes waiting to be indexed: triggers enqueue, JS normalizes, stems and 
 
 ### `memories`
 
-What an agent concluded: a summary, a daily digest, a fact, a preference. Derived and fallible, so it carries its evidence (`links` of kind `evidence`), its confidence and its status; notes are what a person wrote.
+What an agent concluded: a summary, a daily digest, a preference. Derived and fallible, so it carries its evidence (`links` of kind `evidence`), its confidence and its status; notes are what a person wrote.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `kind` | text | not null |  | summary, digest, fact, preference |
+| `kind` | text | not null |  | summary, digest, preference |
 | `body` | text | not null |  |  |
 | `subject_type` | text |  |  | what it is about: `person`, `chat`, `meeting`, `project`, …; null for a general fact |
 | `subject_id` | integer |  |  | the row in the `subject_type` table |
@@ -864,6 +864,7 @@ What an agent concluded: a summary, a daily digest, a fact, a preference. Derive
 | `scope` | text | not null |  | personal or work, from its evidence |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | when it stopped being a memory: a `fact` memory moved to `facts` |
 
 *Keys and indexes:* `INDEX (subject_type, subject_id)`, `INDEX (author_type, author_id)`, `INDEX (supersedes_id)`
 
@@ -1148,7 +1149,7 @@ Rows of transcript rows, meeting chat and summaries waiting to be indexed: trigg
 
 ## Tasks
 
-A task and ticket system for people and agents: projects with keys, typed and prioritised tasks, assignees that are people or bots, and the decisions made along the way. A promise is a task of type `promise`; a question is a task of type `question` whose answer is linked.
+A task and ticket system for people and agents: projects with keys, typed and prioritised tasks, assignees that are people or bots, and the facts recorded along the way (`facts`). A promise is a task of type `promise`; a question is a task of type `question` whose answer is linked.
 
 ### `reminders`
 
@@ -1266,7 +1267,7 @@ The history of a task: created, status changed, assigned, due date moved.
 
 ### `decisions`
 
-A choice that was made and holds until replaced: why we do something. Its evidence — the message, transcript row or document — is `links` of kind `evidence`; a decision an agent proposed links back to that memory with `created-from`.
+Replaced by `facts` (a decision is a fact of type `decision`) in store version 2. Nothing writes it; it stays, empty, until a version that may drop tables.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -1285,6 +1286,35 @@ A choice that was made and holds until replaced: why we do something. Its eviden
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `INDEX (project_id)`, `INDEX (supersedes_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+### `facts`
+
+What happened, as its evidence shows: a fact, a statement, a question, a decision or a promise. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. Replaces `decisions`, which stays empty.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `type` | text | not null |  | fact, statement, question, decision, promise |
+| `statement` | text | not null |  | what happened, in one sentence |
+| `status` | text | not null |  | proposed, accepted; a decision also superseded or reversed |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `subject_type` | text |  |  | who or what it is about: `person`, `chat`, `meeting`, `project`, … |
+| `subject_id` | integer |  |  | the row in the `subject_type` table |
+| `occurred_at` | integer |  |  | when it happened, as the evidence shows |
+| `supersedes_id` | integer |  | → `facts.id` | the decision this decision replaces |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who accepted it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who accepted it; null while proposed |
+| `scope` | text |  |  | personal or work, when its writer said |
+| `source` | text | not null |  | owner, agent, memory, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (project_id)`, `INDEX (subject_type, subject_id)`, `INDEX (supersedes_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
 
 ## Agents and actions
 
@@ -1371,7 +1401,7 @@ A tag's name, stored once. Which things carry it is `taggings`.
 
 ### `links`
 
-Every connection between two things that no column holds. Kinds: `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a decision or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.
+Every connection between two things that no column holds. Kinds: `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|

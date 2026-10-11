@@ -12,7 +12,7 @@ import { resolveMeetingReference } from "./meeting-reference.js"
 
 export type MeetingContextServiceStore = Pick<
   MessageStore,
-  "storedAccount" | "meetings" | "notes" | "knowledge" | "memories"
+  "storedAccount" | "meetings" | "notes" | "knowledge" | "memories" | "facts"
 >
 
 const checkCancelled = (signal?: AbortSignal): void => {
@@ -70,17 +70,30 @@ export const createMeetingContextService = async (
           return store.knowledge.addTags(key, target, [...change.tags])
         case "tags.remove":
           return store.knowledge.removeTags(key, target, [...change.tags])
-        case "memory.add":
+        case "memory.add": {
+          const evidence = change.evidence.map((value) => formatMeetingReference(parseMeetingReference(value)))
+          const subject =
+            change.subject === undefined ? reference : formatMeetingReference(parseMeetingReference(change.subject))
+          // cli-meetings still offers `fact` as a memory kind; what happened is a fact now, not a memory.
+          if (change.kind === "fact")
+            return store.facts.add({
+              type: "fact",
+              statement: change.body,
+              scope: change.scope,
+              evidence,
+              subject,
+              by: "owner",
+            })
           return store.memories.add({
             body: change.body,
             kind: change.kind,
             scope: change.scope,
-            evidence: change.evidence.map((value) => formatMeetingReference(parseMeetingReference(value))),
-            subject:
-              change.subject === undefined ? reference : formatMeetingReference(parseMeetingReference(change.subject)),
+            evidence,
+            subject,
             status: "confirmed",
             author: "owner",
           })
+        }
         case "event.link":
           return store.meetings.linkMeetingEvent({
             accountId,

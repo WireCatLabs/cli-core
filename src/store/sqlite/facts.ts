@@ -1,0 +1,226 @@
+import { CliError } from "@wirecat/cli-core"
+import type { Actor } from "./actors.js"
+import { atomic } from "./atomic.js"
+import { linkKind } from "./link-kinds.js"
+import { type Author, authorActor, evidenceOf, linkEvidence, MEMORY_SCOPES } from "./memories.js"
+import { requiredThing } from "./notes.js"
+import type { StoreContext } from "./open.js"
+import { referenceOfThing, storedThing } from "./things.js"
+
+export const FACT_TYPES = ["fact", "statement", "question", "decision", "promise"] as const
+export const FACT_STATUSES = ["proposed", "accepted", "superseded", "reversed"] as const
+
+/** What happened, as its evidence shows; its evidence is `links` of kind `evidence`. */
+export interface Fact {
+  id: string
+  ref: string
+  type: (typeof FACT_TYPES)[number]
+  statement: string
+  /** Every fact is proposed or accepted; only a decision is also superseded or reversed. */
+  status: (typeof FACT_STATUSES)[number]
+  project: string | null
+  subject: string | null
+  occurredAt: string | null
+  supersedes: string | null
+  author: { type: Actor["type"]; id: string }
+  model: string | null
+  confirmedBy: { type: Actor["type"]; id: string } | null
+  scope: (typeof MEMORY_SCOPES)[number] | null
+  source: string
+  evidence: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FactInput {
+  type: Fact["type"]
+  statement: string
+  /** Who records it: the owner's is accepted at once, an agent's waits as proposed. */
+  by: Author
+  project?: string
+  subject?: string
+  /** When it happened, as the evidence shows (ISO). */
+  occurredAt?: string
+  evidence?: string[]
+  scope?: Fact["scope"] & string
+  /** A decision only: the decision this one replaces, `superseded` once this one is accepted. */
+  supersedes?: string
+  /** The memory an agent drew it from: a `created-from` link. */
+  createdFrom?: string
+}
+
+export interface FactsStore {
+  add(input: FactInput): Promise<Fact>
+  get(reference: string): Promise<Fact>
+  list(options?: {
+    type?: Fact["type"]
+    project?: string
+    subject?: string
+    status?: Fact["status"]
+    limit?: number
+  }): Promise<Fact[]>
+  /** The owner accepts a proposed fact; a decision it supersedes stops holding. */
+  accept(reference: string): Promise<Fact>
+  /** An accepted decision no longer holds and nothing replaced it. */
+  reverse(reference: string): Promise<Fact>
+}
+
+type Row = Record<string, unknown>
+const iso = (value: unknown) => new Date(Number(value)).toISOString()
+
+const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
+  if (typeof value !== "string" || !allowed.includes(value as T))
+    throw new CliError("validation_error", `${what} is one of ${allowed.join(", ")}`)
+  return value as T
+}
+
+export const factsStoreOver = (context: StoreContext): FactsStore => {
+  const { database, now } = context
+  const factOf = (row: Row): Fact => ({
+    id: String(row.id),
+    ref: `fact:${row.id}`,
+    type: row.type as Fact["type"],
+    statement: String(row.statement),
+    status: row.status as Fact["status"],
+    project: row.project_id == null ? null : `project:${row.project_id}`,
+    subject:
+      row.subject_type == null
+        ? null
+        : (referenceOfThing(database, storedThing(row.subject_type, row.subject_id)) ?? null),
+    occurredAt: row.occurred_at == null ? null : iso(row.occurred_at),
+    supersedes: row.supersedes_id == null ? null : `fact:${row.supersedes_id}`,
+    author: { type: row.author_type as Actor["type"], id: String(row.author_id) },
+    model: row.model == null ? null : String(row.model),
+    confirmedBy:
+      row.confirmed_by_type == null
+        ? null
+        : { type: row.confirmed_by_type as Actor["type"], id: String(row.confirmed_by_id) },
+    scope: row.scope == null ? null : (row.scope as Fact["scope"]),
+    source: String(row.source),
+    evidence: evidenceOf(context, { type: "fact", id: Number(row.id) }),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+  })
+  const rowOf = (reference: string): Row => {
+    const thing = requiredThing(database, reference.includes(":") ? reference : `fact:${reference}`, "the fact")
+    if (thing.type !== "fact") throw new CliError("validation_error", `${reference} is not a fact`)
+    return database.prepare("SELECT * FROM facts WHERE id = ?").get(thing.id) as Row
+  }
+  const accept = (id: number) => {
+    const row = database.prepare("SELECT * FROM facts WHERE id = ?").get(id) as Row
+    if (row.status !== "proposed" && row.status !== "accepted")
+      throw new CliError("validation_error", `a ${String(row.status)} decision cannot be accepted`)
+    const { actor } = authorActor(context, "owner")
+    const at = now()
+    database
+      .prepare(
+        "UPDATE facts SET status = 'accepted', confirmed_by_type = ?, confirmed_by_id = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(actor.type, actor.id, at, id)
+    if (row.supersedes_id != null)
+      database
+        .prepare("UPDATE facts SET status = 'superseded', updated_at = ? WHERE id = ? AND status = 'accepted'")
+        .run(at, Number(row.supersedes_id))
+  }
+
+  return {
+    add: async (input) => {
+      const type = oneOf(input.type, FACT_TYPES, "a fact's type")
+      const statement = input.statement?.trim() ?? ""
+      if (!statement || statement.length > 2000)
+        throw new CliError("validation_error", "a fact's statement takes 1–2000 characters")
+      const scope = input.scope === undefined ? null : oneOf(input.scope, MEMORY_SCOPES, "a fact's scope")
+      const occurredAt = input.occurredAt === undefined ? null : Date.parse(input.occurredAt)
+      if (occurredAt !== null && !Number.isFinite(occurredAt))
+        throw new CliError("validation_error", "occurredAt takes an ISO timestamp")
+      if (input.supersedes !== undefined && type !== "decision")
+        throw new CliError("validation_error", "only a decision supersedes another")
+      const id = atomic(database, () => {
+        const project = input.project === undefined ? undefined : requiredThing(database, input.project, "the project")
+        if (project && project.type !== "project")
+          throw new CliError("validation_error", `${input.project} is not a project`)
+        const subject = input.subject === undefined ? undefined : requiredThing(database, input.subject, "the subject")
+        const replaced = input.supersedes === undefined ? undefined : rowOf(input.supersedes)
+        if (replaced && replaced.type !== "decision")
+          throw new CliError("validation_error", `${input.supersedes} is not a decision`)
+        const owner = input.by === "owner"
+        const { actor, model } = authorActor(context, input.by)
+        const at = now()
+        const made = Number(
+          database
+            .prepare(
+              "INSERT INTO facts (type, statement, status, project_id, subject_type, subject_id, occurred_at, supersedes_id, " +
+                "author_type, author_id, model, scope, source, created_at, updated_at) " +
+                "VALUES (?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            )
+            .get(
+              type,
+              statement,
+              project?.id ?? null,
+              subject?.type ?? null,
+              subject?.id ?? null,
+              occurredAt,
+              replaced === undefined ? null : Number(replaced.id),
+              actor.type,
+              actor.id,
+              model,
+              scope,
+              owner ? "owner" : "agent",
+              at,
+              at,
+            )?.id,
+        )
+        linkEvidence(context, { type: "fact", id: made }, input.evidence ?? [], owner ? "owner" : "agent")
+        if (input.createdFrom !== undefined) {
+          const from = requiredThing(database, input.createdFrom, "the source")
+          database
+            .prepare(
+              "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, confirmed, created_at, author, updated_at) " +
+                `VALUES ('fact', ?, ?, ?, ${linkKind("created-from")}, 'suggested', 1, ?, 'agent', ?)`,
+            )
+            .run(made, from.type, from.id, at, at)
+        }
+        if (owner) accept(made)
+        return made
+      })
+      return factOf(rowOf(`fact:${id}`))
+    },
+    get: async (reference) => factOf(rowOf(reference)),
+    list: async (options = {}) => {
+      const project =
+        options.project === undefined ? undefined : requiredThing(database, options.project, "the project")
+      const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
+      return database
+        .prepare(
+          "SELECT * FROM facts WHERE deleted_at IS NULL AND (? IS NULL OR type = ?) AND (? IS NULL OR project_id = ?) " +
+            "AND (? IS NULL OR (subject_type = ? AND subject_id = ?)) AND (? IS NULL OR status = ?) " +
+            "ORDER BY coalesce(occurred_at, created_at) DESC, id DESC LIMIT ?",
+        )
+        .all(
+          options.type ?? null,
+          options.type ?? null,
+          project?.id ?? null,
+          project?.id ?? null,
+          subject?.type ?? null,
+          subject?.type ?? null,
+          subject?.id ?? null,
+          options.status ?? null,
+          options.status ?? null,
+          Math.min(Math.max(options.limit ?? 100, 1), 500),
+        )
+        .map(factOf)
+    },
+    accept: async (reference) => {
+      const id = Number(rowOf(reference).id)
+      atomic(database, () => accept(id))
+      return factOf(rowOf(reference))
+    },
+    reverse: async (reference) => {
+      const row = rowOf(reference)
+      if (row.type !== "decision") throw new CliError("validation_error", "only a decision can be reversed")
+      if (row.status !== "accepted") throw new CliError("validation_error", "only an accepted decision can be reversed")
+      database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+      return factOf(rowOf(reference))
+    },
+  }
+}

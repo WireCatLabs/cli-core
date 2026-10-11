@@ -26,7 +26,7 @@ export const SIMPLE_REFERENCES = [
   "project",
   "task",
   "memory",
-  "decision",
+  "fact",
   "bot",
   "entity",
 ] as const
