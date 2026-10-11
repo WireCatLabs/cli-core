@@ -333,7 +333,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--as` | `<state>` | how a task is closed: done, or dismissed — it needs no answer |  | `tasks close` |
 | `--as-file` |  | send every --file as a plain file to download, a video included |  | `bot messages send`, `messages send` |
 | `--as-reply` |  | send as a reply to the matched message |  | `replies edit` |
-| `--at` | `<HH:MM>` | every day at this local time |  | `schedule agent`, `schedule command` |
 | `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m |  | `messages send` |
 | `--attachment` | `<n>` | which file of the message, from 1; needed when it has more than one |  | `attachments show`, `attachments text set` |
 | `--backend` | `<archive\|server\|both>` | where to search: the local archive, the messenger's server, or both (default: both; message discovery uses archive only) |  | `search all` (planned), `search messages` |
@@ -392,7 +391,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--error-code` | `<code>` | filter diagnostic runs by a stable error code |  | `runs search` |
 | `--estimate` |  | only say what the fetch would cost, from this machine's copy; nothing is sent. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `store fetch` |
 | `--events` |  | also print edits, deletions and reactions; every line then names its event. **watch updates use this flag independently of the group event --type filter** |  | `bot watch`, `watch` |
-| `--every` | `<duration>` | repeat at this interval: 30m, 2h, 1d |  | `schedule agent`, `schedule command` |
 | `--exact` |  | bare words and quotes match their exact form only, as exact:word does; text: still matches every form |  | `search all`, `search mail`, `search messages`, `search notes`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
 | `--exclude-chat` | `<chat>` | never show this chat in the folder; repeat it for more |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--expire-time` | `<time>` | it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now |  | `chats link create` (tg-only), `chats link update` (tg-only) |
@@ -439,7 +437,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-age` | `<duration>` | the observation-age threshold for a fresh counter snapshot |  | `stats messages counters show` |
 | `--max-chats` | `<n>` | at most this many chats in one run. **local graph work defaults to 20; opt-in --sync-first network refresh defaults to 5, so help distinguishes the two uses** | `20` | `conversations build`, `conversations embed`, `search conversations`, `search messages`, `stats contacts top`, `stats messages show`, `stats messages top` |
 | `--max-chunks` | `<n>` | at most this many chunks embedded in one run | `2000` | `conversations embed`, `search conversations` |
-| `--max-cost` | `<usd>` | stop an agent's run that costs more than this, in US dollars |  | `schedule agent` |
 | `--max-gaps` | `<n>` | maximum interior coverage gaps repaired in this run |  | `store gaps repair` |
 | `--max-input-bytes` | `<bytes>` | at most this many bytes of buffered stdin | `16777216` | every command |
 | `--max-meetings` | `<n\|all>` | how many meetings --meetings looks through, newest first; all looks through every one (default 100) |  | `search all` (planned) |
@@ -488,7 +485,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--offset` | `<n>` | skip this many, for the next page |  | `search notes` |
 | `--offset-bytes` | `<n>` | start byte offset in a retained attachment | `0` | `attachments show` |
 | `--older-than` | `<duration>` | minimum age of a question without an observed qualifying answer |  | `stats messages unanswered` |
-| `--once` | `<when>` | one run: a duration from now or an ISO 8601 time |  | `schedule agent`, `schedule command` |
 | `--online` |  | also log in once, read one chat and start the MCP server; sends nothing. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `doctor` |
 | `--only` | `<resources>` | only these resources, separated by commas: messages, mail, notes; meetings with --meetings |  | `search all` |
 | `--only-admins-add` | `<on\|off>` | only admins may add members |  | `chats update` |

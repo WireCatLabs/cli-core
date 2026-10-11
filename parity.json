@@ -110,10 +110,6 @@
     "--as-reply": {
       "meaning": "send as a reply to the matched message"
     },
-    "--at": {
-      "value": "<HH:MM>",
-      "meaning": "every day at this local time"
-    },
     "--at-time": {
       "value": "<time>",
       "meaning": "let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m"
@@ -344,10 +340,6 @@
       "meaning": "also print edits, deletions and reactions; every line then names its event",
       "note": "watch updates use this flag independently of the group event --type filter"
     },
-    "--every": {
-      "value": "<duration>",
-      "meaning": "repeat at this interval: 30m, 2h, 1d"
-    },
     "--exact": {
       "meaning": "bare words and quotes match their exact form only, as exact:word does; text: still matches every form"
     },
@@ -534,10 +526,6 @@
       "meaning": "at most this many chunks embedded in one run",
       "default": "2000"
     },
-    "--max-cost": {
-      "value": "<usd>",
-      "meaning": "stop an agent's run that costs more than this, in US dollars"
-    },
     "--max-gaps": {
       "value": "<n>",
       "meaning": "maximum interior coverage gaps repaired in this run"
@@ -712,10 +700,6 @@
     "--older-than": {
       "value": "<duration>",
       "meaning": "minimum age of a question without an observed qualifying answer"
-    },
-    "--once": {
-      "value": "<when>",
-      "meaning": "one run: a duration from now or an ISO 8601 time"
     },
     "--online": {
       "meaning": "also log in once, read one chat and start the MCP server; sends nothing",
@@ -3065,35 +3049,6 @@
       }
     },
     "runs show": {
-      "in": "all"
-    },
-    "schedule": {
-      "in": "all"
-    },
-    "schedule agent": {
-      "in": "all",
-      "options": {
-        "--at": "all",
-        "--every": "all",
-        "--max-cost": "all",
-        "--once": "all"
-      }
-    },
-    "schedule command": {
-      "in": "all",
-      "options": {
-        "--at": "all",
-        "--every": "all",
-        "--once": "all"
-      }
-    },
-    "schedule list": {
-      "in": "all"
-    },
-    "schedule remove": {
-      "in": "all"
-    },
-    "schedule run": {
       "in": "all"
     },
     "search": {

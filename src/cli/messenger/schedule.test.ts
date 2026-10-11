@@ -65,7 +65,10 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, system: ServerSystem
   return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
 }
 
-describe("schedule on Linux", () => {
+// Unit text for Linux and macOS holds POSIX paths; on Windows the real timer is checked by schedules.os.test.ts.
+const posix = process.platform !== "win32"
+
+describe.runIf(posix)("schedule on Linux", () => {
   it("writes a oneshot service and a timer that run `schedule exec <file>`, lists it, and removes both", async () => {
     const { env } = setup()
     const { system, ran } = machine("linux")
@@ -117,7 +120,7 @@ describe("schedule on Linux", () => {
   })
 })
 
-describe("schedule agent", () => {
+describe.runIf(posix)("schedule agent", () => {
   it("starts claude by its full path with only the CLI's own commands allowed", async () => {
     const { env, root } = setup()
     const added = await call(
@@ -163,7 +166,9 @@ describe("schedule agent", () => {
     expect(plist).toContain("<key>Minute</key><integer>30</integer>")
     expect(ran.at(-1)?.argv).toEqual(["launchctl", "bootstrap", "gui/501", expect.stringContaining("follow-ups.plist")])
   })
+})
 
+describe("schedule on Windows", () => {
   it("on Windows registers a scheduled task, its values in variables rather than in the script", async () => {
     const { env } = setup()
     const { system, ran } = machine("win32", ["C:\\node\\node.exe", "C:\\chat\\chat.js"])
