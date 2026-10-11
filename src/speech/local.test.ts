@@ -239,3 +239,25 @@ it("honors cancellation during asynchronous engine preparation before opening th
   await expect(pending).rejects.toMatchObject({ code: "timeout" })
   expect(open).not.toHaveBeenCalled()
 })
+
+it("yields between bounded windows so queued cancellation runs before synchronous inference", async () => {
+  const directory = await installed()
+  const controller = new AbortController()
+  const native = backend()
+  const recognizer = await openLocalSpeechRecognizer("tiny-example", { directory, open: () => native })
+  const interruption = new Promise<void>((resolve) =>
+    setImmediate(() => {
+      controller.abort()
+      resolve()
+    }),
+  )
+  try {
+    await expect(recognizer.recognize(new Float32Array([0]), { signal: controller.signal })).rejects.toMatchObject({
+      code: "cancelled",
+    })
+    await interruption
+    expect(native.recognize).not.toHaveBeenCalled()
+  } finally {
+    await recognizer.close()
+  }
+})

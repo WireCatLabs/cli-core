@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { isAbsolute } from "node:path"
+import { setImmediate } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-core"
 import { isInstalled, modelPath, modelsDirectory, vadPath } from "./install.js"
 import { type SpeechModel, speechModel, VAD } from "./models.js"
@@ -93,7 +94,8 @@ export const openLocalSpeechRecognizer = async (
       const samples = new Float32Array(pcm)
       if (samples.some((value) => !Number.isFinite(value) || Math.abs(value) > 1))
         throw new CliError("validation_error", "speech PCM samples must be finite and normalized")
-      active = Promise.resolve().then(() => {
+      active = (async () => {
+        await setImmediate()
         cancelled(signal)
         const text = engine.recognize(toModelRate(samples, description.sampleRate))
         cancelled(signal)
@@ -105,7 +107,7 @@ export const openLocalSpeechRecognizer = async (
         )
           throw new CliError("invalid_response", "local speech output exceeds its text budget or is invalid")
         return text.trim()
-      })
+      })()
       try {
         return await active
       } finally {
