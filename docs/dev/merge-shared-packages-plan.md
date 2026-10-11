@@ -1,8 +1,8 @@
 # Merge cli-tasks and cli-meetings into cli-messaging
 
-Status: plan, not started. Owner's calls (2026-10-11): fold cli-tasks and cli-meetings into cli-messaging
-and keep modules apart with lint rules, not with packages; cli-core stays a separate package; then rename
-cli-core → **cli-base** and cli-messaging → **cli-core** ([Naming](#naming)).
+Status: approved 2026-10-11, phase 1 in progress. Owner's calls (2026-10-11): fold cli-tasks and
+cli-meetings into cli-messaging and keep modules apart with lint rules, not with packages; cli-core stays a
+separate package; then rename cli-core → **cli-base** and cli-messaging → **cli-core** ([Naming](#naming)).
 
 ## Why
 
@@ -15,7 +15,7 @@ becomes a lint rule.
 
 ## Target layout
 
-```
+```text
 src/tasks/      ← cli-tasks src/ (model, service, store port, testing/)
 src/meetings/   ← cli-meetings src/ (model, vtt, source and store ports, pull, import, cli/, mcp/, testing/)
 ```
@@ -56,10 +56,10 @@ Each phase is one PR in cli-messaging, released before the next starts.
 1. Boundary rule first, proven by the violating import above.
 2. `git subtree add --prefix=src/tasks` from cli-tasks `main`, then move files into place. Subtree keeps
    cli-tasks' 17 commits in `git log` with no extra tool; a plain copy would lose them.
-3. Rewrite the 10 source files and 6 tests that import `@wirecat/cli-tasks`; drop the dependency.
+3. Rewrite the 18 files (counted 2026-10-11) that import `@wirecat/cli-tasks`; drop the dependency.
 4. Add the `./tasks` and `./tasks/testing` exports; tests, `docs:check`, CHANGELOG line under
    "Changed — may break callers" naming the new import paths.
-5. cli-tasks has an open PR (#6); merge or close it before the subtree.
+5. cli-tasks PR #6 had to land before the subtree: merged 2026-10-11.
 
 **Phase 2 — meetings.**
 1. Freeze cli-meetings: no merges after the subtree commit. Announce in [#849](https://github.com/WireCatLabs/cli-messaging/issues/849) (another session works on
