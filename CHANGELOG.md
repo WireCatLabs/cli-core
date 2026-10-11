@@ -4,6 +4,14 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Meeting context records facts with `fact.add`.** The action takes `statement`, `type` (fact,
+  statement, question, decision or promise), `scope`, `evidence` and an optional `subject`, and writes
+  to the facts table. `memory.add` no longer accepts the kind `fact`; send `fact.add` instead.
+
 ## 0.246.0 — 11.10.2026
 
 ### Fixed

@@ -15,6 +15,9 @@ export type MeetingContextServiceStore = Pick<
   "storedAccount" | "meetings" | "notes" | "knowledge" | "memories" | "facts"
 >
 
+const meetingReferences = (values: readonly string[]): string[] =>
+  values.map((value) => formatMeetingReference(parseMeetingReference(value)))
+
 const checkCancelled = (signal?: AbortSignal): void => {
   if (!signal?.aborted) return
   if (signal.reason instanceof CliError) throw signal.reason
@@ -43,18 +46,18 @@ export const createMeetingContextService = async (
   const check = async (meetingId: number, change: Readonly<MeetingContextChange>, signal?: AbortSignal) => {
     checkCancelled(signal)
     await resolveMeetingReference(store.meetings, accountId, root(meetingId), { signal })
-    if (change.action === "memory.add") {
+    if (change.action === "memory.add" || change.action === "fact.add") {
       for (const reference of [...change.evidence, ...(change.subject === undefined ? [] : [change.subject])]) {
         const parsed = parseMeetingReference(reference)
         if (parsed.accountId !== accountId || parsed.meetingId !== meetingId)
-          throw new CliError("not_found", "memory evidence must belong to this meeting and account")
+          throw new CliError("not_found", "evidence must belong to this meeting and account")
         await resolveMeetingReference(store.meetings, accountId, reference, { signal })
       }
     }
     checkCancelled(signal)
   }
   const context = createMeetingContext(scope, accountId, {
-    actions: ["note.add", "tags.add", "tags.remove", "memory.add", "event.link", "person.link"],
+    actions: ["note.add", "tags.add", "tags.remove", "memory.add", "fact.add", "event.link", "person.link"],
     async apply(meetingId, change, operation) {
       await check(meetingId, change, operation.signal)
       const reference = root(meetingId)
@@ -70,30 +73,25 @@ export const createMeetingContextService = async (
           return store.knowledge.addTags(key, target, [...change.tags])
         case "tags.remove":
           return store.knowledge.removeTags(key, target, [...change.tags])
-        case "memory.add": {
-          const evidence = change.evidence.map((value) => formatMeetingReference(parseMeetingReference(value)))
-          const subject =
-            change.subject === undefined ? reference : formatMeetingReference(parseMeetingReference(change.subject))
-          // src/meetings/ still offers `fact` as a memory kind; what happened is a fact now, not a memory.
-          if (change.kind === "fact")
-            return store.facts.add({
-              type: "fact",
-              statement: change.body,
-              scope: change.scope,
-              evidence,
-              subject,
-              by: "owner",
-            })
+        case "memory.add":
           return store.memories.add({
             body: change.body,
             kind: change.kind,
             scope: change.scope,
-            evidence,
-            subject,
+            evidence: meetingReferences(change.evidence),
+            subject: change.subject === undefined ? reference : meetingReferences([change.subject])[0],
             status: "confirmed",
             author: "owner",
           })
-        }
+        case "fact.add":
+          return store.facts.add({
+            type: change.type,
+            statement: change.statement,
+            scope: change.scope,
+            evidence: meetingReferences(change.evidence),
+            subject: change.subject === undefined ? reference : meetingReferences([change.subject])[0],
+            by: "owner",
+          })
         case "event.link":
           return store.meetings.linkMeetingEvent({
             accountId,

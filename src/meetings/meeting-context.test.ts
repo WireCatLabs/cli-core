@@ -67,7 +67,7 @@ describe("meeting context", () => {
   it.each<MeetingContextChange>([
     { action: "note.add", text: "Example" },
     { action: "tags.remove", tags: ["example"] },
-    { action: "memory.add", body: "Example", kind: "fact", scope: "work", evidence: ["meeting:1/2"] },
+    { action: "fact.add", statement: "Example", type: "decision", scope: "work", evidence: ["meeting:1/2"] },
     {
       action: "memory.add",
       body: "Example",
@@ -101,7 +101,10 @@ describe("meeting context", () => {
     { action: "tags.add", tags: "example" },
     { action: "tags.add", tags: Array(101).fill("example") },
     { action: "memory.add", body: "Example", kind: "unknown", scope: "work", evidence: ["meeting:1/2"] },
-    { action: "memory.add", body: "Example", kind: "fact", scope: "unknown", evidence: ["meeting:1/2"] },
+    { action: "memory.add", body: "Example", kind: "fact", scope: "work", evidence: ["meeting:1/2"] },
+    { action: "fact.add", statement: "Example", type: "fact", scope: "unknown", evidence: ["meeting:1/2"] },
+    { action: "fact.add", statement: "Example", type: "summary", scope: "work", evidence: ["meeting:1/2"] },
+    { action: "fact.add", statement: "Example", type: "fact", scope: "work", evidence: [] },
     { action: "event.link", eventId: 0 },
     { action: "event.link", eventId: 1.5 },
     { action: "event.link", eventId: "1" },

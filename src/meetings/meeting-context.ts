@@ -2,13 +2,24 @@ import { CliError } from "@wirecat/cli-core"
 import { dispatchMeetingMutation, type MeetingMutationOptions } from "./meeting-management.js"
 import { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
 
+/** Mirrors the store's fact types; the store checks the type again when it writes. */
+export const MEETING_FACT_TYPES = ["fact", "statement", "question", "decision", "promise"] as const
+
 export type MeetingContextChange =
   | { action: "note.add"; text: string; title?: string }
   | { action: "tags.add" | "tags.remove"; tags: readonly string[] }
   | {
       action: "memory.add"
       body: string
-      kind: "summary" | "digest" | "fact" | "preference"
+      kind: "summary" | "digest" | "preference"
+      scope: "personal" | "work"
+      evidence: readonly string[]
+      subject?: string
+    }
+  | {
+      action: "fact.add"
+      statement: string
+      type: (typeof MEETING_FACT_TYPES)[number]
       scope: "personal" | "work"
       evidence: readonly string[]
       subject?: string
@@ -73,6 +84,7 @@ const fields: Record<MeetingContextAction, readonly string[]> = {
   "tags.add": ["tags"],
   "tags.remove": ["tags"],
   "memory.add": ["body", "kind", "scope", "evidence", "subject"],
+  "fact.add": ["statement", "type", "scope", "evidence", "subject"],
   "event.link": ["eventId", "expectedEventId"],
   "person.link": ["participantId", "personUid", "targetAccountIds", "expectedPersonUid"],
 }
@@ -97,15 +109,27 @@ export const validateMeetingContextChange = (change: MeetingContextChange): Read
     case "tags.remove":
       return Object.freeze({ action: change.action, tags: strings(change.tags, 100, 200) })
     case "memory.add": {
-      if (
-        !["summary", "digest", "fact", "preference"].includes(change.kind) ||
-        !["personal", "work"].includes(change.scope)
-      )
+      if (!["summary", "digest", "preference"].includes(change.kind) || !["personal", "work"].includes(change.scope))
         throw new CliError("validation_error", "memory kind and explicit personal/work scope are required")
       return Object.freeze({
         action: change.action,
         body: text(change.body, 20_000),
         kind: change.kind,
+        scope: change.scope,
+        evidence: strings(change.evidence, 100, 4000),
+        ...(change.subject === undefined ? {} : { subject: text(change.subject, 4000) }),
+      })
+    }
+    case "fact.add": {
+      if (!MEETING_FACT_TYPES.includes(change.type) || !["personal", "work"].includes(change.scope))
+        throw new CliError(
+          "validation_error",
+          `fact type (${MEETING_FACT_TYPES.join(", ")}) and explicit personal/work scope are required`,
+        )
+      return Object.freeze({
+        action: change.action,
+        statement: text(change.statement, 20_000),
+        type: change.type,
         scope: change.scope,
         evidence: strings(change.evidence, 100, 4000),
         ...(change.subject === undefined ? {} : { subject: text(change.subject, 4000) }),

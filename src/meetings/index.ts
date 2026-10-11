@@ -18,6 +18,7 @@ export {
 export { type ImportFile, importFiles } from "./import.js"
 export {
   createMeetingContext,
+  MEETING_FACT_TYPES,
   type MeetingContextAction,
   type MeetingContextChange,
   type MeetingContextOperation,
