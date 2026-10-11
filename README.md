@@ -52,6 +52,24 @@ and 2000 provenance characters per row; deleted/foreign meetings and deleted/acc
 excluded. Title/alias similarity never creates membership. These are shared store APIs; a command
 surface and project-selected transcript retrieval are separate consumer work.
 
+## Project task keys and dependencies
+
+New owner projects receive a 3–4-character uppercase key, or take an explicit key of that shape.
+Existing keys stay stable. Task creation allocates `<project key>-<number>` inside a write transaction;
+a failed creation rolls back the counter. No project or task is renumbered.
+
+`store.tasks.linkTask(from, to, kind, "owner")` and `unlinkTask` manage `blocked-by`, `follow-up-of`
+and `related-to`. `RES-2 blocked-by RES-1` means RES-1 must finish first. Informational follow-up and
+related links do not affect readiness; related pairs are symmetric. Cycles and self-links fail before
+writing, replays return `changed: false`, and actual changes append linked/unlinked task events.
+Agents propose changes for owner review. Targets must be live tasks in owner projects; inbox tasks
+need their separate account-scoped service. Parent hierarchy remains a separate field.
+
+`taskRelations(id)`, `taskReadiness(id)` and `readyTasks(project, { limit? })` read bounded coherent
+snapshots. Only a done blocker is resolved: dismissed/deleted blockers continue to require review.
+Ready reads are discovery, not a work claim or exclusive lock. SQLite write transactions serialize
+counter/dependency mutations; expiring agent leases and command mounting are subsequent work.
+
 ## The rule this package keeps
 
 **Nothing here knows a messenger.** An adapter translates its provider's objects into these types,

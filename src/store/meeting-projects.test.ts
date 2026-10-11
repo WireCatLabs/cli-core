@@ -21,7 +21,7 @@ const fixture = async () => {
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   const saved = await store.meetings.saveMeeting(input)
-  const project = await store.knowledge.addProject({ name: "Harbour Example", key: "HARBOUR" })
+  const project = await store.knowledge.addProject({ name: "Harbour Example", key: "HAR" })
   return { store, path, meeting: String(saved.meeting.id), project: project.id }
 }
 it("keeps agent membership proposed until an owner reviews its fingerprint, and replays without duplicates", async () => {
@@ -85,7 +85,7 @@ it("bounds reads and validates explicit accounts, IDs, cancellation and provenan
     code: "cancelled",
   })
   await store.knowledge.linkMeetingProject(key, meeting, project)
-  const second = await store.knowledge.addProject({ name: "Lighthouse Example", key: "LIGHT" })
+  const second = await store.knowledge.addProject({ name: "Lighthouse Example", key: "LIGH" })
   await store.knowledge.linkMeetingProject(key, meeting, second.id)
   const page = await store.knowledge.meetingProjects(key, { limit: 1 })
   expect(page.items).toHaveLength(1)

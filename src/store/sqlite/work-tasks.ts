@@ -6,13 +6,24 @@ import { atomic } from "./atomic.js"
 import { type Author, authorActor } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
 import { taskIdOf, taskRowOf } from "./things.js"
 
 /** What the store writes itself; the task package finds only `TASK_KINDS`, in messages. */
 export const WORK_TASK_TYPES = ["bug", "feature", "chore"] as const
 export const TASK_TYPES = [...WORK_TASK_TYPES, ...TASK_KINDS] as const
 export const TASK_ROLES = ["assignee", "reviewer", "watcher"] as const
-export const TASK_EVENT_KINDS = ["created", "status", "assigned", "unassigned", "due", "priority", "moved"] as const
+export const TASK_EVENT_KINDS = [
+  "created",
+  "status",
+  "assigned",
+  "unassigned",
+  "due",
+  "priority",
+  "moved",
+  "linked",
+  "unlinked",
+] as const
 
 export type WorkTaskType = (typeof WORK_TASK_TYPES)[number]
 export type TaskType = (typeof TASK_TYPES)[number]
@@ -74,7 +85,7 @@ export interface TaskEvent {
 }
 
 /** Tasks beyond the package's four message kinds, and the fields the package does not know, on any task. */
-export interface WorkTasks {
+export interface WorkTasks extends TaskRelationsStore {
   create(input: NewWorkTask, by: Author): Promise<TaskDetails>
   edit(id: string, fields: TaskFields, by: Author): Promise<TaskDetails>
   assign(id: string, assignment: TaskAssignment, by: Author): Promise<TaskDetails>
@@ -226,6 +237,9 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
   }
 
   return {
+    ...taskRelationsStoreOver(context, (task, actor, kind, changes, at) =>
+      recordTaskEvent(database, task, actor, kind, changes, at),
+    ),
     create: async (input, by) => {
       if (!WORK_TASK_TYPES.includes(input.type))
         throw new CliError("validation_error", `a task made here is one of ${WORK_TASK_TYPES.join(", ")}`)
@@ -239,6 +253,8 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
           )
           .get(at, project) as Row
         const number = Number(counted.tasks_count)
+        if (!Number.isSafeInteger(number) || number < 1)
+          throw new CliError("configuration_error", "the project task counter exceeds the safe numbering range")
         const id = Number(
           database
             .prepare(
