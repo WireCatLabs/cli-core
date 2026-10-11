@@ -406,8 +406,8 @@ bin/release           # from GitHub Actions, once npm trusts .github/workflows/r
 ```
 
 Both refuse a dirty tree, a branch other than `main` and an unpushed `main`. When npm already has the
-version, or a higher one, they commit the next free version to `main` — the next minor for `x.y.0`,
-the next patch otherwise — and publish that. They run every check, and tag `v<version>` once npm
+version, or a higher one, they raise it to the next free version through a pull request — the next
+minor for `x.y.0`, the next patch otherwise — merge it once its checks pass, and publish that. They run every check, and tag `v<version>` once npm
 shows it. The token is never printed and never
 written to a file.
 
