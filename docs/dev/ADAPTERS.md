@@ -7,6 +7,18 @@ the messenger, and a **`Messenger`**, which tells the shared commands about it. 
 The port is [`src/cli/messenger/port.ts`](../../src/cli/messenger/port.ts). Its doc comments are the
 contract. This page is the order to read them in, and the rules that are not in one method.
 
+## Where to import from
+
+| Entry point | What a connector takes from it |
+|---|---|
+| `@wirecat/cli-messaging/cli` | `Messenger`, `MessengerAdapter`, `MessengerCore` and the optional groups |
+| `@wirecat/cli-messaging/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter` |
+| `@wirecat/cli-messaging/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
+| `@wirecat/cli-messaging/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
+| `@wirecat/cli-messaging/tasks` | `TaskStore`, when a host keeps tasks itself |
+
+There is no `/sdk` entry point that gathers these; import each name from its own.
+
 ## What to build first
 
 1. A `Messenger` with the required fields (below), and a `connect` that returns your adapter.

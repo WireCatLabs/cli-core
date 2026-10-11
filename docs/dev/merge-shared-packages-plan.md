@@ -1,8 +1,9 @@
 # Merge cli-tasks and cli-meetings into cli-messaging
 
-Status: approved 2026-10-11, phase 1 in progress. Owner's calls (2026-10-11): fold cli-tasks and
-cli-meetings into cli-messaging and keep modules apart with lint rules, not with packages; cli-core stays a
-separate package; then rename cli-core → **cli-base** and cli-messaging → **cli-core** ([Naming](#naming)).
+Status: approved 2026-10-11. Phase 1 released in 0.239.0, phase 2 in 0.244.0; phase 3 under way.
+Owner's calls (2026-10-11): fold cli-tasks and cli-meetings into cli-messaging and keep modules apart with
+lint rules, not with packages; cli-core stays a separate package; then rename cli-core → **cli-base** and
+cli-messaging → **cli-core** ([Naming](#naming)).
 
 ## Why
 
@@ -74,7 +75,11 @@ Each phase is one PR in cli-messaging, released before the next starts.
 **Phase 3 — shims and retirement (owner).**
 1. Last release of `@wirecat/cli-tasks` and `@wirecat/cli-meetings`: each re-exports from the matching
    cli-messaging subpath, with a README line pointing there. One version, then
-   `npm deprecate` on both names.
+   `npm deprecate` on both names. Prepared as cli-tasks 0.4.0
+   ([cli-tasks#28](https://github.com/WireCatLabs/cli-tasks/pull/28)) and cli-meetings 0.5.0
+   ([cli-meetings#51](https://github.com/WireCatLabs/cli-meetings/pull/51)), with cli-messaging as a peer
+   so an app keeps one copy. zoom-cli 0.7.0 is already on the new paths, so the deprecation warns no `zm`
+   install.
 2. Archive the two GitHub repositories; their local checkouts and worktrees go to CLEANUP.md.
 
 ## Why cli-core stays out
@@ -96,10 +101,10 @@ share. After [Naming](#naming) they are `cli-base` and `cli-core`.
 
 ## Connector authors
 
-No separate SDK package. A connector author runs the real CLI and tests against the real store, so a
-light package saves them nothing. The public surface is a documented subpath instead:
-`@wirecat/cli-messaging/sdk` re-exports the ports (`MessengerAdapter`, `MeetingSource`, `MeetingStore`,
-the task store), the models and the errors. Added in phase 2, when all ports live here.
+No separate SDK package and no `/sdk` subpath (owner, 2026-10-11). A connector author runs the real CLI
+and tests against the real store, so a light package saves them nothing, and a second path to the same
+names would have to be kept in step in every release. The ports, models and contract kits each have one
+entry point; [ADAPTERS.md](ADAPTERS.md#where-to-import-from) lists them.
 
 ## Naming
 
