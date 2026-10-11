@@ -20,6 +20,12 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   answers `not_found` for it.
 - **Assignments have one home, `task_assignments`.** Upgrading copies every confirmed `assigned-to` link from
   a task to a person into `task_assignments` with role `assignee`, once per task and person; the links stay.
+- **Tasks made in the store: bugs, features and chores in a project.** `store.tasks.create({ project, title,
+  type, priority?, parent?, description?, dueAt? }, by)` writes one keyed `<project key>-<n>`; the task package
+  never sees it. `edit`, `assign`/`unassign` (assignee, reviewer, watcher), `details`, `find` and `events` work on
+  any task, a message's included, and read back its verdict. Every change of status, due date, priority or
+  assignee is a `task_events` row, and so is a task's creation through the package. `TASK_TYPES`,
+  `WORK_TASK_TYPES`, `TASK_ROLES` and `TASK_EVENT_KINDS` are exported from `./store`.
 
 ### Changed — may break callers
 
@@ -29,6 +35,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 - **`MEMORY_KINDS` no longer holds `fact`**: `summary`, `digest`, `preference`. A meeting context's
   `memory.add` of kind `fact` (cli-meetings still offers it) records a fact; `MeetingContextServiceStore`
   now picks `facts` too.
+- **`knowledge.relate` no longer takes `assigned-to`, and relations no longer list it.** Who works on a task is
+  `store.tasks.assign`, in `task_assignments`.
 
 ## 0.235.0 — 11.10.2026
 

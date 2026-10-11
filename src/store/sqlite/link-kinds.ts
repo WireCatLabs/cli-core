@@ -18,7 +18,7 @@ export const LINK_KINDS = [
 export type LinkKind = (typeof LINK_KINDS)[number]
 
 /** The kinds `knowledge.relate` makes between people, organizations and projects. */
-export const RELATION_KINDS = ["member-of", "related-to", "assigned-to"] as const satisfies readonly LinkKind[]
+export const RELATION_KINDS = ["member-of", "related-to"] as const satisfies readonly LinkKind[]
 
 /** A kind as an SQL literal, so a kind written into a query is checked against the list. */
 export const linkKind = (kind: LinkKind): string => `'${kind}'`

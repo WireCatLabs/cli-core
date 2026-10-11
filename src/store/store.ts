@@ -1643,7 +1643,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       return involvements
     },
     get tasks() {
-      tasks ??= taskStoreOver(database, context.now)
+      tasks ??= taskStoreOver(context)
       return tasks
     },
     get knowledge() {

@@ -383,6 +383,12 @@ The store implements its `TaskStore` as `store.tasks`, in the `tasks` table (sto
 joins its message in one query. A task holds a locator, never the message text; `kind`, `state` and
 `origin` are checked in code, as `chats.kind` is.
 
+A bug, feature or chore has no message behind it, so it never reaches the package: `store.tasks.create`
+(`src/store/sqlite/work-tasks.ts`) writes it into a project the owner names, keyed `<project key>-<n>`, with no
+package id, and the package's reads skip rows without one. `edit`, `assign`, `details`, `find` and `events` work
+on any task — priority, parent, description, assignees and the verdict the package does not carry — and each
+change of status, due date, priority or assignee is a `task_events` row.
+
 ## The command skeleton
 
 `run()` (`src/cli/program.ts`) never throws; it returns an exit code. It lifts a profile given as
