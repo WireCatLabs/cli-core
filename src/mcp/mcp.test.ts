@@ -823,7 +823,9 @@ describe("the MCP server", () => {
       "chat_store_jobs_list",
       "chat_store_jobs_show",
       "chat_tags_list",
+      "chat_tasks_agenda",
       "chat_tasks_list",
+      "chat_tasks_show",
       "chat_topics_list",
     ])
     expect(tools.every((one) => one.annotations?.readOnlyHint === true)).toBe(true)
@@ -1555,6 +1557,13 @@ describe("the MCP server", () => {
       items: [{ id: added.body.id, message: { text: expect.any(String) } }],
       hasMore: false,
     })
+    const planned = await call("chat_tasks_plan", { task: added.body.id, title: "Send the plan", due: "2h" })
+    expect(planned.body).toMatchObject({ title: "Send the plan", dueAt: expect.any(String), nextCheckAt: null })
+    const linked = await call("chat_tasks_link", { task: added.body.id, targets: ["https://example.com/plan"] })
+    expect(linked.body.links).toMatchObject([{ targetText: "https://example.com/plan", kind: "related-to" }])
+    expect((await call("chat_tasks_agenda", { due: "1d" })).body.tasks).toMatchObject([
+      { id: added.body.id, title: "Send the plan", reasons: ["due"] },
+    ])
     const closed = await call("chat_tasks_close", { task: added.body.id, as: "dismissed", reason: "no-reply-needed" })
     expect(closed.body).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closedBy: "agent" })
     expect((await call("chat_stats_tasks_show")).body).toMatchObject({ items: [{ group: "7", open: 0 }] })

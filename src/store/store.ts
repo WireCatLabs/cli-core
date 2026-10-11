@@ -570,6 +570,8 @@ export interface MessageStore {
   markRange(key: AccountKey, chatId: Id, from: number, to: number): Promise<Range>
   /** Per chat that has messages: how many, the oldest and newest, and when the last one was stored. */
   chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>
+  /** Per chat that spoke since `since` (ms): its newest message and who sent it when stored, never the text. */
+  chatActivity(key: AccountKey, since: number): Promise<{ chats: ChatActivity[]; storedAt: string | null }>
   /** One person's stored messages per chat of this account, newest first. */
   senderStats(key: AccountKey, senderId: Id): Promise<SenderChatStats[]>
   /** Every name and username this account's store recorded for one person, the current ones included. */
@@ -648,6 +650,17 @@ export interface SenderChatStats {
   messages: number
   firstAt: string | null
   lastAt: string | null
+}
+
+export interface ChatActivity {
+  chatId: Id
+  title: string | null
+  kind: ChatKind
+  lastMessageAt: string
+  /** `null` while the newest message is not stored: the chat list says the chat moved, nothing more. */
+  lastMessageId: Id | null
+  /** `null` when the newest message is not stored, or the messenger did not say who sent it. */
+  lastFromOwner: boolean | null
 }
 
 export interface ChatStats {
@@ -1575,6 +1588,11 @@ const storeOver = (context: StoreContext): MessageStore => {
       return accountKey === undefined ? [] : reads.chatStats(context, accountKey, chatId)
     },
 
+    chatActivity: async (key, since) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined ? { chats: [], storedAt: null } : reads.chatActivity(context, accountKey, since)
+    },
+
     ranges: async (key, chatId) => {
       const accountKey = findAccountPk(key)
       const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
@@ -1735,6 +1753,7 @@ export { involvementStoreOver } from "./sqlite/involvements.js"
 export type { MeetingReadCapabilities } from "./sqlite/meeting-reads.js"
 export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
+export type { Link as ThingLink } from "./sqlite/notes.js"
 export type { ProposedAction } from "./sqlite/proposed-actions.js"
 export type { RankedEvidence, RankingEvidenceItem, RankingEvidenceRequest } from "./sqlite/ranking-evidence.js"
 export type { RankedStoreFound, RankedStoreRow, RankingRequest } from "./sqlite/rankings.js"
@@ -1759,4 +1778,6 @@ export {
   stemsState,
 } from "./sqlite/stems.js"
 export type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
+export { inboxKey } from "./sqlite/tasks.js"
 export type { ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"
+export type { TaskDetails } from "./sqlite/work-tasks.js"

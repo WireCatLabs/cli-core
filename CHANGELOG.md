@@ -152,6 +152,19 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **Follow-ups: tasks get a plan, links and a daily agenda** (store version 4 adds `tasks.next_check_at`).
+  `tasks add` takes `--title`, `--description`, `--due` and `--check`; `tasks plan <task>` changes them later,
+  `none` clearing a date. The next check is when an agent should look at the task again, not a reminder: nothing
+  reaches the owner. `tasks link <task> <targets…> [--chat <chat>]` links a task to messages, chats, people,
+  documents or URLs (`--kind related-to|evidence|created-from`); a message the store has not saved yet is kept as
+  written. `tasks show <task>` prints the plan with its links. `tasks agenda` lists, from the local store and
+  without one message's text, the open tasks overdue, due within `--due`, due a check or never planned; the chats
+  where someone else wrote last and the owner has not answered for `--unanswered` (`owed`); and those where the
+  owner wrote last and nobody answered for `--quiet` (`waiting`), within `--within`; a chat the chat list says moved
+  but whose newest message is not stored is listed as `unsynced`, never dropped. A dialog is named after its other
+  side. `stale` says the store saved nothing for a day. MCP: `tasks_plan`, `tasks_link`, `tasks_show`, `tasks_agenda`, and the plan fields on
+  `tasks_add`. `skill show follow-ups` prints the daily routine for an agent, which drafts and never sends.
+  Permissions `tasks.plan` and `tasks.link` guard the new writes.
 - **`--source` takes a list of accounts and groups**: `--source group:work,max:default,tg:mila,email:me@work.example`
   searches exactly those accounts in `search messages`, `search mail` and `search conversations`. An entry is a
   group, `app-or-messenger:account` — the account's id, a profile of any app (`max:default` works from tg), or the

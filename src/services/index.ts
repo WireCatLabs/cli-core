@@ -2,6 +2,7 @@ import { type BotCheckService, botCheckService } from "../botcheck/service.js"
 import { type AccountService, accountService } from "./account.js"
 import { type AdminService, adminService } from "./admin.js"
 import { type AdminStatisticsService, adminStatisticsService } from "./admin-statistics.js"
+import { type AgendaService, agendaService } from "./agenda.js"
 import { type ArchiveService, archiveService } from "./archive.js"
 import { gapsService } from "./archive-gaps.js"
 import { type AttachmentsService, attachmentsService } from "./attachments.js"
@@ -116,6 +117,7 @@ export interface Services {
   tags: TagsService
   searches: SearchesService
   tasks: TasksService
+  agenda: AgendaService
   attachments: AttachmentsService
   botcheck: BotCheckService
 }
@@ -152,6 +154,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
     attachments: attachmentsService(deps),
     searches: searchesService(deps),
     tasks: tasksService(deps),
+    agenda: agendaService(deps),
     botcheck: botCheckService(deps),
   }
   return deps.messenger.services ? { ...base, ...deps.messenger.services(base, deps) } : base

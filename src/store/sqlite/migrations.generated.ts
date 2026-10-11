@@ -332,5 +332,12 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "CREATE UNIQUE INDEX `aliases_by_aliasable_type_aliasable_id_name_folded` ON `aliases` (`aliasable_type`,`aliasable_id`,`name_folded`) WHERE account_id IS NULL AND aliasable_type = 'project' OR account_id IS NULL AND aliasable_type = 'tag';"
     ]
+  },
+  {
+    "name": "20261011172120_version-4-task-next-check",
+    "statements": [
+      "ALTER TABLE `tasks` ADD `next_check_at` integer;",
+      "CREATE INDEX `tasks_by_project_id_status_next_check_at` ON `tasks` (`project_id`,`status`,`next_check_at`);"
+    ]
   }
 ]

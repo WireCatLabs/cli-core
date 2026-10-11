@@ -46,6 +46,15 @@ describe("skill show", () => {
     expect(out).not.toContain("{{command}}")
   })
 
+  it("**prints the shared follow-ups skill**, which only drafts and never sends", async () => {
+    const out = (await show(["skill", "show", "follow-ups"])).stdout.join("\n")
+
+    expect(out).toMatch(/^---\nname: follow-ups\n/)
+    expect(out).toContain("chat tasks agenda --json")
+    expect(out).toContain("You draft; the owner sends.")
+    expect(out).not.toContain("{{command}}")
+  })
+
   it("has the agent send the skill's own version with every answer, so links can be told apart by prompt", async () => {
     const out = (await show(["skill", "show", "link-conversations"])).stdout.join("\n")
 

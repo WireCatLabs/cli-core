@@ -21,6 +21,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261011035353_version-2-facts", version: 2, minCompatible: 1 },
   { name: "20261011035430_version-2-facts-from-memories", version: 2, minCompatible: 1 },
   { name: "20261011115708_version-3-vocabulary", version: 3, minCompatible: 1 },
+  { name: "20261011172120_version-4-task-next-check", version: 4, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

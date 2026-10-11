@@ -1176,10 +1176,12 @@ export const tasks = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    nextCheckAt: integer("next_check_at"),
   },
   (table) => [
     unique().on(table.projectId, table.number),
     index("tasks_by_status").on(table.projectId, table.status, table.dueAt),
+    index("tasks_by_project_id_status_next_check_at").on(table.projectId, table.status, table.nextCheckAt),
     index("tasks_by_project_id_source_locator").on(table.projectId, table.sourceLocator),
     index("tasks_by_source_group").on(table.sourceGroup),
     index("tasks_by_parent_id").on(table.parentId),

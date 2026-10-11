@@ -1029,10 +1029,14 @@ const NEW = {
         meta(),
         ...ts(),
         del(),
+        c("next_check_at", "integer", {
+          note: "when an agent should look at the open task again; the agenda lists it from then. Not a reminder: nothing reaches the owner",
+        }),
       ],
       keys: [
         "UNIQUE (project_id, number)",
         "INDEX (project_id, status, due_at)",
+        "INDEX (project_id, status, next_check_at)",
         "INDEX (project_id, source_locator)",
         "INDEX (source_group)",
       ],

@@ -1230,8 +1230,9 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `next_check_at` | integer |  |  | when an agent should look at the open task again; the agenda lists it from then. Not a reminder: nothing reaches the owner |
 
-*Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`
+*Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`
 
 ### `task_assignments`
 

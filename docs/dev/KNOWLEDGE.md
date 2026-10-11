@@ -58,6 +58,10 @@ receipts. Closing a task cancels pending/leased reminders through a trigger. Sta
 Delivery is a host decision: this store makes no outbound messenger/email call and sets no system timer.
 An import timer does not authorize outbound reminder delivery.
 
+A task's `next_check_at` is not a reminder: it is when an agent should look at the task again, and
+`tasks agenda` lists the task from then. Nothing delivers it and nothing reaches the owner; a reminder
+is for the owner, a next check for the agent.
+
 ## Facts, memories and what agents do
 
 A memory is what was derived; a fact is what happened. `facts` holds a `fact`, `statement`, `question`,
