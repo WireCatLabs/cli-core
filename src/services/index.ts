@@ -57,6 +57,7 @@ export type { FolderEdit, FoldersService } from "./folders.js"
 export { foldersService } from "./folders.js"
 export type { InboxService } from "./inbox.js"
 export { inboxService } from "./inbox.js"
+export { readMail } from "./mail-search.js"
 export type {
   AroundWindow,
   FoundMessage,

@@ -1136,6 +1136,10 @@ describe("the MCP server", () => {
     expect(brief.body.items[0]).not.toHaveProperty("email")
     const full = await call("chat_search_mail", { text: "chapter", account: "bob@example.test", detail: "full" })
     expect(full.body.items[0].text).toBe("Reading group\n\nWhich chapter next?")
+    const opened = await call("chat_messages_context", { chat: one.body.items[0].locator })
+    expect(opened.body.items).toEqual([
+      expect.objectContaining({ id: "<bob@example.test>", anchor: true, text: "Reading group\n\nWhich chapter next?" }),
+    ])
   })
 
   it("search_all takes meetings: the one stored meeting account, or one named; never without asking", async () => {

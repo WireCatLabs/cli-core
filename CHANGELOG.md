@@ -6,6 +6,14 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Added
+
+- **`messages show` and `messages context` open an email by its `msg:email/…` locator**, and so does the
+  `messages_context` tool: the whole email with its people, labels and thread, and with `--before-n`/`--after-n`
+  (`before_n`/`after_n`) the emails of its thread either side, read from the stored mail without connecting. Search
+  answers an excerpt by default; this is the read that excerpt leads to. `MailStore.threadHits` and `readMail`
+  (services) are the store and service halves.
+
 ### Fixed
 
 - Hints that point to importing mail name the account: `memo mail <account> import --since <date>`.

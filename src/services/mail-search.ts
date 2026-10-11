@@ -1,6 +1,7 @@
+import { CliError } from "@wirecat/cli-core"
 import { parseLocator } from "../domain/locator.js"
 import type { Chat, Message, Page } from "../domain/models.js"
-import type { AccountKey, MessageStore, ScoredHit } from "../store/store.js"
+import type { AccountKey, MessageStore, ScoredHit, StoredHit } from "../store/store.js"
 import { messageOfEmail } from "../store/store.js"
 
 const THREADS_PAGE = 500
@@ -91,4 +92,25 @@ export const mailAround = async (
         ? { ...messageOfEmail(email, hit.chatId), anchor: true as const }
         : messageOfEmail(email, hit.chatId),
     )
+}
+
+/**
+ * One email by its `msg:email/…` locator, with up to `before` and `after` emails of its thread either side, each
+ * whole: what an excerpt in a search answer leads to. The asked one is marked `anchor`.
+ */
+export const readMail = async (
+  store: MessageStore,
+  locator: string,
+  { before = 0, after = 0 }: { before?: number; after?: number } = {},
+): Promise<(StoredHit & { anchor?: true })[]> => {
+  const { provider, account, chat, message } = parseLocator(locator)
+  if (provider !== "email") throw new CliError("validation_error", `${locator} is not an email — it names ${provider}`)
+  const stored = await store.storedAccount({ provider, account }).catch(() => undefined)
+  if (!stored) throw new CliError("not_found", `no mail of ${account} is stored`)
+  const thread = await store.mail.threadHits(stored.id, chat)
+  const at = thread.findIndex(({ id }) => id === message)
+  if (at < 0) throw new CliError("not_found", `no stored email ${message} in that thread`)
+  return thread
+    .slice(Math.max(0, at - before), at + after + 1)
+    .map((hit) => (hit.id === message ? { ...hit, anchor: true as const } : hit))
 }

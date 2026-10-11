@@ -4,14 +4,18 @@ import { listStart } from "../../cli/messenger/after.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { capability } from "../../cli/messenger/port.js"
 import { listed } from "../../cli/paging.js"
-import { isLocator } from "../../domain/locator.js"
+import { isLocator, parseLocator } from "../../domain/locator.js"
 import { SAVE_NEXT_STEPS } from "../../meetings/index.js"
-import { readEvidencePacket } from "../../services/index.js"
+import { readEvidencePacket, readMail } from "../../services/index.js"
 import { heard, hearForTool, modelWith } from "../../speech/hearing.js"
 import { searchServices } from "../search-sync.js"
 import { threadArgs, threadInputs } from "../thread-options.js"
 import { type AnyTool, chatOf, limit, message, nameOf, READ, snakeOf, tool } from "../tool.js"
 import { answerMessagesStats, MESSAGES_STATS_DESCRIPTION, messagesStatsInput } from "./search.js"
+
+/** Mail lives in the store's mail tables, whichever messenger serves the tool. */
+const isMail = (chat: string, message: string | undefined) =>
+  message === undefined && isLocator(chat) && parseLocator(chat).provider === "email"
 
 export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
@@ -154,7 +158,8 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
         "carries anchor: true; `before_n` and `after_n` say how many either side. Returns { items, page, limit, hasMore }. " +
         "With thread=true, reads the stored parent chain and replies without connecting: returns locator, mode, items, links with provenance/stale labels, chain, stale, stopped and bounds. " +
         "thread_hops (8), thread_messages (50), thread_bytes (65536) and thread_within (1d) bound it; no graph gives a labelled local time fallback. " +
-        "A msg: locator in chat needs no message argument; it must belong to the active account. offline=true reads ordinary context from this account's local store without connecting.",
+        "A msg: locator in chat needs no message argument; it must belong to the active account. offline=true reads ordinary context from this account's local store without connecting. " +
+        "A msg:email/… locator reads the whole email and its thread from the stored mail, with people, labels and thread references.",
       input: v.object({
         ...threadInputs,
         offline: v.optional(v.boolean()),
@@ -165,12 +170,14 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
       }),
       annotations: READ,
       storedWhen: (args) => {
-        if (args.thread || args.offline) return true
+        if (args.thread || args.offline || isMail(args.chat, args.message)) return true
         if (args.message === undefined && !isLocator(args.chat))
           throw new CliError("validation_error", "give a message id, or a msg: locator")
         return false
       },
       stored: async (store, account, args, defaults) => {
+        if (isMail(args.chat, args.message))
+          return listed(await readMail(store, args.chat, { before: args.before_n ?? 0, after: args.after_n ?? 0 }))
         const services = searchServices(messenger, store, account, defaults)
         if (!args.thread)
           return listed(
