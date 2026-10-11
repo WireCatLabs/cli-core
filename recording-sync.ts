@@ -331,6 +331,7 @@ export async function* syncRecordingArchive(
     const save = async (next: RecordingSyncCheckpoint): Promise<void> => {
       const updated = { ...next, revision: state.revision + 1, updatedAt: clock() }
       if (
+        !integer(updated.revision, 1, Number.MAX_SAFE_INTEGER) ||
         updated.windows.length > 1000 ||
         updated.pendingWindows.length > 1000 ||
         updated.entries.length > maxEntries ||

@@ -620,3 +620,16 @@ for (const contract of recordingSyncCheckpointStoreContract(() => {
   return { store, reopen: async () => store }
 }))
   it(contract.name, contract.run)
+
+it("refuses exhausted revision counters before checkpoint writes", async () => {
+  const seeded = memoryRecordingSyncCheckpointStore()
+  await collect(syncRecordingArchive(source(), options(seeded)))
+  const current = await read(seeded)
+  if (!current) throw new Error("missing synthetic checkpoint")
+  const save = vi.fn(async () => undefined)
+  const store = { ...seeded, read: async () => ({ ...current, revision: Number.MAX_SAFE_INTEGER }), save }
+  await expect(
+    collect(syncRecordingArchive(source(), options(store, { from: "2026-03-01", to: "2026-03-31" }))),
+  ).rejects.toThrow(/metadata limit/)
+  expect(save).not.toHaveBeenCalled()
+})
