@@ -1,3 +1,12 @@
+export type {
+  MeetingContextStore,
+  MeetingEventLinkInput,
+  MeetingEventLinkReceipt,
+  ParticipantPerson,
+  ParticipantPersonInput,
+  ParticipantPersonLinkInput,
+  ParticipantPersonLinkReceipt,
+} from "./context-store.js"
 export { linkEvent } from "./events.js"
 export {
   exportMeeting,
@@ -7,6 +16,15 @@ export {
   serializeVtt,
 } from "./export.js"
 export { type ImportFile, importFiles } from "./import.js"
+export {
+  createMeetingContext,
+  type MeetingContextAction,
+  type MeetingContextChange,
+  type MeetingContextOperation,
+  type MeetingContextPorts,
+  type MeetingContextReceipt,
+  validateMeetingContextChange,
+} from "./meeting-context.js"
 export {
   createMeetingManagement,
   dispatchMeetingMutation,
@@ -87,6 +105,7 @@ export {
   strongRecordingValidator,
   transferRecording,
 } from "./recording-transfer.js"
+export type { MeetingSearchOptions, MeetingSearchPage, MeetingSearchStore } from "./search-store.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,
@@ -104,6 +123,21 @@ export type {
   TranscriptInput,
   TranscriptRowInput,
 } from "./store.js"
-export type { MeetingTranscriptStore, TranscriptAppend, UnlinkedTranscriptInput } from "./transcript-store.js"
+export type {
+  MeetingTranscriptReceiptStore,
+  MeetingTranscriptStore,
+  TranscriptAppend,
+  TranscriptAppendReceipt,
+  UnlinkedTranscriptInput,
+} from "./transcript-store.js"
+export {
+  type MeetingMediaDescriptor,
+  type MeetingRecognitionSegment,
+  type MeetingTranscriptionContext,
+  type MeetingTranscriptionOptions,
+  type MeetingTranscriptionReceipt,
+  type MeetingTranscriptionSource,
+  transcribeMeeting,
+} from "./transcription.js"
 export { parseVtt, VttError } from "./vtt.js"
 export { type WatchOptions, type WatchSleep, watchMeetingIngestion } from "./watch.js"

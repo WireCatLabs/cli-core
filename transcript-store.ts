@@ -22,3 +22,16 @@ export interface MeetingTranscriptStore {
    */
   appendTranscripts(input: TranscriptAppend): Promise<MeetingDetails>
 }
+
+export interface TranscriptAppendReceipt {
+  meeting: MeetingDetails
+  created: boolean
+  insertedTranscripts: number
+  replayedTranscripts: number
+  supersededTranscripts: number
+}
+
+/** Counts and writes share one transaction; preflight reads cannot establish these outcomes. */
+export interface MeetingTranscriptReceiptStore {
+  appendTranscriptsWithReceipt(input: TranscriptAppend): Promise<TranscriptAppendReceipt>
+}
