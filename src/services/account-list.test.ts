@@ -57,6 +57,18 @@ describe("--source as a list of accounts and groups", () => {
     expect(await scope(store, "group:work,telegram:101")).toEqual([tg2, max2, work, tg1])
   })
 
+  it("finds a profile of any app that recorded it, while running as another", async () => {
+    const store = await seeded()
+    await store.saveProfile("tg", "mila", tg2)
+    await store.saveProfile("max", "default", max1)
+    await store.saveProfile("max", "work", max2)
+    expect(await scope(store, "max:default,tg:mila")).toEqual([max1, tg2])
+    expect(await scope(store, "telegram:mila,max:work")).toEqual([tg2, max2])
+    await store.saveAccountGroup("work", ["tg:mila", "max:work"])
+    expect(await scope(store, "group:work")).toEqual([tg2, max2])
+    await expect(scope(store, "max:nobody")).rejects.toThrow(/profiles: default, work/)
+  })
+
   it("takes a list without a group: ids, names and bare messenger words", async () => {
     const store = await seeded()
     expect(await scope(store, "telegram:Bob Sample,max:201")).toEqual([tg2, max1])
@@ -79,7 +91,7 @@ describe("--source as a list of accounts and groups", () => {
     await expect(scope(store, "max:Dave")).rejects.toThrow(/max:201 \(Alice Example\), max:202 \(Carol Sample\)/)
     await expect(scope(store, "viber:1")).rejects.toThrow(/viber is not a messenger in the store/)
     await store.saveAccount({ provider: "max", account: "203" }, { name: "Carol Sample" })
-    await expect(scope(store, "max:carol sample")).rejects.toThrow(/names 2 accounts/)
+    await expect(scope(store, "max:carol sample")).rejects.toThrow(/names more than one account/)
   })
 
   it("keeps a bare word meaning what it did, and refuses in: beside a list", async () => {

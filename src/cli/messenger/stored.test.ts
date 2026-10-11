@@ -48,6 +48,7 @@ const setUp = async () => {
     store: async () => store,
     warn: () => {},
     events: () => {},
+    profile: { app: "chat", name: "work" },
   })
   const found = async (text: string) => (await store.search(text, { limit: 10, account })).items.map((hit) => hit.id)
   return { wrapped, found, store }
@@ -61,6 +62,15 @@ describe("what the writes leave in the store", () => {
 
     expect(await found("tuesday")).toEqual([])
     expect(await found("friday")).toEqual(["1"])
+  })
+
+  it("the first save records which account the profile is, for other apps to name it", async () => {
+    const { wrapped, store } = await setUp()
+    expect(await store.profiles()).toEqual({})
+
+    await wrapped.edit?.("7", "1", "the meeting moved to friday", {})
+
+    expect(await store.profiles()).toEqual({ chat: { work: account } })
   })
 
   it("a deletion leaves nothing for search to find", async () => {

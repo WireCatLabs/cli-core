@@ -50,7 +50,7 @@ const changeGroup = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: st
       result: { store: storePath(env), scope: "store", setting, value: members ?? null },
       note:
         `store-wide — \`--source group:${name}\` searches these accounts from every app; ` +
-        `a profile name resolves only in its own app, the account's id or name in any (\`${app.command} config show\`)`,
+        `a profile is found once its app has saved something (\`${app.command} config show\`)`,
     }
   } finally {
     await store.close()

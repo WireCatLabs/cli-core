@@ -14,6 +14,8 @@ export interface Saving {
   /** Saves still writing, for the closer to wait on: `watch` does not hold the next event for one. */
   pending?: Set<Promise<void>>
   deletedWithoutChat?: DeletionScope
+  /** The app command and profile running, recorded with the first save so another app can name this account. */
+  profile?: { app: string; name: string }
 }
 
 /**
@@ -26,13 +28,21 @@ export interface Saving {
  */
 export const stored = (
   messenger: MessengerAdapter,
-  { account, store, warn, events, pending, deletedWithoutChat }: Saving,
+  { account, store, warn, events, pending, deletedWithoutChat, profile }: Saving,
 ): MessengerAdapter => {
   let warned = false
+  let recorded = profile === undefined
   const attempt = async (operation: string, write: (store: MessageStore) => Promise<unknown>): Promise<void> => {
     try {
       const opened = await store()
       if (opened) await write(opened)
+      // After the write, so saves keep their order; a convenience for naming this account from another app.
+      if (opened && !recorded && profile) {
+        recorded = true
+        await Promise.resolve()
+          .then(() => opened.saveProfile(profile.app, profile.name, account))
+          .catch(() => {})
+      }
     } catch (error) {
       events({ event: "warning", code: "store_not_written", operation })
       if (!warned) warn(`not saved to the local store: ${error instanceof Error ? error.message : String(error)}`)

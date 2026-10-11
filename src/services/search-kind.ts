@@ -1,6 +1,5 @@
 import { CliError } from "@wirecat/cli-core"
 import type { AppIdentity } from "../cli/app.js"
-import { profilesWithAccounts, recalledAccount } from "../cli/messenger/accounts.js"
 import { accountsOfList, isAccountList } from "../search/account-list.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 
@@ -27,13 +26,8 @@ export const listedAccounts = async (
   return accountsOfList(source, {
     held,
     groups: await store.accountGroups(),
+    profiles: await store.profiles(),
     running: { provider: account.provider, ...(app ? { command: app.command } : {}) },
-    ...(app
-      ? {
-          profile: (name: string) => recalledAccount(app, account.provider, name, process.env)?.account,
-          profiles: () => profilesWithAccounts(app, process.env),
-        }
-      : {}),
   })
 }
 
