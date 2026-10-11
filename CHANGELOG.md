@@ -8,6 +8,34 @@ Versions before 0.8.0 are in the [git tags](https://github.com/WireCatLabs/cli-c
 Every entry says what changed as a caller sees it, why, and what to watch for — the rules are
 [`docs/dev/CONVENTIONS.md`](docs/dev/CONVENTIONS.md#the-changelog).
 
+## Unreleased
+
+### Changed — may break callers
+
+- **`resolvePaths` gives the XDG layout on macOS too** — `~/.config/<app>`, `~/.local/share/<app>` and
+  `~/.cache/<app>`, or the `XDG_*` variables when set — instead of `~/Library/Preferences`,
+  `~/Library/Application Support` and `~/Library/Caches`. One layout on every Unix is one set of
+  documentation and one place to look. Linux and Windows paths do not change, and the `*_DIR` overrides
+  still win. It now reads `HOME`, the `XDG_*` variables, `USERPROFILE`, `APPDATA` and `LOCALAPPDATA`
+  from the `env` it is given, not from the global `process.env`, and takes an optional `platform`.
+  **On macOS, a CLI that adopts this release finds none of its existing files** until it calls
+  `migrateLegacyMacPaths` at start. A keyring service name built from the config path changes with it.
+
+### Added
+
+- **`migrateLegacyMacPaths` moves an older release's `~/Library` folders to the new ones**, once.
+  On macOS, with no `*_DIR` override set, it moves each old folder whose new one is missing or empty,
+  all of them or none, and returns what moved. It never merges into a folder that has files, and
+  across file systems it copies, checks the copy and keeps the old folder. It throws a
+  `configuration_error` naming the processes when lsof shows a file open in a pending folder — stop a
+  running `serve` or MCP server and run again. lsof sees only files open at that moment, so a caller
+  that knows its own lock files should report their holders through `holders`. Call it at program start, before anything resolves a
+  path; with nothing to move it costs one `lstat` per folder. `legacyMacPaths` gives the old folders.
+
+### Removed
+
+- **The `env-paths` dependency.** The paths it gave on Windows are kept as they were.
+
 ## 0.19.4 — 11.10.2026
 
 ### Fixed

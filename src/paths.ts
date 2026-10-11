@@ -1,5 +1,5 @@
-import { join } from "node:path"
-import envPaths from "env-paths"
+import { homedir } from "node:os"
+import { join, posix, win32 } from "node:path"
 
 export interface Paths {
   /** `config.json`, and the credential file when the keyring is unavailable. */
@@ -19,28 +19,55 @@ export interface PathsOptions {
    */
   prefix?: string
   env?: NodeJS.ProcessEnv
+  platform?: NodeJS.Platform
+}
+
+export const PATH_KINDS = ["config", "state", "cache"] as const
+const OVERRIDES = { config: "CONFIG_DIR", state: "STATE_DIR", cache: "CACHE_DIR" } as const
+
+const overrideName = (appName: string, prefix: string | undefined, kind: keyof Paths) =>
+  `${prefix ?? appName.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_${OVERRIDES[kind]}`
+
+/**
+ * The XDG layout on macOS too: a CLI user expects `~/.config`, and one layout is one set of docs.
+ * Windows keeps the layout `env-paths` gave it, so nothing there moves. Everything is read from
+ * `env`, never the global one, so a test can point every directory at a temp folder.
+ */
+export const defaultPaths = ({ appName, env = process.env, platform = process.platform }: PathsOptions): Paths => {
+  if (platform === "win32") {
+    const home = env.USERPROFILE || homedir()
+    const roaming = env.APPDATA || win32.join(home, "AppData", "Roaming")
+    const local = env.LOCALAPPDATA || win32.join(home, "AppData", "Local")
+    return {
+      config: win32.join(roaming, appName, "Config"),
+      state: win32.join(local, appName, "Data"),
+      cache: win32.join(local, appName, "Cache"),
+    }
+  }
+  const home = env.HOME || homedir()
+  return {
+    config: posix.join(env.XDG_CONFIG_HOME || posix.join(home, ".config"), appName),
+    state: posix.join(env.XDG_DATA_HOME || posix.join(home, ".local", "share"), appName),
+    cache: posix.join(env.XDG_CACHE_HOME || posix.join(home, ".cache"), appName),
+  }
 }
 
 /**
- * `env-paths` rather than a hand-rolled `~/.config`, so macOS and Windows land where those systems
- * expect. Each directory is overridable by environment variable, which is what makes a test —
- * and a throwaway profile — possible without touching the real ones.
+ * Each directory is overridable by environment variable, which is what makes a test — and a
+ * throwaway profile — possible without touching the real ones.
  */
-export const resolvePaths = ({ appName, prefix, env = process.env }: PathsOptions): Paths => {
-  const base = envPaths(appName, { suffix: "" })
-  const key = (name: string) => `${prefix ?? appName.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_${name}`
-
+export const resolvePaths = (options: PathsOptions): Paths => {
+  const { appName, prefix, env = process.env } = options
+  const base = defaultPaths(options)
   return {
-    config: env[key("CONFIG_DIR")] ?? base.config,
-    state: env[key("STATE_DIR")] ?? base.data,
-    cache: env[key("CACHE_DIR")] ?? base.cache,
+    config: env[overrideName(appName, prefix, "config")] ?? base.config,
+    state: env[overrideName(appName, prefix, "state")] ?? base.state,
+    cache: env[overrideName(appName, prefix, "cache")] ?? base.cache,
   }
 }
 
 /** Whether any of the three directories came from the environment rather than the OS convention. */
-export const pathsAreOverridden = ({ appName, prefix, env = process.env }: PathsOptions): boolean => {
-  const stem = prefix ?? appName.toUpperCase().replace(/[^A-Z0-9]/g, "_")
-  return ["CONFIG_DIR", "STATE_DIR", "CACHE_DIR"].some((name) => env[`${stem}_${name}`] !== undefined)
-}
+export const pathsAreOverridden = ({ appName, prefix, env = process.env }: PathsOptions): boolean =>
+  PATH_KINDS.some((kind) => env[overrideName(appName, prefix, kind)] !== undefined)
 
 export const configFilePath = (configDir: string, fileName = "config.json"): string => join(configDir, fileName)

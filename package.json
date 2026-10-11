@@ -96,7 +96,6 @@
   "dependencies": {
     "cli-table3": "^0.6.5",
     "cross-spawn": "7.0.6",
-    "env-paths": "^4.0.0",
     "picocolors": "^1.1.1",
     "pino": "^10.3.1",
     "valibot": "^1.5.0"
@@ -106,18 +105,18 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
+    "@cspell/dict-en-gb": "5.0.34",
+    "@cspell/dict-es-es": "3.0.9",
+    "@cspell/dict-ru_ru": "2.3.3",
     "@types/cross-spawn": "6.0.6",
     "@types/node": "^22.20.4",
     "@vitest/coverage-v8": "^5.0.2",
     "commander": "^15.0.0",
-    "lefthook": "2.1.16",
-    "typescript": "^7.0.2",
-    "vitest": "^5.0.2",
-    "@cspell/dict-en-gb": "5.0.34",
-    "@cspell/dict-es-es": "3.0.9",
-    "@cspell/dict-ru_ru": "2.3.3",
     "cspell": "10.3.6",
-    "markdownlint-cli2": "0.23.3"
+    "lefthook": "2.1.16",
+    "markdownlint-cli2": "0.23.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
   },
   "publishConfig": {
     "access": "public"
