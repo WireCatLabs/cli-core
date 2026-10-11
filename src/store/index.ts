@@ -16,6 +16,7 @@ export type {
   EmailAttachment,
   EmailFilter,
   EmailInput,
+  EmailInThread,
   EmailRecipient,
   EmailThread,
   EmailVectorHit,

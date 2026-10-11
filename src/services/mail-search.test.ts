@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest"
 import { formatLocator } from "../domain/locator.js"
 import type { AttachmentInput, EmailInput } from "../store/index.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
+import { storeOnlyDeps } from "./deps.js"
+import { embeddingsService } from "./embeddings.js"
 import { searchStore } from "./messages.js"
 import { personContext } from "./person-context.js"
 
@@ -215,6 +217,17 @@ describe("search mail over the mail tables", () => {
     expect(hits[1]?.chatTitle).toBe("Old notes")
   })
 
+  it("purges a mail account with its mail, attachments, pieces and thread tags", async () => {
+    const { store } = await seeded()
+    await store.addTags(MAIL, { type: "chat", chatId: "thread-2" }, ["food"])
+    await store.mail.chunksToEmbed("test:model:2", { limit: 10 })
+    await store.purge(MAIL)
+    expect(await store.mail.threads({ includeDeleted: true })).toEqual([])
+    expect(await store.mail.emails({ includeDeleted: true })).toEqual([])
+    expect(await store.mail.chunksToEmbed("test:model:2", { limit: 10 })).toEqual([])
+    expect(await store.accounts()).not.toContainEqual(MAIL)
+  })
+
   it("leaves a deleted email out", async () => {
     const { store, accountId } = await seeded()
     await store.mail.markDeleted(accountId, ["<three@example.com>"], at(30))
@@ -312,5 +325,17 @@ describe("mail by meaning", () => {
     await store.mail.markDeleted(accountId, ["<three@example.com>"], at(30))
     const after = await store.nearestConversations(MAIL, { model: MODEL, query: unit(0, 1), limit: 5 })
     expect(after.map(({ chunk }) => chunk.firstMessageId)).not.toContain("<three@example.com>")
+  })
+
+  it("finds an email by words in search conversations, as its thread", async () => {
+    const { store } = await seeded()
+    const cache = mkdtempSync(join(tmpdir(), "no-models-"))
+    const env = { CLI_COMMON_CACHE_DIR: cache, XDG_CACHE_HOME: cache }
+    const embeddings = embeddingsService(storeOnlyDeps(store, MAIL, { app: { command: "memo" } as never, env }))
+    const { hits, meaning } = await embeddings.search("kitchen", { limit: 5 })
+    expect(meaning).toBe("unavailable")
+    expect(hits.map(({ summary, chunk, locator }) => [summary.chatId, chunk.firstMessageId, locator])).toEqual([
+      ["thread-2", "<three@example.com>", formatLocator({ ...MAIL, chat: "thread-2", message: "<three@example.com>" })],
+    ])
   })
 })

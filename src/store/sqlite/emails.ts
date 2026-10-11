@@ -5,7 +5,7 @@ import type { Message } from "../../domain/models.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
-import type { StoredHit } from "../store.js"
+import type { ConversationSummary, StoredHit } from "../store.js"
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { ensurePerson } from "./identities.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
@@ -136,7 +136,8 @@ export interface ThreadDetails {
   emails: Email[]
 }
 
-export interface EmailVectorHit {
+/** An email and the thread it is in, as a conversation hit shows them. */
+export interface EmailInThread {
   emailId: number
   externalId: string
   threadExternalId: string
@@ -146,7 +147,48 @@ export interface EmailVectorHit {
   threadLastAt: number | null
   threadEmails: number
   threadSenders: number
+}
+
+export interface EmailVectorHit extends EmailInThread {
   score: number
+}
+
+/** A thread as a conversation: the summary `search conversations` and `related` answer for an email. */
+export const threadConversation = (place: EmailInThread, builtAt: number): ConversationSummary => ({
+  id: `email:${place.emailId}`,
+  chatId: place.threadExternalId,
+  firstMessageId: place.threadFirstExternalId,
+  firstAt: new Date(place.threadFirstAt ?? 0).toISOString(),
+  lastAt: new Date(place.threadLastAt ?? place.threadFirstAt ?? 0).toISOString(),
+  messageCount: place.threadEmails,
+  senders: place.threadSenders,
+  builtAt: new Date(builtAt).toISOString(),
+  algorithmVersion: 0,
+})
+
+const inThread = (database: CacheDatabase, emailId: number): EmailInThread | undefined => {
+  const row = database
+    .prepare(
+      `SELECT e.external_id, t.external_id AS thread, t.last_email_at, t.emails_count,
+         (SELECT f.external_id FROM emails f WHERE f.email_thread_id = t.id AND f.deleted_at IS NULL
+           ORDER BY coalesce(f.sent_at, f.received_at), f.id LIMIT 1) AS first_email,
+         (SELECT min(coalesce(f.sent_at, f.received_at)) FROM emails f WHERE f.email_thread_id = t.id AND f.deleted_at IS NULL) AS first_at,
+         (SELECT count(DISTINCT f.from_address) FROM emails f WHERE f.email_thread_id = t.id AND f.deleted_at IS NULL) AS senders
+         FROM emails e JOIN email_threads t ON t.id = e.email_thread_id WHERE e.id = ?`,
+    )
+    .get(emailId)
+  return row
+    ? {
+        emailId,
+        externalId: String(row.external_id),
+        threadExternalId: String(row.thread),
+        threadFirstExternalId: String(row.first_email ?? row.external_id),
+        threadFirstAt: int(row.first_at),
+        threadLastAt: int(row.last_email_at),
+        threadEmails: Number(row.emails_count),
+        threadSenders: Number(row.senders),
+      }
+    : undefined
 }
 
 export interface MailFilter {
@@ -188,12 +230,23 @@ export interface MailStore {
     found: ReadonlyMap<string, string[]>,
     now: number,
   ): Promise<number>
+  /**
+   * Read and flagged as the source shows them now, for emails already stored; a flag left out stays. Answers how
+   * many emails changed.
+   */
+  setFlags(
+    accountId: number,
+    flags: ReadonlyMap<string, { read?: boolean; flagged?: boolean }>,
+    now: number,
+  ): Promise<number>
   /** Marks emails gone at the source and drops their text; saving one again brings it back. Answers how many changed. */
   markDeleted(accountId: number, externalIds: string[], now: number): Promise<number>
   /** Every word of the query, as a prefix, in the subject or body; newest first. */
   search(query: string, filter?: Omit<EmailFilter, "includeDeleted">): Promise<Email[]>
   /** Text pieces of live emails with no vector of `model`, by content hash, for an embedder to fill. */
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<{ hash: string; text: string }[]>
+  /** Live emails of one account by Message-ID, each placed in its thread; an unknown one is left out. */
+  inThreads(accountId: number, externalIds: string[]): Promise<EmailInThread[]>
   /** The emails of one account nearest in meaning to `query`, each by its best chunk, best first. */
   nearest(
     model: string,
@@ -722,6 +775,20 @@ export const mailStoreOver = (
       return count
     })
   },
+  async setFlags(accountId, flags, now) {
+    return inBatch(database, () => {
+      const update = database.prepare(
+        `UPDATE emails SET read = CASE WHEN ?1 IS NULL THEN read ELSE ?1 END,
+           flagged = CASE WHEN ?2 IS NULL THEN flagged ELSE ?2 END, updated_at = ?3
+         WHERE account_id = ?4 AND external_id = ?5
+           AND ((?1 IS NOT NULL AND read IS NOT ?1) OR (?2 IS NOT NULL AND flagged IS NOT ?2))`,
+      )
+      let changed = 0
+      for (const [externalId, { read, flagged }] of flags)
+        changed += update.run(flag(read), flag(flagged), now, accountId, externalId).changes
+      return changed
+    })
+  },
   async markDeleted(accountId, externalIds, now) {
     return inBatch(database, () => {
       const mark = database.prepare(
@@ -798,35 +865,21 @@ export const mailStoreOver = (
       if (rows.length < 500) break
       after = Number(rows.at(-1)?.id)
     }
-    const describe = database.prepare(
-      `SELECT e.external_id, t.external_id AS thread, t.last_email_at, t.emails_count,
-         (SELECT f.external_id FROM emails f WHERE f.email_thread_id = t.id AND f.deleted_at IS NULL
-           ORDER BY coalesce(f.sent_at, f.received_at), f.id LIMIT 1) AS first_email,
-         (SELECT min(coalesce(f.sent_at, f.received_at)) FROM emails f WHERE f.email_thread_id = t.id AND f.deleted_at IS NULL) AS first_at,
-         (SELECT count(DISTINCT f.from_address) FROM emails f WHERE f.email_thread_id = t.id AND f.deleted_at IS NULL) AS senders
-         FROM emails e JOIN email_threads t ON t.id = e.email_thread_id WHERE e.id = ?`,
-    )
     return [...best.entries()]
       .sort(([, a], [, b]) => b - a)
       .slice(0, limit)
       .flatMap(([emailId, score]) => {
-        const row = describe.get(emailId)
-        return row
-          ? [
-              {
-                emailId,
-                externalId: String(row.external_id),
-                threadExternalId: String(row.thread),
-                threadFirstExternalId: String(row.first_email ?? row.external_id),
-                threadFirstAt: int(row.first_at),
-                threadLastAt: int(row.last_email_at),
-                threadEmails: Number(row.emails_count),
-                threadSenders: Number(row.senders),
-                score,
-              },
-            ]
-          : []
+        const place = inThread(database, emailId)
+        return place ? [{ ...place, score }] : []
       })
+  },
+  async inThreads(accountId, externalIds) {
+    const id = database.prepare("SELECT id FROM emails WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL")
+    return externalIds.flatMap((externalId) => {
+      const row = id.get(accountId, externalId)
+      const place = row ? inThread(database, Number(row.id)) : undefined
+      return place ? [place] : []
+    })
   },
   async search(query, filter = {}) {
     const match = wordsQuery(query)

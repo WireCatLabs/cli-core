@@ -119,6 +119,13 @@ export const purgeAccount = ({ orm }: StoreContext, accountKey: number): void =>
   orm.delete(messages).where(eq(messages.accountId, accountKey)).run()
   orm.delete(chats).where(eq(chats.accountId, accountKey)).run()
   orm.delete(syncCursors).where(eq(syncCursors.accountId, accountKey)).run()
+  // Deleting an email clears its recipients, mailboxes, words, attachments and tags (trigger email_bd).
+  orm.run(sql`DELETE FROM emails WHERE account_id = ${accountKey}`)
+  orm.run(
+    sql`DELETE FROM taggings WHERE taggable_type = 'email_thread' AND taggable_id IN (SELECT id FROM email_threads WHERE account_id = ${accountKey})`,
+  )
+  orm.run(sql`DELETE FROM email_threads WHERE account_id = ${accountKey}`)
+  orm.run(sql`DELETE FROM mailboxes WHERE account_id = ${accountKey}`)
   orm.delete(accountIdentities).where(eq(accountIdentities.accountId, accountKey)).run()
   // The inbox project and its tasks are the owner's; only the tie to the account goes.
   orm.update(projects).set({ accountId: null }).where(eq(projects.accountId, accountKey)).run()
