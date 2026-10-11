@@ -3,6 +3,7 @@ import { parseLocator } from "../../domain/locator.js"
 import { formatMeetingReference } from "../../domain/meeting-reference.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
+import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import type { AccountKey } from "../store.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
@@ -12,6 +13,7 @@ import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import {
   addTags as addThingTags,
+  canonicalTagNamed,
   createTag,
   type Label,
   labelsOf,
@@ -23,6 +25,7 @@ import {
 } from "./tags.js"
 import { inboxKey, taskAccountOf, taskIdOf, taskRowOf } from "./tasks.js"
 import { referenceOfThing, stateOfThing, storedThing, type Thing, type ThingState, thingOf } from "./things.js"
+import { type VocabularyStore, vocabularyStoreOver } from "./vocabulary.js"
 
 export type { Label } from "./tags.js"
 
@@ -107,7 +110,7 @@ export interface Reminder {
 
 export type LabelledType = "note" | "document" | "person" | "organization" | "project" | "task" | "meeting" | "folder"
 
-export interface KnowledgeStore {
+export interface KnowledgeStore extends VocabularyStore {
   taskIds(
     key: AccountKey,
     options?: { state?: "open" | "done" | "dismissed"; limit?: number; offset?: number; sources?: string[] },
@@ -423,9 +426,11 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     if (!open) throw new CliError("validation_error", "a reminder requires an open task in this account")
     return row as number
   }
-  const tagsOf = (list: string[]) => [...new Set(list.map(normalizeTag))]
+  const canonicalTagName = (name: string) => canonicalTagNamed(database, name)?.name ?? normalizeTag(name)
+  const tagsOf = (list: string[]) => [...new Set(list.map(canonicalTagName))]
 
   return {
+    ...vocabularyStoreOver(context),
     taskIds: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       if (options.state !== undefined && !["open", "done", "dismissed"].includes(options.state))
@@ -552,15 +557,15 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       )
     },
     createTag: async (name, { kind = "tag", by = "owner" } = {}) =>
-      atomic(database, () => createTag(context, normalizeTag(name), kind, by)),
+      atomic(database, () => createTag(context, canonicalTagName(name), kind, by)),
     setMainTopic: async (key, target, topic) => {
       const thing = available(key, target)
-      atomic(database, () => setMainTopic(context, thing, topic === null ? null : normalizeTag(topic)))
+      atomic(database, () => setMainTopic(context, thing, topic === null ? null : canonicalTagName(topic)))
     },
     labelled: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       checked(key)
-      const tag = options.tag === undefined ? null : normalizeTag(options.tag)
+      const tag = options.tag === undefined ? null : canonicalTagName(options.tag)
       const types = Object.entries(LABELLED)
         .filter(([, type]) => options.type === undefined || type === options.type)
         .map(([table]) => table)
@@ -627,6 +632,25 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         const wanted = key === undefined ? projectKey(title) : key.trim().toUpperCase()
         if (!/^[A-Z][A-Z0-9]{0,9}$/.test(wanted))
           throw new CliError("validation_error", "a project key is 1–10 letters and digits, starting with a letter")
+        const aliasName = (() => {
+          try {
+            return normalizeVocabularyName(title)
+          } catch {
+            return null
+          }
+        })()
+        const alias = database
+          .prepare(
+            "SELECT DISTINCT p.id,p.name FROM aliases a JOIN projects p ON p.id=a.aliasable_id " +
+              "WHERE a.aliasable_type='project' AND a.account_id IS NULL AND p.account_id IS NULL AND p.deleted_at IS NULL " +
+              "AND a.name_folded IN (?,?) LIMIT 2",
+          )
+          .all(aliasName, normalizeVocabularyName(wanted))
+        if (alias.length)
+          throw new CliError("configuration_error", "the project name or key already aliases an existing project", {
+            reason: "vocabulary_alias_conflict",
+            candidates: alias.map((row) => ({ kind: "project", id: String(row.id), name: String(row.name) })),
+          })
         let chosen = wanted
         for (let n = 2; database.prepare("SELECT 1 FROM projects WHERE key = ?").get(chosen); n++) {
           if (key !== undefined) throw new CliError("validation_error", `the project key ${wanted} is taken`)

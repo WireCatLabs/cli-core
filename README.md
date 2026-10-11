@@ -19,6 +19,25 @@ These references stay within one store and retain the exact revision after a cor
 They use a dedicated parser; the general `parseReference` and existing knowledge targets do not
 accept them yet. A reader must verify the caller's authorized account before returning content.
 
+## Canonical project and label vocabulary
+
+`store.knowledge.vocabulary({ kind?, scope?, maxEntries?, maxReadBytes?, signal? })` lists live owner
+projects and tags/topics with stable IDs, aliases, usage counts and a preview fingerprint.
+`resolveVocabulary(name, options)` matches only explicit aliases, canonical names or project keys;
+several matches remain ambiguous. Unicode normalization preserves accents and distinct letters.
+Person/contact aliases are independent and retain their existing behavior.
+
+`addVocabularyAlias({ kind, id }, name, { expectedFingerprint?, by?, signal? })` and
+`removeVocabularyAlias(target, aliasId, options)` are owner writes with transactional collision and
+stale-preview checks. Creating a project cannot shadow an existing project alias. Knowledge labels,
+main-topic selection and label filters resolve an exact tag/topic alias to its canonical name.
+
+`tagPreflight(name, { kind?, maxEntries?, maxReadBytes?, signal? })` returns `reuse`, `create` or
+`review`, with lexical candidates and a fingerprint. Similarity suggests review; it never selects a
+synonym, changes a tag or loads a model. This API supplies a creation preflight; existing callers
+must invoke it to review likely synonyms. Native automatic tag creation still creates unknown
+labels, so universal duplicate protection and reviewed merges require a further rollout.
+
 ## The rule this package keeps
 
 **Nothing here knows a messenger.** An adapter translates its provider's objects into these types,

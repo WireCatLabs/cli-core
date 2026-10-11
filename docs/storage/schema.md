@@ -221,13 +221,13 @@ Other names for anything: a person's nickname, a contact's name in one messenger
 | `aliasable_id` | integer | not null |  | the row in the `aliasable_type` table |
 | `account_id` | integer |  | → `accounts.id` | set when the alias holds only as seen from one account, as a contact name in one messenger does; null when it holds everywhere |
 | `name` | text | not null |  | the alias as written: a nickname, a short name, a former name |
-| `name_folded` | text | not null |  | `name` folded for matching: lower case, accents removed |
+| `name_folded` | text | not null |  | normalized for matching; person/contact aliases use accent-insensitive search folding, canonical project/tag aliases retain accents |
 | `display` | integer | not null |  | 1 for the alias to show instead of the real name; at most one per thing and account |
 | `source` | text | not null |  | owner, agent, an import |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 
-*Keys and indexes:* `UNIQUE (aliasable_type, aliasable_id, ifnull(account_id, 0)) WHERE display = 1`, `INDEX (aliasable_type, aliasable_id)`, `INDEX (account_id)`
+*Keys and indexes:* `UNIQUE (aliasable_type, aliasable_id, ifnull(account_id, 0)) WHERE display = 1`, `UNIQUE (aliasable_type, aliasable_id, name_folded) WHERE account_id IS NULL AND aliasable_type = 'project' OR account_id IS NULL AND aliasable_type = 'tag'`, `INDEX (aliasable_type, aliasable_id)`, `INDEX (account_id)`
 
 ### `identities_fts`
 

@@ -245,6 +245,9 @@ export const aliases = sqliteTable(
     uniqueIndex("aliases_displayed")
       .on(table.aliasableType, table.aliasableId, sql`ifnull(${table.accountId}, 0)`)
       .where(sql`display = 1`),
+    uniqueIndex("aliases_by_aliasable_type_aliasable_id_name_folded")
+      .on(table.aliasableType, table.aliasableId, table.nameFolded)
+      .where(sql`account_id IS NULL AND aliasable_type = 'project' OR account_id IS NULL AND aliasable_type = 'tag'`),
     index("aliases_by_aliasable_type_aliasable_id").on(table.aliasableType, table.aliasableId),
     index("aliases_by_account_id").on(table.accountId),
   ],
