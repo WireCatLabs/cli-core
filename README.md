@@ -6,7 +6,7 @@
 
 The messenger-neutral half of a messaging command line tool, shared by
 [`tg-cli`](https://github.com/WireCatLabs/tg-cli) and [`max-cli`](https://github.com/WireCatLabs/max-cli).
-Built on [`@wirecat/cli-core`](https://github.com/WireCatLabs/cli-core), a peer dependency: the CLI installs
+Built on [`@wirecat/cli-core`](https://github.com/WireCatLabs/cli-base), a peer dependency: the CLI installs
 it itself, so the install holds one copy.
 
 **Status: on npm** — what each version changed is in [CHANGELOG.md](CHANGELOG.md). The domain model, message locators, message rendering, name
