@@ -25,7 +25,7 @@ const threadOf = new Map(corpus.threads.flatMap((t) => t.emails.map((e) => [e.id
 for (const query of corpus.queries)
   for (const id of query.relevant) assert.ok(threadOf.has(id), `${query.id} labels unknown email ${id}`)
 
-const PRODUCTION: Variant = { unit: "thread", size: 1_200, overlap: 150, cleaning: "rules" }
+const PRODUCTION: Variant = { unit: "email", size: 1_200, overlap: 150, cleaning: "rules" }
 const variants: Variant[] = (["thread", "email"] as const).flatMap((unit) =>
   [600, 1_200, 2_000].flatMap((size) =>
     [0, 150, 300].flatMap((overlap) => (["rules", "off"] as const).map((cleaning) => ({ unit, size, overlap, cleaning }))),
@@ -36,8 +36,8 @@ const titleOf = (subject: string): string | null =>
   subject.replace(/^\s*((re|fwd?|aw|wg)\s*:\s*)+/i, "").trim() || null
 
 /**
- * Mirrors `threadText` in src/store/sqlite/emails.ts; the store check below fails if the two drift apart.
- * Cut per email, every email carries the subject, since it is read alone.
+ * Per email, mirrors `threadText` in src/store/sqlite/emails.ts; the store check below fails if the two drift
+ * apart. Per thread, as the store cut mail before: the subject only where it changes.
  */
 const linesOf = (thread: Thread, { unit, cleaning }: Variant): ChunkLine[] => {
   const earlier: string[] = []
