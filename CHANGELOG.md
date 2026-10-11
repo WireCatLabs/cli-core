@@ -5,6 +5,15 @@ version, newest first. Versions follow [semver](https://semver.org/); before `1.
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
 
+## Unreleased
+
+### Fixed
+
+- **`messages list --limit` returns as many messages as it was asked for.** A messenger hands out its history a
+  page at a time (Telegram at most 100), and `--limit 500` used to stop after one page with `hasMore: true`. It now
+  reads on from the page's edge until the limit or the start of the chat: back, from `--before-time`, or forward
+  with `--after-id` or `--after-time`. Messengers that page by send time (MAX) still return one page.
+
 ## 0.234.0 — 11.10.2026
 
 ### Added
@@ -67,6 +76,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 - **`store.find` refuses a `chatId` without its `account`.** A chat id is one account's; without the account it
   matched that id's chat in every account of the store. It is now a `validation_error`; no caller here or in
   tg, max, memo or zoom passes one.
+||||||| parent of 218ca10a (fix(messages): list reads past the messenger's page cap up to --limit)
 
 ## 0.232.0 — 11.10.2026
 

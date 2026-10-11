@@ -76,6 +76,47 @@ describe("the messages service", () => {
     expect(asked).toEqual([{ reference: "Book", window: { limit: 2, before: "3" } }])
   })
 
+  it("reads on past a messenger's page cap until the limit: back, from a moment, or forward", async () => {
+    const history = ["1", "2", "3", "4", "5"].map((id) => ({ ...(thread[0] as Message), id }))
+    const windows: unknown[] = []
+    const capped = {
+      self: () => "500",
+      history: async (_: string, window: { limit: number; before?: string }) => {
+        windows.push(window)
+        const end = window.before === undefined ? history.length : history.findIndex((one) => one.id === window.before)
+        const start = Math.max(0, end - Math.min(2, window.limit))
+        return { items: history.slice(start, end), hasMore: start > 0 }
+      },
+      historyBefore: async (_: string, window: { limit: number; time: number }) => {
+        windows.push(window)
+        return { items: history.slice(3, 5), hasMore: true }
+      },
+      historyAfter: async (_: string, window: { limit: number; after: { id: string } }) => {
+        windows.push(window)
+        const start = history.findIndex((one) => one.id === window.after.id) + 1
+        const end = Math.min(history.length, start + Math.min(2, window.limit))
+        return { items: history.slice(start, end), hasMore: end < history.length }
+      },
+    } as unknown as MessengerAdapter
+    const service = messagesService(onlineDeps(messenger, capped, guard))
+
+    const back = await service.list("7", { limit: 4 })
+    const fromTime = await service.list("7", { limit: 3, beforeTime: Date.parse("2026-09-27T10:05:00Z") })
+    const forward = await service.list("7", { limit: 10, after: { id: "1" } })
+
+    expect(back).toEqual({ items: history.slice(1), hasMore: true })
+    expect(forward).toEqual({ items: history.slice(1), hasMore: false })
+    expect(fromTime.items.map((one) => one.id)).toEqual(["3", "4", "5"])
+    expect(windows).toEqual([
+      { limit: 4 },
+      { limit: 2, before: "4" },
+      { limit: 3, time: Date.parse("2026-09-27T10:05:00Z") },
+      { limit: 1, before: "4" },
+      { limit: 10, after: { id: "1" } },
+      { limit: 8, after: { id: "3" } },
+    ])
+  })
+
   it("reads the same chat from the store when offline, found by its title, without connecting", async () => {
     const service = messagesService(storedDeps(messenger, await keptStore(), account, guard))
 
