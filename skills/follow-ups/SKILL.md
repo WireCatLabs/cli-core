@@ -19,7 +19,7 @@ forwards, deletes or marks read. A draft is text in your answer to the owner, no
 
 ```sh
 {{command}} review --new --json                       # every message since the last run, both sides: the day's only full read
-{{command}} tasks agenda --json                       # defaults: --due 1d --unanswered 1d --quiet 7d --within 30d
+{{command}} tasks agenda --json                       # defaults: --due 1d --unanswered 1d --waiting 7d --within 30d
 ```
 
 `review --new` also saves what it reads, so the agenda after it knows who wrote last. The agenda holds
@@ -29,7 +29,7 @@ no message text — read all of it:
 - `tasks` — open tasks with `reasons`: `overdue`, `due` (within `--due`), `check` (their next check
   passed), `unplanned` (no due date and no next check: plan it now).
 - `owed` — someone else wrote last and the owner has not answered for `--unanswered`.
-- `waiting` — the owner wrote last and nobody answered for `--quiet`.
+- `waiting` — the owner wrote last and nobody answered for `--waiting`.
 - `unsynced` — the chat moved, and its newest message is not stored, so who wrote last is unknown.
   Read it — `{{command}} messages list "<chatId>" --limit 20 --json` saves it too — and judge it like
   the others. Never skip one: a chat nobody synced is how an agreement gets lost.
@@ -53,6 +53,7 @@ For a chat in `owed` or `waiting`: read around its `lastMessage` the same way.
 | What you see | Do |
 |---|---|
 | A promise, a request, a question someone waits on | `tasks add <msg> --type promise\|request\|question` with a plan |
+| `tasks add` answers `created: false` | the message already has that task (a rule made it): `tasks plan` that one |
 | A task that is done (the reply came, the file was sent) | `tasks close <key> --as done --reason "<one line>"` |
 | A task still open, nothing new | `tasks plan <key> --check <when>` — 1d if hot, 3d–7d if not |
 | An `owed` chat that needs no answer (thanks, a sticker) | nothing; it leaves the agenda on the next message |
@@ -86,7 +87,7 @@ A recipe is a set of flags, not a new command:
 | Recipe | Command |
 |---|---|
 | Morning sweep | `review --new --json`, then `tasks agenda --json` |
-| Weekly quiet-chat pass | `tasks agenda --quiet 3d --within 90d --json` |
+| Weekly quiet-chat pass | `tasks agenda --waiting 3d --within 90d --json` |
 | Groups too, not only people | `tasks agenda --kind dialog,group,channel --json` |
 | Before a call with someone | `tasks list --chat "<chat>" --state open --json`, then `tasks show` each |
 

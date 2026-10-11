@@ -90,7 +90,7 @@ it("lists the chats owed an answer and the ones waiting on others, from who wrot
       ["7", "Synthetic author", null, null],
     ])
     expect(JSON.stringify(shown)).not.toContain("synthetic")
-    expect((await agenda.show({ quiet: DAY / 2 })).waiting.map((one) => one.chatId)).toEqual(["2"])
+    expect((await agenda.show({ waiting: DAY / 2 })).waiting.map((one) => one.chatId)).toEqual(["2"])
     expect((await agenda.show({ within: 90 * DAY })).owed.map((one) => one.chatId)).toEqual(["1", "5"])
     expect((await agenda.show({ kinds: ["channel"] })).owed.map((one) => one.chatId)).toEqual(["4"])
   } finally {

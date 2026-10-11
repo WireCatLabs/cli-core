@@ -160,7 +160,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   written. `tasks show <task>` prints the plan with its links. `tasks agenda` lists, from the local store and
   without one message's text, the open tasks overdue, due within `--due`, due a check or never planned; the chats
   where someone else wrote last and the owner has not answered for `--unanswered` (`owed`); and those where the
-  owner wrote last and nobody answered for `--quiet` (`waiting`), within `--within`; a chat the chat list says moved
+  owner wrote last and nobody answered for `--waiting` (`waiting`), within `--within`; a chat the chat list says moved
   but whose newest message is not stored is listed as `unsynced`, never dropped. A dialog is named after its other
   side. `stale` says the store saved nothing for a day. MCP: `tasks_plan`, `tasks_link`, `tasks_show`, `tasks_agenda`, and the plan fields on
   `tasks_add`. `skill show follow-ups` prints the daily routine for an agent, which drafts and never sends.

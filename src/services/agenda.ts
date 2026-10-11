@@ -10,7 +10,7 @@ export interface AgendaOptions {
   /** ms: a task due within this is listed. */
   dueWithin?: number
   /** ms: a chat where the owner wrote last and nobody answered for this long is listed. */
-  quiet?: number
+  waiting?: number
   /** ms: a chat where someone else wrote last and the owner did not answer for this long is listed. */
   unanswered?: number
   /** ms: chats silent for longer than this are not looked at: they ended, they did not go quiet. */
@@ -60,7 +60,7 @@ export interface AgendaService {
 }
 
 export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): AgendaService => ({
-  show: async ({ dueWithin = DAY, quiet = 7 * DAY, unanswered = DAY, within = 30 * DAY, kinds } = {}) => {
+  show: async ({ dueWithin = DAY, waiting = 7 * DAY, unanswered = DAY, within = 30 * DAY, kinds } = {}) => {
     const [store, account] = [await deps.store(), await deps.account()]
     const at = now()
     const open = await store.tasks
@@ -111,7 +111,7 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
       stale: activity.storedAt === null || at - Date.parse(activity.storedAt) > DAY,
       tasks,
       owed: chats.filter((chat) => chat.lastFromOwner === false && silentFor(chat) >= unanswered),
-      waiting: chats.filter((chat) => chat.lastFromOwner === true && silentFor(chat) >= quiet),
+      waiting: chats.filter((chat) => chat.lastFromOwner === true && silentFor(chat) >= waiting),
       unsynced: chats.filter((chat) => chat.lastMessage === null),
     }
   },

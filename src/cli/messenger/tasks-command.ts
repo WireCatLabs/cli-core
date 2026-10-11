@@ -62,9 +62,9 @@ const agendaText = (agenda: Agenda) => {
   ].join("\n")
 }
 
-/** `none` clears a date; anything else is a time ahead. */
+/** `none` clears a date; anything else is a time ahead. Not `null`: commander stores a parser's `null` as "". */
 const dateOrNone = (flag: string) => (typed: string) =>
-  typed.trim().toLowerCase() === "none" ? null : new Date(aheadOf(typed, flag))
+  typed.trim().toLowerCase() === "none" ? ("none" as const) : new Date(aheadOf(typed, flag))
 
 const durationOf = (flag: string) => (typed: string) => {
   const wanted = typed.trim()
@@ -89,12 +89,12 @@ const planOptions = (command: Command, verb: string) =>
       dateOrNone("--check"),
     )
 
-const planFrom = (options: { title?: string; description?: string; due?: Date | null; check?: Date | null }) => {
+const planFrom = (options: { title?: string; description?: string; due?: Date | "none"; check?: Date | "none" }) => {
   const plan: TaskPlan = {}
   if (options.title !== undefined) plan.title = options.title
   if (options.description !== undefined) plan.description = options.description
-  if (options.due !== undefined) plan.dueAt = options.due
-  if (options.check !== undefined) plan.nextCheckAt = options.check
+  if (options.due !== undefined) plan.dueAt = options.due === "none" ? null : options.due
+  if (options.check !== undefined) plan.nextCheckAt = options.check === "none" ? null : options.check
   return plan
 }
 
@@ -146,7 +146,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
   ).action(async function (this: Command, message: string) {
     const context = messengerContext(this, messenger)
     refuseLocalWrite(context, messenger.app.command, "tasks.add")
-    const options = this.opts<{ type: TaskView["kind"]; title?: string; description?: string; due?: Date | null }>()
+    const options = this.opts<{ type: TaskView["kind"]; title?: string; description?: string; due?: Date | "none" }>()
     const plan = planFrom(options)
     const {
       task,
@@ -228,7 +228,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       "list chats where someone else wrote last this long ago (default 1d)",
       durationOf("--unanswered"),
     )
-    .option("--quiet <span>", "list chats where you wrote last this long ago (default 7d)", durationOf("--quiet"))
+    .option("--waiting <span>", "list chats where you wrote last this long ago (default 7d)", durationOf("--waiting"))
     .option(
       "--within <span>",
       "leave out chats silent longer than this: they ended (default 30d)",
@@ -242,7 +242,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const options = this.opts<{
         due?: number
         unanswered?: number
-        quiet?: number
+        waiting?: number
         within?: number
         kind?: ReturnType<typeof kindsOf>
       }>()
@@ -250,7 +250,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
         services.agenda.show({
           ...(options.due === undefined ? {} : { dueWithin: options.due }),
           ...(options.unanswered === undefined ? {} : { unanswered: options.unanswered }),
-          ...(options.quiet === undefined ? {} : { quiet: options.quiet }),
+          ...(options.waiting === undefined ? {} : { waiting: options.waiting }),
           ...(options.within === undefined ? {} : { within: options.within }),
           ...(options.kind === undefined ? {} : { kinds: options.kind }),
         }),

@@ -188,7 +188,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({
         due: span("list tasks due within this (default 1d)"),
         unanswered: span("list chats someone else wrote last in this long ago (default 1d)"),
-        quiet: span("list chats the owner wrote last in this long ago (default 7d)"),
+        waiting: span("list chats the owner wrote last in this long ago (default 7d)"),
         within: span("leave out chats silent longer than this (default 30d)"),
         kind: v.optional(
           v.pipe(v.string(), v.minLength(1), v.description("chat kinds, comma-separated: dialog,group")),
@@ -196,11 +196,13 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account, args, defaults) => {
-        const [dueWithin, unanswered, quiet, within] = [args.due, args.unanswered, args.quiet, args.within].map(spanMs)
+        const [dueWithin, unanswered, waiting, within] = [args.due, args.unanswered, args.waiting, args.within].map(
+          spanMs,
+        )
         return servicesFor(storedDeps(messenger, store, account, defaults.guard)).agenda.show({
           ...(dueWithin === undefined ? {} : { dueWithin }),
           ...(unanswered === undefined ? {} : { unanswered }),
-          ...(quiet === undefined ? {} : { quiet }),
+          ...(waiting === undefined ? {} : { waiting }),
           ...(within === undefined ? {} : { within }),
           ...(args.kind === undefined ? {} : { kinds: kindsOf(args.kind, "kind") }),
         })
