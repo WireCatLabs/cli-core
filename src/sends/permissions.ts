@@ -345,6 +345,8 @@ const HOUSEKEEPING = new Set([
   "skill",
   "models",
   "server",
+  // What a schedule runs is checked by its own key when it runs; an agent runs read-only.
+  "schedule",
   "runs",
   "sends",
   "recipients",

@@ -46,6 +46,7 @@ describe("the level of a command path", () => {
 describe("a bot's permissions", () => {
   it("**keys every bot command under `bot`**, apart from its housekeeping", () => {
     expect(keyForCommand(["flood", "clear"])).toBeNull()
+    expect(keyForCommand(["schedule", "agent"])).toBeNull()
     expect(keyForCommand(["contacts", "context"])).toBe("messages")
     expect(keyForCommand(["bot", "messages", "send"])).toBe("bot.messages.send")
     expect(keyForCommand(["bot", "chats", "members", "remove"])).toBe("bot.chats.members.remove")

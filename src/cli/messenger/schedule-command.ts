@@ -246,8 +246,8 @@ export const scheduleCommand = (messenger: Messenger): Command => {
     })
 
   command
-    .command("exec", { hidden: true })
-    .description("what a timer runs")
+    .command("exec")
+    .description("what a timer runs, given the schedule's file; to run one by hand, use run")
     .argument("<file>")
     .action(async function (this: Command, file: string) {
       const { context, system, timer } = prepare(this)
