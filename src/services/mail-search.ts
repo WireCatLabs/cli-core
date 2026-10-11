@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-core"
+import { CliError } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
 import type { Chat, Message, Page } from "../domain/models.js"
 import type { AccountKey, MessageStore, ScoredHit, StoredHit } from "../store/store.js"
