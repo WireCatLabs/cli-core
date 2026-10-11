@@ -4,6 +4,24 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Task dependencies and ready work.** `store.tasks.linkTask`/`unlinkTask` record owner-reviewed
+  `blocked-by`, `follow-up-of` and symmetric `related-to` edges, with idempotent receipts and task
+  events. Dependency cycles are refused atomically. `taskRelations`, `taskReadiness` and `readyTasks`
+  provide bounded reads; follow-up and related links do not block work. A blocker must be done:
+  dismissing or deleting it does not silently release dependent work. Generic note links cannot
+  bypass dependency validation. No additional store migration is needed.
+
+### Changed — may break callers
+
+- **New owner project keys are 3–4 uppercase letters/digits**, starting with a letter. Default keys
+  follow that length and skip both held keys and aliases. Existing project/task keys are retained;
+  project tasks continue to receive the atomic `<project>-<number>` key, such as `RES-1`.
+
+
 ## 0.241.0 — 11.10.2026
 
 ### Fixed

@@ -13,8 +13,8 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "vocabulary-test-")), "fixture.db")
   const store = await openStore({ path, now: () => 3000 })
   opened.push(store)
-  const project = await store.knowledge.addProject({ name: "Harbour Example", key: "HARBOUR", scope: "work" })
-  const other = await store.knowledge.addProject({ name: "Lighthouse Example", key: "LIGHT", scope: "personal" })
+  const project = await store.knowledge.addProject({ name: "Harbour Example", key: "HAR", scope: "work" })
+  const other = await store.knowledge.addProject({ name: "Lighthouse Example", key: "LIGH", scope: "personal" })
   const tag = await store.knowledge.createTag("onboarding")
   const topic = await store.knowledge.createTag("budget", { kind: "topic" })
   return { path, store, project, other, tag, topic }
@@ -42,7 +42,7 @@ describe("canonical vocabulary", () => {
     const first = await store.knowledge.addVocabularyAlias(target, "Гавань пример")
     expect(first).toMatchObject({ target, changed: true, alias: { name: "Гавань пример" } })
     expect(await store.knowledge.addVocabularyAlias(target, " ГАВАНЬ   ПРИМЕР ")).toMatchObject({ changed: false })
-    expect(await store.knowledge.addVocabularyAlias(target, "harbour")).toMatchObject({ changed: false, alias: null })
+    expect(await store.knowledge.addVocabularyAlias(target, "har")).toMatchObject({ changed: false, alias: null })
     const reopened = await openStore({ path, now: () => 4000 })
     opened.push(reopened)
     expect(await reopened.knowledge.resolveVocabulary("ГАВАНЬ ПРИМЕР", { kind: "project" })).toMatchObject({
@@ -56,7 +56,7 @@ describe("canonical vocabulary", () => {
     const { store, project, other } = await fixture()
     const target = { kind: "project" as const, id: project.id }
     await store.knowledge.addVocabularyAlias(target, "shared-example")
-    for (const name of ["shared-example", "HARBOUR", "Harbour Example"])
+    for (const name of ["shared-example", "HAR", "Harbour Example"])
       await expect(store.knowledge.addVocabularyAlias({ kind: "project", id: other.id }, name)).rejects.toMatchObject({
         code: "configuration_error",
         details: { reason: "vocabulary_alias_conflict" },
@@ -87,7 +87,7 @@ describe("canonical vocabulary", () => {
 
   it("reports canonical-name ambiguity and scopes project reads explicitly", async () => {
     const { store, project } = await fixture()
-    const duplicate = await store.knowledge.addProject({ name: "Harbour Example", key: "HARBOUR2", scope: "personal" })
+    const duplicate = await store.knowledge.addProject({ name: "Harbour Example", key: "HAR2", scope: "personal" })
     expect(await store.knowledge.resolveVocabulary("Harbour Example", { kind: "project" })).toMatchObject({
       ambiguous: true,
       matches: [{ id: project.id }, { id: duplicate.id }],
@@ -180,9 +180,9 @@ describe("canonical vocabulary", () => {
 
   it("keeps unsupported legacy display names from breaking unrelated canonical lookups", async () => {
     const { store, project } = await fixture()
-    const legacy = await store.knowledge.addProject({ name: "Legacy\nExample", key: "LEGACY" })
-    expect((await store.knowledge.resolveVocabulary("HARBOUR", { kind: "project" })).matches[0]?.id).toBe(project.id)
-    expect((await store.knowledge.resolveVocabulary("LEGACY", { kind: "project" })).matches[0]?.id).toBe(legacy.id)
+    const legacy = await store.knowledge.addProject({ name: "Legacy\nExample", key: "LEG" })
+    expect((await store.knowledge.resolveVocabulary("HAR", { kind: "project" })).matches[0]?.id).toBe(project.id)
+    expect((await store.knowledge.resolveVocabulary("LEG", { kind: "project" })).matches[0]?.id).toBe(legacy.id)
     expect(
       await store.knowledge.addVocabularyAlias({ kind: "project", id: legacy.id }, "legacy-example"),
     ).toMatchObject({ changed: true })

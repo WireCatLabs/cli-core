@@ -268,6 +268,8 @@ export const resolvePersonLinks = (database: CacheDatabase, names: (string | nul
 export const insertLink = (context: StoreContext, input: LinkInput): Link => {
   const { database, now } = context
   const kind = oneOf(input.kind, LINK_KINDS, "a link's kind")
+  if (kind === "blocked-by" || kind === "follow-up-of")
+    throw new CliError("validation_error", "use tasks.linkTask for validated task dependencies")
   const origin = oneOf(input.origin ?? "owner", LINK_ORIGINS, "a link's origin")
   const from = requiredThing(database, input.from, "a link's source")
   const to = input.to === undefined ? null : requiredThing(database, input.to, "a link's target")

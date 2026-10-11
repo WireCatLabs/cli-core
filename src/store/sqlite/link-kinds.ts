@@ -4,6 +4,8 @@
  */
 export const LINK_KINDS = [
   "links-to",
+  "blocked-by",
+  "follow-up-of",
   "about",
   "member-of",
   "labelled",

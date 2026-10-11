@@ -81,6 +81,8 @@ export {
   searchIndexState,
 } from "./sqlite/search-index.js"
 export type { TagKind, TagRow } from "./sqlite/tags.js"
+export type { TaskRelation, TaskRelationKind, TaskRelationsStore } from "./sqlite/task-relations.js"
+export { TASK_RELATION_KINDS } from "./sqlite/task-relations.js"
 export type { StoreTaskStore } from "./sqlite/tasks.js"
 export type {
   TagPreflight,

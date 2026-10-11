@@ -632,8 +632,8 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
                 return thing.id
               })()
         const wanted = key === undefined ? projectKey(title) : key.trim().toUpperCase()
-        if (!/^[A-Z][A-Z0-9]{0,9}$/.test(wanted))
-          throw new CliError("validation_error", "a project key is 1–10 letters and digits, starting with a letter")
+        if (!/^[A-Z][A-Z0-9]{2,3}$/.test(wanted))
+          throw new CliError("validation_error", "a new project key is 3–4 letters and digits, starting with a letter")
         const aliasName = (() => {
           try {
             return normalizeVocabularyName(title)
@@ -654,9 +654,21 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
             candidates: alias.map((row) => ({ kind: "project", id: String(row.id), name: String(row.name) })),
           })
         let chosen = wanted
-        for (let n = 2; database.prepare("SELECT 1 FROM projects WHERE key = ?").get(chosen); n++) {
+        for (
+          let n = 2;
+          database.prepare("SELECT 1 FROM projects WHERE key = ?").get(chosen) ||
+          database
+            .prepare(
+              "SELECT 1 FROM aliases a JOIN projects p ON p.id=a.aliasable_id WHERE a.aliasable_type='project' AND a.account_id IS NULL AND p.account_id IS NULL AND p.deleted_at IS NULL AND a.name_folded=? LIMIT 1",
+            )
+            .get(normalizeVocabularyName(chosen));
+          n++
+        ) {
           if (key !== undefined) throw new CliError("validation_error", `the project key ${wanted} is taken`)
-          chosen = `${wanted.slice(0, 8)}${n}`
+          const suffix = String(n)
+          if (suffix.length > 3)
+            throw new CliError("validation_error", "no short project key is available; choose an explicit key")
+          chosen = `${wanted.slice(0, 4 - suffix.length)}${suffix}`
         }
         const at = now()
         const row = database
@@ -833,12 +845,12 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   }
 }
 
-/** A key from a name: its first letters, upper case, up to six. */
+/** Existing project keys stay stable; only new projects receive the short-key convention. */
 const projectKey = (name: string): string => {
   const letters = name
     .normalize("NFKD")
     .replace(/[^A-Za-z0-9]/g, "")
     .toUpperCase()
-  const key = /^[A-Z]/.test(letters) ? letters.slice(0, 6) : `P${letters.slice(0, 5)}`
-  return key || "P"
+  const key = /^[A-Z]/.test(letters) ? letters.slice(0, 4) : letters ? `P${letters.slice(0, 3)}` : "PRJ"
+  return key.padEnd(3, "X")
 }

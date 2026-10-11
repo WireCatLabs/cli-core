@@ -1178,7 +1178,7 @@ A place for tasks, with the short key their ids start with (`MEET-12`).
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `key` | text | not null, unique |  | uppercase, e.g. MEET |
+| `key` | text | not null, unique |  | 3–4 uppercase letters/digits for new owner projects, e.g. RES; existing keys retained |
 | `name` | text | not null |  | the project's name |
 | `description` | text |  |  | what the project is for |
 | `type` | text | not null |  | work, client, personal, oss, other; tags group projects beyond that |
@@ -1401,7 +1401,7 @@ A tag's name, stored once. Which things carry it is `taggings`.
 
 ### `links`
 
-Every connection between two things that no column holds. Kinds: `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.
+Every connection between two things that no column holds. Kinds: `blocked-by` (a task needs another task to finish first), `follow-up-of` (a task continues an earlier task), `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|

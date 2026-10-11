@@ -269,7 +269,7 @@ const EDITS = {
       ["updated_at", "integer", { notnull: true }],
     ],
     keys: ["INDEX (target_folded) WHERE to_id IS NULL"],
-    doc: "Every connection between two things that no column holds. Kinds: `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.",
+    doc: "Every connection between two things that no column holds. Kinds: `blocked-by` (a task needs another task to finish first), `follow-up-of` (a task continues an earlier task), `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.",
     note: "String references → polymorphic columns, type as a string (owner).",
   },
   chunk_vectors: {
@@ -956,7 +956,11 @@ const NEW = {
       doc: "A place for tasks, with the short key their ids start with (`MEET-12`).",
       cols: [
         id(),
-        c("key", "text", { notnull: true, unique: true, note: "uppercase, e.g. MEET" }),
+        c("key", "text", {
+          notnull: true,
+          unique: true,
+          note: "3–4 uppercase letters/digits for new owner projects, e.g. RES; existing keys retained",
+        }),
         c("name", "text", { notnull: true }),
         c("description", "text"),
         c("type", "text", {
