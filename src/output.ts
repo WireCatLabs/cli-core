@@ -8,6 +8,7 @@ import {
 } from "@wirecat/cli-core"
 import { fieldsOf, projectFields } from "./cli/result-fields.js"
 import { agentJson as serializeAgentJson } from "./mcp/text.js"
+import { atDetail, type Detail } from "./output-detail.js"
 
 export interface OutputOptions {
   json?: boolean
@@ -20,6 +21,8 @@ export interface OutputOptions {
   color?: boolean
   env?: NodeJS.ProcessEnv
   fields?: string
+  /** How much of each found message: `brief`, the default or `full` (src/output-detail.ts). */
+  hitDetail?: Detail
 }
 
 /**
@@ -39,12 +42,23 @@ export const resolveOutput = ({
   tty,
   color,
   fields,
+  hitDetail,
   env = process.env,
 }: OutputOptions = {}) => {
   const interactive = tty ?? process.stdout.isTTY === true
   const format: RenderFormat = jsonl ? "jsonl" : agentJson || json || !interactive ? "json" : "pretty"
   const painted = format === "pretty" && (color ?? (env.NO_COLOR === undefined && env.TERM !== "dumb" && !env.CI))
-  const standard = createRenderer({ format, color: painted, streams })
+  const rendered = createRenderer({ format, color: painted, streams })
+  // `--fields` names exactly what to keep, so it chooses from everything unless a level was asked for too.
+  const level = hitDetail ?? (fields === undefined ? "default" : "full")
+  const standard =
+    format === "pretty"
+      ? rendered
+      : {
+          ...rendered,
+          result: (value: unknown) => rendered.result(atDetail(value, level)),
+          stream: (items: Iterable<unknown>) => rendered.stream(atDetail([...items], level)),
+        }
   const safe = (value: unknown) => JSON.parse(serializeAgentJson(value)) as unknown
   const created = agentJson
     ? {

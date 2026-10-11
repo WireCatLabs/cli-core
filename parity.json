@@ -156,6 +156,9 @@
       "value": "<profiles>",
       "meaning": "also read these bots' copies, comma separated — each allowed by readOtherBots"
     },
+    "--brief": {
+      "meaning": "found messages and mail as reference, title, time, sender and excerpt only"
+    },
     "--budget": {
       "value": "<pages>",
       "meaning": "at most this many pages of a list, with a pause between them"
@@ -410,6 +413,9 @@
     "--from-dir": {
       "value": "<dir>",
       "meaning": "read nonrecursive files from this directory for one explicit chat"
+    },
+    "--full": {
+      "meaning": "found messages and mail with their whole text and every provider field"
     },
     "--hidden": {
       "value": "<on|off>",
@@ -1154,8 +1160,22 @@
         "tg": "each CLI’s next cli-messaging bump"
       }
     },
+    "--brief": {
+      "in": [],
+      "planned": {
+        "max": "each CLI’s next cli-messaging bump",
+        "tg": "each CLI’s next cli-messaging bump"
+      }
+    },
     "--dry-run": "all",
     "--fields": "all",
+    "--full": {
+      "in": [],
+      "planned": {
+        "max": "each CLI’s next cli-messaging bump",
+        "tg": "each CLI’s next cli-messaging bump"
+      }
+    },
     "--json": "all",
     "--jsonl": "all",
     "--max-input-bytes": "all",

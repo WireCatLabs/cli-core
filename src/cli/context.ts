@@ -1,4 +1,4 @@
-import type { Renderer, RenderFormat, Streams } from "@wirecat/cli-core"
+import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-core"
 import type { Command } from "commander"
 import { resolveOutput } from "../output.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
@@ -73,6 +73,11 @@ export interface BaseContext {
 
 type Resolve = (flags: GlobalFlags, options?: ResolveOptions) => Settings
 
+const detailOf = ({ brief, full }: { brief?: boolean; full?: boolean }): { hitDetail?: "brief" | "full" } => {
+  if (brief && full) throw new CliError("validation_error", "--brief and --full ask for opposite things — pick one")
+  return brief ? { hitDetail: "brief" } : full ? { hitDetail: "full" } : {}
+}
+
 /** Everything a command needs that no messenger decides, resolved once. */
 export const baseContext = (command: Command, resolveSettings: Resolve): BaseContext => {
   const environment = environmentOf(command)
@@ -81,6 +86,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
   const { renderer, format, color, streams } = resolveOutput({
     ...settings,
     env,
+    ...detailOf(command.optsWithGlobals<{ brief?: boolean; full?: boolean }>()),
     ...(command.optsWithGlobals<{ fields?: string }>().fields
       ? { fields: command.optsWithGlobals<{ fields?: string }>().fields }
       : {}),

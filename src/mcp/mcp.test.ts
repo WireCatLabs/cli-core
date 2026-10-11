@@ -1124,6 +1124,16 @@ describe("the MCP server", () => {
     ])
     const one = await call("chat_search_mail", { text: "chapter", account: "bob@example.test" })
     expect(one.body.items.map(({ id }: { id: string }) => id)).toEqual(["<bob@example.test>"])
+    expect(one.body).not.toHaveProperty("coverage")
+    expect(one.body.items[0]).toMatchObject({
+      excerpt: "Reading group Which chapter next?",
+      email: { from: { address: "bob@example.test" }, thread: "chat:email/bob%40example.test/thread-1" },
+    })
+    expect(one.body.items[0]).not.toHaveProperty("text")
+    const brief = await call("chat_search_mail", { text: "chapter", account: "bob@example.test", detail: "brief" })
+    expect(brief.body.items[0]).not.toHaveProperty("email")
+    const full = await call("chat_search_mail", { text: "chapter", account: "bob@example.test", detail: "full" })
+    expect(full.body.items[0].text).toBe("Reading group\n\nWhich chapter next?")
   })
 
   it("search_all takes meetings: the one stored meeting account, or one named; never without asking", async () => {

@@ -4,6 +4,28 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Found mail says who it was between, where it is filed and which thread it is in.** Each mail hit of
+  `search mail` (CLI and `search_mail`) carries `email`: `subject`, `from`, `to`, `cc`, `bcc` and `replyTo` as
+  `{ name, address, ref }` with the `person:` reference other commands take, `labels` (Gmail labels or IMAP
+  folders), `thread` as a `chat:` reference, `read` and `flagged`. An address in Cc is listed in Cc only: memo's
+  import filed Cc addresses under To as well. The terminal view adds a `to … · cc … · labels` line.
+- **`--brief` and `--full` on every command, `detail: "brief" | "full"` on `search_messages` and `search_mail`.**
+  Brief keeps a found message's `locator`, `chatTitle`, `timestamp`, `senderName`, `excerpt` and `score`; full
+  keeps everything, as before. `--fields` still picks exact fields, from everything unless a level is given too.
+
+### Changed — may break callers
+
+- **A found message carries an `excerpt` instead of its whole `text` by default.** `search messages` and
+  `search mail` give each hit about 240 characters around the first query word; `--full` (or `detail: "full"`)
+  brings the whole text back. In machine output of any command, a found or listed message drops `editedAt`,
+  `replyTo`, `forwardedFrom` and `reactions` when they are null, and a mail hit drops `providerMetadata`, whose
+  cc and bcc are now in `email`. Mail search no longer answers `coverage`, and its `completeness` is empty: both
+  described messenger chats fetched from a server, never mail.
+
 ## 0.250.1 — 11.10.2026
 
 ### Fixed

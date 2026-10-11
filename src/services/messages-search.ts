@@ -17,6 +17,7 @@ import {
   type ChatStats,
   type MessageStore,
 } from "../store/store.js"
+import { excerpt } from "./excerpt.js"
 import { mailAround, mergeMail, withMailThreads } from "./mail-search.js"
 import { chatAmong, type SearchFound, type SearchQuery, senderAmong } from "./messages.js"
 import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
@@ -445,9 +446,12 @@ export const searchLucene = async (
     : mailAccounts.length
       ? mergeMail(await execute(prepared.execution), await inMailTables(), request.limit, request.newest)
       : await execute(prepared.execution)
-  const { completeness, coverage } = await coverageOf(store, prepared, messenger)
+  // Coverage counts messenger chats fetched from a server; mail is imported whole, so for mail it says nothing.
+  const { completeness, coverage } =
+    request.kind === "mail" ? { completeness: [], coverage: undefined } : await coverageOf(store, prepared, messenger)
   const items = await Promise.all(
-    found.items.map(async (hit) => {
+    found.items.map(async (item) => {
+      const hit = { ...item, excerpt: excerpt(item.text, request.text ?? "") }
       if (!request.context) return hit
       const locator = parseLocator(hit.locator)
       return {
@@ -469,7 +473,7 @@ export const searchLucene = async (
     stemsReady: prepared.stemsReady,
     completeness,
     query: queryOf(prepared.timezone, request.newest, prepared.stemming),
-    coverage,
+    ...(coverage ? { coverage } : {}),
   }
 }
 const QUERY_PAGE_LIMIT = 1000

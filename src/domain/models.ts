@@ -331,6 +331,32 @@ export interface Message {
  */
 export interface MessageHit extends Message {
   chatTitle: string | null
+  /** Set on an email: who it was between, its labels and its thread, as references other commands take. */
+  email?: MailFields
+  /** A short stretch of `text` around what matched; the output shows it instead of the whole text unless asked. */
+  excerpt?: string
+}
+
+/** Someone on an email; `ref` is their `person:` reference, `null` when the store has none. */
+export interface MailPerson {
+  name: string | null
+  address: string
+  ref: string | null
+}
+
+export interface MailFields {
+  subject: string | null
+  from: MailPerson | null
+  to: MailPerson[]
+  cc: MailPerson[]
+  bcc: MailPerson[]
+  replyTo: MailPerson[]
+  /** The Gmail labels or IMAP folders it is in. */
+  labels: string[]
+  /** The thread as a `chat:` reference. */
+  thread: string
+  read: boolean | null
+  flagged: boolean | null
 }
 
 /** What happened to a message after it arrived, as `watch --events` prints it. */

@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-core"
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { parseDuration } from "../../cli/settings.js"
+import { DETAILS } from "../../output-detail.js"
 import type { MessagesService } from "../../services/messages.js"
 import type { SearchKind } from "../../services/search-kind.js"
 import type { SearchesService, SearchParams } from "../../services/searches.js"
@@ -35,6 +36,15 @@ export const backendArgs = (args: { backend?: "archive" | "server" | "both"; ser
 
 export const messagesSearchInput = (messenger: Messenger) =>
   v.object({
+    detail: v.optional(
+      v.pipe(
+        v.picklist(DETAILS),
+        v.description(
+          "brief: reference, title, time, sender and excerpt only; full: the whole text and every provider field; " +
+            "unset: people, thread, labels and an excerpt",
+        ),
+      ),
+    ),
     // Typed as present so the answer code reads them; offered only where the server can search.
     ...((messenger.serverSearch ? backendInputs : {}) as typeof backendInputs),
     ...threadInputs,
@@ -85,6 +95,15 @@ export const messagesSearchInput = (messenger: Messenger) =>
 /** `search_mail`: the mailboxes in the local store; no server, no fetching, no saved searches. */
 export const mailSearchInput = (messenger: Messenger) =>
   v.object({
+    detail: v.optional(
+      v.pipe(
+        v.picklist(DETAILS),
+        v.description(
+          "brief: reference, title, time, sender and excerpt only; full: the whole text and every provider field; " +
+            "unset: people, thread, labels and an excerpt",
+        ),
+      ),
+    ),
     text: v.optional(v.pipe(v.string(), v.description("the query, in the strict Lucene language"))),
     ast: v.optional(v.unknown()),
     timezone: v.optional(v.string()),

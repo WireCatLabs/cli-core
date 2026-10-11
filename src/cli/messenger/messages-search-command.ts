@@ -225,7 +225,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
         `${chats} of the chats searched are not held in full — \`${command} store fetch <chat>\` fetches one`,
       )
     }
-    if (incomplete.some((chat) => chat.provider === "email")) {
+    if (kind === "mail" || incomplete.some((chat) => chat.provider === "email")) {
       context.renderer.note(
         "mail search covers imported messages only; older or unimported mail may be missing — `memo mail import --since <date>` imports more",
       )
