@@ -1,14 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { CliError } from "@wirecat/cli-core"
-import type {
-  MeetingContextStore,
-  MeetingSearchIndexStore,
-  MeetingSearchStore,
-  MeetingStore,
-  MeetingTranscriptReceiptStore,
-  MeetingTranscriptStore,
-} from "@wirecat/cli-meetings"
 import type { TextRange } from "../conversations/chunks.js"
 import type { Link, LinkInput } from "../conversations/link.js"
 import type { DownloadedFile } from "../domain/attachments.js"
@@ -29,6 +21,14 @@ import type {
   WindowedMessage,
 } from "../domain/models.js"
 import type { RetentionOptions } from "../domain/retention.js"
+import type {
+  MeetingContextStore,
+  MeetingSearchIndexStore,
+  MeetingSearchStore,
+  MeetingStore,
+  MeetingTranscriptReceiptStore,
+  MeetingTranscriptStore,
+} from "../meetings/index.js"
 import type { PeopleLookup } from "../resolve.js"
 import { ACCOUNT_GROUPS, type AccountGroups, type Profiles } from "../search/account-list.js"
 import type { QueryExecution } from "../search/lucene/resolved.js"
@@ -624,7 +624,7 @@ export interface MessageStore {
   readonly proposedActions: ProposedActionsStore
   /** One row per tool an agent called, never its arguments. */
   readonly agentActions: AgentActionsStore
-  /** Meetings and calendar events: the port `@wirecat/cli-meetings` defines. */
+  /** Meetings and calendar events: the port `src/meetings/` defines. */
   readonly meetingVectors: MeetingVectors
   readonly meetings: MeetingStore &
     MeetingTranscriptStore &

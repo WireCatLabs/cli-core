@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-core"
-import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "@wirecat/cli-meetings"
+import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"

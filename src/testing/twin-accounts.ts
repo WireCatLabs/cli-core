@@ -1,8 +1,8 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { sampleMeeting } from "@wirecat/cli-meetings/testing"
 import type { Message } from "../domain/models.js"
+import { sampleMeeting } from "../meetings/testing/index.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 
 /**

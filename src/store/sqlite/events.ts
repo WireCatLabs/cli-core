@@ -1,4 +1,4 @@
-import type { Event, EventCandidateFilter, EventSeries, NewRecord } from "@wirecat/cli-meetings"
+import type { Event, EventCandidateFilter, EventSeries, NewRecord } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 
 /** JSON columns keep a missing value as SQL NULL, never the text `null`, so a read gives back what was saved. */

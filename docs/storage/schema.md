@@ -901,7 +901,7 @@ Rows of memories waiting to be indexed: triggers enqueue, JS normalizes, stems a
 The owner's events, and each meeting app's record of them.
 
 `MessageStore.meetings` implements both `MeetingStore` and the optional `MeetingTranscriptStore`
-from `@wirecat/cli-meetings`. `appendTranscripts` runs in one immediate transaction, matching the
+of `src/meetings/`. `appendTranscripts` runs in one immediate transaction, matching the
 numeric account and external occurrence id. Explicit creation fields apply only to a missing
 occurrence; a deleted occurrence rejects with `not_found`. Appending changes only transcript
 versions and rows, preserving existing occurrence fields, events, series, cursors and other parts.

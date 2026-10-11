@@ -1,4 +1,4 @@
-import type { Meeting, Transcript, TranscriptRow } from "@wirecat/cli-meetings"
+import type { Meeting, Transcript, TranscriptRow } from "../../meetings/index.js"
 import { fromJson, int, str } from "./events.js"
 
 type Row = Record<string, unknown>

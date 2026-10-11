@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-core"
-import type { Meeting, MeetingDetails, MeetingFilter, SearchHit } from "@wirecat/cli-meetings"
 import type { Page } from "../domain/models.js"
+import type { Meeting, MeetingDetails, MeetingFilter, SearchHit } from "../meetings/index.js"
 import type { AttachmentTextEntry } from "./sqlite/attachment-texts.js"
 import type { Email, EmailFilter, EmailThread, Mailbox, MailFilter, ThreadDetails } from "./sqlite/emails.js"
 import type { AccountKey, AccountMessageFilter, MessageStore, StoredHit } from "./store.js"

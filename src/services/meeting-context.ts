@@ -1,12 +1,12 @@
 import { CliError } from "@wirecat/cli-core"
+import { formatMeetingReference, parseMeetingReference } from "../domain/meeting-reference.js"
 import {
   createMeetingContext,
   type MeetingContextChange,
   type MeetingMutationOptions,
   snapshotMeetingScope,
   validateMeetingContextChange,
-} from "@wirecat/cli-meetings"
-import { formatMeetingReference, parseMeetingReference } from "../domain/meeting-reference.js"
+} from "../meetings/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { resolveMeetingReference } from "./meeting-reference.js"
 
@@ -74,7 +74,7 @@ export const createMeetingContextService = async (
           const evidence = change.evidence.map((value) => formatMeetingReference(parseMeetingReference(value)))
           const subject =
             change.subject === undefined ? reference : formatMeetingReference(parseMeetingReference(change.subject))
-          // cli-meetings still offers `fact` as a memory kind; what happened is a fact now, not a memory.
+          // src/meetings/ still offers `fact` as a memory kind; what happened is a fact now, not a memory.
           if (change.kind === "fact")
             return store.facts.add({
               type: "fact",

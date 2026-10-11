@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-core"
-import type { IdentityInput } from "@wirecat/cli-meetings"
 import type { Contact, Id, Page, PersonAlias, Provider } from "../../domain/models.js"
+import type { IdentityInput } from "../../meetings/index.js"
 import type { PeopleLookup } from "../../resolve.js"
 import { fold } from "../normalize.js"
 import type { AccountKey, PersonFacts } from "../store.js"

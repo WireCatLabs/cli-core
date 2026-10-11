@@ -46,6 +46,19 @@
                   {
                     "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
                     "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
+                    ],
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
                   }
                 ]
               }
@@ -87,6 +100,19 @@
                   {
                     "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
                     "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
+                    ],
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
                   }
                 ]
               }
@@ -119,6 +145,19 @@
                   {
                     "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
                     "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
+                    ],
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
                   }
                 ]
               }
@@ -143,6 +182,19 @@
                   {
                     "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
                     "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
+                    ],
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
                   }
                 ]
               }
@@ -211,6 +263,90 @@
                   {
                     "group": ["@mtcute/*", "ws"],
                     "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/meetings/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "node:fs": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts",
+                  "node:fs/promises": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts",
+                  "node:sqlite": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts",
+                  "bun:sqlite": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts"
+                },
+                "patterns": [
+                  {
+                    "group": ["../**"],
+                    "message": "src/meetings/ depends on nothing else in cli-messaging: the rest of the package calls it, never the other way round"
+                  },
+                  {
+                    "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],
+                    "message": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts"
+                  },
+                  {
+                    "group": [
+                      "@mtcute/*",
+                      "ws",
+                      "**/telegram/**",
+                      "**/max/**",
+                      "**/zoom/**",
+                      "@wirecat/zoom-cli",
+                      "@wirecat/zoom-cli/*"
+                    ],
+                    "message": "src/meetings/ knows no provider: a provider implements MeetingSource in its own package"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/meetings/cli/**", "src/meetings/mcp/**", "src/meetings/testing/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "node:fs": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts",
+                  "node:fs/promises": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts",
+                  "node:sqlite": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts",
+                  "bun:sqlite": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts"
+                },
+                "patterns": [
+                  {
+                    "group": ["../../**"],
+                    "message": "src/meetings/ depends on nothing else in cli-messaging: the rest of the package calls it, never the other way round"
+                  },
+                  {
+                    "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],
+                    "message": "src/meetings/ touches no database and no file: the store implements MeetingStore in src/store/sqlite/meetings.ts"
+                  },
+                  {
+                    "group": [
+                      "@mtcute/*",
+                      "ws",
+                      "**/telegram/**",
+                      "**/max/**",
+                      "**/zoom/**",
+                      "@wirecat/zoom-cli",
+                      "@wirecat/zoom-cli/*"
+                    ],
+                    "message": "src/meetings/ knows no provider: a provider implements MeetingSource in its own package"
                   }
                 ]
               }

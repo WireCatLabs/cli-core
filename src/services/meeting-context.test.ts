@@ -1,8 +1,8 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { sampleMeeting } from "@wirecat/cli-meetings/testing"
 import { afterEach, expect, it, vi } from "vitest"
+import { sampleMeeting } from "../meetings/testing/index.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { createMeetingContextService, type MeetingContextServiceStore } from "./meeting-context.js"
 
