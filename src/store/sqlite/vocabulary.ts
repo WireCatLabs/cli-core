@@ -55,8 +55,26 @@ export interface TagPreflight {
   fingerprint: string
   semantic: "not-requested"
 }
+export interface VocabularyAuditOptions extends VocabularyOptions {
+  minSimilarity?: number
+  maxComparisons?: number
+  limit?: number
+}
+export interface VocabularyAudit {
+  pairs: {
+    left: VocabularyTarget & { name: string; nameTruncated: boolean }
+    right: VocabularyTarget & { name: string; nameTruncated: boolean }
+    similarity: number
+    by: "lexical"
+  }[]
+  fingerprint: string
+  comparisons: number
+  complete: boolean
+  semantic: "not-requested"
+}
 export interface VocabularyStore {
   vocabulary(options?: VocabularyOptions): Promise<VocabularyCatalog>
+  auditVocabulary(options?: VocabularyAuditOptions): Promise<VocabularyAudit>
   resolveVocabulary(name: string, options?: VocabularyOptions): Promise<VocabularyResolution>
   addVocabularyAlias(
     target: VocabularyTarget,
@@ -258,6 +276,63 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
   }
   return {
     vocabulary: async (options) => catalog(options),
+    auditVocabulary: async (options = {}) =>
+      snapshot(() => {
+        const minSimilarity = options.minSimilarity ?? 0.65
+        const maxComparisons = options.maxComparisons ?? 10000
+        const limit = options.limit ?? 20
+        if (
+          !Number.isFinite(minSimilarity) ||
+          minSimilarity < 0.65 ||
+          minSimilarity > 1 ||
+          !Number.isSafeInteger(maxComparisons) ||
+          maxComparisons < 1 ||
+          maxComparisons > 100000 ||
+          !Number.isSafeInteger(limit) ||
+          limit < 1 ||
+          limit > 200
+        )
+          throw new CliError("validation_error", "audit takes similarity 0.65–1, 1–100000 comparisons and 1–200 pairs")
+        const current = catalog(options)
+        const report: VocabularyAudit = {
+          pairs: [],
+          fingerprint: current.fingerprint,
+          comparisons: 0,
+          complete: true,
+          semantic: "not-requested",
+        }
+        const target = (entry: VocabularyEntry) => ({
+          kind: entry.kind,
+          id: entry.id,
+          name: entry.name.slice(0, 300),
+          nameTruncated: entry.name.length > 300,
+        })
+        const names = (entry: VocabularyEntry) => [
+          entry.name,
+          ...(entry.key ? [entry.key] : []),
+          ...entry.aliases.map((alias) => alias.name),
+        ]
+        for (let left = 0; left < current.entries.length; left++) {
+          const a = current.entries[left] as VocabularyEntry
+          for (const b of current.entries.slice(left + 1)) {
+            if ((a.kind === "project") !== (b.kind === "project")) continue
+            let similarity = 0
+            for (const name of names(a))
+              for (const other of names(b)) {
+                cancelled(options.signal)
+                if (report.comparisons === maxComparisons) return { ...report, complete: false }
+                report.comparisons++
+                if (storedName(name) !== null && storedName(other) !== null)
+                  similarity = Math.max(similarity, vocabularySimilarity(name, other))
+              }
+            if (similarity >= minSimilarity) {
+              report.pairs.push({ left: target(a), right: target(b), similarity, by: "lexical" })
+              if (report.pairs.length === limit) return { ...report, complete: false }
+            }
+          }
+        }
+        return report
+      }),
     resolveVocabulary: async (name, options) => {
       normalizeVocabularyName(name)
       const current = catalog(options)
