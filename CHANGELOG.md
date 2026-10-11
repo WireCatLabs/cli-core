@@ -4,7 +4,7 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
-## 0.247.0 — 11.10.2026
+## Unreleased
 
 ### Added
 
@@ -12,6 +12,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   syncing through `./files`, and bounded PCM16 WAV preflight and streaming through `./speech/wav`.
   WAV decoding needs no model, codec package or download; providers can reuse these helpers while
   keeping authentication and provider-specific archive formats in their own packages.
+
+## 0.247.0 — 11.10.2026
 
 ### Changed — may break callers
 
