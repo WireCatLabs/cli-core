@@ -15,6 +15,8 @@ contract. This page is the order to read them in, and the rules that are not in 
 | `@wirecat/cli-messaging/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter` |
 | `@wirecat/cli-messaging/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
 | `@wirecat/cli-messaging/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
+| `@wirecat/cli-messaging/files` | native ordinary-file identity checks and directory syncing |
+| `@wirecat/cli-messaging/speech/wav` | bounded PCM16 WAV preflight and 16 kHz streaming, without loading a speech model |
 | `@wirecat/cli-messaging/tasks` | `TaskStore`, when a host keeps tasks itself |
 
 There is no `/sdk` entry point that gathers these; import each name from its own.

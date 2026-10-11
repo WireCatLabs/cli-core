@@ -6,6 +6,13 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## 0.247.0 — 11.10.2026
 
+### Added
+
+- **Portable native meeting host helpers** expose ordinary-file identity checks and POSIX directory
+  syncing through `./files`, and bounded PCM16 WAV preflight and streaming through `./speech/wav`.
+  WAV decoding needs no model, codec package or download; providers can reuse these helpers while
+  keeping authentication and provider-specific archive formats in their own packages.
+
 ### Changed — may break callers
 
 - **Meeting context records facts with `fact.add`.** The action takes `statement`, `type` (fact,
