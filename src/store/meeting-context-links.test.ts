@@ -87,6 +87,9 @@ it("manually associates a guest with an explicitly selected cross-account person
     .prepare("SELECT method,author,from_person_id,to_person_id FROM identity_link_events WHERE identity_id=?")
     .all(Number(saved.participants[0]?.identityId))
   expect(await store.personSeenInAccounts(target.uid, [accountId])).toBe(true)
+  expect(store.involvements.forPerson(Number(target.uid))).toEqual(
+    expect.arrayContaining([expect.objectContaining({ subjectType: "meeting", subjectId: saved.meeting.id })]),
+  )
   expect(audit).toEqual([
     { method: "manual", author: "owner" as const, from_person_id: null, to_person_id: Number(target.uid) },
   ])
@@ -306,4 +309,48 @@ it("reads only a scoped person UID and bounds selected-account inputs before tou
       author: "owner" as const,
     }),
   ).rejects.toMatchObject({ code: "validation_error" })
+})
+
+it("rolls back a first guest link and its derived involvement when cancellation arrives after draining", async () => {
+  const { path, store, accountId, otherId, saved, participantId, target } = await fixture()
+  const underlying = await openSqlite(path)
+  opened.push(underlying.database)
+  const cancelled = new AbortController()
+  let drained = false
+  const database = {
+    ...underlying.database,
+    prepare: (sql: string) => {
+      const statement = underlying.database.prepare(sql)
+      return sql === "DELETE FROM involvement_pending WHERE indexable_type=? AND id=?"
+        ? {
+            ...statement,
+            run: (...args: Parameters<typeof statement.run>) => {
+              const result = statement.run(...args)
+              drained = true
+              cancelled.abort()
+              return result
+            },
+          }
+        : statement
+    },
+  }
+  const links = meetingContextLinksOver({ ...underlying, database, now: () => 1000 })
+  await expect(
+    links.linkParticipantPerson({
+      accountId,
+      meetingId: saved.meeting.id,
+      participantId,
+      personUid: target.uid,
+      targetAccountIds: [otherId],
+      expectedPersonUid: null,
+      now: 2000,
+      author: "owner",
+      signal: cancelled.signal,
+    }),
+  ).rejects.toMatchObject({ code: "cancelled" })
+  expect(drained).toBe(true)
+  expect(
+    await store.meetings.participantPerson({ accountId, meetingId: saved.meeting.id, participantId }),
+  ).toMatchObject({ personUid: null })
+  expect(store.involvements.forPerson(Number(target.uid)).filter((item) => item.subjectType === "meeting")).toEqual([])
 })

@@ -44,27 +44,31 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
       if (input.eventId !== null) positiveReadInteger(input.eventId, "eventId")
       if (input.expectedEventId !== undefined && input.expectedEventId !== null)
         positiveReadInteger(input.expectedEventId, "expectedEventId")
-      return meetingWriteSnapshot(database, () => {
-        checkMeetingCancelled(input.signal)
-        const row = database
-          .prepare("SELECT event_id FROM meetings WHERE id=? AND account_id=? AND deleted_at IS NULL")
-          .get(input.meetingId, input.accountId)
-        if (!row) return missing()
-        const previousEventId = row.event_id == null ? null : Number(row.event_id)
-        if (input.expectedEventId !== undefined && input.expectedEventId !== previousEventId) return conflict()
-        if (
-          input.eventId !== null &&
-          !database.prepare("SELECT 1 FROM events WHERE id=? AND deleted_at IS NULL").get(input.eventId)
-        )
-          return missing()
-        const changed = previousEventId !== input.eventId
-        if (changed)
-          database
-            .prepare("UPDATE meetings SET event_id=?,updated_at=? WHERE id=? AND account_id=?")
-            .run(input.eventId, input.now, input.meetingId, input.accountId)
-        checkMeetingCancelled(input.signal)
-        return { meetingId: input.meetingId, eventId: input.eventId, previousEventId, changed }
-      })
+      return meetingWriteSnapshot(
+        database,
+        () => {
+          checkMeetingCancelled(input.signal)
+          const row = database
+            .prepare("SELECT event_id FROM meetings WHERE id=? AND account_id=? AND deleted_at IS NULL")
+            .get(input.meetingId, input.accountId)
+          if (!row) return missing()
+          const previousEventId = row.event_id == null ? null : Number(row.event_id)
+          if (input.expectedEventId !== undefined && input.expectedEventId !== previousEventId) return conflict()
+          if (
+            input.eventId !== null &&
+            !database.prepare("SELECT 1 FROM events WHERE id=? AND deleted_at IS NULL").get(input.eventId)
+          )
+            return missing()
+          const changed = previousEventId !== input.eventId
+          if (changed)
+            database
+              .prepare("UPDATE meetings SET event_id=?,updated_at=? WHERE id=? AND account_id=?")
+              .run(input.eventId, input.now, input.meetingId, input.accountId)
+          checkMeetingCancelled(input.signal)
+          return { meetingId: input.meetingId, eventId: input.eventId, previousEventId, changed }
+        },
+        input.signal,
+      )
     },
     async participantPerson(original) {
       const input = { ...original }
@@ -101,40 +105,45 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
       )
         throw new CliError("validation_error", "Target account selection must contain 1 through 1000 accounts")
       for (const id of input.targetAccountIds) positiveReadInteger(id, "targetAccountId")
-      return meetingWriteSnapshot(database, () => {
-        checkMeetingCancelled(input.signal)
-        const found = participant(input)
-        if (input.expectedPersonUid !== undefined && input.expectedPersonUid !== found.personUid) return conflict()
-        const selected = [...new Set(input.targetAccountIds)]
-        for (const id of selected) if (!database.prepare("SELECT 1 FROM accounts WHERE id=?").get(id)) return missing()
-        if (
-          !database
-            .prepare(
-              "SELECT 1 FROM identity_links l JOIN account_identities a ON a.identity_id=l.identity_id WHERE l.person_id=? AND a.account_id IN (SELECT value FROM json_each(?)) LIMIT 1",
-            )
-            .get(target, JSON.stringify(selected))
-        )
-          return missing()
-        const changed = found.personUid !== input.personUid
-        if (changed)
-          linkIdentityToPerson({ ...context, now: () => input.now }, found.identityId, target, {
-            method: "manual",
-            by: input.author,
-          })
-        database
-          .prepare(
-            "INSERT INTO account_identities(account_id,identity_id,created_at,updated_at) VALUES(?,?,?,?) ON CONFLICT(account_id,identity_id) DO NOTHING",
+      return meetingWriteSnapshot(
+        database,
+        () => {
+          checkMeetingCancelled(input.signal)
+          const found = participant(input)
+          if (input.expectedPersonUid !== undefined && input.expectedPersonUid !== found.personUid) return conflict()
+          const selected = [...new Set(input.targetAccountIds)]
+          for (const id of selected)
+            if (!database.prepare("SELECT 1 FROM accounts WHERE id=?").get(id)) return missing()
+          if (
+            !database
+              .prepare(
+                "SELECT 1 FROM identity_links l JOIN account_identities a ON a.identity_id=l.identity_id WHERE l.person_id=? AND a.account_id IN (SELECT value FROM json_each(?)) LIMIT 1",
+              )
+              .get(target, JSON.stringify(selected))
           )
-          .run(input.accountId, found.identityId, input.now, input.now)
-        checkMeetingCancelled(input.signal)
-        return {
-          meetingId: input.meetingId,
-          participantId: input.participantId,
-          personUid: input.personUid,
-          previousPersonUid: found.personUid,
-          changed,
-        }
-      })
+            return missing()
+          const changed = found.personUid !== input.personUid
+          if (changed)
+            linkIdentityToPerson({ ...context, now: () => input.now }, found.identityId, target, {
+              method: "manual",
+              by: input.author,
+            })
+          database
+            .prepare(
+              "INSERT INTO account_identities(account_id,identity_id,created_at,updated_at) VALUES(?,?,?,?) ON CONFLICT(account_id,identity_id) DO NOTHING",
+            )
+            .run(input.accountId, found.identityId, input.now, input.now)
+          checkMeetingCancelled(input.signal)
+          return {
+            meetingId: input.meetingId,
+            participantId: input.participantId,
+            personUid: input.personUid,
+            previousPersonUid: found.personUid,
+            changed,
+          }
+        },
+        input.signal,
+      )
     },
   }
 }
