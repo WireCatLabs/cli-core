@@ -4,6 +4,14 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **Automatic tags combine canonical names and aliases in one batch.** Matches that resolve to the
+  same label now produce one claim, retaining all matched fields and the highest supplied score.
+  Repeated batches remain idempotent and keep manual labels; alias reuse no longer causes a duplicate-key failure.
+
 ## 0.245.0 — 11.10.2026
 
 ### Added
