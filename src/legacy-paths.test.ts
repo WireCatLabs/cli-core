@@ -96,6 +96,15 @@ describe("migrateLegacyMacPaths", () => {
     expect(existsSync(join(HOME, ".config/tg-cli"))).toBe(false)
   })
 
+  it("leaves an empty ~/Library folder alone and asks no one", () => {
+    const { HOME } = darwinHome()
+    mkdirSync(join(HOME, "Library", "Application Support", "tg-cli"), { recursive: true })
+    const holders = () => {
+      throw new Error("should not be called")
+    }
+    expect(migrateLegacyMacPaths({ ...options(), holders, env: { HOME } })).toEqual([])
+  })
+
   it("does not ask who holds files when there is nothing to move", () => {
     const { HOME } = darwinHome()
     const holders = () => {

@@ -126,7 +126,11 @@ export const migrateLegacyMacPaths = (options: MigrateLegacyPathsOptions): Legac
   const legacy = legacyMacPaths(appName, env)
   const current = resolvePaths({ ...options, env, platform })
   const pending = PATH_KINDS.filter(
-    (kind) => legacy[kind] !== current[kind] && kindOf(legacy[kind]) === "dir" && isFreeTarget(current[kind]),
+    (kind) =>
+      legacy[kind] !== current[kind] &&
+      kindOf(legacy[kind]) === "dir" &&
+      readdirSync(legacy[kind]).length > 0 &&
+      isFreeTarget(current[kind]),
   )
   if (pending.length === 0) return []
 
