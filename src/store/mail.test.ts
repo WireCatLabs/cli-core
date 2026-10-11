@@ -284,6 +284,32 @@ describe("mail store", () => {
     expect(pieces()).toBe(1)
   })
 
+  it("replaces pieces cut email by email with pieces of the thread, and drops their vectors", async () => {
+    const { database, mail } = await seeded()
+    await mail.saveThread(thread([email()]))
+    await mail.chunksToEmbed("test:model:2", { limit: 10 })
+    const id = Number((await mail.email(1, "<first@example.com>"))?.id)
+    database
+      .prepare(
+        `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, account_id,
+           created_at, updated_at) VALUES ('email', ?, 0, 0, 10, 'old-hash', 1, 1, 1)`,
+      )
+      .run(id)
+    database
+      .prepare(
+        "INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at) VALUES ('m', 'old-hash', 2, x'00', 1, 1)",
+      )
+      .run()
+    const types = () =>
+      database
+        .prepare("SELECT chunkable_type AS type FROM chunks ORDER BY type")
+        .all()
+        .map(({ type }) => type)
+    await mail.chunksToEmbed("test:model:2", { limit: 10 })
+    expect(types()).toEqual(["email_thread"])
+    expect(database.prepare("SELECT count(*) AS n FROM embeddings").get()?.n).toBe(0)
+  })
+
   it("refuses an empty key and leaves nothing behind", async () => {
     const { mail } = await seeded()
     await expect(mail.saveThread(thread([email(), email({ externalId: "" })]))).rejects.toThrow("Invalid email key")

@@ -1586,12 +1586,12 @@ Things whose `involvements` rows are stale: a message, chat, meeting, email, tas
 
 ### `chunks`
 
-Pieces of a longer text, the unit that gets an embedding: ranges of a document, an email, an attachment's text, a note, a meeting transcript or summary; a short task or event is one chunk. A conversation of messages is cut into pieces here too, one `conversation` row per piece, and `chunk_messages` says which messages each piece spans; so one search can read every kind of text, filtered by scope, account, project and time.
+Pieces of a longer text, the unit that gets an embedding: ranges of a document, an email thread, an attachment's text, a note, a meeting transcript or summary; a short task or event is one chunk. A conversation of messages is cut into pieces here too, one `conversation` row per piece, and `chunk_messages` says which messages each piece spans; so one search can read every kind of text, filtered by scope, account, project and time.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `chunkable_type` | text | not null |  | `document`, `email`, `attachment`, `note`, `memory`, `conversation`, `meeting_transcript`, `meeting_summary`, `event`, `task` |
+| `chunkable_type` | text | not null |  | `document`, `email_thread`, `attachment`, `note`, `memory`, `conversation`, `meeting_transcript`, `meeting_summary`, `event`, `task` |
 | `chunkable_id` | integer | not null |  | the row in the `chunkable_type` table |
 | `position` | integer | not null |  | order within its parent, from 0 |
 | `start_offset` | integer | not null |  | where the piece starts in the parent's text, in characters |

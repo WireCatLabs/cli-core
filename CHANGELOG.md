@@ -13,6 +13,19 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   at it, or while its person is kept: the owner, a person something points at, or one linked to an identity that
   stays. A caller that expected those people to survive a purge now finds them gone.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Mail is cut into pieces for search by meaning by thread, not email by email.** A thread's emails, oldest first,
+  are packed into pieces of up to `CHUNK_CHARS` as a messenger conversation is, so a short reply shares a piece with
+  its neighbours and a new reply changes only the last piece: every earlier piece keeps its hash and its vector.
+  Each email adds only its own text: a quoted block whose text is in an earlier email of the thread, the greeting,
+  the sign-off and the signature are left out of the pieces (English, Russian and Spanish forms). The stored body
+  and search by words are unchanged. `mail.nearest` answers the newest email of the best piece. Pieces cut email by
+  email are dropped with their vectors on the first index pass, and every thread is cut again, so mail is embedded
+  once more.
+
 ## 0.237.0 — 11.10.2026
 
 ### Fixed

@@ -291,10 +291,10 @@ describe("mail by meaning", () => {
   const MODEL = "test:model:2"
   const unit = (x: number, y: number) => new Float32Array([x, y])
 
-  it("hands out each email and attachment chunk once and answers nearest conversations with email threads", async () => {
+  it("hands out each thread and attachment piece once and answers nearest conversations with email threads", async () => {
     const { store, accountId } = await seeded()
     const chunks = await store.mail.chunksToEmbed(MODEL, { limit: 10 })
-    expect(chunks.length).toBe(4)
+    expect(chunks.length).toBe(3)
     await store.saveVectors(
       MODEL,
       2,
@@ -320,11 +320,49 @@ describe("mail by meaning", () => {
       limit: 5,
       chatId: "thread-1",
     })
-    expect(inThread.map(({ chunk }) => chunk.firstMessageId).sort()).toEqual(["<one@example.com>", "<two@example.com>"])
+    expect(inThread.map(({ chunk }) => chunk.firstMessageId)).toEqual(["<two@example.com>"])
 
     await store.mail.markDeleted(accountId, ["<three@example.com>"], at(30))
     const after = await store.nearestConversations(MAIL, { model: MODEL, query: unit(0, 1), limit: 5 })
     expect(after.map(({ chunk }) => chunk.firstMessageId)).not.toContain("<three@example.com>")
+  })
+
+  it("embeds only the last piece again when a reply arrives, without the quote it repeats", async () => {
+    const { store, accountId } = await seeded()
+    const long = (n: number) => `Point ${n}: ${"the venue needs a bigger room for the team ".repeat(6)}`
+    const first = Array.from({ length: 8 }, (_, n) => long(n)).join("\n\n")
+    const reply = (id: string, day: number, text: string) =>
+      email(id, { subject: "Re: Offsite", sentAt: at(day), receivedAt: at(day), bodyText: text })
+    await store.mail.saveThread({
+      accountId,
+      externalId: "thread-3",
+      now: at(11),
+      emails: [
+        email("<four@example.com>", { subject: "Offsite", sentAt: at(11), receivedAt: at(11), bodyText: first }),
+      ],
+    })
+    const before = await store.mail.chunksToEmbed(MODEL, { limit: 20 })
+    expect(before.length).toBeGreaterThan(4)
+    await store.saveVectors(
+      MODEL,
+      2,
+      before.map(({ hash }) => ({ hash, vector: unit(1, 0) })),
+    )
+
+    const quoted = first
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n")
+    await store.mail.saveThread({
+      accountId,
+      externalId: "thread-3",
+      now: at(12),
+      emails: [reply("<five@example.com>", 12, `Booked Hall B.\n\nOn Sunday, Alice Example wrote:\n${quoted}`)],
+    })
+    const added = await store.mail.chunksToEmbed(MODEL, { limit: 20 })
+    expect(added).toHaveLength(1)
+    expect(added[0]?.text).toContain("Booked Hall B.")
+    expect(added[0]?.text).not.toContain("> Point")
   })
 
   it("finds an email by words in search conversations, as its thread", async () => {

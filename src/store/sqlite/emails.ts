@@ -1,5 +1,6 @@
 import type { Attachment, Metadata } from "@wirecat/cli-meetings"
-import { CHUNK_CHARS, chunkHash, splitText } from "../../conversations/chunks.js"
+import { CHUNK_CHARS, type Chunk, type ChunkLine, chunkHash, cutChunks, splitText } from "../../conversations/chunks.js"
+import { mailCore } from "../../conversations/mail-text.js"
 import { formatLocator } from "../../domain/locator.js"
 import type { Message } from "../../domain/models.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
@@ -9,7 +10,7 @@ import type { ConversationSummary, StoredHit } from "../store.js"
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { ensurePerson } from "./identities.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
-import { CORPORA, drainCorpus, noteIndexText } from "./note-index.js"
+import { CORPORA, drainCorpus } from "./note-index.js"
 import type { Orm, StoreContext } from "./open.js"
 import { inBatch } from "./search-index.js"
 import { stemmerCache } from "./stems.js"
@@ -417,12 +418,92 @@ const join = (database: CacheDatabase, emailId: number, mailboxId: number, now: 
     .prepare("INSERT OR IGNORE INTO email_mailboxes (email_id, mailbox_id, created_at) VALUES (?, ?, ?)")
     .run(emailId, mailboxId, now)
 
-/** Every piece of mail, an email's own text or one of its attachments', with the email it belongs to as `e`. */
-const MAIL_PIECES = `(SELECT k.id, k.content_hash, k.chunkable_type AS type, k.chunkable_id AS owner, k.start_offset, k.end_offset,
-    CASE k.chunkable_type WHEN 'email' THEN k.chunkable_id ELSE a.attachable_id END AS email_id
+/**
+ * Every piece of mail: a stretch of a thread, or of one email's attachment. A thread piece holds no email of its
+ * own; `threadPieces` cuts the thread again to find which emails it spans.
+ */
+const MAIL_PIECES = `(SELECT k.id, k.content_hash, k.chunkable_type AS type, k.chunkable_id AS owner, k.position,
+    k.start_offset, k.end_offset, k.account_id, k.occurred_at, a.attachable_id AS email_id,
+    CASE k.chunkable_type WHEN 'email_thread' THEN k.chunkable_id
+      ELSE (SELECT email_thread_id FROM emails WHERE id = a.attachable_id) END AS thread_id
     FROM chunks k LEFT JOIN attachments a ON k.chunkable_type = 'attachment' AND a.id = k.chunkable_id
       AND a.attachable_type = 'email'
-   WHERE k.chunkable_type = 'email' OR a.id IS NOT NULL) p JOIN emails e ON e.id = p.email_id`
+   WHERE k.chunkable_type = 'email_thread' OR a.id IS NOT NULL) p`
+
+interface ThreadText {
+  lines: ChunkLine[]
+  at: Map<string, number | null>
+}
+
+/** A thread's live emails, oldest first, each as what it adds: its subject when that changes, then its own text. */
+const threadText = (database: CacheDatabase, threadId: number): ThreadText => {
+  const rows = database
+    .prepare(
+      `SELECT id, subject, coalesce(body_text, '') AS body, coalesce(from_name, from_address) AS sender,
+         coalesce(received_at, sent_at) AS at
+         FROM emails WHERE email_thread_id = ? AND deleted_at IS NULL ORDER BY coalesce(sent_at, received_at), id`,
+    )
+    .all(threadId)
+  const earlier: string[] = []
+  const at = new Map<string, number | null>()
+  let topic: string | null = null
+  const lines = rows.map((row) => {
+    const body = String(row.body)
+    const core = mailCore(body, earlier)
+    earlier.push(body)
+    const subject = titleOf(str(row.subject))
+    const text = subject && subject !== topic ? `${subject}\n\n${core}` : core
+    topic = subject ?? topic
+    at.set(String(row.id), int(row.at) ?? null)
+    return { id: String(row.id), sender: str(row.sender), text }
+  })
+  return { lines, at }
+}
+
+/**
+ * The thread cut greedily from its oldest email, so a new reply changes only the last piece or adds one: every
+ * piece before it keeps its text, its hash and so its vector.
+ */
+const threadPieces = (database: CacheDatabase, threadId: number): Chunk[] =>
+  cutChunks(threadText(database, threadId).lines)
+
+const chunkThread = (database: CacheDatabase, threadId: number, now: number) => {
+  const before = database
+    .prepare("SELECT content_hash AS hash FROM chunks WHERE chunkable_type = 'email_thread' AND chunkable_id = ?")
+    .all(threadId)
+    .map(({ hash }) => String(hash))
+  database.prepare("DELETE FROM chunks WHERE chunkable_type = 'email_thread' AND chunkable_id = ?").run(threadId)
+  const thread = database
+    .prepare("SELECT t.account_id, a.scope FROM email_threads t JOIN accounts a ON a.id = t.account_id WHERE t.id = ?")
+    .get(threadId)
+  if (thread) {
+    const { lines, at } = threadText(database, threadId)
+    const insert = database.prepare(
+      `INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope, account_id,
+         occurred_at, created_at, updated_at) VALUES ('email_thread', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    for (const [position, piece] of cutChunks(lines).entries())
+      insert.run(
+        threadId,
+        position,
+        piece.text.length,
+        piece.hash,
+        str(thread.scope),
+        Number(thread.account_id),
+        at.get(piece.lastId) ?? null,
+        now,
+        now,
+      )
+  }
+  purgeUnused(database, before)
+}
+
+const queueThreads = (database: CacheDatabase, ids: Iterable<number>) => {
+  const queue = database.prepare(
+    "INSERT OR IGNORE INTO email_index_pending (indexable_type, id) VALUES ('email_thread', ?)",
+  )
+  for (const id of ids) queue.run(id)
+}
 
 const ATTACHMENTS_OF_EMAIL = "SELECT id FROM attachments WHERE attachable_type = 'email' AND attachable_id = ?"
 
@@ -610,6 +691,7 @@ const saveThread = (database: CacheDatabase, orm: Orm, input: ThreadSave): numbe
     .prepare("UPDATE email_threads SET subject = ? WHERE id = ? AND subject IS NULL")
     .run(titleOf(str(first?.subject)), threadId)
   for (const id of [threadId, ...moved]) recount(database, id, now)
+  queueThreads(database, moved)
   return threadId
 }
 
@@ -697,8 +779,35 @@ export const emailHitsByPk = (database: CacheDatabase, pks: number[]): StoredHit
   })
 }
 
-/** Indexes the queued emails as the notes are indexed: words, stems and chunks of the subject, then the body. */
+/**
+ * Indexes the queued emails as the notes are indexed, words and stems of the subject, then the body; then cuts
+ * the threads they belong to into pieces for search by meaning.
+ */
 export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: Stemmers) => Stemmer): number => {
+  // Mail was once cut email by email; those pieces go once, and every thread is cut again.
+  const single = database
+    .prepare("SELECT DISTINCT content_hash AS hash FROM chunks WHERE chunkable_type = 'email'")
+    .all()
+    .map(({ hash }) => String(hash))
+  if (single.length)
+    inBatch(database, () => {
+      database.prepare("DELETE FROM chunks WHERE chunkable_type = 'email'").run()
+      queueThreads(
+        database,
+        database
+          .prepare("SELECT id FROM email_threads")
+          .all()
+          .map(({ id }) => Number(id)),
+      )
+      purgeUnused(database, single)
+    })
+  database
+    .prepare(
+      `INSERT OR IGNORE INTO email_index_pending (indexable_type, id)
+         SELECT DISTINCT 'email_thread', e.email_thread_id FROM email_index_pending q JOIN emails e ON e.id = q.id
+          WHERE q.indexable_type = 'email' AND e.email_thread_id IS NOT NULL`,
+    )
+    .run()
   // Attachments saved before their text was cut into pieces get them here, once.
   const unchunked = database
     .prepare(
@@ -715,7 +824,25 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
         purgeUnused(database, before)
       }
     })
-  return drainCorpus(database, CORPORA.email, stemmerFor)
+  const emails = drainCorpus(database, CORPORA.email, stemmerFor)
+  const next = database.prepare(
+    "SELECT id FROM email_index_pending WHERE indexable_type = 'email_thread' ORDER BY id LIMIT 50",
+  )
+  const done = database.prepare("DELETE FROM email_index_pending WHERE indexable_type = 'email_thread' AND id = ?")
+  let threads = 0
+  for (;;) {
+    const count = inBatch(database, () => {
+      const ids = next.all().map(({ id }) => Number(id))
+      for (const id of ids) {
+        chunkThread(database, id, Date.now())
+        done.run(id)
+      }
+      return ids.length
+    })
+    if (count === 0) break
+    threads += count
+  }
+  return emails + threads
 }
 
 export const mailStoreOver = (
@@ -830,40 +957,41 @@ export const mailStoreOver = (
   },
   async chunksToEmbed(model, { after, limit }) {
     drainEmailIndex(database, stemmerFor)
-    const read = database.prepare(CORPORA.email.read)
     const file = database.prepare("SELECT text FROM attachments WHERE id = ?")
+    const threads = new Map<number, Chunk[]>()
     return database
       .prepare(
-        `SELECT p.content_hash AS hash, min(p.type || ':' || p.owner) AS owner, p.start_offset AS start, p.end_offset AS end
+        `SELECT p.content_hash AS hash, min(p.type || ':' || p.owner) AS owner, p.position, p.start_offset AS start,
+           p.end_offset AS end
            FROM ${MAIL_PIECES}
-          WHERE p.content_hash > ? AND e.deleted_at IS NULL
+          WHERE p.content_hash > ?
             AND NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = p.content_hash)
           GROUP BY p.content_hash ORDER BY p.content_hash LIMIT ?`,
       )
       .all(after ?? "", model, limit)
       .flatMap((row) => {
         const [type, id] = String(row.owner).split(":")
-        const text =
-          type === "email"
-            ? (() => {
-                const email = read.get(Number(id))
-                return email ? noteIndexText(str(email.title), String(email.body)) : undefined
-              })()
-            : str(file.get(Number(id))?.text)
+        const owner = Number(id)
+        if (type === "email_thread") {
+          if (!threads.has(owner)) threads.set(owner, threadPieces(database, owner))
+          const piece = threads.get(owner)?.[Number(row.position)]
+          return piece && piece.hash === row.hash ? [{ hash: piece.hash, text: piece.text }] : []
+        }
+        const text = str(file.get(owner)?.text)
         return text == null ? [] : [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
       })
   },
   async nearest(model, query, { accountId, limit, threadExternalId, since }) {
     drainEmailIndex(database, stemmerFor)
     const page = database.prepare(
-      `SELECT p.id, p.email_id AS email, v.vector FROM ${MAIL_PIECES}
+      `SELECT p.id, p.type, p.owner, p.position, p.email_id AS email, v.vector FROM ${MAIL_PIECES}
          JOIN embeddings v ON v.model = ? AND v.content_hash = p.content_hash
-        WHERE p.id > ? AND e.account_id = ? AND e.deleted_at IS NULL
-          AND (? IS NULL OR e.email_thread_id IN (SELECT id FROM email_threads WHERE account_id = e.account_id AND external_id = ?))
-          AND (? IS NULL OR coalesce(e.received_at, e.sent_at) >= ?)
+        WHERE p.id > ? AND p.account_id = ?
+          AND (? IS NULL OR p.thread_id IN (SELECT id FROM email_threads WHERE account_id = p.account_id AND external_id = ?))
+          AND (? IS NULL OR p.occurred_at >= ?)
         ORDER BY p.id LIMIT 500`,
     )
-    const best = new Map<number, number>()
+    const best = new Map<string, number>()
     for (let after = 0; ; ) {
       const rows = page.all(
         model,
@@ -876,19 +1004,32 @@ export const mailStoreOver = (
       )
       for (const row of rows) {
         const score = dot(query, row.vector as Uint8Array)
-        const email = Number(row.email)
-        if (score > (best.get(email) ?? Number.NEGATIVE_INFINITY)) best.set(email, score)
+        const key = row.type === "email_thread" ? `${row.owner}:${row.position}` : `email:${row.email}`
+        if (score > (best.get(key) ?? Number.NEGATIVE_INFINITY)) best.set(key, score)
       }
       if (rows.length < 500) break
       after = Number(rows.at(-1)?.id)
     }
-    return [...best.entries()]
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, limit)
-      .flatMap(([emailId, score]) => {
-        const place = inThread(database, emailId)
-        return place ? [{ ...place, score }] : []
-      })
+    // A thread piece stands for the newest email in it: the one whose arrival made the piece what it is.
+    const threads = new Map<number, Chunk[]>()
+    const emails = new Map<number, number>()
+    for (const [key, score] of [...best.entries()].sort(([, a], [, b]) => b - a)) {
+      if (emails.size >= limit) break
+      const [owner, position] = key.split(":")
+      let email = Number(position)
+      if (owner !== "email") {
+        const thread = Number(owner)
+        if (!threads.has(thread)) threads.set(thread, threadPieces(database, thread))
+        const piece = threads.get(thread)?.[email]
+        if (!piece) continue
+        email = Number(piece.lastId)
+      }
+      if (!emails.has(email)) emails.set(email, score)
+    }
+    return [...emails.entries()].flatMap(([emailId, score]) => {
+      const place = inThread(database, emailId)
+      return place ? [{ ...place, score }] : []
+    })
   },
   async inThreads(accountId, externalIds) {
     const id = database.prepare("SELECT id FROM emails WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL")
