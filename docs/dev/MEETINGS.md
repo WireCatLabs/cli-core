@@ -156,3 +156,20 @@ an explicit `--since`; invalid bounds fail before provider discovery. Groups hav
 for the meeting read tools. The server owns registration and access policy. Arguments use snake case
 and are checked before execution. Results include JSON text and structured content; errors set
 `isError`. Both surfaces use [`src/reads.ts`](../../src/meetings/reads.ts), including the list page envelope.
+
+## Providers next
+
+Moved from cli-meetings' roadmap when that repository was retired. Zoom, through `zoom-cli` (`zm`), is the
+first provider. Each one below is a source behind the same port; nothing above the port changes when one
+is added.
+
+- **Google Meet** — transcripts and recordings from Google Workspace.
+- **Microsoft Teams** — transcripts and meeting chat through Microsoft Graph.
+- **Meeting-assistant bots** that already transcribe and summarise — Fireflies and similar services —
+  read through their APIs as one more source.
+- **A browser source** for Zoom, for accounts whose admin does not approve the app and for meetings the
+  user only attended.
+- **Later, calendars** — Google Calendar and others. A calendar entry is one more source for an event,
+  next to the meetings: it points at the same event, its invitees are identities like meeting
+  participants, and a recurring entry points at the same event series. Nothing for calendars is built
+  yet; the event tables are shaped so that adding them changes no meeting code.

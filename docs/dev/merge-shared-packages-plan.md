@@ -1,6 +1,6 @@
 # Merge cli-tasks and cli-meetings into cli-messaging
 
-Status: approved 2026-10-11. Phase 1 released in 0.239.0, phase 2 in 0.244.0; phase 3 under way.
+Status: approved 2026-10-11. Phase 1 released in 0.239.0, phase 2 in 0.244.0; phase 3 under way; phase 4 under way.
 Owner's calls (2026-10-11): fold cli-tasks and cli-meetings into cli-messaging and keep modules apart with
 lint rules, not with packages; cli-core stays a separate package; then rename cli-core → **cli-base** and
 cli-messaging → **cli-core** ([Naming](#naming)).
@@ -76,11 +76,13 @@ Each phase is one PR in cli-messaging, released before the next starts.
 1. Last release of `@wirecat/cli-tasks` and `@wirecat/cli-meetings`: each re-exports from the matching
    cli-messaging subpath, with a README line pointing there. One version, then
    `npm deprecate` on both names. Prepared as cli-tasks 0.4.0
-   ([cli-tasks#28](https://github.com/WireCatLabs/cli-tasks/pull/28)) and cli-meetings 0.5.0
-   ([cli-meetings#51](https://github.com/WireCatLabs/cli-meetings/pull/51)), with cli-messaging as a peer
+   (cli-tasks#28) and cli-meetings 0.5.0
+   (cli-meetings#51), with cli-messaging as a peer
    so an app keeps one copy. zoom-cli 0.7.0 is already on the new paths, so the deprecation warns no `zm`
    install.
-2. Archive the two GitHub repositories; their local checkouts and worktrees go to CLEANUP.md.
+2. Delete the two GitHub repositories (owner, 2026-10-11: delete, not archive); their local checkouts and
+   worktrees go to CLEANUP.md. Their code history is in this repository; their pull requests and tags go
+   with them. cli-meetings' roadmap moved to [MEETINGS.md](MEETINGS.md#providers-next) first.
 
 ## Why cli-core stays out
 
@@ -125,12 +127,24 @@ repository name and the npm name are reused, and each reuse has a trap:
 So the order is strict, and each step finishes everywhere before the next:
 
 **Phase 4 — the framework becomes cli-base.**
-1. Rename the GitHub repository `cli-core` → `cli-base`; publish the same code as `@wirecat/cli-base`.
-2. Every repository switches `@wirecat/cli-core` → `@wirecat/cli-base` (imports, `biome.json` extends,
-   tsconfig extends, lefthook, release scripts) and its links to `WireCatLabs/cli-core` → `cli-base`. One
-   script, run per repository, one PR each; about 12,000 file references, nearly all import lines.
-3. Every local checkout and worktree of the framework: `git remote set-url origin …/cli-base.git`.
-4. Last framework release under the old name: none. `@wirecat/cli-core` is not deprecated; it is about
+1. Publish the framework as `@wirecat/cli-base` (cli-core#84; 0.21.0 is the same code as 0.20.0 under the
+   new name). The first version goes out from the owner's machine: npm's trusted publishing is set on a
+   package that already exists. Done 2026-10-11.
+2. Rename the GitHub repository `cli-core` → `cli-base`, inside an announced freeze, and merge one PR per
+   repository moving `uses: WireCatLabs/cli-core/.github/workflows/…` to `cli-base/…` with the same pinned
+   commit. GitHub [does not redirect](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)
+   calls to actions or reusable workflows in a renamed repository, so CI and releases fail everywhere
+   between the rename and those merges. Done 2026-10-11 at 20:14 UTC, with nine PRs merged within a
+   minute. Then the owner adds the npm trusted publisher for `cli-base`.
+3. Every repository switches `@wirecat/cli-core` → `@wirecat/cli-base` (imports, `biome.json` extends,
+   tsconfig extends, lefthook, release scripts, prose), one PR each:
+   `node <cli-base>/scripts/rename-package.ts --pass npm --version <x.y.z>`. **Producers first**
+   (cli-testing, cli-messaging), apps after: an app on cli-base whose cli-messaging still peers cli-core
+   installs two framework copies, and `instanceof` on errors fails between them. About 1,100 lines in
+   tracked files (lockfiles and changelogs excluded).
+4. Local checkouts of the framework: `git remote set-url origin …/cli-base.git`, any time before phase 5
+   reuses the name (until then GitHub redirects git).
+5. Last framework release under the old name: none. `@wirecat/cli-core` is not deprecated; it is about
    to be reused.
 
 **Phase 5 — cli-messaging becomes cli-core.** Only after phase 4 is released in every app.
