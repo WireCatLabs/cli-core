@@ -175,6 +175,7 @@ describe("local meeting transcription", () => {
       { meeting: { ...original, meeting: { ...original.meeting, accountId: 2 } } },
       { meeting: { ...original, meeting: { ...original.meeting, externalId: "foreign" } } },
       { meeting: { ...original, meeting: { ...original.meeting, deletedAt: 6000 } } },
+      { meeting: { ...original, meeting: { ...original.meeting, id: 0 } } },
     ]) {
       fixture.store.appendTranscriptsWithReceipt.mockResolvedValueOnce({
         meeting: original,
@@ -185,10 +186,10 @@ describe("local meeting transcription", () => {
         ...change,
       })
       await expect(transcribeMeeting(fixture.source, fixture.store, target, { apply: true })).rejects.toMatchObject({
-        code: "invalid_response",
+        code: "outcome_unknown",
       })
     }
-    expect(fixture.store.appendTranscriptsWithReceipt).toHaveBeenCalledTimes(6)
+    expect(fixture.store.appendTranscriptsWithReceipt).toHaveBeenCalledTimes(7)
     fixture.source.describe.mockResolvedValue({
       ...media(),
       recognition: { engine: "example", model: "example", timing: "fixed-windows" },
@@ -197,6 +198,29 @@ describe("local meeting transcription", () => {
     expect(fixture.store.appendTranscriptsWithReceipt.mock.calls.at(-1)?.[0].transcripts[0]?.metadata?.timing).toBe(
       "fixed-windows",
     )
+  })
+
+  it("classifies missing and throwing acknowledgements after a possible commit", async () => {
+    const fixture = await setup()
+    const malformed = [
+      undefined,
+      null,
+      {},
+      { meeting: null },
+      { meeting: { meeting: null } },
+      {
+        get meeting() {
+          throw new Error("broken acknowledgement")
+        },
+      },
+    ]
+    for (const value of malformed) {
+      fixture.store.appendTranscriptsWithReceipt.mockResolvedValueOnce(value as never)
+      await expect(transcribeMeeting(fixture.source, fixture.store, target, { apply: true })).rejects.toMatchObject({
+        code: "outcome_unknown",
+      })
+    }
+    expect(fixture.store.appendTranscriptsWithReceipt).toHaveBeenCalledTimes(malformed.length)
   })
 
   it("keeps cancellation and backend errors from committing partial rows", async () => {

@@ -183,19 +183,27 @@ export const transcribeMeeting = async (
         },
       ],
     })
-    if (
-      append.meeting?.meeting.accountId !== accountId ||
-      append.meeting.meeting.externalId !== externalId ||
-      append.meeting.meeting.deletedAt !== null ||
-      append.created !== false ||
-      [append.insertedTranscripts, append.replayedTranscripts, append.supersededTranscripts].some(
-        (count) => !Number.isSafeInteger(count) || count < 0,
-      ) ||
-      append.insertedTranscripts + append.replayedTranscripts !== 1
-    )
+    let valid = false
+    try {
+      const meeting = append?.meeting?.meeting
+      valid =
+        meeting?.accountId === accountId &&
+        meeting.externalId === externalId &&
+        meeting.deletedAt === null &&
+        Number.isSafeInteger(meeting.id) &&
+        meeting.id > 0 &&
+        append.created === false &&
+        [append.insertedTranscripts, append.replayedTranscripts, append.supersededTranscripts].every(
+          (count) => Number.isSafeInteger(count) && count >= 0,
+        ) &&
+        append.insertedTranscripts + append.replayedTranscripts === 1
+    } catch {
+      valid = false
+    }
+    if (!valid)
       throw new CliError(
-        "invalid_response",
-        "transcription append returned an invalid acknowledgement; outcome may be uncertain",
+        "outcome_unknown",
+        "transcription append acknowledgement is invalid; verify stored state before retrying",
       )
     return { append, segments: rows.length }
   })
