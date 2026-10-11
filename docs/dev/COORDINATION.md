@@ -4,7 +4,8 @@ Several sessions work on cli-messaging, tg-cli and max-cli at once. This page is
 
 ## Store migrations
 
-**The next free migration version is 4.** Version 3 is reserved for canonical project/tag/topic aliases
+**The next free migration version is 5.** Version 4 is reserved for `tasks.next_check_at` (task follow-ups,
+2026-10-11). Version 3 is reserved for canonical project/tag/topic aliases
 (Codex root, meeting intelligence wave, 2026-10-11). Version 2 is taken by facts (decisions become facts with a kind;
 kind-fact memories move into the facts store), owner's NEED-949 A, 2026-10-11. Versions are the `version` field of `MANIFEST` in
 `src/store/sqlite/manifest.ts`; the initial migration is 1. Take the next one by editing this line in a pull
