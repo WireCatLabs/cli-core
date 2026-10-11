@@ -29,6 +29,7 @@ import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
 import { type MeetingReadCapabilities, meetingReadsOver } from "./meeting-reads.js"
+import { invalidateMeetingStems } from "./meeting-stem-state.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
 import { inBatch } from "./search-index.js"
@@ -554,6 +555,7 @@ export const drainMeetingIndex = (database: CacheDatabase, batch = 500): number 
       for (const { indexable_type: type, id } of queued) {
         const kind = String(type)
         if (kind in INDEX_CODES) {
+          invalidateMeetingStems(database, kind, Number(id))
           const rowid = meetingRowid(kind as Indexable, Number(id))
           drop.run(rowid)
           const words = normalize(indexedText(database, kind, Number(id)) ?? "")

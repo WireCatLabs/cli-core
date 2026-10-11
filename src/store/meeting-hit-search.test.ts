@@ -36,7 +36,7 @@ it("continues individual cue hits across a long transcript and isolates another 
   original.rows.splice(0, original.rows.length, ...generatedRows)
   const saved = await store.meetings.saveMeeting(input)
   await store.meetings.saveMeeting({ ...input, meeting: { ...input.meeting, accountId: otherId } })
-  await store.meetings.search("needle", { accountId })
+  await store.meetings.indexSearch({ accountId })
   const hits = []
   let after: string | undefined
   do {
@@ -110,6 +110,7 @@ it("preflights UTF8 bytes including lookahead without hydrating huge cue text", 
     rowId * 4 + 1,
     "needle",
   )
+  db.prepare("DELETE FROM meeting_index_pending WHERE indexable_type='meeting_transcript_row' AND id=?").run(rowId)
   await expect(store.meetings.searchHits("needle", { accountId })).rejects.toMatchObject({ code: "validation_error" })
   const page = await store.meetings.searchHits("needle", { accountId, maxReadBytes: 8 * 1024 ** 2, limit: 1 })
   expect(page.items[0]?.text.length).toBe(3000007)

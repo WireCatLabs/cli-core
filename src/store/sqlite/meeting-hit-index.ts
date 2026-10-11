@@ -1,21 +1,19 @@
 import { CliError } from "@wirecat/cli-core"
 import type { MeetingSearchIndexStore } from "@wirecat/cli-meetings"
-import { normalize } from "../normalize.js"
+import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import { checkMeetingCancelled, meetingWriteSnapshot } from "./meeting-operation.js"
 import { positiveReadInteger } from "./meeting-reads.js"
+import {
+  meetingCurrentIndexRows,
+  meetingQueuedIndexRows,
+  meetingStemmableText,
+  meetingStemState,
+  meetingStemStateName,
+} from "./meeting-stem-state.js"
 import { type INDEX_CODES, indexedText, meetingRowid } from "./meetings.js"
 import type { StoreContext } from "./open.js"
 
-const summaryBytes = ["title", "overview", "sections", "next_steps", "content"]
-  .map((key) => `coalesce(length(CAST(s.${key} AS BLOB)),0)`)
-  .join("+")
-const queue = `FROM meeting_index_pending p
- LEFT JOIN meeting_transcript_rows r ON p.indexable_type='meeting_transcript_row' AND r.id=p.id
- LEFT JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id
- LEFT JOIN meeting_chat_messages c ON p.indexable_type='meeting_chat_message' AND c.id=p.id
- LEFT JOIN meeting_summaries s ON p.indexable_type='meeting_summary' AND s.id=p.id
- JOIN meetings m ON m.id=coalesce(t.meeting_id,c.meeting_id,s.meeting_id) WHERE m.account_id=?`
-export function meetingHitIndexOver({ database }: StoreContext): MeetingSearchIndexStore {
+export function meetingHitIndexOver({ database, now }: StoreContext): MeetingSearchIndexStore {
   return {
     async indexSearch(original) {
       const input = { ...original }
@@ -29,14 +27,19 @@ export function meetingHitIndexOver({ database }: StoreContext): MeetingSearchIn
         throw new CliError("validation_error", "Meeting indexing byte limit must be from 1 through 67108864")
       return meetingWriteSnapshot(database, () => {
         checkMeetingCancelled(input.signal)
+        if (!database.prepare("SELECT 1 FROM accounts WHERE id=?").get(input.accountId))
+          throw new CliError("not_found", "Meeting index account not found")
+        const state = meetingStemState(database, input.accountId)
+        if (!state.stemmer)
+          throw new CliError(
+            "configuration_error",
+            "Meeting stemmers are unknown; choose supported store stemmers before indexing",
+          )
+        const candidates = `WITH current AS (${meetingCurrentIndexRows}), queued AS (${meetingQueuedIndexRows}), candidates AS (SELECT * FROM current WHERE rid>? UNION SELECT * FROM queued)`
+        const parameters = [input.accountId, input.accountId, input.accountId, input.accountId, state.through]
         const rows = database
-          .prepare(`SELECT p.indexable_type,p.id,
-        CASE WHEN m.deleted_at IS NOT NULL OR (p.indexable_type='meeting_transcript_row' AND (t.deleted_at IS NOT NULL OR t.superseded_at IS NOT NULL)) THEN 0 ELSE 1 END AS live,
-        CASE WHEN m.deleted_at IS NOT NULL OR (p.indexable_type='meeting_transcript_row' AND (t.deleted_at IS NOT NULL OR t.superseded_at IS NOT NULL)) THEN 0
-          WHEN p.indexable_type='meeting_transcript_row' THEN coalesce(length(CAST(r.text AS BLOB)),0)
-          WHEN p.indexable_type='meeting_chat_message' THEN coalesce(length(CAST(c.text AS BLOB)),0)
-          ELSE ${summaryBytes} END AS bytes ${queue} ORDER BY p.indexable_type,p.id LIMIT ?`)
-          .all(input.accountId, limit)
+          .prepare(`${candidates} SELECT * FROM candidates ORDER BY rid LIMIT ?`)
+          .all(...parameters, limit)
         let bytes = 0
         for (const row of rows) {
           const size = Number(row.bytes)
@@ -45,6 +48,8 @@ export function meetingHitIndexOver({ database }: StoreContext): MeetingSearchIn
             throw new CliError("validation_error", "Meeting indexing exceeds its stored text byte budget")
         }
         const remove = database.prepare("DELETE FROM meeting_words WHERE rowid=?")
+        const removeStems = database.prepare("DELETE FROM meeting_stems WHERE rowid=?")
+        const addStems = database.prepare("INSERT INTO meeting_stems(rowid,stems,scope) VALUES(?,?,?)")
         const add = database.prepare("INSERT INTO meeting_words(rowid,normalized_text,scope) VALUES(?,?,?)")
         const dequeue = database.prepare("DELETE FROM meeting_index_pending WHERE indexable_type=? AND id=?")
         for (const row of rows) {
@@ -52,18 +57,46 @@ export function meetingHitIndexOver({ database }: StoreContext): MeetingSearchIn
           const kind = String(row.indexable_type) as keyof typeof INDEX_CODES
           const id = Number(row.id)
           remove.run(meetingRowid(kind, id))
+          removeStems.run(meetingRowid(kind, id))
           if (Number(row.live) === 1) {
             let text: string
             try {
-              text = normalize(indexedText(database, kind, id) ?? "")
+              text = indexedText(database, kind, id) ?? ""
             } catch {
               throw new CliError("invalid_response", "Stored meeting search text has invalid structured text")
             }
-            if (text) add.run(meetingRowid(kind, id), text, kind)
+            const normalized = normalize(text)
+            const stemmed = state.stemmer.indexText(meetingStemmableText(text))
+            if (normalized) add.run(meetingRowid(kind, id), normalized, kind)
+            if (stemmed) addStems.run(meetingRowid(kind, id), stemmed, kind)
           }
           dequeue.run(kind, id)
         }
-        const remaining = Number(database.prepare(`SELECT count(*) AS n ${queue}`).get(input.accountId)?.n ?? 0)
+        const advanced = rows.reduce((through, row) => Math.max(through, Number(row.rid)), state.through)
+        const leftover = Number(
+          database
+            .prepare(`SELECT count(*) AS n FROM (${meetingCurrentIndexRows}) WHERE rid>?`)
+            .get(input.accountId, input.accountId, input.accountId, advanced)?.n ?? 0,
+        )
+        const through = leftover === 0 ? Math.max(advanced, state.watermark) : advanced
+        database
+          .prepare(
+            "INSERT INTO search_index_state(name,watermark,filled_through,terms_through,normalizer_version,built_at,analyzer) VALUES(?,?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET watermark=excluded.watermark,filled_through=excluded.filled_through,normalizer_version=excluded.normalizer_version,built_at=excluded.built_at,analyzer=excluded.analyzer",
+          )
+          .run(
+            meetingStemStateName(input.accountId),
+            state.watermark,
+            through,
+            0,
+            NORMALIZER_VERSION,
+            leftover === 0 ? now() : null,
+            state.identity,
+          )
+        const remaining = Number(
+          database
+            .prepare(`${candidates} SELECT count(*) AS n FROM candidates`)
+            .get(input.accountId, input.accountId, input.accountId, input.accountId, through)?.n ?? 0,
+        )
         checkMeetingCancelled(input.signal)
         return { indexed: rows.length, remaining }
       })

@@ -5,6 +5,7 @@ import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
 import { meetingReadSnapshot, positiveReadInteger } from "./meeting-reads.js"
+import { meetingStemmableText, meetingStemState } from "./meeting-stem-state.js"
 import { indexedText } from "./meetings.js"
 import type { StoreContext } from "./open.js"
 
@@ -23,9 +24,18 @@ const timestamp = (value: number | undefined): void => {
   if (value !== undefined && (!Number.isSafeInteger(value) || Math.abs(value) > 8640000000000000))
     fail("Invalid meeting search timestamp")
 }
-const fingerprint = (query: string, input: MeetingSearchOptions): string =>
+const fingerprint = (query: string, input: MeetingSearchOptions, analyzer: string): string =>
   createHash("sha256")
-    .update(JSON.stringify([query, input.accountId, input.meetingId ?? null, input.since ?? null, input.until ?? null]))
+    .update(
+      JSON.stringify([
+        query,
+        analyzer,
+        input.accountId,
+        input.meetingId ?? null,
+        input.since ?? null,
+        input.until ?? null,
+      ]),
+    )
     .digest("hex")
 const cursorOf = (value: string | undefined, key: string): Cursor | null => {
   if (value === undefined) return null
@@ -75,15 +85,20 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         fail("Meeting search byte limit must be from 1 through 67108864")
       if (typeof rawQuery !== "string" || Buffer.byteLength(rawQuery) > 65536)
         fail("Meeting search query must be a bounded string")
-      const words = normalize(rawQuery)
-        .split(/[^\p{L}\p{N}]+/u)
-        .filter(Boolean)
-      if (words.length > 128) fail("Meeting search supports at most 128 query words")
-      const query = words.map((word) => `"${word}"*`).join(" AND ")
-      const key = fingerprint(query, input)
-      const after = cursorOf(input.after, key)
+      const rawWords = rawQuery.match(/[\p{L}\p{N}\p{M}]+/gu)?.filter((word) => normalize(word)) ?? []
+      if (rawWords.length > 128) fail("Meeting search supports at most 128 query words")
       return meetingReadSnapshot(database, () => {
         checkMeetingCancelled(input.signal)
+        const state = meetingStemState(database, input.accountId)
+        const terms = rawWords.map((raw) => ({
+          literal: normalize(raw),
+          stems:
+            state.stemmer && raw.length <= 1024
+              ? [...new Set(state.stemmer.explain(raw).map((word) => word.stem))]
+              : [],
+        }))
+        const key = fingerprint(JSON.stringify(terms), input, state.identity)
+        const after = cursorOf(input.after, key)
         const pending = database
           .prepare(`SELECT 1 FROM meeting_index_pending p
           LEFT JOIN meeting_transcript_rows r ON p.indexable_type='meeting_transcript_row' AND r.id=p.id
@@ -97,11 +112,26 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         const coverage = {
           archiveCompleteness: "unknown" as const,
           currentRevisions: true as const,
-          indexing: pending ? ("pending" as const) : ("ready" as const),
+          indexing:
+            pending || !state.stemmer || state.through < state.watermark ? ("pending" as const) : ("ready" as const),
           indexCompleteness: "unknown" as const,
         }
-        if (!query) return { items: [], hasMore: false, nextCursor: null, coverage }
+        if (terms.length === 0) return { items: [], hasMore: false, nextCursor: null, coverage }
         const clauses = ["m.account_id=?", "m.deleted_at IS NULL"]
+        const queryParams: SqlValue[] = []
+        const termTables = terms.map((term, i) => {
+          queryParams.push(`normalized_text : ("${term.literal}"*)`)
+          let select = "SELECT rowid AS rid FROM meeting_words WHERE meeting_words MATCH ?"
+          if (state.stemmer && state.through > 0 && term.stems.length) {
+            queryParams.push(
+              `stems : (${term.stems.map((stem) => `"${stem.replaceAll('"', '""')}"`).join(" OR ")})`,
+              state.through,
+            )
+            select += " UNION SELECT rowid AS rid FROM meeting_stems WHERE meeting_stems MATCH ? AND rowid<=?"
+          }
+          return `term_${i} AS (${select})`
+        })
+        const matching = terms.map((_, i) => `SELECT rid FROM term_${i}`).join(" INTERSECT ")
         const params: SqlValue[] = [input.accountId]
         if (input.meetingId !== undefined) {
           clauses.push("m.id=?")
@@ -120,12 +150,12 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
           : ""
         if (after)
           params.push(after.started, after.started, after.meeting, after.meeting, after.kind, after.kind, after.id)
-        const sql = `WITH matching AS (SELECT rowid AS rid FROM meeting_words WHERE meeting_words MATCH ?), selected AS (SELECT m.id,coalesce(m.started_at,0) AS started FROM meetings m WHERE ${clauses.join(" AND ")}), hits AS (
+        const sql = `WITH ${termTables.join(",")}, matches AS (${matching}), matching AS (SELECT rid FROM matches h WHERE NOT EXISTS(SELECT 1 FROM meeting_index_pending p WHERE p.id=h.rid/4 AND p.indexable_type=CASE h.rid%4 WHEN 1 THEN 'meeting_transcript_row' WHEN 2 THEN 'meeting_chat_message' ELSE 'meeting_summary' END)), selected AS (SELECT m.id,coalesce(m.started_at,0) AS started FROM meetings m WHERE ${clauses.join(" AND ")}), hits AS (
         SELECT m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text"])} AS bytes FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
         UNION ALL SELECT m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])} FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
         UNION ALL SELECT m.started,m.id,2,s.id,NULL,${bytes("s", fields)} FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
         SELECT * FROM hits ${seek} ORDER BY started DESC,meeting_id,kind,id LIMIT ?`
-        const rows = database.prepare(sql).all(`normalized_text : (${query})`, ...params, limit + 1)
+        const rows = database.prepare(sql).all(...queryParams, ...params, limit + 1)
         let total = 0
         for (const row of rows) {
           const size = Number(row.bytes)
@@ -155,6 +185,16 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             startMs: row.start_ms === null ? null : Number(row.start_ms),
           }
         })
+        const fresh = items.filter((item) => {
+          const literalTokens = normalize(item.text).match(/[\p{L}\p{N}]+/gu) ?? []
+          const missing = terms.filter((term) => !literalTokens.some((token) => token.startsWith(term.literal)))
+          if (missing.length === 0) return true
+          const stemTokens = state.stemmer
+            ? new Set(state.stemmer.explain(meetingStemmableText(item.text)).map((word) => word.stem))
+            : new Set<string>()
+          return missing.every((term) => term.stems.some((stem) => stemTokens.has(stem)))
+        })
+        if (fresh.length !== items.length) coverage.indexing = "pending"
         const last = rows[limit - 1]
         const hasMore = rows.length > limit
         const nextCursor =
@@ -170,7 +210,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
                 }),
               ).toString("base64url")
             : null
-        return { items, hasMore, nextCursor, coverage }
+        return { items: fresh, hasMore, nextCursor, coverage }
       })
     },
   }
