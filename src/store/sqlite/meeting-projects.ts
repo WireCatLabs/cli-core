@@ -48,8 +48,7 @@ const check = (signal?: AbortSignal) => {
 /** Membership is scoped to the meeting's account, independently of global project names. */
 export const meetingProjectsStoreOver = ({ database, now }: StoreContext): MeetingProjectsStore => {
   const account = (key: AccountKey) => {
-    if (!key || !key.provider || !key.account)
-      throw new CliError("validation_error", "choose a meeting account explicitly")
+    if (!key?.provider || !key.account) throw new CliError("validation_error", "choose a meeting account explicitly")
     const row = database
       .prepare("SELECT id FROM accounts WHERE provider=? AND external_id=?")
       .get(key.provider, key.account)
