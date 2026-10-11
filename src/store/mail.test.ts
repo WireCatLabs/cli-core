@@ -266,6 +266,24 @@ describe("mail store", () => {
     expect(await mail.setFlags(1, new Map([["<missing@example.com>", { read: true }]]), 5000)).toBe(0)
   })
 
+  it("cuts the text of attachments saved before attachments had pieces, once", async () => {
+    const { database, mail } = await seeded()
+    await mail.saveThread(thread([email()]))
+    const id = Number((await mail.email(1, "<first@example.com>"))?.id)
+    database
+      .prepare(
+        "INSERT INTO attachments (attachable_type, attachable_id, position, kind, name, text, created_at, updated_at) VALUES ('email', ?, 0, 'file', 'old.txt', 'An old budget file', 1, 1)",
+      )
+      .run(id)
+    const pieces = () =>
+      Number(database.prepare("SELECT count(*) AS n FROM chunks WHERE chunkable_type = 'attachment'").get()?.n)
+    expect(pieces()).toBe(0)
+    await mail.chunksToEmbed("test:model:2", { limit: 10 })
+    expect(pieces()).toBe(1)
+    await mail.chunksToEmbed("test:model:2", { limit: 10 })
+    expect(pieces()).toBe(1)
+  })
+
   it("refuses an empty key and leaves nothing behind", async () => {
     const { mail } = await seeded()
     await expect(mail.saveThread(thread([email(), email({ externalId: "" })]))).rejects.toThrow("Invalid email key")

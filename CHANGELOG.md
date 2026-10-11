@@ -7,6 +7,14 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Fixed
+
+- **Purging a meeting account failed** on the accounts foreign key, as purging a mail account did: `purgeAccount`
+  now deletes its meetings, transcripts, rows, chat, summaries, participants and series, and the attachments, tags
+  and links that point at them. A purge also drops the vectors of the account's pieces that no other piece holds.
+- **Pieces of email and document text now carry their account**, as the schema says, and older ones get it on the
+  next index pass; an email's attachments saved before attachment pieces existed are cut into pieces then too.
+
 ## 0.236.0 — 11.10.2026
 
 ### Added

@@ -698,8 +698,25 @@ export const emailHitsByPk = (database: CacheDatabase, pks: number[]): StoredHit
 }
 
 /** Indexes the queued emails as the notes are indexed: words, stems and chunks of the subject, then the body. */
-export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: Stemmers) => Stemmer): number =>
-  drainCorpus(database, CORPORA.email, stemmerFor)
+export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: Stemmers) => Stemmer): number => {
+  // Attachments saved before their text was cut into pieces get them here, once.
+  const unchunked = database
+    .prepare(
+      `SELECT DISTINCT e.id, e.account_id FROM attachments a JOIN emails e ON a.attachable_type = 'email' AND e.id = a.attachable_id
+        WHERE a.text <> '' AND e.deleted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM chunks k WHERE k.chunkable_type = 'attachment' AND k.chunkable_id = a.id)`,
+    )
+    .all()
+  if (unchunked.length)
+    inBatch(database, () => {
+      for (const row of unchunked) {
+        const before = dropAttachmentChunks(database, Number(row.id))
+        chunkAttachments(database, Number(row.account_id), Number(row.id), Date.now())
+        purgeUnused(database, before)
+      }
+    })
+  return drainCorpus(database, CORPORA.email, stemmerFor)
+}
 
 export const mailStoreOver = (
   { database, orm }: Pick<StoreContext, "database" | "orm">,

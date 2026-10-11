@@ -97,6 +97,10 @@ export const purgeAccount = ({ orm }: StoreContext, accountKey: number): void =>
   const messagesOf = orm.select({ pk: messages.id }).from(messages).where(eq(messages.accountId, accountKey))
   orm.delete(botUpdates).where(eq(botUpdates.accountId, accountKey)).run()
   orm.delete(involvements).where(eq(involvements.accountId, accountKey)).run()
+  // Vectors are keyed by text: those of this account's pieces go at the end, unless another piece holds that text.
+  const hashes = orm
+    .all<{ hash: string }>(sql`SELECT DISTINCT content_hash AS hash FROM chunks WHERE account_id = ${accountKey}`)
+    .map(({ hash }) => hash)
   orm.delete(chunks).where(eq(chunks.accountId, accountKey)).run()
   orm.delete(aliases).where(eq(aliases.accountId, accountKey)).run()
   orm.delete(syncs).where(eq(syncs.accountId, accountKey)).run()
@@ -126,8 +130,28 @@ export const purgeAccount = ({ orm }: StoreContext, accountKey: number): void =>
   )
   orm.run(sql`DELETE FROM email_threads WHERE account_id = ${accountKey}`)
   orm.run(sql`DELETE FROM mailboxes WHERE account_id = ${accountKey}`)
+  // Meetings have no delete trigger: children first, then what points at a meeting, then the meetings.
+  const meetingsOf = sql`(SELECT id FROM meetings WHERE account_id = ${accountKey})`
+  orm.run(
+    sql`DELETE FROM meeting_transcript_rows WHERE meeting_transcript_id IN (SELECT id FROM meeting_transcripts WHERE meeting_id IN ${meetingsOf})`,
+  )
+  orm.run(sql`DELETE FROM meeting_transcripts WHERE meeting_id IN ${meetingsOf}`)
+  orm.run(sql`DELETE FROM meeting_chat_messages WHERE meeting_id IN ${meetingsOf}`)
+  orm.run(sql`DELETE FROM meeting_summaries WHERE meeting_id IN ${meetingsOf}`)
+  orm.run(sql`DELETE FROM meeting_participants WHERE meeting_id IN ${meetingsOf}`)
+  orm.run(sql`DELETE FROM attachments WHERE attachable_type = 'meeting' AND attachable_id IN ${meetingsOf}`)
+  orm.run(sql`DELETE FROM taggings WHERE taggable_type = 'meeting' AND taggable_id IN ${meetingsOf}`)
+  orm.run(
+    sql`DELETE FROM links WHERE (from_type = 'meeting' AND from_id IN ${meetingsOf}) OR (to_type = 'meeting' AND to_id IN ${meetingsOf})`,
+  )
+  orm.run(sql`DELETE FROM meetings WHERE account_id = ${accountKey}`)
+  orm.run(sql`DELETE FROM meeting_series WHERE account_id = ${accountKey}`)
   orm.delete(accountIdentities).where(eq(accountIdentities.accountId, accountKey)).run()
   // The inbox project and its tasks are the owner's; only the tie to the account goes.
   orm.update(projects).set({ accountId: null }).where(eq(projects.accountId, accountKey)).run()
   orm.delete(accounts).where(eq(accounts.id, accountKey)).run()
+  orm.run(
+    sql`DELETE FROM embeddings WHERE content_hash IN (SELECT value FROM json_each(${JSON.stringify(hashes)}))
+      AND NOT EXISTS (SELECT 1 FROM chunks k WHERE k.content_hash = embeddings.content_hash)`,
+  )
 }
