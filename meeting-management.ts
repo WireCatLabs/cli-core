@@ -149,7 +149,13 @@ export const dispatchMeetingMutation = async <T>(
 
 export const createMeetingManagement = (scope: MeetingProviderScope, ports: MeetingManagementPorts) => {
   const fixed = snapshotMeetingScope(scope)
-  const capabilities = Object.freeze({ ...ports })
+  const capabilities: MeetingManagementPorts = {}
+  for (const name of ["list", "get", "invitation", "create", "update", "cancel"] as const) {
+    const port = ports[name]
+    if (typeof port === "function")
+      Object.defineProperty(capabilities, name, { value: port.bind(ports), enumerable: true })
+  }
+  Object.freeze(capabilities)
   const context = (options: MeetingOperationOptions): MeetingProviderContext => {
     const signal = options.signal
     checkCancelled(signal)

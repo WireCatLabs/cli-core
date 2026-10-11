@@ -104,6 +104,24 @@ it("snapshots provider, account, capabilities and change before asynchronous wor
   expect(await pending).toMatchObject({ applied: true, meeting: { id: "opaque-example" } })
 })
 
+it("composes class-based adapters without advertising unrelated helpers", async () => {
+  class ExampleProvider {
+    readonly title = "Alice Example class adapter"
+    async get(id: string) {
+      return { ...meeting(id), title: this.title }
+    }
+    async helper() {
+      throw new Error("not a meeting capability")
+    }
+  }
+  const sdk = createMeetingManagement({ provider: "example-class", account: "Alice Example" }, new ExampleProvider())
+  expect(sdk.capabilities).toEqual(["get"])
+  expect(await sdk.get("opaque/class-meeting")).toMatchObject({ title: "Alice Example class adapter" })
+  await expect(sdk.create({ title: "Example", kind: "instant" })).rejects.toMatchObject({
+    code: "provider_unavailable",
+  })
+})
+
 it("propagates uncertain mutation outcomes without retry or cancellation rewriting", async () => {
   const abort = new AbortController()
   const uncertain = new CliError("outcome_unknown", "verify provider state before retrying")
