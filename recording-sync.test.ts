@@ -641,3 +641,103 @@ it("uses the shared CLI error identity and closed standard error taxonomy", () =
   expect(error.code).toBe("configuration_error")
   expect(error.name).toBe("RecordingSyncError")
 })
+
+it("keeps scope validation shared and acknowledgment metadata detached from callback mutations", async () => {
+  const list = vi.fn(async () => ({ items: [occurrence()], nextCursor: null }))
+  for (const scope of [
+    { provider: "example", account: "AliceExample\nBobSample" },
+    { provider: "example", account: "x".repeat(1001) },
+  ])
+    await expect(collect(syncRecordingArchive(source(list), options(undefined, { scope })))).rejects.toMatchObject({
+      code: "validation_error",
+    })
+  expect(list).not.toHaveBeenCalled()
+  const store = memoryRecordingSyncCheckpointStore()
+  const opts = options(store, {
+    to: "2026-01-31",
+    archive: async (item) => {
+      const asset = item.assets[0]
+      if (!asset) throw new Error("missing synthetic asset")
+      asset.size = 999
+      return report(item)
+    },
+  })
+  await collect(syncRecordingArchive(source(), opts))
+  const current = await read(store)
+  expect(current?.entries[0]?.assets[0]?.size).toBe(5)
+  expect(current?.entries[0]?.acknowledged).toEqual([])
+  expect(
+    await collect(syncRecordingArchive(source(), { ...opts, archive: async (item) => report(item) })),
+  ).toHaveLength(1)
+})
+it("refuses to acknowledge an archived length that contradicts its known remote length", async () => {
+  const store = memoryRecordingSyncCheckpointStore()
+  await collect(
+    syncRecordingArchive(
+      source(),
+      options(store, {
+        to: "2026-01-31",
+        archive: async (item) => {
+          const result = report(item)
+          const file = result.downloaded[0]
+          if (!file) throw new Error("missing synthetic archived file")
+          file.size = 10
+          return result
+        },
+      }),
+    ),
+  )
+  expect((await read(store))?.entries[0]?.acknowledged).toEqual([])
+  expect(await collect(syncRecordingArchive(source(), options(store, { to: "2026-01-31" })))).toHaveLength(1)
+  const unknown = source(async () => ({ items: [occurrence("BobSample", [file({ size: null })])], nextCursor: null }))
+  expect(await collect(syncRecordingArchive(unknown, options(undefined, { to: "2026-01-31" })))).toHaveLength(1)
+})
+it("portable two-provider workflows retain pending revisions and isolate checkpoints across provider namespaces", async () => {
+  const sharedStore = memoryRecordingSyncCheckpointStore()
+  for (const [provider, id, cursor] of [
+    ["camera-example", "opaque/AliceExample+1", "camera-page"],
+    ["assistant-example", "urn:BobSample:session#1", "assistant-token"],
+  ]) {
+    if (!provider || !id || !cursor) throw new Error("missing synthetic provider")
+    let phase = 0
+    const calls: string[] = []
+    const catalog: RecordingCatalog = {
+      provider,
+      list: async (options) => {
+        calls.push(`${options.account}:${options.cursor ?? "first"}`)
+        return {
+          items: [
+            occurrence(id, [
+              file(phase === 0 ? { available: false, status: "processing" } : { size: phase === 1 ? 5 : 6 }),
+            ]),
+          ],
+          nextCursor: options.cursor ? null : cursor,
+        }
+      },
+    }
+    const opts = options(sharedStore, {
+      scope: { provider, account: "AliceExample" },
+      to: "2026-01-31",
+      checkpoint: { store: sharedStore, jobId: provider, configKey: "portable-test" },
+    })
+    expect(await collect(syncRecordingArchive(catalog, opts))).toHaveLength(1)
+    phase = 1
+    expect(await collect(syncRecordingArchive(catalog, opts))).toHaveLength(1)
+    expect(await collect(syncRecordingArchive(catalog, opts))).toEqual([])
+    phase = 2
+    expect(await collect(syncRecordingArchive(catalog, opts))).toHaveLength(1)
+    const lease = await sharedStore.acquire(provider)
+    const current = await sharedStore.read(provider, lease.token)
+    await lease.release()
+    expect(current?.entries[0]?.assets[0]?.size).toBe(6)
+    expect(current?.entries[0]?.acknowledged).toHaveLength(1)
+    expect(JSON.stringify(current)).not.toContain(cursor)
+    expect(calls.every((call) => call.startsWith("AliceExample:"))).toBe(true)
+    const otherProvider = { ...catalog, provider: "other-example" }
+    await expect(
+      collect(
+        syncRecordingArchive(otherProvider, { ...opts, scope: { provider: "other-example", account: "AliceExample" } }),
+      ),
+    ).rejects.toMatchObject({ code: "configuration_error" })
+  }
+})

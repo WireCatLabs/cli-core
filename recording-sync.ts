@@ -1,4 +1,5 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-core"
+import { snapshotMeetingScope } from "./provider.js"
 import type {
   RecordingArchiveResult,
   RecordingAsset,
@@ -108,7 +109,11 @@ const object = (value: unknown): Record<string, unknown> => {
 const scope = (value: unknown): RecordingScope => {
   const row = object(value)
   if (!text(row.provider) || !text(row.account)) return fail("archive provider and account are required")
-  return { provider: row.provider, account: row.account }
+  try {
+    return snapshotMeetingScope({ provider: row.provider, account: row.account })
+  } catch {
+    return fail("archive provider and account must be bounded nonempty identifiers")
+  }
 }
 const window = (value: unknown): RecordingWindow => {
   const row = object(value)
@@ -266,6 +271,7 @@ const acknowledgedAssets = (occurrence: RecordingOccurrence, result: RecordingAr
             file.endedAt === item.endedAt &&
             text(file.path) &&
             integer(file.size, 0, Number.MAX_SAFE_INTEGER) &&
+            (item.size === null || file.size === item.size) &&
             /^[a-f0-9]{64}$/.test(file.sha256),
         ),
     )
@@ -417,7 +423,7 @@ export async function* syncRecordingArchive(
           if (old && !pending(current)) continue
           if (!old && state.entries.length >= maxEntries)
             return fail("archive checkpoint entry limit exceeded", "invalid_response")
-          const archive = await options.archive(occurrence, options.signal)
+          const archive = await options.archive(structuredClone(occurrence), options.signal)
           current.acknowledged = [...new Set([...current.acknowledged, ...acknowledgedAssets(occurrence, archive)])]
           await save({
             ...state,
