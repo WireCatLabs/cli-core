@@ -72,6 +72,8 @@ export interface SendGuardOptions {
   readOnly: boolean
   /** Named in the refusal, so the owner can find what decided it. */
   readOnlyFrom: string
+  /** A variable that refuses every write, whatever `permissions` or a flag say (a scheduled agent's). */
+  readOnlyLock?: string
   /** `undefined` allows every action; a list only those (`CLI-37`). */
   allow?: readonly Permission[]
   allowFrom?: string
@@ -141,6 +143,7 @@ export const sendGuard = ({
   command = recipients.command,
   readOnly,
   readOnlyFrom,
+  readOnlyLock,
   allow,
   allowFrom = "default",
   allowFix,
@@ -161,6 +164,12 @@ export const sendGuard = ({
 
   const permitted = (request: GuardRequest) => {
     const { chatId, kind = "message", action, personIds } = request
+    if (readOnlyLock) {
+      throw new CliError(
+        "permission_error",
+        `this process is read-only (${readOnlyLock}) — it cannot send, react, change chats or change the account`,
+      )
+    }
     const levels = currentPermissions()
     if (levels === undefined) {
       if (readOnly) {
@@ -391,6 +400,7 @@ export const guardFor = (
     command: app.command,
     readOnly: settings.readOnly,
     readOnlyFrom: settings.sources.readOnly ?? "default",
+    ...(settings.readOnlyLock ? { readOnlyLock: settings.readOnlyLock } : {}),
     ...(settings.allow ? { allow: settings.allow, allowFrom: settings.sources.allow ?? "default" } : {}),
     permissions: () => settings.permissions,
     permissionSources: settings.permissionSources,
