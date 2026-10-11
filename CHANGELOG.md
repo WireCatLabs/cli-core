@@ -4,6 +4,23 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`schedule`: run a command or an agent later or on a timer**, through systemd (Linux), launchd (macOS) or
+  Task Scheduler (Windows). `schedule command <name> -- <args…>` runs the CLI's own command — a read saves what
+  it reads, so this is how a chat's history fills the store; `schedule agent <name> claude|codex "<prompt>"`
+  starts an agent. Either takes `--every 30m|2h|1d`, `--at HH:MM` (daily) or `--once <30m|2d|ISO time>`, a
+  one-off removing itself after its run. `schedule list` shows the last run, `schedule run` runs one now, and
+  `schedule remove` stops it. An agent runs no more than hourly, with `<PREFIX>_READ_ONLY=1`, so it cannot send;
+  claude also gets `--permission-mode dontAsk` and only the CLI's own commands, whatever the owner's claude
+  settings allow. Its answer is kept as `latest.md` beside the schedule and announced by a desktop
+  notification; a failed run is announced too. `server install` ends with the command that turns on a daily
+  follow-up review, and turns on nothing. Consumers register `scheduleCommand(messenger)`.
+- **`<PREFIX>_READ_ONLY=1` refuses every write of the process**, above the config file and `--permission`: for
+  an agent that reads chat text unattended. `0` or unset leaves the configuration in charge.
+
 ## 0.249.0 — 11.10.2026
 
 ### Added

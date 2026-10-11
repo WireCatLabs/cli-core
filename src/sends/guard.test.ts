@@ -4,8 +4,9 @@ import { dirname, join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
 import { flooded } from "../cli/messenger/flooded.js"
 import type { MessengerAdapter } from "../cli/messenger/port.js"
+import { settingsFor } from "../cli/settings.js"
 import { FloodMemory } from "./flood.js"
-import { sendGuard } from "./guard.js"
+import { guardFor, sendGuard } from "./guard.js"
 import { guardedWrite } from "./guarded.js"
 import { SendJournal, sendsPathFor as sendsPath } from "./journal.js"
 import { RecipientList, recipientsPathFor as recipientsPath } from "./recipients.js"
@@ -422,5 +423,24 @@ describe("a send the messenger asked to hold off on", () => {
     expect(journal.entries()).toEqual([
       expect.objectContaining({ outcome: "failed", errorCode: "rate_limited", sendId: "9" }),
     ])
+  })
+})
+
+describe("a read-only lock", () => {
+  it("refuses every write while a config file and a --permission flag both allow it", () => {
+    const configDir = mkdtempSync(join(tmpdir(), "app-lock-"))
+    writeFileSync(join(configDir, "config.json"), JSON.stringify({ defaults: { permissions: { messages: "allow" } } }))
+    const settings = settingsFor(app).resolveSettings(
+      { permission: ["messages.send=allow"] },
+      { env: { ...env, APP_READ_ONLY: "1" }, configDir },
+    )
+    expect(settings).toMatchObject({ readOnly: true, readOnlyLock: "APP_READ_ONLY" })
+    const guard = guardFor(app, settings, () => {}, env)
+    expect(() => guard.check({ chatId: "1" })).toThrow("this process is read-only (APP_READ_ONLY)")
+    expect(() => guard.check({ chatId: "1", kind: "reaction" })).toThrow("read-only")
+
+    const unlocked = settingsFor(app).resolveSettings({}, { env: { ...env, APP_READ_ONLY: "0" }, configDir })
+    expect(unlocked.readOnlyLock).toBeUndefined()
+    expect(() => guardFor(app, unlocked, () => {}, env).check({ chatId: "1" })).not.toThrow()
   })
 })

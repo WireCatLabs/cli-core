@@ -204,6 +204,8 @@ export interface Settings extends AISettings {
   keepFailedRuns: boolean
   keepRunsForDays: number
   readOnly: boolean
+  /** The variable that made this process read-only, above every level and flag (`<PREFIX>_READ_ONLY`). */
+  readOnlyLock?: string
   /** `undefined` is every action; a list is only those. */
   allow: readonly Permission[] | undefined
   /**
@@ -299,6 +301,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
 
   const PROFILE = envName(app, "PROFILE")
   const PROFILE_LOCK = envName(app, "PROFILE_LOCK")
+  const READ_ONLY = envName(app, "READ_ONLY")
   const TIMEOUT = envName(app, "TIMEOUT")
   const REQUESTS_PER_MINUTE = envName(app, "REQUESTS_PER_MINUTE")
 
@@ -380,7 +383,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const catchUpMarksRead = fromLayers("catchUpMarksRead", false)
     const searchCatchUp = fromLayers("searchCatchUp", false)
     const keepRunsForDays = fromLayers("keepRunsForDays", DEFAULT_KEEP_RUNS_FOR_DAYS)
-    const readOnly = fromLayers("readOnly", false)
+    // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
+    const readOnlyLock = given(env[READ_ONLY]) !== undefined && env[READ_ONLY] !== "0" ? READ_ONLY : undefined
+    const configuredReadOnly = fromLayers("readOnly", false)
+    const readOnly = readOnlyLock ? { value: true, from: readOnlyLock } : configuredReadOnly
     const allow = fromLayers<readonly Permission[] | undefined>("allow", undefined)
     // A bot has no hourly limit unless the bot section gives it one: a bot that answers people is
     // expected to send a lot, and a limit there is the owner's choice, not the tool's.
@@ -398,8 +404,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
         ? fromLayers<boolean | readonly string[]>("readOtherBots", false, kindLayers)
         : { value: false, from: "default" }
     // The old settings sit in the layer they were written in, under that layer's own `permissions`.
-    const old = readOnly.value ? { label: "readOnly", from: readOnly.from } : { label: "allow", from: allow.from }
-    const oldLevels = fromOldSettings(readOnly.value, allow.value, { bot: kind === "bot" })
+    const old = configuredReadOnly.value
+      ? { label: "readOnly", from: configuredReadOnly.from }
+      : { label: "allow", from: allow.from }
+    const oldLevels = fromOldSettings(configuredReadOnly.value, allow.value, { bot: kind === "bot" })
     const permissions = layerPermissions([
       ["flag", permissionOverrides(flags.permission)],
       ...layers.flatMap(([from, scope]): [Source, Record<PermissionKey, Level> | undefined][] => [
@@ -457,6 +465,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       keepFailedRuns: record.value || record.from === "default",
       keepRunsForDays: keepRunsForDays.value,
       readOnly: readOnly.value,
+      ...(readOnlyLock ? { readOnlyLock } : {}),
       allow: allow.value,
       permissions: permissions.levels,
       permissionSources: permissions.sources,
