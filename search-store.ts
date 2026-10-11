@@ -28,3 +28,20 @@ export interface MeetingSearchPage {
 export interface MeetingSearchStore {
   searchHits(query: string, options: MeetingSearchOptions): Promise<MeetingSearchPage>
 }
+
+export interface MeetingSearchIndexInput {
+  accountId: number
+  limit?: number
+  maxReadBytes?: number
+  signal?: AbortSignal
+}
+
+export interface MeetingSearchIndexReceipt {
+  indexed: number
+  remaining: number
+}
+
+/** Explicit bounded index maintenance, independent of read-only hit paging. */
+export interface MeetingSearchIndexStore {
+  indexSearch(input: MeetingSearchIndexInput): Promise<MeetingSearchIndexReceipt>
+}

@@ -105,7 +105,14 @@ export {
   strongRecordingValidator,
   transferRecording,
 } from "./recording-transfer.js"
-export type { MeetingSearchOptions, MeetingSearchPage, MeetingSearchStore } from "./search-store.js"
+export type {
+  MeetingSearchIndexInput,
+  MeetingSearchIndexReceipt,
+  MeetingSearchIndexStore,
+  MeetingSearchOptions,
+  MeetingSearchPage,
+  MeetingSearchStore,
+} from "./search-store.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,
