@@ -7,6 +7,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+## 0.235.0 — 11.10.2026
+
 ### Added
 
 - **`store.mail.setFlags`** sets read and flagged on emails already stored, as the source shows them now, so an
