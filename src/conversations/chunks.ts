@@ -85,8 +85,15 @@ export const chunkHash = (text: string): string => createHash("sha256").update(t
  * With `carry`, each chunk after the first opens with up to that many characters from the end of the
  * message before it, so a reply is read with what it answers; such a chunk may run `carry` over `limit`.
  * A chunk depends only on the messages before it, so a new message never changes a chunk already closed.
+ * `split` is how much the pieces of one long message overlap.
  */
-export const cutChunks = (members: ChunkLine[], limit = CHUNK_CHARS, check?: () => void, carry = 0): Chunk[] => {
+export const cutChunks = (
+  members: ChunkLine[],
+  limit = CHUNK_CHARS,
+  check?: () => void,
+  carry = 0,
+  split = CHUNK_OVERLAP,
+): Chunk[] => {
   const chunks: Chunk[] = []
   let open: ChunkLine[] = []
   let size = 0
@@ -122,7 +129,7 @@ export const cutChunks = (members: ChunkLine[], limit = CHUNK_CHARS, check?: () 
       size = 0
       seeded = false
       const room = Math.max(Math.floor(limit / 2), limit - (lineOf(member).length - member.text.length))
-      for (const range of splitText(member.text, room, CHUNK_OVERLAP, check)) {
+      for (const range of splitText(member.text, room, split, check)) {
         const text = chunkTextOf([member], range)
         if (text) chunks.push({ firstId: member.id, lastId: member.id, range, text, hash: chunkHash(text) })
       }
