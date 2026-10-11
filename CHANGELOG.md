@@ -4,6 +4,14 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## 0.241.0 — 11.10.2026
+
+### Fixed
+
+- **Installs flat again next to cli-core 0.20.0.** `@wirecat/cli-meetings` 0.4.2 accepts cli-core 0.20, so npm no
+  longer nests this package under a CLI that uses cli-core 0.20.0. A script in the CLI's install folder can import
+  `@wirecat/cli-messaging` again, and only one copy of cli-core is installed.
+
 ## 0.240.0 — 11.10.2026
 
 ### Changed — may break callers
