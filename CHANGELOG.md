@@ -27,8 +27,9 @@ Every entry says what changed as a caller sees it, why, and what to watch for �
   On macOS, with no `*_DIR` override set, it moves each old folder whose new one is missing or empty,
   all of them or none, and returns what moved. It never merges into a folder that has files, and
   across file systems it copies, checks the copy and keeps the old folder. It throws a
-  `configuration_error` naming the processes when any file in a pending folder is open — stop a
-  running `serve` or MCP server and run again. Call it at program start, before anything resolves a
+  `configuration_error` naming the processes when lsof shows a file open in a pending folder — stop a
+  running `serve` or MCP server and run again. lsof sees only files open at that moment, so a caller
+  that knows its own lock files should report their holders through `holders`. Call it at program start, before anything resolves a
   path; with nothing to move it costs one `lstat` per folder. `legacyMacPaths` gives the old folders.
 
 ### Removed

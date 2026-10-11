@@ -15,7 +15,7 @@ export interface LegacyMove {
 
 export interface MigrateLegacyPathsOptions extends PathsOptions {
   rename?: (from: string, to: string) => void
-  /** The processes, as text, that hold files under `dirs` open; empty when none does. */
+  /** The processes, as text, that hold files under `dirs` open; empty when none does. Defaults to lsof. */
   holders?: (dirs: string[]) => string[]
 }
 
@@ -42,19 +42,35 @@ const isFreeTarget = (path: string) => {
   return kind === "none" || (kind === "dir" && readdirSync(path).length === 0)
 }
 
-const lsofHolders = (dirs: string[]): string[] =>
+// An absolute path: an MCP host may start the CLI with a PATH that has no /usr/sbin.
+const LSOF = "/usr/sbin/lsof"
+
+const runLsof = (args: string[]) => execFileSync(LSOF, args, { encoding: "utf8", timeout: 30_000, stdio: "pipe" })
+
+/**
+ * Only files open right now: a file written by path and closed again, like a lock or a journal,
+ * is invisible here, so a caller that knows its own lock files should add them through `holders`.
+ */
+export const lsofHolders = (dirs: string[], run = runLsof): string[] =>
   dirs.flatMap((dir) => {
+    let listed: string
     try {
-      const pids = execFileSync("lsof", ["-t", "+D", dir], { encoding: "utf8", timeout: 30_000, stdio: "pipe" })
-      return pids
-        .split("\n")
-        .filter((pid) => pid && pid !== String(process.pid))
-        .map((pid) => `pid ${pid} (${dir})`)
+      listed = run(["-t", "+D", dir])
     } catch (error) {
-      // lsof exits 1 when nothing under the folder is open.
-      if ((error as { status?: number }).status === 1) return []
-      return [`unknown: lsof failed for ${dir}`]
+      // lsof exits 1 both when nothing is open and when it hit a warning; the PIDs are on stdout either way.
+      const failure = error as { status?: number; stdout?: string; message: string }
+      if (failure.status !== 1)
+        throw new CliError(
+          "configuration_error",
+          `could not check whether a process has files open in ${dir}, so nothing was moved: ${failure.message}. ` +
+            `Run \`lsof +D "${dir}"\`, stop what it lists, and run the command again.`,
+        )
+      listed = failure.stdout ?? ""
     }
+    return listed
+      .split("\n")
+      .filter((pid) => pid && pid !== String(process.pid))
+      .map((pid) => `pid ${pid} (${dir})`)
   })
 
 const listTree = (root: string): string[] =>
@@ -93,9 +109,9 @@ const movedByAnother = (from: string, to: string) => kindOf(from) === "none" || 
  * gives on macOS. Call it once at program start, before anything resolves a path — a write that
  * creates the new folder first would leave the old data behind for good.
  *
- * It moves all pending folders or none, and throws when a process holds a file in any of them: a
- * running `serve` keeps writing into the folder it opened, and data it writes after the move is
- * lost. Cheap when there is nothing to do: one `lstat` per folder.
+ * It moves all pending folders or none, and throws when `holders` (lsof by default) shows a file
+ * open in any of them: a running `serve` keeps writing into the folder it opened, and data it
+ * writes after the move is lost. Cheap when there is nothing to do: one `lstat` per folder.
  */
 export const migrateLegacyMacPaths = (options: MigrateLegacyPathsOptions): LegacyMove[] => {
   const {

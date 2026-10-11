@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { isCliError } from "./errors.js"
-import { legacyMacPaths, migrateLegacyMacPaths } from "./legacy-paths.js"
+import { legacyMacPaths, lsofHolders, migrateLegacyMacPaths } from "./legacy-paths.js"
 
 const darwinHome = () => {
   const HOME = mkdtempSync(join(tmpdir(), "legacy-paths-"))
@@ -144,5 +144,29 @@ describe("migrateLegacyMacPaths", () => {
       /could not move .*permission denied/,
     )
     expect(existsSync(join(HOME, ".config/tg-cli/config.json"))).toBe(true)
+  })
+})
+
+describe("lsofHolders", () => {
+  const exit =
+    (status: number, stdout = "") =>
+    () => {
+      throw Object.assign(new Error(`exit ${status}`), { status, stdout })
+    }
+
+  it("lists the processes lsof names, without this one", () => {
+    expect(lsofHolders(["/d"], () => `4242\n${process.pid}\n`)).toEqual(["pid 4242 (/d)"])
+  })
+
+  it("reads exit 1 as nothing open, unless it printed PIDs anyway", () => {
+    expect(lsofHolders(["/d"], exit(1))).toEqual([])
+    expect(lsofHolders(["/d"], exit(1, "7\n"))).toEqual(["pid 7 (/d)"])
+  })
+
+  it("refuses with its own message when lsof cannot run", () => {
+    const missing = () => {
+      throw Object.assign(new Error("spawn /usr/sbin/lsof ENOENT"), { code: "ENOENT" })
+    }
+    expect(() => lsofHolders(["/d"], missing)).toThrow(/could not check whether a process has files open in \/d/)
   })
 })
