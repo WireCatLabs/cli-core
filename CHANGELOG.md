@@ -5,7 +5,7 @@ version, newest first. Versions follow [semver](https://semver.org/); before `1.
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
 
-## Unreleased
+## 0.234.0 — 11.10.2026
 
 ### Added
 
@@ -13,7 +13,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   chosen participant identity with a manual audit and account observation. Shared context services
   reuse existing notes, tags and memories; native writes recheck live ownership and optional prior
   values in one transaction. Existing memo commands remain the knowledge interface.
-- **Bounded meeting hit pages and explicit indexing** support continuation inside a large meeting,
+- **Bounded meeting hit pages and explicit indexing** match configured English/Spanish/Russian word forms and support continuation inside a large meeting,
   account/query-bound cursors, stored text byte budgets and small account indexing batches. Coverage
   reports pending indexing and unknown archive completeness; read pages do not drain queues.
 - **Exact transcript append receipts** count occurrence creation, inserted/replayed revisions and
@@ -23,6 +23,23 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   windows and output text, with pinned model provenance and cancellation between synchronous
   windows. Importing the speech entry point loads no engine and installs no model.
 
+### Changed — may break callers
+
+- **Legacy meeting search refuses oversized results before loading text.** More than 10000 hits or
+  64 MiB of stored match text requires bounded hit paging; individual legacy indexing entries over
+  64 MiB require bounded index maintenance. Normal prefix results below these caps are unchanged.
+- **Native meeting capabilities widen the typed store.** Hand-written stores typed as MessageStore
+  provide the new scoped association, hit/index page and append receipt methods; the base SDK
+  MeetingStore and older append interfaces are unchanged.
+
+## 0.233.0 — 11.10.2026
+
+### Added
+
+- **An email's attachments are found by meaning.** Their extracted text is cut into pieces as an email's own text
+  is, written when the email's attachments are saved and dropped (with vectors no longer used) when the email is
+  marked deleted. `embedMail` embeds them, and `nearestConversations` answers a match in an attachment with its
+  email.
 - **`store.forAccount(key)` binds a store to one account.** The same calls without the account argument; `find`
   and `search` take no `account`, `accounts` or `provider`. `localPathOf` and `keepAttachmentText` refuse an
   attachment of another account (`not_found`); its `mail` and `meetings` read only that account, and
@@ -30,6 +47,10 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   gives a service the running account's bound store and `crossAccount(deps, reason)` the whole store for a read
   across accounts on purpose; `chatIdIn(messenger, reference, bound)` is `storedChatId` over a bound store.
   `chats`, `conversations` and `attachments` services read and write through it.
+- **`search mail --account <address>` and `search_mail`'s `account` narrow mail search to one mail account.**
+  Without it, mail search still reads every mail account; an address the store does not hold is `not_found`
+  and names the ones it holds. `SearchQuery.mailAccount` carries it. `search notes --folder` and
+  `search_notes`'s `folders` already narrow notes to some folders; without them every folder is read.
 
 ### Changed — may break callers
 
