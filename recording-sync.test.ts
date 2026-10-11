@@ -65,6 +65,7 @@ const options = (
   scope: { provider: "example", account: "AliceExample" },
   from: "2026-01-01",
   to: "2026-02-28",
+  recheckFrom: "2026-01-01",
   archive: async (item) => report(item),
   now: () => 1000,
   checkpoint: { store, jobId: "AliceExample-backup", configKey: "configuration-v1" },
@@ -453,14 +454,13 @@ it("bounds retained window metadata and total serialized checkpoints", async () 
     revision: current.revision + 1,
   })
   await lease.release()
-  await expect(
-    collect(
-      syncRecordingArchive(
-        source(async () => ({ items: [], nextCursor: null })),
-        options(store),
-      ),
+  await collect(
+    syncRecordingArchive(
+      source(async () => ({ items: [], nextCursor: null })),
+      options(store),
     ),
-  ).rejects.toThrow(/metadata limit/)
+  )
+  expect((await read(store))?.windows).toHaveLength(2)
   const largeSource = source(async () => ({
     items: [
       occurrence(
@@ -538,4 +538,78 @@ it("bounds cumulative discovery metadata independently of checkpoint metadata", 
   await expect(collect(syncRecordingArchive(catalog, options(undefined, { checkpoint: undefined })))).rejects.toThrow(
     /occurrence metadata exceeds its byte limit/,
   )
+})
+it("compacts extending same-month windows and drops old successful metadata without losing backlog", async () => {
+  const store = memoryRecordingSyncCheckpointStore()
+  let ready = false
+  const archive = vi.fn(async (item: RecordingOccurrence) => report(item))
+  const catalog = source(async ({ from }) => ({
+    items: [
+      occurrence(from, [file(from.startsWith("2026-01") && !ready ? { available: false, status: "processing" } : {})]),
+    ],
+    nextCursor: null,
+  }))
+  const opts = options(store, { recheckFrom: undefined, to: "2026-01-15", archive })
+  await collect(syncRecordingArchive(catalog, opts))
+  await collect(syncRecordingArchive(catalog, { ...opts, to: "2026-01-20" }))
+  expect((await read(store))?.windows).toEqual([{ from: "2026-01-01", to: "2026-01-20" }])
+  await collect(syncRecordingArchive(catalog, { ...opts, to: "2026-02-15" }))
+  await collect(syncRecordingArchive(catalog, { ...opts, to: "2026-02-20" }))
+  const february = await read(store)
+  expect(february?.windows).toEqual([
+    { from: "2026-01-01", to: "2026-01-31" },
+    { from: "2026-02-01", to: "2026-02-20" },
+  ])
+  expect(february?.entries.map((entry) => entry.externalId).sort()).toEqual(["2026-01-01", "2026-02-01"])
+  await collect(syncRecordingArchive(catalog, { ...opts, from: "2026-03-01", to: "2026-03-20" }))
+  expect((await read(store))?.windows).toEqual([{ from: "2026-03-01", to: "2026-03-20" }])
+  expect((await read(store))?.entries.map((entry) => entry.externalId).sort()).toEqual(["2026-01-01", "2026-03-01"])
+  ready = true
+  await collect(syncRecordingArchive(catalog, { ...opts, from: "2026-04-01", to: "2026-04-20" }))
+  expect((await read(store))?.entries.map((entry) => entry.externalId).sort()).toEqual(["2026-04-01"])
+})
+it("never merges discovery gaps and retains successful metadata overlapping pending work", async () => {
+  const store = memoryRecordingSyncCheckpointStore()
+  const opts = options(store, { to: "2026-01-15", recheckFrom: undefined })
+  await collect(syncRecordingArchive(source(), opts))
+  const current = await read(store)
+  if (!current?.entries[0]) throw new Error("missing synthetic checkpoint")
+  const lease = await store.acquire("AliceExample-backup")
+  await store.save("AliceExample-backup", lease.token, current.revision, {
+    ...current,
+    revision: current.revision + 1,
+    pendingWindows: [],
+    windows: [
+      { from: "2026-01-01", to: "2026-01-15" },
+      { from: "2026-01-20", to: "2026-01-31" },
+    ],
+  })
+  await lease.release()
+  const list = vi.fn(async () => ({ items: [], nextCursor: null }))
+  await collect(syncRecordingArchive(source(list), { ...opts, from: "2026-01-16", to: "2026-01-18" }))
+  expect(list).toHaveBeenCalledOnce()
+  expect((await read(store))?.windows).toEqual([
+    { from: "2026-01-16", to: "2026-01-18" },
+    { from: "2026-01-20", to: "2026-01-31" },
+  ])
+  const again = await store.acquire("AliceExample-backup")
+  const state = await store.read("AliceExample-backup", again.token)
+  if (!state) throw new Error("missing synthetic checkpoint")
+  await store.save("AliceExample-backup", again.token, state.revision, {
+    ...state,
+    revision: state.revision + 1,
+    entries: [{ ...current.entries[0], window: { from: "2026-01-25", to: "2026-01-31" } }],
+    pendingWindows: [{ from: "2026-01-20", to: "2026-01-31" }],
+  })
+  await again.release()
+  const stopped = source(async ({ from }) => {
+    if (from === "2026-01-20") throw new Error("Example interrupted backlog")
+    return { items: [], nextCursor: null }
+  })
+  await expect(
+    collect(
+      syncRecordingArchive(stopped, { ...opts, from: "2026-01-19", to: "2026-01-19", recheckFrom: "2026-02-01" }),
+    ),
+  ).rejects.toThrow("Example interrupted backlog")
+  expect((await read(store))?.entries[0]?.externalId).toBe(current.entries[0].externalId)
 })

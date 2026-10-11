@@ -222,6 +222,24 @@ export function parseRecordingSyncCheckpoint(value: unknown, maxEntries = 10000)
     entries,
   }
 }
+const covered = (windows: RecordingWindow[], selected: RecordingWindow): boolean =>
+  windows.some((item) => item.from <= selected.from && item.to >= selected.to)
+const compactWindows = (windows: RecordingWindow[], from: string): RecordingWindow[] => {
+  const result: RecordingWindow[] = []
+  for (const item of windows.filter((item) => item.to >= from).sort((a, b) => a.from.localeCompare(b.from))) {
+    const last = result.at(-1)
+    if (last && last.from.slice(0, 7) === item.from.slice(0, 7)) {
+      const nextDay = date(last.to)
+      nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+      if (item.from <= label(nextDay)) {
+        last.to = last.to > item.to ? last.to : item.to
+        continue
+      }
+    }
+    result.push({ ...item })
+  }
+  return result
+}
 const pending = (entry: RecordingSyncEntry): boolean =>
   entry.assets.length === 0 ||
   entry.assets.some((item) => !item.available || !entry.acknowledged.includes(recordingAssetFingerprint(item)))
@@ -338,7 +356,7 @@ export async function* syncRecordingArchive(
     for (const selectedWindow of planned) {
       cancelled(options.signal)
       if (
-        state.windows.some((item) => windowKey(item) === windowKey(selectedWindow)) &&
+        covered(state.windows, selectedWindow) &&
         !state.pendingWindows.some((item) => windowKey(item) === windowKey(selectedWindow)) &&
         !state.entries.some((entry) => windowKey(entry.window) === windowKey(selectedWindow) && pending(entry)) &&
         !(options.recheckFrom !== undefined && selectedWindow.to >= options.recheckFrom)
@@ -420,12 +438,18 @@ export async function* syncRecordingArchive(
         cursor = page.nextCursor ?? undefined
       } while (cursor !== undefined)
       cancelled(options.signal)
+      const pendingWindows = state.pendingWindows.filter((item) => windowKey(item) !== windowKey(selectedWindow))
+      const retainFrom = options.recheckFrom ?? `${options.to.slice(0, 7)}-01`
       await save({
         ...state,
-        windows: state.windows.some((item) => windowKey(item) === windowKey(selectedWindow))
-          ? state.windows
-          : [...state.windows, selectedWindow],
-        pendingWindows: state.pendingWindows.filter((item) => windowKey(item) !== windowKey(selectedWindow)),
+        windows: compactWindows([...state.windows, selectedWindow], options.from),
+        pendingWindows,
+        entries: state.entries.filter(
+          (entry) =>
+            pending(entry) ||
+            entry.window.to >= retainFrom ||
+            pendingWindows.some((item) => item.from <= entry.window.to && item.to >= entry.window.from),
+        ),
       })
     }
   } finally {
