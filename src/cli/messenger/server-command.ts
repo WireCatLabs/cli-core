@@ -15,6 +15,9 @@ import { type Messenger, type MessengerContext, messengerContext } from "./conte
 
 export type { Ran, ServerSystem } from "../../background/system.js"
 
+export const followUpsPrompt = (command: string) =>
+  `Run the daily follow-up review: read \`${command} skill show follow-ups\` and follow it. Draft replies; never send.`
+
 /** How many looks, a pause apart, `start` gives `serve` to connect — about 30 seconds on a real machine. */
 const LOOKS = 120
 
@@ -379,6 +382,8 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
         `${replaced ? "Rewrote" : "Wrote"} ${tilde(unit.path, context.env)} — nothing started.`,
         `It runs: ${unit.command.map((word) => tilde(word, context.env)).join(" ")}`,
         `Start it now: ${app.command} server start · ${platform.atLogin(unit)}`,
+        // Suggested, never turned on: an agent reading chats every morning is the owner's choice (NEED-161).
+        `A daily follow-up review is off. To turn it on: ${app.command} schedule agent follow-ups claude "${followUpsPrompt(app.command)}" --at 08:30`,
       ])
     })
 

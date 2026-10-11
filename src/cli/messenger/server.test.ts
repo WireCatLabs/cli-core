@@ -12,7 +12,14 @@ import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
 import type { MessengerAdapter } from "./port.js"
 import { servingProfiles } from "./serve-command.js"
-import { type Ran, type Running, type ServerOptions, type ServerSystem, serverCommand } from "./server-command.js"
+import {
+  followUpsPrompt,
+  type Ran,
+  type Running,
+  type ServerOptions,
+  type ServerSystem,
+  serverCommand,
+} from "./server-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const messenger: Messenger = {
@@ -279,6 +286,7 @@ describe("server with a systemd unit", () => {
         `Rewrote ~/.config/systemd/user/chat-serve-${unitScope(app, "default", env)}.service — nothing started.`,
         "It runs: /opt/node /opt/chat/bin/chat.js serve",
         `Start it now: chat server start · at every login too: systemctl --user enable chat-serve-${unitScope(app, "default", env)}`,
+        `A daily follow-up review is off. To turn it on: chat schedule agent follow-ups claude "${followUpsPrompt("chat")}" --at 08:30`,
       ].join("\n"),
     )
   })

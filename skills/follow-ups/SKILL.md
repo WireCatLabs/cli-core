@@ -80,6 +80,13 @@ Short, in this order: overdue and due today; what the owner owes; what the owner
 drafted follow-up for each; what you closed and why. Each item names the chat and the task key. Then
 stop. The owner sends what they choose.
 
+## On a timer
+
+`{{command}} schedule agent follow-ups claude "<prompt>" --at 08:30` runs this every morning. Then you run
+with the CLI's read-only variable set (`MAX_READ_ONLY=1` for max): every send, reaction and edit is
+refused, so do not try. What you print is the report the owner opens; its first line shows in the desktop notification, so make it the count that
+matters ("3 overdue, 2 owe a reply, 1 waiting since 24.09").
+
 ## Recipes
 
 A recipe is a set of flags, not a new command:
