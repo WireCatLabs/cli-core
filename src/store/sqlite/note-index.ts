@@ -2,6 +2,7 @@ import { CHUNK_CHARS, chunkHash, splitText } from "../../conversations/chunks.js
 import { analyzerIdentity, DEFAULT_STEMMERS, type Stemmer, type Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { normalize } from "../normalize.js"
+import { int } from "./events.js"
 import { inBatch, indexRow } from "./search-index.js"
 import { savedStemmers } from "./stems.js"
 
@@ -35,7 +36,7 @@ export const CORPORA = {
     index: "document_index",
     table: "documents",
     read:
-      "SELECT d.title, coalesce(d.body, '') AS body, d.deleted_at IS NULL AS live, a.scope FROM documents d " +
+      "SELECT d.title, coalesce(d.body, '') AS body, d.deleted_at IS NULL AS live, a.scope, d.account_id FROM documents d " +
       "JOIN accounts a ON a.id = d.account_id WHERE d.id = ?",
   },
   note: {
@@ -55,7 +56,7 @@ export const CORPORA = {
     index: "email_index",
     table: "emails",
     read:
-      "SELECT e.subject AS title, coalesce(e.body_text, '') AS body, e.deleted_at IS NULL AS live, a.scope FROM emails e " +
+      "SELECT e.subject AS title, coalesce(e.body_text, '') AS body, e.deleted_at IS NULL AS live, a.scope, e.account_id FROM emails e " +
       "JOIN accounts a ON a.id = e.account_id WHERE e.id = ?",
   },
 } as const satisfies Record<string, Corpus>
@@ -99,8 +100,8 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
     words: database.prepare(`INSERT INTO ${corpus.type}_words (rowid, normalized_text, scope) VALUES (?, ?, ?)`),
     stems: database.prepare(`INSERT INTO ${corpus.type}_stems (rowid, stems, scope) VALUES (?, ?, ?)`),
     chunk: database.prepare(
-      "INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope, created_at, updated_at) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope, account_id, created_at, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ),
     purge: database.prepare(
       `DELETE FROM embeddings WHERE content_hash = ?
@@ -127,7 +128,7 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
       splitText(text, CHUNK_CHARS).forEach(({ start, end }, position) => {
         const hash = chunkHash(text.slice(start, end))
         after.add(hash)
-        statements.chunk.run(corpus.type, id, position, start, end, hash, scope, at, at)
+        statements.chunk.run(corpus.type, id, position, start, end, hash, scope, int(row?.account_id), at, at)
       })
     }
     for (const hash of before) if (!after.has(hash)) statements.purge.run(hash, hash)
@@ -145,6 +146,14 @@ export const drainCorpus = (
   stemmerFor: (stemmers: Stemmers) => Stemmer,
   { batch = 200, until = () => false }: { batch?: number; until?: () => boolean } = {},
 ): number => {
+  // Pieces written before they carried their account get it, once: purge and vector search filter by it.
+  if (corpus.type === "email" || corpus.type === "document")
+    database
+      .prepare(
+        `UPDATE chunks SET account_id = (SELECT account_id FROM ${corpus.table} WHERE id = chunks.chunkable_id)
+          WHERE chunkable_type = ? AND account_id IS NULL`,
+      )
+      .run(corpus.type)
   // The first schema seeded no row for mail; a data row, so no migration.
   database
     .prepare(
