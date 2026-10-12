@@ -420,6 +420,16 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
     chunksToEmbed: async (model, { after, limit }) => {
       drain()
       const scope = live(undefined, undefined)
+      // One long note fills a whole batch; build its text once, not once per chunk.
+      const texts = new Map<string, string | undefined>()
+      const textOf = (owner: string) => {
+        if (!texts.has(owner)) {
+          const [type, id] = owner.split(":")
+          const note = read(String(type), Number(id))
+          texts.set(owner, note ? noteIndexText(note.title, note.text) : undefined)
+        }
+        return texts.get(owner)
+      }
       return database
         .prepare(
           `SELECT k.content_hash AS hash, min(k.chunkable_type || ':' || k.chunkable_id) AS owner, k.start_offset AS start, k.end_offset AS end
@@ -430,11 +440,10 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
         )
         .all(after ?? "", ...scope.params, model, limit)
         .flatMap((row) => {
-          const [type, id] = String(row.owner).split(":")
-          const note = read(String(type), Number(id))
-          if (!note) return []
-          const text = noteIndexText(note.title, note.text)
-          return [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
+          const text = textOf(String(row.owner))
+          return text === undefined
+            ? []
+            : [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
         })
     },
     nearest: async (model, query, { limit, folderIds, source }) => {

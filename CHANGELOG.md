@@ -4,6 +4,15 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Added
+
+- A file note keeps up to 2 000 000 characters of text (was 200 000), the same cap as the document readers, so a long spreadsheet or PDF read by them can be saved whole and found by a word anywhere in it. Measured on a generated 2M-character note: saving takes about 50 ms, the first search that indexes it about 0.7 s, later searches 2–3 ms (stemmed) and about 90 ms (exact), and the store grows about 9 MiB.
+### Fixed
+
+- Preparing note chunks for embedding builds each note's text once per batch instead of once per chunk; a full pass over a 2M-character note's chunks went from about 186 ms to 37 ms per batch of 8.
+
 ## 0.255.0 — 12.10.2026
 
 ### Added
