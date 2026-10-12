@@ -91,6 +91,13 @@ guessable from the others.
    local store for `content:` in a search and never sent; `attachments.extract` is a local write.
    `chats tracking` is the one collection named by what it does rather than a plural: the chats whose
    member lists `serve` fetches daily into the local store — owner's wording, 2026-10-05.
+   `chats documents` (planned) are the Google Docs and Drive documents people linked in a chat's stored
+   messages: a part of the chat, as its members are, so a subresource of `chats` and not a new root.
+   `chats documents list <chat>` reads the local store only, and says per link whether the document
+   is in the store. It does not overlap `chats media`, which reads every link from the messenger's
+   server and knows no document, or `attachments list`, which lists files, not links in text.
+   drive's `sync` writes the message → document link. Owner's name and design, 2026-10-13
+   ([plan](chat-documents-plan.md)).
 2. **Top-level words** only for what spans every chat or is the tool itself: `inbox`, `review`,
    `watch`, `serve`, `doctor`, `upgrade`, `commands`, `complete`, `mcp`, `bot`, `stats`, `search`. Prefer an
    existing resource or namespace before adding another root word. A new root needs a reason in
@@ -431,7 +438,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch`, `store fetch` |
 | `--last-name` | `<name>` | your last name |  | `account update` |
 | `--left` |  | only the chats this account has left |  | `store clear` |
-| `--limit` | `<n>` | how many: rows to show, or messages one run fetches. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `attachments extract`, `attachments list`, `bot chats members list` (max-only), `bot contacts show`, `bot messages between`, `bot messages list`, `bot search messages`, `bot store fetch`, `calls list` (planned), `chats link list` (tg-only), `chats list`, `chats media` (planned), `chats members list`, `chats requests list`, `contacts context`, `contacts list`, `contacts timeline`, `conversations list`, `conversations related`, `inbox`, `messages comments` (tg-only), `messages evidence`, `messages list`, `metadata refresh`, `polls voters` (tg-only), `runs list`, `runs search`, `search all`, `search conversations`, `search mail`, `search messages`, `search notes`, `searches create`, `searches history`, `sends list`, `stats chats newcomers`, `stats chats retention`, `stats contacts evidence`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages evidence`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `store fetch`, `store gaps repair`, `tags auto`, `tasks list` |
+| `--limit` | `<n>` | how many: rows to show, or messages one run fetches. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `attachments extract`, `attachments list`, `bot chats members list` (max-only), `bot contacts show`, `bot messages between`, `bot messages list`, `bot search messages`, `bot store fetch`, `calls list` (planned), `chats documents list` (planned), `chats link list` (tg-only), `chats list`, `chats media` (planned), `chats members list`, `chats requests list`, `contacts context`, `contacts list`, `contacts timeline`, `conversations list`, `conversations related`, `inbox`, `messages comments` (tg-only), `messages evidence`, `messages list`, `metadata refresh`, `polls voters` (tg-only), `runs list`, `runs search`, `search all`, `search conversations`, `search mail`, `search messages`, `search notes`, `searches create`, `searches history`, `sends list`, `stats chats newcomers`, `stats chats retention`, `stats contacts evidence`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages evidence`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `store fetch`, `store gaps repair`, `tags auto`, `tasks list` |
 | `--lines` | `<n>` | how many lines | `50` | `server logs` |
 | `--link` | `<link>` | an invite link: only the requests made through it. **chats requests list filters by it; accept and decline take it with --all — one link, worded for each command (Help text rule 4)** |  | `chats requests accept`, `chats requests decline`, `chats requests list` |
 | `--local` |  | use the model on this machine, never the messenger |  | `messages transcribe` (tg-only) |
@@ -503,7 +510,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--output` |  | where to write: a directory for `messages download`, a file for `store export`. **MAX `messages download --output <dir>` remains a compatibility alias for `--output-dir`; other commands use --output for a file — e10** | `.` | `doctor report create`, `messages download` (max-only), `stats charts`, `store decrypt`, `store export` |
 | `--output-dir` | `<dir>` | the folder to write into, created if missing. **`attachments extract` takes it only with --download, and has no default there, so extraction never fills the working folder unasked** | `.` | `attachments extract`, `messages download` |
 | `--outside` | `<hours>` | answer outside this 24-hour window, such as 09:00-19:00 |  | `replies edit` |
-| `--page` | `<n>` | which page, starting at 1 |  | `attachments list`, `attachments show`, `chats list`, `chats members list`, `contacts list`, `runs search` |
+| `--page` | `<n>` | which page, starting at 1 |  | `attachments list`, `attachments show`, `chats documents list` (planned), `chats list`, `chats members list`, `contacts list`, `runs search` |
 | `--page-size` | `<n>` | how many items one request to the messenger asks for; the messenger's own if not given. **the default is each messenger's own page: 30 on MAX, 100 on Telegram** |  | `bot store fetch`, `store fetch`, `store gaps repair` |
 | `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `bot store fetch`, `messages download`, `store fetch`, `store gaps repair` |
 | `--payload` | `<text>` | the start parameter the bot reads; a link's own ?start= when not given |  | `chats start` (planned) |
@@ -695,7 +702,8 @@ whose values are levels. It holds for a command the owner types and for an agent
    key starts with a resource, so a misspelled one is refused rather than ignored. Every command
    maps to exactly one key, checked by a test over `commands --json`:
    - a command that shows messages from outside `messages` counts as `messages` — `inbox`,
-     `review`, `watch`, `serve`, `store fetch|export|search`, the MCP resources and prompts;
+     `review`, `watch`, `serve`, `store fetch|export|search`, the MCP resources and prompts, and
+     what tells who sent what — `attachments list`, `chats documents list` (planned);
    - housekeeping is never gated — `config`, `session`, `doctor`, `commands`, `complete`,
      `upgrade`, `skill`, `models`, `server`, `runs`, `sends`, `recipients`, `mcp`, and `store`'s
      own maintenance.
