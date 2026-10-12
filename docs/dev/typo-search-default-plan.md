@@ -1,6 +1,10 @@
 # Plan: typo-tolerant search by default, without `--language legacy`
 
-Status: awaits the owner's approval. No production code changes until then.
+Status: approved by the owner on 2026-10-13 — option B. Strict first; only when strict finds
+nothing, one-edit corrections and 3+ letter beginnings, each forgiven hit labelled. Partial matches
+stay opt-in through `--discover`. When B finds nothing, MCP points at `discover=true` through the
+existing `next_steps` key (`src/mcp/tool.ts:96-97`, `:290`); the CLI prints one stderr line. No new
+key. Service code waits for the plain-search-coverage change (see Dependency).
 
 ## Goal
 
@@ -181,8 +185,9 @@ for a later ranking change. Proposed gates for B, to approve before coding:
 
 Take B with one-edit corrections and labelled hits, behind the gates above. Do not put C's partial
 fallback in the default: its only gain over B is the any-word hits, which arrive with 80 / 80
-no-answer false hits. When B finds nothing, say on stderr that `--discover` searches partial
-matches, so the owner or agent opts in knowingly. It removes the reason
+no-answer false hits. When B finds nothing, MCP answers name `discover=true` in `next_steps`, and
+the CLI says on stderr that `--discover` searches partial matches, so the owner or agent opts in
+knowingly. It removes the reason
 to use `--language legacy` without moving a single strict result; the ranking gates stay for the
 ranking work, where they belong.
 
@@ -220,7 +225,9 @@ So B lands after the plain-search-coverage change, or in the same release with t
    (`parser.ts:256`, `registry.ts:424`).
 5. **Deprecate `--language legacy` for one or two releases.** It still runs the old chain unchanged
    and prints one stderr line: plain search now forgives typos; use `--discover` for partial
-   matches. stdout stays data only. MCP `language=legacy` gets the same hint.
+   matches. stdout stays data only. MCP `language=legacy` gets the same hint in `next_steps`.
+   An empty B answer gets the `--discover` pointer the same way: `next_steps` in MCP, one stderr
+   line in the CLI.
    Then remove the option (`messages-search-command.ts:74`, `searches-command.ts:46`), the MCP
    field (`src/mcp/tools/search.ts:74`) and the parity catalogue entry together.
 6. **SDK transition**, per [combined-search.md](combined-search.md#compatibility-and-release-order)
@@ -248,16 +255,18 @@ So B lands after the plain-search-coverage change, or in the same release with t
 - `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm docs:check`, `pnpm parity:audit`,
   `pnpm standards:check`.
 
+## Owner decisions (2026-10-13)
+
+- Option B, with its own gates (above); the ranking gates stay for later ranking work.
+- One edit only.
+- B is the default; partial matches stay behind `--discover`, hinted through `next_steps` (MCP)
+  and one stderr line (CLI) when B finds nothing. C is not adopted.
+
 ## Open questions for the owner
 
-1. Approve B with its own gates (above), and keep the ranking gates for later ranking work?
-2. One edit only? It misses a long word with two mistakes, but two edits fired on all five
-   absent-near-word topics.
-3. "Single words" per word inside a multi-word query (as measured), or literally one-word queries
+1. "Single words" per word inside a multi-word query (as measured), or literally one-word queries
    only (no measurable gain)?
-4. During deprecation, should `--language legacy` keep the old chain (proposed), or route to
+2. During deprecation, should `--language legacy` keep the old chain (proposed), or route to
    `--discover`?
-5. Default B, with partial matches staying behind `--discover` and a stderr hint on empty results
-   (proposed), or C, with labelled partial hits in the default?
-6. Should a strict saved search that returned nothing start returning labelled forgiven hits on
+3. Should a strict saved search that returned nothing start returning labelled forgiven hits on
    replay (proposed: yes)?

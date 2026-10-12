@@ -5,7 +5,7 @@ Open work only. A finished item is deleted; its record is the merged pull reques
 - **One message search without a language switch** — Lucene syntax with legacy's forgiving matching,
   matchers run in parallel, merged and ranked against the query, each hit labelled with how it matched;
   removes `--language legacy`. Ranking test set and an owner-approved plan come first:
-  [combined-search-handoff.md](combined-search-handoff.md). Measured plan for a narrow first step, awaiting approval:
+  [combined-search-handoff.md](combined-search-handoff.md). Approved plan for the narrow first step (B):
   [typo-search-default-plan.md](typo-search-default-plan.md).
 - **Messenger feature gaps** — albums, archiving, typing and location, MAX cloud password and video
   notes. Proposed, not claimed: [messenger-feature-gaps.md](messenger-feature-gaps.md).
