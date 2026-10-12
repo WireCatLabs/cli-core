@@ -4,6 +4,14 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`store export --json` answers the list envelope** `{ items, page, limit, hasMore }` — `page: 1`, `limit` the
+  count, `hasMore: false` — like every other list. It answered `{ items }` alone. `--output` and `--to` still answer
+  what they wrote.
+
 ## 0.255.0 — 12.10.2026
 
 ### Added
