@@ -34,6 +34,10 @@ const fingerprint = (query: string, input: MeetingSearchOptions, analyzer: strin
         input.meetingId ?? null,
         input.since ?? null,
         input.until ?? null,
+        input.participantIdentityId ?? null,
+        input.personId ?? null,
+        input.projectId ?? null,
+        input.tagId ?? null,
       ]),
     )
     .digest("hex")
@@ -73,6 +77,8 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
       checkMeetingCancelled(input.signal)
       positiveReadInteger(input.accountId, "accountId")
       if (input.meetingId !== undefined) positiveReadInteger(input.meetingId, "meetingId")
+      for (const name of ["participantIdentityId", "personId", "projectId", "tagId"] as const)
+        if (input[name] !== undefined) positiveReadInteger(input[name], name)
       timestamp(input.since)
       timestamp(input.until)
       if (input.since !== undefined && input.until !== undefined && input.until < input.since)
@@ -144,6 +150,28 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         if (input.until !== undefined) {
           clauses.push("m.started_at<=?")
           params.push(input.until)
+        }
+        if (input.participantIdentityId !== undefined) {
+          clauses.push("EXISTS (SELECT 1 FROM meeting_participants p WHERE p.meeting_id=m.id AND p.identity_id=?)")
+          params.push(input.participantIdentityId)
+        }
+        if (input.personId !== undefined) {
+          clauses.push(
+            "EXISTS (SELECT 1 FROM meeting_participants p JOIN identity_links i ON i.identity_id=p.identity_id JOIN persons person ON person.id=i.person_id WHERE p.meeting_id=m.id AND person.id=?)",
+          )
+          params.push(input.personId)
+        }
+        if (input.projectId !== undefined) {
+          clauses.push(
+            "EXISTS (SELECT 1 FROM links l JOIN projects p ON p.id=l.to_id WHERE l.from_type='meeting' AND l.from_id=m.id AND l.to_type='project' AND l.kind='member-of' AND l.anchor IS NULL AND l.confirmed=1 AND p.id=? AND p.account_id IS NULL AND p.deleted_at IS NULL)",
+          )
+          params.push(input.projectId)
+        }
+        if (input.tagId !== undefined) {
+          clauses.push(
+            "EXISTS (SELECT 1 FROM taggings g JOIN tags t ON t.id=g.tag_id WHERE g.taggable_type='meeting' AND g.taggable_id=m.id AND t.id=?)",
+          )
+          params.push(input.tagId)
         }
         const seek = after
           ? "WHERE started<? OR (started=? AND (meeting_id>? OR (meeting_id=? AND (kind>? OR (kind=? AND id>?)))))"

@@ -160,3 +160,5 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
     }
   }
 }
+
+export { callMeetingHitSearchTool, meetingHitSearchTool } from "./search.js"

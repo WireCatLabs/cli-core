@@ -173,3 +173,13 @@ is added.
   next to the meetings: it points at the same event, its invitees are identities like meeting
   participants, and a recurring entry points at the same event series. Nothing for calendars is built
   yet; the event tables are shaped so that adding them changes no meeting code.
+
+## Bounded search with context filters
+
+`meetings.searchHits` combines account and date bounds with `participantIdentityId`, `personId`, `projectId` and `tagId` before hit pagination. Participant identity matches observed meeting membership; person matches follow existing identity links. Neither attributes transcript speech. Project selection requires a confirmed, unanchored membership link to a live owner project. Tags and topics use explicit meeting taggings. Proposed project membership does not count.
+
+`searchMeetingHits` from the services export also takes `project`, `tag` or `topic` names. It reuses the shared vocabulary's exact canonical-name, project-key and explicit-alias resolution; missing or ambiguous names fail with candidates instead of guessing. Results include the resolved name selections. It does not infer project membership from transcript words or write labels. Cursors bind the resolved IDs together with the account, query and dates.
+
+Providers mount `addMeetingHitSearchCommand` from the meetings CLI export with a search closure fixed to their selected account. The optional `meetingHitSearchTool` and `callMeetingHitSearchTool` from the meetings MCP export accept the same selectors; tool callers cannot override that account. Existing basic meeting MCP tools keep their contract. Hosts retain permission checks, connection lifecycle and output limits.
+
+Search coverage remains explicit: an empty page does not prove the archive is complete, and pending indexing can hide matches. Human-name participant disambiguation, discovery by project words without explicit membership, hit-centered evidence and compact cited passages remain separate work.

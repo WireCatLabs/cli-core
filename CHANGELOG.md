@@ -4,6 +4,16 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Added
+
+- Bounded meeting hit search combines dates with an observed participant identity, an explicitly linked person, confirmed project membership and a tag/topic. The shared search service resolves canonical project names, keys and explicit aliases; shared CLI and MCP adapters keep the same scoped behavior. Participant filters select meetings and do not attribute transcript speech.
+
+### Fixed
+
+- Vitest passes the published base compiler config directly to Oxc, whose loader does not follow TypeScript package exports after the cli-base rename. TypeScript continues to check the complete project configurations.
+
 ## 0.254.0 — 12.10.2026
 
 ### Added
@@ -653,8 +663,6 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 - `store.meetings` exposes account-scoped metadata, revision and cue seek pages without loading a
   whole meeting. Reads default to current revisions, allow explicit retained history and enforce
   a stored text byte budget in one read snapshot; oversized pages reject without truncating evidence.
-
-
 
 - `store.meetings.appendTranscripts` implements the optional shared atomic append capability:
   account-scoped source/hash imports preserve existing meeting fields, owner links and unrelated

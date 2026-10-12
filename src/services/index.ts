@@ -58,6 +58,7 @@ export { foldersService } from "./folders.js"
 export type { InboxService } from "./inbox.js"
 export { inboxService } from "./inbox.js"
 export { readMail } from "./mail-search.js"
+export { type MeetingHitSearchRequest, searchMeetingHits } from "./meeting-hit-search.js"
 export type {
   AroundWindow,
   FoundMessage,
