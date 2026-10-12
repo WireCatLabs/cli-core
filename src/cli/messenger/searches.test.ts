@@ -165,7 +165,7 @@ describe("searches", () => {
   })
 })
 
-it("tells in each search's help that file text needs content: and which keys hold the answer", async () => {
+it("tells in each search's help what content: narrows to and which keys hold the answer", async () => {
   const help = async (...path: string[]) => {
     const streams = captureStreams()
     await run(
@@ -176,7 +176,7 @@ it("tells in each search's help that file text needs content: and which keys hol
     return streams.stdout.join("")
   }
   const messages = await help("messages")
-  expect(messages).toContain("the text of its files only with content:")
+  expect(messages).toContain("content: narrows a search to the text of files")
   expect(messages).toContain("chat search messages 'content:invoice'")
   expect(messages).toContain("each hit's reference is locator")
   expect(await help("mail")).toContain("each email's reference is locator")

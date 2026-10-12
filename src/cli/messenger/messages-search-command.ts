@@ -79,7 +79,7 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
     return command
       .addHelpText(
         "after",
-        `The text of attachments is searched with content: and their names with filename: —
+        `content: narrows a search to the text of attachments, filename: to their names —
 \`${messenger.app.command} search mail 'content:invoice'\`. --json: the list is items; each email's reference is locator.`,
       )
       .action(searchAction(messenger, kind))
@@ -90,7 +90,7 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
 \`${messenger.app.command} store fetch --all --background\` (the last 90 days of every chat); the answer's
 coverage says what was searched and coverage.next what would improve it. Mail is \`${messenger.app.command} search mail\`;
 everything at once is \`${messenger.app.command} search all\`.
-A plain word matches what a message says; the text of its files only with content: —
+content: narrows a search to the text of files, filename: to their names —
 \`${messenger.app.command} search messages 'content:invoice'\`. --json: the list is items; each hit's reference is locator.
 Search guide: https://github.com/WireCatLabs/cli-messaging/blob/main/docs/search/query-language.md`,
     )

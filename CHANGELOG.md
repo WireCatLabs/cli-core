@@ -8,9 +8,9 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
-- **Search help says that file text needs `content:` and where the answer keeps its references.** `search
-  messages`, `search mail` and `search all` say a plain word reads what a message says and the text of its files
-  only with `content:`, with an example; each search's help names its `--json` list (`items`, or `hits` for
+- **Search help says what `content:` narrows to and where the answer keeps its references.** `search messages`,
+  `search mail` and `search all` say `content:` narrows a search to the text of files and `filename:` to their
+  names, with an example; each search's help names its `--json` list (`items`, or `hits` for
   notes) and the reference key (`locator` for messages and mail, `ref` for all and notes). An agent compared a
   plain word in one tool with `content:` in another and reported a missing feature.
 

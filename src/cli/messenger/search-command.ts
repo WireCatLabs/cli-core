@@ -71,7 +71,7 @@ const allCommand = (messenger: Messenger): Command => {
     .addHelpText("after", SAVE_HELP)
     .addHelpText(
       "after",
-      `The text of files is searched only with content: — \`${messenger.app.command} search all 'content:invoice'\`.
+      `content: narrows a search to the text of files, filename: to their names — \`${messenger.app.command} search all 'content:invoice'\`.
 --json: the list is items; each result's reference is ref, with its kind (search messages gives locator).`,
     )
     .option(
