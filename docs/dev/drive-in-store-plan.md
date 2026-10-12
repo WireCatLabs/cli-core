@@ -1,6 +1,6 @@
 # Plan — Google Drive documents in the one store
 
-Status: **awaits the owner's approval.** No code until then.
+Status: **approved by the owner, 2026-10-13.** Q1 answered: nothing in drive needs to survive the move; documents are rebuilt from drive's local copies.
 
 ## Goal
 
@@ -123,9 +123,6 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 
 ## Open questions for the owner
 
-- **Q1 · Did you write anything in drive about documents (tags, notes, facts, memories, people
-  links) that must survive the move?** If yes, drive copies them across with new references (one
-  more work item). If no, the stop in "Existing data" is the whole guard.
 - **Q2 · Should a `search all` hit for a Drive document show its Google URL and the time it was last
   edited in Google?** Yes adds item 1 and a pin bump in tg, max and memo. No leaves both to
   `drive documents show`; the hit shows when drive last saved the text.
