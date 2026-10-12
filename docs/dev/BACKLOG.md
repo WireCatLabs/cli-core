@@ -15,4 +15,6 @@ Open work only. A finished item is deleted; its record is the merged pull reques
   [bench/mail-quality](../../bench/mail-quality/README.md) on the owner's own mailbox, which would stay in
   cli-private.
 - **Google Drive documents in the one store** — drive-cli writes into the shared store so `search all`
-  finds Drive documents; awaits the owner's approval: [drive-in-store-plan.md](drive-in-store-plan.md).
+  finds Drive documents; approved, not built: [drive-in-store-plan.md](drive-in-store-plan.md).
+- **Documents linked in a chat** — `chats documents list <chat>` in tg and max, with the message →
+  document link written by drive's `sync`; approved, not built: [chat-documents-plan.md](chat-documents-plan.md).
