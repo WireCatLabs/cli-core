@@ -108,7 +108,7 @@ qualify a release. It is reported so the dev result is not read alone.
    300 distractors per topic share the words. No typo rule can lift that; only ranking can.
 2. **B equals A on quality and costs nothing on hits strict already finds.** When strict returns
    hits, B returns exactly them. Phrase, AND/OR, chat, sender and date queries are identical to
-   strict for A and B. B's p95 is about strict's; A's is 2.8× strict on this run (about 4× on
+   strict for A and B. B's p95 is about strict's; A's is 3.2× strict on this run (2.8-4× across
    earlier runs). The corpus is small; no 100k-message latency is measured.
 3. **Zero no-answer hits is weak evidence.** The benchmark's no-answer words (`quantum`, `unicorn`,
    `purple`) have no near word in the archive, so no correction ever fires on them.
@@ -149,7 +149,7 @@ qualify a release. It is reported so the dev result is not read alone.
 | Typo and beginnings recall above legacy | fail: equal on dev | fail: equal on dev, below on held-out typo |
 | Every combined hit labelled | pass (`match`, `matches`) | not yet: the prototype is unlabelled (work item 3) |
 | Strict results unchanged for the same query | pass for explicit syntax | pass for every query strict answers |
-| Latency p95 ≤ 250 ms and ≤ 3× strict | borderline at small scale; 100k not measured | ≈ 1× strict at small scale; 100k not measured |
+| Latency p95 ≤ 250 ms and ≤ 3× strict | fails at small scale (3.2× strict); 100k not measured | ≈ 1× strict at small scale; 100k not measured |
 
 B's numbers come from the query rewrite described above, not from `searchCombined`.
 Neither option passes the gates as written. The three quality gates measure ranking, and both
