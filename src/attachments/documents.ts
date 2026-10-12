@@ -9,6 +9,7 @@ import { MAX_TEXT_CHARS as MAX_TEXT } from "./limits.js"
 const OFFICE = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
 const TEXT = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
 const TABLE = "urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+const ODF_DRAW = "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
 const PACKAGE_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 const STRICT_REL = "http://purl.oclc.org/ooxml/officeDocument/relationships"
@@ -17,10 +18,11 @@ const SLIDE = "http://schemas.openxmlformats.org/presentationml/2006/main"
 const DRAW = "http://schemas.openxmlformats.org/drawingml/2006/main"
 const OPF = "http://www.idpf.org/2007/opf"
 const XHTML = "http://www.w3.org/1999/xhtml"
-export type DocumentKind = "odt" | "ods" | "xlsx" | "pptx" | "epub"
+export type DocumentKind = "odt" | "ods" | "odp" | "xlsx" | "pptx" | "epub"
 const TYPES: Record<DocumentKind, string> = {
   odt: "application/vnd.oasis.opendocument.text",
   ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odp: "application/vnd.oasis.opendocument.presentation",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   epub: "application/epub+zip",
@@ -151,7 +153,7 @@ const odfParagraphs = (node: Node): Element[] => {
   visit(node)
   return result
 }
-const readOdf = (archive: Map<string, Uint8Array>, kind: "odt" | "ods", output: Output) => {
+const readOdf = (archive: Map<string, Uint8Array>, kind: "odt" | "ods" | "odp", output: Output) => {
   if (new TextDecoder().decode(archive.get("mimetype")) !== TYPES[kind]) throw new Error("wrong_format")
   const document = xmlPart(archive, "content.xml")
   rootIs(document, "document-content", [OFFICE])
@@ -160,10 +162,17 @@ const readOdf = (archive: Map<string, Uint8Array>, kind: "odt" | "ods", output: 
     if (elements(manifest, "encryption-data", "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0").length)
       throw new Error("encrypted_document")
   }
-  const body = elements(document, kind === "odt" ? "text" : "spreadsheet", OFFICE)
+  const body = elements(document, { odt: "text", ods: "spreadsheet", odp: "presentation" }[kind], OFFICE)
   if (body.length !== 1) throw new Error("wrong_format")
   if (kind === "odt") {
     for (const paragraph of odfParagraphs(body[0] as Element)) output.add(`${odfText(paragraph)}\n`)
+    return
+  }
+  if (kind === "odp") {
+    elements(body[0] as Element, "page", ODF_DRAW).forEach((page, index) => {
+      output.section(`Slide ${index + 1}`)
+      for (const paragraph of odfParagraphs(page)) output.add(`${odfText(paragraph)}\n`)
+    })
     return
   }
   for (const sheet of elements(body[0] as Element, "table", TABLE)) {
@@ -327,7 +336,7 @@ export const readDocument = async (
   try {
     const archive = await readContainer(bytes, signal)
     const output = new Output()
-    if (kind === "odt" || kind === "ods") readOdf(archive, kind, output)
+    if (kind === "odt" || kind === "ods" || kind === "odp") readOdf(archive, kind, output)
     else if (kind === "xlsx") readSheet(archive, output)
     else if (kind === "pptx") readSlides(archive, output)
     else readBook(archive, output)

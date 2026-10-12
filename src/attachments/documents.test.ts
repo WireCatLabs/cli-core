@@ -1,7 +1,15 @@
+import { readFileSync } from "node:fs"
 import { strToU8, zipSync } from "fflate"
 import { describe, expect, it, vi } from "vitest"
 import { zip } from "../testing/files.js"
-import { bookEntries, odfEntries, officeFixture, sheetEntries, slideEntries } from "../testing/office-files.js"
+import {
+  bookEntries,
+  odfEntries,
+  officeFixture,
+  presentationEntries,
+  sheetEntries,
+  slideEntries,
+} from "../testing/office-files.js"
 import { readContainer } from "./container.js"
 import { extractText, importEngine } from "./extract.js"
 
@@ -14,7 +22,7 @@ const textOf = async (kind: string, entries: Record<string, string>) => {
 }
 
 describe("digital document text", () => {
-  it.each(["odt", "ods", "xlsx", "pptx", "epub"] as const)(
+  it.each(["odt", "ods", "odp", "xlsx", "pptx", "epub"] as const)(
     "reads %s locally from an actual ZIP container",
     async (kind) => {
       const noEngine = vi.fn(() => {
@@ -44,6 +52,9 @@ describe("digital document text", () => {
     expect(text).toContain("B7: sharedneedle")
     expect(text).toContain("C2: 12 [formula: SUM(A1:B1)]")
     expect(text).toContain("D2:  [formula: 1+1]")
+  })
+  it("reads ODP slides in order", async () => {
+    expect(await textOf("odp", presentationEntries())).toBe("[Slide 1]\nFirst slideneedle\n\n\n[Slide 2]\nLater слайд")
   })
   it("uses presentation order, not archive order", async () => {
     const text = await textOf("pptx", slideEntries())
@@ -204,5 +215,51 @@ describe("digital document text", () => {
       expect(await extractText(zip(odfEntries("odt")), hint(kind), importEngine)).toMatchObject({
         status: "unsupported",
       })
+  })
+})
+
+describe("legacy and markup text", () => {
+  const bytes = (text: string) => new TextEncoder().encode(text)
+  const textFrom = async (data: Uint8Array, kind: string) => {
+    const result = await extractText(data, hint(kind), importEngine)
+    expect(result.status).toBe("extracted")
+    return result.status === "extracted" ? result : undefined
+  }
+
+  it("**reads a Word 97–2003 .doc**", async () => {
+    const doc = new Uint8Array(readFileSync(new URL("../testing/fixtures/legacy.doc", import.meta.url)))
+    const result = await textFrom(doc, "doc")
+    expect(result?.text).toContain("The heron count rose to 42 in October. Цапли вернулись.")
+    expect(result?.extractor).toMatch(/^doc:word-extractor@/)
+  })
+
+  it("**reads RTF**: its code page, \\u escapes and symbols, without fonts, styles or hidden groups", async () => {
+    const rtf = String.raw`{\rtf1\ansi\ansicpg1251\deff0{\fonttbl{\f0 Times New Roman;}}{\colortbl;\red0\green0\blue0;}
+{\*\generator Synthetic;}{\info{\title hidden title}}\pard\plain Heron \b rtfneedle\b0  count\par
+\'d6\'e0\'ef\'eb\'ff and \u1094?\u1072? \{braces\}\tab end\par}`
+    const result = await textFrom(bytes(rtf), "rtf")
+    expect(result?.text).toBe("Heron rtfneedle count\nЦапля and ца {braces}\tend")
+    expect(result?.extractor).toBe("rtf:v1")
+  })
+
+  it("**reads HTML** without scripts, styles, comments or tags, entities decoded", async () => {
+    const html =
+      "<!doctype html><html><head><title>hidden</title><style>p{}</style></head><body><h1>Report</h1>" +
+      "<p>htmlneedle &amp; more&nbsp;text &#1046; &#x416;</p><!-- secret --><script>alert(1)</script>" +
+      "<table><tr><td>a</td><td>b</td></tr></table></body></html>"
+    const result = await textFrom(bytes(html), "html")
+    expect(result?.text).toContain("Report\n")
+    expect(result?.text).toContain("htmlneedle & more\u00A0text Ж Ж")
+    expect(result?.text).toContain("a\tb")
+    expect(result?.text).not.toMatch(/hidden|secret|alert|p\{\}/)
+  })
+
+  it("leaves .xls and .ppt, and a .doc that is not one, unsupported", async () => {
+    const ole = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0])
+    for (const kind of ["xls", "ppt"])
+      expect(await extractText(ole, hint(kind), importEngine)).toMatchObject({ status: "unsupported" })
+    expect(await extractText(bytes("not a document"), hint("doc"), importEngine)).toMatchObject({
+      status: "unsupported",
+    })
   })
 })

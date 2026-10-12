@@ -8,6 +8,7 @@ import {
   classify,
   type Engine,
   type Extraction,
+  engineMissing,
   extractText,
   importEngine,
   type LoadEngine,
@@ -357,7 +358,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
                   status === "too-large"
                     ? "attachment exceeds an extraction, decompression or OCR size limit"
                     : extraction?.status === "engine-missing"
-                      ? `attachment engine-missing; reading it needs the optional package ${extraction.engine}, installed where this tool is (for a global npm install: npm install -g ${extraction.engine}); \`doctor\` lists the readers`
+                      ? `attachment engine-missing; ${engineMissing(extraction.engine)}; \`doctor\` lists the readers`
                       : `attachment ${status}; retry or skip this item`,
                   { limitSource: ocr ? "provider" : "local" },
                 )),

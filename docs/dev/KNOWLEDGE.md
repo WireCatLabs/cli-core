@@ -82,6 +82,7 @@ arguments; `list` filters by tool and by the agent's name, such as `tg-mcp`.
 ## Document extraction
 
 `./documents` exposes `extractText`, `importEngine`, limits and extraction types. Markdown/TXT/CSV/TSV
-use UTF-8 text. PDF and DOCX reuse the optional `unpdf` and `mammoth` engines; XLSX and other modern office formats use the existing bounded built-in readers and preserve sheet/cell addresses. PDF results expose page spans. Missing engines,
+use UTF-8 text; HTML and RTF are read to their visible text. PDF, DOCX and DOC use `unpdf`, `mammoth` and `word-extractor`,
+dependencies of this package; XLSX, PPTX, ODT, ODS, ODP and EPUB use the bounded built-in readers and preserve sheet/cell addresses. PDF results expose page spans. Missing engines,
 unreadable files, scans requiring an agent, unsupported formats and oversized inputs are distinct.
-Legacy DOC/XLS and automatic OCR are not advertised as supported formats.
+Legacy XLS/PPT and automatic OCR are not supported.

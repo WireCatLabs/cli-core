@@ -26,3 +26,11 @@
 The voice detector model the speech code downloads (`VAD` in `src/speech/models.ts`, same sha256), so
 the test runs without a download. Silero VAD, MIT license — [`silero_vad.LICENSE`](silero_vad.LICENSE),
 from [snakers4/silero-vad](https://github.com/snakers4/silero-vad).
+
+## `legacy.doc`
+
+A 9.5 KB Word 97–2003 document with invented text (English and Russian), for the `.doc` reader test in
+`src/attachments/documents.test.ts`. Binary `.doc` cannot be built in a test without a writer library.
+
+- **Made with:** `soffice --headless --convert-to doc legacy.txt` (LibreOffice), from a text file holding
+  "Synthetic legacy memo", a blank line and "The heron count rose to 42 in October. Цапли вернулись."

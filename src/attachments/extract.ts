@@ -8,14 +8,19 @@ import { type CellSpan, delimitedSpans } from "./csv-spans.js"
 import { documentKind, readDocument } from "./documents.js"
 import { decodeText } from "./encoding.js"
 import { attachmentMaxBytes, MAX_TEXT_CHARS } from "./limits.js"
+import { htmlText, rtfText } from "./markup.js"
 
 export { MAX_FILE_BYTES, MAX_TEXT_CHARS } from "./limits.js"
 
-/** The optional packages that read formats; none is installed with this package (owner, NEED-629 A). */
-export const ENGINES = ["unpdf", "mammoth", "@napi-rs/canvas"] as const
+/**
+ * The packages that read formats. Reading documents is core, so the readers ship with this package (owner,
+ * 2026-10-12, replacing NEED-629 A); only the page renderer for OCR stays optional, a native binary.
+ */
+export const BUILT_IN = ["unpdf", "mammoth", "word-extractor"] as const
+export const ENGINES = [...BUILT_IN, "@napi-rs/canvas"] as const
 export type Engine = (typeof ENGINES)[number]
 
-/** Loads an optional package; a test hands in its own to play a machine without it. */
+/** Loads a reader package; a test hands in its own to play a machine without it. */
 export type LoadEngine = (name: Engine) => Promise<unknown>
 
 export type Extraction =
@@ -46,6 +51,9 @@ export interface FileHint {
 const PLAIN = new Set([".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".log"])
 const IMAGES = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".tif", ".tiff", ".bmp"])
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+const HTML = new Set([".html", ".htm", ".xhtml"])
+/** OLE2 compound file: every legacy Office binary — .doc, .xls, .ppt — starts with it. */
+const OLE = "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
 
 export const importEngine: LoadEngine = (name) => import(name)
 
@@ -87,6 +95,10 @@ const plain = (bytes: Uint8Array): Extraction => {
   }
 }
 
+interface WordExtractor {
+  extract(input: Buffer): Promise<{ getBody(): string }>
+}
+
 interface Mammoth {
   extractRawText(input: { buffer: Buffer }): Promise<{ value: string }>
 }
@@ -117,7 +129,7 @@ const withEngine = async <T>(
     if (isMissing(error, name)) return { status: "engine-missing", engine: name }
     throw error
   }
-  const extractor = name === "mammoth" ? `docx:${versionOf(name)}` : `pdf:${versionOf(name)}`
+  const extractor = `${name === "mammoth" ? "docx" : name === "word-extractor" ? "doc" : "pdf"}:${versionOf(name)}`
   try {
     return await read(engine, extractor)
   } catch (error) {
@@ -212,6 +224,17 @@ export const extractText = async (
         : { status: "extracted", text: capped(value), extractor }
     })
   }
+  if (startsWith(bytes, OLE) && (extension === ".doc" || hint.mime === "application/msword")) {
+    return withEngine<{ default: new () => WordExtractor }>(load, "word-extractor", async (engine, extractor) => {
+      const value = (await new engine.default().extract(Buffer.from(bytes))).getBody()
+      return value.trim() === ""
+        ? { status: "needs-agent", extractor }
+        : { status: "extracted", text: capped(value), extractor }
+    })
+  }
+  if (startsWith(bytes, "{\\rtf")) return derived(bytes, "rtf:v1", rtfText)
+  if (HTML.has(extension) || hint.mime === "text/html" || hint.mime === "application/xhtml+xml")
+    return derived(bytes, "html:v1", htmlText)
   if (PLAIN.has(extension) || hint.mime?.startsWith("text/") || hint.mime === "application/json") {
     const result = plain(bytes)
     if (result.status !== "extracted" || ![".csv", ".tsv"].includes(extension)) return result
@@ -225,6 +248,19 @@ export const extractText = async (
   if (hint.kind === "photo" || hint.mime?.startsWith("image/") || IMAGES.has(extension))
     return { status: "needs-agent" }
   return { status: "unsupported" }
+}
+
+/** Text read out of a markup, decoded as plain text is; an empty result is for the agent. */
+const derived = (bytes: Uint8Array, extractor: string, read: (source: string) => string): Extraction => {
+  const decoded = decodeText(bytes)
+  if ("error" in decoded) return { status: "unreadable", extractor, error: decoded.error }
+  try {
+    const text = read(decoded.text)
+    return text === "" ? { status: "needs-agent", extractor } : { status: "extracted", text: capped(text), extractor }
+  } catch (error) {
+    if (error instanceof ReaderLimit) return { status: "too-large" }
+    return { status: "unreadable", extractor, error: "invalid_document" }
+  }
 }
 
 const SILENT_KINDS = new Set(["voice", "audio", "video", "video_note", "sticker", "animation", "gif"])
@@ -247,25 +283,32 @@ export const classify = (hint: FileHint): "image" | "unsupported" | undefined =>
   return undefined
 }
 
+const isBuiltIn = (engine: Engine) => (BUILT_IN as readonly string[]).includes(engine)
+
+/** Why a file was not read for want of a package, and what fixes it. */
+export const engineMissing = (engine: Engine): string =>
+  isBuiltIn(engine)
+    ? `the package ${engine}, which ships with this tool, could not be loaded — reinstall the tool`
+    : `the optional package ${engine} is needed, installed where this tool is (for a global npm install: npm install -g ${engine})`
+
 /** The one note a run gives for a format it skipped, naming what to install. */
 export const engineHint = (engine: Engine, command: string): string =>
-  `${engine === "unpdf" ? "PDF" : engine === "mammoth" ? "Word" : "Scanned PDF OCR"} files need the optional package ${engine}, installed where ${command} is ` +
-  `(for a global npm install: npm install -g ${engine}); they are read on the next run`
+  `${engine === "unpdf" ? "PDF" : engine === "mammoth" ? "Word" : engine === "word-extractor" ? "Word 97–2003" : "Scanned PDF OCR"} files: ${engineMissing(engine).replace("this tool", command)}; they are read on the next run`
 
-/** For `doctor`: the optional readers resolve from here exactly as `importEngine` would load them. */
+/** For `doctor`: each reader resolved from here exactly as `importEngine` would load it. */
 export const engineStates = (
   resolve: (name: string) => string = (name) => import.meta.resolve(name),
-): Record<Engine, "installed" | "missing"> =>
+): Record<Engine, "built in" | "installed" | "missing"> =>
   Object.fromEntries(
     ENGINES.map((name) => {
       try {
         resolve(name)
-        return [name, "installed"]
+        return [name, isBuiltIn(name) ? "built in" : "installed"]
       } catch {
         return [name, "missing"]
       }
     }),
-  ) as Record<Engine, "installed" | "missing">
+  ) as Record<Engine, "built in" | "installed" | "missing">
 
 export const tooLarge = (bytes: number, env: NodeJS.ProcessEnv = process.env): boolean =>
   bytes > attachmentMaxBytes(env)

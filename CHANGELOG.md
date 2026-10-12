@@ -8,6 +8,12 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **File readers ship with the package.** `unpdf` and `mammoth` move from optional peers to dependencies, so
+  PDF and Word text is read on every install, a global pnpm one included; only `@napi-rs/canvas`, the native
+  page renderer that scanned-PDF OCR needs, stays optional. `doctor` `readers` says `built in` for them.
+- **More formats are read:** Word 97–2003 `.doc` (`word-extractor`), RTF, HTML and OpenDocument presentations
+  (`.odp`). `.xls` and `.ppt` stay unsupported.
+
 - **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each
   `installed` or `missing`, resolved the way extraction loads them.
 
