@@ -50,7 +50,13 @@ Variants:
 - **discover** — today's `--discover`.
 - **narrow (B)** — strict first. Only when strict returns nothing, each plain word that is not a whole
   archive word gets help: a known beginning becomes `word*`; an unknown word becomes its nearest
-  archive words. Frozen guard: one edit, no frequency floor, beginnings of 3+ letters.
+  archive words. The words are rewritten into the query (`aurora (rollout) rollback`,
+  `aurora (roll*) rollback`) and strict runs once more. Frozen guard: one edit, no frequency
+  floor, beginnings of 3+ letters. Dev tied on beginnings of 3 or 4 letters and on every frequency
+  floor; 3 is production's existing threshold, and the floor changed nothing.
+- **combined when strict is empty** — also measured: strict first, then `searchCombined`. Same
+  quality as B, but p95 34.3 ms and 41 near-word hits, because `correctWords` allows two edits
+  above four letters (`src/search/correct.ts:17`).
 
 Reproduce (from the cli-testing worktree):
 
@@ -102,14 +108,17 @@ qualify a release. It is reported so the dev result is not read alone.
 4. **Corrections fire on real words that are simply not in the archive.** Six unlabelled
    `absent-near-word` queries were added after the first sweep, so they are a diagnostic, not a gate.
    `cedar backup detention` becomes `retention` under one edit and returns ten hits. Two edits
-   (production's rule for words over four letters) fire on all five topics (41 hits). The held-out run
+   (production's rule for words over four letters) fire on all five queries (41 hits). The held-out run
    also corrected a real word, `схемы` → `схему`, in a paraphrase query. A frequency floor
    (1, 2, 3, 5 or 10 messages) changed nothing: a common archive word is always the nearest.
    The search cannot tell a typo from an absent word. Only visible labelling makes this safe.
-5. **The benchmark has no one-word queries.** "Single words with no exact hit" is read here per
+5. **"Strict found nothing" has a blind spot.** `вектор миграця отмена` (held-out) gets ten strict
+   hits because the stemmer matches the typo `миграця`. B never fires, and the stem-matched ranking
+   misses both answers. That is the one held-out parity miss.
+6. **The benchmark has no one-word queries.** "Single words with no exact hit" is read here per
    word inside an implicit-AND query. Read literally (a query of exactly one word), the rule fires
    on zero benchmark queries and gains nothing measurable.
-6. **Today's `--discover` has 80 / 80 no-answer hits.** It is a partial-match tool by design; it is
+7. **Today's `--discover` has 80 / 80 no-answer hits.** It is a partial-match tool by design; it is
    not a replacement for the default.
 
 ## Gates
@@ -125,6 +134,7 @@ qualify a release. It is reported so the dev result is not read alone.
 | Strict results unchanged for the same query | pass for explicit syntax | pass for every query strict answers |
 | Latency p95 ≤ 250 ms and ≤ 3× strict | borderline at small scale; 100k not measured | ≈ 1× strict at small scale; 100k not measured |
 
+B's numbers come from the query rewrite described above, not from `searchCombined`.
 Neither option passes the gates as written. The three quality gates measure ranking, and both
 options leave ranking where strict has it.
 
@@ -176,16 +186,19 @@ So B lands after the plain-search-coverage change, or in the same release with t
 3. **Narrow step in the service.** After strict returns nothing, for implicit-AND plain words only:
    a whole archive word stays; a known beginning of 3+ letters becomes a prefix; an unknown word
    gets its nearest archive words at one edit. Explicit syntax, phrases, fields, exclusions, AST,
-   `--exact`, regex keep strict. Label each hit and list the corrections. Reuse `searchCombined`'s
-   eligibility (`messages-combined.ts:65-76`) and `correctWords` (`correct.ts:55`) with a one-edit
-   limit; do not add a second matcher.
+   `--exact`, regex keep strict. Label each hit and list the corrections. Build it as measured:
+   rewrite the forgiven words into the resolved query and run strict once more. Reuse
+   `searchCombined`'s eligibility (`messages-combined.ts:65-76`) and `correctWords`
+   (`correct.ts:55`) with a new edit-limit parameter set to one; do not add a second matcher.
+   Running `searchCombined` itself instead measured 2.5× slower with 41 near-word hits.
 4. **CLI and MCP default.** `search messages`, `search all` (messages part) and the MCP tool use it.
    `--exact` and MCP `exact=true` turn it off. Parser and registry hints stop pointing at legacy
    (`parser.ts:256`, `registry.ts:424`).
 5. **Deprecate `--language legacy` for one or two releases.** It still runs the old chain unchanged
    and prints one stderr line: plain search now forgives typos; use `--discover` for partial
    matches. stdout stays data only. MCP `language=legacy` gets the same hint.
-   Then remove the option, the MCP field and the parity catalogue entry together.
+   Then remove the option (`messages-search-command.ts:74`, `searches-command.ts:46`), the MCP
+   field (`src/mcp/tools/search.ts:74`) and the parity catalogue entry together.
 6. **SDK transition**, per [combined-search.md](combined-search.md#compatibility-and-release-order)
    steps 3-5: an additive SDK switch first (name chosen in STANDARD), then one breaking release where
    `searchStore` without a language runs strict + narrow instead of legacy. Explicit SDK `legacy`
