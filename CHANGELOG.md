@@ -4,6 +4,16 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`upgrade` reads back the version it installed** when the host passes `installed` (and, for the time,
+  `publishedAt`). The result gains `installed`; `updated` is false when the version did not change; when the package
+  manager installed an older version than `latest` — pnpm 11 holds a version for 1 day by default
+  (`minimumReleaseAge`) — the result carries `heldBack: { until, command }`, the reason is `held_back`, and a warning
+  names the exact-version command that installs it now. Before, it reported the npm `latest` as installed.
+
 ## 0.255.0 — 12.10.2026
 
 ### Added
