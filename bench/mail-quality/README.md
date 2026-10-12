@@ -55,6 +55,21 @@ node bench/mail-quality/run.ts > bench/mail-quality/results.json
 The store check leaves a temporary store in the system temp directory; removing it is a separate
 cleanup step.
 
+### On a real mailbox
+
+[export-store.ts](export-store.ts) turns one mailbox of a store, read from a copy, and its owner's questions into a
+corpus of the same shape; `MAIL_CORPUS` points the runner at it and `MAIL_VARIANTS` narrows the 36 variants, since a
+mailbox of thousands of emails takes hours to embed every way:
+
+```sh
+node bench/mail-quality/export-store.ts --store <db> --account <address> --queries <questions.json> > <corpus.json>
+MAIL_CORPUS=<corpus.json> MAIL_VARIANTS=email/1200/150/rules,thread/1200/150/rules \
+  node bench/mail-quality/run.ts > <results.json>
+```
+
+The corpus holds the mail's text and the questions say what the owner looks for: both stay private, as do the
+results, which name the questions by id.
+
 ## Measured results
 
 2026-10-11, AMD Ryzen AI 9 HX 470, 24 threads, Node 24.19; corpus hash and every rank are in
