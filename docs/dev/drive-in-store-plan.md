@@ -31,13 +31,16 @@ Anchors are on `origin/main` of each repository, 2026-10-13.
    filter (`src/services/search-all.ts:140-147`). memo calls `searchAll` with no filter either
    (`cli-memo/src/search/command.ts:264-277`). The hit carries the reference, the title and the folder
    id, but no Google URL (`search-all.ts:155-163`). drive's own `documents search` adds `sourceUrl` from
-   front matter (`drive-cli/src/store.ts:107-119`).
+   front matter (`drive-cli/src/store.ts:107-119`). The hit's time is the row's `updatedAt`
+   (`search-all.ts:160`, `src/services/notes-search.ts:363`): when drive last saved a changed text, not
+   when the doc was last edited in Google.
 5. **memo leaves folders it does not have in its config alone.** `memo sync` reads only configured
-   folders (`cli-memo/src/notes/bound.ts:19-38`), so it never deletes drive's documents. But
+   folders (`cli-memo/src/notes/bound.ts:19-38`), so it never touches drive's documents. But
    `memo folders list` shows such a folder as "not on this computer — memo folders attach"
    (`cli-memo/src/notes/folders-command.ts:99-110`). If the owner attached `google-drive:…` to a disk
-   folder, the next `memo sync` would delete every Drive document missing from that disk folder
-   (`cli-memo/src/notes/import.ts:168-175`).
+   folder, the next `memo sync` would import that disk folder's files into drive's folder, and delete
+   the Drive documents missing from disk whenever they are at most 20% of the folder or fewer than 5
+   (`cli-memo/src/notes/import.ts:29-30,168-175`).
 6. **Text limit.** A file note holds 200 000 characters now (`notes.ts:391`). cm#1017 raises it to
    2 000 000. drive#19 sets `maxTextChars` to 2 000 000 by default, so drive#19 needs a release with
    cm#1017.
@@ -59,7 +62,8 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 ## Work
 
 1. **cli-messaging (optional, owner question Q2):** `search all` note hits gain `url` from front matter
-   `sourceUrl` when there is one. No schema change. Release it together with cm#1017.
+   `sourceUrl`, and take their time from front matter `modifiedAt`, when there are such fields. No
+   schema change. Release it together with cm#1017.
 2. **cli-memo:** `memo folders list` shows `google-drive:` folders as drive's, not as "attach me";
    `memo folders attach` refuses them (point 5).
 3. **drive-cli, after drive#19 merges:**
@@ -75,13 +79,17 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 ## Existing `drive.db` data
 
 - **Documents are rebuilt, not copied.** Each profile's `state.json` keeps a `reference` per document
-  (`drive-cli/src/state.ts:32`). Those ids belong to drive.db. With a cursor saved, a sync re-saves
-  only changed files (`drive-cli/src/sync.ts:54`), so unchanged documents would never reach the
-  shared store.
-  On the first run against the shared store, when the profile's `google-drive:<principal>` folder is
-  missing there and `state.documents` is not empty, drive re-saves every document from its local
-  snapshot (`readSnapshot`, `drive-cli/src/state.ts:86`) and rewrites each `reference`. No Google
-  call. A missing snapshot falls back to `folders sync --rescan` (`drive-cli/src/sync.ts:202-204`).
+  (`drive-cli/src/state.ts:32`). That `document:<id>` is a row number in drive.db; in the shared store
+  the same number can name another document, memo's for example. `documents list` and
+  `documents show` read these references (`drive-cli/src/program.ts:309-326`). With a cursor saved, a
+  sync re-saves only changed files (`drive-cli/src/sync.ts:54`), so unchanged documents would never
+  reach the shared store.
+- `state.json` gains `store`: the file its references belong to. `openIndex`, which every command
+  goes through, compares it with `storePath(env)`. On a mismatch drive re-saves every document from
+  its local snapshot (`readSnapshot`, `drive-cli/src/state.ts:86`) and rewrites each `reference`, with
+  no Google call. It writes `store` last, so an interrupted rebuild starts over; re-saving is
+  idempotent, since a document is keyed by folder and `<fileId>.md`. A missing snapshot falls back to
+  `folders sync --rescan` (`drive-cli/src/sync.ts:202-204`).
 - **What the owner wrote in drive.db cannot be fetched again**: tags, notes about a document,
   memories, facts, people links (`drive-cli/src/knowledge.ts`). Before the rebuild drive counts these
   rows in drive.db through the store API. If there are none, it goes on. If there are some, it stops
@@ -107,8 +115,8 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 - drive test: sync a fixture Google Doc with `MESSAGING_STORE` in the sandbox, then call `searchAll`
   from cli-messaging. Expect one `note` item with a `document:` reference and the doc's title (and
   `url`, with item 1).
-- drive test: a profile with `state.documents` and snapshots but an empty shared store is rebuilt
-  offline; references in `state.json` point at the new rows.
+- drive test: a profile whose `state.json` names another store file is rebuilt offline from
+  snapshots; references point at the new rows; a rebuild cut off halfway completes on the next run.
 - memo test: `folders list` and `folders attach` treat a `google-drive:` folder as drive's.
 - After the releases, the owner runs `drive <profile> folders sync`, then
   `memo search all <word from a Google Doc>`. It returns the doc.
@@ -118,7 +126,8 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 - **Q1 · Did you write anything in drive about documents (tags, notes, facts, memories, people
   links) that must survive the move?** If yes, drive copies them across with new references (one
   more work item). If no, the stop in "Existing data" is the whole guard.
-- **Q2 · Should a `search all` hit for a Drive document show its Google URL?** Yes adds item 1 and a
-  pin bump in tg, max and memo. No leaves the URL to `drive documents show`.
+- **Q2 · Should a `search all` hit for a Drive document show its Google URL and the time it was last
+  edited in Google?** Yes adds item 1 and a pin bump in tg, max and memo. No leaves both to
+  `drive documents show`; the hit shows when drive last saved the text.
 - **Q3 · May `DRIVE_STORE` go?** One store means one override, `MESSAGING_STORE`. Keeping
   `DRIVE_STORE` lets a second database come back.
