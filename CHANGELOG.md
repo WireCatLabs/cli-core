@@ -4,6 +4,15 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **A person's context names their last message and yours whatever the message limit.** `last.fromThem` and
+  `last.fromMe` were looked for only in the messages returned, so `memo context … --limit 1` gave `fromMe: null`
+  while `--limit 2` gave the message. They now come from the whole stored dialog; mail is still read within
+  the limit. `MessageStore.messages` takes `outgoing` to keep only the owner's or only the others' messages.
+
 ## 0.255.0 — 12.10.2026
 
 ### Added
