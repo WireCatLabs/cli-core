@@ -26,6 +26,34 @@ chats documents list <chat> [--limit <n>] [--page <n>]
   as the message does ([Permissions](STANDARD.md#permissions), rule 2). It only reads, so a `readonly`
   profile runs it and `deny messages` hides it. Over MCP it runs through `<tool>_read`.
 
+## Before creating a command
+
+The five questions of [STANDARD](STANDARD.md#before-creating-a-command):
+
+1. **What the user wants to learn:** which documents people shared in a chat, and which of them the
+   store holds. The chat owns it, so the path starts with `chats`.
+2. **A new leaf, not an option.** No existing command lists documents; `chats media` and
+   `attachments list` list other things (STANDARD rule 1). The parent help gains one line:
+
+   ```text
+   $ tg chats --help
+     …
+     documents   the Google Docs and Drive documents linked in a chat's stored messages
+     events      …
+     media       …
+     members     …
+     tracking    …
+   $ tg chats documents --help
+     list <chat>   every document link in the chat, newest first, and whether the store has it
+   ```
+
+3. **Every word exists already:** the resource `chats`, the verb `list`, the argument `<chat>`, the
+   options `--limit` and `--page`. `documents` is the glossary's word for a file from Google Drive.
+4. **Result and coverage:** the list envelope below. It covers the stored messages only and does not
+   report gaps in them; `store gaps` does. Permission `messages`; over MCP, `<tool>_read` with the
+   command `chats documents list`.
+5. **Nothing moves or is replaced**, except the owner's hand-written script.
+
 ## Output
 
 The list envelope from [Output](STANDARD.md#output), rule 1:
@@ -93,7 +121,8 @@ the store and its Google file id (front matter `fileId`).
   `{ url, documentId }` for every Docs, Sheets, Slides, Forms and Drive file URL, in each form:
   `/d/<id>/…`, `/u/<n>/…`, `open?id=<id>`, `file/d/<id>/view`, with any query or fragment. The reader
   and the writer use it, so they agree on what a document link is.
-- **Store API:** `store.documents.linkMessages({ documents: [{ reference, fileId }], since? })`.
+- **Store API:** `store.notes.linkMessages({ documents: [{ reference, fileId }], since? })`, beside
+  `saveFileNote` and `replaceFileLinks`, where documents are kept today.
   It finds candidate messages through `messages_fts` (trigram, so a file id matches as a substring),
   keeps those whose `googleDocumentLinks` contains the `fileId`, and inserts the missing `links` rows.
   `since` limits it to messages stored after a time (`messages.created_at`). It answers how many links
