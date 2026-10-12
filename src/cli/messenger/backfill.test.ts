@@ -541,9 +541,14 @@ describe("store fetch in the background", () => {
     expect(dead.calls[0]?.argv).toEqual(["messages", "sync", "7", "--limit", "40", "--json"])
   })
 
-  it("store fetch is gone: messages sync took its place", async () => {
-    const { code } = await call(["store", "fetch", "7", "--json"], idle, setup())
-    expect(code).not.toBe(0)
+  it("store fetch still syncs and names messages sync on stderr", async () => {
+    const env = setup()
+    const state = { newest: 3, asked: [] as (string | undefined)[] }
+    const old = await call(["store", "fetch", "7", "--pause", "1ms", "--json"], chatOf(state), env)
+    expect(old.code).toBe(0)
+    expect(old.stderr).toContain("store fetch is now messages sync")
+    const fresh = await call(["messages", "sync", "7", "--pause", "1ms", "--json"], chatOf(state), env)
+    expect(fresh.stderr).not.toContain("store fetch is now messages sync")
   })
 
   it("retry rebuilds the command of a job recorded before jobs kept theirs", async () => {
