@@ -37,9 +37,9 @@ The [message benchmark](https://github.com/WireCatLabs/cli-testing/blob/06e23a1/
 
 - cli-testing `origin/main` (contains 63de1d78, package scope `@wirecat`) runs against today's
   cli-messaging. Branch `test/search-experiments` still uses the old `@leemour` scope and does not.
-- The new runner is on cli-testing branch `test/typo-search-narrow`, commit `06e23a1`
+- The new runner is on cli-testing branch `test/typo-search-narrow`, commit `a82bf93`
   ([cli-testing#37](https://github.com/WireCatLabs/cli-testing/pull/37)).
-- Measured build: cli-messaging `0cc88b1f` (origin/main). Runner sha256 `be08e94b…`, corpus
+- Measured build: cli-messaging `0cc88b1f` (origin/main). Runner sha256 `a7ab3a2b…`, corpus
   `31ffb868…`, `messages-combined.js` `cb8f4c25…`; all hashes are in the result files.
 
 Variants:
@@ -57,6 +57,9 @@ Variants:
 - **combined when strict is empty** — also measured: strict first, then `searchCombined`. Same
   quality as B, but p95 34.3 ms and 41 near-word hits, because `correctWords` allows two edits
   above four letters (`src/search/correct.ts:17`).
+- **C — B plus a partial fallback.** Only when B still finds nothing: a partial-word search, each hit
+  listing its missing words. Three fallbacks on dev: any word (`(a OR b OR c)`), all but one word,
+  and the production `--discover` path. Frozen choice: `--discover`, the only one equal to legacy.
 
 Reproduce (from the cli-testing worktree):
 
@@ -65,29 +68,33 @@ export SEARCH_MESSAGING_ROOT=/absolute/path/to/cli-messaging   # built with pnpm
 python3 performance/search/run.py --messaging-root "$SEARCH_MESSAGING_ROOT" typecheck
 python3 performance/search/run.py --messaging-root "$SEARCH_MESSAGING_ROOT" typo > /tmp/typo-dev.json
 python3 performance/search/run.py --messaging-root "$SEARCH_MESSAGING_ROOT" typo --held-out \
-  '--frozen={"edits":"one","minDocs":1,"prefix":3}' > /tmp/typo-heldout.json
+  '--frozen={"edits":"one","minDocs":1,"prefix":3}' --partial=discover > /tmp/typo-heldout.json
 ```
 
 ### Dev split (tuning)
 
-| Variant | Recall@10 | MRR@10 | nDCG@10 | No-answer false hits | Typo recall | Beginnings recall | Near-word hits | p95 ms |
-|---|---|---|---|---|---|---|---|---|
-| strict | 0.313 | 0.325 | 0.287 | 0 / 80 | 0.000 | 0.000 | 0 | 13.6 |
-| legacy | 0.388 | 0.425 | 0.354 | 80 / 80 | 0.250 | 0.250 | 41 | 7.1 |
-| combined (A) | 0.362 | 0.375 | 0.326 | 0 / 80 | 0.250 | 0.250 | 41 | 37.6 |
-| discover | 0.362 | 0.425 | 0.328 | 80 / 80 | 0.125 | 0.125 | 50 | 44.7 |
-| narrow (B) | 0.362 | 0.375 | 0.326 | 0 / 80 | 0.250 | 0.250 | 10 | 13.8 |
-| gate | ≥ 0.45 | ≥ 0.50 | ≥ 0.40 | 0 | > legacy | > legacy | — | ≤ 3× strict |
+| Variant | Recall@10 | MRR@10 | nDCG@10 | No-answer false hits | Typo recall | Beginnings recall | Paraphrase recall | Near-word hits | p95 ms |
+|---|---|---|---|---|---|---|---|---|---|
+| strict | 0.313 | 0.325 | 0.287 | 0 / 80 | 0.000 | 0.000 | 0.000 | 0 | 10.5 |
+| legacy | 0.388 | 0.425 | 0.354 | 80 / 80 | 0.250 | 0.250 | 0.250 | 41 | 5.9 |
+| combined (A) | 0.362 | 0.375 | 0.326 | 0 / 80 | 0.250 | 0.250 | 0.000 | 41 | 34.1 |
+| discover | 0.362 | 0.425 | 0.328 | 80 / 80 | 0.125 | 0.125 | 0.250 | 50 | 44.3 |
+| narrow (B) | 0.362 | 0.375 | 0.326 | 0 / 80 | 0.250 | 0.250 | 0.000 | 10 | 11.0 |
+| C, any-word fallback | 0.375 | 0.400 | 0.333 | 80 / 80 | 0.250 | 0.250 | 0.125 | 50 | 12.1 |
+| C, all-but-one fallback | 0.375 | 0.400 | 0.347 | 40 / 80 | 0.250 | 0.250 | 0.125 | 50 | 16.1 |
+| C, `--discover` fallback | 0.388 | 0.425 | 0.354 | 80 / 80 | 0.250 | 0.250 | 0.250 | 50 | 28.0 |
+| gate | ≥ 0.45 | ≥ 0.50 | ≥ 0.40 | 0 | > legacy | > legacy | reported | — | ≤ 3× strict |
 
 ### Held-out split (one run of the frozen guard; informational)
 
-| Variant | Recall@10 | MRR@10 | nDCG@10 | No-answer false hits | Typo recall | Beginnings recall |
-|---|---|---|---|---|---|---|
-| strict | 0.263 | 0.325 | 0.219 | 0 / 80 | 0.000 | 0.000 |
-| legacy | 0.338 | 0.450 | 0.299 | 80 / 80 | 0.125 | 0.125 |
-| combined (A) | 0.275 | 0.350 | 0.226 | 0 / 80 | 0.000 | 0.125 |
-| discover | 0.325 | 0.403 | 0.274 | 80 / 80 | 0.125 | 0.125 |
-| narrow (B) | 0.275 | 0.350 | 0.226 | 0 / 80 | 0.000 | 0.125 |
+| Variant | Recall@10 | MRR@10 | nDCG@10 | No-answer false hits | Typo recall | Beginnings recall | Paraphrase recall |
+|---|---|---|---|---|---|---|---|
+| strict | 0.263 | 0.325 | 0.219 | 0 / 80 | 0.000 | 0.000 | 0.000 |
+| legacy | 0.338 | 0.450 | 0.299 | 80 / 80 | 0.125 | 0.125 | 0.500 |
+| combined (A) | 0.275 | 0.350 | 0.226 | 0 / 80 | 0.000 | 0.125 | 0.000 |
+| discover | 0.325 | 0.403 | 0.274 | 80 / 80 | 0.125 | 0.125 | 0.375 |
+| narrow (B) | 0.275 | 0.350 | 0.226 | 0 / 80 | 0.000 | 0.125 | 0.000 |
+| C, `--discover` fallback | 0.312 | 0.400 | 0.272 | 80 / 80 | 0.000 | 0.125 | 0.375 |
 
 This split was already read by the reranker experiment. By the rule in
 [combined-search.md](combined-search.md#evidence-and-acceptance-targets) (lines 52-55) it cannot
@@ -118,7 +125,17 @@ qualify a release. It is reported so the dev result is not read alone.
 6. **The benchmark has no one-word queries.** "Single words with no exact hit" is read here per
    word inside an implicit-AND query. Read literally (a query of exactly one word), the rule fires
    on zero benchmark queries and gains nothing measurable.
-7. **Today's `--discover` has 80 / 80 no-answer hits.** It is a partial-match tool by design; it is
+7. **Why B loses to legacy.** Per category on dev, B equals legacy everywhere except paraphrase
+   (legacy 0.25, B 0). A paraphrase answer lacks one or more query words. Legacy's any-word fallback
+   still returns it, and on every query with no full match it fills the page: that is the
+   80 / 80 no-answer false hits. The extra recall and the false hits are the same mechanism.
+8. **C buys legacy's quality with legacy's false hits.** The `--discover` fallback equals legacy in
+   every dev category and on all three averages, with 80 / 80 no-answer hits (each one labelled
+   with its missing words). All-but-one halves the false hits (40) but loses half the paraphrase
+   gain. On held-out C stays below legacy in typo and paraphrase. The stemmer blind spot still
+   costs typo recall there: legacy and `--discover` get 0.5 on `вектор миграця отмена`; B and C get 0,
+   because strict's stem match is not empty, so neither the correction nor the fallback runs.
+9. **Today's `--discover` has 80 / 80 no-answer hits.** It is a partial-match tool by design; it is
    not a replacement for the default.
 
 ## Gates
@@ -140,6 +157,10 @@ options leave ranking where strict has it.
 
 ## Options
 
+C (B plus a partial fallback) is measured above. It reaches legacy on dev only by repeating legacy's
+no-answer hits, so it fails the zero-false-hit gate the same way legacy does.
+
+
 **A — full switch through the gates.** Make `searchCombined` the default for every plain word. It
 needs a ranking change that passes the quality gates first. The only measured candidate is the
 query-message reranker (dev 0.525 / 0.553 / 0.477), which missed held-out recall and MRR and costs
@@ -158,7 +179,10 @@ for a later ranking change. Proposed gates for B, to approve before coding:
 
 ## Recommendation
 
-Take B with one-edit corrections and labelled hits, behind the gates above. It removes the reason
+Take B with one-edit corrections and labelled hits, behind the gates above. Do not put C's partial
+fallback in the default: its only gain over B is the any-word hits, which arrive with 80 / 80
+no-answer false hits. When B finds nothing, say on stderr that `--discover` searches partial
+matches, so the owner or agent opts in knowingly. It removes the reason
 to use `--language legacy` without moving a single strict result; the ranking gates stay for the
 ranking work, where they belong.
 
@@ -233,5 +257,7 @@ So B lands after the plain-search-coverage change, or in the same release with t
    only (no measurable gain)?
 4. During deprecation, should `--language legacy` keep the old chain (proposed), or route to
    `--discover`?
-5. Should a strict saved search that returned nothing start returning labelled forgiven hits on
+5. Default B, with partial matches staying behind `--discover` and a stderr hint on empty results
+   (proposed), or C, with labelled partial hits in the default?
+6. Should a strict saved search that returned nothing start returning labelled forgiven hits on
    replay (proposed: yes)?
