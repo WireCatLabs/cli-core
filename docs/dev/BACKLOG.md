@@ -14,3 +14,5 @@ Open work only. A finished item is deleted; its record is the merged pull reques
 - **Mail embedding: what is not measured yet** — a model-based line classifier for cleaning, and a run of
   [bench/mail-quality](../../bench/mail-quality/README.md) on the owner's own mailbox, which would stay in
   cli-private.
+- **Google Drive documents in the one store** — drive-cli writes into the shared store so `search all`
+  finds Drive documents; awaits the owner's approval: [drive-in-store-plan.md](drive-in-store-plan.md).
