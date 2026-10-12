@@ -12,10 +12,10 @@ import { openStore } from "../../dist/store/store.js"
  *
  *   node bench/mail-quality/export-store.ts --store <db> --account <address> --queries <file> > <private corpus>
  *
- * Questions file: [{ "id": "q1", "split": "dev" | "test", "text": "...", "relevant": ["msg:email/…"] }]; each
+ * Questions file: [{ "id": "q1", "text": "...", "relevant": ["msg:email/…"], "split"?: "dev" | "test" }]; each
  * locator is one `search mail` or `mail show` gave. The output holds the mail's text: keep it out of public repos.
  */
-type Question = { id: string; split: "dev" | "test"; text: string; relevant: string[] }
+type Question = { id: string; split?: "dev" | "test"; text: string; relevant: string[] }
 
 const { values } = parseArgs({
   options: { store: { type: "string" }, account: { type: "string" }, queries: { type: "string" } },
@@ -50,7 +50,7 @@ try {
     }
     if (page.length < 500) break
   }
-  const queries = questions.map(({ id, split, text, relevant }) => ({
+  const queries = questions.map(({ id, split = "dev", text, relevant }) => ({
     id,
     split,
     lang: "own",
