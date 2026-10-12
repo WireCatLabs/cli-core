@@ -6,6 +6,10 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Added
+
+- A fact's and a memory's `author`, and a proposed action's `proposedBy`, carry `name`: the bot's handle for an agent, `null` for a person — the shape the agent log's `actor` already had.
+
 ### Fixed
 
 - **`store export --json` answers the list envelope** `{ items, page, limit, hasMore }` — `page: 1`, `limit` the
