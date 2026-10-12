@@ -88,11 +88,13 @@ const clearCommand = (messenger: Messenger): Command =>
  */
 const exportCommand = (messenger: Messenger): Command =>
   new Command("export")
-    .description("a chat's stored messages as JSON lines, oldest first; never asks the messenger")
+    .description(
+      "a chat's stored messages, oldest first: --jsonl one message per line, --json one { items } object; never asks the messenger",
+    )
     .argument("[chats...]", `${messenger.chatArgument}; several with --to`)
     .option(
       "--format <format>",
-      "jsonl (the default): one message per line; markdown: a transcript with a heading per day, replies and forwards quoted",
+      "jsonl: one message per line, the default with --output; markdown: a transcript with a heading per day, replies and forwards quoted",
     )
     .option("--since-time <time>", "only from this ISO 8601 time, or 30m / 2h / 1d ago, on")
     .option("--output <file>", "write JSON lines, or the transcript, to this new file, readable only by you")
