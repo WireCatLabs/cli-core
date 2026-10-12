@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config"
 
 export default defineConfig({
+  // Oxc's tsconfig loader does not follow package exports; TypeScript still checks the full project configs.
+  tsconfig: "./node_modules/@wirecat/cli-base/config/tsconfig.base.json",
   test: {
     include: ["src/**/*.test.ts", "scripts/parity/**/*.test.ts"],
     setupFiles: ["src/testing/sandbox.ts"],

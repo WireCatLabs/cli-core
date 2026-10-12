@@ -198,3 +198,10 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     print(listed(await deps.store.events()), command)
   })
 }
+
+export {
+  addMeetingHitSearchCommand,
+  type MeetingHitSearch,
+  type MeetingHitSearchOptions,
+  validateMeetingHitSearch,
+} from "./search.js"

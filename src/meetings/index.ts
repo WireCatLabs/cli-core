@@ -108,6 +108,7 @@ export {
 } from "./recording-transfer.js"
 export { SAVE_HELP, SAVE_NEXT_STEPS } from "./save-hints.js"
 export type {
+  MeetingHitSearchRequest,
   MeetingSearchIndexInput,
   MeetingSearchIndexReceipt,
   MeetingSearchIndexStore,
