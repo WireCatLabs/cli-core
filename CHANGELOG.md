@@ -4,6 +4,18 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`store check` passes the schema check for a file a newer build wrote that this build may still write**
+  (`minCompatible` at or below what it speaks), and says so; a file it may not write fails it with
+  `<command> upgrade`. Before, any file ahead of the build failed it.
+- **`store check` says when the typo vocabulary is behind the stored messages**: `wordIndex` gains `newest` and
+  `termsReady`, and the note names `store migrate`. `ready` still means only that every message is in the word index.
+- **`store fetch <chat> --catch-up` names the commands that finish search preparation** when it stopped at a
+  bound (`conversations build --chat`, then `conversations embed --chat`).
+
 ## 0.255.0 — 12.10.2026
 
 ### Added

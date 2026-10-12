@@ -753,6 +753,9 @@ describe("post-fetch catch-up controls", () => {
       env,
     )
     expect(bounded.answer).toMatchObject({ prepared: { reason: "message_bound", complete: false } })
+    expect(bounded.stderr).toContain(
+      "search is not fully prepared for this chat (message_bound) — `chat conversations build --chat 7`, then `chat conversations embed --chat 7`",
+    )
     expect(
       (await call(["store", "fetch", "7", "--catch-up", "--catch-up-chunks", "20001", "--json"], chatOf(state), env))
         .code,
