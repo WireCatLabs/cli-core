@@ -63,7 +63,7 @@ export const upgradePackage = async (
   const installed = await ports.installed?.()
   if (installed === undefined) return restart(result, ports)
   const read = { ...result, installed }
-  if (installed === latest) return restart(read, ports)
+  if (!isNewer(latest, installed)) return restart(read, ports)
   const heldBack = {
     // pnpm 11 resolves `@latest` to the newest version older than minimumReleaseAge, 1 day by default.
     until: installer === "pnpm" ? dayAfter(await ports.publishedAt?.(latest)) : null,
