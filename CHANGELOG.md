@@ -6,10 +6,19 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A bare search word looks everywhere a message holds words:** its text, a voice note's transcript, a word of
+  a file's name and a file's text (owner, 2026-10-13). Each hit says where (`matchedIn`: `text`, `transcript`,
+  `filename`, `file`) and its `excerpt` comes from there. Hits with the word in the text rank first, then
+  transcripts, file names and file text, so a long spreadsheet does not crowd out messages. `text:` keeps
+  the old meaning. `content:` now means file text only; transcripts moved to the new `transcript:` field.
+  The legacy language and `--backend` server search still read message text only.
+
 ### Fixed
 
 - **A kept voice transcript is found and reused.** It becomes the voice attachment's text (extractor
-  `speech:<model>`), so `content:` finds it, including a transcript made before its message was stored;
+  `speech:<model>`), so search finds it (`transcript:` alone), including a transcript made before its message was stored;
   `store reindex` fills it in for transcripts kept before. `messages show` and `messages context` show it, and
   `messages transcribe` answers it without hearing the message again, unless `--model`/`--local` asks for a
   different model than the one that heard it.

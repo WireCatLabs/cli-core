@@ -144,7 +144,7 @@ describe("text of attachments in the store (version 19)", () => {
     expect(await found(reopened, "content:елка")).toEqual(["1"])
   })
 
-  it("**`store reindex` gives a voice note the transcript kept before transcripts reached the file index**", async () => {
+  it("**`store reindex` gives a voice note the transcript kept before transcripts reached the attachment index**", async () => {
     const path = fresh()
     const store = await openStore({ path })
     await store.saveMessages(OWNER, "-1", [message("3", "", [{ kind: "voice", mime: "audio/ogg" }])], {
@@ -162,6 +162,6 @@ describe("text of attachments in the store (version 19)", () => {
     ])
     const reopened = await openStore({ path })
     live.push(reopened)
-    expect(await found(reopened, "content:heron")).toEqual(["3"])
+    expect(await found(reopened, "transcript:heron")).toEqual(["3"])
   })
 })

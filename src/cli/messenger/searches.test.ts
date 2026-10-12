@@ -79,7 +79,7 @@ describe("searches", () => {
 
     const first = json(await call("search", "messages", "--saved", "invoices", "--json"))
     expect([first.items.map(({ id }: { id: string }) => id), first.limit, first.hasMore]).toEqual([
-      ["106", "102"],
+      ["106", "105"],
       2,
       true,
     ])
@@ -87,7 +87,7 @@ describe("searches", () => {
       ids(json(await call("search", "messages", "--saved", "invoices", "alpha", "--limit", "5", "--json"))),
     ).toEqual(["101", "106"])
     const stats = json(await call("stats", "messages", "show", "--saved", "invoices", "--by", "sender", "--json"))
-    expect(stats.total).toBe(3)
+    expect(stats.total).toBe(4)
 
     const history = json(await call("searches", "history", "--json"))
     const runs = history.items.map(
@@ -114,7 +114,12 @@ describe("searches", () => {
     expect((await call("store", "backup", file, "--json")).code).toBe(0)
     await call("searches", "delete", "invoices", "--json")
     expect((await call("store", "restore", file, "--json")).code).toBe(0)
-    expect(ids(json(await call("search", "messages", "--saved", "invoices", "--json")))).toEqual(["101", "102", "106"])
+    expect(ids(json(await call("search", "messages", "--saved", "invoices", "--json")))).toEqual([
+      "101",
+      "102",
+      "105",
+      "106",
+    ])
   })
 
   it("keeps no history with --no-record, and none of a refused query", async () => {

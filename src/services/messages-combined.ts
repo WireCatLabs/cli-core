@@ -10,7 +10,7 @@ import type { QueryExecution, ResolvedNode } from "../search/lucene/resolved.js"
 import { exhausted, QUERY_LIMITS, walkQuery } from "../search/lucene/types.js"
 import { normalize } from "../store/normalize.js"
 import type { AccountKey, MessageStore, ScoredHit } from "../store/store.js"
-import { excerpt } from "./excerpt.js"
+import { withExcerpt } from "./excerpt.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import type { QueryMetadata } from "./messages-search.js"
 import { coverageOf, prepareLucene } from "./messages-search.js"
@@ -222,7 +222,7 @@ export const searchCombined = async (
       request.kind === "mail" ? { completeness: [], coverage: undefined } : await coverageOf(store, prepared, messenger)
     const hydrated = await Promise.all(
       items.map(async (item) => {
-        const hit = { ...item, excerpt: excerpt(item.text, request.text ?? "") }
+        const hit = withExcerpt(item, request.text ?? "")
         if (!request.context) return hit
         const { provider, account } = parseLocator(hit.locator)
         return {

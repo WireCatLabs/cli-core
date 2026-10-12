@@ -2400,8 +2400,8 @@ describe("the shared read commands", () => {
       expect(stats.stdout).toHaveLength(1)
       expect(JSON.parse(stats.stdout[0] ?? "null")).toMatchObject({
         by: "chat",
-        total: 3,
-        items: [{ key: "7", name: "Work fixture", count: 3 }],
+        total: 4,
+        items: [{ key: "7", name: "Work fixture", count: 4 }],
         query: { language: "lucene-v1" },
       })
       const badGrouping = await call(
@@ -3929,11 +3929,11 @@ describe("messages transcribe", () => {
     })
     const found = async (root: NodeJS.ProcessEnv, connect: Messenger["connect"]) =>
       JSON.parse(
-        (await call(["search", "messages", "content:zebrafinch", "--language", "lucene", "--json"], connect, root))
-          .stdout[0] ?? "",
+        (await call(["search", "messages", "zebrafinch", "--language", "lucene", "--json"], connect, root)).stdout[0] ??
+          "",
       ).items.map(({ id }: { id: string }) => id)
 
-    it("**is shown by messages show, found by content: and not heard again**", async () => {
+    it("**is shown by messages show, found by search and not heard again**", async () => {
       const root = env()
       const asked: string[] = []
       const connect = async () => hearing(asked)
@@ -3946,9 +3946,11 @@ describe("messages transcribe", () => {
       expect(JSON.parse(again.stdout[0] ?? "")).toMatchObject({ text: "synthetic zebrafinch", pending: false })
       expect(asked).toEqual(["transcribe"])
       expect(await found(root, connect)).toEqual(["1"])
+      const pretty = await call(["search", "messages", "zebrafinch"], connect, root, { tty: true })
+      expect(pretty.stdout.join("")).toContain("found in the transcript: synthetic zebrafinch")
     })
 
-    it("**is found by content: when it was heard before the message was stored**", async () => {
+    it("**is found by search when it was heard before the message was stored**", async () => {
       const root = env()
       const connect = async () => hearing([])
 

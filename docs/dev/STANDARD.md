@@ -185,6 +185,23 @@ guessable from the others.
 should reach for first. A resource's own `search` leaf (`messages search`) does not exist beside it.
 `searches` stays: it is the owner's saved searches, a resource, not a search.
 
+### Where a search word is looked for
+
+**Proposed 2026-10-13, awaiting the owner's approval.** A bare word in a search query (`search messages`,
+`search all`, `stats messages show`) is looked for everywhere a message holds words: its text, a voice
+note's transcript, a word of a file's name, and a file's text. Each hit names the place (`matchedIn`:
+`text`, `transcript`, `filename`, `file`). One field narrows to one place, and only these:
+
+| Field | Place |
+|---|---|
+| `text:` / `exact:` | what was written in the message (`exact:` the exact form) |
+| `transcript:` | a voice note's transcript |
+| `filename:` | a file's whole name (`*` for part of it) |
+| `content:` | a file's text |
+
+`--type text|voice|file` filters by the kind of message, not by place. A new place is a new field here
+first.
+
 ### Statistics hierarchy
 
 **Every command whose primary result is statistics lives under `stats`, then its resource.**

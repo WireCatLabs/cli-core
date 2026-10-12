@@ -241,8 +241,17 @@ export const QUERY_FIELDS = [
     aliases: [],
     type: "tokens",
     operators: terms,
-    normalization:
-      "NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote, and voice transcripts",
+    normalization: "NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote",
+    support: "A2",
+  },
+  {
+    name: "transcript",
+    example: "transcript:invoice",
+    index: "attachment_words (voice transcripts)",
+    aliases: [],
+    type: "tokens",
+    operators: terms,
+    normalization: "NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed",
     support: "A2",
   },
   {
@@ -357,6 +366,7 @@ export const validateAst = (input: unknown): QueryAst => {
       operator,
       value: value.value,
       span,
+      ...(value.implicit === true ? { implicit: true as const } : {}),
       ...(operator === "range"
         ? {
             upper: String(value.upper),

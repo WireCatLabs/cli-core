@@ -20,6 +20,7 @@ import type { ScoredHit } from "../store.js"
 import { emailHitsByPk } from "./emails.js"
 import type { StoreContext } from "./open.js"
 import { hitsByPk } from "./search.js"
+import type { MatchPlace } from "./words.js"
 
 interface Fragment {
   sql: string
@@ -28,6 +29,8 @@ interface Fragment {
   fts?: string
   /** The leaf as a phrase of stems, for ranking a stemmed search by `message_stems`. */
   stems?: string
+  /** A bare word's other places — transcripts, file text, file names — as a set of item ids. */
+  elsewhere?: { sql: string; params: SqlValue[] }
 }
 interface Leaf {
   node: ResolvedPredicate
@@ -69,6 +72,8 @@ const MAIL: Corpus = {
   thread: "email_thread",
 }
 
+/** A voice note's transcript is its attachment's text, written by speech recognition (`speech:<model>`). */
+const SPEECH = "coalesce(att.extractor,'') LIKE 'speech:%'"
 const quoted = (value: string) => `"${value.replaceAll('"', '""')}"`
 const combine = (parts: Fragment[], operator: "AND" | "OR"): Fragment => ({
   sql: parts.length ? `(${parts.map(({ sql }) => sql).join(` ${operator} `)})` : operator === "AND" ? "1" : "0",
@@ -164,6 +169,68 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     return automaton
   }
   const fragments = new Map<ResolvedPredicate, Leaf>()
+  const accountScope = () =>
+    combine(
+      execution.accounts.map(({ provider, account }) => ({
+        sql: "ac.provider=? AND ac.external_id=?",
+        params: [provider, account],
+        exact: true,
+      })),
+      "OR",
+    )
+  let names: { message: number; words: string[] }[] | undefined
+  /** Every attachment name in the searched accounts, as words, read once per query. */
+  const attachmentNames = () => {
+    if (names) return names
+    const scope = accountScope()
+    const page = database.prepare(
+      `SELECT att.id AS id, att.attachable_id AS message, att.name AS value FROM attachments att JOIN ${corpus.rows} m ON m.id=att.attachable_id AND att.attachable_type='${corpus.item}' JOIN accounts ac ON ac.id=m.account_id WHERE att.id > ? AND att.name IS NOT NULL AND m.deleted_at IS NULL AND ${scope.sql} ORDER BY att.id LIMIT 5000`,
+    )
+    names = []
+    for (let rows = page.all(0, ...scope.params); rows.length > 0; ) {
+      check()
+      for (const row of rows) {
+        const words = normalize(String(row.value))
+          .split(/[^\p{L}\p{N}]+/u)
+          .filter(Boolean)
+        budget.work += words.length
+        if (budget.work > QUERY_LIMITS.work) exhausted("detector work")
+        names.push({ message: Number(row.message), words })
+      }
+      rows = page.all(Number(rows.at(-1)?.id), ...scope.params)
+    }
+    return names
+  }
+  const namedWith = (text: string): number[] => {
+    const wanted = text.split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+    if (!wanted.length) return []
+    return [
+      ...new Set(
+        attachmentNames()
+          .filter(({ words }) => words.some((_, at) => wanted.every((word, offset) => words[at + offset] === word)))
+          .map(({ message }) => message),
+      ),
+    ]
+  }
+  const attachmentWords = (match: string, which: "file" | "transcript" | "any") => ({
+    sql: `SELECT att.attachable_id FROM attachments att WHERE att.attachable_type='${corpus.item}'${which === "any" ? "" : ` AND ${which === "file" ? "NOT " : ""}${SPEECH}`} AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?)`,
+    params: [match] as SqlValue[],
+  })
+  /** A bare word also matches a transcript, a file's text and a word of a file's name. */
+  const everywhere = (node: ResolvedPredicate, text: string, fragment: Fragment): Fragment => {
+    if (!node.implicit || fragment.sql === "0") return fragment
+    const files = attachmentWords(quoted(text), "any")
+    const elsewhere = {
+      sql: `${files.sql} UNION SELECT value FROM json_each(?)`,
+      params: [...files.params, JSON.stringify(namedWith(text))],
+    }
+    return {
+      ...fragment,
+      sql: `(${fragment.sql} OR m.id IN (${elsewhere.sql}))`,
+      params: [...fragment.params, ...elsewhere.params],
+      elsewhere,
+    }
+  }
   const createLeaf = (node: ResolvedPredicate): Leaf => {
     const { field, operator, value, resolution } = node
     let fragment: Fragment
@@ -179,20 +246,20 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       const stems = stemsOf(value)
       // Words OR stems: two spellings can fold one word to different stems, and every exact hit must stay.
       fragment = /[\p{L}\p{N}]/u.test(text)
-        ? {
+        ? everywhere(node, text, {
             sql: `m.id IN (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)${stems ? ` OR m.id IN (SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?)` : ""}`,
             params: [`normalized_text : (${quoted(text)})`, ...(stems ? [`stems : (${stems})`] : [])],
             exact: true,
             fts: quoted(text),
             ...(stems ? { stems } : {}),
-          }
+          })
         : bound("0")
     } else if (field === "text" || field === "exact") {
       if (operator === "term" || operator === "phrase") {
         const text = normalize(value)
         const stems = stemsOf(value)
         fragment = /[\p{L}\p{N}]/u.test(text)
-          ? { ...wordMatch(corpus, quoted(text)), ...(stems ? { stems } : {}) }
+          ? everywhere(node, text, { ...wordMatch(corpus, quoted(text)), ...(stems ? { stems } : {}) })
           : bound("0")
       } else {
         const pattern = operator === "wildcard" ? wildcardPattern(normalize(value)) : foldRegex(value, node.span)
@@ -293,15 +360,11 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
         `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.size IS NOT NULL AND ${range.sql})`,
         ...range.params,
       )
-    } else if (field === "content") {
+    } else if (field === "content" || field === "transcript") {
       const text = normalize(value)
       // Never `fts`: the ranking ANDs every required word into message_words, where a file's words are not.
-      fragment = /[\p{L}\p{N}]/u.test(text)
-        ? bound(
-            `m.id IN (SELECT att.attachable_id FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?))`,
-            quoted(text),
-          )
-        : bound("0")
+      const set = attachmentWords(quoted(text), field === "content" ? "file" : "transcript")
+      fragment = /[\p{L}\p{N}]/u.test(text) ? bound(`m.id IN (${set.sql})`, ...set.params) : bound("0")
     } else if (field === "date") {
       const range = resolution?.date
       if (!range) queryError("invalid_ast", node.span)
@@ -535,8 +598,10 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       : undefined
   }
   const stemmed = [...fragments.keys()].some(isStemmed)
-  const rankMatch = stemmed ? undefined : requiredText(execution.root)
-  if (execution.chat && !rankMatch && !stemmed) {
+  // A word found only in a file is not in the word index, so neither may filter: they rank, joined LEFT.
+  const elsewhere = [...fragments.values()].some(({ fragment }) => fragment.elsewhere)
+  const rankMatch = stemmed || elsewhere ? undefined : requiredText(execution.root)
+  if (execution.chat && !rankMatch && !stemmed && !elsewhere) {
     baseFrom = `FROM ${corpus.threads} c JOIN accounts ac ON ac.id=c.account_id CROSS JOIN ${corpus.rows} m LEFT JOIN identities i ON i.id=m.sender_identity_id`
     where = combine([{ sql: "m.chat_id=c.id", params: [], exact: true }, where], "AND")
   }
@@ -544,15 +609,17 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   // message of the account and tests each against the index sets.
   const driverOf = (node: ResolvedNode): { sql: string; params: SqlValue[] } | undefined => {
     if (node.kind === "predicate") {
-      const { fts, stems } = fragments.get(node)?.fragment ?? {}
+      const { fts, stems, elsewhere: other } = fragments.get(node)?.fragment ?? {}
       if (fts === undefined) return undefined
       const words = `SELECT rowid AS id FROM ${corpus.words} WHERE ${corpus.words} MATCH ?`
-      return isStemmed(node) && stems
-        ? {
-            sql: `${words} UNION SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?`,
-            params: [`normalized_text : (${fts})`, `stems : (${stems})`],
-          }
-        : { sql: words, params: [`normalized_text : (${fts})`] }
+      const own =
+        isStemmed(node) && stems
+          ? {
+              sql: `${words} UNION SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?`,
+              params: [`normalized_text : (${fts})`, `stems : (${stems})`] as SqlValue[],
+            }
+          : { sql: words, params: [`normalized_text : (${fts})`] as SqlValue[] }
+      return other ? { sql: `${own.sql} UNION ${other.sql}`, params: [...own.params, ...other.params] } : own
     }
     const required = node.clauses.filter(({ occur }) => occur === "must")
     const optional = node.clauses.filter(({ occur }) => occur === "should")
@@ -566,7 +633,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       params: sets.flatMap(({ params }) => params),
     }
   }
-  const driver = stemmed ? driverOf(execution.root) : undefined
+  const driver = stemmed || elsewhere ? driverOf(execution.root) : undefined
   const filtered = where
   if (driver) where = combine([{ sql: "m.id=d.id", params: [], exact: true }, where], "AND")
   const from = rankMatch
@@ -588,17 +655,35 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     )
   // A stemmed search ranks by stems but must not filter by them, so its ranking is a set computed once and
   // joined LEFT; joined row by row, the same query took 420 ms instead of 5 at 100k (stemming gate).
-  const ranking = stemmed ? requiredText(execution.root, "stems") : undefined
+  const ranking = stemmed ? requiredText(execution.root, "stems") : elsewhere ? requiredText(execution.root) : undefined
+  const rankIndex = stemmed
+    ? { table: corpus.stems, column: "stems" }
+    : { table: corpus.words, column: "normalized_text" }
   const exactTier = stemmed ? requiredText(execution.root) : undefined
   const ranked: { sql: string[]; params: SqlValue[] } = driver
     ? { sql: [`d(id) AS MATERIALIZED (${driver.sql})`], params: [...driver.params] }
     : { sql: [], params: [] }
   if (ranking && !execution.newest) {
     ranked.sql.push(
-      `f(id, rank) AS MATERIALIZED (SELECT rowid, bm25(${corpus.stems}, 1.0, 0.0) FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?)`,
+      `f(id, rank) AS MATERIALIZED (SELECT rowid, bm25(${rankIndex.table}, 1.0, 0.0) FROM ${rankIndex.table} WHERE ${rankIndex.table} MATCH ?)`,
     )
-    ranked.params.push(`stems : (${ranking})`)
+    ranked.params.push(`${rankIndex.column} : (${ranking})`)
   }
+  // Among hits the message text does not hold: a transcript, then a file's name, then a file's text. bm25 scores
+  // of different indexes do not compare, and a long spreadsheet must not crowd out what was said.
+  const places = [...fragments.values()].flatMap(({ node, fragment }) =>
+    fragment.elsewhere && fragment.fts ? [normalize(node.value)] : [],
+  )
+  if (places.length && !execution.newest) {
+    ranked.sql.push(
+      `s(id, tier) AS MATERIALIZED (SELECT att.attachable_id, min(CASE WHEN ${SPEECH} THEN 1 ELSE 3 END) FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) GROUP BY att.attachable_id UNION ALL SELECT value, 2 FROM json_each(?))`,
+    )
+    ranked.params.push(
+      places.map((text) => quoted(text)).join(" OR "),
+      JSON.stringify([...new Set(places.flatMap((text) => namedWith(text)))]),
+    )
+  }
+  const placeTier = places.length && !execution.newest ? "coalesce((SELECT min(tier) FROM s WHERE s.id=m.id), 4)," : ""
   if (exactTier) {
     ranked.sql.push(`x(id) AS MATERIALIZED (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)`)
     ranked.params.push(`normalized_text : (${exactTier})`)
@@ -611,7 +696,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     ? ""
     : rankMatch
       ? "f.rank,"
-      : `${exactTier ? "exact DESC," : ""}${ranking ? "f.rank IS NULL, f.rank," : ""}`
+      : `${exactTier ? "exact DESC," : ""}${ranking ? `f.rank IS NULL, ${placeTier}f.rank,` : placeTier}`
   const order = `${tiers}m.sent_at DESC, ac.provider, ac.external_id, c.external_id, m.external_id DESC`
   const leaves = [...fragments.values()]
   const exact = leaves.filter(({ test }) => test === undefined)
@@ -645,7 +730,83 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
         count: Number(row.count),
       }))
   }
-  const hits = (pks: number[]) => (mail ? emailHitsByPk(database, pks) : hitsByPk(context, pks))
+  const placeLeaves = [...fragments.values()].filter(
+    ({ node }) =>
+      (node.operator === "term" || node.operator === "phrase") &&
+      (node.implicit || node.field === "content" || node.field === "transcript"),
+  )
+  /** Which place of each hit holds the words, first match wins in the order of `MatchPlace`. */
+  const placed = (found: ReturnType<typeof hitsByPk>, pks: number[]) => {
+    if (!placeLeaves.length || !pks.length || found.length !== pks.length) return found
+    const keys = JSON.stringify(pks)
+    const texts = placeLeaves.map(({ node }) => normalize(node.value)).filter((text) => /[\p{L}\p{N}]/u.test(text))
+    if (!texts.length) return found
+    const match = texts.map((text) => quoted(text)).join(" OR ")
+    const implicit = placeLeaves.some(({ node }) => node.implicit)
+    const inText = new Set(
+      implicit
+        ? database
+            .prepare(
+              `SELECT rowid AS id FROM ${corpus.words} WHERE ${corpus.words} MATCH ? AND rowid IN (SELECT value FROM json_each(?))${
+                placeLeaves.some(({ fragment }) => fragment.stems)
+                  ? ` UNION SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ? AND rowid IN (SELECT value FROM json_each(?))`
+                  : ""
+              }`,
+            )
+            .all(
+              `normalized_text : (${match})`,
+              keys,
+              ...(placeLeaves.some(({ fragment }) => fragment.stems)
+                ? [
+                    `stems : (${placeLeaves.flatMap(({ fragment }) => (fragment.stems ? [`(${fragment.stems})`] : [])).join(" OR ")})`,
+                    keys,
+                  ]
+                : []),
+            )
+            .map(({ id }) => Number(id))
+        : [],
+    )
+    const files = database
+      .prepare(
+        `SELECT att.attachable_id AS id, att.text AS text, ${SPEECH} AS speech FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id IN (SELECT value FROM json_each(?)) AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) ORDER BY att.position`,
+      )
+      .all(keys, match)
+    const fileFields = new Set(
+      placeLeaves.flatMap(({ node }) => (node.implicit ? ["transcript", "content"] : [node.field])),
+    )
+    const allNames = implicit
+      ? database
+          .prepare(
+            `SELECT att.attachable_id AS id, att.name AS name FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id IN (SELECT value FROM json_each(?)) AND att.name IS NOT NULL ORDER BY att.position`,
+          )
+          .all(keys)
+      : []
+    const wanted = texts.map((text) => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean))
+    return found.map((hit, index) => {
+      const pk = pks[index] as number
+      const transcript = files.find((row) => Number(row.id) === pk && Number(row.speech) === 1)
+      const file = files.find((row) => Number(row.id) === pk && Number(row.speech) !== 1)
+      const name = allNames.find((row) => {
+        if (Number(row.id) !== pk) return false
+        const words = normalize(String(row.name)).split(/[^\p{L}\p{N}]+/u)
+        return wanted.some((phrase) =>
+          words.some((_, at) => phrase.every((word, offset) => words[at + offset] === word)),
+        )
+      })
+      const place: [MatchPlace, string] | undefined = inText.has(pk)
+        ? ["text", hit.text]
+        : transcript && fileFields.has("transcript")
+          ? ["transcript", String(transcript.text)]
+          : name
+            ? ["filename", String(name.name)]
+            : file && fileFields.has("content")
+              ? ["file", String(file.text)]
+              : undefined
+      return place ? { ...hit, matchedIn: place[0], matchedText: place[1] } : hit
+    })
+  }
+  const hits = (pks: number[]) =>
+    placed(mail ? emailHitsByPk(database, pks) : hitsByPk(context, pks), pks) as ReturnType<typeof hitsByPk>
   return {
     corpus,
     rowsFrom,
@@ -668,6 +829,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     rankedFrom,
     exactColumn,
     order,
+    placeTier,
     projection,
     projectionParams,
     joinedFrom,
@@ -776,6 +938,7 @@ const runQuery = async (
     rankedFrom,
     exactColumn,
     order,
+    placeTier,
     projection,
     projectionParams,
     joinedFrom,
@@ -806,7 +969,7 @@ const runQuery = async (
       room > 0
         ? database
             .prepare(
-              `${withRanking}SELECT m.id AS id, ${relevance} AS relevance ${rankedFrom} WHERE ${where.sql} AND m.id NOT IN (SELECT id FROM x) ORDER BY ${ranking ? "f.rank IS NULL, f.rank," : ""}m.sent_at DESC, ac.provider, ac.external_id, c.external_id, m.external_id DESC LIMIT ?`,
+              `${withRanking}SELECT m.id AS id, ${relevance} AS relevance ${rankedFrom} WHERE ${where.sql} AND m.id NOT IN (SELECT id FROM x) ORDER BY ${ranking ? `f.rank IS NULL, ${placeTier}f.rank,` : placeTier}m.sent_at DESC, ac.provider, ac.external_id, c.external_id, m.external_id DESC LIMIT ?`,
             )
             .all(...ranked.params, ...where.params, room)
         : []

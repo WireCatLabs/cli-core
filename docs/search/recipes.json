@@ -87,7 +87,7 @@
   ],
   "fileTexts": [{ "chat": "7", "message": "105", "attachment": 1, "text": "Накладная № 17, оплата до 31 января" }],
   "recipes": [
-    { "title": "Слово", "query": "invoice", "ids": ["101", "102", "106"] },
+    { "title": "Слово", "query": "invoice", "ids": ["101", "102", "105", "106"] },
     { "title": "Другие формы слова", "query": "квартира", "ids": ["109"] },
     { "title": "Фраза в кавычках — тоже в любой форме", "query": "\"квартира\"", "ids": ["109"] },
     { "title": "Только точная форма", "query": "exact:квартира", "ids": [] },
@@ -95,12 +95,12 @@
     {
       "title": "Группа авторов",
       "query": "from:(\"Alice Synthetic\" OR \"Bob Synthetic\") AND invoice",
-      "ids": ["101", "102", "106"]
+      "ids": ["101", "102", "105", "106"]
     },
-    { "title": "Чат по имени", "query": "chat:\"Work fixture\" AND invoice", "ids": ["101", "102", "106"] },
+    { "title": "Чат по имени", "query": "chat:\"Work fixture\" AND invoice", "ids": ["101", "102", "105", "106"] },
     { "title": "Диапазон дат", "query": "invoice date:[2026-01-20 TO 2026-01-22}", "ids": ["101", "102"] },
     { "title": "Все сообщения автора", "query": "from:\"Bob Synthetic\"", "ids": ["106", "107", "108"] },
-    { "title": "Начиная с даты", "query": "invoice date>=2026-01-21", "ids": ["102", "106"] },
+    { "title": "Начиная с даты", "query": "invoice date>=2026-01-21", "ids": ["102", "105", "106"] },
     { "title": "Личная переписка", "query": "passport kind:private", "ids": ["103"] },
     { "title": "Кандидат secret в Избранном", "query": "preset:secret kind:saved", "ids": ["104"] },
     { "title": "Regex по терму", "query": "text:/pass(port)?/ kind:private", "ids": ["103"] },
@@ -113,7 +113,7 @@
     { "title": "Ссылка на сайт", "query": "has:link AND \"example.org\"", "ids": ["107"] },
     { "title": "Метка на сообщении или авторе", "query": "tag:work invoice", "ids": ["102", "106"] },
     { "title": "Метка на чате", "query": "tag:family", "ids": ["103", "108"] },
-    { "title": "Без метки", "query": "invoice NOT tag:work", "ids": ["101"] },
+    { "title": "Без метки", "query": "invoice NOT tag:work", "ids": ["101", "105"] },
     { "title": "Слово внутри файла", "query": "content:накладная", "ids": ["105"] },
     {
       "title": "Фраза внутри файла, а не в сообщении",

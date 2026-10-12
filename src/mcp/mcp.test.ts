@@ -2025,7 +2025,7 @@ describe("the MCP server", () => {
     const found = await call("chat_search_messages", { text: "invoice" })
     const counted = await call("chat_stats_messages_show", { text: "invoice" })
     expect(found.isError).toBe(false)
-    expect(counted.body).toMatchObject({ total: 3 })
+    expect(counted.body).toMatchObject({ total: 4 })
     expect((await call("chat_searches_history")).body.items).toHaveLength(record ? 2 : 0)
   })
 
@@ -2047,7 +2047,7 @@ describe("the MCP server", () => {
     expect(found.body.items.map(({ id }: { id: string }) => id).sort()).toEqual(["101", "106"])
     expect((await call("chat_stats_messages_show", { saved: "invoices" })).body).toMatchObject({
       by: "sender",
-      total: 3,
+      total: 4,
     })
     const ast = await call("chat_search_messages", { saved: "invoices", ast: parseLucene("alpha") })
     expect([ast.isError, ast.body.error.code]).toEqual([true, "validation_error"])

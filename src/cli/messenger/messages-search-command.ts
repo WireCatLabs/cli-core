@@ -14,6 +14,8 @@ import { backendOptions, backendRequest, noteServer } from "./search-backend-opt
 import { syncOptions, syncRequest } from "./search-sync-options.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
 
+const PLACES = { transcript: "transcript", filename: "file name", file: "file text" } as const
+
 const TYPES = { text: "NOT has:attachment", voice: "has:voice", file: "has:file" } as const
 type MessageType = keyof typeof TYPES
 
@@ -251,7 +253,11 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
           .map(({ hit, at }) => {
             const title = hit.chatTitle ?? hit.chatId
             const links = hit.thread ? renderThreadLinks(hit.thread) : ""
-            return `${spans ? `${at.provider} · ${title}` : title}  ${hit.locator}\n${renderMessages(hit.thread?.items ?? hit.context ?? [hit], options)}${links ? `\n${links}` : ""}`
+            const place =
+              hit.matchedIn && hit.matchedIn !== "text" && "excerpt" in hit
+                ? `\n  found in the ${PLACES[hit.matchedIn]}: ${String(hit.excerpt)}`
+                : ""
+            return `${spans ? `${at.provider} · ${title}` : title}  ${hit.locator}\n${renderMessages(hit.thread?.items ?? hit.context ?? [hit], options)}${place}${links ? `\n${links}` : ""}`
           })
           .join("\n\n"),
       )
