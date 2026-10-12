@@ -3,6 +3,34 @@
 The trail, optional: the field test that found these items —
 [cli-private reports/2026-10-12-polevoy-test-tg-memo-drive.md](https://github.com/WireCatLabs/cli-private/blob/main/reports/2026-10-12-polevoy-test-tg-memo-drive.md).
 
+## 0. State on 2026-10-13 (resume here)
+
+Owner rulings 2026-10-13: typo search = option B (strict first; one-edit corrections and 3+ letter
+beginnings only when strict finds nothing; each forgiven hit labelled; on an empty answer MCP
+`next_steps` and one stderr line point at `--discover`; partial matches stay opt-in). Drive plan
+approved; nothing in drive.db to keep; Drive hits show Google URL + last Google edit time; remove
+`DRIVE_STORE`. `chats documents list <chat>` with a stored message→document link written by
+`drive sync`. Every search must let the owner choose accounts/profiles for every entity.
+
+Merged: cm#1020 (export envelope), cm#1021 (bot author name), cm#1022 (Drive plan), cm#1024
+(typo plan, `docs/dev/typo-search-default-plan.md`), cm#1026 (STANDARD: `chats documents list`),
+cli-memo#116 (memo refuses drive's folder), cli-testing#37 (typo benchmark + results). None
+released yet.
+
+Not done, in order:
+1. **Typo work item 1:** STANDARD PR for `match: corrected | beginnings`, `corrections`, the
+   `--language legacy` deprecation and the `next_steps` hint. Then the service code — it builds on
+   cm#1025 (bare word covers transcripts, file names, file text; another session), check it first.
+2. **`--source` everywhere:** plan + STANDARD rows, not started (worktree
+   `cli-messaging-wt-source-everywhere` is empty). Extend the existing `--source` list to `search all`,
+   notes folders and Drive documents; the answer names the accounts searched. Also record Q2/Q3
+   answers in `docs/dev/drive-in-store-plan.md`. Owner sees the value grammar before merge.
+3. **Drive switch:** waits for drive#19 and a cli-messaging release with cm#1017 (other agents).
+4. **`chats documents list`:** implement per `docs/dev/chat-documents-plan.md` (merged in #1026).
+5. **Release cli-messaging** when memo#111 or cm#1017 needs it; then pin bumps.
+6. Items 5 and 6 below wait for cm#1013 / cm#1006. Item 4's name (`messages sync <chat> --files`)
+   is proposed on #1019, not ruled.
+
 ## 1. What this is
 
 cli-messaging is the shared library under `tg`, `max` and `memo` (one local store, one search). The owner wants
