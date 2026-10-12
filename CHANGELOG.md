@@ -4,6 +4,14 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **The local speech engine no longer writes to stdout.** sherpa-onnx's WebAssembly printed its own logs
+  (`circular-buffer.cc … Overflow! … No data loss!`) straight to file descriptor 1, ahead of the `--json` answer of
+  `messages list --transcribe` and `messages transcribe`. They go to stderr now.
+
 ## 0.255.0 — 12.10.2026
 
 ### Added
