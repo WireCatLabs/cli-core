@@ -19,18 +19,24 @@ type Variant = { unit: "email" | "thread"; size: number; overlap: number; cleani
 type Piece = Chunk & { thread: string }
 type Scores = { recallAt5: number; mrr: number }
 
-const corpusText = readFileSync(new URL("./corpus.json", import.meta.url), "utf8")
+// MAIL_CORPUS names another corpus, such as one export-store.ts made from a real mailbox.
+const corpusText = readFileSync(process.env.MAIL_CORPUS ?? new URL("./corpus.json", import.meta.url), "utf8")
 const corpus = JSON.parse(corpusText) as Corpus
 const threadOf = new Map(corpus.threads.flatMap((t) => t.emails.map((e) => [e.id, t.id] as const)))
 for (const query of corpus.queries)
   for (const id of query.relevant) assert.ok(threadOf.has(id), `${query.id} labels unknown email ${id}`)
 
 const PRODUCTION: Variant = { unit: "email", size: 1_200, overlap: 150, cleaning: "rules" }
-const variants: Variant[] = (["thread", "email"] as const).flatMap((unit) =>
+const every: Variant[] = (["thread", "email"] as const).flatMap((unit) =>
   [600, 1_200, 2_000].flatMap((size) =>
     [0, 150, 300].flatMap((overlap) => (["rules", "off"] as const).map((cleaning) => ({ unit, size, overlap, cleaning }))),
   ),
 )
+const nameOf = ({ unit, size, overlap, cleaning }: Variant) => `${unit}/${size}/${overlap}/${cleaning}`
+// MAIL_VARIANTS=email/1200/150/rules,thread/1200/150/rules measures only those: a real mailbox is too big for all 36.
+const chosen = process.env.MAIL_VARIANTS?.split(",").map((name) => name.trim())
+const variants = chosen ? every.filter((variant) => chosen.includes(nameOf(variant))) : every
+assert.ok(variants.length > 0, `MAIL_VARIANTS names none of ${every.map(nameOf).join(", ")}`)
 
 const titleOf = (subject: string): string | null =>
   subject.replace(/^\s*((re|fwd?|aw|wg)\s*:\s*)+/i, "").trim() || null
