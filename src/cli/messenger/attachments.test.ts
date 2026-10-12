@@ -464,6 +464,19 @@ describe("attachments extract", () => {
     expect(done.stderr.match(/npm install -g unpdf/g)).toHaveLength(1)
   })
 
+  it("**names the missing package on each file it could not read**, as `messages download --extract` reports it", async () => {
+    const without: LoadEngine = async (name) => {
+      if (name === "unpdf")
+        throw Object.assign(new Error("Cannot find package 'unpdf'"), { code: "ERR_MODULE_NOT_FOUND" })
+      return importEngine(name)
+    }
+    const { call } = await setup({ load: without })
+    const done = json(await call("attachments", "extract", "--json"))
+    const pdf = done.items.find(({ status }: { status: string }) => status === "engine-missing")
+    expect(pdf.issue.message).toContain("optional package unpdf")
+    expect(pdf.issue.message).toContain("npm install -g unpdf")
+  })
+
   it("prints one line per file in a terminal, and the summary on stderr", async () => {
     const { pretty } = await setup()
     const done = await pretty("attachments", "extract")

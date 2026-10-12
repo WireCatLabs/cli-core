@@ -4,6 +4,19 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each
+  `installed` or `missing`, resolved the way extraction loads them.
+
+### Fixed
+
+- **A file not read for want of an optional package names the package.** The per-file issue from
+  `attachments extract` and `messages download --extract` said only "install the required optional reader
+  package"; it now names it and the global npm install line.
+
 ## 0.255.0 — 12.10.2026
 
 ### Added
