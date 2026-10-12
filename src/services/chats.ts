@@ -266,7 +266,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     const counted = counts.length > 0 ? { ...stats, memberCounts: counts } : stats
     return completeness.state === "complete"
       ? counted
-      : { ...counted, fetch: `${deps.messenger.app.command} store fetch ${chatId}` }
+      : { ...counted, fetch: `${deps.messenger.app.command} messages sync ${chatId}` }
   },
 
   sendAs: async (chat) => {
@@ -307,7 +307,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
       unknown,
       ...(stored?.completeness ? { completeness: stored.completeness } : {}),
       ...(stored?.completeness && stored.completeness.state !== "complete"
-        ? { fetch: `${deps.messenger.app.command} store fetch ${id}` }
+        ? { fetch: `${deps.messenger.app.command} messages sync ${id}` }
         : {}),
       items,
     }

@@ -12,7 +12,7 @@ export interface PaceRate {
   burst: number
 }
 
-/** One call a second after a burst of 20: what a single `store fetch` already did with its 1 s page pause. */
+/** One call a second after a burst of 20: what a single `messages sync` already did with its 1 s page pause. */
 export const DEFAULT_PACE: PaceRate = { perMinute: 60, burst: 20 }
 
 /** `<state dir>/pace/<profile>.json`, beside `flood/`. */

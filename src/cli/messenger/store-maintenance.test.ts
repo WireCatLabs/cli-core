@@ -97,7 +97,7 @@ describe("store check", () => {
       foreignKeyViolations: 0,
       searchIndexes: { messages_fts: "ok", chats_fts: "ok", identities_fts: "ok" },
     })
-    expect(stderr.join("\n")).toContain("chat store fetch <chat>")
+    expect(stderr.join("\n")).toContain("chat messages sync <chat>")
   })
 
   it("names a note left on a deleted message, and a pointer of an unknown type, as orphans", async () => {

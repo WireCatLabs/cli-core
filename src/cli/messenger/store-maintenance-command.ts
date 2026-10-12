@@ -268,7 +268,7 @@ const checkCommand = (messenger: Messenger): Command =>
       }
       const ours = answer.chatsBehind.filter((chat) => chat.provider === messenger.provider).length
       if (ours > 0)
-        renderer.note(`${ours} chats hold less than their newest message — \`${command} store fetch <chat>\``)
+        renderer.note(`${ours} chats hold less than their newest message — \`${command} messages sync <chat>\``)
       const orphans = answer.orphanPointers.reduce((sum, { count }) => sum + count, 0)
       if (orphans > 0)
         renderer.note(

@@ -26,7 +26,7 @@ There is no `/sdk` entry point that gathers these; import each name from its own
 1. A `Messenger` with the required fields (below), and a `connect` that returns your adapter.
 2. The adapter's **required core**, `MessengerCore`, and — unless your history is pushed to you
    (below) — the `ServerReads` group. With both you get `account`, `chats`, `contacts`,
-   `messages list`, `show`, `context`, `send`, `inbox`, `store fetch` and the MCP read tools.
+   `messages list`, `show`, `context`, `send`, `inbox`, `messages sync` and the MCP read tools.
 3. The contract cases, passing. Do this before any other optional group.
 4. Then the optional groups your messenger has, one at a time.
 
@@ -48,7 +48,7 @@ Optional fields fit the shared commands to your messenger. Leave each one out un
 needs it. The ones a new messenger usually sets:
 
 - `name` — the messenger's name as its users write it.
-- `fetching` — how `store fetch` and `messages download --all` page your history. Set `orderBy: "time"` when your message ids
+- `fetching` — how `messages sync` and `messages download --all` page your history. Set `orderBy: "time"` when your message ids
   are not whole numbers below 2^53.
 - `history` — `"store"` when your messenger pushes its history instead of answering for it (below).
 - `deletedWithoutChat` — set it only if your messenger reports a deletion without its chat. Without
@@ -83,7 +83,7 @@ and `AccountEditing`.
   the adapter's answers. Provider ids are often 64-bit, and a number loses digits.
 - Shared code does not read an id. It does not check for digits and does no arithmetic. Your ids
   can have any shape, for example `123@s.whatsapp.net`.
-- One exception: when `fetching.orderBy` is `"id"` (the default), `store fetch` and
+- One exception: when `fetching.orderBy` is `"id"` (the default), `messages sync` and
   `messages download --all` key what they hold by the message id as a number. So either your message ids are whole numbers below 2^53, or you
   set `orderBy: "time"`. A contract case checks this.
 

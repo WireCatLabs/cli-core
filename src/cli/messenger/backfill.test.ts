@@ -10,6 +10,7 @@ import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
 import { jobsDir, listJobs, readJob, type SpawnJob, saveJob, updateJob } from "./backfill-jobs.js"
 import type { Fetching, Messenger } from "./context.js"
+import { messagesCommand } from "./messages-command.js"
 import type { MessengerAdapter, ServerReads } from "./port.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
@@ -74,7 +75,7 @@ const call = async (
   const streams = captureStreams()
   const code = await run(
     argv,
-    { app, commands: () => [storeCommand(messenger)] },
+    { app, commands: () => [storeCommand(messenger), messagesCommand(messenger)] },
     {
       streams,
       tty: false,
@@ -116,19 +117,21 @@ const timedChatOf = (
     },
   }) as unknown as MessengerAdapter
 
-describe("store fetch", () => {
+describe("messages sync", () => {
   it("**fetches by send time where ids pass 2^53**, at the messenger's own page and pause, without reactions", async () => {
     const env = setup()
     const asked: { before?: string; reactions?: false }[] = []
     const fetching: Fetching = { page: 3, pause: "1ms", maxPages: 10, orderBy: "time" }
 
-    const { code, answer } = await call(["store", "fetch", "7", "--json"], timedChatOf(7, asked), env, { fetching })
+    const { code, answer } = await call(["messages", "sync", "7", "--json"], timedChatOf(7, asked), env, { fetching })
 
     expect(code).toBe(0)
     expect(answer).toMatchObject({ complete: true })
     expect(asked.every((one) => one.reactions === false)).toBe(true)
     expect(asked[1]?.before).toBe(new Date(Date.parse(message(5).timestamp) + 1).toISOString())
-    const estimate = await call(["store", "fetch", "7", "--estimate", "--json"], timedChatOf(7, []), env, { fetching })
+    const estimate = await call(["messages", "sync", "7", "--estimate", "--json"], timedChatOf(7, []), env, {
+      fetching,
+    })
     expect(estimate.code).toBe(2)
   })
 
@@ -137,7 +140,7 @@ describe("store fetch", () => {
     const sameMoment = (index: number) => message(index === 3 ? 5 : index + 1).timestamp
 
     const { code, answer } = await call(
-      ["store", "fetch", "7", "--json"],
+      ["messages", "sync", "7", "--json"],
       timedChatOf(7, [], undefined, sameMoment),
       setup(),
       { fetching },
@@ -159,7 +162,7 @@ describe("store fetch", () => {
         },
       }
 
-      const { code, answer } = await call(["store", "fetch", "7", "--json"], sameEveryTime, setup(), { fetching })
+      const { code, answer } = await call(["messages", "sync", "7", "--json"], sameEveryTime, setup(), { fetching })
 
       expect(code).toBe(0)
       expect(answer).toMatchObject({ fetched: 3 })
@@ -172,9 +175,14 @@ describe("store fetch", () => {
     const fetching: Fetching = { page: 3, pause: "1ms", maxPages: 10, orderBy: "time" }
     const crowded = (index: number) => message(index < 5 ? 5 : index + 1).timestamp
 
-    const { code } = await call(["store", "fetch", "7", "--json"], timedChatOf(7, asked, undefined, crowded), setup(), {
-      fetching,
-    })
+    const { code } = await call(
+      ["messages", "sync", "7", "--json"],
+      timedChatOf(7, asked, undefined, crowded),
+      setup(),
+      {
+        fetching,
+      },
+    )
 
     expect(code).toBe(0)
     expect(asked.length).toBeLessThan(6)
@@ -184,7 +192,7 @@ describe("store fetch", () => {
     const fetching: Fetching = { page: 3, pause: "1ms", maxPages: 10, orderBy: "time" }
     const words = timedChatOf(7, [], (index) => `msg-${index}`)
 
-    const { code, answer } = await call(["store", "fetch", "7", "--json"], words, setup(), { fetching })
+    const { code, answer } = await call(["messages", "sync", "7", "--json"], words, setup(), { fetching })
 
     expect(code).toBe(0)
     expect(answer).toMatchObject({
@@ -197,12 +205,16 @@ describe("store fetch", () => {
     const env = setup()
     const state = { newest: 250, asked: [] as (string | undefined)[] }
 
-    const first = await call(["store", "fetch", "7", "--limit", "200", "--pause", "1ms", "--json"], chatOf(state), env)
+    const first = await call(
+      ["messages", "sync", "7", "--limit", "200", "--pause", "1ms", "--json"],
+      chatOf(state),
+      env,
+    )
     expect(first.answer).toEqual({ chat: "7", fetched: 200, complete: false, ranges: [{ from: 51, to: 250 }] })
 
     state.newest = 260
     state.asked = []
-    const second = await call(["store", "fetch", "7", "--pause", "1ms", "--json"], chatOf(state), env)
+    const second = await call(["messages", "sync", "7", "--pause", "1ms", "--json"], chatOf(state), env)
     expect(second.answer).toEqual({ chat: "7", fetched: 150, complete: true, ranges: [{ from: 1, to: 260 }] })
     // The newest page, then straight past the 51..250 already held.
     expect(state.asked).toEqual([undefined, "51"])
@@ -212,7 +224,7 @@ describe("store fetch", () => {
     const state = { newest: 250, asked: [] as (string | undefined)[] }
 
     const { answer } = await call(
-      ["store", "fetch", "7", "--limit", "120", "--page-size", "50", "--pause", "1ms", "--json"],
+      ["messages", "sync", "7", "--limit", "120", "--page-size", "50", "--pause", "1ms", "--json"],
       chatOf(state),
       setup(),
     )
@@ -224,9 +236,9 @@ describe("store fetch", () => {
   it("**refuses a --page-size above what the messenger returns**, and allows it where no cap is known", async () => {
     const state = { newest: 250, asked: [] as (string | undefined)[] }
 
-    const refused = await call(["store", "fetch", "7", "--page-size", "200", "--json"], chatOf(state), setup())
+    const refused = await call(["messages", "sync", "7", "--page-size", "200", "--json"], chatOf(state), setup())
     const uncapped = await call(
-      ["store", "fetch", "7", "--page-size", "200", "--pause", "1ms", "--json"],
+      ["messages", "sync", "7", "--page-size", "200", "--pause", "1ms", "--json"],
       chatOf(state),
       setup(),
       { fetching: { page: 30, pause: "1ms", maxPages: 10 } },
@@ -247,11 +259,15 @@ describe("store fetch", () => {
         hasMore: false,
       }),
     } as MessengerAdapter
-    const wrong = await call(["store", "fetch", "7", "--pause", "1ms", "--json"], cutShort, env)
+    const wrong = await call(["messages", "sync", "7", "--pause", "1ms", "--json"], cutShort, env)
     expect(wrong.answer).toMatchObject({ complete: true, ranges: [{ from: 151, to: 250 }] })
 
     state.asked = []
-    const again = await call(["store", "fetch", "7", "--limit", "200", "--pause", "1ms", "--json"], chatOf(state), env)
+    const again = await call(
+      ["messages", "sync", "7", "--limit", "200", "--pause", "1ms", "--json"],
+      chatOf(state),
+      env,
+    )
     expect(state.asked).toEqual([undefined, "151"])
     expect(again.answer).toMatchObject({ complete: false, ranges: [{ from: 51, to: 250 }] })
   })
@@ -261,11 +277,15 @@ describe("store fetch", () => {
     const state = { newest: 250, asked: [] as (string | undefined)[] }
 
     const { answer } = await call(
-      ["store", "fetch", "7", "--last", "120", "--pause", "1ms", "--json"],
+      ["messages", "sync", "7", "--last", "120", "--pause", "1ms", "--json"],
       chatOf(state),
       env,
     )
-    const both = await call(["store", "fetch", "7", "--last", "5", "--since-time", "1d", "--json"], chatOf(state), env)
+    const both = await call(
+      ["messages", "sync", "7", "--last", "5", "--since-time", "1d", "--json"],
+      chatOf(state),
+      env,
+    )
 
     expect(answer).toMatchObject({ fetched: 200, complete: false, reachedLast: true, ranges: [{ from: 51, to: 250 }] })
     expect(both.code).toBe(2)
@@ -273,7 +293,7 @@ describe("store fetch", () => {
 
   it("sits out a short wait the provider asks for", async () => {
     const state = { newest: 30, asked: [] as (string | undefined)[], wait: 5 }
-    const { code, answer } = await call(["store", "fetch", "7", "--pause", "1ms", "--json"], chatOf(state), setup())
+    const { code, answer } = await call(["messages", "sync", "7", "--pause", "1ms", "--json"], chatOf(state), setup())
 
     expect(code).toBe(0)
     expect(answer).toMatchObject({ fetched: 30, complete: true })
@@ -282,18 +302,22 @@ describe("store fetch", () => {
   it("stops at a long wait with what it had read kept", async () => {
     const env = setup()
     const state = { newest: 250, asked: [] as (string | undefined)[] }
-    await call(["store", "fetch", "7", "--limit", "100", "--pause", "1ms"], chatOf(state), env)
+    await call(["messages", "sync", "7", "--limit", "100", "--pause", "1ms"], chatOf(state), env)
 
-    const refused = await call(["store", "fetch", "7", "--pause", "1ms"], chatOf({ ...state, wait: 10 * 60_000 }), env)
+    const refused = await call(
+      ["messages", "sync", "7", "--pause", "1ms"],
+      chatOf({ ...state, wait: 10 * 60_000 }),
+      env,
+    )
     expect(refused.code).toBe(0)
     const asked = state.asked.length
-    const remembered = await call(["store", "fetch", "7", "--pause", "1ms"], chatOf(state), env)
+    const remembered = await call(["messages", "sync", "7", "--pause", "1ms"], chatOf(state), env)
     expect(remembered.code).toBe(0)
     expect(state.asked).toHaveLength(asked)
 
     rmSync(join(env.CHAT_STATE_DIR, "flood"), { recursive: true })
     rmSync(join(env.CHAT_STATE_DIR, "pace"), { recursive: true })
-    const resumed = await call(["store", "fetch", "7", "--pause", "1ms", "--json"], chatOf(state), env)
+    const resumed = await call(["messages", "sync", "7", "--pause", "1ms", "--json"], chatOf(state), env)
     expect(resumed.answer).toMatchObject({ complete: true, ranges: [{ from: 1, to: 250 }] })
   })
 
@@ -301,7 +325,7 @@ describe("store fetch", () => {
     const state = { newest: 250, asked: [] as (string | undefined)[] }
     const since = new Date(Date.UTC(2026, 0, 1) + 180 * 60_000).toISOString()
     const { answer } = await call(
-      ["store", "fetch", "7", "--since-time", since, "--pause", "1ms", "--json"],
+      ["messages", "sync", "7", "--since-time", since, "--pause", "1ms", "--json"],
       chatOf(state),
       setup(),
     )
@@ -314,16 +338,16 @@ describe("store fetch", () => {
       ranges: [{ from: 151, to: 250 }],
     })
     expect(state.asked).toEqual([undefined])
-    expect((await call(["store", "fetch", "7", "--since-time", "7"], chatOf(state), setup())).code).not.toBe(0)
+    expect((await call(["messages", "sync", "7", "--since-time", "7"], chatOf(state), setup())).code).not.toBe(0)
     expect(
-      (await call(["store", "fetch", "7", "--since-time", since, "--estimate"], chatOf(state), setup())).code,
+      (await call(["messages", "sync", "7", "--since-time", since, "--estimate"], chatOf(state), setup())).code,
     ).not.toBe(0)
   })
 
   it("keeps no old name: backfill and --pace are unknown", async () => {
     const state = { newest: 5, asked: [] as (string | undefined)[] }
     expect((await call(["backfill", "7"], chatOf(state), setup())).code).not.toBe(0)
-    expect((await call(["store", "fetch", "7", "--pace", "1ms"], chatOf(state), setup())).code).not.toBe(0)
+    expect((await call(["messages", "sync", "7", "--pace", "1ms"], chatOf(state), setup())).code).not.toBe(0)
     expect(state.asked).toEqual([])
   })
 })
@@ -364,14 +388,14 @@ describe("store fetch in the background", () => {
     const env = setup()
     const { calls, spawnJob } = spawned(4242)
 
-    const started = await call(["store", "fetch", "--all", "--pause", "1ms", "--background", "--json"], idle, env, {
+    const started = await call(["messages", "sync", "--all", "--pause", "1ms", "--background", "--json"], idle, env, {
       spawnJob,
     })
-    const neither = await call(["store", "fetch", "--json"], idle, env)
-    const both = await call(["store", "fetch", "7", "--all", "--json"], idle, env)
+    const neither = await call(["messages", "sync", "--json"], idle, env)
+    const both = await call(["messages", "sync", "7", "--all", "--json"], idle, env)
 
     expect(started.answer).toMatchObject({ pid: 4242, chat: "--all" })
-    expect(calls[0]?.argv.slice(0, 3)).toEqual(["store", "fetch", "--all"])
+    expect(calls[0]?.argv.slice(0, 3)).toEqual(["messages", "sync", "--all"])
     const since = calls[0]?.argv[calls[0].argv.indexOf("--since-time") + 1] ?? ""
     expect(Date.now() - Date.parse(since)).toBeGreaterThan(89 * 86_400_000)
     expect(Date.now() - Date.parse(since)).toBeLessThan(91 * 86_400_000)
@@ -385,7 +409,7 @@ describe("store fetch in the background", () => {
     onTestFinished(stop)
 
     const started = await call(
-      ["store", "fetch", "7", "--limit", "300", "--last", "250", "--pause", "1ms", "--background", "--json"],
+      ["messages", "sync", "7", "--limit", "300", "--last", "250", "--pause", "1ms", "--background", "--json"],
       idle,
       env,
       {
@@ -397,8 +421,8 @@ describe("store fetch in the background", () => {
     const job = started.answer.job as string
     expect(calls).toHaveLength(1)
     expect(calls[0]?.argv).toEqual([
-      "store",
-      "fetch",
+      "messages",
+      "sync",
       "7",
       "--limit",
       "300",
@@ -420,7 +444,7 @@ describe("store fetch in the background", () => {
       hasMore: false,
     })
 
-    const again = await call(["store", "fetch", "7", "--background"], idle, env, { spawnJob })
+    const again = await call(["messages", "sync", "7", "--background"], idle, env, { spawnJob })
     expect(again.code).not.toBe(0)
     expect(again.stderr).toContain(`job ${job} is already fetching 7`)
   })
@@ -428,7 +452,7 @@ describe("store fetch in the background", () => {
   it("the job's own run records its progress and outcome, and status adds what the store holds", async () => {
     const env = setup()
     const { calls, spawnJob } = spawned(process.pid)
-    const { job } = (await call(["store", "fetch", "7", "--background", "--json"], idle, env, { spawnJob })).answer
+    const { job } = (await call(["messages", "sync", "7", "--background", "--json"], idle, env, { spawnJob })).answer
 
     const state = { newest: 150, asked: [] as (string | undefined)[] }
     const child = await call(calls[0]?.argv ?? [], chatOf(state), { ...env, ...calls[0]?.env })
@@ -446,7 +470,7 @@ describe("store fetch in the background", () => {
   it("a job that fails says how; one that vanished without a word has died", async () => {
     const env = setup()
     const { calls, spawnJob } = spawned(process.pid)
-    const { job } = (await call(["store", "fetch", "7", "--background", "--json"], idle, env, { spawnJob })).answer
+    const { job } = (await call(["messages", "sync", "7", "--background", "--json"], idle, env, { spawnJob })).answer
     const wait = { newest: 10, asked: [] as (string | undefined)[], wait: 10 * 60_000 }
     await call(calls[0]?.argv ?? [], chatOf(wait), { ...env, ...calls[0]?.env })
 
@@ -456,7 +480,7 @@ describe("store fetch in the background", () => {
     })
 
     const gone = spawned(2 ** 22 + 12345)
-    const other = (await call(["store", "fetch", "8", "--background", "--json"], idle, env, gone)).answer
+    const other = (await call(["messages", "sync", "8", "--background", "--json"], idle, env, gone)).answer
     expect((await call(["store", "jobs", "show", other.job, "--json"], idle, env)).answer).toMatchObject({
       state: "died",
     })
@@ -469,7 +493,7 @@ describe("store fetch in the background", () => {
     const env = setup()
     const { spawnJob, exited, stop } = sleeping()
     onTestFinished(stop)
-    const { job } = (await call(["store", "fetch", "7", "--background", "--json"], idle, env, { spawnJob })).answer
+    const { job } = (await call(["messages", "sync", "7", "--background", "--json"], idle, env, { spawnJob })).answer
 
     const signal = exited()
     expect((await call(["store", "jobs", "cancel", job, "--json"], idle, env)).answer).toEqual({ job, cancelled: true })
@@ -482,7 +506,7 @@ describe("store fetch in the background", () => {
   it("**retry starts a failed or died job again with the same command**, as a new job", async () => {
     const env = setup()
     const dead = spawned(2 ** 22 + 12345)
-    const fetch = ["store", "fetch", "7", "--limit", "30", "--page-size", "10", "--pause", "1ms"]
+    const fetch = ["messages", "sync", "7", "--limit", "30", "--page-size", "10", "--pause", "1ms"]
     const first = (await call([...fetch, "--since-time", "2026-01-01", "--background", "--json"], idle, env, dead))
       .answer.job as string
 
@@ -497,6 +521,29 @@ describe("store fetch in the background", () => {
     const done = await call(["store", "jobs", "retry", retried.answer.job], idle, env, dead)
     expect(done.stderr).toContain("did not fail — it is done")
     expect((await call(["store", "jobs", "retry"], idle, env, dead)).stderr).toContain("name a job, or --failed")
+  })
+
+  it("retry runs a job saved as store fetch under messages sync", async () => {
+    const env = setup()
+    const dead = spawned(2 ** 22 + 12346)
+    const dir = jobsDir(app, env)
+    saveJob(dir, {
+      id: "20260101T000000-bbbbbb",
+      chat: "7",
+      profile: "default",
+      pid: 2 ** 22 + 12346,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      argv: ["store", "fetch", "7", "--limit", "40", "--json"],
+      log: join(dir, "20260101T000000-bbbbbb.log"),
+    })
+
+    expect((await call(["store", "jobs", "retry", "20260101T000000-bbbbbb"], idle, env, dead)).code).toBe(0)
+    expect(dead.calls[0]?.argv).toEqual(["messages", "sync", "7", "--limit", "40", "--json"])
+  })
+
+  it("store fetch is gone: messages sync took its place", async () => {
+    const { code } = await call(["store", "fetch", "7", "--json"], idle, setup())
+    expect(code).not.toBe(0)
   })
 
   it("retry rebuilds the command of a job recorded before jobs kept theirs", async () => {
@@ -517,8 +564,8 @@ describe("store fetch in the background", () => {
 
     expect((await call(["store", "jobs", "retry", "20260101T000000-aaaaaa"], idle, env, dead)).code).toBe(0)
     expect(dead.calls[0]?.argv).toEqual([
-      "store",
-      "fetch",
+      "messages",
+      "sync",
       "7",
       "--limit",
       "40",
@@ -537,7 +584,7 @@ describe("store fetch in the background", () => {
     const dead = spawned(2 ** 22 + 12345)
     const dir = jobsDir(app, env)
     const start = async (chat: string, at: string) => {
-      const { job } = (await call(["store", "fetch", chat, "--background", "--json"], idle, env, dead)).answer
+      const { job } = (await call(["messages", "sync", chat, "--background", "--json"], idle, env, dead)).answer
       updateJob(dir, job, { startedAt: at })
       return job as string
     }
@@ -556,8 +603,8 @@ describe("store fetch in the background", () => {
   it("**list --state** answers only the jobs in that state", async () => {
     const env = setup()
     const dead = spawned(2 ** 22 + 12345)
-    const died = (await call(["store", "fetch", "8", "--background", "--json"], idle, env, dead)).answer.job
-    const done = (await call(["store", "fetch", "9", "--background", "--json"], idle, env, dead)).answer.job
+    const died = (await call(["messages", "sync", "8", "--background", "--json"], idle, env, dead)).answer.job
+    const done = (await call(["messages", "sync", "9", "--background", "--json"], idle, env, dead)).answer.job
     updateJob(jobsDir(app, env), done, { finishedAt: new Date().toISOString(), result: { fetched: 1 } })
 
     const listed = async (state: string) =>
@@ -576,8 +623,9 @@ describe("store fetch in the background", () => {
     const dir = jobsDir(app, env)
     const { spawnJob, stop } = sleeping()
     onTestFinished(stop)
-    const running = (await call(["store", "fetch", "7", "--background", "--json"], idle, env, { spawnJob })).answer.job
-    const died = (await call(["store", "fetch", "8", "--background", "--json"], idle, env, spawned(2 ** 22 + 12345)))
+    const running = (await call(["messages", "sync", "7", "--background", "--json"], idle, env, { spawnJob })).answer
+      .job
+    const died = (await call(["messages", "sync", "8", "--background", "--json"], idle, env, spawned(2 ** 22 + 12345)))
       .answer.job
     const log = readJob(dir, died)?.log ?? ""
     writeFileSync(log, "a line\n")
@@ -598,7 +646,7 @@ describe("store fetch in the background", () => {
         stranger.kill()
       })
       const { job } = (
-        await call(["store", "fetch", "7", "--background", "--json"], idle, env, spawned(stranger.pid ?? 0))
+        await call(["messages", "sync", "7", "--background", "--json"], idle, env, spawned(stranger.pid ?? 0))
       ).answer
 
       expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({ state: "died" })
@@ -617,7 +665,7 @@ describe("store fetch in the background", () => {
       return history(...args)
     }
 
-    const { answer } = await call(["store", "fetch", "7", "--pause", "1ms", "--json"], chat, setup(), {
+    const { answer } = await call(["messages", "sync", "7", "--pause", "1ms", "--json"], chat, setup(), {
       signal: stop.signal,
     })
     expect(answer).toMatchObject({ fetched: 100, stopped: true, ranges: [{ from: 151, to: 250 }] })
@@ -625,8 +673,8 @@ describe("store fetch in the background", () => {
 
   it("status and cancel name a job that does not exist", async () => {
     const env = setup()
-    expect((await call(["store", "jobs", "show"], idle, env)).stderr).toContain("no background fetch jobs")
-    expect((await call(["store", "jobs", "cancel", "nope"], idle, env)).stderr).toContain("no fetch job nope")
+    expect((await call(["store", "jobs", "show"], idle, env)).stderr).toContain("no background sync jobs")
+    expect((await call(["store", "jobs", "cancel", "nope"], idle, env)).stderr).toContain("no sync job nope")
     expect((await call(["store", "jobs", "list", "--json"], idle, env)).answer).toEqual({
       items: [],
       page: 1,
@@ -647,10 +695,10 @@ describe("store fetch --estimate", () => {
 
   it("**prices what is not held at the density of what is, and asks the messenger nothing**", async () => {
     const env = setup()
-    await call(["store", "fetch", "7", "--limit", "100", "--pause", "1ms"], chatOf({ newest: 250, asked: [] }), env)
+    await call(["messages", "sync", "7", "--limit", "100", "--pause", "1ms"], chatOf({ newest: 250, asked: [] }), env)
 
     const { code, answer } = await call(
-      ["store", "fetch", "7", "--estimate", "--limit", "100", "--json"],
+      ["messages", "sync", "7", "--estimate", "--limit", "100", "--json"],
       untouchable,
       env,
     )
@@ -668,9 +716,9 @@ describe("store fetch --estimate", () => {
 
   it("a chat held from its first message costs nothing more", async () => {
     const env = setup()
-    await call(["store", "fetch", "7", "--pause", "1ms"], chatOf({ newest: 50, asked: [] }), env)
+    await call(["messages", "sync", "7", "--pause", "1ms"], chatOf({ newest: 50, asked: [] }), env)
 
-    expect((await call(["store", "fetch", "7", "--estimate", "--json"], untouchable, env)).answer).toMatchObject({
+    expect((await call(["messages", "sync", "7", "--estimate", "--json"], untouchable, env)).answer).toMatchObject({
       missing: 0,
       requests: 0,
     })
@@ -678,9 +726,9 @@ describe("store fetch --estimate", () => {
 
   it("with nothing held it says so rather than guess", async () => {
     const env = setup()
-    await call(["store", "fetch", "7", "--pause", "1ms"], chatOf({ newest: 5, asked: [] }), env)
+    await call(["messages", "sync", "7", "--pause", "1ms"], chatOf({ newest: 5, asked: [] }), env)
 
-    const { answer, stderr } = await call(["store", "fetch", "8", "--estimate", "--json"], untouchable, env)
+    const { answer, stderr } = await call(["messages", "sync", "8", "--estimate", "--json"], untouchable, env)
     expect(answer).toMatchObject({ held: 0, missing: null, requests: null })
     expect(stderr).toContain("--limit 100")
   })
@@ -707,7 +755,7 @@ describe("post-fetch catch-up controls", () => {
     const state = { newest: 2, asked: [] as (string | undefined)[] }
     for (const background of [false, true]) {
       const result = await call(
-        ["store", "fetch", "7", "--catch-up", "--json", ...(background ? ["--background"] : [])],
+        ["messages", "sync", "7", "--catch-up", "--json", ...(background ? ["--background"] : [])],
         chatOf(state),
         env,
       )
@@ -715,7 +763,7 @@ describe("post-fetch catch-up controls", () => {
       expect(state.asked).toEqual([])
     }
     expect(
-      (await call(["store", "fetch", "7", "--no-catch-up", "--pause", "1ms", "--json"], chatOf(state), env)).code,
+      (await call(["messages", "sync", "7", "--no-catch-up", "--pause", "1ms", "--json"], chatOf(state), env)).code,
     ).toBe(0)
     expect(state.asked.length).toBeGreaterThan(0)
   })
@@ -728,17 +776,17 @@ describe("post-fetch catch-up controls", () => {
     writeFileSync(join(config, "config.json"), JSON.stringify({ profiles: { default: { searchCatchUp: true } } }))
     const env = { ...base, CHAT_CONFIG_DIR: config, CLI_COMMON_CACHE_DIR: join(root, "empty-models") }
     const state = { newest: 2, asked: [] as (string | undefined)[] }
-    const enabled = await call(["store", "fetch", "7", "--json", "--pause", "1ms"], chatOf(state), env)
+    const enabled = await call(["messages", "sync", "7", "--json", "--pause", "1ms"], chatOf(state), env)
     expect(enabled.code).toBe(0)
     expect(enabled.answer.prepared).toMatchObject({ prepared: { modelAvailable: false, built: [{ chat: "7" }] } })
     state.newest = 3
     expect(
-      (await call(["store", "fetch", "7", "--no-catch-up", "--json"], chatOf(state), env)).answer,
+      (await call(["messages", "sync", "7", "--no-catch-up", "--json"], chatOf(state), env)).answer,
     ).not.toHaveProperty("prepared")
     const bounded = await call(
       [
-        "store",
-        "fetch",
+        "messages",
+        "sync",
         "7",
         "--catch-up",
         "--catch-up-messages",
@@ -754,7 +802,7 @@ describe("post-fetch catch-up controls", () => {
     )
     expect(bounded.answer).toMatchObject({ prepared: { reason: "message_bound", complete: false } })
     expect(
-      (await call(["store", "fetch", "7", "--catch-up", "--catch-up-chunks", "20001", "--json"], chatOf(state), env))
+      (await call(["messages", "sync", "7", "--catch-up", "--catch-up-chunks", "20001", "--json"], chatOf(state), env))
         .code,
     ).toBe(2)
   })

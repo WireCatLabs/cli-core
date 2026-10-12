@@ -27,7 +27,7 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 
 Поиск читает локальную БД и, где сервер мессенджера умеет искать, по умолчанию спрашивает и его
 («Поиск на сервере мессенджера»); прочитанным ничего не отмечает. Хороший поиск требует скачанных чатов:
-`<cli> store fetch --all --background`, а `coverage.next` в ответе называет, что скачать. Пустой ответ означает «не найдено в выбранном архиве». Проверяйте `coverage`, `completeness` и готовность индекса.
+`<cli> messages sync --all --background`, а `coverage.next` в ответе называет, что скачать. Пустой ответ означает «не найдено в выбранном архиве». Проверяйте `coverage`, `completeness` и готовность индекса.
 Если word index не готов, выполните `store migrate`: строгий поиск не переходит на substring.
 
 ## Если формулировка неизвестна
@@ -612,21 +612,21 @@ Strict `corrections` пуст; version/fieldsVersion/presetVersion/timezone/orde
 `coverage` сообщает accounts/chat/coveredChats, complete/partial/unknown, lastSyncedAt и inventoryComplete.
 Полнота explicit chat выводится из существующих ranges/history-start markers, даже при hits=0.
 
-- `completeness[].fetchedAt` — когда `store fetch` последний раз прочитал самую новую страницу чата; `null`,
+- `completeness[].fetchedAt` — когда `messages sync` последний раз прочитал самую новую страницу чата; `null`,
   если ни разу. Чтение истории другими командами и live-сообщения его не двигают.
 - `lastSyncedAt` — самый старый `fetchedAt` среди чатов охвата; `null`, если хотя бы один чат охвата ни разу
-  не скачивался `store fetch`. Один свежий чат не говорит за весь охват.
+  не скачивался `messages sync`. Один свежий чат не говорит за весь охват.
 - `inventoryComplete` — `true`, когда каждый account охвата хотя бы раз передал store полный список чатов
   (первая страница списка без `hasMore`). Это знание «когда-то», а не «сейчас»: чат, появившийся позже,
   store увидит только при следующем списке. Store до этой версии отвечает `false`/`null`, пока не получит
-  список чатов и `store fetch`.
+  список чатов и `messages sync`.
 - `messages` — сколько сообщений хранится в чатах охвата; `coveredChats` — сколько чатов.
 - `chats` — чаты охвата этого мессенджера по состоянию: `complete`, `partial`, `neverFetched` (история ни разу не
   скачивалась), `behind` (в списке чатов есть сообщения новее хранимых), `withGaps`.
 - `attention` — до 10 таких чатов (не полные, с дырами или отстающие), самые активные первыми:
   `{ chatId, title, state, gaps, behind }`.
-- `next` — одна команда, которая улучшит ответ: `<cli> store fetch --all --background`, когда есть нескачанные или
-  отстающие чаты либо список чатов ни разу не получен целиком; `<cli> store fetch <chat>` для одного выбранного чата;
+- `next` — одна команда, которая улучшит ответ: `<cli> messages sync --all --background`, когда есть нескачанные или
+  отстающие чаты либо список чатов ни разу не получен целиком; `<cli> messages sync <chat>` для одного выбранного чата;
   `null`, когда архив держит что может. Чат, скачанный до окна (`--since-time`), остаётся `partial` и `next` не
   вызывает. Агенту: если ничего не найдено, а `next` задан, сначала выполнить его (или спросить владельца).
 - `wordsReady` — реальное состояние word index для любого запроса. Запрос со словами при `false` даёт

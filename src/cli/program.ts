@@ -212,7 +212,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       process.stdout.on("error", pipeError)
       process.stderr.on("error", pipeError)
     }
-    const cooperative = persistent || (path[0] === "store" && path[1] === "fetch")
+    const cooperative = persistent || (path[0] === "messages" && path[1] === "sync")
     if (!cooperative) options.signal?.addEventListener("abort", externalAbort, { once: true })
     if (!cooperative && options.signal?.aborted) {
       externalAbort()

@@ -185,7 +185,7 @@
       "meaning": "show the text above the --photo or --file, not below it"
     },
     "--catch-up": {
-      "meaning": "prepare local search after this fetch"
+      "meaning": "prepare local search after this run"
     },
     "--catch-up-chunks": {
       "meaning": "at most this many local vector chunks",
@@ -652,7 +652,7 @@
       "meaning": "remove without banning; by default a removed person cannot come back by the link"
     },
     "--no-catch-up": {
-      "meaning": "skip local preparation after this fetch"
+      "meaning": "skip local preparation after this run"
     },
     "--no-contacts-only": {
       "meaning": "do not require a contact"
@@ -2806,6 +2806,26 @@
     "messages show": {
       "in": "all"
     },
+    "messages sync": {
+      "in": "all",
+      "options": {
+        "--all": {
+          "in": "all"
+        },
+        "--background": "all",
+        "--catch-up": "all",
+        "--catch-up-chunks": "all",
+        "--catch-up-messages": "all",
+        "--catch-up-time": "all",
+        "--estimate": "all",
+        "--last": "all",
+        "--limit": "all",
+        "--no-catch-up": "all",
+        "--page-size": "all",
+        "--pause": "all",
+        "--since-time": "all"
+      }
+    },
     "messages transcribe": {
       "in": "all",
       "options": {
@@ -3784,26 +3804,6 @@
         "--output": "all",
         "--since-time": "all",
         "--to": "all"
-      }
-    },
-    "store fetch": {
-      "in": "all",
-      "options": {
-        "--all": {
-          "in": "all"
-        },
-        "--background": "all",
-        "--catch-up": "all",
-        "--catch-up-chunks": "all",
-        "--catch-up-messages": "all",
-        "--catch-up-time": "all",
-        "--estimate": "all",
-        "--last": "all",
-        "--limit": "all",
-        "--no-catch-up": "all",
-        "--page-size": "all",
-        "--pause": "all",
-        "--since-time": "all"
       }
     },
     "store gaps": {

@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
+import { currentArgv } from "../../background/renamed-paths.js"
 import { FETCHING, type Fetched, type FetchedAll } from "../../services/archive.js"
 import { momentOf } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
@@ -35,16 +36,16 @@ import { stopOnSignal } from "./patience.js"
  * nothing, and the next run jumps over what is already held. Needs numeric message ids, which order
  * the chat.
  */
-/** How far back `store fetch --all` goes unless told: enough for most searches, bounded for big chats. */
+/** How far back `messages sync --all` goes unless told: enough for most searches, bounded for big chats. */
 const ALL_SINCE = "90d"
 /** What a background `--all` job is listed under; no chat argument is spelled like it. */
 const ALL_CHATS = "--all"
 
-export const fetchCommand = (messenger: Messenger): Command => {
+export const syncCommand = (messenger: Messenger): Command => {
   const fetching = messenger.fetching ?? FETCHING
-  return new Command("fetch")
+  return new Command("sync")
     .description(
-      "fetch a chat's history into the local store, newest first; run it again to continue; --all fetches every chat",
+      "bring a chat's history in the local store up to date, newest first; run it again to continue; --all syncs every chat",
     )
     .argument("[chat]", messenger.chatArgument)
     .option(
@@ -66,8 +67,8 @@ export const fetchCommand = (messenger: Messenger): Command => {
     )
     .option("--since-time <time>", "stop once it reaches messages older than this: ISO 8601, or 2h / 1d ago")
     .option("--last <n>", "stop once the newest n messages are held", wholeNumber)
-    .option("--catch-up", "prepare local search after fetch; overrides searchCatchUp")
-    .option("--no-catch-up", "skip local preparation after this fetch")
+    .option("--catch-up", "prepare local search after this run; overrides searchCatchUp")
+    .option("--no-catch-up", "skip local preparation after this run")
     .option("--catch-up-chunks <n>", "at most this many local vector chunks", wholeNumber)
     .option("--catch-up-messages <n>", "skip a graph rebuild larger than this many messages", wholeNumber)
     .option("--catch-up-time <duration>", "local preparation time budget, 30s by default")
@@ -144,7 +145,7 @@ export const fetchCommand = (messenger: Messenger): Command => {
         context.renderer.result(answer)
         if (answer.missing === null) {
           context.renderer.note(
-            `nothing held of this chat to measure by — \`${messenger.app.command} store fetch ${chat} --limit ${pageSize}\` gives the estimate something to go on`,
+            `nothing held of this chat to measure by — \`${messenger.app.command} messages sync ${chat} --limit ${pageSize}\` gives the estimate something to go on`,
           )
         } else if (answer.missing > 0) context.renderer.note("an estimate: provider waits (FloodWait) come on top")
         return
@@ -215,13 +216,13 @@ export const fetchCommand = (messenger: Messenger): Command => {
     })
 }
 
-/** `store jobs`: the background runs `store fetch --background` started. */
+/** `store jobs`: the background runs `messages sync --background` started. */
 export const jobsCommand = (messenger: Messenger): Command => {
-  const command = new Command("jobs").description("background fetch jobs")
+  const command = new Command("jobs").description("background sync jobs")
 
   command
     .command("list")
-    .description("background fetch jobs, newest first")
+    .description("background sync jobs, newest first")
     .addOption(new Option("--state <state>", "only jobs in this state").choices(JOB_STATES))
     .action(function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -231,13 +232,13 @@ export const jobsCommand = (messenger: Messenger): Command => {
       )
       renderList(context.renderer, context.format, jobs.map(brief))
       if (jobs.length === 0)
-        context.renderer.note(`no ${state === undefined ? "" : `${state} `}background fetch jobs for this profile`)
+        context.renderer.note(`no ${state === undefined ? "" : `${state} `}background sync jobs for this profile`)
     })
 
   command
     .command("show")
     .description("one background job — the newest when none is named — and what the store now holds of its chat")
-    .argument("[job]", "the job id `store fetch --background` printed")
+    .argument("[job]", "the job id `messages sync --background` printed")
     .action(async function (this: Command, id: string | undefined) {
       const context = messengerContext(this, messenger)
       const job = findJob(messenger, context, id)
@@ -251,7 +252,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
 
   command
     .command("cancel")
-    .description("stop a running background job after its current page; a later fetch resumes where it stopped")
+    .description("stop a running background job after its current page; a later sync resumes where it stopped")
     .argument("<job>", "the job id")
     .action(function (this: Command, id: string) {
       const context = messengerContext(this, messenger)
@@ -266,7 +267,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
 
   command
     .command("retry")
-    .description("start a partial, failed or died job again, as a new job; the fetch resumes where the store stopped")
+    .description("start a partial, failed or died job again, as a new job; the sync resumes where the store stopped")
     .argument("[job]", "the job id")
     .option("--failed", "every chat whose newest job partial, failed or died")
     .action(function (this: Command, id: string | undefined) {
@@ -338,7 +339,7 @@ const findJob = (messenger: Messenger, context: MessengerContext, id: string | u
   if (!job || job.profile !== context.profile) {
     throw new CliError(
       "not_found",
-      id === undefined ? "no background fetch jobs for this profile" : `no fetch job ${id} for this profile`,
+      id === undefined ? "no background sync jobs for this profile" : `no sync job ${id} for this profile`,
     )
   }
   return job
@@ -372,8 +373,8 @@ const fetchArgv = (
 ): string[] => {
   const { timeout } = command.optsWithGlobals<{ timeout?: string }>()
   return [
-    "store",
-    "fetch",
+    "messages",
+    "sync",
     chat,
     "--limit",
     String(limit),
@@ -443,7 +444,7 @@ const launchJob = (
 
 /** A job recorded before it kept its argv: what it did keep, the pause and window back at their defaults. */
 const argvOf = (command: Command, messenger: Messenger, job: Job): string[] => {
-  if (job.argv) return job.argv
+  if (job.argv) return currentArgv(job.argv)
   const fetching = messenger.fetching ?? FETCHING
   return fetchArgv(command, {
     chat: job.chat,

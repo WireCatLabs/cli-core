@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { join } from "node:path"
 import { CliError, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
+import { currentArgv } from "./renamed-paths.js"
 import type { ServerSystem } from "./system.js"
 
 /** Minutes between runs, a daily local time, or one local moment. */
@@ -341,7 +342,7 @@ export const runSchedule = async (
   const agent = schedule.kind === "agent"
   const output = join(runs, `${stamp}.${agent ? "md" : "log"}`)
   const log = agent ? join(runs, `${stamp}.log`) : output
-  const [program = "", ...args] = agent ? schedule.argv : [...system.entry, ...schedule.argv]
+  const [program = "", ...args] = agent ? schedule.argv : [...system.entry, ...currentArgv(schedule.argv)]
   const childEnv = {
     ...env,
     ...schedule.environment,

@@ -289,7 +289,7 @@ option both call the existing `searchAll`. No meeting reference resolver or vect
 `searchServer` (`src/services/server-search.ts`): it turns the resolved query into at most three
 server queries (required words, one chat, one sender, dates), calls the optional `MessageSearch`
 capability under a time bound, looks up which hits the store already held, and saves the rest with
-`via: "search"` — never `markRange`, so ranges and coverage stay what `store fetch` proved. The strict
+`via: "search"` — never `markRange`, so ranges and coverage stay what `messages sync` proved. The strict
 local query then runs once over everything; `server` restricts it to the returned messages
 (`QueryExecution.only`). A page that arrives after the bound is dropped unsaved. The step is not wrapped
 by `stored`, because it must look before it saves.
@@ -456,7 +456,7 @@ command and `since` in a tool.
 `--offline`, and never connects; writes still do. `serve` keeps the store filled, so such a read
 warns on stderr when no `serve` holds the profile, and a chat with nothing stored is `not_found`.
 `inbox` and `review` read the stored chats and messages through `storeReader`, the same code over
-an `InboxReader`, so their `--json` is the online one; `store fetch` refuses for now. The MCP chat
+an `InboxReader`, so their `--json` is the online one; `messages sync` refuses for now. The MCP chat
 resource reads the store too, and so does an MCP tool with a `served` body: it gets the services
 over the store and reaches the session's connection only through `connect`, for transcription.
 
@@ -516,7 +516,7 @@ synthetic MCP proof are tested here; installed consumer parity is not claimed be
 
 ## Bounded preparation after history fetch
 
-Per-profile `searchCatchUp` defaults to false; store fetch can override it with --catch-up or
+Per-profile `searchCatchUp` defaults to false; messages sync can override it with --catch-up or
 --no-catch-up. The fetched chat alone is prepared with500chunks,10,000messages and30seconds by
 default. Explicit budgets have hard caps. Invalid permissions/bounds refuse before connection;
 missing local e5 keeps graph-only progress, without downloading a model or using a remote provider.

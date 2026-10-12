@@ -168,7 +168,7 @@ describe("stats chats show", () => {
 
     expect(stats.complete).toBe(false)
     expect(stats.completeness.state).toBe("unknown")
-    expect(stats.fetch).toBe("chat store fetch 7")
+    expect(stats.fetch).toBe("chat messages sync 7")
   })
 
   it("says the counts are lower bounds when the messenger stopped reading joins early", async () => {

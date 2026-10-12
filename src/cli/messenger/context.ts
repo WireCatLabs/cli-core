@@ -45,7 +45,7 @@ export interface Fetching {
   pause: string
   /** Each wait drawn between `pause` and twice that, as a person scrolls rather than a clock. */
   jitter?: boolean
-  /** `store fetch` takes this many pages' worth of messages when `--limit` is not given. */
+  /** `messages sync` takes this many pages' worth of messages when `--limit` is not given. */
   maxPages: number
   /**
    * What a held stretch is keyed by: the message id, or its send time where ids pass 2^53 and do
@@ -139,7 +139,7 @@ export interface Messenger {
    * unset, the store applies Telegram's rule.
    */
   deletedWithoutChat?: DeletionScope
-  /** How `store fetch` reads this messenger's history, where Telegram's defaults do not fit it. */
+  /** How `messages sync` reads this messenger's history, where Telegram's defaults do not fit it. */
   fetching?: Fetching
   /**
    * Where `chats`, `messages list|context` and `contacts` read from. `store` is for a messenger that

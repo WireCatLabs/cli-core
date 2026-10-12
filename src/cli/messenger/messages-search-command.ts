@@ -80,7 +80,7 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
     .addHelpText(
       "after",
       `Search reads the local archive: a chat never fetched is not searched. Prepare it once with
-\`${messenger.app.command} store fetch --all --background\` (the last 90 days of every chat); the answer's
+\`${messenger.app.command} messages sync --all --background\` (the last 90 days of every chat); the answer's
 coverage says what was searched and coverage.next what would improve it. Mail is \`${messenger.app.command} search mail\`;
 everything at once is \`${messenger.app.command} search all\`.
 Search guide: https://github.com/WireCatLabs/cli-messaging/blob/main/docs/search/query-language.md`,
@@ -227,7 +227,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     if (summary) context.renderer.note(summary)
     else if (!found.coverage && chats > 0) {
       context.renderer.note(
-        `${chats} of the chats searched are not held in full — \`${command} store fetch <chat>\` fetches one`,
+        `${chats} of the chats searched are not held in full — \`${command} messages sync <chat>\` syncs one`,
       )
     }
     if (kind === "mail" || incomplete.some((chat) => chat.provider === "email")) {

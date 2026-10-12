@@ -134,7 +134,7 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
   }),
   store_jobs_show: tool({
     title: "Show a store job",
-    description: "The selected profile's own fetch/repair job metadata and result, without opening its log.",
+    description: "The selected profile's own sync/repair job metadata and result, without opening its log.",
     input: v.object({ job: v.pipe(v.string(), v.minLength(1)) }),
     annotations: { ...READ, openWorldHint: false },
     local: async (args, defaults) => {
@@ -146,7 +146,7 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
   }),
   store_jobs_list: tool({
     title: "List store jobs",
-    description: "The selected profile's own fetch/repair jobs, newest first.",
+    description: "The selected profile's own sync/repair jobs, newest first.",
     input: v.object({ limit: count(100), page: count(10_000) }),
     annotations: { ...READ, openWorldHint: false },
     local: async (args, defaults) => {

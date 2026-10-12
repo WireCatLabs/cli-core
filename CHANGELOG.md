@@ -6,6 +6,10 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Changed — may break callers
+
+- `store fetch` is now `messages sync` (owner, 2026-10-12): same arguments, options, output and permission key (`messages`). `store fetch` stops working. A background job or a schedule saved with `store fetch` runs as `messages sync`, so `store jobs retry` and `schedule exec` keep working. Help hints, the parity manifest and the option catalogue name the new path. `bot store fetch` keeps its name for now.
+
 ### Added
 
 - A fact's and a memory's `author`, and a proposed action's `proposedBy`, carry `name`: the bot's handle for an agent, `null` for a person — the shape the agent log's `actor` already had.
