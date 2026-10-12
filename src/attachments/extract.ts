@@ -1,14 +1,15 @@
 import { readFileSync } from "node:fs"
-import { dirname, extname, join } from "node:path"
+import { basename, dirname, extname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type { ActionableError } from "../cli/recovery.js"
 import { ReaderLimit, readContainer } from "./container.js"
-import { type CellSpan, delimitedSpans } from "./csv-spans.js"
+import { delimitedSpans } from "./csv-spans.js"
 import { documentKind, readDocument } from "./documents.js"
 import { decodeText } from "./encoding.js"
 import { attachmentMaxBytes, MAX_TEXT_CHARS } from "./limits.js"
 import { htmlText, rtfText } from "./markup.js"
+import { sheetText } from "./sheets.js"
 
 export { MAX_FILE_BYTES, MAX_TEXT_CHARS } from "./limits.js"
 
@@ -31,7 +32,6 @@ export type Extraction =
       pages?: number
       ocrPages?: number
       spans?: { page: number; start: number; end: number }[]
-      cells?: CellSpan[]
       truncated?: boolean
     }
   /** No text layer: a scan, a photo. An agent reads it and writes the text back. */
@@ -48,6 +48,19 @@ export interface FileHint {
   path: string
 }
 
+const DELIMITED: Record<string, string> = {
+  ".csv": ",",
+  ".tsv": "\t",
+  "text/csv": ",",
+  "text/tab-separated-values": "\t",
+}
+const MAX_DELIMITED_CELLS = 200_000
+const unquoted = (field: string) => {
+  const trimmed = field.trim()
+  return trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')
+    ? trimmed.slice(1, -1).replaceAll('""', '"')
+    : field
+}
 const PLAIN = new Set([".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".log"])
 const IMAGES = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".tif", ".tiff", ".bmp"])
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -237,12 +250,23 @@ export const extractText = async (
     return derived(bytes, "html:v1", htmlText)
   if (PLAIN.has(extension) || hint.mime?.startsWith("text/") || hint.mime === "application/json") {
     const result = plain(bytes)
-    if (result.status !== "extracted" || ![".csv", ".tsv"].includes(extension)) return result
+    const delimiter = DELIMITED[extension] ?? DELIMITED[hint.mime?.split(";")[0]?.trim() ?? ""]
+    if (result.status !== "extracted" || !delimiter) return result
+    const extractor = `sheet:v1:${delimiter === "," ? "csv" : "tsv"}`
     try {
-      const spans = delimitedSpans(result.text, extension === ".csv" ? "," : "\t")
-      return { ...result, cells: spans.cells, ...(spans.truncated ? { truncated: true } : {}) }
+      const spans = delimitedSpans(result.text, delimiter, MAX_DELIMITED_CELLS)
+      const cells = spans.cells.map(({ row, column, start, end }) => ({
+        row,
+        column,
+        value: unquoted(result.text.slice(start, end)),
+      }))
+      const name = basename(hint.name ?? hint.path, extension) || "Sheet"
+      const { text, truncated } = sheetText([{ name, cells }])
+      return text === ""
+        ? { status: "needs-agent", extractor }
+        : { status: "extracted", text, extractor, ...(truncated || spans.truncated ? { truncated: true } : {}) }
     } catch {
-      return { status: "unreadable", extractor: "plain", error: "malformed_delimited_text" }
+      return { status: "unreadable", extractor, error: "malformed_delimited_text" }
     }
   }
   if (hint.kind === "photo" || hint.mime?.startsWith("image/") || IMAGES.has(extension))

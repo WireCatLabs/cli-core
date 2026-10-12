@@ -81,21 +81,37 @@ describe("reading the text layer of a file", () => {
     expect(destroy).toHaveBeenCalledOnce()
     expect(read).not.toHaveBeenCalled()
   })
-  it("preserves spreadsheet cell addresses and PDF page spans", async () => {
+  it("**reads a workbook row by row under its header, values as displayed**, and PDF page spans", async () => {
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet("Synthetic Budget")
-    sheet.getCell("A1").value = "Synthetic invoice"
-    sheet.getCell("B2").value = 42
+    sheet.addRow(["Item", "Amount", "Paid", "Share"])
+    sheet.addRow(["Rent", 1200, new Date(Date.UTC(2026, 2, 1)), 0.25])
+    sheet.addRow(["Heron food", 0.1 + 0.2, undefined, undefined])
+    sheet.getCell("D2").numFmt = "0%"
+    sheet.getCell("B4").value = { formula: "B2+B3", result: 1200.3 }
     const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
     const found = await extractText(bytes, hint("budget.xlsx"), importEngine)
     expect(found).toMatchObject({
       status: "extracted",
-      text: expect.stringContaining("A1: Synthetic invoice"),
+      text:
+        "# Synthetic Budget\nRow 2: Item: Rent; Amount: 1200; Paid: 2026-03-01; Share: 25%\n" +
+        "Row 3: Item: Heron food; Amount: 0.3\nRow 4: Amount: 1200.3",
     })
     const pages = await extractText(pdf("Synthetic invoice"), hint("invoice.pdf"), importEngine)
     expect(pages.status === "extracted" && pages.spans).toEqual([
       { page: 1, start: 0, end: "Synthetic invoice".length },
     ])
+  })
+  it("**reads CSV and TSV row by row under their header**", async () => {
+    const csv = text('Name,Note\nAnn,"says ""hi"", twice"\n\nBob,\n')
+    expect(await extractText(csv, hint("people.csv"), importEngine)).toEqual({
+      status: "extracted",
+      text: '# people\nRow 2: Name: Ann; Note: says "hi", twice\nRow 4: Name: Bob',
+      extractor: "sheet:v1:csv",
+    })
+    expect(await extractText(text("a\tb\n1\t2"), hint("t.tsv"), importEngine)).toMatchObject({
+      text: "# t\nRow 2: a: 1; b: 2",
+    })
   })
   it("**reads plain text in UTF-8, with or without a BOM, Cyrillic and Latin alike**", async () => {
     expect(await extractText(text("счёт invoice 42"), hint("notes.txt"), importEngine)).toEqual({
@@ -104,7 +120,9 @@ describe("reading the text layer of a file", () => {
       extractor: "plain",
     })
     const bom = new Uint8Array([0xef, 0xbb, 0xbf, ...text("a,b\nдоговор,1")])
-    expect(await extractText(bom, hint("table.csv"), importEngine)).toMatchObject({ text: "a,b\nдоговор,1" })
+    expect(await extractText(bom, hint("table.csv"), importEngine)).toMatchObject({
+      text: "# table\nRow 2: a: договор; b: 1",
+    })
     expect(
       await extractText(text('{"k":"v"}'), hint("data", { mime: "application/json" }), importEngine),
     ).toMatchObject({

@@ -17,6 +17,15 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 - **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each
   `installed` or `missing`, resolved the way extraction loads them.
 
+### Changed — may break callers
+
+- **Spreadsheets read as rows under their header.** XLSX, ODS, CSV and TSV text is now `# <sheet>` followed by
+  `Row 12: <Header>: <value>; …` lines, with the first all-text row as the header (column letters when there is
+  none), empty cells left out, and dates, percentages and numbers as the sheet shows them. It replaces
+  `A1: value` / `R1C1: value` lines and raw CSV text; the `cells` spans of a CSV extraction are gone. Stored
+  XLSX/ODS text is read again (extractor `document:v2:…`). `sheetText` and `columnName` are exported from
+  `./documents` for callers with their own sheet data.
+
 ### Fixed
 
 - **A file not read for want of an optional package names the package.** The per-file issue from

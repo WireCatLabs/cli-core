@@ -11,6 +11,7 @@ import {
   slideEntries,
 } from "../testing/office-files.js"
 import { readContainer } from "./container.js"
+import { documentExtractor } from "./documents.js"
 import { extractText, importEngine } from "./extract.js"
 
 const hint = (kind: string) => ({ kind: "file", name: `fixture.${kind}`, mime: null, path: `/fixture.${kind}` })
@@ -30,7 +31,7 @@ describe("digital document text", () => {
       })
       expect(await extractText(officeFixture(kind), hint(kind), noEngine)).toMatchObject({
         status: "extracted",
-        extractor: `document:v1:${kind}`,
+        extractor: documentExtractor(kind),
       })
       expect(noEngine).not.toHaveBeenCalled()
     },
@@ -38,20 +39,15 @@ describe("digital document text", () => {
   it("preserves ODT paragraph order, inline text and explicit spaces/tabs", async () => {
     expect(await textOf("odt", odfEntries("odt"))).toBe("Heading\nreaderneedle Привет   world\t42\nnext")
   })
-  it("expands meaningful ODS repeats, skips empty ranges and marks cached formula values", async () => {
+  it("expands meaningful ODS repeats and skips empty ranges, row by row", async () => {
     const text = await textOf("ods", odfEntries("ods"))
-    expect(text).toContain("[Sheet: Budget]")
-    expect(text).toContain("R1C1: cellneedle\nR1C2: cellneedle")
-    expect(text).toContain("R2C2: cellneedle")
-    expect(text).toContain("R2C3: 42 [formula: of:=SUM([.A1:.B1])]")
+    expect(text).toBe(
+      "# Budget\nRow 1: A: cellneedle; B: cellneedle; C: 42\nRow 2: A: cellneedle; B: cellneedle; C: 42",
+    )
   })
-  it("uses workbook order, rich/shared and inline strings, cell references and cached values", async () => {
+  it("uses workbook order, rich/shared and inline strings, a header row and cached values", async () => {
     const text = await textOf("xlsx", sheetEntries())
-    expect(text.indexOf("[Sheet: First]")).toBeLessThan(text.indexOf("[Sheet: Second]"))
-    expect(text).toContain("A1: inline Привет")
-    expect(text).toContain("B7: sharedneedle")
-    expect(text).toContain("C2: 12 [formula: SUM(A1:B1)]")
-    expect(text).toContain("D2:  [formula: 1+1]")
+    expect(text).toBe("# First\nRow 2: C: 12; D: =1+1\n\n# Second\nRow 7: B: sharedneedle")
   })
   it("reads ODP slides in order", async () => {
     expect(await textOf("odp", presentationEntries())).toBe("[Slide 1]\nFirst slideneedle\n\n\n[Slide 2]\nLater слайд")
