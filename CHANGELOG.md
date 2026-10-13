@@ -28,6 +28,8 @@ shape of this file.
 
 ### Added
 
+- `store.catalog` stores file/folder metadata and parent relationships in existing document records. Account-scoped metadata filters, paging and reconciliation preserve indexed content, stable references and owner annotations; no store migration is required.
+
 - **The answer envelope** (`src/cli/envelope.ts`): `listOf` and `itemOf` build `{items, page, next?, missing?}` and
   `{item, next?, missing?}`; `meta` (`run_id`, `duration_ms`) is added in one place for the CLI and MCP.
   `renderAnswer` prints it: the envelope for a machine, the items and a `→` line per next step for a person. A list
@@ -83,8 +85,6 @@ shape of this file.
   one. It is written at the top level of the file and reported as `scope: "defaultProfile"`; `--defaults`,
   `--personal` and `--bot` are refused for it, and so is a process under `<PREFIX>_PROFILE_LOCK`.
   `config show` lists it.
-
-- `store.catalog` stores file/folder metadata and parent relationships in existing document records. Account-scoped metadata filters, paging and reconciliation preserve indexed content, stable references and owner annotations; no store migration is required.
 
 ## 0.261.0 — 13.10.2026
 
