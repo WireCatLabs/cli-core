@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.263.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **An adapter names a provider's refusal `provider_error`** in an error's details, not `providerError`.
