@@ -65,7 +65,7 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 
 1. **cli-messaging (Q2):** Drive document hits in `search all` and `search notes` gain `url` from
    front matter `sourceUrl` and take their time from front matter `modifiedAt`. The fields are
-   [source-everywhere-plan.md](source-everywhere-plan.md), "Fields of a Drive document hit" (its work
+   [source-everywhere-plan.md](source-everywhere-plan.md), "Fields of a document hit" (its work
    item 1). No schema change. Release it together with cm#1017.
 2. **cli-memo:** `memo folders list` shows `google-drive:` folders as drive's, not as "attach me";
    `memo folders attach` refuses them (point 5). Merged in cli-memo#116.
@@ -119,7 +119,7 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 ## Check
 
 - drive test: sync a fixture Google Doc with `MESSAGING_STORE` in the sandbox, then call `searchAll`
-  from cli-messaging. Expect one `note` item with a `document:` reference, the doc's title, its `url`,
+  from cli-messaging. Expect one `document` item with a `document:` reference, the doc's title, its `url`,
   provider `drive` and the profile as `account`.
 - drive test: a profile whose `state.json` names another store file is rebuilt offline from
   snapshots; references point at the new rows; a rebuild cut off halfway completes on the next run.
