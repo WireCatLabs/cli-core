@@ -102,6 +102,13 @@ describe("a chat as Markdown", () => {
     expect(markdown).toContain("**23:58 Olga (owner)**\n## Section\n**rich text**")
   })
 
+  it("quotes a forward longer than a call takes arguments", () => {
+    const long = "line\n".repeat(200_000)
+    const forwardedFrom = { id: "5", senderId: "3", senderName: "Ivan", timestamp: null, text: long, attachments: [] }
+    const markdown = toMarkdown("Chat", [message("1", 0, { forwardedFrom: { ...forwardedFrom, outgoing: false } })])
+    expect(markdown.split("\n> line").length).toBeGreaterThan(200_000)
+  })
+
   it("lists a bot's buttons with their numbers", () => {
     const keyboard = {
       kind: "inline_keyboard",

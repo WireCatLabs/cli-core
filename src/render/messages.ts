@@ -74,10 +74,10 @@ export const renderMessage = (message: Message | MessageHit | WindowedMessage, o
   if (message.replyTo) lines.push(paint("dim", preview("↳", message.replyTo, room, options)))
   if (message.forwardedFrom) {
     lines.push(paint("dim", `↪ ${nameOf(message.forwardedFrom, options)}`))
-    if (message.forwardedFrom.text) lines.push(...body(message.forwardedFrom.text))
+    if (message.forwardedFrom.text) for (const line of body(message.forwardedFrom.text)) lines.push(line)
     lines.push(...attachmentLines(message.forwardedFrom.attachments, paint, options))
   }
-  if (message.text) lines.push(...body(message.text))
+  if (message.text) for (const line of body(message.text)) lines.push(line)
   lines.push(...attachmentLines(message.attachments, paint, options))
   if (message.reactions && message.reactions.total > 0) lines.push(paint("dim", reactionLine(message.reactions)))
   if (message.editedAt) lines.push(paint("dim", `edited ${editedAt(message, options)}`))
