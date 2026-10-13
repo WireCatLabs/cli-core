@@ -2,15 +2,7 @@ import { type Command, InvalidArgumentError, Option } from "commander"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
 import { pull } from "../pull.js"
-import {
-  listed,
-  MeetingError,
-  meetingShow,
-  meetingSummary,
-  meetingsList,
-  meetingsSearch,
-  meetingTranscript,
-} from "../reads.js"
+import { listed, MeetingError, meetingShow, meetingSummary, meetingsList, meetingTranscript } from "../reads.js"
 import { SAVE_HELP } from "../save-hints.js"
 import type { MeetingSource } from "../source.js"
 import type { MeetingStore } from "../store.js"
@@ -125,34 +117,6 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
   )
   output(
     group
-      .command("search")
-      .description("search stored transcripts, chat and summaries")
-      .argument("<query>", "words to find")
-      .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", date)
-      .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", date)
-      .option("--event-id <id>", "only meetings linked to this stored event", integer)
-      .option("--series-id <id>", "only meetings in this stored series", integer)
-      .addHelpText("after", SAVE_HELP),
-  ).action(
-    async (
-      query: string,
-      opts: { sinceTime?: number; untilTime?: number; eventId?: number; seriesId?: number },
-      command: Command,
-    ) => {
-      print(
-        await meetingsSearch(deps.store, query, {
-          accountId: deps.accountId,
-          since: opts.sinceTime,
-          until: opts.untilTime,
-          eventId: opts.eventId,
-          meetingSeriesId: opts.seriesId,
-        }),
-        command,
-      )
-    },
-  )
-  output(
-    group
       .command("people")
       .description("find meeting participants by name or email")
       .argument("<query>", "a name or an email address"),
@@ -198,8 +162,9 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
 }
 
 export {
-  addMeetingHitSearchCommand,
+  addMeetingSearchCommand,
   type MeetingHitSearch,
   type MeetingHitSearchOptions,
+  type MeetingSearchFlags,
   validateMeetingHitSearch,
 } from "./search.js"

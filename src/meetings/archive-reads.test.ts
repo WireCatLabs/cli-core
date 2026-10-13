@@ -238,7 +238,7 @@ it("shares summary/history/export between CLI and MCP and writes files only thro
   await expect(run("meetings", "export", id, "--output", " ")).rejects.toMatchObject({ code: "validation_error" })
 })
 
-it("validates MCP export/history/account filters and passes supported search filters", async () => {
+it("validates MCP export/history/account filters", async () => {
   const { store, second } = await corrected()
   for (const [name, input] of [
     ["meeting_export", { meeting: second.meeting.id, format: "bad" }],
@@ -247,30 +247,4 @@ it("validates MCP export/history/account filters and passes supported search fil
     ["meeting_summary", { meeting: second.meeting.id, account_id: 2 }],
   ] as const)
     expect((await callMeetingTool(store, name, input)).isError).toBe(true)
-  let captured: unknown
-  store.search = async (_query, filter) => {
-    captured = filter
-    return []
-  }
-  const program = new Command().exitOverride()
-  addMeetingCommands(program, { store, accountId: 1, write() {} })
-  await program.parseAsync(
-    [
-      "meetings",
-      "search",
-      "example",
-      "--since-time",
-      "1970-01-01",
-      "--until-time",
-      "1970-01-02",
-      "--event-id",
-      "2",
-      "--series-id",
-      "3",
-    ],
-    { from: "user" },
-  )
-  expect(captured).toEqual({ accountId: 1, since: 0, until: 86400000, eventId: 2, meetingSeriesId: 3 })
-  await callMeetingTool(store, "meetings_search", { query: "example", account_id: 1, event_id: 2, series_id: 3 })
-  expect(captured).toMatchObject({ accountId: 1, eventId: 2, meetingSeriesId: 3 })
 })

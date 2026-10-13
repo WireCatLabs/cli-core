@@ -100,7 +100,14 @@ it("honors none/changed/unknown analyzers, normalizer provenance and cursor bind
   expect((await store.meetings.searchHits("running", { accountId })).items).toHaveLength(2)
   db.prepare("UPDATE store_settings SET value=? WHERE key='searchStemmers'").run('{"latin":"unknown-example"}')
   expect((await store.meetings.searchHits("example", { accountId })).items.length).toBeGreaterThan(0)
-  await expect(store.meetings.indexSearch({ accountId })).rejects.toMatchObject({ code: "configuration_error" })
+  const added = await store.meetings.saveMeeting({
+    ...sampleMeeting(),
+    meeting: { ...sampleMeeting().meeting, accountId, externalId: "unknown-stemmer-occurrence", startedAt: 5000 },
+  })
+  expect((await store.meetings.indexSearch({ accountId })).remaining).toBe(0)
+  const wordsOnly = await store.meetings.searchHits("example", { accountId, meetingId: added.meeting.id })
+  expect(wordsOnly.items.length).toBeGreaterThan(0)
+  expect(wordsOnly.coverage.indexing).toBe("pending")
 })
 it("filters old-producer stale stem matches against current text while advancing scanned candidates", async () => {
   const { store, db, accountId, saved } = await fixture()

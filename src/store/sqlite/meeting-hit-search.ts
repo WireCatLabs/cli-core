@@ -38,6 +38,8 @@ const fingerprint = (query: string, input: MeetingSearchOptions, analyzer: strin
         input.personId ?? null,
         input.projectId ?? null,
         input.tagId ?? null,
+        input.eventId ?? null,
+        input.meetingSeriesId ?? null,
       ]),
     )
     .digest("hex")
@@ -77,7 +79,14 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
       checkMeetingCancelled(input.signal)
       positiveReadInteger(input.accountId, "accountId")
       if (input.meetingId !== undefined) positiveReadInteger(input.meetingId, "meetingId")
-      for (const name of ["participantIdentityId", "personId", "projectId", "tagId"] as const)
+      for (const name of [
+        "participantIdentityId",
+        "personId",
+        "projectId",
+        "tagId",
+        "eventId",
+        "meetingSeriesId",
+      ] as const)
         if (input[name] !== undefined) positiveReadInteger(input[name], name)
       timestamp(input.since)
       timestamp(input.until)
@@ -142,6 +151,14 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         if (input.meetingId !== undefined) {
           clauses.push("m.id=?")
           params.push(input.meetingId)
+        }
+        if (input.eventId !== undefined) {
+          clauses.push("m.event_id=?")
+          params.push(input.eventId)
+        }
+        if (input.meetingSeriesId !== undefined) {
+          clauses.push("m.meeting_series_id=?")
+          params.push(input.meetingSeriesId)
         }
         if (input.since !== undefined) {
           clauses.push("m.started_at>=?")

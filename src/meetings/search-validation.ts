@@ -13,9 +13,15 @@ export const validateMeetingHitSearch = (query: string, options: MeetingHitSearc
     new TextEncoder().encode(query).byteLength > 65536 ||
     !integer(options.limit ?? 100, 1, 1000) ||
     !integer(options.maxReadBytes ?? 4194304, 1, 67108864) ||
-    [options.meetingId, options.participantIdentityId, options.personId, options.projectId, options.tagId].some(
-      (value) => value !== undefined && !integer(value, 1, Number.MAX_SAFE_INTEGER),
-    ) ||
+    [
+      options.meetingId,
+      options.participantIdentityId,
+      options.personId,
+      options.projectId,
+      options.tagId,
+      options.eventId,
+      options.meetingSeriesId,
+    ].some((value) => value !== undefined && !integer(value, 1, Number.MAX_SAFE_INTEGER)) ||
     [options.since, options.until].some(
       (value) => value !== undefined && !integer(value, -8640000000000000, 8640000000000000),
     ) ||

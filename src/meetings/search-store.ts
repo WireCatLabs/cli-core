@@ -11,6 +11,9 @@ export interface MeetingSearchOptions {
   projectId?: number
   /** An explicit meeting label (tag or topic). */
   tagId?: number
+  /** A stored calendar event the meeting is linked to. */
+  eventId?: number
+  meetingSeriesId?: number
   since?: number
   until?: number
   limit?: number

@@ -32,11 +32,6 @@ export function meetingHitIndexOver({ database, now }: StoreContext): MeetingSea
           if (!database.prepare("SELECT 1 FROM accounts WHERE id=?").get(input.accountId))
             throw new CliError("not_found", "Meeting index account not found")
           const state = meetingStemState(database, input.accountId)
-          if (!state.stemmer)
-            throw new CliError(
-              "configuration_error",
-              "Meeting stemmers are unknown; choose supported store stemmers before indexing",
-            )
           const candidates = `WITH current AS (${meetingCurrentIndexRows}), queued AS (${meetingQueuedIndexRows}), candidates AS (SELECT * FROM current WHERE rid>? UNION SELECT * FROM queued)`
           const parameters = [input.accountId, input.accountId, input.accountId, input.accountId, state.through]
           const rows = database
@@ -68,7 +63,7 @@ export function meetingHitIndexOver({ database, now }: StoreContext): MeetingSea
                 throw new CliError("invalid_response", "Stored meeting search text has invalid structured text")
               }
               const normalized = normalize(text)
-              const stemmed = state.stemmer.indexText(meetingStemmableText(text))
+              const stemmed = state.stemmer?.indexText(meetingStemmableText(text))
               if (normalized) add.run(meetingRowid(kind, id), normalized, kind)
               if (stemmed) addStems.run(meetingRowid(kind, id), stemmed, kind)
             }
