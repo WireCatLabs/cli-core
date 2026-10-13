@@ -98,6 +98,14 @@ describe("a plain word searches everywhere", () => {
     expect(ids(await search(store, "chat:1 AND NOT heron"))).toEqual(["5"])
   })
 
+  it("finds a Russian file name whatever its case, й and ё", async () => {
+    const store = await seeded()
+    await store.saveMessages(account, "1", [message("8", "", [{ kind: "document", name: "Мой_ДОГОВОР Ёлка.docx" }])], {
+      via: "history",
+    })
+    for (const word of ["мой", "договор", "ёлка", "елка"]) expect(ids(await search(store, word))).toEqual(["8"])
+  })
+
   it("**ranks a message that says it above a long spreadsheet that repeats it**", async () => {
     const store = await seeded()
     await store.saveMessages(account, "1", [message("9", "", [{ kind: "document", name: "ledger.xlsx" }])], {

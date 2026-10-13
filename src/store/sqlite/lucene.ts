@@ -169,49 +169,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     return automaton
   }
   const fragments = new Map<ResolvedPredicate, Leaf>()
-  const accountScope = () =>
-    combine(
-      execution.accounts.map(({ provider, account }) => ({
-        sql: "ac.provider=? AND ac.external_id=?",
-        params: [provider, account],
-        exact: true,
-      })),
-      "OR",
-    )
-  let names: { message: number; words: string[] }[] | undefined
-  /** Every attachment name in the searched accounts, as words, read once per query. */
-  const attachmentNames = () => {
-    if (names) return names
-    const scope = accountScope()
-    const page = database.prepare(
-      `SELECT att.id AS id, att.attachable_id AS message, att.name AS value FROM attachments att JOIN ${corpus.rows} m ON m.id=att.attachable_id AND att.attachable_type='${corpus.item}' JOIN accounts ac ON ac.id=m.account_id WHERE att.id > ? AND att.name IS NOT NULL AND m.deleted_at IS NULL AND ${scope.sql} ORDER BY att.id LIMIT 5000`,
-    )
-    names = []
-    for (let rows = page.all(0, ...scope.params); rows.length > 0; ) {
-      check()
-      for (const row of rows) {
-        const words = normalize(String(row.value))
-          .split(/[^\p{L}\p{N}]+/u)
-          .filter(Boolean)
-        budget.work += words.length
-        if (budget.work > QUERY_LIMITS.work) exhausted("detector work")
-        names.push({ message: Number(row.message), words })
-      }
-      rows = page.all(Number(rows.at(-1)?.id), ...scope.params)
-    }
-    return names
-  }
-  const namedWith = (text: string): number[] => {
-    const wanted = text.split(/[^\p{L}\p{N}]+/u).filter(Boolean)
-    if (!wanted.length) return []
-    return [
-      ...new Set(
-        attachmentNames()
-          .filter(({ words }) => words.some((_, at) => wanted.every((word, offset) => words[at + offset] === word)))
-          .map(({ message }) => message),
-      ),
-    ]
-  }
+  const namedSql = `SELECT att.attachable_id FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.id IN (SELECT rowid FROM attachment_name_words WHERE attachment_name_words MATCH ?)`
   const attachmentWords = (match: string, which: "file" | "transcript" | "any") => ({
     sql: `SELECT att.attachable_id FROM attachments att WHERE att.attachable_type='${corpus.item}'${which === "any" ? "" : ` AND ${which === "file" ? "NOT " : ""}${SPEECH}`} AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?)`,
     params: [match] as SqlValue[],
@@ -220,10 +178,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   const everywhere = (node: ResolvedPredicate, text: string, fragment: Fragment): Fragment => {
     if (!node.implicit || fragment.sql === "0") return fragment
     const files = attachmentWords(quoted(text), "any")
-    const elsewhere = {
-      sql: `${files.sql} UNION SELECT value FROM json_each(?)`,
-      params: [...files.params, JSON.stringify(namedWith(text))],
-    }
+    const elsewhere = { sql: `${files.sql} UNION ${namedSql}`, params: [...files.params, quoted(text)] }
     return {
       ...fragment,
       sql: `(${fragment.sql} OR m.id IN (${elsewhere.sql}))`,
@@ -676,12 +631,9 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   )
   if (places.length && !execution.newest) {
     ranked.sql.push(
-      `s(id, tier) AS MATERIALIZED (SELECT att.attachable_id, min(CASE WHEN ${SPEECH} THEN 1 ELSE 3 END) FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) GROUP BY att.attachable_id UNION ALL SELECT value, 2 FROM json_each(?))`,
+      `s(id, tier) AS MATERIALIZED (SELECT att.attachable_id, min(CASE WHEN ${SPEECH} THEN 1 ELSE 3 END) FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) GROUP BY att.attachable_id UNION ALL SELECT attachable_id, 2 FROM (${namedSql}))`,
     )
-    ranked.params.push(
-      places.map((text) => quoted(text)).join(" OR "),
-      JSON.stringify([...new Set(places.flatMap((text) => namedWith(text)))]),
-    )
+    ranked.params.push(places.map((text) => quoted(text)).join(" OR "), places.map((text) => quoted(text)).join(" OR "))
   }
   const placeTier = places.length && !execution.newest ? "coalesce((SELECT min(tier) FROM s WHERE s.id=m.id), 4)," : ""
   if (exactTier) {
