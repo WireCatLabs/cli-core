@@ -24,7 +24,8 @@ export interface Memory {
   body: string
   /** What it is about, as a reference; `null` for a general fact. */
   subject: string | null
-  author: { type: Actor["type"]; id: string }
+  /** `name` is a bot's handle; `null` for a person. */
+  author: { type: Actor["type"]; id: string; name: string | null }
   model: string | null
   confidence: number | null
   status: (typeof MEMORY_STATUSES)[number]
@@ -72,6 +73,8 @@ export interface MemoriesStore {
 }
 
 type Row = Record<string, unknown>
+const NAMED =
+  "SELECT m.*, b.name AS author_name FROM memories m LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id"
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
@@ -87,6 +90,12 @@ export const authorActor = (context: StoreContext, author: Author): { actor: Act
     model: author.model === undefined ? null : author.model.trim().slice(0, 200) || null,
   }
 }
+
+export const authorOf = (row: Row): Memory["author"] => ({
+  type: row.author_type as Actor["type"],
+  id: String(row.author_id),
+  name: row.author_name == null ? null : String(row.author_name),
+})
 
 /** Writes `evidence` links from a row to each reference, refusing one the store does not hold. */
 export const linkEvidence = (
@@ -126,7 +135,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       row.subject_type == null
         ? null
         : (referenceOfThing(database, storedThing(row.subject_type, row.subject_id)) ?? null),
-    author: { type: row.author_type as Actor["type"], id: String(row.author_id) },
+    author: authorOf(row),
     model: row.model == null ? null : String(row.model),
     confidence: row.confidence == null ? null : Number(row.confidence),
     status: row.status as Memory["status"],
@@ -140,7 +149,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
   const rowOf = (reference: string): Row => {
     const thing = requiredThing(database, reference.includes(":") ? reference : `memory:${reference}`, "the memory")
     if (thing.type !== "memory") throw new CliError("validation_error", `${reference} is not a memory`)
-    const row = database.prepare("SELECT * FROM memories WHERE id = ?").get(thing.id) as Row
+    const row = database.prepare(`${NAMED} WHERE m.id = ?`).get(thing.id) as Row
     if (row.deleted_at != null) throw new CliError("not_found", `${reference} is a fact now: store.facts holds it`)
     return row
   }
@@ -216,8 +225,9 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
       return database
         .prepare(
-          "SELECT * FROM memories WHERE deleted_at IS NULL AND (? IS NULL OR (subject_type = ? AND subject_id = ?)) AND (? IS NULL OR kind = ?) " +
-            "AND (? IS NULL OR status = ?) AND (? IS NULL OR scope = ?) ORDER BY created_at DESC, id DESC LIMIT ?",
+          `${NAMED} WHERE m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id = ?)) ` +
+            "AND (? IS NULL OR m.kind = ?) AND (? IS NULL OR m.status = ?) AND (? IS NULL OR m.scope = ?) " +
+            "ORDER BY m.created_at DESC, m.id DESC LIMIT ?",
         )
         .all(
           subject?.type ?? null,
@@ -244,7 +254,8 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       const match = `normalized_text : (${words.map((word) => `"${word.replaceAll('"', '""')}"*`).join(" AND ")})`
       return database
         .prepare(
-          "SELECT m.* FROM memory_words w JOIN memories m ON m.id = w.rowid WHERE memory_words MATCH ? " +
+          "SELECT m.*, b.name AS author_name FROM memory_words w JOIN memories m ON m.id = w.rowid " +
+            "LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id WHERE memory_words MATCH ? " +
             "AND m.deleted_at IS NULL AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ?",
         )
         .all(match, scope ?? null, scope ?? null, Math.min(Math.max(limit, 1), 200))
