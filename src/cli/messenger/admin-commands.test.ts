@@ -719,12 +719,33 @@ describe("chats create, join and leave", () => {
     }
 
     const listed = await call(["account", "list", "--json"], offline, env)
+    const named = await call(["work", "account", "list", "--json"], offline, env)
 
     expect(listed.code).toBe(0)
     expect(JSON.parse(listed.stdout[0] ?? "").items).toEqual([
-      { profile: "default", current: true, account: "500", name: "Owner" },
+      { profile: "default", current: false, account: "500", name: "Owner" },
       { profile: "work", current: false, account: "501", name: null },
     ])
+    expect(JSON.parse(named.stdout[0] ?? "").items.map((item: { current: boolean }) => item.current)).toEqual([
+      false,
+      true,
+    ])
+  })
+
+  it("**picks no profile among several** — an account command stops and lists them", async () => {
+    const env = sandbox()
+    rememberAccount(app, "personal", "500", env)
+    rememberAccount(app, "work", "501", env)
+
+    const unnamed = await call(["account", "show", "--json"], base, env)
+    const named = await call(["work", "account", "show", "--json"], base, env)
+
+    expect(unnamed.code).toBe(2)
+    expect(JSON.parse(unnamed.stderr.at(-1) ?? "").error).toMatchObject({
+      code: "validation_error",
+      message: "name a profile: `chat <profile> …` — profiles here: personal, work (or set CHAT_PROFILE)",
+    })
+    expect(named.code).toBe(0)
   })
 
   it("**changes the address book through the guard**, each as its own account action", async () => {

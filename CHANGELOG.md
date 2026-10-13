@@ -8,6 +8,15 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
+- **No profile is picked among several.** When neither the first word, `<PREFIX>_PROFILE`, `defaultProfile`
+  in the config file nor `<PREFIX>_PROFILE_LOCK` names a profile and this computer has two or more (those
+  `account list` shows), a command that uses an account fails with `validation_error`:
+  `name a profile: \`tg <profile> …\` — profiles here: personal, work (or set TG_PROFILE)`. It used to run
+  as `default`. One profile is used on its own; with none the name stays `default`. `account list`,
+  `config show`, `config migrate` and `config set --defaults` still run, and then show no current profile
+  (`profile: null`, `profileFrom: "none named"`). `ResolveOptions.needsProfile: false` and the third
+  argument of `messengerContext` let a tool's own command do the same; `profilesHere` lists the profiles.
+
 - **`search all` answers a required `accounts` field, and a `skipped` entry may carry `source` in place of
   `resource`** (`SearchAllFound`, `SearchAllIncludingMeetingsFound`): a fake that builds the answer adds
   `accounts`, and code reading `skipped[].resource` handles `undefined`.

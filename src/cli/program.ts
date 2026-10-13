@@ -60,7 +60,8 @@ export const createProgram = (
     .description(
       `${app.description}\n\n` +
         `The first word is the profile whenever it is not a command — \`${app.command} personal chats list\`.\n` +
-        `\`${app.envPrefix}_PROFILE\` says the same thing for a whole shell session; without either it is \`default\`.`,
+        `\`${app.envPrefix}_PROFILE\` says the same thing for a whole shell session, and \`defaultProfile\` in the config file for good.\n` +
+        "With none of them, the one profile on this computer is used; with several, the command stops and lists them.",
     )
     .version(app.version, "-V, --version")
     .option(
@@ -312,7 +313,7 @@ const hintFor = ({ app, configuration }: ProgramDefinition, argv: string[], opti
   const env = options.env ?? process.env
   let enabled: boolean
   try {
-    enabled = (configuration ?? settingsFor(app)).resolveSettings({}, { env }).skillHint
+    enabled = (configuration ?? settingsFor(app)).resolveSettings({}, { env, needsProfile: false }).skillHint
   } catch {
     return undefined
   }
@@ -371,7 +372,7 @@ const keepFailure = async (
   try {
     settings = resolveSettings(
       { ...program.opts(), ...(profile === undefined ? {} : { profile }) },
-      { env, kind: path.split(" ")[0] === "bot" ? "bot" : "personal" },
+      { env, kind: path.split(" ")[0] === "bot" ? "bot" : "personal", needsProfile: false },
     )
   } catch {
     // A configuration that will not load is a failure worth keeping too; the flags are all there is to go on.

@@ -15,6 +15,7 @@ import {
 } from "../sends/permissions.js"
 import { type AppIdentity, envName } from "./app.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
+import { profilesHere } from "./messenger/accounts.js"
 import { DEFAULT_PROFILE, usableProfileName } from "./profile.js"
 
 const DEFAULT_LIMIT = DEFAULT_CONFIG.defaults.limit
@@ -241,7 +242,15 @@ export interface ResolveOptions {
   configDir?: string
   /** `personal` unless given. */
   kind?: ProfileKind
+  /**
+   * `false` for a command that touches no account — `account list`, `config show` — so it still runs
+   * when several profiles exist and none is named. Its `profile` is then `default`, from `none named`.
+   */
+  needsProfile?: boolean
 }
+
+/** Where `profile` came from when several profiles exist, none was named, and the command needs none. */
+export const NONE_NAMED = "none named"
 
 /** The first candidate that is set, and which layer it came from. */
 export const first = <T>(candidates: [Source, T | undefined][], fallback: T): { value: T; from: Source } => {
@@ -334,6 +343,22 @@ export const settingsFor = <T extends object = Record<never, never>>(
     return { value: lock, from: PROFILE_LOCK }
   }
 
+  /**
+   * **Nothing named a profile, so none is picked** among several: which account a command speaks
+   * for is the owner's choice. One profile is no choice, and none keeps `default` for the first setup.
+   */
+  const unnamed = (config: Config, env: NodeJS.ProcessEnv, needed: boolean): { value: string; from: Source } => {
+    const here = profilesHere(app, namedProfiles(config), env)
+    if (here.length === 0) return { value: DEFAULT_PROFILE, from: "default" }
+    if (here.length === 1) return { value: here[0] as string, from: "the only profile" }
+    if (!needed) return { value: DEFAULT_PROFILE, from: NONE_NAMED }
+    throw new CliError(
+      "validation_error",
+      `name a profile: \`${app.command} <profile> …\` — profiles here: ${here.join(", ")} (or set ${PROFILE})`,
+      { profiles: here },
+    )
+  }
+
   const resolveSettings = (flags: GlobalFlags = {}, options: ResolveOptions = {}): Settings & T => {
     const env = options.env ?? process.env
     const configPath = configPathFor(options)
@@ -344,16 +369,21 @@ export const settingsFor = <T extends object = Record<never, never>>(
     }
     const config = readConfig(configPath)
 
+    const lock = given(env[PROFILE_LOCK])
+    const named = first<string | undefined>(
+      [
+        ["first word", flags.profile],
+        [PROFILE, given(env[PROFILE])],
+        [extension.sourcePaths ? "config file: defaultProfile" : "config file", config.defaultProfile],
+        [PROFILE_LOCK, lock],
+      ],
+      undefined,
+    )
     const profile = locked(
-      first(
-        [
-          ["first word", flags.profile],
-          [PROFILE, given(env[PROFILE])],
-          [extension.sourcePaths ? "config file: defaultProfile" : "config file", config.defaultProfile],
-        ],
-        DEFAULT_PROFILE,
-      ),
-      given(env[PROFILE_LOCK]),
+      named.value === undefined
+        ? unnamed(config, env, options.needsProfile !== false)
+        : { value: named.value, from: named.from },
+      lock,
     )
     const kind = options.kind ?? "personal"
     const name = usableProfileName(profile.value)

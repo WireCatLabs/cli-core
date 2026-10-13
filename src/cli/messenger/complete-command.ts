@@ -11,7 +11,7 @@ import { envName } from "../app.js"
 import { environmentOf, outputFor } from "../context.js"
 import { commandWords, DEFAULT_PROFILE, liftProfile, rootOf, usableProfileName } from "../profile.js"
 import type { Configuration } from "../settings.js"
-import { recalledAccount } from "./accounts.js"
+import { profilesHere, recalledAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
 
 const SHELLS = ["zsh", "bash", "fish", "powershell"]
@@ -60,9 +60,10 @@ export const completeCommand = (
       const { profile, rest } =
         words.length > 1 ? liftProfile(words, commandWords(root)) : { profile: undefined, rest: words }
       const lock = env[envName(app, "PROFILE_LOCK")]
-      const wanted = profile ?? lock ?? env[envName(app, "PROFILE")] ?? DEFAULT_PROFILE
-      const custom = readable(wanted, lock) ? options.sources?.(wanted, rest, env) : undefined
-      const account = !custom && readable(wanted, lock) ? accountOf(messenger, wanted, env, options) : undefined
+      const wanted = profile ?? lock ?? env[envName(app, "PROFILE")] ?? soleProfile(messenger, config, env)
+      const custom = wanted && readable(wanted, lock) ? options.sources?.(wanted, rest, env) : undefined
+      const account =
+        wanted && !custom && readable(wanted, lock) ? accountOf(messenger, wanted, env, options) : undefined
       const store = account && existsSync(storePath(env)) ? await openStore({ env }).catch(() => undefined) : undefined
       try {
         // Read up front: `suggest` asks its sources synchronously, and the store answers asynchronously.
@@ -131,6 +132,16 @@ const sourcesFrom = (
  */
 const chatSuggestions = (chats: Chat[]): Suggestion[] =>
   chats.map((chat) => ({ value: chat.id, description: singleLine(chat.title ?? "") }))
+
+/** Chat names come from one profile only; among several unnamed ones there is none to take them from. */
+const soleProfile = (
+  messenger: Messenger,
+  config: Pick<Configuration, "configuredProfiles">,
+  env: NodeJS.ProcessEnv,
+): string | undefined => {
+  const here = profilesHere(messenger.app, profileNames(config, env), env)
+  return here.length > 1 ? undefined : (here[0] ?? DEFAULT_PROFILE)
+}
 
 const profileNames = (config: Pick<Configuration, "configuredProfiles">, env: NodeJS.ProcessEnv): string[] => {
   try {

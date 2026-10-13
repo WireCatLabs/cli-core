@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import * as v from "valibot"
@@ -147,6 +147,28 @@ describe("the order a setting is decided in", () => {
 
   it("falls back to `default`, which is what an unconfigured machine has", () => {
     expect(settings().profile).toBe("default")
+  })
+
+  it("**uses the one profile on this computer** when nothing names one, and `default` when there is none", () => {
+    const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
+    expect(settings({}, env)).toMatchObject({ profile: "default", sources: { profile: "default" } })
+
+    withConfig(JSON.stringify({ profiles: { work: {} } }))
+    expect(settings({}, env)).toMatchObject({ profile: "work", sources: { profile: "the only profile" } })
+  })
+
+  it("**refuses to pick among several**, counting logged-in profiles the file does not name", () => {
+    const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
+    withConfig(JSON.stringify({ profiles: { work: {} } }))
+    mkdirSync(join(env.APP_STATE_DIR, "accounts"))
+    writeFileSync(join(env.APP_STATE_DIR, "accounts", "personal.json"), '{"account":"1"}')
+
+    expect(() => settings({}, env)).toThrow("profiles here: personal, work (or set APP_PROFILE)")
+    expect(settings({ profile: "work" }, env).profile).toBe("work")
+    expect(settings({}, { ...env, APP_PROFILE: "personal" }).profile).toBe("personal")
+    expect(resolveSettings({}, { env, configDir, needsProfile: false }).sources.profile).toBe("none named")
+    withConfig(JSON.stringify({ defaultProfile: "work", profiles: { work: {} } }))
+    expect(settings({}, env).profile).toBe("work")
   })
 
   it("reads `APP_PROFILE` as unset when the shell set it to nothing", () => {
@@ -347,7 +369,7 @@ describe("defaults shared by every profile", () => {
     expect(settings({ profile: "work" })).toMatchObject({ limit: 5, record: true })
     expect(settings({ profile: "work" }).sources).toMatchObject({ limit: "config file", record: "config defaults" })
     expect(settings({ limit: 7 }).limit).toBe(7)
-    expect(settings().sources.limit).toBe("config defaults")
+    expect(settings({ profile: "home" }).sources.limit).toBe("config defaults")
   })
 })
 
@@ -421,15 +443,15 @@ describe("a bot's settings", () => {
 
   it("**has no hourly limit** unless the bot section gives it one", () => {
     withConfig(JSON.stringify({ defaults: { sendsPerHour: 10 }, bot: { profiles: { sales: { sendsPerHour: 200 } } } }))
-    expect(bot().sendsPerHour).toBe(Number.POSITIVE_INFINITY)
+    expect(bot({ profile: "news" }).sendsPerHour).toBe(Number.POSITIVE_INFINITY)
     expect(bot({ profile: "sales" }).sendsPerHour).toBe(200)
-    expect(settings().sendsPerHour).toBe(10)
+    expect(settings({ profile: "news" }).sendsPerHour).toBe(10)
   })
 
   it("**reads other bots only when the bot section allows it**", () => {
     withConfig(JSON.stringify({ bot: { profiles: { shop: { readOtherBots: ["news"] } } } }))
     expect(bot({ profile: "shop" }).readOtherBots).toEqual(["news"])
-    expect(bot().readOtherBots).toBe(false)
+    expect(bot({ profile: "news" }).readOtherBots).toBe(false)
     expect(settings({ profile: "shop" }).readOtherBots).toBe(false)
     expect(() =>
       changeSetting(join(configDir, "config.json"), { profile: "shop", setting: "readOtherBots", value: "true" }),
