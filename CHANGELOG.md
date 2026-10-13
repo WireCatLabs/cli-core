@@ -7,10 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-### Fixed
-
-- The opt-in meeting passage CLI uses the shared `--before-n` and `--after-n` count flags; context JSON/MCP retain `before` and `after`.
-
 ## 0.263.0 — 14.10.2026
 
 ### Changed — may break callers
@@ -46,6 +42,10 @@ shape of this file.
   with this package's by `failureContext` and kept by the CLI, MCP and meeting-tool error handlers alike.
 - Bounded transcript search hits carry reusable cue references. The shared context reader selects preceding and following cues in one read snapshot, preserves historical revisions and optional anchor fingerprints, and exposes explicit boundaries and byte clipping.
 - Shared passage formatting provides cited text or Markdown with timestamps, speaker labels, revision and coverage. Hosts can opt into the account-bound `meetings passage` CLI adapter and `meeting_passage` MCP tool; existing installed apps need a producer release and consumer integration.
+
+### Fixed
+
+- The opt-in meeting passage CLI uses the shared `--before-n` and `--after-n` count flags; context JSON/MCP retain `before` and `after`.
 
 ## 0.262.0 — 13.10.2026
 
@@ -83,7 +83,6 @@ shape of this file.
   one. It is written at the top level of the file and reported as `scope: "defaultProfile"`; `--defaults`,
   `--personal` and `--bot` are refused for it, and so is a process under `<PREFIX>_PROFILE_LOCK`.
   `config show` lists it.
-||||||| parent of c12171f6 (feat!: snake_case entity schemas and an app hook for error reasons and details)
 
 - `store.catalog` stores file/folder metadata and parent relationships in existing document records. Account-scoped metadata filters, paging and reconciliation preserve indexed content, stable references and owner annotations; no store migration is required.
 
