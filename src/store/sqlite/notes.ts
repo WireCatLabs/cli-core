@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { MAX_TEXT_CHARS } from "../../attachments/limits.js"
 import { googleDocumentLinks } from "../../domain/google-documents.js"
 import { parseReference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
@@ -402,7 +403,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       inTransaction(() => {
         const folder = Number(folderRow(input.folderId).id)
         const path = textOf(input.path, "a note's path", 4096)
-        const text = textOf(input.text, "a note's text", 200_000, true)
+        const text = textOf(input.text, "a note's text", MAX_TEXT_CHARS, true)
         const frontMatter = input.frontMatter == null ? null : JSON.stringify(input.frontMatter)
         const at = now()
         const found = database

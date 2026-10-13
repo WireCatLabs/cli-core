@@ -29,6 +29,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- A file note keeps up to 2 000 000 characters of text (was 200 000), the same cap as the document readers, so a long spreadsheet or PDF read by them can be saved whole and found by a word anywhere in it. Measured on a generated 2M-character note: saving takes about 50 ms, the first search that indexes it about 0.7 s, later searches 2–3 ms (stemmed) and about 90 ms (exact), and the store grows about 9 MiB.
+
 - **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each
   `installed` or `missing`, resolved the way extraction loads them.
 
@@ -54,6 +56,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   until it does, every item reads `inStore: false`. No migration.
 
 ### Fixed
+
+- Preparing note chunks for embedding builds each note's text once per batch instead of once per chunk; a full pass over a 2M-character note's chunks went from about 186 ms to 37 ms per batch of 8.
 
 - **A file not read for want of an optional package names the package.** The per-file issue from
   `attachments extract` and `messages download --extract` said only "install the required optional reader
