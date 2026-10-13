@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, createRecordLog, type Renderer } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { holdLock, lockPath, releaseLock, takeLock } from "../../background/lock.js"
 import type { ChatKind, Message, MessageEvent } from "../../domain/models.js"
@@ -12,6 +12,8 @@ import { newSendId } from "../../sends/send-id.js"
 import { onlineDeps } from "../../services/deps.js"
 import { servicesFor } from "../../services/index.js"
 import { applyTaskRulesOnArrival, openRequestTask } from "../../services/task-rules.js"
+import { failureKey } from "../failures.js"
+import { currentRun } from "../runs/scope.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 import type { MessengerAdapter } from "./port.js"
@@ -32,7 +34,7 @@ export const serveCommand = (messenger: Messenger): Command => {
   )
 
   command.action(async function (this: Command) {
-    const context = messengerContext(this, messenger)
+    const context = withRecordedDiagnostics(messengerContext(this, messenger), messenger)
     if (context.settings.offline) throw new CliError("validation_error", "serve listens live; --offline cannot")
     const path = lockPath(messenger.app, context.profile, context.env)
     const startedAt = new Date().toISOString()
@@ -110,6 +112,33 @@ export const serveCommand = (messenger: Messenger): Command => {
   })
 
   return command
+}
+
+/**
+ * A serve left running writes its diagnostics to a log file, so off a terminal each one is a log
+ * record with its time and run rather than a bare sentence.
+ */
+const withRecordedDiagnostics = (context: MessengerContext, messenger: Messenger): MessengerContext => {
+  if (context.format === "pretty") return context
+  const resource = { service: messenger.app.command, version: messenger.app.version }
+  const say =
+    (severity: "info" | "warn" | "error", event: string, always = false) =>
+    (message: string) => {
+      if (context.settings.quiet && !always) return
+      const { runId, command } = currentRun()
+      createRecordLog({ to: context.streams.diagnostic, runId, command: command || "serve", resource })[severity](
+        { event },
+        message,
+      )
+    }
+  const renderer: Renderer = {
+    ...context.renderer,
+    note: say("info", "note"),
+    success: say("info", "success"),
+    warn: say("warn", "warning"),
+    failure: say("error", "failure", true),
+  }
+  return { ...context, renderer }
 }
 
 /**
@@ -191,9 +220,7 @@ const replying = (context: MessengerContext, messenger: Messenger, since: number
     arrived: (message: Message) => {
       if (message.outgoing !== false) return
       queue = queue.then(() =>
-        handle(message).catch((error) =>
-          renderer.warn(`a reply rule failed: ${error instanceof Error ? error.message : String(error)}`),
-        ),
+        handle(message).catch((error) => renderer.warn(`a reply rule failed: ${failureKey(error)}`)),
       )
     },
     settled: () => queue,
@@ -218,9 +245,7 @@ const tasking = (context: MessengerContext) => {
             total.added += added
             total.closed += closed
           })
-          .catch((error) =>
-            context.renderer.warn(`a task rule failed: ${error instanceof Error ? error.message : String(error)}`),
-          ),
+          .catch((error) => context.renderer.warn(`a task rule failed: ${failureKey(error)}`)),
       )
     },
     settled: () => queue,

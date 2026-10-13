@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { createFileLogger, type FileLogger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
+import { createRecordLog, type Logger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../app.js"
 
 export type RunStatus = "success" | "failed" | "partial"
@@ -47,6 +47,8 @@ export interface StartRunOptions {
   runsDir: string
   command: string
   profile: string
+  /** The log record's `resource.service`: the program's own name, `tg` or `max`. */
+  service: string
   cliVersion: string
   /** Older runs are removed as this one starts. */
   keepDays?: number
@@ -61,9 +63,9 @@ export interface StartRunOptions {
 export interface Run {
   id: string
   dir: string
-  logger: FileLogger
+  logger: Logger
   /**
-   * Writes the final `run.json` and closes the log. **Must run on every path** — the answer, a
+   * Writes the final `run.json`. **Must run on every path** — the answer, a
    * refusal, a failure before the connection was even open. Safe to call twice.
    */
   finish(status: RunStatus, extra?: Partial<RunMetadata>): Promise<void>
@@ -81,7 +83,7 @@ export const runsDirFor = (app: AppIdentity, env: NodeJS.ProcessEnv = process.en
  * ```text
  * <state dir>/runs/2026-09-20/20260920T084431Z-chats-list-a81f2c/
  *   run.json       what it was, when, which profile, how long, the outcome
- *   events.jsonl   one JSON object per request, written by Pino, no ANSI ever
+ *   events.jsonl   one log record per event (cli-base's `LogRecord`), no ANSI ever
  * ```
  *
  * `run.json` is written **now**, with `status: "running"`, and again by `finish`. A directory
@@ -94,7 +96,7 @@ export const runsDirFor = (app: AppIdentity, env: NodeJS.ProcessEnv = process.en
 export const startRun = (options: StartRunOptions): Run => {
   const now = options.now ?? (() => new Date())
   const startedAt = options.startedAt ?? now()
-  const id = options.runId ?? runId(startedAt, options.command)
+  const id = options.runId ?? newRunId(startedAt, options.command)
   const dir = join(options.runsDir, day(startedAt), id)
 
   // Only while something is being recorded: a tool that is not recording has no business walking
@@ -109,9 +111,11 @@ export const startRun = (options: StartRunOptions): Run => {
   const events = join(dir, "events.jsonl")
   writeFileSync(events, "", { flag: "a", mode: 0o600 })
 
-  const file = createFileLogger({
-    path: events,
-    base: { runId: id, command: options.command, profile: options.profile },
+  const file = createRecordLog({
+    to: events,
+    runId: id,
+    command: options.command,
+    resource: { service: options.service, version: options.cliVersion },
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   })
   const operations = new Set<string>()
@@ -124,12 +128,11 @@ export const startRun = (options: StartRunOptions): Run => {
       for (const value of [errorCode, code]) if (typeof value === "string") codes.add(value)
       write(event, message)
     }
-  const logger: FileLogger = {
+  const logger: Logger = {
     debug: noted(file.debug),
     info: noted(file.info),
     warn: noted(file.warn),
     error: noted(file.error),
-    close: file.close,
   }
 
   const metadata: RunMetadata = {
@@ -165,10 +168,6 @@ export const startRun = (options: StartRunOptions): Run => {
         operations: [...operations].sort(),
         codes: [...codes].sort(),
       })
-
-      // Pino writes through a plain append stream, and a process that exits before it flushes
-      // loses the tail — which is exactly the run somebody wanted to read.
-      await logger.close()
     },
   }
 }
@@ -179,7 +178,7 @@ export const runtime = (): string => {
 }
 
 /** `20260920T084431Z-chats-list-a81f2c` — sortable, and readable without opening it. */
-const runId = (startedAt: Date, command: string): string => {
+export const newRunId = (startedAt: Date, command: string): string => {
   const stamp = startedAt
     .toISOString()
     .replace(/[-:]/g, "")
@@ -257,7 +256,10 @@ export const findRun = (runsDir: string, id: string): { dir: string; metadata: R
   return undefined
 }
 
-/** The events of one run, in the order they happened. A line that will not parse is skipped. */
+/**
+ * The events of one run, in the order they happened: each record's `attributes` with its `time` and
+ * `severity` beside them. A line that will not parse is skipped.
+ */
 export const readEvents = (dir: string): Record<string, unknown>[] => {
   let raw: string
   try {
@@ -271,13 +273,20 @@ export const readEvents = (dir: string): Record<string, unknown>[] => {
     if (line.trim() === "") continue
     try {
       const parsed: unknown = JSON.parse(line)
-      if (parsed !== null && typeof parsed === "object") events.push(parsed as Record<string, unknown>)
+      if (parsed !== null && typeof parsed === "object") events.push(eventOf(parsed as Record<string, unknown>))
     } catch {
       // A half-written last line is what a killed process leaves behind. The rest of the file is
       // still the run somebody wants to read.
     }
   }
   return events
+}
+
+/** A run kept before records were written holds the event's fields at the top of each line. */
+const eventOf = (line: Record<string, unknown>): Record<string, unknown> => {
+  const { attributes, time, severity } = line
+  if (attributes === null || typeof attributes !== "object") return line
+  return { time, severity, ...(attributes as Record<string, unknown>) }
 }
 
 /**

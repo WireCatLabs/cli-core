@@ -1,4 +1,5 @@
 import type { MessageStore } from "../../store/store.js"
+import { failureKey } from "../failures.js"
 
 export const STEMS_EVERY_MS = 30_000
 export const STEMS_SLICE_MS = 2_000
@@ -44,7 +45,7 @@ export const stemFills = ({
   const tick = () => {
     slice = fillOnce()
       .catch((error) => {
-        warn(`the stems were not filled: ${error instanceof Error ? error.message : String(error)}`)
+        warn(`the stems were not filled: ${failureKey(error)}`)
         return true
       })
       .then((more) => {

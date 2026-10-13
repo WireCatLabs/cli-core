@@ -15,6 +15,7 @@ it("exposes diagnostic search through MCP for the selected profile only", async 
       runsDir: runsDirFor(app, env),
       profile,
       command: "messages download",
+      service: "tg",
       cliVersion: app.version,
     })
     await run.finish("failed", { errorCode: "rate_limited" })

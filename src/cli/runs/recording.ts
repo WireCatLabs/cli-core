@@ -2,7 +2,8 @@ import { processStreams, type RenderFormat, type Streams } from "@wirecat/cli-ba
 import type { AppIdentity } from "../app.js"
 import { isCliFailure } from "../failures.js"
 import { type DiagnosticEvent, type EventSink, providerErrorKey, renderEvent } from "./events.js"
-import { type Run, runsDirFor, startRun } from "./run.js"
+import { newRunId, type Run, runsDirFor, startRun } from "./run.js"
+import { inRun } from "./scope.js"
 
 export interface RecordingOptions {
   app: AppIdentity
@@ -32,7 +33,7 @@ export interface RecordingOptions {
 export const recorded = async <T>(options: RecordingOptions, body: (events: EventSink) => Promise<T>): Promise<T> => {
   const recording = startRecording(options)
   try {
-    const answer = await body(recording.events)
+    const answer = await inRun({ runId: recording.runId, command: options.command }, () => body(recording.events))
     await recording.succeed(answer)
     return answer
   } catch (error) {
@@ -42,6 +43,8 @@ export const recorded = async <T>(options: RecordingOptions, body: (events: Even
 }
 
 export interface Recording {
+  /** Given now, before the run is kept or not, so whatever the command writes can name it. */
+  runId: string
   events: EventSink
   succeed: (answer?: unknown) => Promise<void>
   /** Marks the error as dealt with, so the program's last catch does not keep it a second time. */
@@ -52,12 +55,16 @@ export interface Recording {
 export const startRecording = (options: RecordingOptions): Recording => {
   const streams = options.streams ?? processStreams
   const now = options.now ?? (() => new Date())
+  const startedAt = now()
+  const runId = newRunId(startedAt, options.command)
 
   const open = (extra: { startedAt?: Date } = {}): Run =>
     startRun({
       runsDir: options.runsDir ?? runsDirFor(options.app, options.env),
+      runId,
       command: options.command,
       profile: options.profile,
+      service: options.app.command,
       cliVersion: options.app.version,
       // The operation has happened or is under way, and failing the command now invites a retry
       // that sends twice.
@@ -70,16 +77,15 @@ export const startRecording = (options: RecordingOptions): Recording => {
       ...extra,
     })
 
-  const run = options.record ? open() : undefined
+  const run = options.record ? open({ startedAt }) : undefined
   // Unrecorded, the newest events are held until the outcome is known, so a failure can still be kept.
   const held: DiagnosticEvent[] | undefined = !run && options.keepFailed ? [] : undefined
-  const startedAt = now()
   let requests = 0
 
   const events: EventSink = (event) => {
     if (event.event === "request") requests += 1
     if (options.trace) streams.diagnostic(options.format === "pretty" ? renderEvent(event) : JSON.stringify(event))
-    run?.logger.info(event)
+    if (run) logEvent(run, event)
     if (held) {
       held.push(event)
       if (held.length > HELD_AT_MOST) held.shift()
@@ -87,6 +93,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
   }
 
   return {
+    runId,
     events,
     succeed: async (answer) => {
       const partial = partialOutcome(answer)
@@ -96,7 +103,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
     fail: async (error) => {
       const failed = run ?? (held ? keep(open({ startedAt }), held) : undefined)
       if (failed) {
-        if (!isCliFailure(error)) failed.logger.info(crashOf(error))
+        if (!isCliFailure(error)) failed.logger.error(crashOf(error))
         await failed.finish("failed", {
           requests,
           ...outcomeOf(error),
@@ -116,8 +123,14 @@ export const wasSettled = (error: unknown): boolean => typeof error === "object"
 const HELD_AT_MOST = 500
 
 const keep = (run: Run, events: DiagnosticEvent[]): Run => {
-  for (const event of events) run.logger.info(event)
+  for (const event of events) logEvent(run, event)
   return run
+}
+
+const logEvent = (run: Run, event: DiagnosticEvent): void => {
+  if (event.event === "warning") run.logger.warn(event)
+  else if (event.event !== "cache" && event.outcome === "error") run.logger.error(event)
+  else run.logger.info(event)
 }
 
 const outcomeOf = (error: unknown): { errorCode: string; providerError?: string } => {

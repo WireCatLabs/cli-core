@@ -19,3 +19,7 @@ export const isCommanderFailure = (value: unknown): value is Error & { code: str
     value instanceof Error && typeof code === "string" && code.startsWith("commander.") && typeof exitCode === "number"
   )
 }
+
+/** What failed, never what it said: a messenger's refusal can quote the message back. */
+export const failureKey = (error: unknown): string =>
+  isCliFailure(error) ? error.code : error instanceof Error ? error.name : "error"

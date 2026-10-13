@@ -1,7 +1,9 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { resolvePaths } from "@wirecat/cli-base"
+import type { LogRecord } from "@wirecat/cli-base/standards"
 import type { AppIdentity } from "../cli/app.js"
+import { currentRun } from "../cli/runs/scope.js"
 import type { Id } from "../domain/models.js"
 import { withFileLock } from "./file-lock.js"
 
@@ -116,8 +118,16 @@ export interface SendEntry {
 export const sendsPathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
   join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "sends", `${profile}.jsonl`)
 
+/**
+ * One log record per line (cli-base's `LogRecord`): the entry's `at` is the record's `time`, the rest
+ * its `attributes`, and the run that wrote it its `runId`. A refusal or a failure is a `warn`.
+ */
 export class SendJournal {
-  constructor(readonly path: string) {}
+  constructor(
+    readonly path: string,
+    /** Who writes: the program's name and version. Only a reader may leave it out. */
+    private readonly resource: LogRecord["resource"] = { service: "unknown", version: "unknown" },
+  ) {}
 
   /**
    * Runs `body` with the journal to itself, across processes: two sends at the limit must not both
@@ -128,8 +138,19 @@ export class SendJournal {
   }
 
   append(entry: SendEntry): void {
+    const { at, ...attributes } = entry
+    const { runId, command } = currentRun()
+    const record: LogRecord = {
+      time: at,
+      severity: entry.outcome === "sent" || entry.outcome === "reserved" ? "info" : "warn",
+      body: entry.kind ?? "message",
+      runId,
+      command,
+      attributes,
+      resource: this.resource,
+    }
     mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 })
-    appendFileSync(this.path, `${JSON.stringify(entry)}\n`, { mode: 0o600 })
+    appendFileSync(this.path, `${JSON.stringify(record)}\n`, { mode: 0o600 })
   }
 
   /**
@@ -157,13 +178,20 @@ export class SendJournal {
       .filter((line) => line.trim() !== "")
       .flatMap((line) => {
         try {
-          return [JSON.parse(line) as SendEntry]
+          return [entryOf(JSON.parse(line) as SendEntry | LogRecord)]
         } catch {
           return []
         }
       })
   }
 }
+
+/**
+ * The guard counts every line toward the hourly limit, so a line written before the journal held
+ * records — flat, with `at` — still counts.
+ */
+const entryOf = (line: SendEntry | LogRecord): SendEntry =>
+  "attributes" in line ? ({ at: line.time, ...line.attributes } as SendEntry) : line
 
 /** max-cli wrote the send identity as a number called `cid` before it was shared; read both. */
 const withSendId = (entry: SendEntry & { cid?: number }): SendEntry => {
