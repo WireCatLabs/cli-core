@@ -1,7 +1,9 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { parseLucene } from "@wirecat/cli-base/query"
 import { afterEach, expect, it } from "vitest"
+import { searchNotesQuery } from "../services/notes-search.js"
 import type { CatalogInput } from "./sqlite/catalog.js"
 import { type MessageStore, openStore } from "./store.js"
 
@@ -164,4 +166,48 @@ it("rejects malformed runtime inputs before changing existing content", async ()
     await expect(store.catalog.upsert(account, [input as unknown as CatalogInput])).rejects.toThrow("catalog")
   }
   expect((await store.catalog.list(account)).items).toEqual([])
+})
+
+it("preserves catalog metadata when a reader replaces extracted metadata and sections", async () => {
+  const { store, account } = await setup()
+  await store.catalog.upsert(account, [file()])
+  await store.notes.saveFileNote({
+    folderId: account,
+    path: "item.md",
+    title: "New",
+    text: "source",
+    metadata: { site: "Example" },
+  })
+  expect((await store.catalog.get(account, "item.md"))?.metadata).toEqual({ version: "one" })
+  await store.catalog.upsert(account, [{ ...file(), name: "Another" }])
+  const found = await searchNotesQuery(store, {
+    text: "site:example",
+    limit: 10,
+    timezone: "UTC",
+    folderIds: [account],
+  })
+  expect(found.items.map((hit) => hit.note.ref)).toEqual([(await store.catalog.get(account, "item.md"))?.ref])
+})
+
+it("compiles shared metadata queries in SQL with boolean logic, literal values and observed actors", async () => {
+  const { store, account } = await setup()
+  await store.catalog.upsert(account, [
+    file("a.md"),
+    { ...file("b.md"), name: "Résumé archive", kind: "folder", actors: [] },
+  ])
+  const get = async (query: string) =>
+    (await store.catalog.list(account, { ast: parseLucene(query, { defaultField: "text" }) })).items.map(
+      (e) => e.externalId,
+    )
+  expect(await get("budget AND person:Rin*")).toEqual(["a.md"])
+  expect(await get('mime:"text/plain" AND NOT kind:folder')).toEqual(["a.md"])
+  expect(await get("name:Resume*")).toEqual(["b.md"])
+  expect(await get("kind:folder OR person:editor-id")).toEqual(["a.md", "b.md"])
+  expect(await get('person:"Rin Example"')).toEqual(["a.md"])
+  expect(await get("parent:root.md AND text:archive")).toEqual(["b.md"])
+  const ref = (await store.catalog.get(account, "a.md"))?.ref ?? ""
+  await store.knowledge.addTags(null, { type: "document", id: ref.slice("document:".length) }, ["work"])
+  expect(await get("tag:work")).toEqual(["a.md"])
+  await expect(get("unknown:value")).rejects.toThrow()
+  await expect(get("kind:invalid")).rejects.toThrow()
 })

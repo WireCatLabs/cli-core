@@ -1,8 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
+import { defineQuery, type Predicate, type QueryAst, validateQuery, walkQuery } from "@wirecat/cli-base/query"
 import { normalizeTag } from "../../domain/tags.js"
+import type { SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
 import { atomic } from "./atomic.js"
 import type { StoreContext } from "./open.js"
+import { type ColumnMap, queryFilter } from "./query-filter.js"
 import { canonicalTagNamed } from "./tags.js"
 
 export interface CatalogActor {
@@ -32,7 +35,39 @@ export interface CatalogEntry extends CatalogInput {
   active: boolean
   content: "metadata" | "indexed" | "unreadable"
 }
+export const CATALOG_QUERY = defineQuery({
+  entity: "document",
+  backend: "sql",
+  fields: [
+    {
+      name: "text",
+      type: "txt",
+      operators: ["term", "phrase"],
+      example: "text:budget",
+      relation: "names, descriptions and MIME types",
+    },
+    { name: "name", type: "kw", operators: ["term", "phrase", "wildcard"], example: "name:Budget*" },
+    { name: "kind", type: "enum", values: ["file", "folder"], operators: ["term"], example: "kind:folder" },
+    { name: "mime", type: "kw", operators: ["term", "phrase", "wildcard"], example: 'mime:"application/pdf"' },
+    {
+      name: "parent",
+      type: "kw",
+      operators: ["term"],
+      example: "parent:root.md",
+      relation: "a direct parent external ID",
+    },
+    {
+      name: "person",
+      type: "kw",
+      operators: ["term", "phrase", "wildcard"],
+      example: "person:Rin*",
+      relation: "an observed owner/editor name, email or ID",
+    },
+    { name: "tag", type: "kw", operators: ["term", "phrase"], example: "tag:follow-up", relation: "a local owner tag" },
+  ],
+})
 export interface CatalogQuery {
+  ast?: QueryAst
   parent?: string
   kind?: CatalogInput["kind"]
   mime?: string
@@ -60,6 +95,7 @@ const objectOf = (value: unknown): Record<string, unknown> => {
 interface Stored extends CatalogInput {
   active: boolean
   observedAt: string
+  folded?: { name: string; text: string; people: string[] }
 }
 const field = (value: string, max = 4000) => {
   if (typeof value !== "string" || !value || value.length > max)
@@ -79,9 +115,10 @@ const entryOf = (row: Row): CatalogEntry => {
   const data = stored(row)
   if (!data) throw new CliError("invalid_response", "document has no catalog metadata")
   const front = row.front_matter == null ? {} : JSON.parse(String(row.front_matter))
+  const { folded: _folded, ...entry } = data
   return {
-    ...data,
-    name: String(row.title ?? data.name),
+    ...entry,
+    name: data.name,
     ref: `document:${row.id}`,
     content: data.kind === "folder" || !row.has_body ? "metadata" : front.notRead ? "unreadable" : "indexed",
   }
@@ -92,24 +129,17 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
       throw new CliError("not_found", "catalog account is not in the local store")
     return Number(id)
   }
-  const rows = (id: number) => {
+  const bound = (id: number, includeInactive = false) => {
+    const scope =
+      "account_id = ? AND json_type(metadata, '$.catalog') = 'object'" +
+      (includeInactive ? "" : " AND json_extract(metadata, '$.catalog.active') = 1 AND deleted_at IS NULL")
     const budget = database
-      .prepare(
-        "SELECT sum(length(metadata)) AS bytes FROM documents WHERE account_id = ? AND json_type(metadata, '$.catalog') = 'object'",
-      )
+      .prepare(`SELECT count(*) AS entries, sum(length(metadata)) AS bytes FROM documents WHERE ${scope}`)
       .get(id)
     if (Number(budget?.bytes ?? 0) > 32 * 1024 * 1024)
       throw new CliError("validation_error", "catalog scope exceeds its metadata budget")
-    return database
-      .prepare(
-        "SELECT id, external_id, title, front_matter, metadata, deleted_at, body IS NOT NULL AS has_body FROM documents WHERE account_id = ? AND json_type(metadata, '$.catalog') = 'object' ORDER BY external_id LIMIT 10001",
-      )
-      .all(id)
-  }
-  const list = (id: number) => {
-    const found = rows(id)
-    if (found.length > 10000) throw new CliError("validation_error", "catalog scope exceeds 10000 entries")
-    return found
+    if (Number(budget?.entries ?? 0) > 10000)
+      throw new CliError("validation_error", "catalog scope exceeds 10000 entries")
   }
   return {
     upsert: async (accountId, inputs) => {
@@ -160,7 +190,20 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
             .prepare("SELECT *, body IS NOT NULL AS has_body FROM documents WHERE account_id = ? AND external_id = ?")
             .get(id, input.externalId)
           const metadata = objectOf(before?.metadata)
-          metadata.catalog = { ...input, active: true, observedAt: new Date(at).toISOString() }
+          metadata.catalog = {
+            ...input,
+            active: true,
+            observedAt: new Date(at).toISOString(),
+            folded: {
+              name: fold(input.name),
+              text: fold([input.name, input.description, input.mime].filter(Boolean).join(" ")),
+              people: (input.actors ?? []).flatMap((actor) =>
+                [actor.id, actor.email, actor.name]
+                  .filter((value): value is string => typeof value === "string")
+                  .map(fold),
+              ),
+            },
+          }
           if (before?.deleted_at != null)
             database
               .prepare("UPDATE documents SET deleted_at=NULL, body=NULL, content_hash=NULL, extraction=NULL WHERE id=?")
@@ -210,21 +253,17 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
     reconcile: async (accountId, externalIds) => {
       const id = account(accountId)
       if (externalIds.length > 10000) throw new CliError("validation_error", "catalog scope exceeds 10000 entries")
-      const current = new Set(externalIds.map((key) => field(key)))
-      return atomic(database, () => {
-        let retired = 0
-        for (const row of list(id)) {
-          const data = stored(row)
-          if (!data?.active || current.has(String(row.external_id))) continue
-          const metadata = objectOf(row.metadata)
-          metadata.catalog = { ...data, active: false }
+      const current = [...new Set(externalIds.map((key) => field(key)))]
+      return atomic(
+        database,
+        () =>
           database
-            .prepare("UPDATE documents SET metadata = ? WHERE id = ?")
-            .run(JSON.stringify(metadata), Number(row.id))
-          retired++
-        }
-        return retired
-      })
+            .prepare(
+              "UPDATE documents SET metadata=json_set(metadata, '$.catalog.active', json('false')) WHERE account_id=? AND json_type(metadata, '$.catalog')='object' AND json_extract(metadata, '$.catalog.active')=1" +
+                (current.length ? " AND external_id NOT IN (SELECT value FROM json_each(?))" : ""),
+            )
+            .run(...(current.length ? [id, JSON.stringify(current)] : [id])).changes,
+      )
     },
     get: async (accountId, externalId, includeInactive = false) => {
       const id = account(accountId)
@@ -241,40 +280,70 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
       const offset = query.offset ?? 0
       if (!Number.isInteger(limit) || limit < 1 || limit > 1000 || !Number.isInteger(offset) || offset < 0)
         throw new CliError("validation_error", "invalid catalog page bounds")
-      const search = query.search === undefined ? undefined : fold(query.search)
-      const person = query.person === undefined ? undefined : fold(query.person)
-      const tag =
-        query.tag === undefined ? undefined : (canonicalTagNamed(database, query.tag)?.name ?? normalizeTag(query.tag))
-      const matches = list(id).filter((row) => {
-        const data = stored(row) as Stored
-        if (!query.includeInactive && (!data.active || row.deleted_at != null)) return false
-        if (query.parent !== undefined && !data.parents.includes(query.parent)) return false
-        if (query.kind !== undefined && data.kind !== query.kind) return false
-        if (query.mime !== undefined && data.mime !== query.mime) return false
-        if (
-          search !== undefined &&
-          !fold([row.title, data.description, data.mime].filter(Boolean).join(" ")).includes(search)
+      const clauses: string[] = ["d.account_id=?", "json_type(d.metadata, '$.catalog')='object'"]
+      const params: SqlValue[] = [id]
+      if (!query.includeInactive) clauses.push("json_extract(d.metadata, '$.catalog.active')=1", "d.deleted_at IS NULL")
+      const add = (sql: string, ...values: SqlValue[]) => {
+        clauses.push(sql)
+        params.push(...values)
+      }
+      const actorSql = "json_each(d.metadata, '$.catalog.folded.people')"
+      const tagSql =
+        "SELECT 1 FROM taggings g JOIN tags t ON t.id=g.tag_id WHERE g.taggable_type='document' AND g.taggable_id=d.id AND t.name=?"
+      const tag = (name: string) => canonicalTagNamed(database, name)?.name ?? normalizeTag(name)
+      if (query.parent !== undefined)
+        add("EXISTS(SELECT 1 FROM json_each(d.metadata, '$.catalog.parents') WHERE value=?)", query.parent)
+      if (query.kind !== undefined) add("json_extract(d.metadata, '$.catalog.kind')=?", query.kind)
+      if (query.mime !== undefined) add("json_extract(d.metadata, '$.catalog.mime')=?", query.mime)
+      if (query.search !== undefined)
+        add("instr(json_extract(d.metadata, '$.catalog.folded.text'), ?)>0", fold(query.search))
+      if (query.person !== undefined)
+        add(`EXISTS(SELECT 1 FROM ${actorSql} WHERE instr(value, ?)>0)`, fold(query.person))
+      if (query.tag !== undefined) add(`EXISTS(${tagSql})`, tag(query.tag))
+      if (query.ast !== undefined) {
+        const ast = structuredClone(validateQuery(query.ast, CATALOG_QUERY))
+        for (const node of walkQuery(ast.root))
+          if (["text", "name", "person"].includes(node.field)) node.value = fold(node.value)
+        const person = (node: Predicate) => ({
+          sql: `EXISTS(SELECT 1 FROM ${actorSql} WHERE value ${node.operator === "wildcard" ? "LIKE ? ESCAPE '\\'" : "=?"})`,
+          params: [
+            node.operator === "wildcard"
+              ? node.value
+                  .replace(/[\\%_]/gu, "\\$&")
+                  .replaceAll("*", "%")
+                  .replaceAll("?", "_")
+              : node.value,
+          ],
+        })
+        const columns: ColumnMap = {
+          name: { type: "kw", sql: "json_extract(d.metadata, '$.catalog.folded.name')" },
+          mime: { type: "kw", sql: "json_extract(d.metadata, '$.catalog.mime')" },
+          kind: { type: "enum", sql: "json_extract(d.metadata, '$.catalog.kind')" },
+          text: {
+            where: (node) => ({
+              sql: "instr(json_extract(d.metadata, '$.catalog.folded.text'), ?)>0",
+              params: [node.value],
+            }),
+          },
+          parent: {
+            where: (node) => ({
+              sql: "EXISTS(SELECT 1 FROM json_each(d.metadata, '$.catalog.parents') WHERE value=?)",
+              params: [node.value],
+            }),
+          },
+          person: { where: person },
+          tag: { where: (node) => ({ sql: `EXISTS(${tagSql})`, params: [tag(node.value)] }) },
+        }
+        const compiled = queryFilter(ast, columns)
+        if (compiled.sql) add(compiled.sql, ...compiled.params)
+      }
+      bound(id, query.includeInactive)
+      const found = database
+        .prepare(
+          `SELECT d.id, d.external_id, d.title, d.front_matter, d.metadata, d.deleted_at, d.body IS NOT NULL AS has_body FROM documents d WHERE ${clauses.join(" AND ")} ORDER BY d.external_id LIMIT ? OFFSET ?`,
         )
-          return false
-        if (
-          person !== undefined &&
-          !(data.actors ?? []).some((actor) =>
-            [actor.id, actor.email, actor.name].some((value) => value && fold(value).includes(person)),
-          )
-        )
-          return false
-        if (
-          tag !== undefined &&
-          !database
-            .prepare(
-              "SELECT 1 FROM taggings g JOIN tags t ON t.id=g.tag_id WHERE g.taggable_type='document' AND g.taggable_id=? AND t.name=?",
-            )
-            .get(Number(row.id), tag)
-        )
-          return false
-        return true
-      })
-      return { items: matches.slice(offset, offset + limit).map(entryOf), hasMore: matches.length > offset + limit }
+        .all(...params, limit + 1, offset)
+      return { items: found.slice(0, limit).map(entryOf), hasMore: found.length > limit }
     },
   }
 }
