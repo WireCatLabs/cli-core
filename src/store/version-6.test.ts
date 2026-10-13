@@ -32,7 +32,7 @@ it("rewrites the query trees of saved searches and runs stored before version 6,
     ["words", text],
   ] as const)
     insert.run(name, record.command, record.params, record.language, record.version, record.fieldsVersion)
-  old.exec("DELETE FROM schema_migrations WHERE version = 6")
+  old.exec("DELETE FROM schema_migrations WHERE version >= 6")
   old.close()
 
   const upgraded = await openStore({ path })

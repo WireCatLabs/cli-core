@@ -370,6 +370,9 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--before-n` | `<n>` | count | how many messages before it | messages |
 | `--after-n` | `<n>` | count | how many messages after it | messages |
 | `--timeout` | `<duration>` | duration | give up after this long |  |
+| `--account` | `<account>` | string | the account to use; never assumed |  |
+| `--provider` | `<provider>` | choice | read every account of this provider |  |
+| `--source` | `<accounts>` | list | what to read: provider:account, a provider, a kind or group:<name>; comma-separated |  |
 | `--dry-run` |  | switch | judge and plan; do nothing |  |
 | `--debug` |  | switch | on failure, show the full error record: cause and stack |  |
 
@@ -390,6 +393,11 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `faulty-help-example-parameters` | high | command | an example starts with the tool, runs its own command, and gives only arguments and options it takes |
 | `missing-argument-help` | high | argument | every argument is described |
 | `missing-option-help` | high | option | every option is described |
+| `key-casing` | high | key | every key of a registered JSON Schema and of the commands document is snake_case |
+| `filter-flag` | high | option | a command that changes nothing filters with its query, not with a flag named after a field of its entity |
+| `option-role` | high | option | every option has a role in the vocabulary; a filter has none, it is a query field |
+| `list-without-query` | medium | command | a list that answers with an entity takes a query over that entity's fields |
+| `query-example` | high | command | every query field's example, and every default term, parses and validates |
 
 <!-- lint rules: end -->
 
@@ -856,7 +864,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
    id is in the send journal.
 3. **A one-thing view answers the object itself** (`account show`, `store info`).
 4. **An error is one JSON object on stderr** in the machine modes —
-   `{ "error": { "code", "reason", "message", "param"?, "details"?, "next"?, "runId"? } }`, the same
+   `{ "error": { "code", "reason", "message", "param"?, "details"?, "next"?, "run_id"? } }`, the same
    object MCP answers with `isError` — stdout stays empty, and the exit code says which kind of
    failure it was. `reason` is a registered id (`query.too-large`, `src/cli/reasons.ts`, or the code's
    own from cli-base); branch on `code` and `reason`, never on `message`. `details` holds only

@@ -338,30 +338,30 @@ enum или unsupported сочетание дают ошибку, а не пус
 
 | Поле | Тип | Значения / нормализация | Пример | Поддержка |
 |---|---|---|---|---|
-| `text` | tokens | Snowball 3.1.1 by script (Cyrillic, Latin; the store's searchStemmers), then v1 | `invoice` | term, phrase, wildcard, regex |
-| `exact` | tokens | NFKD/marks/NFC/lowercase v1 | `exact:invoice` | term, phrase, wildcard, regex |
-| `body` | keyword | raw, case-sensitive | `body:/.*invoice.*/` | term, phrase, wildcard, regex |
-| `from` | person | account-scoped resolution | `from:"Alice Synthetic"` | term, phrase |
-| `to` | person | account-scoped resolution; mail only | `to:"Alice Synthetic"` | term, phrase |
-| `cc` | person | account-scoped resolution; mail only | `cc:"Alice Synthetic"` | term, phrase |
-| `bcc` | person | account-scoped resolution; mail only | `bcc:"Alice Synthetic"` | term, phrase |
-| `subject` | text | every word, folded as text is; mail only | `subject:"quarterly planning"` | term, phrase |
-| `mailbox` | keyword | a folder or label by its id or name, ASCII case folded; mail only | `mailbox:INBOX OR mailbox:"[Gmail]/Sent Mail"` | term, phrase |
-| `label` | keyword | the same as mailbox:; mail only | `label:Projects` | term, phrase |
+| `text` | txt | Snowball 3.1.1 by script (Cyrillic, Latin; the store's searchStemmers), then v1 | `invoice` | term, phrase, wildcard, regex |
+| `exact` | txt | NFKD/marks/NFC/lowercase v1 | `exact:invoice` | term, phrase, wildcard, regex |
+| `body` | txt | raw, case-sensitive | `body:/.*invoice.*/` | term, phrase, wildcard, regex |
+| `from` | kw | account-scoped resolution | `from:"Alice Synthetic"` | term, phrase |
+| `to` | kw | account-scoped resolution; mail only | `to:"Alice Synthetic"` | term, phrase |
+| `cc` | kw | account-scoped resolution; mail only | `cc:"Alice Synthetic"` | term, phrase |
+| `bcc` | kw | account-scoped resolution; mail only | `bcc:"Alice Synthetic"` | term, phrase |
+| `subject` | txt | every word, folded as text is; mail only | `subject:"quarterly planning"` | term, phrase |
+| `mailbox` | kw | a folder or label by its id or name, ASCII case folded; mail only | `mailbox:INBOX OR mailbox:"[Gmail]/Sent Mail"` | term, phrase |
+| `label` | kw | the same as mailbox:; mail only | `label:Projects` | term, phrase |
 | `is` | enum | unread, read, starred | `is:unread` | term, phrase |
-| `chat` | chat | account-scoped resolution | `chat:"Work fixture"` | term, phrase |
-| `date` | timestamp | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
+| `chat` | kw | account-scoped resolution | `chat:"Work fixture"` | term, phrase |
+| `date` | time | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
 | `kind` | enum | private, saved, bot, service, group, channel, unknown | `kind:private` | term, phrase |
 | `has` | enum | text, attachment, link, file, photo, image, video, audio, voice, sticker, contact, location, poll | `has:file` | term, phrase |
-| `topic` | id | string id, one chat required | `chat:7 AND topic:42` | term, phrase |
-| `in` | source | lowercase provider/account class | `in:bots` | term, phrase |
+| `topic` | kw | string id, one chat required | `chat:7 AND topic:42` | term, phrase |
+| `in` | kw | lowercase provider/account class | `in:bots` | term, phrase |
 | `preset` | enum | password, code, api-key, secret, card, bank, passport, phone, email, telegram-link, url, contact, location | `preset:secret` | term, phrase |
-| `filename` | keyword | NFKD/marks/NFC/lowercase v1, whole name | `filename:*.pdf` | term, phrase, wildcard, regex |
-| `mime` | keyword | lowercase; a value without / matches the first part; only where the messenger reports a type | `mime:"application/pdf" OR mime:image` | term, phrase, wildcard |
-| `size` | bytes | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
-| `content` | tokens | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase |
-| `transcript` | tokens | NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed | `transcript:invoice` | term, phrase |
-| `tag` | local-tag | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase |
+| `filename` | kw | NFKD/marks/NFC/lowercase v1, whole name | `filename:*.pdf` | term, phrase, wildcard, regex |
+| `mime` | kw | lowercase; a value without / matches the first part; only where the messenger reports a type | `mime:"application/pdf" OR mime:image` | term, phrase, wildcard |
+| `size` | kw | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
+| `content` | txt | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase |
+| `transcript` | txt | NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed | `transcript:invoice` | term, phrase |
+| `tag` | kw | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase |
 
 <!-- fields: end -->
 
