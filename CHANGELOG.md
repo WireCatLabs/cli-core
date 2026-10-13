@@ -8,6 +8,20 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
+- **A bare search word looks everywhere a message holds words:** its text, a voice note's transcript, a word of
+  a file's name and a file's text (owner, 2026-10-13). Each hit says where (`matchedIn`: `text`, `transcript`,
+  `filename`, `file`) and its `excerpt` comes from there. Hits with the word in the text rank first, then
+  transcripts, file names and file text, so a long spreadsheet does not crowd out messages. `text:` keeps
+  the old meaning. `content:` now means file text only; transcripts moved to the new `transcript:` field.
+  The legacy language and `--backend` server search still read message text only.
+- **Store version 5:** a word index of file names (`attachment_name_words`), filled once on upgrade from the
+  names already stored. Older builds still open it; its triggers keep the index current.
+- **Spreadsheets read as rows under their header.** XLSX, ODS, CSV and TSV text is now `# <sheet>` followed by
+  `Row 12: <Header>: <value>; …` lines, with the first all-text row as the header (column letters when there is
+  none), empty cells left out, and dates, percentages and numbers as the sheet shows them. It replaces
+  `A1: value` / `R1C1: value` lines and raw CSV text; the `cells` spans of a CSV extraction are gone. Stored
+  XLSX/ODS text is read again (extractor `document:v2:…`). `sheetText` and `columnName` are exported from
+  `./documents` for callers with their own sheet data.
 - **No profile is assumed.** When neither the first word, `<PREFIX>_PROFILE`, `defaultProfile` in the config
   file nor `<PREFIX>_PROFILE_LOCK` names a profile, a command that uses an account fails with `validation_error`
   (exit 2) instead of running as `default` — also with a single profile, and also `setup` on a new computer.
