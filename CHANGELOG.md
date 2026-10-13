@@ -23,6 +23,12 @@ shape of this file.
   missing picture model is a `missing` entry `pictures` with a `models.download-image` step, in place of
   `picturesSkipped`.
 
+### Fixed
+
+- **Search, `inbox`, `review` and a person's context work on a store with very many chats.** The chat-coverage
+  check built one SQL parameter per chat and failed past 32,766 chats, and several steps passed every chat as
+  function arguments, which Node refuses past about 125,000. Both now read any number of chats.
+
 ## 0.265.0 — 14.10.2026
 
 ### Changed — may break callers

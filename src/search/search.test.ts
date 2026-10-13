@@ -135,6 +135,11 @@ describe("completeness", () => {
     expect((await store.chatCompleteness(ME, ["1"]))[0]).toMatchObject({ state: "partial", gaps: true })
   })
 
+  it("**answers for more chats than SQLite takes parameters**", async () => {
+    const many = Array.from({ length: 200_000 }, (_, at) => `missing-${at}`)
+    expect((await store.chatCompleteness(ME, [...many, "1"])).map(({ chatId }) => chatId)).toEqual(["1"])
+  })
+
   it("**stops counting a start mark once older messages are held**, so a wrong mark heals with the next fetch", async () => {
     const chat = { id: "40", title: "Marked", kind: "group" as const, unreadCount: 0, lastMessageAt: null }
     await store.saveChats(ME, [{ ...chat, participantsCount: null }])
