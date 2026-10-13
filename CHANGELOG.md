@@ -29,6 +29,9 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each
+  `installed` or `missing`, resolved the way extraction loads them.
+
 - **`search all --source <accounts>`** (MCP `search_all` `source`): the same list `search messages` takes —
   `provider:account` as a hit shows it, a provider, a kind or `group:<name>`. Each resource reads the accounts of
   its kind, a resource the list names none of is in `skipped` (`--source names no notes account`), an entry
@@ -51,6 +54,10 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   until it does, every item reads `inStore: false`. No migration.
 
 ### Fixed
+
+- **A file not read for want of an optional package names the package.** The per-file issue from
+  `attachments extract` and `messages download --extract` said only "install the required optional reader
+  package"; it now names it and the global npm install line.
 
 - **The local speech engine no longer writes to stdout.** sherpa-onnx's WebAssembly printed its own logs
   (`circular-buffer.cc … Overflow! … No data loss!`) straight to file descriptor 1, ahead of the `--json` answer of
