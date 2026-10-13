@@ -5,6 +5,7 @@ import { elements, ReaderLimit, readContainer, xmlPart } from "./container.js"
 import type { Extraction, FileHint } from "./extract.js"
 
 import { MAX_TEXT_CHARS as MAX_TEXT } from "./limits.js"
+import { type Sheet, type SheetCell, sheetText } from "./sheets.js"
 
 const OFFICE = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
 const TEXT = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
@@ -37,7 +38,9 @@ export const documentKind = (hint: FileHint): DocumentKind | undefined => {
     (kind) => kind === extension || TYPES[kind] === hint.mime?.split(";")[0]?.trim().toLowerCase(),
   )
 }
-export const documentExtractor = (kind: DocumentKind) => `document:v1:${kind}`
+/** v2 for spreadsheets: rows under their header instead of one line per cell, so older text is read again. */
+export const documentExtractor = (kind: DocumentKind) =>
+  `document:${kind === "xlsx" || kind === "ods" ? "v2" : "v1"}:${kind}`
 
 class Output {
   readonly parts: string[] = []
@@ -153,7 +156,11 @@ const odfParagraphs = (node: Node): Element[] => {
   visit(node)
   return result
 }
-const readOdf = (archive: Map<string, Uint8Array>, kind: "odt" | "ods" | "odp", output: Output) => {
+const readOdf = (
+  archive: Map<string, Uint8Array>,
+  kind: "odt" | "ods" | "odp",
+  output: Output,
+): Sheet[] | undefined => {
   if (new TextDecoder().decode(archive.get("mimetype")) !== TYPES[kind]) throw new Error("wrong_format")
   const document = xmlPart(archive, "content.xml")
   rootIs(document, "document-content", [OFFICE])
@@ -166,17 +173,22 @@ const readOdf = (archive: Map<string, Uint8Array>, kind: "odt" | "ods" | "odp", 
   if (body.length !== 1) throw new Error("wrong_format")
   if (kind === "odt") {
     for (const paragraph of odfParagraphs(body[0] as Element)) output.add(`${odfText(paragraph)}\n`)
-    return
+    return undefined
   }
   if (kind === "odp") {
     elements(body[0] as Element, "page", ODF_DRAW).forEach((page, index) => {
       output.section(`Slide ${index + 1}`)
       for (const paragraph of odfParagraphs(page)) output.add(`${odfText(paragraph)}\n`)
     })
-    return
+    return undefined
   }
-  for (const sheet of elements(body[0] as Element, "table", TABLE)) {
-    output.section(`Sheet: ${required(attribute(sheet, "name", TABLE))}`)
+  return readOds(body[0] as Element)
+}
+
+const readOds = (body: Element): Sheet[] =>
+  elements(body, "table", TABLE).map((sheet) => {
+    const cells: SheetCell[] = []
+    let chars = 0
     let rowNumber = 1
     for (const row of elements(sheet, "table-row", TABLE)) {
       const repeatedRows = count(attribute(row, "number-rows-repeated", TABLE))
@@ -191,37 +203,81 @@ const readOdf = (archive: Map<string, Uint8Array>, kind: "odt" | "ods" | "odp", 
           continue
         const cell = child as Element
         const repeats = count(attribute(cell, "number-columns-repeated", TABLE))
-        const paragraphs = odfParagraphs(cell).map(odfText).join("\n")
+        // The paragraphs are the value as displayed; the attributes stand in when a cell has none.
         const value =
-          paragraphs ||
+          odfParagraphs(cell).map(odfText).join("\n") ||
           attribute(cell, "string-value", OFFICE) ||
           attribute(cell, "value", OFFICE) ||
           attribute(cell, "date-value", OFFICE) ||
           attribute(cell, "time-value", OFFICE) ||
           attribute(cell, "boolean-value", OFFICE)
-        const formula = attribute(cell, "formula", TABLE)
-        if (value || formula)
-          values.push({ column, repeats, value: `${value}${formula ? ` [formula: ${formula}]` : ""}` })
+        if (value) values.push({ column, repeats, value })
         column += repeats
       }
-      if (values.length) {
-        for (let repeat = 0; repeat < repeatedRows; repeat++) {
-          for (const cell of values) {
-            if (cell.repeats * repeatedRows * (cell.value.length + 5) > MAX_TEXT) throw new ReaderLimit()
-            for (let offset = 0; offset < cell.repeats; offset++)
-              output.add(`R${rowNumber + repeat}C${cell.column + offset}: ${cell.value}\n`)
-          }
-        }
+      for (const cell of values) {
+        chars += cell.repeats * repeatedRows * (cell.value.length + 5)
+        if (chars > MAX_TEXT) throw new ReaderLimit()
+        for (let repeat = 0; repeat < repeatedRows; repeat++)
+          for (let offset = 0; offset < cell.repeats; offset++)
+            cells.push({ row: rowNumber + repeat, column: cell.column + offset, value: cell.value })
       }
       rowNumber += repeatedRows
     }
-  }
+    return { name: required(attribute(sheet, "name", TABLE)), cells }
+  })
+
+/** Built-in number formats that show a date or a time (ECMA-376 §18.8.30). */
+const DATE_FORMATS = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47])
+const PERCENT_FORMATS = new Set([9, 10])
+
+/** For each cell style: how its numbers are displayed. */
+const numberFormats = (archive: Map<string, Uint8Array>, path: string | undefined, namespace: string) => {
+  if (!path) return []
+  const styles = xmlPart(archive, path)
+  const custom = new Map(
+    elements(styles, "numFmt", namespace).map((format) => [
+      Number(attribute(format, "numFmtId")),
+      attribute(format, "formatCode"),
+    ]),
+  )
+  const formats = elements(styles, "cellXfs", namespace)[0]
+  return (formats ? elements(formats, "xf", namespace) : []).map((xf): "date" | "time" | "percent" | "number" => {
+    const id = Number(attribute(xf, "numFmtId"))
+    const code = (custom.get(id) ?? "").replace(/"[^"]*"|\[[^\]]*\]|\\./g, "")
+    if (DATE_FORMATS.has(id) || /[dy]/i.test(code)) return id >= 18 && id <= 21 ? "time" : "date"
+    if (/[hs]/i.test(code)) return "time"
+    if (PERCENT_FORMATS.has(id) || code.includes("%")) return "percent"
+    return "number"
+  })
 }
 
-const readSheet = (archive: Map<string, Uint8Array>, output: Output) => {
+const plainNumber = (value: number) => String(Number(value.toPrecision(15)))
+
+/** A stored number as the sheet shows it: serial days as an ISO date, a fraction as a percentage. */
+const displayed = (saved: string, format: "date" | "time" | "percent" | "number", base1904: boolean) => {
+  const value = Number(saved)
+  if (saved === "" || !Number.isFinite(value)) return saved
+  if (format === "percent") return `${plainNumber(value * 100)}%`
+  if (format === "number") return plainNumber(value)
+  const days = value + (base1904 ? 1462 : 0)
+  const iso = new Date(Date.UTC(1899, 11, 30) + Math.round(days * 86_400_000)).toISOString()
+  if (format === "time" && value < 1) return iso.slice(11, 19)
+  return Number.isInteger(value) ? iso.slice(0, 10) : `${iso.slice(0, 10)} ${iso.slice(11, 19)}`
+}
+
+const cellAddress = (reference: string) => {
+  const match = /^([A-Z]{1,3})([1-9]\d{0,6})$/.exec(reference)
+  if (!match) throw new Error("invalid_cell")
+  const column = [...(match[1] as string)].reduce((sum, letter) => sum * 26 + letter.charCodeAt(0) - 64, 0)
+  return { row: Number(match[2]), column }
+}
+
+const readSheet = (archive: Map<string, Uint8Array>): Sheet[] => {
   const path = mainPart(archive, `${TYPES.xlsx}.main+xml`)
   const document = xmlPart(archive, path)
   const namespace = rootIs(document, "workbook", [SHEET, "http://purl.oclc.org/ooxml/spreadsheetml/main"])
+  const properties = elements(document, "workbookPr", namespace)[0]
+  const base1904 = properties !== undefined && ["1", "true"].includes(attribute(properties, "date1904"))
   const rels = relationships(archive, path)
   const shared = [...rels.values()].find((entry) => entry.type.endsWith("/sharedStrings"))
   const strings = shared
@@ -231,15 +287,19 @@ const readSheet = (archive: Map<string, Uint8Array>, output: Output) => {
           .join(""),
       )
     : []
-  for (const sheet of elements(document, "sheet", namespace)) {
-    output.section(`Sheet: ${required(attribute(sheet, "name"))}`)
+  const formats = numberFormats(
+    archive,
+    [...rels.values()].find((entry) => entry.type.endsWith("/styles"))?.path,
+    namespace,
+  )
+  return elements(document, "sheet", namespace).map((sheet) => {
     const relationship = rels.get(relationId(sheet))
     if (!relationship?.type.endsWith("/worksheet")) throw new Error("missing_sheet")
     const worksheet = xmlPart(archive, relationship.path)
     rootIs(worksheet, "worksheet", [namespace])
+    const cells: SheetCell[] = []
     for (const cell of elements(worksheet, "c", namespace)) {
-      const reference = required(attribute(cell, "r"))
-      if (!/^[A-Z]+[1-9]\d*$/.test(reference)) throw new Error("invalid_cell")
+      const { row, column } = cellAddress(required(attribute(cell, "r")))
       const type = attribute(cell, "t")
       const saved = elements(cell, "v", namespace)[0]?.textContent ?? ""
       let value =
@@ -251,11 +311,14 @@ const readSheet = (archive: Map<string, Uint8Array>, output: Output) => {
       if (type === "s") {
         if (!/^\d+$/.test(saved) || strings[Number(saved)] === undefined) throw new Error("missing_shared_string")
         value = strings[Number(saved)] as string
-      }
+      } else if (type === "" || type === "n") {
+        value = displayed(saved, formats[Number(attribute(cell, "s") || 0)] ?? "number", base1904)
+      } else if (type === "b") value = saved === "1" ? "TRUE" : saved === "0" ? "FALSE" : saved
       const formula = elements(cell, "f", namespace)[0]?.textContent
-      if (value || formula) output.add(`${reference}: ${value}${formula ? ` [formula: ${formula}]` : ""}\n`)
+      cells.push({ row, column, value: value || (formula ? `=${formula}` : "") })
     }
-  }
+    return { name: required(attribute(sheet, "name")), cells }
+  })
 }
 const drawingText = (node: Node, namespace: string): string => {
   if (node.nodeType === 1 && node.namespaceURI === namespace) {
@@ -336,10 +399,21 @@ export const readDocument = async (
   try {
     const archive = await readContainer(bytes, signal)
     const output = new Output()
-    if (kind === "odt" || kind === "ods" || kind === "odp") readOdf(archive, kind, output)
-    else if (kind === "xlsx") readSheet(archive, output)
-    else if (kind === "pptx") readSlides(archive, output)
-    else readBook(archive, output)
+    const sheets =
+      kind === "odt" || kind === "ods" || kind === "odp"
+        ? readOdf(archive, kind, output)
+        : kind === "xlsx"
+          ? readSheet(archive)
+          : undefined
+    if (sheets) {
+      if (signal?.aborted) throw new CliError("cancelled", "document extraction cancelled")
+      const { text, truncated } = sheetText(sheets)
+      return text === ""
+        ? { status: "needs-agent", extractor }
+        : { status: "extracted", extractor, text, ...(truncated ? { truncated: true } : {}) }
+    }
+    if (kind === "pptx") readSlides(archive, output)
+    else if (kind === "epub") readBook(archive, output)
     if (signal?.aborted) throw new CliError("cancelled", "document extraction cancelled")
     return output.real ? { status: "extracted", extractor, text: output.text() } : { status: "needs-agent", extractor }
   } catch (error) {
