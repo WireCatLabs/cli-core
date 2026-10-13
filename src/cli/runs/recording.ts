@@ -135,7 +135,7 @@ const logEvent = (run: Run, event: DiagnosticEvent): void => {
 
 const outcomeOf = (error: unknown): { errorCode: string; providerError?: string } => {
   if (!isCliFailure(error)) return { errorCode: "generic_failure" }
-  const providerError = providerErrorKey(error.details?.providerError)
+  const providerError = providerErrorKey(error.details?.provider_error)
   return { errorCode: error.code, ...(providerError ? { providerError } : {}) }
 }
 

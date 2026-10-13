@@ -18,5 +18,5 @@ export const attachment = v.strictObject({
   /** The text read out of it; how it was read is `extraction`. */
   text: v.optional(text),
   extraction: v.optional(v.strictObject({ origin: text, extractor: text, chars: count, error: v.optional(text) })),
-  localPath: v.optional(text),
+  local_path: v.optional(text),
 })

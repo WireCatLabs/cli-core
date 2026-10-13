@@ -262,7 +262,7 @@ describe("doctor --online", () => {
         ...withHealth(async () => ({ serverTime: Date.now(), standingChecked: true })),
         me: async () => {
           throw new CliError("authentication_error", "the messenger ended this account", {
-            providerError: "USER_DEACTIVATED_BAN",
+            provider_error: "USER_DEACTIVATED_BAN",
             standing: { state: "banned", hint: "only the messenger can restore it" },
           })
         },

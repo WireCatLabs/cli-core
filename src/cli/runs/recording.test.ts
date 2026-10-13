@@ -83,7 +83,7 @@ describe("a recorded run", () => {
 
   it("is kept when it fails, with the code a script branches on and never the sentence", async () => {
     const { code, runsDir } = await call(["messages", "send", TITLE, BODY], async () => {
-      throw new CliError("provider_error", `Telegram refused "${BODY}"`, { providerError: "PEER_ID_INVALID" })
+      throw new CliError("provider_error", `Telegram refused "${BODY}"`, { provider_error: "PEER_ID_INVALID" })
     })
 
     expect(code).toBe(11)

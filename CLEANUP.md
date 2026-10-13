@@ -12,3 +12,4 @@
 - 2026-10-13: `../cli-messaging-wt-app-ref`, branch `ci/release-app-ref` — worktree for the release `app_ref` input to Parity; remove once merged.
 - 2026-10-13: `../cli-messaging-wt-d2a` (branch `feat/d2a-cli-base-query`) and `../cli-messaging-wt-d2a-reserve` (branch `docs/reserve-store-6-query-ast`) — stream D-2a worktrees; remove once their PRs are merged.
 - 2026-10-13: `../cli-messaging-wt-mcp-default-test`, branch `fix/mcp-entry-default-test` — worktree for the 0.260.0 changelog section; remove once merged.
+- 2026-10-13: `../cli-messaging-wt-a2-core`, branches `feat/a2-core-entities` and `feat/a2-core-output` — stream A a2-core worktree; remove once both PRs are merged.

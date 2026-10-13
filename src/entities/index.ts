@@ -40,8 +40,8 @@ export {
 
 export const ENTITIES = {
   message,
-  "message.hit": v.pick(message, ["ref", "chatTitle", "timestamp", "senderName", "excerpt", "matchedIn", "score"]),
-  "message.summary": v.pick(message, ["ref", "timestamp", "senderName", "text"]),
+  "message.hit": v.pick(message, ["ref", "chat_title", "timestamp", "sender_name", "excerpt", "matched_in", "score"]),
+  "message.summary": v.pick(message, ["ref", "timestamp", "sender_name", "text"]),
   chat,
   person,
   identity,

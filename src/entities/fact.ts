@@ -11,13 +11,14 @@ export const fact = v.strictObject({
   status: v.picklist(FACT_STATUSES),
   project: v.nullable(text),
   subject: v.nullable(reference),
-  occurredAt: v.nullable(time),
+  occurred_at: v.nullable(time),
   supersedes: v.nullable(reference),
   author,
   model: v.nullable(text),
   scope: v.nullable(v.picklist(MEMORY_SCOPES)),
-  source: text,
+  /** Who recorded it: the owner, or an agent whose fact waits as proposed. */
+  origin: v.picklist(["owner", "agent"]),
   evidence: v.array(reference),
-  createdAt: time,
-  updatedAt: time,
+  created_at: time,
+  updated_at: time,
 })

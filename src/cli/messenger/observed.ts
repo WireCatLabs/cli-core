@@ -22,7 +22,7 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
       events({ event: "response", operation, durationMs: durationMs(), outcome: "ok", ...marked(after?.(answer)) })
       return answer
     } catch (error) {
-      const providerError = isCliFailure(error) ? providerErrorKey(error.details?.providerError) : undefined
+      const providerError = isCliFailure(error) ? providerErrorKey(error.details?.provider_error) : undefined
       events({
         event: "response",
         operation,

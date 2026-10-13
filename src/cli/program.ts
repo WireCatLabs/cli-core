@@ -20,7 +20,7 @@ import { isCliFailure, isCommanderFailure } from "./failures.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile } from "./profile.js"
-import { DETAILS, REASONS } from "./reasons.js"
+import { failureContext } from "./reasons.js"
 import { recorded, wasSettled } from "./runs/recording.js"
 import { type GlobalFlags, parseDuration, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
 
@@ -421,7 +421,7 @@ const failed = (
     settled.settlementFailed && isCliFailure(error)
       ? new CliError(error.code, error.message, { ...error.details, settlement_failed: true })
       : error
-  const object = errorObjectOf(failure, { reasons: REASONS, details: [...DETAILS, "settlement_failed"] })
+  const object = errorObjectOf(failure, failureContext(app.errors))
   const command = commandPath(program, program.args.length > 0 ? program.args : rest) || app.command
   return {
     object,

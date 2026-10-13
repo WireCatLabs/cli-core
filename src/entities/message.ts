@@ -4,8 +4,8 @@ import { count, id, providerMetadata, reference, text, time } from "./fields.js"
 
 const quoted = v.strictObject({
   id,
-  senderId: v.nullable(id),
-  senderName: v.nullable(text),
+  sender_id: v.nullable(id),
+  sender_name: v.nullable(text),
   timestamp: v.nullable(time),
   text,
   attachments: v.array(attachment),
@@ -20,29 +20,29 @@ export const message = v.strictObject({
   id,
   provider: v.optional(text),
   account: v.optional(text),
-  chatId: id,
-  chatTitle: v.optional(v.nullable(text)),
-  senderId: v.nullable(id),
-  senderName: v.nullable(text),
-  senderUsername: v.optional(text),
-  senderIsChat: v.optional(v.boolean()),
+  chat_id: id,
+  chat_title: v.optional(v.nullable(text)),
+  sender_id: v.nullable(id),
+  sender_name: v.nullable(text),
+  sender_username: v.optional(text),
+  sender_is_chat: v.optional(v.boolean()),
   mentions: v.optional(v.array(id)),
   /** When it was sent. */
   timestamp: time,
-  editedAt: v.nullable(time),
+  edited_at: v.nullable(time),
   text,
   /** A stretch of the text, transcript, file name or file text around what a search matched. */
   excerpt: v.optional(text),
-  matchedIn: v.optional(v.picklist(["text", "transcript", "filename", "file"])),
+  matched_in: v.optional(v.picklist(["text", "transcript", "filename", "file", "context"])),
   score: v.optional(v.number()),
   outgoing: v.nullable(v.boolean()),
   attachments: v.array(attachment),
-  replyTo: v.nullable(quoted),
+  reply_to: v.nullable(quoted),
   /** The id a reply answers, also when the provider sent no copy of that message. */
-  replyToId: v.optional(id),
-  forwardedFrom: v.nullable(quoted),
-  threadId: v.optional(id),
-  threadRootId: v.optional(id),
+  reply_to_id: v.optional(id),
+  forwarded_from: v.nullable(quoted),
+  thread_id: v.optional(id),
+  thread_root_id: v.optional(id),
   reactions: v.optional(
     v.nullable(
       v.strictObject({
@@ -52,7 +52,7 @@ export const message = v.strictObject({
       }),
     ),
   ),
-  scheduledFor: v.optional(time),
+  scheduled_for: v.optional(time),
   email: v.optional(
     v.strictObject({
       subject: v.nullable(text),
@@ -60,7 +60,8 @@ export const message = v.strictObject({
       to: v.array(mailPerson),
       cc: v.array(mailPerson),
       bcc: v.array(mailPerson),
-      replyTo: v.array(mailPerson),
+      /** The mail header Reply-To; `reply_to` is the quoted message a chat reply answers. */
+      reply_addresses: v.array(mailPerson),
       labels: v.array(text),
       /** The thread as a `chat:` reference. */
       thread: reference,
@@ -68,5 +69,5 @@ export const message = v.strictObject({
       flagged: v.nullable(v.boolean()),
     }),
   ),
-  providerMetadata,
+  provider_metadata: providerMetadata,
 })

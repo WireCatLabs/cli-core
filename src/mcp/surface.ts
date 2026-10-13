@@ -2,6 +2,7 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import type { AppErrors } from "../cli/reasons.js"
 import { agentArguments } from "./text.js"
 import {
   type AnyTool,
@@ -75,7 +76,12 @@ const nearest = (commands: Record<string, McpCommand>, asked: string): string[] 
  * with `read` or `write`. A command keeps its CLI path and its arguments, and runs as its own tool
  * did. The list never changes during a connection; what a profile may not use is not in `commands`.
  */
-export const registerCommands = (server: McpServer, prefix: string, commands: Record<string, McpCommand>) => {
+export const registerCommands = (
+  server: McpServer,
+  prefix: string,
+  commands: Record<string, McpCommand>,
+  errors?: AppErrors,
+) => {
   const byNormal = new Map(Object.keys(commands).map((command) => [normal(command), command]))
 
   server.registerTool(
@@ -139,7 +145,7 @@ export const registerCommands = (server: McpServer, prefix: string, commands: Re
           })
         return await one.run(parsed.output as Record<string, unknown>, ctx)
       } catch (error) {
-        return failed(error)
+        return failed(error, errors)
       }
     }
 
@@ -194,5 +200,6 @@ export const registerSurface = (server: McpServer, tools: Record<string, AnyTool
         } satisfies McpCommand,
       ]),
     ),
+    registration.messenger?.app?.errors,
   )
 }

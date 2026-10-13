@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **An adapter names a provider's refusal `provider_error`** in an error's details, not `providerError`.
+  The flood memory, `doctor`, run records and request events read only that key, and it now reaches the printed
+  error object.
+- **Entity schemas (`src/entities`) have snake_case keys** (`chat_id`, `sender_name`, `started_at`), and three
+  keys that meant two things are split: a fact's `source` is `origin` (`owner` or `agent`), a task's message is
+  `source_message`, a mail's Reply-To header is `email.reply_addresses`, and a document's own time is
+  `source_modified_at` beside the store's `stored_at`.
+
+### Added
+
+- **`AppIdentity.errors`: a CLI's own error reasons and detail keys** (`max_code`, `migrated_chat_id`), merged
+  with this package's by `failureContext` and kept by the CLI, MCP and meeting-tool error handlers alike.
+
 ## 0.262.0 — 13.10.2026
 
 ### Changed — may break callers
@@ -43,6 +58,7 @@ shape of this file.
   one. It is written at the top level of the file and reported as `scope: "defaultProfile"`; `--defaults`,
   `--personal` and `--bot` are refused for it, and so is a process under `<PREFIX>_PROFILE_LOCK`.
   `config show` lists it.
+||||||| parent of c12171f6 (feat!: snake_case entity schemas and an app hook for error reasons and details)
 
 ## 0.261.0 — 13.10.2026
 

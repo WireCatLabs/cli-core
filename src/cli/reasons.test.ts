@@ -1,12 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, captureStreams, errorObjectOf } from "@wirecat/cli-base"
-import { BASE_REASONS } from "@wirecat/cli-base/standards"
+import { BASE_REASONS, defineReasons } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { failed } from "../mcp/tool.js"
 import { run } from "./program.js"
-import { DETAILS, REASONS } from "./reasons.js"
+import { DETAILS, failureContext, REASONS } from "./reasons.js"
 
 const sources = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
@@ -67,5 +67,40 @@ describe("error reasons", () => {
       command: "item",
       attributes: { code: "configuration_error", cause: "SQLITE_BUSY near private text" },
     })
+  })
+
+  it("keeps an app's own reason and detail keys on the CLI and MCP alike", async () => {
+    const errors = {
+      reasons: defineReasons([
+        { reason: "chat.migrated", code: "not_found", message: "the group became a supergroup", details: [] },
+      ]),
+      details: ["migrated_chat_id"],
+    }
+    const error = new CliError("not_found", "the group moved", {
+      reason: "chat.migrated",
+      migrated_chat_id: "-1001",
+      provider_error: "CHAT_MIGRATED",
+    })
+    const streams = captureStreams()
+    await run(
+      ["item", "--json", "--no-record"],
+      { ...failing(error), app: { ...app, errors } },
+      {
+        streams,
+        tty: false,
+        env: process.env,
+      },
+    )
+    const printed = JSON.parse(streams.stderr[0] ?? "")
+    expect(printed.error).toMatchObject({
+      reason: "chat.migrated",
+      details: { migrated_chat_id: "-1001", provider_error: "CHAT_MIGRATED" },
+    })
+    expect(failed(error, errors).structuredContent).toEqual(printed)
+    expect(failed(error).structuredContent).toMatchObject({ error: { reason: "item.not-found" } })
+  })
+
+  it("refuses an app detail key that is not snake_case", () => {
+    expect(() => failureContext({ details: ["migratedChatId"] })).toThrow(/snake_case: migratedChatId/)
   })
 })

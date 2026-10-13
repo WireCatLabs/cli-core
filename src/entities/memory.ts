@@ -15,7 +15,7 @@ export const memory = v.strictObject({
   scope: v.picklist(MEMORY_SCOPES),
   supersedes: v.nullable(reference),
   evidence: v.array(reference),
-  lastVerifiedAt: v.nullable(time),
-  createdAt: time,
-  updatedAt: time,
+  last_verified_at: v.nullable(time),
+  created_at: time,
+  updated_at: time,
 })

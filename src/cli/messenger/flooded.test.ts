@@ -9,7 +9,7 @@ import { flooded } from "./flooded.js"
 import type { MessengerAdapter } from "./port.js"
 
 const wait = (seconds: number) =>
-  new CliError("rate_limited", `wait ${seconds} s`, { retry_after_ms: seconds * 1000, providerError: "FLOOD_WAIT" })
+  new CliError("rate_limited", `wait ${seconds} s`, { retry_after_ms: seconds * 1000, provider_error: "FLOOD_WAIT" })
 
 const setup = (answers: Partial<Record<"history" | "send", () => Promise<unknown>>> = {}) => {
   const memory = new FloodMemory(join(mkdtempSync(join(tmpdir(), "flooded-")), "p.json"))
@@ -37,7 +37,7 @@ describe("a call the messenger asked to hold off on", () => {
     const refused = adapter.history?.("42", { limit: 1 })
     await expect(refused).rejects.toMatchObject({
       code: "rate_limited",
-      details: { remembered: true, providerError: "FLOOD_WAIT", retry_after_ms: expect.any(Number) },
+      details: { remembered: true, provider_error: "FLOOD_WAIT", retry_after_ms: expect.any(Number) },
     })
     await expect(refused).rejects.toThrow(/nothing was sent to Chat/)
     expect(inner.history).toHaveBeenCalledTimes(1)

@@ -8,7 +8,7 @@ import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { MAX_BUFFERED_INPUT } from "../cli/input-policy.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { MessengerAdapter } from "../cli/messenger/port.js"
-import { DETAILS, REASONS } from "../cli/reasons.js"
+import { type AppErrors, failureContext } from "../cli/reasons.js"
 import { partialOutcome, startRecording } from "../cli/runs/recording.js"
 import type { Settings } from "../cli/settings.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
@@ -373,7 +373,7 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
       }
       return around ? await around(key, definition, execute) : await execute()
     } catch (error) {
-      return failed(error)
+      return failed(error, messenger?.app?.errors)
     }
   }
 }
@@ -462,10 +462,8 @@ export const answered = (value: object, maxBytes = DEFAULT_OUTPUT_BYTES): CallTo
 }
 
 /** The same object the CLI prints on stderr, so an agent reads one error shape from both. */
-export const failed = (error: unknown): CallToolResult =>
-  mcpErrorResult(
-    JSON.parse(agentJson(errorObjectOf(error, { reasons: REASONS, details: DETAILS }))) as ErrorObject,
-  ) as CallToolResult
+export const failed = (error: unknown, errors?: AppErrors): CallToolResult =>
+  mcpErrorResult(JSON.parse(agentJson(errorObjectOf(error, failureContext(errors)))) as ErrorObject) as CallToolResult
 
 /** An option's name as an MCP argument: `beforeId` is `before_id`. */
 export const snakeOf = (key: string): string => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)

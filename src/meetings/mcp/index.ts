@@ -1,4 +1,4 @@
-import { errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
+import { errorObjectOf, type FailureContext, mcpErrorResult } from "@wirecat/cli-base"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import {
   listed,
@@ -95,7 +95,13 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
   }
   return args
 }
-export const callMeetingTool = async (store: MeetingStore, name: string, input: unknown) => {
+export const callMeetingTool = async (
+  store: MeetingStore,
+  name: string,
+  input: unknown,
+  /** The host's error registry (`failureContext`), so its reasons and detail keys survive. */
+  failure: FailureContext = {},
+) => {
   try {
     const args = argumentsOf(name, input)
     const filter: MeetingFilter = {
@@ -138,7 +144,7 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
     if (CONTENT_READS.has(name)) result = { ...result, next_steps: SAVE_NEXT_STEPS }
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
   } catch (error) {
-    const { content, structuredContent } = mcpErrorResult(errorObjectOf(error))
+    const { content, structuredContent } = mcpErrorResult(errorObjectOf(error, failure))
     return { content, structuredContent, isError: true as const }
   }
 }
