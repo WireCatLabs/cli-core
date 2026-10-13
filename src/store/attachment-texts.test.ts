@@ -143,4 +143,25 @@ describe("text of attachments in the store (version 19)", () => {
     live.push(reopened)
     expect(await found(reopened, "content:елка")).toEqual(["1"])
   })
+
+  it("**`store reindex` gives a voice note the transcript kept before transcripts reached the file index**", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    await store.saveMessages(OWNER, "-1", [message("3", "", [{ kind: "voice", mime: "audio/ogg" }])], {
+      via: "history",
+    })
+    await store.keepTranscript(OWNER, "-1", "3", "synthetic heron", "gigaam-v3")
+    await store.close()
+    const database = await openCache(path)
+    database.exec("UPDATE attachments SET text = NULL, normalized_text = NULL, extraction = NULL, extractor = NULL")
+    expect(resetAttachmentWords(database)).toBe(1)
+    database.close()
+
+    expect(await raw(path, "SELECT text, extractor FROM attachments")).toEqual([
+      { text: "synthetic heron", extractor: "speech:gigaam-v3" },
+    ])
+    const reopened = await openStore({ path })
+    live.push(reopened)
+    expect(await found(reopened, "content:heron")).toEqual(["3"])
+  })
 })

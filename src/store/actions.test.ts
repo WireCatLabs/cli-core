@@ -27,8 +27,13 @@ describe("proposed actions", () => {
       payload: { text: "Thanks, Friday works" },
       reason: "she asked twice",
     })
-    expect(reply).toMatchObject({ status: "proposed", payload: { text: "Thanks, Friday works" }, target: note.ref })
-    expect((await store.proposedActions.pending()).map(({ id }) => id)).toEqual([reply.id])
+    expect(reply).toMatchObject({
+      status: "proposed",
+      payload: { text: "Thanks, Friday works" },
+      target: note.ref,
+      proposedBy: { type: "bot", name: "helper" },
+    })
+    expect((await store.proposedActions.pending()).map(({ proposedBy }) => proposedBy.name)).toEqual(["helper"])
 
     await expect(store.proposedActions.executed(reply.id)).rejects.toMatchObject({
       details: { reason: "proposal_state" },

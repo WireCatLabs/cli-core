@@ -1,34 +1,53 @@
 import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
-import { accountsOfList, isAccountList } from "../search/account-list.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+import { isKind, kindOf, providerNamed } from "../domain/providers.js"
+import { entriesOfList, fitting, isAccountList, type ListContext, type SkippedSource } from "../search/account-list.js"
+import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
 
 export type SearchKind = "messages" | "mail"
 
 export const NO_MAIL = "no_mail"
 
 export const MAIL = "email"
-/** Notes stored as messages before store version 25: `search notes` reads their own table now. */
-const OLD_NOTES = "notes"
+/** What a `--source` list is resolved against: the store's accounts, groups and profiles, and the app running. */
+export const listContextOf = async (
+  store: MessageStore,
+  account: AccountKey,
+  app: AppIdentity | undefined,
+  stored?: StoredAccount[],
+): Promise<ListContext> => {
+  const all = stored ?? (await store.storedAccounts())
+  // A fresh store has no row yet for the account it runs as.
+  const held = all.some((one) => one.provider === account.provider && one.account === account.account)
+    ? all
+    : [...all, { id: 0, ...account, name: null, scope: "personal" as const }]
+  return {
+    held,
+    groups: await store.accountGroups(),
+    profiles: await store.profiles(),
+    running: { provider: account.provider, ...(app ? { command: app.command } : {}) },
+  }
+}
 
-/** `--source` as a list of accounts and groups: `undefined` when it is a bare word like `all` or `telegram`. */
+/**
+ * `--source` as a list of accounts and groups: `undefined` when it is a bare word like `all` or `telegram`. The
+ * accounts are those of `kind` the list names; an entry naming none of them is in `skipped`.
+ */
 export const listedAccounts = async (
   store: MessageStore,
   account: AccountKey,
   source: string | undefined,
   app: AppIdentity | undefined,
-): Promise<AccountKey[] | undefined> => {
-  if (source === undefined || !isAccountList(source)) return undefined
+  kind?: SearchKind,
+): Promise<{ accounts: AccountKey[]; skipped: SkippedSource[] } | undefined> => {
+  if (source === undefined) return undefined
   const stored = await store.storedAccounts()
-  const held = stored.some((one) => one.provider === account.provider && one.account === account.account)
-    ? stored
-    : [...stored, { id: 0, ...account, name: null, scope: "personal" as const }]
-  return accountsOfList(source, {
-    held,
-    groups: await store.accountGroups(),
-    profiles: await store.profiles(),
-    running: { provider: account.provider, ...(app ? { command: app.command } : {}) },
-  })
+  // A provider the store holds by that very name, and all, personal and bots, keep their old path.
+  const registered =
+    isKind(source) || (providerNamed(source) !== undefined && !stored.some(({ provider }) => provider === source))
+  if (!isAccountList(source) && !registered) return undefined
+  const entries = entriesOfList(source, await listContextOf(store, account, app, stored))
+  return fitting(entries, kind ? [kind] : ["messages", "mail"], `${app?.command ?? "tg"} search ${kind ?? "messages"}`)
 }
 
 /**
@@ -50,22 +69,14 @@ export const accountsOfKind = (
   if (kind === "messages") {
     if (explicit === MAIL)
       throw new CliError("validation_error", `mail is searched with \`${command} search mail\`, not search messages`)
-    const messages = chosen.filter(({ provider }) => provider !== MAIL && provider !== OLD_NOTES)
-    if (listed && messages.length === 0)
-      throw new CliError(
-        "validation_error",
-        `the accounts named are mailboxes only — \`${command} search mail\` reads them`,
-      )
-    return messages
+    return chosen.filter(({ provider }) => kindOf(provider) === "messages")
   }
   if (explicit !== undefined && explicit !== MAIL && explicit !== "all")
     throw new CliError(
       "validation_error",
       `search mail reads mail only — \`${command} search messages\` searches ${explicit}`,
     )
-  const mail = (listed ? chosen : held).filter(({ provider }) => provider === MAIL)
-  if (listed && mail.length === 0)
-    throw new CliError("validation_error", "the accounts named hold no mailbox — search mail reads mail only")
+  const mail = (listed ? chosen : held).filter(({ provider }) => kindOf(provider) === "mail")
   if (mail.length === 0)
     throw new CliError(
       "not_found",

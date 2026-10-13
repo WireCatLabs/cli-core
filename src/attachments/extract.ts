@@ -12,7 +12,8 @@ import { attachmentMaxBytes, MAX_TEXT_CHARS } from "./limits.js"
 export { MAX_FILE_BYTES, MAX_TEXT_CHARS } from "./limits.js"
 
 /** The optional packages that read formats; none is installed with this package (owner, NEED-629 A). */
-export type Engine = "unpdf" | "mammoth" | "@napi-rs/canvas"
+export const ENGINES = ["unpdf", "mammoth", "@napi-rs/canvas"] as const
+export type Engine = (typeof ENGINES)[number]
 
 /** Loads an optional package; a test hands in its own to play a machine without it. */
 export type LoadEngine = (name: Engine) => Promise<unknown>
@@ -250,6 +251,21 @@ export const classify = (hint: FileHint): "image" | "unsupported" | undefined =>
 export const engineHint = (engine: Engine, command: string): string =>
   `${engine === "unpdf" ? "PDF" : engine === "mammoth" ? "Word" : "Scanned PDF OCR"} files need the optional package ${engine}, installed where ${command} is ` +
   `(for a global npm install: npm install -g ${engine}); they are read on the next run`
+
+/** For `doctor`: the optional readers resolve from here exactly as `importEngine` would load them. */
+export const engineStates = (
+  resolve: (name: string) => string = (name) => import.meta.resolve(name),
+): Record<Engine, "installed" | "missing"> =>
+  Object.fromEntries(
+    ENGINES.map((name) => {
+      try {
+        resolve(name)
+        return [name, "installed"]
+      } catch {
+        return [name, "missing"]
+      }
+    }),
+  ) as Record<Engine, "installed" | "missing">
 
 export const tooLarge = (bytes: number, env: NodeJS.ProcessEnv = process.env): boolean =>
   bytes > attachmentMaxBytes(env)

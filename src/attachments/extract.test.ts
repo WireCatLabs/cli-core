@@ -2,7 +2,7 @@ import ExcelJS from "exceljs"
 import { zipSync } from "fflate"
 import { describe, expect, it, vi } from "vitest"
 import { docx, pdf, zip } from "../testing/files.js"
-import { type Engine, engineHint, extractText, importEngine, type LoadEngine } from "./extract.js"
+import { type Engine, engineHint, engineStates, extractText, importEngine, type LoadEngine } from "./extract.js"
 
 const hint = (name: string, extra: { kind?: string; mime?: string } = {}) => ({
   kind: extra.kind ?? "file",
@@ -182,4 +182,14 @@ it("honors a configured file budget for local text extraction", async () => {
     (await extractText(bytes, hint("synthetic.txt"), importEngine, undefined, { MESSAGING_ATTACHMENT_MAX_MIB: "2" }))
       .status,
   ).toBe("extracted")
+})
+
+describe("engineStates", () => {
+  it("says which optional reader would not load", () => {
+    const resolve = (name: string) => {
+      if (name === "mammoth") throw Object.assign(new Error("not found"), { code: "ERR_MODULE_NOT_FOUND" })
+      return `file:///node_modules/${name}/index.js`
+    }
+    expect(engineStates(resolve)).toEqual({ unpdf: "installed", mammoth: "missing", "@napi-rs/canvas": "installed" })
+  })
 })
