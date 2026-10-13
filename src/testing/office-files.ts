@@ -13,6 +13,10 @@ const rels = (content: string) => `<Relationships xmlns="${PACKAGE_NS}">${conten
 const relation = (id: string, target: string, type: string) =>
   `<Relationship Id="${id}" Target="${target}" Type="${REL_NS}/${type}"/>`
 
+export const presentationEntries = (): Record<string, string> => ({
+  mimetype: "application/vnd.oasis.opendocument.presentation",
+  "content.xml": `<office:document-content xmlns:office="${ODF_OFFICE}" xmlns:text="${ODF_TEXT}" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"><office:body><office:presentation><draw:page draw:name="one"><draw:frame><draw:text-box><text:p>First slideneedle</text:p></draw:text-box></draw:frame></draw:page><draw:page draw:name="two"><draw:frame><draw:text-box><text:p>Later <text:span>слайд</text:span></text:p></draw:text-box></draw:frame></draw:page></office:presentation></office:body></office:document-content>`,
+})
 export const odfEntries = (kind: "odt" | "ods", content?: string): Record<string, string> => ({
   mimetype: `application/vnd.oasis.opendocument.${kind === "odt" ? "text" : "spreadsheet"}`,
   "content.xml": `<office:document-content xmlns:office="${ODF_OFFICE}" xmlns:text="${ODF_TEXT}" xmlns:table="${ODF_TABLE}"><office:body><office:${kind === "odt" ? "text" : "spreadsheet"}>${content ?? (kind === "odt" ? '<text:h>Heading</text:h><text:p>readerneedle <text:span>Привет</text:span><text:s text:c="3"/>world<text:tab/>42<text:line-break/>next</text:p>' : '<table:table table:name="Budget"><table:table-row table:number-rows-repeated="2"><table:table-cell table:number-columns-repeated="2"><text:p>cellneedle</text:p></table:table-cell><table:table-cell office:value="42" table:formula="of:=SUM([.A1:.B1])"/></table:table-row><table:table-row table:number-rows-repeated="1048574"><table:table-cell table:number-columns-repeated="16384"/></table:table-row></table:table>')}</office:${kind === "odt" ? "text" : "spreadsheet"}></office:body></office:document-content>`,
@@ -64,13 +68,15 @@ export const bookEntries = (): Record<string, string> => ({
   "Book/two.xhtml":
     '<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><body><p>First <em>bookneedle</em> Привет</p><script>must not execute</script><style>hidden style</style></body></html>',
 })
-export const officeFixture = (kind: "odt" | "ods" | "xlsx" | "pptx" | "epub") =>
+export const officeFixture = (kind: "odt" | "ods" | "odp" | "xlsx" | "pptx" | "epub") =>
   zip(
     kind === "odt" || kind === "ods"
       ? odfEntries(kind)
-      : kind === "xlsx"
-        ? sheetEntries()
-        : kind === "pptx"
-          ? slideEntries()
-          : bookEntries(),
+      : kind === "odp"
+        ? presentationEntries()
+        : kind === "xlsx"
+          ? sheetEntries()
+          : kind === "pptx"
+            ? slideEntries()
+            : bookEntries(),
   )

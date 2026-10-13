@@ -307,6 +307,7 @@ describe("inbox --new", () => {
   const setup = (histories: Record<string, Message[]>, chats: Chat[]) => {
     const root = mkdtempSync(join(tmpdir(), "inbox-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),

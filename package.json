@@ -159,11 +159,14 @@
     "image-size": "2.0.4",
     "liquidjs": "10.30.0",
     "lossless-json": "4.3.0",
+    "mammoth": "1.13.0",
     "ogg-opus-decoder": "1.7.5",
     "qrcode-generator": "2.0.4",
     "sherpa-onnx": "1.13.8",
     "string-width": "8.3.0",
+    "unpdf": "1.8.1",
     "valibot": "1.5.0",
+    "word-extractor": "1.0.4",
     "wrap-ansi": "10.0.2",
     "yaml": "2.9.1"
   },
@@ -186,11 +189,9 @@
     "exceljs": "4.4.0",
     "jsqr": "1.4.0",
     "lefthook": "2.1.16",
-    "mammoth": "1.13.0",
     "markdownlint-cli2": "0.23.3",
     "pngjs": "7.0.0",
     "typescript": "^7.0.2",
-    "unpdf": "1.8.1",
     "vitest": "^5.0.1"
   },
   "publishConfig": {
@@ -199,21 +200,13 @@
   "peerDependencies": {
     "@napi-rs/canvas": ">=0.1.69 <2",
     "@wirecat/cli-base": ">=0.21.0 <0.22.0",
-    "commander": ">=15",
-    "mammoth": ">=1.8.0 <2",
-    "unpdf": ">=1.0.0 <2"
+    "commander": ">=15"
   },
   "bin": {
     "cli-messaging-parity": "dist/parity/bin.js"
   },
   "peerDependenciesMeta": {
     "@napi-rs/canvas": {
-      "optional": true
-    },
-    "mammoth": {
-      "optional": true
-    },
-    "unpdf": {
       "optional": true
     }
   }

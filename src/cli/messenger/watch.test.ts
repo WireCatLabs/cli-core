@@ -46,7 +46,7 @@ const listening =
 
 const call = async (argv: string[], connect: Messenger["connect"], signal?: AbortSignal) => {
   const root = mkdtempSync(join(tmpdir(), "watch-"))
-  const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+  const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
   const messenger: Messenger = {
     app,
     provider: "chat",

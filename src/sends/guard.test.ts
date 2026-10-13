@@ -13,7 +13,7 @@ import { RecipientList, recipientsPathFor as recipientsPath } from "./recipients
 import { newSendId } from "./send-id.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0" }
-const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-sends-")) }
+const env = { APP_PROFILE: "default", APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-sends-")) }
 const sendsPathFor = (profile: string) => sendsPath(app, profile, env)
 const recipientsPathFor = (profile: string) => recipientsPath(app, profile, env)
 

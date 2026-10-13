@@ -8,14 +8,15 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
-- **A bare search word looks everywhere a message holds words:** its text, a voice note's transcript, a word of
-  a file's name and a file's text (owner, 2026-10-13). Each hit says where (`matchedIn`: `text`, `transcript`,
-  `filename`, `file`) and its `excerpt` comes from there. Hits with the word in the text rank first, then
-  transcripts, file names and file text, so a long spreadsheet does not crowd out messages. `text:` keeps
-  the old meaning. `content:` now means file text only; transcripts moved to the new `transcript:` field.
-  The legacy language and `--backend` server search still read message text only.
-- **Store version 5:** a word index of file names (`attachment_name_words`), filled once on upgrade from the
-  names already stored. Older builds still open it; its triggers keep the index current.
+- **No profile is assumed.** When neither the first word, `<PREFIX>_PROFILE`, `defaultProfile` in the config
+  file nor `<PREFIX>_PROFILE_LOCK` names a profile, a command that uses an account fails with `validation_error`
+  (exit 2) instead of running as `default` — also with a single profile, and also `setup` on a new computer.
+  The message lists the profiles here (those `account list` shows), or with none says
+  `create one with \`tg personal setup\``; `details.profiles` carries the list. `account list`, `config show`,
+  `config migrate` and `config set --defaults` still run, showing no current profile (`profile: null`,
+  `profileFrom: "none named"`). `asFirstWord` always returns the profile, so every hint names it, and the bot
+  MCP server always passes it. `ResolveOptions.needsProfile: false` and the third argument of
+  `messengerContext` let a tool's own no-account command run unnamed. `Settings.profilesHere` lists the profiles; a messenger with profile files of its own adds them through `SettingsExtension.profiles`.
 - **`search all` answers a required `accounts` field, and a `skipped` entry may carry `source` in place of
   `resource`** (`SearchAllFound`, `SearchAllIncludingMeetingsFound`): a fake that builds the answer adds
   `accounts`, and code reading `skipped[].resource` handles `undefined`.
@@ -37,6 +38,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **File readers ship with the package.** `unpdf` and `mammoth` move from optional peers to dependencies, so
+  PDF and Word text is read on every install, a global pnpm one included; only `@napi-rs/canvas`, the native
+  page renderer that scanned-PDF OCR needs, stays optional. `doctor` `readers` says `built in` for them.
+- **More formats are read:** Word 97–2003 `.doc` (`word-extractor`), RTF, HTML and OpenDocument presentations
+  (`.odp`). `.xls` and `.ppt` stay unsupported.
 - A file note keeps up to 2 000 000 characters of text (was 200 000), the same cap as the document readers, so a long spreadsheet or PDF read by them can be saved whole and found by a word anywhere in it. Measured on a generated 2M-character note: saving takes about 50 ms, the first search that indexes it about 0.7 s, later searches 2–3 ms (stemmed) and about 90 ms (exact), and the store grows about 9 MiB.
 
 - **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each

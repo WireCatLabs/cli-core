@@ -14,7 +14,7 @@ const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", descripti
 const cli = async (argv: string[]) => {
   vi.mocked(serveOverHttpUntilStopped).mockClear()
   const root = mkdtempSync(join(tmpdir(), "mcp-policy-"))
-  const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+  const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
   mkdirSync(env.CHAT_CONFIG_DIR)
   const file = join(env.CHAT_CONFIG_DIR, "config.json")
   const original = JSON.stringify({ defaults: { readOnly: true, permissions: { "messages.send": "deny" } } })

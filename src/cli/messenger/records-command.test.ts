@@ -88,7 +88,12 @@ const invoke = async (argv: string[], adapter: MessengerAdapter, own: Partial<Me
     {
       streams,
       tty: false,
-      env: { CHAT_STATE_DIR: join(root, "s"), CHAT_CONFIG_DIR: join(root, "c"), MESSAGING_STORE: join(root, "m.db") },
+      env: {
+        CHAT_PROFILE: "default",
+        CHAT_STATE_DIR: join(root, "s"),
+        CHAT_CONFIG_DIR: join(root, "c"),
+        MESSAGING_STORE: join(root, "m.db"),
+      },
     },
   )
   return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("") }

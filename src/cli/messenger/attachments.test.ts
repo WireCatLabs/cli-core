@@ -82,6 +82,7 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
   const root = mkdtempSync(join(tmpdir(), "attachments-cli-"))
   const env = {
     ...process.env,
+    CHAT_PROFILE: "default",
     CHAT_STATE_DIR: join(root, "state"),
     CHAT_CONFIG_DIR: join(root, "config"),
     MESSAGING_STORE: join(root, "m.db"),
@@ -452,7 +453,7 @@ describe("attachments extract", () => {
     expect(json(await call("attachments", "extract", "--chat", "7", "--json")).extracted).toBe(0)
   })
 
-  it("**says once which optional package to install, and reads those files on a later run**", async () => {
+  it("**says once which package could not be loaded, and reads those files on a later run**", async () => {
     const without: LoadEngine = async (name) => {
       if (name === "unpdf")
         throw Object.assign(new Error("Cannot find package 'unpdf'"), { code: "ERR_MODULE_NOT_FOUND" })
@@ -461,7 +462,7 @@ describe("attachments extract", () => {
     const { call } = await setup({ load: without })
     const done = await call("attachments", "extract", "--json")
     expect(json(done)).toMatchObject({ enginesMissing: ["unpdf"], extracted: 2 })
-    expect(done.stderr.match(/npm install -g unpdf/g)).toHaveLength(1)
+    expect(done.stderr.match(/package unpdf, which ships with chat, could not be loaded/g)).toHaveLength(1)
   })
 
   it("**names the missing package on each file it could not read**, as `messages download --extract` reports it", async () => {
@@ -473,8 +474,7 @@ describe("attachments extract", () => {
     const { call } = await setup({ load: without })
     const done = json(await call("attachments", "extract", "--json"))
     const pdf = done.items.find(({ status }: { status: string }) => status === "engine-missing")
-    expect(pdf.issue.message).toContain("optional package unpdf")
-    expect(pdf.issue.message).toContain("npm install -g unpdf")
+    expect(pdf.issue.message).toContain("the package unpdf, which ships with this tool, could not be loaded")
   })
 
   it("prints one line per file in a terminal, and the summary on stderr", async () => {
