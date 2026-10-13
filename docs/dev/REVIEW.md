@@ -23,8 +23,9 @@ design guidance or our policy; record justified deviations instead of claiming b
    was run.
 3. **Output.** A list answers the envelope, a write its `operationId`, an error one JSON object on
    stderr with a code from the table ([Output](STANDARD.md#output)).
-4. **MCP.** The tool's name, its snake_case arguments, `readOnlyHint` and the permission flag it
-   needs ([MCP](STANDARD.md#mcp)).
+4. **MCP.** The command is found through `tools_search`, its arguments are the options in snake_case,
+   it says whether it writes, and its permission key decides who may run it — no flag of its own
+   ([MCP](STANDARD.md#mcp)).
 5. **Both CLIs' pages.** The user page of each CLI says the same thing at the same depth, max's in
    Russian and tg's in English ([Documents](STANDARD.md#documents)).
 6. **Manifest row.** `parity.json` has the command and its options as `planned`, with who builds them.

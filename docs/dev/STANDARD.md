@@ -973,6 +973,10 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
      `page: 1`; `hasMore` says whether there is more on the far side of the last item.
    - Fields about the whole list go beside the four, never instead of them (`models audio list`'s
      `directory`).
+   - Commands are moving to the answer envelope built by `listOf` in
+     [`src/cli/envelope.ts`](../../src/cli/envelope.ts) (so far `admin folders`):
+     `{ items, page: { limit, has_more, cursor? }, next?, missing?, meta? }`, with `page.next` first in
+     `next` when more rows exist. A command that moves says so in the changelog.
    - `inbox` and `review` are not lists: they answer one view grouped by chat, `{ chats: [{ …,
      messages }] }`, in both tools.
 2. **A write answers what it did**: `{ operationId, … }`, the ids it touched after it. The same

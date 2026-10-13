@@ -39,7 +39,7 @@ Draft the top section from the merged pull requests, by the CLI's changelog rule
 obvious), and what to watch for**: who is affected, what can break, what to do. Read each pull
 request's body and diff. The title is not enough, and a fix can hide in a pull request titled as
 something else. Anything that changes a command's output, an exit code, an option or a config key
-goes under the "may break scripts" heading.
+goes under the "Changed — may break callers" heading.
 
 ## The docs against the diff
 

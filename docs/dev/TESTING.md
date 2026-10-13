@@ -33,7 +33,8 @@ Types-only files have no code to count.
 ## No test waits for real
 
 A unit test takes milliseconds; one that takes a round second is sleeping in the code under test,
-and on a slow CI runner a few of those cross vitest's 5 s limit (max-cli
+and on a slow CI runner a few of those cross the test time limit — 15 s here (`testTimeout` in
+`vitest.config.ts`), raised from vitest's 5 s because several suites share one machine (max-cli
 [`TESTING.md`](https://github.com/WireCatLabs/max-cli/blob/main/docs/dev/TESTING.md#no-test-waits-for-real)).
 On 2026-09-29 the slowest test here took 57 ms. The waits that exist are reached without sleeping:
 
