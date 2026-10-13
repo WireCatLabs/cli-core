@@ -68,7 +68,7 @@ import { findRegex } from "./sqlite/legacy-regex.js"
 import { logPruner } from "./sqlite/log-pruning.js"
 import type { QueryGroup, QueryGrouping } from "./sqlite/lucene.js"
 import * as lucene from "./sqlite/lucene.js"
-import type { MeetingReadCapabilities } from "./sqlite/meeting-reads.js"
+import type { MeetingContextReadCapabilities, MeetingReadCapabilities } from "./sqlite/meeting-reads.js"
 import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
 import { meetingStoreOver } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
@@ -650,6 +650,7 @@ export interface MessageStore {
   readonly meetings: MeetingStore &
     MeetingTranscriptStore &
     MeetingReadCapabilities &
+    MeetingContextReadCapabilities &
     MeetingSearchStore &
     MeetingTranscriptReceiptStore &
     MeetingContextStore &
@@ -1823,7 +1824,12 @@ export type { CounterTarget } from "./sqlite/counters.js"
 export { messageOfEmail, threadConversation } from "./sqlite/emails.js"
 export { orphanPointers } from "./sqlite/entity-types.js"
 export { involvementStoreOver } from "./sqlite/involvements.js"
-export type { MeetingReadCapabilities } from "./sqlite/meeting-reads.js"
+export type {
+  MeetingContextReadCapabilities,
+  MeetingReadCapabilities,
+  TranscriptContextInput,
+  TranscriptContextPage,
+} from "./sqlite/meeting-reads.js"
 export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"

@@ -73,6 +73,8 @@ export interface EventCandidateFilter {
   endsAt: number
 }
 export interface SearchHit {
+  /** A retained cue reference for transcript hits, or the parent meeting for other sources. */
+  ref?: string
   meetingId: number
   scope: "transcript" | "chat" | "summary"
   id: number

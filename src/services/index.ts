@@ -187,6 +187,13 @@ export {
   readMeetingEvidence,
 } from "./meeting-evidence.js"
 export {
+  type MeetingContextCue,
+  type MeetingHitContextOptions,
+  type MeetingHitContextPacket,
+  meetingHitContextLimits,
+  readMeetingHitContext,
+} from "./meeting-hit-context.js"
+export {
   createMeetingRemoteModel,
   type MeetingEmbedder,
   type MeetingEmbedderOptions,
@@ -194,6 +201,7 @@ export {
   meetingEmbeddingModel,
   openMeetingEmbedder,
 } from "./meeting-model.js"
+export { formatMeetingPassage, type MeetingPassageFormat, readMeetingPassage } from "./meeting-passage-format.js"
 export {
   type MeetingReadStore,
   type MeetingReferenceReadOptions,

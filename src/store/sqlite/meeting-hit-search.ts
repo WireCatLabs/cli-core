@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
+import { formatMeetingReference } from "../../domain/meeting-reference.js"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
@@ -196,9 +197,9 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         if (after)
           params.push(after.started, after.started, after.meeting, after.meeting, after.kind, after.kind, after.id)
         const sql = `WITH ${termTables.join(",")}, matches AS (${matching}), matching AS (SELECT rid FROM matches h WHERE NOT EXISTS(SELECT 1 FROM meeting_index_pending p WHERE p.id=h.rid/4 AND p.indexable_type=CASE h.rid%4 WHEN 1 THEN 'meeting_transcript_row' WHEN 2 THEN 'meeting_chat_message' ELSE 'meeting_summary' END)), selected AS (SELECT m.id,coalesce(m.started_at,0) AS started FROM meetings m WHERE ${clauses.join(" AND ")}), hits AS (
-        SELECT m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text"])} AS bytes FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
-        UNION ALL SELECT m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])} FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
-        UNION ALL SELECT m.started,m.id,2,s.id,NULL,${bytes("s", fields)} FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
+        SELECT m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text"])} AS bytes,t.id AS transcript_id,r.position FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
+        UNION ALL SELECT m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])},NULL,NULL FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
+        UNION ALL SELECT m.started,m.id,2,s.id,NULL,${bytes("s", fields)},NULL,NULL FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
         SELECT * FROM hits ${seek} ORDER BY started DESC,meeting_id,kind,id LIMIT ?`
         const rows = database.prepare(sql).all(...queryParams, ...params, limit + 1)
         let total = 0
@@ -223,6 +224,12 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             text = String(database.prepare(`SELECT text FROM ${table} WHERE id=?`).get(Number(row.id))?.text)
           }
           return {
+            ref: formatMeetingReference({
+              type: "meeting",
+              accountId: input.accountId,
+              meetingId: Number(row.meeting_id),
+              ...(kind === 0 ? { transcriptId: Number(row.transcript_id), cuePosition: Number(row.position) } : {}),
+            }),
             meetingId: Number(row.meeting_id),
             scope: kind === 0 ? "transcript" : kind === 1 ? "chat" : "summary",
             id: Number(row.id),

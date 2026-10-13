@@ -68,7 +68,7 @@ export const meetingEvidenceLimits = ({ cues = 100, bytes = 64 * 1024 }: Meeting
     throw new CliError("validation_error", "meeting evidence takes 1–1000 cues and 2–4194304 UTF-8 bytes")
   return { cues, bytes }
 }
-const cueEvidence = (
+export const cueEvidence = (
   accountId: number,
   meetingId: number,
   transcript: Transcript,

@@ -182,4 +182,26 @@ is added.
 
 Providers mount `addMeetingSearchCommand` from the meetings CLI export: it adds `search meetings` under the host's `search` group (creating it when missing) and returns the command, so a host can add options and pick another source from them. Its `search` closure is fixed to the selected account and receives the request and every parsed option. The optional `meetingSearchTool` (`search_meetings`) and `callMeetingSearchTool` from the meetings MCP export accept the same selectors; tool callers cannot override that account. Hosts retain permission checks, connection lifecycle and output limits.
 
-Search coverage remains explicit: an empty page does not prove the archive is complete, and pending indexing can hide matches. Human-name participant disambiguation, discovery by project words without explicit membership, hit-centered evidence and compact cited passages remain separate work.
+Search coverage remains explicit: an empty page does not prove the archive is complete, and pending indexing can hide matches. Human-name participant disambiguation and discovery by project words without explicit membership remain separate work.
+
+## Cue context and compact passages
+
+Transcript hits from `searchHits` include `ref`, a retained `meeting:<account>/<meeting>/<transcript>/<position>` reference. Summary/chat hits reference the parent meeting and cannot serve as cue anchors. IDs and search cursors keep their existing meaning.
+
+`readMeetingHitContext` from the services export accepts a cue reference and the authorized account ID. The optional `transcriptContext` store capability reads the anchor and both sides in one snapshot. Counts refer to actual cues, including sparse positions. Defaults are three before and three after, with at most 999 surrounding cues. `max_read_bytes` bounds stored text; boundary probes load only IDs, positions and sizes. No migration or index write is needed.
+
+The anchor survives output clipping; if it cannot fit `bytes`, the read fails. Otherwise the closest contiguous cues on each side are kept within that budget. Coverage reports clipping, more content on each side and unknown archive completeness. Continuation references are inclusive anchors: repeating from one overlaps that cue. Explicit transcript references retain superseded revisions. `expected_fingerprint` checks a previously read anchor's cue fingerprint. Reading does not attribute anonymous speech or create records.
+
+`formatMeetingPassage` renders an evidence or context packet as text or Markdown, retaining timestamps, speaker labels, references, revision and coverage. It escapes control characters and Markdown/HTML syntax and rejects output over its separate byte budget. Structured JSON keeps original text. Empty packets state that missing/clipped content does not prove absence. `readMeetingPassage` combines context and formatting.
+
+Hosts opt into `addMeetingPassageCommand` from the meetings CLI export with a read closure fixed to their selected account. They retain connection lifetime, permissions and final stdout limits. Default output is text; global JSON/JSONL selects structured output. `meetingPassageTool` and `callMeetingPassageTool` from the meetings MCP export accept equivalent bounds and formats, never an account override, and keep the structured packet alongside display text. Existing apps need a published producer and consumer integration before these commands become available.
+
+An adopting host can expose this workflow with fictional references:
+
+```sh
+example search meetings "launch" --json
+example meetings passage meeting:1/2/3/9 --before 3 --after 4 --format markdown
+example meetings passage meeting:1/2/3/9 --before 0 --after 0 --json
+```
+
+The selected account is passed separately from the reference; a foreign reference fails before a read. CLI and MCP use one reader and formatter. A second synthetic provider needs no provider-specific branch.
