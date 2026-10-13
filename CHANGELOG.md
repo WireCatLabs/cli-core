@@ -30,6 +30,13 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   `WHERE` condition with bound parameters, answering as cli-base's `evaluate` does. No list uses it yet.
 - **One file per entity schema** in `src/entities/`; `reference` is cli-base's.
 
+## 0.260.0 — 13.10.2026
+
+### Fixed
+
+- **`mcp config` and `mcp install` name the profile `default` too.** The server entry left that one name out, so
+  since 0.256.0, which no longer assumes a profile, a server set up for `default` stopped on its first call.
+
 ## 0.259.0 — 13.10.2026
 
 ### Added
@@ -118,9 +125,6 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 - **Note and document search no longer claims meaning when nothing searched has vectors.** It said `by: "words and
   meaning"` with zero vectors (seen in drive before `sync --embed`); now `by` is `words` and `meaningSkipped` says
   why. The query model is not loaded in that case either.
-- **`mcp config` and `mcp install` name the profile `default` too.** The server entry left that one name out, so
-  since 0.256.0, which no longer assumes a profile, a server set up for `default` stopped on its first call.
-
 - **Mail hints name `memo sync --mail`.** `search mail`, its MCP tool and the no-mail hint named
   `memo mail <account> import`, which memo no longer has (cli-memo#122).
 
