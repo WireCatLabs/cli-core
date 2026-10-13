@@ -54,7 +54,7 @@ const chatOf = (state: {
 
 const setup = () => {
   const root = mkdtempSync(join(tmpdir(), "backfill-"))
-  return { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+  return { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
 }
 
 const call = async (

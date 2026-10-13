@@ -73,10 +73,11 @@ guessable from the others.
    allowed when they identify a part of the resource (`chats members list`), not an implementation
    detail. A group without a leaf command shows help, never runs a hidden default action.
    **The profile is chosen, never assumed.** A command that acts for one of several accounts or
-   profiles takes it explicitly (the first word, or the tool's profile variable); none given is an
-   error that lists the profiles — never the first in the config, never an implicit `default`. A read
-   across accounts covers all of them and says so. The owner's rule since 2026-10-11; today tg and
-   max still fall back to `default`, an existing gap.
+   profiles takes it explicitly (the first word, the tool's profile variable, or `defaultProfile` in
+   its config file); none given is an error that lists the profiles — never the first in the config,
+   never an implicit `default`, not even the only profile; with none the error says how to create one
+   by name (`tg personal setup`). A command that touches no account (`account list`, `config show`)
+   runs without one. A read across accounts covers all of them and says so.
    The resource is a noun: **plural** for a
    collection (`chats`, `contacts`, `messages`, `polls`, `reactions`, `recipients`, `replies`, `sends`,
    `runs`, `topics`, `models`, `tags`, `searches`, `copies`, `attachments`, `tasks`), **singular** for what a profile has exactly

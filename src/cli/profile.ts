@@ -3,8 +3,8 @@ import type { Command } from "commander"
 
 export const DEFAULT_PROFILE = "default"
 
-/** How the command line names this profile: the first word, or nothing at all for the default. */
-export const asFirstWord = (profile: string): string => (profile === DEFAULT_PROFILE ? "" : `${profile} `)
+/** How the command line names this profile: always the first word, since none is assumed. */
+export const asFirstWord = (profile: string): string => `${profile} `
 
 /**
  * A profile name becomes a file name and a keyring account, and the first word on the command line

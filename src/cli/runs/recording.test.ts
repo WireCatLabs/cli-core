@@ -20,7 +20,7 @@ type Action = (context: BaseContext) => Promise<unknown>
 
 const call = async (argv: string[], action: Action = async () => {}, config?: string) => {
   const root = mkdtempSync(join(tmpdir(), "runs-recording-"))
-  const env = { APP_STATE_DIR: join(root, "state"), APP_CONFIG_DIR: join(root, "config") }
+  const env = { APP_PROFILE: "default", APP_STATE_DIR: join(root, "state"), APP_CONFIG_DIR: join(root, "config") }
   if (config !== undefined) {
     mkdirSync(env.APP_CONFIG_DIR, { recursive: true })
     writeFileSync(join(env.APP_CONFIG_DIR, "config.json"), config)

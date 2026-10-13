@@ -43,6 +43,7 @@ const card = (id: string, title: string): GroupCard => ({
 const sandbox = () => {
   const root = mkdtempSync(join(tmpdir(), "admin-"))
   return {
+    CHAT_PROFILE: "default",
     CHAT_STATE_DIR: join(root, "state"),
     CHAT_CONFIG_DIR: join(root, "config"),
     MESSAGING_STORE: join(root, "m.db"),
@@ -718,13 +719,38 @@ describe("chats create, join and leave", () => {
       },
     }
 
-    const listed = await call(["account", "list", "--json"], offline, env)
+    const { CHAT_PROFILE: _, ...unnamed } = env
+    const listed = await call(["account", "list", "--json"], offline, unnamed)
+    const named = await call(["work", "account", "list", "--json"], offline, unnamed)
 
     expect(listed.code).toBe(0)
     expect(JSON.parse(listed.stdout[0] ?? "").items).toEqual([
-      { profile: "default", current: true, account: "500", name: "Owner" },
+      { profile: "default", current: false, account: "500", name: "Owner" },
       { profile: "work", current: false, account: "501", name: null },
     ])
+    expect(JSON.parse(named.stdout[0] ?? "").items.map((item: { current: boolean }) => item.current)).toEqual([
+      false,
+      true,
+    ])
+  })
+
+  it("**assumes no profile, not even the only one** — an account command says what to name", async () => {
+    const { CHAT_PROFILE: _, ...env } = sandbox()
+
+    const empty = await call(["account", "show", "--json"], base, env)
+    rememberAccount(app, "work", "501", env)
+    const one = await call(["account", "show", "--json"], base, env)
+    const named = await call(["work", "account", "show", "--json"], base, env)
+
+    expect(empty.code).toBe(2)
+    expect(JSON.parse(empty.stderr.at(-1) ?? "").error.message).toBe(
+      "name a profile: there is none on this computer yet — create one with `chat personal setup` (any name in place of personal)",
+    )
+    expect(JSON.parse(one.stderr.at(-1) ?? "").error).toMatchObject({
+      code: "validation_error",
+      message: "name a profile: `chat <profile> …` — profiles here: work (or set CHAT_PROFILE)",
+    })
+    expect(named.code).toBe(0)
   })
 
   it("**changes the address book through the guard**, each as its own account action", async () => {

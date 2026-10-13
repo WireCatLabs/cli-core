@@ -6,8 +6,9 @@ import { maskedAccount } from "../../services/people.js"
 import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
 import { renderList } from "../paging.js"
+import { NONE_NAMED } from "../settings.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
-import { profilesWithAccounts, recalledAccount } from "./accounts.js"
+import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { privacyCommand } from "./records-command.js"
 
@@ -18,14 +19,11 @@ export const accountCommand = (messenger: Messenger): Command => {
       new Command("list")
         .description("every profile on this computer, and the account each is logged in as; asks the messenger nothing")
         .action(async function (this: Command) {
-          const context = messengerContext(this, messenger)
+          const context = messengerContext(this, messenger, { needsProfile: false })
           const { app, provider } = messenger
+          const current = context.settings.sources.profile === NONE_NAMED ? undefined : context.settings.profile
           const profiles = [
-            ...new Set([
-              context.settings.profile,
-              ...context.settings.configuredProfiles,
-              ...profilesWithAccounts(app, context.env),
-            ]),
+            ...new Set([...(current === undefined ? [] : [current]), ...context.settings.profilesHere]),
           ].sort()
           const store = existsSync(storePath(context.env))
             ? await openStore({ env: context.env }).catch(() => undefined)
@@ -36,7 +34,7 @@ export const accountCommand = (messenger: Messenger): Command => {
               const key = recalledAccount(app, provider, profile, context.env)
               items.push({
                 profile,
-                current: profile === context.settings.profile,
+                current: profile === current,
                 account: key?.account ?? null,
                 name: key && store ? await store.accountName(key) : null,
               })
