@@ -1095,9 +1095,6 @@ describe("the MCP server", () => {
     ])
     const notes = await call("chat_search_notes", { text: "chapter" })
     expect(notes.body).toMatchObject({ by: "words", hits: [] })
-    const folders = await call("chat_search_notes", { text: "chapter", folders: ["4"] })
-    expect(folders.isError).toBe(true)
-    expect(JSON.stringify(folders.body)).toContain("folders was removed — source: notes:<folder id> names a folder")
     const mail = await call("chat_search_mail", { text: "chapter" })
     expect(mail.isError).toBe(true)
     expect(JSON.stringify(mail.body)).toContain("memo mail <account> import")
@@ -1136,11 +1133,6 @@ describe("the MCP server", () => {
     expect(one.body.items.map(({ id }: { id: string }) => id)).toEqual(["<bob@example.test>"])
     expect(one.body.accounts).toEqual([{ resource: "mail", provider: "email", account: "bob@example.test" }])
     expect(one.body).not.toHaveProperty("coverage")
-    const removed = await call("chat_search_mail", { text: "chapter", account: "bob@example.test" })
-    expect(removed.isError).toBe(true)
-    expect(JSON.stringify(removed.body)).toContain(
-      "account was removed — source: email:<address> names the mail account",
-    )
     expect(one.body.items[0]).toMatchObject({
       excerpt: "Reading group Which chapter next?",
       email: { from: { address: "bob@example.test" }, thread: "chat:email/bob%40example.test/thread-1" },
@@ -1199,9 +1191,6 @@ describe("the MCP server", () => {
     const bounded = await call("chat_search_all", { text: "chapter", max_meetings: 5 })
     expect(bounded.isError).toBe(true)
     expect(JSON.stringify(bounded.body)).toContain(MEETINGS_UNNAMED)
-    const removed = await call("chat_search_all", { text: "chapter", meetings: true })
-    expect(removed.isError).toBe(true)
-    expect(JSON.stringify(removed.body)).toContain("meetings was removed — source names the meeting account")
   })
 
   it("prepares stored evidence with a cursor and typed failures without connecting", async () => {

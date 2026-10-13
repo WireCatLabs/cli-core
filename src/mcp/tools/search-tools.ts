@@ -78,10 +78,6 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       timezone,
       limit,
     }),
-    removed: {
-      meetings:
-        "source names the meeting account: all reads every account and its meetings, zoom:<account> or meetings the meetings alone",
-    },
     annotations: { ...READ, openWorldHint: Boolean(messenger.serverSearch) },
     stored: (store, account, args, defaults, connect) => {
       const network = Boolean(messenger.serverSearch) && args.backend !== "archive"
@@ -129,7 +125,6 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "or a list with group:<name>; an entry naming no mailbox is in `skipped`. Returns { items, page, limit, hasMore, " +
       "completeness, query, accounts, skipped? }; accounts lists the mailboxes read as { resource, provider, account }.",
     input: mailSearchInput(messenger),
-    removed: { account: "source: email:<address> names the mail account" },
     annotations: { ...READ, openWorldHint: false },
     stored: (store, account, args, defaults) => {
       const services = searchServices(messenger, store, account, defaults)
@@ -169,9 +164,6 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       timezone,
       limit,
     }),
-    removed: {
-      folders: "source: notes:<folder id> names a folder, and notes:internal the notes written in memo",
-    },
     annotations: { ...READ, openWorldHint: false },
     stored: (store, account, args, defaults) =>
       searchNotesOf(store, account, args.text, {

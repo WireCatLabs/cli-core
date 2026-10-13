@@ -181,8 +181,6 @@ after the title.
 
 ## Removed (may break scripts; changelog)
 
-Each fails with an error naming its replacement (`src/cli/removed-options.ts`; MCP `removed` in `src/mcp/tool.ts`):
-
 - `search notes --folder <id>` → `--source notes:<id>` (MCP `folders` → `source`).
 - `search mail --account <address>` → `--source email:<address>` (MCP `account` → `source`).
 - `search all --meetings [provider:account]` → `--source zoom:<account>`, `--source zoom`, `--source meetings`,

@@ -9,7 +9,6 @@ import {
 } from "../../services/search-all-meetings.js"
 import type { Note } from "../../store/index.js"
 import { positiveCount } from "../paging.js"
-import { removedOptions } from "../removed-options.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { conversationsSearchCommand } from "./conversations-command.js"
 import { messagesSearchCommand, wholeCount } from "./messages-search-command.js"
@@ -77,11 +76,6 @@ const allCommand = (messenger: Messenger): Command => {
     .option("--offset <n>", "skip this many, for the next page", wholeCount)
     .option("--exact", "bare words and quotes match their exact form only, as exact:word does")
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
-  removedOptions(command, {
-    "--meetings":
-      "--source names the meeting account: --source all reads every account and its meetings, " +
-      "--source zoom:<account> or --source meetings the meetings alone",
-  })
   return backendOptions(command, messenger).action(async function (this: Command, words: string[]) {
     const context = messengerContext(this, messenger)
     const { only, source, maxMeetings, limit, offset, exact, timezone } = this.opts<{
@@ -206,11 +200,7 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
     .addCommand(allCommand(messenger))
     .addCommand(messagesSearchCommand(messenger, "messages"))
     .addCommand(messagesSearchCommand(messenger, "mail"))
-    .addCommand(
-      removedOptions(notesCommand(messenger), {
-        "--folder": "--source notes:<folder id> names the folder, and notes:internal the notes written in memo",
-      }),
-    )
+    .addCommand(notesCommand(messenger))
     .addCommand(conversationsSearchCommand(messenger))
   if (topics) search.addCommand(topicsSearchCommand(messenger))
   return search

@@ -58,9 +58,7 @@ Explicit choices and gaps:
 - [Command names](#command-names) currently require immediate removal of renamed paths and no
   aliases. This differs from CLIG's deprecation guidance. The owner explicitly chose immediate
   relocation without a compatibility window. Old paths stop working at adoption; the release
-  notes and user docs give the new paths. One owner-approved exception (2026-10-13):
-  `--language legacy` keeps working for one or two releases with a stderr line, then goes
-  ([Output](#output), rule 7).
+  notes and user docs give the new paths.
 
 New commands are reviewed against this profile and the audit. Existing gaps require explicit
 implementation work with tests; citing a reference alone does not close them.
@@ -697,11 +695,9 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
      existing `next_steps` string, and the CLI writes one line to stderr naming `--discover`. No new
      key; stdout stays data. `search all` names `search messages --discover`, the one command that
      has it.
-   - **`--language legacy` is deprecated.** For one or two releases it runs the old matching
-     unchanged and writes one stderr line: plain search now forgives typos, and `--discover` finds
-     partial matches. MCP `language=legacy` adds the same sentence to `next_steps`. Then
-     `--language` leaves `search messages`, `searches create` and MCP together, with its parity
-     entry. `--exact` stays: it turns forgiveness off.
+   - **`--language` is removed when the forgiving default lands**: from `search messages`,
+     `searches create` and MCP together, with its parity entry. `--exact` stays: it turns
+     forgiveness off.
 8. **A search says which accounts it read** ([source-everywhere-plan.md](source-everywhere-plan.md)).
    Every stored thing has a kind (`messages`, `mail`, `notes`, `documents`, `meetings`), a provider
    and an account; `--source` takes `provider:account`, a bare provider, a bare kind or
@@ -758,8 +754,7 @@ whose values are levels. It holds for a command the owner types and for an agent
    as loose as the profile's level for `chats.moderate`.
 6. **The settings it replaces** — `readOnly`, `allow`, max's `mcpTools`, and the moderation words
    `forbid`, `flag`, `confirm` — are translated once by `config migrate`, then refused with a
-   message naming the new key. The MCP flags it replaces are accepted with a warning naming the
-   setting for one release, so a configured agent still starts, then go.
+   message naming the new key.
 
 7. **A bot's keys are the personal ones under `bot`**: `bot.messages.send`,
    `bot.chats.members.remove`, `bot.webhooks`. A profile can allow its bot what it does not allow
