@@ -37,9 +37,9 @@ describe("meeting commands", () => {
       "1",
       "--page",
       "1",
-      "--since",
+      "--since-time",
       "1970-01-01",
-      "--until",
+      "--until-time",
       "1970-01-02",
     ])
     expect(outputs[0]).toMatchObject({ format: "json", value: { page: 1, limit: 1, hasMore: false } })
@@ -55,8 +55,8 @@ describe("meeting commands", () => {
   })
   it("pulls and imports through injected sources and file readers", async () => {
     const { run, outputs } = await setup()
-    await run(["meetings", "pull", "--since", "1970-01-01"])
-    await run(["meetings", "pull"])
+    await run(["meetings", "sync", "--since-time", "1970-01-01"])
+    await run(["meetings", "sync"])
     await run(["meetings", "import", "example-folder"])
     expect(outputs[0]).toMatchObject({ value: { meetings: 1 } })
     expect(outputs[2]).toMatchObject({ value: { meetings: 0 } })
@@ -68,14 +68,14 @@ describe("meeting commands", () => {
     for (const args of [
       ["meetings", "list", "--limit", "0"],
       ["meetings", "list", "--limit", "9007199254740992"],
-      ["meetings", "list", "--since", "bad"],
+      ["meetings", "list", "--since-time", "bad"],
       ["meetings", "show", "999"],
       ["meetings", "list", "--json", "--jsonl"],
       ["meetings", "search", " "],
     ])
       await expect(run(args)).rejects.toThrow()
     const unconfigured = await setup({ source: undefined, readFiles: undefined })
-    await expect(unconfigured.run(["meetings", "pull"])).rejects.toThrow(/source/)
+    await expect(unconfigured.run(["meetings", "sync"])).rejects.toThrow(/source/)
     await expect(unconfigured.run(["meetings", "import", "example-folder"])).rejects.toThrow(/reader/)
     const badFiles = await setup({
       readFiles: async () => [{ meeting: { ...sampleMeeting().meeting, accountId: 2 }, content: "WEBVTT" }],
@@ -160,12 +160,4 @@ it("pagination detects the next page and readers validate arguments", async () =
   const saved = await store.meeting((await store.meetings())[0]?.id ?? 0)
   if (!saved) throw new Error("Missing meeting")
   await expect(meetingShow(store, saved.meeting.id, 2)).rejects.toThrow(/not found/)
-})
-
-it("mounts ingestion at the root without duplicate nested paths", async () => {
-  const { run, outputs } = await setup({ rootIngestion: true })
-  await run(["pull"])
-  await run(["import", "example-folder"])
-  expect(outputs.length).toBe(2)
-  await expect(run(["meetings", "pull"])).rejects.toThrow()
 })

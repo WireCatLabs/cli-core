@@ -19,10 +19,10 @@ it("CLI lookback revisits the cursor window for late transcripts and subtracts f
   })
   const run = async (...args: string[]) => {
     const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
-    addMeetingCommands(program, { store, source, accountId: 1, rootIngestion: true, write() {}, now: () => now })
-    await program.parseAsync(["pull", ...args], { from: "user" })
+    addMeetingCommands(program, { store, source, accountId: 1, write() {}, now: () => now })
+    await program.parseAsync(["meetings", "sync", ...args], { from: "user" })
   }
-  await run("--since", "1970-01-01")
+  await run("--since-time", "1970-01-01")
   available = true
   now += 1000
   await run()
@@ -33,12 +33,12 @@ it("CLI lookback revisits the cursor window for late transcripts and subtracts f
   await run("--lookback-days", "1")
   expect(boundaries[2]).toBe("1970-01-01T00:00:01.000Z")
   expect((await store.meeting(meeting?.id ?? 0))?.transcripts[0]?.rows[0]?.text).toBe("Late example transcript")
-  await run("--since", "1970-01-02", "--lookback-days", "1")
+  await run("--since-time", "1970-01-02", "--lookback-days", "1")
   expect(boundaries[3]).toBe("1970-01-01T00:00:00.000Z")
   expect((await store.meeting(meeting?.id ?? 0))?.transcripts).toHaveLength(1)
-  await run("--since", "1970-01-02", "--lookback-days", "0")
+  await run("--since-time", "1970-01-02", "--lookback-days", "0")
   expect(boundaries[4]).toBe("1970-01-02T00:00:00.000Z")
-  await run("--since", "1970-02-01", "--lookback-days", "31")
+  await run("--since-time", "1970-02-01", "--lookback-days", "31")
   expect(boundaries[5]).toBe("1970-01-01T00:00:00.000Z")
 })
 
@@ -54,7 +54,7 @@ it("CLI rejects invalid lookback bounds before requesting provider records", asy
     const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
     addMeetingCommands(program, { store: memoryMeetingStore(), source, accountId: 1, write() {} })
     await expect(
-      program.parseAsync(["meetings", "pull", "--lookback-days", days], { from: "user" }),
+      program.parseAsync(["meetings", "sync", "--lookback-days", days], { from: "user" }),
     ).rejects.toMatchObject({ code: "commander.invalidArgument" })
   }
   expect(requests).toBe(0)

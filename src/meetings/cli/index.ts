@@ -18,7 +18,6 @@ import type { MeetingStore } from "../store.js"
 export interface MeetingCommandDeps {
   store: MeetingStore
   accountId: number
-  rootIngestion?: boolean
   source?: MeetingSource
   readFiles?: (folder: string) => Promise<ImportFile[]>
   writeFile?: (path: string, content: string) => Promise<void>
@@ -54,15 +53,15 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
   }
   output(group.command("list").description("list stored meetings"))
-    .option("--since <date>", "meetings starting at or after this date", date)
-    .option("--until <date>", "meetings starting at or before this date", date)
+    .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", date)
+    .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", date)
     .option("--limit <n>", "meetings per page", integer, 100)
     .option("--page <n>", "page number", integer, 1)
-    .action(async (opts: { since?: number; until?: number; limit: number; page: number }, command: Command) => {
+    .action(async (opts: { sinceTime?: number; untilTime?: number; limit: number; page: number }, command: Command) => {
       print(
         await meetingsList(
           deps.store,
-          { accountId: deps.accountId, since: opts.since, until: opts.until, limit: opts.limit },
+          { accountId: deps.accountId, since: opts.sinceTime, until: opts.untilTime, limit: opts.limit },
           opts.page,
         ),
         command,
@@ -128,23 +127,23 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     group
       .command("search")
       .description("search stored transcripts, chat and summaries")
-      .argument("<query>")
-      .option("--since <date>", "meetings starting at or after this date", date)
-      .option("--until <date>", "meetings starting at or before this date", date)
+      .argument("<query>", "words to find")
+      .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", date)
+      .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", date)
       .option("--event-id <id>", "only meetings linked to this stored event", integer)
       .option("--series-id <id>", "only meetings in this stored series", integer)
       .addHelpText("after", SAVE_HELP),
   ).action(
     async (
       query: string,
-      opts: { since?: number; until?: number; eventId?: number; seriesId?: number },
+      opts: { sinceTime?: number; untilTime?: number; eventId?: number; seriesId?: number },
       command: Command,
     ) => {
       print(
         await meetingsSearch(deps.store, query, {
           accountId: deps.accountId,
-          since: opts.since,
-          until: opts.until,
+          since: opts.sinceTime,
+          until: opts.untilTime,
           eventId: opts.eventId,
           meetingSeriesId: opts.seriesId,
         }),
@@ -152,24 +151,23 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       )
     },
   )
-  output(group.command("people").description("find meeting participants by name or email").argument("<query>")).action(
-    async (query: string, _opts: unknown, command: Command) => {
-      print(listed(await deps.store.participants(query, deps.accountId)), command)
-    },
-  )
   output(
-    (deps.rootIngestion ? program : group)
-      .command("pull")
-      .description("fetch meeting records from the connected account"),
-  )
-    .option("--since <date>", "fetch occurrences starting at or after this date", date)
+    group
+      .command("people")
+      .description("find meeting participants by name or email")
+      .argument("<query>", "a name or an email address"),
+  ).action(async (query: string, _opts: unknown, command: Command) => {
+    print(listed(await deps.store.participants(query, deps.accountId)), command)
+  })
+  output(group.command("sync").description("bring the stored meetings up to date from the connected account"))
+    .option("--since-time <time>", "fetch meetings starting at or after this ISO 8601 date or time", date)
     .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays, 0)
-    .action(async (opts: { since?: number; lookbackDays: number }, command: Command) => {
+    .action(async (opts: { sinceTime?: number; lookbackDays: number }, command: Command) => {
       if (!deps.source) throw new MeetingError("configuration_error", "meeting source is unavailable")
       print(
         await pull(deps.source, deps.store, {
           accountId: deps.accountId,
-          since: opts.since === undefined ? undefined : new Date(opts.since).toISOString(),
+          since: opts.sinceTime === undefined ? undefined : new Date(opts.sinceTime).toISOString(),
           now: deps.now?.(),
           lookbackMs: opts.lookbackDays * 86400000,
         }),
@@ -177,10 +175,10 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       )
     })
   output(
-    (deps.rootIngestion ? program : group)
+    group
       .command("import")
       .description("import downloaded meeting transcripts")
-      .argument("<folder>"),
+      .argument("<folder>", "folder of transcripts downloaded from the provider"),
   ).action(async (folder: string, _opts: unknown, command: Command) => {
     if (!deps.readFiles) throw new MeetingError("configuration_error", "file reader is unavailable")
     const files = await deps.readFiles(folder)

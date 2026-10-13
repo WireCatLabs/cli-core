@@ -148,9 +148,9 @@ series inheritance guarantees require coordination with the SQLite adapter.
 
 [`src/cli/index.ts`](../../src/meetings/cli/index.ts) mounts Commander commands on a host program. Dependencies
 supply the selected account, store, source, file reader, output writer and clock. Show and transcript
-are scoped to that account. Pull exposes `--lookback-days <days>`, an integer from zero through 31
-(default zero), forwarding days as `lookbackMs`. It subtracts from the selected boundary, including
-an explicit `--since`; invalid bounds fail before provider discovery. Groups have no default action. The host owns rendering and exit codes.
+are scoped to that account. `meetings sync` runs `pull` and exposes `--lookback-days <days>`, an integer
+from zero through 31 (default zero), forwarding days as `lookbackMs`. It subtracts from the selected
+boundary, including an explicit `--since-time`; invalid bounds fail before provider discovery. Groups have no default action. The host owns rendering and exit codes.
 
 [`src/mcp/index.ts`](../../src/meetings/mcp/index.ts) exports JSON schemas, read annotations and a dispatcher
 for the meeting read tools. The server owns registration and access policy. Arguments use snake case

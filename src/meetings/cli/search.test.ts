@@ -33,11 +33,11 @@ it("forwards combined context, dates and continuation to an injected provider-ne
       "RES",
       "--topic",
       "costs",
-      "--since",
+      "--since-time",
       "2026-09-12",
-      "--until",
+      "--until-time",
       "2026-10-12",
-      "--after",
+      "--cursor",
       "abc",
       "--limit",
       "10",
@@ -59,14 +59,14 @@ it("forwards combined context, dates and continuation to an injected provider-ne
 })
 it("rejects impossible dates and invalid selectors before opening a store", async () => {
   const cases = [
-    ["--since", "2026-02-30"],
-    ["--since", "2026-10-12T10:00:00"],
+    ["--since-time", "2026-02-30"],
+    ["--since-time", "2026-10-12T10:00:00"],
     ["--identity-id", "0"],
     ["--person-id", "1.5"],
     ["--tag", "plan", "--topic", "plan"],
-    ["--since", "2026-10-12", "--until", "2026-09-12"],
+    ["--since-time", "2026-10-12", "--until-time", "2026-09-12"],
     ["--limit", "1001"],
-    ["--after", "!"],
+    ["--cursor", "!"],
     ["--project", " "],
   ]
   for (const flags of cases) {

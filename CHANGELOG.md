@@ -20,6 +20,14 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 - **`runs show` prints only what went wrong.** The answer keeps the run's metadata and adds `eventCount`;
   `events` holds the failed responses, warnings and the crash. `-v` shows every event, as before.
+- **The meeting commands use the shared command words** (zm adopts them with this release). The old names stop
+  working:
+  - `pull` is `meetings sync`, and `import` is `meetings import`. The `rootIngestion` option of
+    `addMeetingCommands` is gone: both always mount under `meetings`.
+  - `--since`/`--until` are `--since-time`/`--until-time` on `meetings list`, `meetings search`,
+    `meetings search-page` and `meetings sync`.
+  - `meetings search-page --after` is `--cursor`; its `--limit` takes `<n>`.
+  - Every argument has a description, and the `search-page` summary fits in 80 characters.
 
 ## 0.257.0 — 13.10.2026
 
