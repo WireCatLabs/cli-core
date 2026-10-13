@@ -1,18 +1,6 @@
-export interface RecoveryAction {
-  type: "wait" | "retry" | "configure" | "skip" | "check"
-  message: string
-  afterMs?: number
-  setting?: string
-}
+import type { ActionableError, RecoveryAction } from "../domain/recovery.js"
 
-export interface ActionableError {
-  code: string
-  message: string
-  retryable: boolean
-  actions: RecoveryAction[]
-  retry_after_ms?: number
-  [key: string]: unknown
-}
+export type { ActionableError, RecoveryAction }
 
 export const withRecovery = (error: { code: string; message: string; [key: string]: unknown }): ActionableError => {
   const wait = Number(error.retry_after_ms)

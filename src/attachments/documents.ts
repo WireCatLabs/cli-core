@@ -1,8 +1,8 @@
 import { posix } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import type { Element, Node } from "@xmldom/xmldom"
+import type { Extraction, FileHint } from "../readers/types.js"
 import { elements, ReaderLimit, readContainer, xmlPart } from "./container.js"
-import type { Extraction, FileHint } from "./extract.js"
 
 import { MAX_TEXT_CHARS as MAX_TEXT } from "./limits.js"
 import { type Sheet, type SheetCell, sheetText } from "./sheets.js"
