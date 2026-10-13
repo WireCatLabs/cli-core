@@ -20,12 +20,19 @@ cm#1024 typo plan · cm#1026 STANDARD chats documents · cm#1027 STANDARD typo l
 cli-memo#116 drive-folder guard · cli-memo#117 memo never picks an account · cli-testing#37 typo
 benchmark.
 
-In flight: `--source` phase 1 (provider registry, one id per notes folder, skipped-not-silent,
-`search all --source`) — branch `feat/source-providers`, worktree `cli-messaging-wt-source-phase1`.
+Also merged: cm#1031 provider registry + bare words + `notes:<id>` + skipped-not-silent ·
+cm#1032 `search all --source` + `accounts` · cm#1033 `--folder`/`--account`/`--meetings` removed
+(errors name `--source`), `in:` takes the new words. Open for the owner: cm#1030 (STANDARD
+`nextStep` on `attachments list --needs-text`, item 5).
+
+At the next tg/max bump of cli-messaging (after #1033): update `src/search-namespace-adoption.test.ts`
+(tg :126, max :130 pass `--folder`), `docs/dev/test-matrix.md` (tg :643,676,684; max :575,608,616),
+regenerate `docs/commands.md`; then delete the three "planned" removed-option rows from
+cli-messaging `parity.json`. After cm#1025 merges: `search mail` prints a `searched:` line.
 
 Next, in order:
-1. `--source` phase 2: remove `--folder`, `search mail --account`, `--meetings`; per-CLI login offers
-   to join a group.
+1. Per-CLI login/profile-create offers to join an account group (tg, max, memo, drive, zoom), and
+   `drive:<profile>` with the drive switch.
 2. Typo service code per cm#1024/#1027 — after cm#1025 merges (field-test session owns it).
 3. Drive switch + Drive provider + `linkMessages` call — after drive#19 and a release with cm#1017.
 4. Items 5 and 6 below — after cm#1013 / cm#1006. Item 4's name (`messages sync <chat> --files`)
