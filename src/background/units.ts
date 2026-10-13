@@ -4,6 +4,7 @@ import { dirname, join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import type { ServerSystem } from "./system.js"
+import { keptOldStore } from "./wirecat-folder.js"
 
 export interface Unit {
   profile: string
@@ -35,7 +36,8 @@ export const locationVariables = (app: AppIdentity, env: NodeJS.ProcessEnv): Rec
     "MESSAGING_STATE_DIR",
     "WIRECAT_STATE_DIR",
   ]
-  return Object.fromEntries(names.flatMap((name) => (env[name] === undefined ? [] : [[name, env[name]]])))
+  const kept = (name: string) => name === "MESSAGING_STORE" && env[name] === keptOldStore()
+  return Object.fromEntries(names.flatMap((name) => (env[name] === undefined || kept(name) ? [] : [[name, env[name]]])))
 }
 
 /**
