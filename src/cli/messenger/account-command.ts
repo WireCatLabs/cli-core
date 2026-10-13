@@ -8,7 +8,7 @@ import { openStore } from "../../store/store.js"
 import { renderList } from "../paging.js"
 import { NONE_NAMED } from "../settings.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
-import { profilesHere, recalledAccount } from "./accounts.js"
+import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { privacyCommand } from "./records-command.js"
 
@@ -23,10 +23,7 @@ export const accountCommand = (messenger: Messenger): Command => {
           const { app, provider } = messenger
           const current = context.settings.sources.profile === NONE_NAMED ? undefined : context.settings.profile
           const profiles = [
-            ...new Set([
-              ...(current === undefined ? [] : [current]),
-              ...profilesHere(app, context.settings.configuredProfiles, context.env),
-            ]),
+            ...new Set([...(current === undefined ? [] : [current]), ...context.settings.profilesHere]),
           ].sort()
           const store = existsSync(storePath(context.env))
             ? await openStore({ env: context.env }).catch(() => undefined)

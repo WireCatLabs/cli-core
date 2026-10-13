@@ -16,7 +16,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   `config migrate` and `config set --defaults` still run, showing no current profile (`profile: null`,
   `profileFrom: "none named"`). `asFirstWord` always returns the profile, so every hint names it, and the bot
   MCP server always passes it. `ResolveOptions.needsProfile: false` and the third argument of
-  `messengerContext` let a tool's own no-account command run unnamed; `profilesHere` lists the profiles.
+  `messengerContext` let a tool's own no-account command run unnamed. `Settings.profilesHere` lists the profiles; a messenger with profile files of its own adds them through `SettingsExtension.profiles`.
 - **`search all` answers a required `accounts` field, and a `skipped` entry may carry `source` in place of
   `resource`** (`SearchAllFound`, `SearchAllIncludingMeetingsFound`): a fake that builds the answer adds
   `accounts`, and code reading `skipped[].resource` handles `undefined`.

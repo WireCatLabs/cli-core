@@ -164,6 +164,16 @@ describe("the order a setting is decided in", () => {
     expect(() => strict({}, env)).toThrow("profiles here: personal, work (or set APP_PROFILE)")
   })
 
+  it("counts the profiles a messenger keeps in its own files, in the error and in `profilesHere`", () => {
+    const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
+    const own = settingsFor(
+      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
+      { profiles: () => ["sales"] },
+    )
+    expect(() => own.resolveSettings({}, { env, configDir })).toThrow("profiles here: sales (or set APP_PROFILE)")
+    expect(own.resolveSettings({}, { env, configDir, needsProfile: false }).profilesHere).toEqual(["sales"])
+  })
+
   it("takes a profile from the first word, APP_PROFILE or `defaultProfile`, and runs a no-account command without", () => {
     const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
     withConfig(JSON.stringify({ profiles: { work: {}, personal: {} } }))

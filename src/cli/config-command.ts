@@ -11,7 +11,6 @@ import { Command } from "commander"
 import * as v from "valibot"
 import { type AppIdentity, envName } from "./app.js"
 import { baseContext } from "./context.js"
-import { profilesHere } from "./messenger/accounts.js"
 import { knownBeside, knownPermissionKeys, type PermissionKeyOf } from "./permission-keys.js"
 import { hasPermissionConfig, migratePermissionConfig } from "./permission-migration.js"
 import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
@@ -68,7 +67,7 @@ export const configCommand = (
       renderer.result({
         profile: settings.sources.profile === NONE_NAMED ? null : settings.profile,
         profileFrom: settings.sources.profile,
-        profiles: profilesHere(app, settings.configuredProfiles, env),
+        profiles: settings.profilesHere,
         configFile: settings.configPath,
         configFound: settings.configFound,
         pathsOverridden: overridden,

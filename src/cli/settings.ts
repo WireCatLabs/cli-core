@@ -122,6 +122,8 @@ export interface SettingsExtension<T extends object = Record<never, never>> {
   profile?: v.ObjectEntries
   /** For the whole program only, never per profile. */
   defaults?: v.ObjectEntries
+  /** Profiles this messenger keeps in files of its own, beyond the config file and the remembered accounts. */
+  profiles?: (env: NodeJS.ProcessEnv) => string[]
 }
 
 export interface SettingsExtensionContext {
@@ -230,6 +232,8 @@ export interface Settings extends AISettings {
   configFound: boolean
   /** Profiles the configuration file names, whether or not anyone has logged in to them. */
   configuredProfiles: string[]
+  /** Every profile on this computer — what `account list` shows and a missing profile's error lists. */
+  profilesHere: string[]
   /** Where each value came from — `config show` prints it. */
   sources: Record<string, Source>
   /** This profile's entries and the shared defaults, for an adapter resolving its own fields with `first`. */
@@ -349,7 +353,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
    */
   const unnamed = (config: Config, env: NodeJS.ProcessEnv, needed: boolean): { value: string; from: Source } => {
     if (!needed) return { value: DEFAULT_PROFILE, from: NONE_NAMED }
-    const here = profilesHere(app, namedProfiles(config), env)
+    const here = profilesOf(config, env)
     throw new CliError(
       "validation_error",
       here.length === 0
@@ -359,6 +363,9 @@ export const settingsFor = <T extends object = Record<never, never>>(
       { profiles: here },
     )
   }
+
+  const profilesOf = (config: Config, env: NodeJS.ProcessEnv): string[] =>
+    profilesHere(app, [...namedProfiles(config), ...(extension.profiles?.(env) ?? [])], env)
 
   const resolveSettings = (flags: GlobalFlags = {}, options: ResolveOptions = {}): Settings & T => {
     const env = options.env ?? process.env
@@ -509,6 +516,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       configPath,
       configFound: existsSync(configPath),
       configuredProfiles: namedProfiles(config),
+      profilesHere: profilesOf(config, env),
       sources: {
         ...ai.sources,
         profile: profile.from,
