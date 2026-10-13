@@ -3979,6 +3979,49 @@ describe("messages transcribe", () => {
     expect(asked).toBe(1)
   })
 
+  describe("a kept transcript", () => {
+    const voiceNote = { ...message, text: "", attachments: [{ kind: "voice", mime: "audio/ogg" }] }
+    const hearing = (asked: string[]) => ({
+      ...fake,
+      history: async () => ({ items: [voiceNote], hasMore: false }),
+      around: async () => [{ ...voiceNote, anchor: true as const }],
+      transcribe: async () => {
+        asked.push("transcribe")
+        return { text: "synthetic zebrafinch", pending: false }
+      },
+    })
+    const found = async (root: NodeJS.ProcessEnv, connect: Messenger["connect"]) =>
+      JSON.parse(
+        (await call(["search", "messages", "content:zebrafinch", "--language", "lucene", "--json"], connect, root))
+          .stdout[0] ?? "",
+      ).items.map(({ id }: { id: string }) => id)
+
+    it("**is shown by messages show, found by content: and not heard again**", async () => {
+      const root = env()
+      const asked: string[] = []
+      const connect = async () => hearing(asked)
+
+      await call(["messages", "list", "Book", "--transcribe", "--json"], connect, root)
+      const shown = await call(["messages", "show", "Book", "1", "--json"], connect, root)
+      const again = await call(["messages", "transcribe", "Book", "1", "--json"], connect, root)
+
+      expect(JSON.parse(shown.stdout[0] ?? "").transcript).toBe("synthetic zebrafinch")
+      expect(JSON.parse(again.stdout[0] ?? "")).toMatchObject({ text: "synthetic zebrafinch", pending: false })
+      expect(asked).toEqual(["transcribe"])
+      expect(await found(root, connect)).toEqual(["1"])
+    })
+
+    it("**is found by content: when it was heard before the message was stored**", async () => {
+      const root = env()
+      const connect = async () => hearing([])
+
+      await call(["messages", "transcribe", "Book", "1", "--json"], connect, root)
+      await call(["messages", "list", "Book", "--json"], connect, root)
+
+      expect(await found(root, connect)).toEqual(["1"])
+    })
+  })
+
   it("lists the speech models Parakeet first, none downloaded, the first the default", async () => {
     const { stdout } = await call(["models", "audio", "list", "--json"], async () => fake, env())
 

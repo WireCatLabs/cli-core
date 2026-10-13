@@ -52,6 +52,12 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **A kept voice transcript is found and reused.** It becomes the voice attachment's text (extractor
+  `speech:<model>`), so `content:` finds it, including a transcript made before its message was stored;
+  `store reindex` fills it in for transcripts kept before. `messages show` and `messages context` show it, and
+  `messages transcribe` answers it without hearing the message again, unless `--model`/`--local` asks for a
+  different model than the one that heard it.
+
 - **`upgrade` reads back the version it installed** when the host passes `installed` (and, for the time,
   `publishedAt`). The result gains `installed`; `updated` is false when the version did not change; when the package
   manager installed an older version than `latest` — pnpm 11 holds a version for 1 day by default
