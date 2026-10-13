@@ -4,6 +4,8 @@ import { newRunId } from "./run.js"
 export interface RunScope {
   runId: string
   command: string
+  /** Epoch ms; an answer's `meta.duration_ms` counts from here. */
+  startedAt?: number
 }
 
 const scopes = new AsyncLocalStorage<RunScope>()
@@ -17,7 +19,7 @@ let processScope: RunScope | undefined
 export const currentRun = (): RunScope => {
   const scope = scopes.getStore()
   if (scope) return scope
-  processScope ??= { runId: newRunId(new Date(), "process"), command: "" }
+  processScope ??= { runId: newRunId(new Date(), "process"), command: "", startedAt: Date.now() }
   return processScope
 }
 

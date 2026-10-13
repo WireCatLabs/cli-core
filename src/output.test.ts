@@ -3,28 +3,11 @@ import { describe, expect, it } from "vitest"
 import { resolveOutput } from "./output.js"
 
 describe("the output mode", () => {
-  it("opts agents into visible controls without changing ordinary JSON", () => {
+  it("keeps text as written in JSON, invisible controls too", () => {
     const text = "a\u202e\u0085\ufeff\u{e0041}b"
     const raw = captureStreams()
     resolveOutput({ json: true, streams: raw }).renderer.result({ text })
     expect(JSON.parse(raw.stdout[0] as string).text).toBe(text)
-    const safe = captureStreams()
-    resolveOutput({ agentJson: true, tty: true, streams: safe }).renderer.result({ text })
-    expect(JSON.parse(safe.stdout[0] as string).text).toBe("a\\u202e\\x85\\ufeff\\u{e0041}b")
-    expect(safe.stderr).toEqual([])
-  })
-
-  it("guards each JSONL item and preserves whole subdivision flags", () => {
-    const flag =
-      "\u{1f3f4}" +
-      "gbeng"
-        .split("")
-        .map((char) => String.fromCodePoint(0xe0000 + char.charCodeAt(0)))
-        .join("") +
-      "\u{e007f}"
-    const streams = captureStreams()
-    resolveOutput({ agentJson: true, jsonl: true, streams }).renderer.stream([{ text: flag }, { text: "\u202e" }])
-    expect(streams.stdout.map((line) => JSON.parse(line).text)).toEqual([flag, "\\u202e"])
   })
 
   it("writes one JSON value to stdout and nothing to stderr when piped", () => {

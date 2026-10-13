@@ -24,9 +24,6 @@
       "value": "<agent>",
       "meaning": "install the skill for this agent; asks at a terminal, otherwise none"
     },
-    "--agent-json": {
-      "meaning": "agent-safe JSON output: control and direction characters visible in strings and keys; combine with --jsonl for streams"
-    },
     "--ai": {
       "meaning": "call the configured reply model with stored message data; requires reply consent, otherwise uses fallback"
     },
@@ -366,10 +363,6 @@
     },
     "--failed": {
       "meaning": "every chat whose newest job failed or died"
-    },
-    "--fields": {
-      "value": "<paths>",
-      "meaning": "only these comma-separated fields of machine result items; preserves list metadata"
     },
     "--file": {
       "value": "<file>",
@@ -1161,13 +1154,6 @@
     }
   },
   "globalOptions": {
-    "--agent-json": {
-      "in": [],
-      "planned": {
-        "max": "each CLI’s next cli-core bump",
-        "tg": "each CLI’s next cli-core bump"
-      }
-    },
     "--brief": {
       "in": [],
       "planned": {
@@ -1177,7 +1163,6 @@
     },
     "--debug": "all",
     "--dry-run": "all",
-    "--fields": "all",
     "--full": {
       "in": [],
       "planned": {

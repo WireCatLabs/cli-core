@@ -33,7 +33,9 @@ export interface RecordingOptions {
 export const recorded = async <T>(options: RecordingOptions, body: (events: EventSink) => Promise<T>): Promise<T> => {
   const recording = startRecording(options)
   try {
-    const answer = await inRun({ runId: recording.runId, command: options.command }, () => body(recording.events))
+    const answer = await inRun({ runId: recording.runId, command: options.command, startedAt: Date.now() }, () =>
+      body(recording.events),
+    )
     await recording.succeed(answer)
     return answer
   } catch (error) {

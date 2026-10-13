@@ -197,7 +197,7 @@ describe("agent CLI contract", () => {
   })
 
   it("projects fields and fails visibly before an oversized document is emitted", async () => {
-    const projected = await invoke(["messages", "send", "synthetic", "--json", "--fields", "id"])
+    const projected = await invoke(["messages", "send", "synthetic", "--json=id"])
     expect(JSON.parse(projected.stdout[0] ?? "")).toEqual({ id: "synthetic", operationId: "op-synthetic" })
     const bounded = await invoke(["messages", "send", "synthetic", "--json", "--max-output-bytes", "4"])
     expect(bounded.result).not.toBe(0)
@@ -268,11 +268,4 @@ it("honors the whole-command timeout environment and explicit flag precedence", 
     },
   )
   expect(overridden.result).toBe(6)
-})
-
-it("rejects projection of human output before preparation or writes", async () => {
-  const result = await invoke(["messages", "send", "synthetic", "--fields", "id"], { tty: true })
-  expect(result.result).toBe(2)
-  expect(result.performed).not.toHaveBeenCalled()
-  expect(result.prepare).not.toHaveBeenCalled()
 })

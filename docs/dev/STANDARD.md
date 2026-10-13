@@ -635,7 +635,8 @@ The shared shell adds these conventions; the manifest tracks adoption:
 - One-shot actions have a 30-second default budget unless a flag/environment supplies another.
   Help/version and intended watch/serve/MCP lifetimes are exempt. Signals cancel tracked resources;
   SIGINT/SIGTERM follow shell exit conventions. Broken pipes end quietly without a stack trace.
-- `--fields` projects machine result fields; list pagination/coverage metadata stays present.
+- `--json=id,text` keeps only those fields of each item; the envelope (`page`, `next`, `meta`) stays. A bare
+  `--json` at a terminal names the fields of a command that declares its answer, instead of printing them all.
   `--max-output-bytes` bounds serialized machine data (4 MiB; zero explicitly disables the bound).
   Exceeding a bound fails visibly with retryable:false, never a malformed or silently cropped JSON
   response. File exports retain their streaming contract.
@@ -667,7 +668,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--after-n` | `<n>` | how many messages after it |  | `messages context` |
 | `--after-time` | `<time>` | read what came after this ISO 8601 time, or 2h / 1d ago; not with --after-id or the --before pair |  | `messages list` |
 | `--agent` | `<agent>` | install the skill for this agent; asks at a terminal, otherwise none |  | `setup` |
-| `--agent-json` |  | agent-safe JSON output: control and direction characters visible in strings and keys; combine with --jsonl for streams |  | every command (planned) |
 | `--ai` |  | call the configured reply model with stored message data; requires reply consent, otherwise uses fallback |  | `replies test` |
 | `--all` |  | every row, no paging. **chats requests accept and decline take every pending request instead — Telegram counts them against its hourly limit first; MAX has no way to answer them all at once and refuses it, naming chats requests list — so it differs on purpose (Help text rule 4)** |  | `attachments list`, `chats list`, `chats members list`, `chats requests accept`, `chats requests decline`, `contacts list`, `inbox`, `messages download`, `messages sync`, `review`, `store export` |
 | `--all-bots` |  | also read every other bot's copy on this machine that readOtherBots allows |  | `bot contacts show`, `bot messages between`, `bot search messages` |
@@ -757,7 +757,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--expire-time` | `<time>` | it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now |  | `chats link create` (tg-only), `chats link update` (tg-only) |
 | `--extract` |  | extract text from files mapped by this download |  | `messages download` |
 | `--failed` |  | every chat whose newest job failed or died |  | `store jobs retry` |
-| `--fields` | `<paths>` | only these comma-separated fields of machine result items; preserves list metadata |  | every command |
 | `--file` | `<file>` | attach a file; images go as a photo, videos as a video. Repeat it for more |  | `bot messages send`, `contacts notes add`, `contacts notes edit`, `messages send` |
 | `--filename` | `<name>` | the name others see for the --file, instead of its name on disk |  | `messages send` (tg-only) |
 | `--filter` | `query` | Strict Lucene filter: any message in the conversation must match; the meaning query stays unchanged. **search notes uses it for a query every note must also match, the meaning half unchanged** |  | `search conversations`, `search notes` |

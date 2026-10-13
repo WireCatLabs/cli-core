@@ -7,13 +7,11 @@ import {
   singleLine,
 } from "@wirecat/cli-base"
 import { fieldsOf, projectFields } from "./cli/result-fields.js"
-import { agentJson as serializeAgentJson } from "./mcp/text.js"
 import { atDetail, type Detail } from "./output-detail.js"
 
 export interface OutputOptions {
   json?: boolean
   jsonl?: boolean
-  agentJson?: boolean
   quiet?: boolean
   streams?: Streams
   /** Whether a person is looking. Defaults to whether stdout is a terminal. */
@@ -36,7 +34,6 @@ export interface OutputOptions {
 export const resolveOutput = ({
   json,
   jsonl,
-  agentJson,
   quiet,
   streams = processStreams,
   tty,
@@ -46,10 +43,10 @@ export const resolveOutput = ({
   env = process.env,
 }: OutputOptions = {}) => {
   const interactive = tty ?? process.stdout.isTTY === true
-  const format: RenderFormat = jsonl ? "jsonl" : agentJson || json || !interactive ? "json" : "pretty"
+  const format: RenderFormat = jsonl ? "jsonl" : json || !interactive ? "json" : "pretty"
   const painted = format === "pretty" && (color ?? (env.NO_COLOR === undefined && env.TERM !== "dumb" && !env.CI))
   const rendered = createRenderer({ format, color: painted, streams })
-  // `--fields` names exactly what to keep, so it chooses from everything unless a level was asked for too.
+  // `--json=<fields>` names exactly what to keep, so it chooses from everything unless a level was asked for too.
   const level = hitDetail ?? (fields === undefined ? "default" : "full")
   const standard =
     format === "pretty"
@@ -59,14 +56,7 @@ export const resolveOutput = ({
           result: (value: unknown) => rendered.result(atDetail(value, level)),
           stream: (items: Iterable<unknown>) => rendered.stream(atDetail([...items], level)),
         }
-  const safe = (value: unknown) => JSON.parse(serializeAgentJson(value)) as unknown
-  const created = agentJson
-    ? {
-        ...standard,
-        result: (value: unknown) => standard.result(safe(value)),
-        stream: (items: Iterable<unknown>) => standard.stream([...items].map(safe)),
-      }
-    : standard
+  const created = standard
   const paths = fields === undefined ? undefined : fieldsOf(fields)
   const renderer =
     format === "pretty"

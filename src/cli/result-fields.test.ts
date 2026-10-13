@@ -1,4 +1,4 @@
-import { fieldsOf as coreFieldsOf, projectFields as coreProjectFields } from "@wirecat/cli-base"
+import { projectFields as coreProjectFields } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { fieldsOf, projectFields } from "./result-fields.js"
 
@@ -42,7 +42,7 @@ describe("machine result projection", () => {
       "a[0]",
       Array.from({ length: 129 }, () => "id").join(","),
     ])
-      expect(() => fieldsOf(path)).toThrow("--fields")
+      expect(() => fieldsOf(path)).toThrow("--json")
     expect(fieldsOf("id, id")).toEqual(["id"])
   })
   it("does not mutate an immutable parent when paths overlap", () => {
@@ -62,7 +62,6 @@ it("accepts items.id consistently for paged rows, arrays and JSONL items", () =>
 })
 
 it("reuses core projection while preserving metadata-only empty selections", () => {
-  expect(fieldsOf).toBe(coreFieldsOf)
   const value = {
     items: [
       { id: "example", operationId: "example-operation", sendId: "example-send" },
@@ -100,5 +99,14 @@ it("rejects unsafe direct paths and excessive selections before projection", () 
     ["a".repeat(257)],
     Array.from({ length: 129 }, () => "id"),
   ])
-    expect(() => projectFields({}, paths)).toThrow("--fields")
+    expect(() => projectFields({}, paths)).toThrow("--json")
+})
+
+it("cuts an item answer down to the fields asked, keeping its next steps and meta", () => {
+  const answer = {
+    item: { id: "1", title: "Synthetic", kind: "group" },
+    next: [],
+    meta: { run_id: "r", duration_ms: 1 },
+  }
+  expect(projectFields(answer, ["title"])).toEqual({ ...answer, item: { title: "Synthetic" } })
 })

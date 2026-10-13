@@ -1,17 +1,21 @@
 import type { CallToolResult, McpServer, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
 import { toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError, errorCodes, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
-import type { ErrorObject } from "@wirecat/cli-base/standards"
+import { type ErrorObject, itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { AISettings } from "../analysis/settings.js"
+import { isBody, sealed } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { MAX_BUFFERED_INPUT } from "../cli/input-policy.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { MessengerAdapter } from "../cli/messenger/port.js"
 import { type AppErrors, failureContext } from "../cli/reasons.js"
 import { partialOutcome, startRecording } from "../cli/runs/recording.js"
+import { newRunId } from "../cli/runs/run.js"
+import { inRun } from "../cli/runs/scope.js"
 import type { Settings } from "../cli/settings.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
+import { ENTITIES, type EntityName } from "../entities/index.js"
 import type { SendGuard } from "../sends/guard.js"
 import {
   assertStatsPermissionsCurrent,
@@ -93,6 +97,8 @@ interface Tool<S extends Input> {
   /** Over the session's connection. */
   online?: (adapter: MessengerAdapter, args: v.InferOutput<S>, defaults: Defaults) => Promise<object>
   outputLimit?: (args: Record<string, unknown>, defaults: Defaults) => number
+  /** The entity it answers with, once it answers in the envelope: its `outputSchema` is generated from it. */
+  output?: { entity: EntityName; list: boolean }
   /** Content reads only: added to the answer as `next_steps`. */
   nextSteps?: string
   storedWhen?: (args: v.InferOutput<S>) => boolean
@@ -244,7 +250,10 @@ export const entryRunner = (registration: Registration): RunEntry => {
   const { log } = registration
   return async (key, definition, args, ctx) => {
     const startedAt = Date.now()
-    const result = await run(key, definition, args, ctx)
+    const command = `mcp ${key.replaceAll("_", " ")}`
+    const result = await inRun({ runId: newRunId(new Date(startedAt), command), command, startedAt }, () =>
+      run(key, definition, args, ctx),
+    )
     if (
       key !== "runs_search" &&
       registration.defaults.history !== false &&
@@ -285,7 +294,7 @@ export const entryRunner = (registration: Registration): RunEntry => {
 }
 
 const withNextSteps = (definition: AnyTool, result: object): object =>
-  definition.nextSteps === undefined || result instanceof Picture || result instanceof BinaryResource
+  definition.nextSteps === undefined || result instanceof Picture || result instanceof BinaryResource || isBody(result)
     ? result
     : { ...result, next_steps: definition.nextSteps }
 
@@ -378,15 +387,25 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
   }
 }
 
-/** Registers each tool as `<cli>_<name>`; every tool's description ends with the warning about data. */
+/** The envelope a tool's answer is checked against: generated from its entity, or any object until it declares one. */
+export const outputSchemaOf = (definition: Pick<AnyTool, "output">): v.GenericSchema => {
+  if (!definition.output) return v.looseObject({})
+  const entity = ENTITIES[definition.output.entity] as v.GenericSchema
+  return definition.output.list ? listEnvelopeSchema(entity) : itemEnvelopeSchema(entity)
+}
+
+/**
+ * Registers each tool as `<cli>_<name>`, in name order so a client sees the same list every time; every tool's
+ * description ends with the warning about data.
+ */
 export const registerTools = (server: McpServer, tools: Record<string, AnyTool>, registration: Registration): void => {
   const run = entryRunner(registration)
-  for (const [key, definition] of Object.entries(tools)) {
+  for (const [key, definition] of Object.entries(tools).sort(([one], [other]) => one.localeCompare(other))) {
     const syncAllowed = syncAllowedFor(key, registration.defaults)
     server.registerTool(
       `${registration.command}_${key}`,
       {
-        outputSchema: toStandardJsonSchema(v.looseObject({})),
+        outputSchema: toStandardJsonSchema(outputSchemaOf(definition)),
         title: definition.title,
         description: `${definition.description} ${UNTRUSTED}`,
         inputSchema: toStandardJsonSchema(inputOf(definition, syncAllowed)),
@@ -421,7 +440,8 @@ export class BinaryResource {
   ) {}
 }
 
-export const answered = (value: object, maxBytes = DEFAULT_OUTPUT_BYTES): CallToolResult => {
+export const answered = (answer: object, maxBytes = DEFAULT_OUTPUT_BYTES): CallToolResult => {
+  const value = sealed(answer)
   const bounded = (result: CallToolResult): CallToolResult => {
     if (maxBytes !== 0 && Buffer.byteLength(JSON.stringify(result)) > maxBytes)
       throw new CliError(

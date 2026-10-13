@@ -30,6 +30,8 @@ const OTHERS: Entry[] = [
   validation("memory.evidence-required", "a memory needs its evidence"),
   validation("memory.scope-required", "a memory needs its scope"),
   validation("name.invalid", "the name is not valid"),
+  validation("output.choose-fields", "at a terminal, --json names the fields it prints"),
+  validation("output.unknown-field", "the answer has no field by that name"),
   validation("name.taken", "the name is already used"),
   validation("period.ambiguous", "the period can be read more than one way"),
   validation("proposal.wrong-state", "the proposal is not in a state that allows this"),

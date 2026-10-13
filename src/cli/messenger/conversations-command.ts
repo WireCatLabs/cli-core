@@ -21,6 +21,7 @@ import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
 import { embeddingChoice, type ModelOptions } from "../embedding-choice.js"
 import { positiveCount, renderList } from "../paging.js"
+import { nextStep, rootOf, runnable, stepLine } from "../steps.js"
 import { answerOf as askOwner } from "./ask.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
@@ -134,7 +135,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
           progress: (note) => context.renderer.note(note),
         }),
       )
-      renderRefreshed(context, refreshed, messenger.app.command)
+      renderRefreshed(context, refreshed, rootOf(this))
       return
     }
     const built = await context.withServices((services) => services.conversations.build(chat))
@@ -413,7 +414,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
           progress: (note) => context.renderer.note(note),
         }),
       )
-      renderRefreshed(context, refreshed, messenger.app.command)
+      renderRefreshed(context, refreshed, rootOf(this))
       return
     }
     const chat = options.chat
@@ -582,7 +583,7 @@ const localOnly = (model: ModelChoice, what: string) => {
   }
 }
 
-const renderRefreshed = (context: MessengerContext, refreshed: Refreshed, command: string) => {
+const renderRefreshed = (context: MessengerContext, refreshed: Refreshed, root: Command) => {
   if (context.format === "pretty") {
     context.streams.data(
       [
@@ -596,10 +597,16 @@ const renderRefreshed = (context: MessengerContext, refreshed: Refreshed, comman
       context.renderer.note("every chat is up to date")
     }
   } else context.renderer.result(refreshed)
-  for (const note of leftNotes(refreshed, command)) context.renderer.note(note)
+  for (const note of leftNotes(refreshed, root)) context.renderer.note(note)
 }
 
-const leftNotes = ({ model, modelAvailable, embedded, left }: Refreshed, command: string) => {
+/** Names the download only where this CLI has the command; a host without `models` gets the fact alone. */
+const notDownloaded = (root: Command, model: string, lead: string): string => {
+  const [step] = runnable(root, [nextStep("models.download", { args: { model } })])
+  return `${lead}: ${model} is not downloaded${step ? ` — \`${stepLine(root, step)}\`` : ""}`
+}
+
+const leftNotes = ({ model, modelAvailable, embedded, left }: Refreshed, root: Command) => {
   const of = (needs: "build" | "embed") => left.filter((one) => one.needs === needs).map(({ chat }) => chat)
   const build = of("build")
   const embed = of("embed")
@@ -608,9 +615,7 @@ const leftNotes = ({ model, modelAvailable, embedded, left }: Refreshed, command
     embed.length > 0 && modelAvailable
       ? `still to embed: chat ${embed.join(", ")} — run it again, or raise --max-chats and --max-chunks`
       : "",
-    embed.length > 0 && !modelAvailable && embedded.length === 0
-      ? `nothing embedded: ${model} is not downloaded — \`${command} models text download ${model}\``
-      : "",
+    embed.length > 0 && !modelAvailable && embedded.length === 0 ? notDownloaded(root, model, "nothing embedded") : "",
   ].filter(Boolean)
 }
 
@@ -825,7 +830,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         })
         return { found, refreshed: found.prepared }
       })
-      if (refreshed) for (const note of leftNotes(refreshed, messenger.app.command)) context.renderer.note(note)
+      if (refreshed) for (const note of leftNotes(refreshed, rootOf(this))) context.renderer.note(note)
       if (context.format === "pretty") {
         context.streams.data(found.hits.map((hit) => `${hitLine(hit)}\n`).join(""))
         if (found.hits.length === 0) {
@@ -858,9 +863,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
       }
       const command = messenger.app.command
       if (found.meaning === "unavailable") {
-        context.renderer.note(
-          `searched by words only: ${found.model} is not downloaded — \`${command} models text download ${found.model}\``,
-        )
+        context.renderer.note(notDownloaded(rootOf(this), found.model, "searched by words only"))
       }
       for (const note of readinessNotes(found, command)) context.renderer.note(note)
     })

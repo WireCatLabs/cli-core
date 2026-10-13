@@ -10,6 +10,7 @@ import {
   entryRunner,
   failed,
   inputOf,
+  outputSchemaOf,
   READ,
   type Registration,
   syncAllowedFor,
@@ -27,6 +28,8 @@ export interface McpCommand {
   description: string
   writes: boolean
   input: Input
+  /** The envelope it answers with, once it declares its entity. */
+  output?: v.GenericSchema
   run: (args: Record<string, unknown>, ctx: ServerContext) => Promise<CallToolResult>
 }
 
@@ -71,6 +74,20 @@ const nearest = (commands: Record<string, McpCommand>, asked: string): string[] 
     .map(({ one }) => one)
 }
 
+/** A `next` step names a command this server offers, or it is dropped: the profile may not offer every command. */
+const runnableOnly = (result: CallToolResult, offered: (command: string) => boolean): CallToolResult => {
+  const body = result.structuredContent as { next?: { command: string }[] } | undefined
+  if (result.isError || !Array.isArray(body?.next)) return result
+  const next = body.next.filter((step) => offered(step.command))
+  const { next: _, ...rest } = body
+  const kept = next.length > 0 ? { ...rest, next } : rest
+  return {
+    ...result,
+    structuredContent: kept,
+    content: result.content.map((part) => (part.type === "text" ? { ...part, text: JSON.stringify(kept) } : part)),
+  }
+}
+
 /**
  * **Three tools in place of one per command** (CLI-74, NEED-766): search the commands, then run one
  * with `read` or `write`. A command keeps its CLI path and its arguments, and runs as its own tool
@@ -109,6 +126,7 @@ export const registerCommands = (
                 description: one.description,
                 writes: one.writes,
                 arguments: toJsonSchema(one.input),
+                ...(one.output ? { output: toJsonSchema(one.output) } : {}),
               })),
               more: found.length > MATCHES,
             }
@@ -143,7 +161,9 @@ export const registerCommands = (
           throw new CliError("validation_error", `${command}: ${v.summarize(parsed.issues)}`, {
             arguments: toJsonSchema(one.input),
           })
-        return await one.run(parsed.output as Record<string, unknown>, ctx)
+        return runnableOnly(await one.run(parsed.output as Record<string, unknown>, ctx), (named) =>
+          byNormal.has(normal(named)),
+        )
       } catch (error) {
         return failed(error, errors)
       }
@@ -196,6 +216,7 @@ export const registerSurface = (server: McpServer, tools: Record<string, AnyTool
           description: definition.description,
           writes: definition.annotations.readOnlyHint !== true,
           input: inputOf(definition, syncAllowedFor(key, registration.defaults)),
+          ...(definition.output ? { output: outputSchemaOf(definition) } : {}),
           run: (args, ctx) => run(key, definition, args, ctx),
         } satisfies McpCommand,
       ]),

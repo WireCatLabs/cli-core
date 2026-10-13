@@ -282,7 +282,8 @@ export const commandContract = (command: Command) => {
     outputSchemaCoverage: output.coverage,
     jsonlSchema: { $schema: SCHEMA_DIALECT, ...resultSchemaFor(path, "jsonl").schema },
     jsonlSchemaCoverage: resultSchemaFor(path, "jsonl").coverage,
-    projection: "--fields may omit item/object members; present members retain their types and envelopes are preserved",
+    projection:
+      "--json=<fields> may omit item/object members; present members retain their types and envelopes are preserved",
     validation: {
       syntax: "declared",
       semantic: "command-and-provider-validation",
