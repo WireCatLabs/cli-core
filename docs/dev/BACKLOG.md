@@ -26,7 +26,11 @@ Open work only. A finished item is deleted; its record is the merged pull reques
   A query-passage model as a separate download, like `embeddinggemma`, run only in a long-lived process
   (MCP server); never on by default. The message-search rerankers did not ship — the rule one changed
   nothing in the dev sweep, e5 cosine lowered recall, the cross-encoder missed held-out gates at 3–4 s
-  ([combined-search.md](combined-search.md)). Being measured on the local-documents queries first.
+  ([combined-search.md](combined-search.md)). Measured on the local-documents queries: mmarco (130 MB) lifts
+  memo's notes from 0.72 to 0.84 first place and every paraphrase into the top 3, ~2 s a query warm; on Drive
+  documents the gain is within noise; qmd's Qwen3 is no better and three times slower
+  ([rerankers](https://github.com/WireCatLabs/cli-testing/blob/docs/search-everywhere-and-qmd/performance/search/local-documents/README.md#rerankers-on-these-queries)).
+  Open: score alone (better first place) or qmd's blend (never loses an exact hit).
 - **No query-expansion model** — qmd rewrites each query with a 1.7B model. Our callers are agents that can
   search again in other words; the skills say so. A model for this stays optional and off by default, if ever.
 - **EmbeddingGemma for documents** — ours already ships it as an option; on documents it was not compared
@@ -43,8 +47,10 @@ Open work only. A finished item is deleted; its record is the merged pull reques
   sources. Headings of notes and documents, so a hit names its section. Not addresses or names by pattern:
   people are linked by the agent with confirmation, as tags. Needs a plan and the owner's choice of fields.
 - **Embedding throughput** — one text per `session.run` (`src/embeddings/embed.ts`), up to 8 WebAssembly
-  threads; extra workers measured 1.04–1.1×. A drive run embedded ~13 passages a second, not the 31 in the
-  model table. Measure batched inputs first; a native ONNX Runtime is the larger lever at a larger install.
+  threads; extra workers measured 1.04–1.1×. On 1,200-character document passages e5-small embedded 11–15 a
+  second and EmbeddingGemma ~1.6, not the 31 and 2 in the model table. Measure batched inputs first; a native ONNX Runtime is the larger lever at a larger install.
+- **Search start-up** — memo and drive take 1.2–2.4 s a search from the CLI; the same vector search in a warm
+  process takes 7 ms. Measure where the CLI time goes (process start, store open, model load) before tuning search.
 - **Speech throughput** — voice messages are heard one after another, the recognizer is opened and freed for
   each (`src/speech/transcribe.ts` `hearLocally`), on one thread (`src/speech/recognize.ts`). Measure one
   recognizer per pass, then several workers over files (each holds its own model).
