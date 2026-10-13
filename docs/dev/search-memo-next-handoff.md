@@ -6,30 +6,32 @@ The trail, optional: the field test that found these items —
 ## 0. State on 2026-10-13 (resume here)
 
 Owner rulings 2026-10-13: typo search = option B (strict first; one-edit corrections and 3+ letter
-beginnings only when strict finds nothing; each forgiven hit labelled; on an empty answer MCP
-`next_steps` and one stderr line point at `--discover`; partial matches stay opt-in). Drive plan
-approved; nothing in drive.db to keep; Drive hits show Google URL + last Google edit time; remove
-`DRIVE_STORE`. `chats documents list <chat>` with a stored message→document link written by
-`drive sync`. Every search must let the owner choose accounts/profiles for every entity.
+beginnings only when strict finds nothing; hits carry `match` + answer `corrections`; on an empty
+answer MCP `next_steps` and one stderr line point at `--discover`). Drive plan approved; nothing in
+drive.db to keep; Drive hits show Google URL + last Google edit time; remove `DRIVE_STORE`.
+`chats documents list <chat>` with a stored message→document link written by `drive sync`. Account
+choice: one `--source` model — kind + provider + account, four shapes (`provider:account`, bare
+provider, bare kind, `group:<name>`), groups link profiles explicitly, `--folder`/`--account`/
+`--meetings` removed; a profile's default group declined.
 
-Merged: cm#1020 (export envelope), cm#1021 (bot author name), cm#1022 (Drive plan), cm#1024
-(typo plan, `docs/dev/typo-search-default-plan.md`), cm#1026 (STANDARD: `chats documents list`),
-cli-memo#116 (memo refuses drive's folder), cli-testing#37 (typo benchmark + results). None
-released yet.
+Merged (none released): cm#1020 export envelope · cm#1021 bot author name · cm#1022 Drive plan ·
+cm#1024 typo plan · cm#1026 STANDARD chats documents · cm#1027 STANDARD typo labels · cm#1028
+`--source` plan (`docs/dev/source-everywhere-plan.md`) · cm#1029 `chats documents list` ·
+cli-memo#116 drive-folder guard · cli-memo#117 memo never picks an account · cli-testing#37 typo
+benchmark.
 
-Not done, in order:
-1. **Typo work item 1:** STANDARD PR for `match: corrected | beginnings`, `corrections`, the
-   `--language legacy` deprecation and the `next_steps` hint. Then the service code — it builds on
-   cm#1025 (bare word covers transcripts, file names, file text; another session), check it first.
-2. **`--source` everywhere:** plan + STANDARD rows, not started (worktree
-   `cli-messaging-wt-source-everywhere` is empty). Extend the existing `--source` list to `search all`,
-   notes folders and Drive documents; the answer names the accounts searched. Also record Q2/Q3
-   answers in `docs/dev/drive-in-store-plan.md`. Owner sees the value grammar before merge.
-3. **Drive switch:** waits for drive#19 and a cli-messaging release with cm#1017 (other agents).
-4. **`chats documents list`:** implement per `docs/dev/chat-documents-plan.md` (merged in #1026).
-5. **Release cli-messaging** when memo#111 or cm#1017 needs it; then pin bumps.
-6. Items 5 and 6 below wait for cm#1013 / cm#1006. Item 4's name (`messages sync <chat> --files`)
+In flight: `--source` phase 1 (provider registry, one id per notes folder, skipped-not-silent,
+`search all --source`) — branch `feat/source-providers`, worktree `cli-messaging-wt-source-phase1`.
+
+Next, in order:
+1. `--source` phase 2: remove `--folder`, `search mail --account`, `--meetings`; per-CLI login offers
+   to join a group.
+2. Typo service code per cm#1024/#1027 — after cm#1025 merges (field-test session owns it).
+3. Drive switch + Drive provider + `linkMessages` call — after drive#19 and a release with cm#1017.
+4. Items 5 and 6 below — after cm#1013 / cm#1006. Item 4's name (`messages sync <chat> --files`)
    is proposed on #1019, not ruled.
+5. Releases are the field-test session's (its handoff: max-cli docs_ai/plans/2026-10-13-field-test-followups-handoff.md).
+Open: `chats documents` keys `sentAt`/`sender` vs search hits' `timestamp`/sender fields (plan Q1).
 
 ## 1. What this is
 
