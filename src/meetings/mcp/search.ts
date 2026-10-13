@@ -3,10 +3,10 @@ import { type MeetingHitSearch, validateMeetingHitSearch } from "../search-valid
 
 const integer = { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER }
 const name = { type: "string", minLength: 1, maxLength: 200 }
-export const meetingHitSearchTool = {
-  name: "meeting_search_page",
+export const meetingSearchTool = {
+  name: "search_meetings",
   description:
-    "Bounded selected-account meeting keyword search with explicit participant/person, project and label filters; participant filters do not attribute speech",
+    "Find words in the selected account's stored meetings, indexing new ones first; participant filters do not say who spoke a hit",
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     type: "object" as const,
@@ -15,37 +15,41 @@ export const meetingHitSearchTool = {
       meeting_id: integer,
       identity_id: integer,
       person_id: integer,
+      event_id: integer,
+      series_id: integer,
       project: name,
       tag: name,
       topic: name,
-      since: { type: "integer", minimum: -8640000000000000, maximum: 8640000000000000 },
-      until: { type: "integer", minimum: -8640000000000000, maximum: 8640000000000000 },
+      since_time: { type: "integer", minimum: -8640000000000000, maximum: 8640000000000000 },
+      until_time: { type: "integer", minimum: -8640000000000000, maximum: 8640000000000000 },
       limit: { type: "integer", minimum: 1, maximum: 1000 },
-      after: { type: "string", minLength: 1, maxLength: 1000 },
+      cursor: { type: "string", minLength: 1, maxLength: 1000 },
       max_read_bytes: { type: "integer", minimum: 1, maximum: 67108864 },
     },
     required: ["query"],
     additionalProperties: false,
   },
 }
-export const callMeetingHitSearchTool = async (search: MeetingHitSearch, input: unknown, signal?: AbortSignal) => {
+export const callMeetingSearchTool = async (search: MeetingHitSearch, input: unknown, signal?: AbortSignal) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw new CliError("validation_error", "expected search argument object")
     const args = input as Record<string, unknown>
-    if (Object.keys(args).some((key) => !Object.hasOwn(meetingHitSearchTool.inputSchema.properties, key)))
+    if (Object.keys(args).some((key) => !Object.hasOwn(meetingSearchTool.inputSchema.properties, key)))
       throw new CliError("validation_error", "unknown meeting search argument")
     const options = {
       meetingId: args.meeting_id as number | undefined,
       participantIdentityId: args.identity_id as number | undefined,
       personId: args.person_id as number | undefined,
+      eventId: args.event_id as number | undefined,
+      meetingSeriesId: args.series_id as number | undefined,
       project: args.project as string | undefined,
       tag: args.tag as string | undefined,
       topic: args.topic as string | undefined,
-      since: args.since as number | undefined,
-      until: args.until as number | undefined,
+      since: args.since_time as number | undefined,
+      until: args.until_time as number | undefined,
       limit: args.limit as number | undefined,
-      after: args.after as string | undefined,
+      after: args.cursor as string | undefined,
       maxReadBytes: args.max_read_bytes as number | undefined,
       signal,
     }

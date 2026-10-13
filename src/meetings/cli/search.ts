@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import type { Command } from "commander"
-import { type MeetingHitSearch, type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
+import { Command } from "commander"
+import { type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
 export { type MeetingHitSearch, type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
@@ -23,59 +23,79 @@ const timestamp = (value: string): number => {
     throw new CliError("validation_error", "meeting search dates require a real ISO date or timestamp with offset")
   return parsed
 }
-export const addMeetingHitSearchCommand = (
+export interface MeetingSearchFlags {
+  meetingId?: number
+  identityId?: number
+  personId?: number
+  eventId?: number
+  seriesId?: number
+  project?: string
+  tag?: string
+  topic?: string
+  sinceTime?: number
+  untilTime?: number
+  limit?: number
+  cursor?: string
+  maxReadBytes?: number
+}
+/**
+ * `search meetings`. The host's `search` closure reindexes before it reads (`refreshMeetingIndex`). It receives
+ * every parsed option, so a host can add options to the returned command and choose another source from them.
+ */
+export const addMeetingSearchCommand = (
   program: Command,
   deps: {
-    search: () => Promise<MeetingHitSearch>
+    search: (
+      query: string,
+      request: MeetingHitSearchOptions,
+      options: MeetingSearchFlags & Record<string, unknown>,
+    ) => Promise<unknown>
     signal: () => AbortSignal | undefined
     output: (value: unknown) => void
   },
-) => {
-  const meetings = program.commands.find((command) => command.name() === "meetings")
-  if (!meetings) throw new CliError("configuration_error", "meeting command group is unavailable")
-  annotate(
-    meetings
-      .command("search-page")
-      .description("find words in stored meetings, by context filters, one page at a time")
-      .argument("<query>", "words to find; each also matches its other word forms")
-      .option("--meeting-id <id>", "restrict to a meeting in the selected account", integer)
-      .option(
-        "--identity-id <id>",
-        "meetings with this observed participant identity; does not attribute speech",
-        integer,
-      )
-      .option("--person-id <id>", "meetings with a participant explicitly linked to this person", integer)
-      .option("--project <name>", "confirmed membership in a canonical project, key or explicit alias")
-      .option("--tag <name>", "an explicit meeting tag, by canonical name or alias")
-      .option("--topic <name>", "an explicit meeting topic, by canonical name or alias")
-      .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", timestamp)
-      .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", timestamp)
-      .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
-      .option("--cursor <cursor>", "continue from the previous page's nextCursor, with the same query and filters")
-      .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
-      .action(
-        async (
-          query: string,
-          options: Omit<MeetingHitSearchOptions, "since" | "until" | "after"> & {
-            identityId?: number
-            sinceTime?: number
-            untilTime?: number
-            cursor?: string
-          },
-        ) => {
-          const { identityId, sinceTime, untilTime, cursor, ...input } = options
-          const request = {
-            ...input,
-            since: sinceTime,
-            until: untilTime,
-            after: cursor,
-            participantIdentityId: identityId,
-            signal: deps.signal(),
-          }
-          validateMeetingHitSearch(query, request)
-          deps.output(await (await deps.search())(query, request))
-        },
-      ),
-    { origin: "handwritten", mutates: false },
-  )
+): Command => {
+  let search = program.commands.find((command) => command.name() === "search")
+  if (!search) {
+    search = new Command("search").description("search the stored resources")
+    program.addCommand(search)
+  }
+  const command = search
+    .command("meetings")
+    .description("find words in stored meetings, indexing new ones first")
+    .argument("<query>", "words to find; each also matches its other word forms")
+    .option("--meeting-id <id>", "only this stored meeting", integer)
+    .option("--identity-id <id>", "meetings with this participant identity; does not say who spoke a hit", integer)
+    .option("--person-id <id>", "meetings with a participant linked to this person", integer)
+    .option("--event-id <id>", "only meetings linked to this stored event", integer)
+    .option("--series-id <id>", "only meetings in this stored series", integer)
+    .option("--project <name>", "meetings confirmed in this project, by name, key or alias")
+    .option("--tag <name>", "meetings with this tag, by name or alias")
+    .option("--topic <name>", "meetings with this topic, by name or alias")
+    .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", timestamp)
+    .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", timestamp)
+    .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
+    .option("--cursor <cursor>", "continue from the previous page's nextCursor, with the same query and filters")
+    .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
+    .action(async (query: string, options: MeetingSearchFlags & Record<string, unknown>) => {
+      const request: MeetingHitSearchOptions = {
+        meetingId: options.meetingId,
+        participantIdentityId: options.identityId,
+        personId: options.personId,
+        eventId: options.eventId,
+        meetingSeriesId: options.seriesId,
+        project: options.project,
+        tag: options.tag,
+        topic: options.topic,
+        since: options.sinceTime,
+        until: options.untilTime,
+        limit: options.limit,
+        after: options.cursor,
+        maxReadBytes: options.maxReadBytes,
+        signal: deps.signal(),
+      }
+      validateMeetingHitSearch(query, request)
+      deps.output(await deps.search(query, request, options))
+    })
+  annotate(command, { origin: "handwritten", mutates: false })
+  return command
 }

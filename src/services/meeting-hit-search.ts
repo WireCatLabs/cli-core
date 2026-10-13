@@ -5,9 +5,27 @@ import type { MessageStore } from "../store/store.js"
 
 export type { MeetingHitSearchRequest } from "../meetings/index.js"
 
+/** Each batch commits on its own, so a search cut short by its deadline keeps the progress it made. */
+export const refreshMeetingIndex = async (
+  meetings: Pick<MessageStore["meetings"], "indexSearch">,
+  accountId: number,
+  signal?: AbortSignal,
+): Promise<void> => {
+  for (;;) {
+    signal?.throwIfAborted()
+    const { indexed, remaining } = await meetings.indexSearch({
+      accountId,
+      limit: 1000,
+      maxReadBytes: 64 * 1024 ** 2,
+      signal,
+    })
+    if (remaining === 0 || indexed === 0) return
+  }
+}
+
 /** Name resolution changes selection only; it never assigns projects or labels from transcript words. */
 export const searchMeetingHits = async (
-  store: Pick<MessageStore, "meetings" | "knowledge">,
+  store: Pick<MessageStore, "meetings"> & { knowledge?: MessageStore["knowledge"] },
   query: string,
   request: MeetingHitSearchRequest,
 ) => {
@@ -19,13 +37,17 @@ export const searchMeetingHits = async (
   )
     throw new CliError("validation_error", "choose one project selector and one tag or topic selector")
   const selection: { kind: VocabularyKind; id: number; name: string; by: "explicit-link" }[] = []
+  const knowledge = store.knowledge
+  if (!knowledge && [project, tag, topic].some((value) => value !== undefined))
+    throw new CliError("configuration_error", "this store cannot resolve project, tag or topic names")
   for (const [kind, name] of [
     ["project", project],
     ["tag", tag],
     ["topic", topic],
   ] as const) {
     if (name === undefined) continue
-    const found = await store.knowledge.resolveVocabulary(name, { kind, signal: input.signal })
+    if (!knowledge) continue
+    const found = await knowledge.resolveVocabulary(name, { kind, signal: input.signal })
     input.signal?.throwIfAborted()
     if (found.ambiguous || found.matches.length !== 1)
       throw new CliError(
@@ -43,6 +65,7 @@ export const searchMeetingHits = async (
     else input.tagId = id
     selection.push({ kind, id, name: entry.name, by: "explicit-link" })
   }
+  await refreshMeetingIndex(store.meetings, input.accountId, input.signal)
   const result = await store.meetings.searchHits(query, input)
   input.signal?.throwIfAborted()
   return { ...result, selection }

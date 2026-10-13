@@ -37,6 +37,18 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   `server logs` and `server start` show a record line as `time severity body`.
 - **`inRun` and `currentRun` are exported**, so a caller that opens a run with `startRecording` can run its work
   in that run — `inRun({ runId: recording.runId, command }, body)` — and its send-journal lines name it.
+- **One meeting search, `search meetings`, that indexes on its own** (zm adopts it with this release):
+  - `addMeetingHitSearchCommand` is `addMeetingSearchCommand`. It mounts `search meetings` under the host's
+    `search` group instead of `meetings search-page`, returns the command, and passes the host every parsed
+    option. It adds `--event-id` and `--series-id`, the filters only the removed `meetings search` had.
+  - `addMeetingCommands` no longer mounts `meetings search`; the MCP tool `meetings_search` is gone.
+  - The MCP tool `meeting_search_page` is `search_meetings`, from `meetingSearchTool` and
+    `callMeetingSearchTool`. Its arguments follow the options: `since_time`, `until_time`, `cursor`, plus
+    `event_id` and `series_id`.
+  - `meetings.searchHits` takes `eventId` and `meetingSeriesId`, and a cursor is bound to them.
+  - `searchMeetingHits` indexes what was saved since the last search before it reads (`refreshMeetingIndex`,
+    also exported), and works without a knowledge store when no names are given. `indexSearch` indexes words
+    only when the store's stemmers are unknown, instead of failing.
 - **`runs show` prints only what went wrong.** The answer keeps the run's metadata and adds `eventCount`;
   `events` holds the failed responses, warnings and the crash. `-v` shows every event, as before.
 - **The meeting commands use the shared command words** (zm adopts them with this release). The old names stop

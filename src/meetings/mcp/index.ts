@@ -6,7 +6,6 @@ import {
   meetingShow,
   meetingSummary,
   meetingsList,
-  meetingsSearch,
   meetingTranscript,
   positiveInteger,
 } from "../reads.js"
@@ -59,12 +58,6 @@ export const meetingTools = [
     required: ["meeting", "format"],
   },
   {
-    name: "meetings_search",
-    description: "search stored transcripts, chat and summaries",
-    properties: { ...filters, query: text },
-    required: ["query"],
-  },
-  {
     name: "meeting_people",
     description: "find meeting participants by name or email",
     properties: { query: text, account_id: integer },
@@ -75,7 +68,7 @@ export const meetingTools = [
   inputSchema: { type: "object", properties, required, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }))
-const CONTENT_READS = new Set(["meeting_show", "meeting_transcript", "meeting_summary", "meetings_search"])
+const CONTENT_READS = new Set(["meeting_show", "meeting_transcript", "meeting_summary"])
 
 const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
   const tool = meetingTools.find((t) => t.name === name)
@@ -139,9 +132,6 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
           transcriptId: args.transcript_id as number | undefined,
         })
         break
-      case "meetings_search":
-        result = await meetingsSearch(store, args.query as string, filter)
-        break
       default:
         result = listed(await store.participants(args.query as string, filter.accountId))
     }
@@ -153,4 +143,4 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
   }
 }
 
-export { callMeetingHitSearchTool, meetingHitSearchTool } from "./search.js"
+export { callMeetingSearchTool, meetingSearchTool } from "./search.js"

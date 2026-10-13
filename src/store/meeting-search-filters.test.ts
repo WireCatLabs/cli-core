@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { sampleMeeting } from "../meetings/testing/index.js"
+import { sampleEvent, sampleMeeting } from "../meetings/testing/index.js"
 import { searchMeetingHits } from "../services/meeting-hit-search.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
@@ -159,4 +159,43 @@ it("uses the same alias and membership search for a second provider without a pr
   })
   expect(result.items.length).toBeGreaterThan(0)
   expect(result.items.every((hit) => hit.meetingId === f.foreign.meeting.id)).toBe(true)
+})
+
+it("filters by a linked event and by a meeting series, and binds the cursor to them", async () => {
+  const f = await fixture()
+  const event = await f.store.meetings.createEvent(sampleEvent(), 3000)
+  await f.store.meetings.linkMeeting(f.second.meeting.id, event.id, 4000, "owner")
+  const input = sampleMeeting()
+  input.meeting.accountId = f.accountId
+  input.meeting.externalId = "third-occurrence"
+  if (input.meeting.series) input.meeting.series.externalId = "other-series"
+  const third = await f.store.meetings.saveMeeting(input)
+  const meetingsOf = async (filter: { eventId?: number; meetingSeriesId?: number }) => [
+    ...new Set(
+      (await searchMeetingHits(f.store, "example", { accountId: f.accountId, ...filter })).items.map(
+        (hit) => hit.meetingId,
+      ),
+    ),
+  ]
+  expect(await meetingsOf({ eventId: event.id })).toEqual([f.second.meeting.id])
+  const series = third.series?.id
+  if (!series || series === f.first.series?.id) throw new Error("missing fictional series")
+  expect(await meetingsOf({ meetingSeriesId: series })).toEqual([third.meeting.id])
+  const page = await f.store.meetings.searchHits("example", { accountId: f.accountId, limit: 1 })
+  await expect(
+    f.store.meetings.searchHits("example", { accountId: f.accountId, eventId: event.id, after: page.nextCursor ?? "" }),
+  ).rejects.toMatchObject({ code: "validation_error" })
+})
+it("indexes what was saved since the last search before it reads", async () => {
+  const f = await fixture()
+  const input = sampleMeeting()
+  input.transcripts[0].rows[0].text = "Invented zeppelin agenda"
+  const added = await f.store.meetings.saveMeeting({
+    ...input,
+    meeting: { ...input.meeting, accountId: f.accountId, externalId: "unindexed-occurrence" },
+  })
+  expect((await f.store.meetings.searchHits("zeppelin", { accountId: f.accountId })).items).toEqual([])
+  const result = await searchMeetingHits(f.store, "zeppelin", { accountId: f.accountId })
+  expect(result.items.map((hit) => hit.meetingId)).toEqual([added.meeting.id])
+  expect(result.coverage.indexing).toBe("ready")
 })

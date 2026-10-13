@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest"
-import { callMeetingHitSearchTool, meetingHitSearchTool } from "./search.js"
+import { callMeetingSearchTool, meetingSearchTool } from "./search.js"
 
 const page = {
   items: [],
@@ -13,13 +13,15 @@ const page = {
   },
 }
 it("offers the same bounded search without letting a tool caller choose an account", async () => {
-  expect(meetingHitSearchTool.inputSchema.additionalProperties).toBe(false)
-  expect(meetingHitSearchTool.inputSchema.properties).not.toHaveProperty("account_id")
+  expect(meetingSearchTool.inputSchema.additionalProperties).toBe(false)
+  expect(meetingSearchTool.inputSchema.properties).not.toHaveProperty("account_id")
   const search = vi.fn(async () => page)
-  const result = await callMeetingHitSearchTool(search, {
+  const result = await callMeetingSearchTool(search, {
     query: "budget",
     identity_id: 12,
     person_id: 34,
+    event_id: 56,
+    series_id: 78,
     project: "RES",
     topic: "costs",
     limit: 10,
@@ -27,7 +29,15 @@ it("offers the same bounded search without letting a tool caller choose an accou
   expect(result.structuredContent).toEqual(page)
   expect(search).toHaveBeenCalledWith(
     "budget",
-    expect.objectContaining({ participantIdentityId: 12, personId: 34, project: "RES", topic: "costs", limit: 10 }),
+    expect.objectContaining({
+      participantIdentityId: 12,
+      personId: 34,
+      eventId: 56,
+      meetingSeriesId: 78,
+      project: "RES",
+      topic: "costs",
+      limit: 10,
+    }),
   )
   for (const input of [
     null,
@@ -35,11 +45,13 @@ it("offers the same bounded search without letting a tool caller choose an accou
     {},
     { query: "budget", account_id: 5 },
     { query: "budget", person_id: "34" },
+    { query: "budget", event_id: 0 },
+    { query: "budget", after: "abc" },
     { query: "budget", topic: true },
     { query: "budget", limit: 1001 },
   ]) {
     search.mockClear()
-    expect(await callMeetingHitSearchTool(search, input)).toMatchObject({
+    expect(await callMeetingSearchTool(search, input)).toMatchObject({
       isError: true,
       structuredContent: { error: { code: "validation_error" } },
     })
@@ -48,7 +60,7 @@ it("offers the same bounded search without letting a tool caller choose an accou
 })
 it("hides unexpected backend errors and preserves cancellation", async () => {
   expect(
-    await callMeetingHitSearchTool(
+    await callMeetingSearchTool(
       async () => {
         throw new Error("private backend details")
       },
@@ -63,7 +75,7 @@ it("hides unexpected backend errors and preserves cancellation", async () => {
   const controller = new AbortController()
   controller.abort()
   const search = vi.fn(async () => page)
-  expect(await callMeetingHitSearchTool(search, { query: "budget" }, controller.signal)).toMatchObject({
+  expect(await callMeetingSearchTool(search, { query: "budget" }, controller.signal)).toMatchObject({
     isError: true,
     structuredContent: { error: { code: "cancelled" } },
   })

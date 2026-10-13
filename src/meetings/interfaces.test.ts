@@ -2,7 +2,7 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { addMeetingCommands, type MeetingCommandDeps } from "./cli/index.js"
 import { callMeetingTool, meetingTools } from "./mcp/index.js"
-import { meetingShow, meetingsList, meetingsSearch } from "./reads.js"
+import { meetingShow, meetingsList } from "./reads.js"
 import { SAVE_NEXT_STEPS } from "./save-hints.js"
 import { fakeMeetingSource, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
 
@@ -27,7 +27,7 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
   return { store, d, outputs, run }
 }
 describe("meeting commands", () => {
-  it("lists, shows, reads transcripts, searches participants/text and lists events", async () => {
+  it("lists, shows, reads transcripts, finds participants and lists events", async () => {
     const { run, outputs, d } = await setup()
     await run([
       "meetings",
@@ -47,11 +47,10 @@ describe("meeting commands", () => {
     expect(outputs[1]).toMatchObject({ format: "text", value: { meeting: { id: d.meeting.id } } })
     await run(["meetings", "transcript", String(d.meeting.id), "--jsonl"])
     expect(outputs[2]).toMatchObject({ format: "jsonl", value: { items: d.transcripts } })
-    await run(["meetings", "search", "example"])
     await run(["meetings", "people", "Alice"])
-    expect(outputs[4]).toMatchObject({ value: { items: d.participants } })
+    expect(outputs[3]).toMatchObject({ value: { items: d.participants } })
     await run(["events", "list"])
-    expect(outputs[5]).toMatchObject({ value: { items: [] } })
+    expect(outputs[4]).toMatchObject({ value: { items: [] } })
   })
   it("pulls and imports through injected sources and file readers", async () => {
     const { run, outputs } = await setup()
@@ -71,7 +70,6 @@ describe("meeting commands", () => {
       ["meetings", "list", "--since-time", "bad"],
       ["meetings", "show", "999"],
       ["meetings", "list", "--json", "--jsonl"],
-      ["meetings", "search", " "],
     ])
       await expect(run(args)).rejects.toThrow()
     const unconfigured = await setup({ source: undefined, readFiles: undefined })
@@ -103,10 +101,6 @@ describe("MCP meeting reads", () => {
     expect(
       (await callMeetingTool(store, "meeting_transcript", { meeting: d.meeting.id })).structuredContent,
     ).toMatchObject({ items: d.transcripts })
-    expect((await callMeetingTool(store, "meetings_search", { query: "example" })).structuredContent).toEqual({
-      ...(await meetingsSearch(store, "example")),
-      next_steps: SAVE_NEXT_STEPS,
-    })
     expect(
       (await callMeetingTool(store, "meeting_people", { query: "Alice", account_id: 1 })).structuredContent,
     ).toMatchObject({ items: d.participants })
@@ -123,8 +117,8 @@ describe("MCP meeting reads", () => {
       ["meeting_show", {}],
       ["meeting_show", { meeting: "1" }],
       ["meeting_show", { meeting: 0 }],
-      ["meetings_search", { query: " " }],
-      ["meetings_search", { query: 1 }],
+      ["meetings_search", { query: "example" }],
+      ["meeting_people", { query: " " }],
       ["meetings_list", { since: "bad" }],
       ["meetings_list", { until: Number.NaN }],
       ["meeting_show", { meeting: 999 }],

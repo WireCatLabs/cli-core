@@ -1,10 +1,9 @@
 import { Command } from "commander"
 import { expect, it, vi } from "vitest"
-import { addMeetingHitSearchCommand, validateMeetingHitSearch } from "./search.js"
+import { addMeetingSearchCommand, validateMeetingHitSearch } from "./search.js"
 
 it("forwards combined context, dates and continuation to an injected provider-neutral search", async () => {
   const program = new Command("example")
-  program.command("meetings")
   const controller = new AbortController()
   const result = {
     items: [],
@@ -19,16 +18,20 @@ it("forwards combined context, dates and continuation to an injected provider-ne
   }
   const search = vi.fn(async () => result)
   const output = vi.fn()
-  addMeetingHitSearchCommand(program, { search: async () => search, signal: () => controller.signal, output })
+  addMeetingSearchCommand(program, { search, signal: () => controller.signal, output })
   await program.parseAsync(
     [
+      "search",
       "meetings",
-      "search-page",
       "budget",
       "--identity-id",
       "12",
       "--person-id",
       "34",
+      "--event-id",
+      "56",
+      "--series-id",
+      "78",
       "--project",
       "RES",
       "--topic",
@@ -44,17 +47,23 @@ it("forwards combined context, dates and continuation to an injected provider-ne
     ],
     { from: "user" },
   )
-  expect(search).toHaveBeenCalledWith("budget", {
-    participantIdentityId: 12,
-    personId: 34,
-    project: "RES",
-    topic: "costs",
-    since: Date.parse("2026-09-12"),
-    until: Date.parse("2026-10-12"),
-    after: "abc",
-    limit: 10,
-    signal: controller.signal,
-  })
+  expect(search).toHaveBeenCalledWith(
+    "budget",
+    {
+      participantIdentityId: 12,
+      personId: 34,
+      eventId: 56,
+      meetingSeriesId: 78,
+      project: "RES",
+      topic: "costs",
+      since: Date.parse("2026-09-12"),
+      until: Date.parse("2026-10-12"),
+      after: "abc",
+      limit: 10,
+      signal: controller.signal,
+    },
+    expect.objectContaining({ eventId: 56, seriesId: 78 }),
+  )
   expect(output).toHaveBeenCalledWith(result)
 })
 it("rejects impossible dates and invalid selectors before opening a store", async () => {
@@ -63,6 +72,8 @@ it("rejects impossible dates and invalid selectors before opening a store", asyn
     ["--since-time", "2026-10-12T10:00:00"],
     ["--identity-id", "0"],
     ["--person-id", "1.5"],
+    ["--event-id", "0"],
+    ["--series-id", "x"],
     ["--tag", "plan", "--topic", "plan"],
     ["--since-time", "2026-10-12", "--until-time", "2026-09-12"],
     ["--limit", "1001"],
@@ -71,17 +82,21 @@ it("rejects impossible dates and invalid selectors before opening a store", asyn
   ]
   for (const flags of cases) {
     const program = new Command("example").exitOverride()
-    program.command("meetings")
     const connect = vi.fn()
-    addMeetingHitSearchCommand(program, { search: connect, signal: () => undefined, output: () => {} })
-    await expect(
-      program.parseAsync(["meetings", "search-page", "budget", ...flags], { from: "user" }),
-    ).rejects.toThrow()
+    addMeetingSearchCommand(program, { search: connect, signal: () => undefined, output: () => {} })
+    await expect(program.parseAsync(["search", "meetings", "budget", ...flags], { from: "user" })).rejects.toThrow()
     expect(connect).not.toHaveBeenCalled()
   }
-  expect(() =>
-    addMeetingHitSearchCommand(new Command(), { search: vi.fn(), signal: () => undefined, output: () => {} }),
-  ).toThrow()
   expect(() => validateMeetingHitSearch(" ")).toThrow()
   expect(() => validateMeetingHitSearch("budget", { project: "RES", projectId: 1 })).toThrow()
+})
+it("joins a search group the host already has", () => {
+  const program = new Command("example")
+  program.command("search").command("all")
+  addMeetingSearchCommand(program, { search: vi.fn(), signal: () => undefined, output: () => {} })
+  expect(program.commands.filter((command) => command.name() === "search")).toHaveLength(1)
+  expect(program.commands.find((command) => command.name() === "search")?.commands.map((c) => c.name())).toEqual([
+    "all",
+    "meetings",
+  ])
 })
