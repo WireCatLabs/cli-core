@@ -66,7 +66,7 @@ const env = {
   [`${app.envPrefix}_STATE_DIR`]: join(root, "state"),
   [`${app.envPrefix}_CONFIG_DIR`]: join(root, "config"),
   [`${app.envPrefix}_CACHE_DIR`]: join(root, "cache"),
-  CLI_COMMON_CACHE_DIR: join(root, "common-cache"),
+  WIRECAT_STATE_DIR: join(root, "common-cache"),
   MESSAGING_STORE: join(root, "store.db"),
 }
 for (const name of ["home", "tmp", "config"]) mkdirSync(join(root, name), { recursive: true })

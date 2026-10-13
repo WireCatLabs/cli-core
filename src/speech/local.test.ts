@@ -218,7 +218,7 @@ it("uses the existing default engine seam and shared cache override without mode
   await writeFile(join(root, "models", "audio", "silero_vad.onnx"), "vad")
   defaultBackend.opened = 0
   defaultBackend.freed = 0
-  const model = await openLocalSpeechRecognizer("tiny-example", { env: { CLI_COMMON_CACHE_DIR: root } })
+  const model = await openLocalSpeechRecognizer("tiny-example", { env: { WIRECAT_STATE_DIR: root } })
   try {
     expect(await model.recognize(new Float32Array([0]))).toBe("Alice Example default backend")
   } finally {

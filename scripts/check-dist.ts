@@ -111,7 +111,7 @@ console.log("dist: the embedding process answers, and refuses once closed")
 
 const speech = await import("@wirecat/cli-messaging/speech")
 const speechCache = join(mkdtempSync(join(tmpdir(), "speech-export-dist-")), "common")
-const speechDirectory = speech.modelsDirectory({ CLI_COMMON_CACHE_DIR: speechCache })
+const speechDirectory = speech.modelsDirectory({ WIRECAT_STATE_DIR: speechCache })
 if (speechDirectory !== join(speechCache, "models", "audio"))
   throw new Error("./speech ignores the common cache override")
 if (

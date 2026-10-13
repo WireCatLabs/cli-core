@@ -24,7 +24,7 @@ export const sandboxEnvironment = (home: string): NodeJS.ProcessEnv => ({
   TG_CONFIG_DIR: join(home, "tg-config"),
   TG_STATE_DIR: join(home, "tg-state"),
   TG_CACHE_DIR: join(home, "tg-cache"),
-  CLI_COMMON_CACHE_DIR: join(home, "common"),
+  WIRECAT_STATE_DIR: join(home, "common"),
   MAX_NO_UPDATE_CHECK: "1",
   TG_NO_UPDATE_CHECK: "1",
   NO_COLOR: "1",

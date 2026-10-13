@@ -26,13 +26,13 @@ describe("migrateFolders", () => {
     const { HOME, library, seed, run } = mac()
     seed(library("Preferences", "tg-cli"), "config.json")
     seed(library("Application Support", "cli-messaging"), "wirecat.db", "rows")
-    seed(library("Caches", "cli-common"), "model.bin")
+    seed(join(library("Caches", "cli-common"), "models"), "model.bin")
 
     run()
 
     expect(existsSync(join(HOME, ".config/tg-cli/config.json"))).toBe(true)
-    expect(readFileSync(join(HOME, ".local/share/cli-messaging/wirecat.db"), "utf8")).toBe("rows")
-    expect(existsSync(join(HOME, ".cache/cli-common/model.bin"))).toBe(true)
+    expect(readFileSync(join(HOME, ".local/share/WireCat/wirecat.db"), "utf8")).toBe("rows")
+    expect(existsSync(join(HOME, ".local/share/WireCat/models/model.bin"))).toBe(true)
   })
 
   it("points an installed serve agent's log at the new state folder", () => {
@@ -86,5 +86,75 @@ describe("migrateFolders", () => {
 
     expect(existsSync(join(HOME, ".config/tg-cli"))).toBe(false)
     expect(warnings).toEqual([])
+  })
+})
+
+describe("the move into the WireCat folder", () => {
+  const linux = () => {
+    const HOME = mkdtempSync(join(tmpdir(), "wirecat-move-"))
+    const old = join(HOME, ".local/share/cli-messaging")
+    const next = join(HOME, ".local/share/WireCat")
+    const seed = (dir: string, file: string, text = "x") => {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, file), text)
+    }
+    const warnings: string[] = []
+    const env: NodeJS.ProcessEnv = { HOME }
+    const run = () => migrateFolders(app, { env, platform: "linux", warn: (line) => warnings.push(line) })
+    return { HOME, old, next, seed, warnings, env, run }
+  }
+  const SIBLINGS = ["wirecat.db-wal", "wirecat.db-shm", "wirecat.db.backup-1", "wirecat.db.before-restore-2"]
+
+  it("moves the store with its journal and backups, and the models, once", () => {
+    const { HOME, old, next, seed, warnings, run } = linux()
+    seed(old, "wirecat.db", "rows")
+    for (const name of SIBLINGS) seed(old, name, name)
+    seed(old, "other.txt")
+    seed(join(HOME, ".cache/cli-common/models/audio"), "m.bin", "model")
+
+    run()
+
+    expect(readFileSync(join(next, "wirecat.db"), "utf8")).toBe("rows")
+    for (const name of SIBLINGS) expect(readFileSync(join(next, name), "utf8")).toBe(name)
+    expect(readFileSync(join(next, "models/audio/m.bin"), "utf8")).toBe("model")
+    expect(existsSync(join(old, "wirecat.db"))).toBe(false)
+    expect(existsSync(join(old, "other.txt"))).toBe(true)
+    expect(existsSync(join(HOME, ".cache/cli-common/models"))).toBe(false)
+    expect(warnings).toEqual([])
+  })
+
+  it("keeps both stores and warns when the new one is already there", () => {
+    const { old, next, seed, warnings, run } = linux()
+    seed(old, "wirecat.db", "old")
+    seed(next, "wirecat.db", "new")
+
+    run()
+
+    expect(readFileSync(join(old, "wirecat.db"), "utf8")).toBe("old")
+    expect(readFileSync(join(next, "wirecat.db"), "utf8")).toBe("new")
+    expect(warnings).toEqual([expect.stringMatching(/two stores/)])
+  })
+
+  it.each(["MESSAGING_STORE", "WIRECAT_STATE_DIR"])("moves nothing when %s is set", (name) => {
+    const { HOME, old, seed, env, run } = linux()
+    seed(old, "wirecat.db", "rows")
+    env[name] = join(HOME, "elsewhere")
+
+    run()
+
+    expect(existsSync(join(old, "wirecat.db"))).toBe(true)
+    expect(existsSync(join(HOME, ".local/share/WireCat"))).toBe(false)
+  })
+
+  it("leaves the store where it is while a serve runs, and uses the old file this run", () => {
+    const { HOME, old, seed, warnings, env, run } = linux()
+    seed(old, "wirecat.db", "rows")
+    seed(join(HOME, ".local/share/tg-cli/serve"), "default.lock", JSON.stringify({ pid: process.ppid, startedAt: "x" }))
+
+    run()
+
+    expect(env.MESSAGING_STORE).toBe(join(old, "wirecat.db"))
+    expect(existsSync(join(old, "wirecat.db"))).toBe(true)
+    expect(warnings).toEqual([expect.stringMatching(/serve is running/)])
   })
 })

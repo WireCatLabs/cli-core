@@ -290,8 +290,8 @@ describe("hearing a voice message", () => {
   })
 })
 
-it("the public speech directory respects an explicit common cache without creating it", () => {
+it("the public speech directory respects an explicit WireCat folder without creating it", () => {
   const cache = join(mkdtempSync(join(tmpdir(), "speech-export-")), "absent")
-  expect(modelsDirectory({ CLI_COMMON_CACHE_DIR: cache })).toBe(join(cache, "models", "audio"))
-  expect(isInstalled(speechModel("gigaam-v3"), modelsDirectory({ CLI_COMMON_CACHE_DIR: cache }))).toBe(false)
+  expect(modelsDirectory({ WIRECAT_STATE_DIR: cache })).toBe(join(cache, "models", "audio"))
+  expect(isInstalled(speechModel("gigaam-v3"), modelsDirectory({ WIRECAT_STATE_DIR: cache }))).toBe(false)
 })

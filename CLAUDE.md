@@ -13,7 +13,7 @@ the one page that covers what you are about to touch:
 
 1. **Nothing here knows a messenger.** No provider library, no adapter; `biome.json` refuses them.
 2. **The store is the owner's system of record.** Migrations are forward-only and cannot be undone.
-   No test and no branch build may open the real file — `MESSAGING_STORE` points elsewhere.
+   No test and no branch build may open the real file (`~/.local/share/WireCat/wirecat.db`) — `MESSAGING_STORE` points elsewhere.
 3. **Other sessions work here at the same time.** Work in a worktree off `origin/main`, rebase before
    pushing, and take a migration number in [COORDINATION.md](docs/dev/COORDINATION.md#store-migrations) before writing it.
 4. **A change reaches tg-cli and max-cli only through a release.** Both pin an exact version.

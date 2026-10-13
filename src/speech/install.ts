@@ -4,15 +4,13 @@ import { rename, rm } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
-import { CliError, resolvePaths } from "@wirecat/cli-base"
+import { CliError } from "@wirecat/cli-base"
+import { wirecatDirectory } from "../store/path.js"
 import { type ModelFile, type SpeechModel, VAD } from "./models.js"
 
-/**
- * `~/.cache/cli-common`: one folder for what every CLI of the family shares, whatever it talks to — a
- * model is hundreds of MB and is downloaded once. `CLI_COMMON_CACHE_DIR` moves it.
- */
+/** Shared by every CLI of the family, whatever it talks to: a model is hundreds of MB and is downloaded once. */
 export const sharedModelsDirectory = (kind: "audio" | "text", env: NodeJS.ProcessEnv = process.env): string =>
-  join(resolvePaths({ appName: "cli-common", prefix: "CLI_COMMON", env }).cache, "models", kind)
+  join(wirecatDirectory(env), "models", kind)
 
 export const modelsDirectory = (env: NodeJS.ProcessEnv = process.env): string => sharedModelsDirectory("audio", env)
 

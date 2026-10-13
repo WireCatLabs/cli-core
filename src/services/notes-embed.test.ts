@@ -39,7 +39,7 @@ beforeEach(() => {
     fileURLToPath(new URL("../embeddings/fixtures/tiny", import.meta.url)),
     join(cache, "models", "text", "tiny"),
   )
-  vi.stubEnv("CLI_COMMON_CACHE_DIR", cache)
+  vi.stubEnv("WIRECAT_STATE_DIR", cache)
 })
 afterEach(async () => {
   floor.value = 0

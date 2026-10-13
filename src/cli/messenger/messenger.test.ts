@@ -2991,7 +2991,7 @@ describe("the shared read commands", () => {
       CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       MESSAGING_STORE: join(root, "m.db"),
-      CLI_COMMON_CACHE_DIR: join(root, "cache"),
+      WIRECAT_STATE_DIR: join(root, "cache"),
     }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = async (): Promise<MessengerAdapter> => {
@@ -3055,7 +3055,7 @@ describe("the shared read commands", () => {
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
-      CLI_COMMON_CACHE_DIR: join(root, "cache"),
+      WIRECAT_STATE_DIR: join(root, "cache"),
       CHAT_OPENAI_API_KEY: "sk-test",
     }
     await call(["chats", "list", "--json"], async () => fake, env)
@@ -3957,7 +3957,7 @@ describe("messages transcribe", () => {
       CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       MESSAGING_STORE: join(root, "m.db"),
-      CLI_COMMON_CACHE_DIR: join(root, "cache"),
+      WIRECAT_STATE_DIR: join(root, "cache"),
       CHAT_CACHE_DIR: join(root, "chat-cache"),
     }
   }

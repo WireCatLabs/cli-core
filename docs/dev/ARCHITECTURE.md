@@ -76,7 +76,7 @@ Where the runtime's SQLite can be swapped, ours from `@wirecat/cli-messaging-sql
 
 `openStore` (`src/store/store.ts`) is the **one file for every messenger and account** — tg's
 profiles and max-cli's bots write the same database, keyed by provider and account. Its path comes
-from `storePath` (`src/store/path.ts`), the only place that turns `MESSAGING_STORE` into a path;
+from `storePath` (`src/store/path.ts`), the only place that turns `MESSAGING_STORE` into a path. Without it the file is `wirecat.db` in the WireCat folder (`~/.local/share/WireCat/`, `%LOCALAPPDATA%\WireCat\Data\`; `WIRECAT_STATE_DIR` moves the folder, the models live in its `models/`). `migrateToWirecatFolder` (`src/background/folders.ts`) moves an older store and the models there once;
 `mcp config` copies the variable into the entry it prints, so the server it starts opens the same file.
 
 Every `MessageStore` method is async and is **one whole operation**: inside the SQLite store each

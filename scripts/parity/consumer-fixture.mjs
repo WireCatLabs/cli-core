@@ -18,7 +18,7 @@ const { openStore } = await import(require.resolve("@wirecat/cli-messaging/store
 const { rememberAccount } = await import(require.resolve("@wirecat/cli-messaging/cli"))
 const temp = mkdtempSync(join(tmpdir(), `parity-deep-search-${cli}-`))
 for (const key of Object.keys(process.env)) {
-  if (/^(MAX_|TG_|MESSAGING_|CLI_COMMON_|OPENAI_|ANTHROPIC_)/.test(key)) delete process.env[key]
+  if (/^(MAX_|TG_|MESSAGING_|CLI_COMMON_|WIRECAT_|OPENAI_|ANTHROPIC_)/.test(key)) delete process.env[key]
 }
 Object.assign(process.env, sandboxEnvironment(temp))
 

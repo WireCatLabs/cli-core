@@ -10,6 +10,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 - **Needs `@wirecat/cli-base` 0.22.** The peer range is now `>=0.22.0 <0.23.0`; a CLI still on cli-base 0.21
   bumps it with this release.
+- **The shared store and the models move to one WireCat folder** (owner, 2026-10-13): `~/.local/share/WireCat/` on Linux and macOS, `%LOCALAPPDATA%\WireCat\Data\` on Windows. The store is `wirecat.db` there, with its `-wal`, `-shm`, `.backup-*` and `.before-restore-*` files, and the models are in `models/`. The first start of tg, max or memo moves them from `~/.local/share/cli-messaging/` and `~/.cache/cli-common/models` (Windows: the `cli-messaging` folder under `%LOCALAPPDATA%`), only when `MESSAGING_STORE` and `WIRECAT_STATE_DIR` are unset, only when the new store is absent (two stores are never merged: a warning, the new one is used) and not while a `serve` is running (that run uses the old file, with a warning). `CLI_COMMON_CACHE_DIR` is replaced by `WIRECAT_STATE_DIR`, which moves the whole folder. `MESSAGING_STORE` still moves the file alone. `MESSAGING_STATE_DIR` no longer moves the store. Nothing is deleted from the old folders by code.
 
 ## 0.256.0 — 13.10.2026
 

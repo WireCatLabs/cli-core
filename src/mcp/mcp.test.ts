@@ -340,7 +340,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     CHAT_STATE_DIR: join(root, "state"),
     CHAT_CONFIG_DIR: join(root, "config"),
     MESSAGING_STORE: join(root, "m.db"),
-    CLI_COMMON_CACHE_DIR: join(root, "cache"),
+    WIRECAT_STATE_DIR: join(root, "cache"),
     CHAT_CACHE_DIR: join(root, "chat-cache"),
   }
   const {
@@ -1512,12 +1512,12 @@ describe("the MCP server", () => {
       }),
     )
     await call("chat_messages_list", { chat: "7" })
-    mkdirSync(join(env.CLI_COMMON_CACHE_DIR, "models", "text"), { recursive: true })
+    mkdirSync(join(env.WIRECAT_STATE_DIR, "models", "text"), { recursive: true })
     symlinkSync(
       fileURLToPath(new URL("../embeddings/fixtures/tiny", import.meta.url)),
-      join(env.CLI_COMMON_CACHE_DIR, "models", "text", "tiny"),
+      join(env.WIRECAT_STATE_DIR, "models", "text", "tiny"),
     )
-    vi.stubEnv("CLI_COMMON_CACHE_DIR", env.CLI_COMMON_CACHE_DIR)
+    vi.stubEnv("WIRECAT_STATE_DIR", env.WIRECAT_STATE_DIR)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const deps = storedDeps(
       { provider: "chat", app } as Messenger,
@@ -1554,12 +1554,12 @@ describe("the MCP server", () => {
     const { client, call, env, embedders } = await connect(telegram)
     await call("chat_chats_list")
     await call("chat_messages_list", { chat: "7" })
-    mkdirSync(join(env.CLI_COMMON_CACHE_DIR, "models", "text"), { recursive: true })
+    mkdirSync(join(env.WIRECAT_STATE_DIR, "models", "text"), { recursive: true })
     symlinkSync(
       fileURLToPath(new URL("../embeddings/fixtures/tiny", import.meta.url)),
-      join(env.CLI_COMMON_CACHE_DIR, "models", "text", "tiny"),
+      join(env.WIRECAT_STATE_DIR, "models", "text", "tiny"),
     )
-    vi.stubEnv("CLI_COMMON_CACHE_DIR", env.CLI_COMMON_CACHE_DIR)
+    vi.stubEnv("WIRECAT_STATE_DIR", env.WIRECAT_STATE_DIR)
     const opened = telegram.opened()
     models.opened = 0
 
