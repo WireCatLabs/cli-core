@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFile
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { migrateFolders, migrateToWirecatFolder } from "./folders.js"
+import { migrateFolders } from "./folders.js"
+import { migrateToWirecatFolder } from "./wirecat-folder.js"
 
 const app = { command: "tg", appName: "tg-cli", envPrefix: "TG" }
 const GONE = 2 ** 22 + 12345
@@ -124,16 +125,15 @@ describe("the move into the WireCat folder", () => {
     expect(warnings).toEqual([])
   })
 
-  it("keeps both stores and warns when the new one is already there", () => {
-    const { old, next, seed, warnings, run } = linux()
+  it("stops, naming both stores, and changes neither when the new one is already there", () => {
+    const { old, next, seed, run } = linux()
     seed(old, "wirecat.db", "old")
     seed(next, "wirecat.db", "new")
 
-    run()
+    expect(run).toThrow(`${join(old, "wirecat.db")} and ${join(next, "wirecat.db")}`)
 
     expect(readFileSync(join(old, "wirecat.db"), "utf8")).toBe("old")
     expect(readFileSync(join(next, "wirecat.db"), "utf8")).toBe("new")
-    expect(warnings).toEqual([expect.stringMatching(/two stores/)])
   })
 
   it.each(["MESSAGING_STORE", "WIRECAT_STATE_DIR"])("moves nothing when %s is set", (name) => {
