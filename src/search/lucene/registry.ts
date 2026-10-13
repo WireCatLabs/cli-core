@@ -241,7 +241,8 @@ export const QUERY_FIELDS = [
     aliases: [],
     type: "tokens",
     operators: terms,
-    normalization: "NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote",
+    normalization:
+      "NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote, and voice transcripts",
     support: "A2",
   },
   {

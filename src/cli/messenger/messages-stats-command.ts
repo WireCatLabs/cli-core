@@ -19,7 +19,7 @@ export const messagesStatsCommand = (messenger: Messenger): Command =>
     .option("--by <chat|sender|day|hour>", "what to count by (default: chat)", groupingOf)
     .option("--chat <chat>", `only this chat — the same as chat: in the query; ${messenger.chatArgument}`)
     .option(
-      "--source <messenger>",
+      "--source <accounts>",
       "every account of this messenger held in the store; personal, bots or all — the same as in: in the query",
     )
     .option("--limit <n>", "how many rows", positiveCount("--limit"))

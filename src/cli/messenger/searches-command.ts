@@ -32,7 +32,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
     .argument("[query...]", "the query, as for search messages; none matches every stored message")
     .option("--chat <chat>", `only this chat — the same as chat: in the query; ${messenger.chatArgument}`)
     .option(
-      "--source <messenger>",
+      "--source <accounts>",
       "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; " +
         "or a list: group:work,telegram:Alice,email:me@example.com",
     )
