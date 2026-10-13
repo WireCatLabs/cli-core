@@ -127,12 +127,15 @@ describe("the notes' indexes", () => {
     const chunks = await store.notes.chunksToEmbed("test:model:2", { limit: 10 })
     expect(chunks.map(({ text }) => text).sort()).toEqual(["a harbour with a lighthouse", "a recipe for soup"])
     const unit = (x: number, y: number) => new Float32Array([x, y])
+    expect(await store.notes.embedded("test:model:2", {})).toBe(false)
     await store.saveVectors(
       "test:model:2",
       2,
       chunks.map(({ hash, text }) => ({ hash, vector: text.includes("harbour") ? unit(1, 0) : unit(0, 1) })),
     )
     expect(await store.notes.chunksToEmbed("test:model:2", { limit: 10 })).toEqual([])
+    expect(await store.notes.embedded("test:model:2", {})).toBe(true)
+    expect(await store.notes.embedded("test:model:2", { source: "file" })).toBe(false)
     const nearest = await store.notes.nearest("test:model:2", unit(1, 0), { limit: 2 })
     expect(nearest.map(({ note, score }) => [note.id, score])).toEqual([
       [near.id, 1],

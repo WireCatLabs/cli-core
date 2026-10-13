@@ -196,6 +196,13 @@ export const nearestNotes = async (
 ): Promise<NearestNote[]> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the notes")
   const { model, directory, key } = localModel(choice, env, command)
+  const scope = {
+    ...(folderIds ? { folderIds } : {}),
+    ...(withInternal ? { withInternal: true } : {}),
+    ...(source ? { source } : {}),
+  }
+  if (!(await store.notes.embedded(key, scope)))
+    throw new CliError("not_found", `nothing searched here has vectors of ${model.id} yet, so only words were matched`)
   const [vector] = await withLocal(model, directory, threads, (embedder) => embedder.embed([query], "query"))
   const floor = meaningFloor(key)
   const nearest = await store.notes.nearest(key, vector as Float32Array, {

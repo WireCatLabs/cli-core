@@ -64,6 +64,9 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **Note and document search no longer claims meaning when nothing searched has vectors.** It said `by: "words and
+  meaning"` with zero vectors (seen in drive before `sync --embed`); now `by` is `words` and `meaningSkipped` says
+  why. The query model is not loaded in that case either.
 - **Mail hints name `memo sync --mail`.** `search mail`, its MCP tool and the no-mail hint named
   `memo mail <account> import`, which memo no longer has (cli-memo#122).
 
