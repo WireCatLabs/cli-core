@@ -25,7 +25,6 @@ import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
 import { SAVE_NEXT_STEPS } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
-import { astJson } from "../search/lucene/registry.js"
 import type { SendGuard } from "../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../sends/journal.js"
 import { conversationsService } from "../services/conversations.js"
@@ -1046,7 +1045,7 @@ describe("the MCP server", () => {
     for (const recipe of searchRecipes.recipes) {
       const textual = await call("chat_search_messages", { text: recipe.query, language: "lucene", timezone: "UTC" })
       const structured = await call("chat_search_messages", {
-        ast: astJson(parseLucene(recipe.query)),
+        ast: parseLucene(recipe.query),
         timezone: "UTC",
       })
       expect(textual.isError, recipe.title).toBe(false)

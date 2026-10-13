@@ -16,7 +16,7 @@ const root: ResolvedPredicate = {
   operator: "range",
   value: "*",
   span: { start: 0, end: 0 },
-  resolution: { date: { lowerInclusive: true, upperInclusive: true } },
+  resolution: { date: { lower_inclusive: true, upper_inclusive: true } },
 }
 const open = async () => {
   const context = { ...(await openSqlite(":memory:")), now: () => 0 }
@@ -206,7 +206,7 @@ describe("stored rankings", () => {
     put(context, 3, 1, { reply: "2", at: 5000 })
     const period: ResolvedPredicate = {
       ...root,
-      resolution: { date: { lower: 2000, upper: 4000, lowerInclusive: true, upperInclusive: false } },
+      resolution: { date: { lower: 2000, upper: 4000, lower_inclusive: true, upper_inclusive: false } },
     }
     expect(run(context, "contacts", { measure: "answers" }, 10, { root: period }).items[0]?.value).toBe(0)
     expect(

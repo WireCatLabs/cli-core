@@ -51,8 +51,8 @@ export const searchNotesQuery = async (
         date: dateRange(
           node.value,
           node.operator === "range" ? (node.upper ?? "*") : node.value,
-          node.operator === "range" ? node.lowerInclusive === true : true,
-          node.operator === "range" ? node.upperInclusive === true : true,
+          node.operator === "range" ? node.lower_inclusive === true : true,
+          node.operator === "range" ? node.upper_inclusive === true : true,
           timezone,
           node.span,
         ),

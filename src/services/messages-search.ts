@@ -81,7 +81,7 @@ const positiveSources = (node: QueryNode): string[] =>
     ? node.field === "in"
       ? [node.value.toLowerCase()]
       : []
-    : node.clauses.filter(({ occur }) => occur !== "mustNot").flatMap(({ node }) => positiveSources(node))
+    : node.clauses.filter(({ occur }) => occur !== "must_not").flatMap(({ node }) => positiveSources(node))
 export interface Prepared {
   wordsReady: boolean
   stemsReady: boolean
@@ -122,8 +122,8 @@ export const prepareLucene = async (
               operator: "range",
               value: "*",
               upper: "*",
-              lowerInclusive: true,
-              upperInclusive: true,
+              lower_inclusive: true,
+              upper_inclusive: true,
               span: { start: 0, end: 0 },
             },
           }
@@ -190,8 +190,8 @@ export const prepareLucene = async (
           date: dateRange(
             node.value,
             node.operator === "range" ? (node.upper ?? "*") : node.value,
-            node.operator === "range" ? node.lowerInclusive === true : true,
-            node.operator === "range" ? node.upperInclusive === true : true,
+            node.operator === "range" ? node.lower_inclusive === true : true,
+            node.operator === "range" ? node.upper_inclusive === true : true,
             timezone,
             node.span,
           ),

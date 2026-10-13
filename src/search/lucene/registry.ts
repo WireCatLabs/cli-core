@@ -1,15 +1,15 @@
 import {
   type FieldSpec,
-  type Occur,
   type Operator,
   type Predicate,
   type QueryAst,
-  type QueryNode,
   type QueryRegistry,
+  queryAstSchema,
   type Span,
   validateQuery,
   walkQuery,
 } from "@wirecat/cli-base/query"
+import * as v from "valibot"
 import { tagOf } from "../../domain/tags.js"
 import { QUERY_LIMITS, SEARCH_QUERY, searchError } from "./types.js"
 
@@ -351,92 +351,36 @@ const validSpan = (value: unknown): value is Span =>
   Number(value.start) >= 0 &&
   Number(value.end) >= Number(value.start) &&
   Number(value.end) <= QUERY_LIMITS.bytes
-/**
- * A query tree as JSON — MCP input and stored searches — has snake_case keys and the occur `must_not`;
- * cli-base's parser still builds `lowerInclusive`, `upperInclusive` and `mustNot`.
- */
-export const astJson = (ast: QueryAst): unknown => {
-  const write = (node: QueryNode): unknown => {
-    if (node.kind === "boolean")
-      return {
-        ...node,
-        clauses: node.clauses.map(({ occur, node: child }) => ({
-          occur: occur === "mustNot" ? "must_not" : occur,
-          node: write(child),
-        })),
-      }
-    const { lowerInclusive, upperInclusive, ...rest } = node
-    return {
-      ...rest,
-      ...(lowerInclusive === undefined ? {} : { lower_inclusive: lowerInclusive }),
-      ...(upperInclusive === undefined ? {} : { upper_inclusive: upperInclusive }),
-    }
-  }
-  return { ...ast, root: write(ast.root) }
-}
-
-/** Reads a query tree written as `astJson` writes it, checks its shape and limits, then its fields. */
+/** Checks a received query tree — MCP input, a stored search — against cli-base's schema, the limits, then its fields. */
 export const validateAst = (input: unknown): QueryAst => {
   const failure = { start: 0, end: 0 }
   if (!record(input) || input.version !== 1 || input.language !== "lucene-v1")
     searchError("query.unsupported-version", failure)
   let count = 0
   let bytes = 0
-  const read = (value: unknown, depth: number): QueryNode => {
+  // Before the schema: its recursion has no depth bound.
+  const measure = (value: unknown, depth: number): void => {
     if (++count > QUERY_LIMITS.nodes || depth > QUERY_LIMITS.depth) searchError("query.too-large", failure)
     if (!record(value) || !validSpan(value.span)) searchError("query.invalid-ast", failure)
-    const span = { start: value.span.start, end: value.span.end }
-    if (value.kind === "boolean") {
-      if (!Array.isArray(value.clauses) || value.clauses.length === 0 || value.clauses.length > QUERY_LIMITS.nodes)
-        searchError("query.invalid-ast", span)
-      const clauses = value.clauses.map((clause: unknown) => {
-        if (!record(clause) || !["must", "should", "must_not"].includes(String(clause.occur)))
-          searchError("query.invalid-ast", span)
-        const occur: Occur = clause.occur === "must_not" ? "mustNot" : (clause.occur as "must" | "should")
-        return { occur, node: read(clause.node, depth + 1) }
-      })
-      return { kind: "boolean", clauses, span }
+    if (Array.isArray(value.clauses)) {
+      if (value.clauses.length === 0) searchError("query.invalid-ast", value.span)
+      for (const clause of value.clauses) measure(record(clause) ? clause.node : undefined, depth + 1)
+      return
     }
-    if (
-      value.kind !== "predicate" ||
-      typeof value.field !== "string" ||
-      typeof value.value !== "string" ||
-      !["term", "phrase", "wildcard", "regex", "range"].includes(String(value.operator))
-    )
-      searchError("query.invalid-ast", span)
-    if (value.value.length + value.field.length > QUERY_LIMITS.bytes) searchError("query.too-large", span)
-    bytes += new TextEncoder().encode(value.value).length + value.field.length
-    if (bytes > QUERY_LIMITS.bytes) searchError("query.too-large", span)
-    const operator = value.operator as Operator
-    if (
-      operator === "range" &&
-      (typeof value.upper !== "string" ||
-        typeof value.lower_inclusive !== "boolean" ||
-        typeof value.upper_inclusive !== "boolean")
-    )
-      searchError("query.invalid-ast", span)
-    if (typeof value.upper === "string") {
-      if (value.upper.length > QUERY_LIMITS.bytes) searchError("query.too-large", span)
-      bytes += new TextEncoder().encode(value.upper).length
-      if (bytes > QUERY_LIMITS.bytes) searchError("query.too-large", span)
-    }
-    return {
-      kind: "predicate",
-      field: value.field,
-      operator,
-      value: value.value,
-      span,
-      ...(value.implicit === true ? { implicit: true as const } : {}),
-      ...(operator === "range"
-        ? {
-            upper: String(value.upper),
-            lowerInclusive: Boolean(value.lower_inclusive),
-            upperInclusive: Boolean(value.upper_inclusive),
-          }
-        : {}),
-    }
+    for (const text of [value.field, value.value, value.upper])
+      if (typeof text === "string") bytes += new TextEncoder().encode(text).length
+    if (bytes > QUERY_LIMITS.bytes) searchError("query.too-large", value.span)
   }
-  return validateFields({ version: 1, language: "lucene-v1", root: read(input.root, 1) })
+  measure(input.root, 1)
+  const parsed = v.safeParse(queryAstSchema, input)
+  if (!parsed.success) searchError("query.invalid-ast", failure)
+  const open = walkQuery(parsed.output.root).find(
+    (node) =>
+      node.operator === "range" &&
+      (node.upper === undefined || node.lower_inclusive === undefined || node.upper_inclusive === undefined),
+  )
+  if (open) searchError("query.invalid-ast", open.span)
+  return validateFields(parsed.output)
 }
 
 export const QUERY_OPERATORS = [

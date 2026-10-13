@@ -312,10 +312,10 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
           ? [
               ...(value === "*"
                 ? []
-                : [bound(`att.size ${node.lowerInclusive ? ">=" : ">"} ?`, parseBytes(value, node.span))]),
+                : [bound(`att.size ${node.lower_inclusive ? ">=" : ">"} ?`, parseBytes(value, node.span))]),
               ...(node.upper === undefined || node.upper === "*"
                 ? []
-                : [bound(`att.size ${node.upperInclusive ? "<=" : "<"} ?`, parseBytes(node.upper, node.span))]),
+                : [bound(`att.size ${node.upper_inclusive ? "<=" : "<"} ?`, parseBytes(node.upper, node.span))]),
             ]
           : [bound("att.size = ?", parseBytes(value, node.span))]
       const range = combine(conditions, "AND")
@@ -333,9 +333,9 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       if (!range) searchError("query.invalid-ast", node.span)
       const conditions: Fragment[] = []
       if (range.lower !== undefined)
-        conditions.push(bound(`m.sent_at ${range.lowerInclusive ? ">=" : ">"} ?`, range.lower))
+        conditions.push(bound(`m.sent_at ${range.lower_inclusive ? ">=" : ">"} ?`, range.lower))
       if (range.upper !== undefined)
-        conditions.push(bound(`m.sent_at ${range.upperInclusive ? "<=" : "<"} ?`, range.upper))
+        conditions.push(bound(`m.sent_at ${range.upper_inclusive ? "<=" : "<"} ?`, range.upper))
       fragment = combine(conditions, "AND")
     } else if (field === "chat") {
       const chat = resolution?.chat
@@ -463,7 +463,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     const clauses = node.clauses.map(({ occur, node }) => ({ occur, part: compile(node) }))
     const required = clauses.filter(({ occur }) => occur === "must")
     const optional = clauses.filter(({ occur }) => occur === "should")
-    const prohibited = clauses.filter(({ occur }) => occur === "mustNot")
+    const prohibited = clauses.filter(({ occur }) => occur === "must_not")
     const positive = required.length
       ? combine(
           required.map(({ part }) => part),
@@ -675,7 +675,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     }
     const must = node.clauses.filter(({ occur }) => occur === "must")
     const should = node.clauses.filter(({ occur }) => occur === "should")
-    const not = node.clauses.filter(({ occur }) => occur === "mustNot")
+    const not = node.clauses.filter(({ occur }) => occur === "must_not")
     return (
       (must.length
         ? must.every(({ node }) => evaluate(node, row, text, attachments))

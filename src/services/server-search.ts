@@ -76,8 +76,8 @@ const branchesOf = (node: ResolvedNode, account: AccountKey): Branch[] => {
       return [
         {
           words: [],
-          ...(date.lower === undefined ? {} : { minDate: date.lowerInclusive ? date.lower : date.lower + 1 }),
-          ...(date.upper === undefined ? {} : { maxDate: date.upperInclusive ? date.upper : date.upper - 1 }),
+          ...(date.lower === undefined ? {} : { minDate: date.lower_inclusive ? date.lower : date.lower + 1 }),
+          ...(date.upper === undefined ? {} : { maxDate: date.upper_inclusive ? date.upper : date.upper - 1 }),
         },
       ]
     return [{ words: [] }]

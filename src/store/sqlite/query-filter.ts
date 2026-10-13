@@ -48,17 +48,17 @@ const leaf = (node: Predicate, columns: ColumnMap, options: FilterOptions): Wher
       if (node.operator !== "range") return { sql: `${sql} = ?`, params: [Number(node.value)] }
       const bounds: Where[] = []
       if (node.value !== "*")
-        bounds.push({ sql: `${sql} ${node.lowerInclusive ? ">=" : ">"} ?`, params: [Number(node.value)] })
+        bounds.push({ sql: `${sql} ${node.lower_inclusive ? ">=" : ">"} ?`, params: [Number(node.value)] })
       if (node.upper !== undefined && node.upper !== "*")
-        bounds.push({ sql: `${sql} ${node.upperInclusive ? "<=" : "<"} ?`, params: [Number(node.upper)] })
+        bounds.push({ sql: `${sql} ${node.upper_inclusive ? "<=" : "<"} ?`, params: [Number(node.upper)] })
       return all([{ sql: `${sql} IS NOT NULL`, params: [] }, ...bounds])
     }
     case "time": {
       const range =
         node.operator === "range"
-          ? [node.value, node.upper ?? "*", node.lowerInclusive ?? true, node.upperInclusive ?? true]
+          ? [node.value, node.upper ?? "*", node.lower_inclusive ?? true, node.upper_inclusive ?? true]
           : [node.value, node.value, true, true]
-      const { lower, upper, lowerInclusive, upperInclusive } = dateRange(
+      const { lower, upper, lower_inclusive, upper_inclusive } = dateRange(
         range[0] as string,
         range[1] as string,
         range[2] as boolean,
@@ -69,8 +69,8 @@ const leaf = (node: Predicate, columns: ColumnMap, options: FilterOptions): Wher
       )
       return all([
         { sql: `${sql} IS NOT NULL`, params: [] },
-        ...(lower === undefined ? [] : [{ sql: `${sql} ${lowerInclusive ? ">=" : ">"} ?`, params: [lower] }]),
-        ...(upper === undefined ? [] : [{ sql: `${sql} ${upperInclusive ? "<=" : "<"} ?`, params: [upper] }]),
+        ...(lower === undefined ? [] : [{ sql: `${sql} ${lower_inclusive ? ">=" : ">"} ?`, params: [lower] }]),
+        ...(upper === undefined ? [] : [{ sql: `${sql} ${upper_inclusive ? "<=" : "<"} ?`, params: [upper] }]),
       ])
     }
     case "bool":
@@ -94,7 +94,7 @@ const compile = (node: QueryNode, columns: ColumnMap, options: FilterOptions): W
   if (node.kind === "predicate") return known(leaf(node, columns, options))
   const of = (occur: string) =>
     node.clauses.filter((clause) => clause.occur === occur).map((clause) => compile(clause.node, columns, options))
-  const [must, should, mustNot] = [of("must"), of("should"), of("mustNot")]
+  const [must, should, mustNot] = [of("must"), of("should"), of("must_not")]
   const parts = [
     ...must,
     ...(must.length === 0 && should.length > 0

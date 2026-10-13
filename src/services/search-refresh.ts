@@ -41,7 +41,7 @@ const chatScope = (node: ResolvedNode): ChatScope[] | undefined => {
 const matchesChat = (node: ResolvedNode, chat: ChatScope): boolean | undefined => {
   if (node.kind === "predicate") return node.resolution?.chat ? keyOf(node.resolution.chat) === keyOf(chat) : undefined
   const must = node.clauses.filter(({ occur }) => occur === "must").map(({ node }) => matchesChat(node, chat))
-  const excluded = node.clauses.filter(({ occur }) => occur === "mustNot").map(({ node }) => matchesChat(node, chat))
+  const excluded = node.clauses.filter(({ occur }) => occur === "must_not").map(({ node }) => matchesChat(node, chat))
   if (must.includes(false) || excluded.includes(true)) return false
   const should = node.clauses.filter(({ occur }) => occur === "should").map(({ node }) => matchesChat(node, chat))
   if (!must.length && should.length && should.every((match) => match === false)) return false

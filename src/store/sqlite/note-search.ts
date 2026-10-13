@@ -240,10 +240,10 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
         [
           ...(range.lower === undefined
             ? []
-            : [bound(`n.updated_at ${range.lowerInclusive ? ">=" : ">"} ?`, range.lower)]),
+            : [bound(`n.updated_at ${range.lower_inclusive ? ">=" : ">"} ?`, range.lower)]),
           ...(range.upper === undefined
             ? []
-            : [bound(`n.updated_at ${range.upperInclusive ? "<=" : "<"} ?`, range.upper)]),
+            : [bound(`n.updated_at ${range.upper_inclusive ? "<=" : "<"} ?`, range.upper)]),
         ],
         "AND",
       )
@@ -262,7 +262,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
     const must = parts.filter(({ occur }) => occur === "must").map(({ part }) => part)
     const should = parts.filter(({ occur }) => occur === "should").map(({ part }) => part)
     const not = parts
-      .filter(({ occur }) => occur === "mustNot")
+      .filter(({ occur }) => occur === "must_not")
       .map(({ part }) =>
         part.exact ? { ...part, sql: `NOT coalesce(${part.sql},0)` } : { sql: "1", params: [], exact: false },
       )
@@ -342,7 +342,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       }
       const must = node.clauses.filter(({ occur }) => occur === "must")
       const should = node.clauses.filter(({ occur }) => occur === "should")
-      const not = node.clauses.filter(({ occur }) => occur === "mustNot")
+      const not = node.clauses.filter(({ occur }) => occur === "must_not")
       return (
         (must.length
           ? must.every(({ node }) => evaluate(node, row, text))

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLucene } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
-import { astJson, QUERY_FIELDS, validateAst, validateFields } from "./registry.js"
+import { QUERY_FIELDS, validateAst, validateFields } from "./registry.js"
 
 const reason = (run: () => unknown) => {
   try {
@@ -13,9 +13,9 @@ const reason = (run: () => unknown) => {
 }
 
 describe("versioned structured AST and field registry", () => {
-  it("round-trips a typed range, a negation and a field group through the snake_case JSON form", () => {
+  it("round-trips a typed range, a negation and a field group through JSON", () => {
     const ast = parseLucene("from:(alice OR bob) date:[2026-01-01 TO 2026-02-01} -kind:bot")
-    const json = JSON.parse(JSON.stringify(astJson(ast)))
+    const json = JSON.parse(JSON.stringify(ast))
     expect(JSON.stringify(json)).toContain('"lower_inclusive":true')
     expect(JSON.stringify(json)).toContain('"upper_inclusive":false')
     expect(JSON.stringify(json)).toContain('"occur":"must_not"')
@@ -24,9 +24,17 @@ describe("versioned structured AST and field registry", () => {
     expect(validateFields(ast)).toBe(ast)
     expect(QUERY_FIELDS.map(({ name }) => name)).toContain("body")
   })
-  it("refuses the parser's camelCase tree as input", () => {
-    expect(reason(() => validateAst(parseLucene("date:[2026-01-01 TO 2026-02-01]")))).toBe("query.invalid-ast")
-    expect(reason(() => validateAst(parseLucene("alpha -beta")))).toBe("query.invalid-ast")
+  it("refuses the camelCase tree cli-base built before 0.26", () => {
+    const span = { start: 0, end: 1 }
+    const range = { kind: "predicate", field: "date", operator: "range", value: "a", upper: "b", span }
+    const tree = (root: unknown) => ({ version: 1, language: "lucene-v1", root })
+    expect(reason(() => validateAst(tree({ ...range, lowerInclusive: true, upperInclusive: true })))).toBe(
+      "query.invalid-ast",
+    )
+    const term = { kind: "predicate", field: "text", operator: "term", value: "beta", span }
+    expect(
+      reason(() => validateAst(tree({ kind: "boolean", span, clauses: [{ occur: "mustNot", node: term }] }))),
+    ).toBe("query.invalid-ast")
   })
   it.each([
     ["unknown:foo", "query.unknown-field"],
@@ -60,7 +68,7 @@ describe("versioned structured AST and field registry", () => {
     }
   })
   it("rejects malicious structured inputs rather than trusting casts", () => {
-    const ast = astJson(parseLucene("alpha")) as { root: Record<string, unknown> }
+    const ast = parseLucene("alpha") as unknown as { root: Record<string, unknown> }
     for (const input of [
       null,
       {},

@@ -28,7 +28,7 @@ const leaf = (field: string, value: string, operator: ResolvedPredicate["operato
 const query = (root: QueryExecution["root"]): QueryExecution => ({ root, accounts: [account], limit: 1 })
 const all = (): ResolvedPredicate => ({
   ...leaf("date", "*", "range"),
-  resolution: { date: { lowerInclusive: true, upperInclusive: true } },
+  resolution: { date: { lower_inclusive: true, upper_inclusive: true } },
 })
 const opened = async (path = ":memory:") => {
   const context = { ...(await openSqlite(path)), now: () => 0 }
@@ -104,7 +104,7 @@ describe("a compiled ranking selection", () => {
       clauses: [
         { occur: "should", node: leaf("body", "alpha", "regex") },
         { occur: "should", node: leaf("body", "beta") },
-        { occur: "mustNot", node: leaf("body", "beta", "regex") },
+        { occur: "must_not", node: leaf("body", "beta", "regex") },
       ],
     }
     expect(keys(context, query(root))).toEqual([1])

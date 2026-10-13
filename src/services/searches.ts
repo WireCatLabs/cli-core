@@ -2,7 +2,7 @@ import { CliError, singleLine } from "@wirecat/cli-base"
 import { parseLucene, type QueryAst } from "@wirecat/cli-base/query"
 import type { AdminReport } from "../domain/admin-statistics.js"
 import type { RankingInput, RankingTarget } from "../domain/rankings-options.js"
-import { astJson, FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
+import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
 import { QUERY_VERSION, SEARCH_QUERY } from "../search/lucene/types.js"
 import type { MessageStore, SearchCommand, SearchRecord, StoredSearch } from "../store/store.js"
 import { isAdminSelection, readAdminSelection } from "./admin-statistics.js"
@@ -221,7 +221,7 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
               "validation_error",
               `saved search "${search.name}" is a --regex search; it takes no more words`,
             )
-          if (params.ast !== undefined) params.ast = astJson(both(validateAst(params.ast), extra))
+          if (params.ast !== undefined) params.ast = both(validateAst(params.ast), extra)
           else if (params.text === undefined) params.text = extra
           else params.text = language === "lucene" ? `(${params.text}) AND (${extra})` : `${params.text} ${extra}`
         }

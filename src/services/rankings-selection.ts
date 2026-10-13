@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
 import { type RankingInput, type RankingTarget, rankingOptions } from "../domain/rankings-options.js"
-import { astJson, FIELD_VERSION, validateAst } from "../search/lucene/registry.js"
+import { FIELD_VERSION, validateAst } from "../search/lucene/registry.js"
 import type { QueryExecution, ResolvedNode } from "../search/lucene/resolved.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 
@@ -117,8 +117,7 @@ export const readRankingSelection = async (store: MessageStore, input: unknown):
     } else if (typeof node.operator !== "string") invalid()
   }
   checkShape(execution.root)
-  // A selection keeps the parser's own tree, not the JSON form that MCP and stored searches use.
-  const ast = validateAst(astJson({ version: 1, language: "lucene-v1", root: execution.root as QueryNode }))
+  const ast = validateAst({ version: 1, language: "lucene-v1", root: execution.root })
   const bind = (node: QueryNode, value: unknown): ResolvedNode => {
     const rawNode = object(value)
     if (node.kind === "boolean") {
@@ -143,15 +142,15 @@ export const readRankingSelection = async (store: MessageStore, input: unknown):
     }
     if (node.field === "date") {
       const range = object(resolution?.date)
-      if (!range || typeof range.lowerInclusive !== "boolean" || typeof range.upperInclusive !== "boolean") invalid()
+      if (!range || typeof range.lower_inclusive !== "boolean" || typeof range.upper_inclusive !== "boolean") invalid()
       const lower = finiteTime(range.lower),
         upper = finiteTime(range.upper)
       return {
         ...node,
         resolution: {
           date: {
-            lowerInclusive: range.lowerInclusive,
-            upperInclusive: range.upperInclusive,
+            lower_inclusive: range.lower_inclusive,
+            upper_inclusive: range.upper_inclusive,
             ...(lower === undefined ? {} : { lower }),
             ...(upper === undefined ? {} : { upper }),
           },

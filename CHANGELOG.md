@@ -8,7 +8,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
-- **Needs `@wirecat/cli-base` 0.25.** The peer range is now `>=0.25.0 <0.26.0`. `commands --json` says
+- **Needs `@wirecat/cli-base` 0.26.** The peer range is now `>=0.26.0 <0.27.0`. `commands --json` says
   `global_options`, `inherited_options`, `exit_codes` and `takes_value`, and its `contract` is 1. Log records
   (run events, the send journal) carry `run_id`. Error details are snake_case: `operation_id`, `operation_ids`,
   `send_id`, `chat_id`, `previous_chat_id`, `person_ids`, `scheduled_for`, `retry_after_ms`, `retry_at`,
@@ -19,9 +19,10 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   cli-base `FieldSpec`s: `type` is `txt`, `kw`, `enum` or `time`, and `size`, `tag`, `topic` check their values
   in a `validate` hook. Query errors point at the field of a `field:value` term, and the `~` hint no longer
   names `--language legacy`.
-- **A query tree given as JSON has snake_case keys:** `lower_inclusive`, `upper_inclusive` and the occur
-  `must_not`, in the MCP `ast` input of `search`, `stats` and `admin-statistics`. Store version 6 rewrites the
-  trees of saved searches and runs kept before it; a ranking `selection` keeps its own form.
+- **A query tree has snake_case keys:** `lower_inclusive`, `upper_inclusive` and the occur `must_not`, as
+  cli-base 0.26 builds it — in the MCP `ast` input of `search`, `stats` and `admin-statistics`, and in a ranking
+  `selection`. `validateAst` checks a received tree with cli-base's `queryAstSchema`. Store version 6 rewrites
+  the trees of saved searches, rankings and runs kept before it.
 
 ### Added
 

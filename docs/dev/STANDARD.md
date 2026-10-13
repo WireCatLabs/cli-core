@@ -375,6 +375,122 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--source` | `<accounts>` | list | what to read: provider:account, a provider, a kind or group:<name>; comma-separated |  |
 | `--dry-run` |  | switch | judge and plan; do nothing |  |
 | `--debug` |  | switch | on failure, show the full error record: cause and stack |  |
+| `--agent-json` |  | switch | JSON with control and direction characters made visible in strings and keys |  |
+| `--brief` |  | switch | each item as its reference, title, time and excerpt only |  |
+| `--chart-kind` | `<messages\|active\|membership>` | choice | what a chart draws |  |
+| `--checkpoints` | `<durations>` | list | the ages to report on, comma-separated: 1d,7d,30d |  |
+| `--fields` | `<paths>` | list | only these comma-separated fields of each item; list metadata stays |  |
+| `--format` | `<format>` | choice | the format of the file written |  |
+| `--full` |  | switch | each item with its whole text and every field |  |
+| `--json` |  | switch | machine-readable output: one JSON value on stdout, nothing else |  |
+| `--jsonl` |  | switch | machine-readable output: one JSON object per line |  |
+| `--output` | `<file>` | path | the file to write |  |
+| `--output-dir` | `<dir>` | path | the folder to write into, created if missing |  |
+| `--quiet` |  | switch | no diagnostics on stderr |  |
+| `--show-phone` |  | switch | print the whole phone number |  |
+| `--thread-within` | `<duration>` | duration | messages within this long either side of the hit |  |
+| `--trace` |  | switch | one line per request on stderr: ids and timings, never content |  |
+| `--verbose` |  | switch | more detail in what is shown; repeat for more |  |
+| `--version` |  | switch | print the version number |  |
+| `--with-notes` |  | switch | include the owner's private notes |  |
+| `--measure` | `<name>` | choice | the metric a ranking is ordered by |  |
+| `--newest` |  | switch | newest first instead of best first |  |
+| `--order` | `<recent\|name>` | choice | the order of a list: most recent first, or by name |  |
+| `--score` | `<preset>` | choice | the named ranking score preset |  |
+| `--weights` | `<json>` | string | the ranking component weights, all of them |  |
+| `--accept-terms` |  | switch | accept the model's licence terms |  |
+| `--allow-any-file` |  | switch | send a file even from a credential folder or the tool's own folders |  |
+| `--allow-dangerous` |  | switch | go ahead without the question an ask level puts before a deletion |  |
+| `--allow-writes` |  | switch | acknowledge that the profile offers writing tools |  |
+| `--as-file` |  | switch | send every file as a plain file to download |  |
+| `--background` |  | switch | run as a job that outlives this command |  |
+| `--base-url` | `<url>` | string | the address of an OpenAI-compatible model API |  |
+| `--dims` | `<n>` | count | the embedding vector size |  |
+| `--discover` |  | switch | also find partial matches; the results are evidence, not answers |  |
+| `--encrypt` |  | switch | compress and encrypt with a password that is never kept |  |
+| `--exact` |  | switch | bare words and quotes match their exact form only |  |
+| `--fingerprint` | `<hash>` | string | refuse if the plan it names has changed |  |
+| `--for-everyone` |  | switch | delete for everyone in the chat, not only for the owner |  |
+| `--http` |  | switch | serve over HTTP on 127.0.0.1 |  |
+| `--language` | `<lucene\|legacy>` | choice | the query language |  |
+| `--local` |  | switch | use the model on this machine, never the source |  |
+| `--max-age` | `<duration>` | duration | how old a stored snapshot may be and still count as fresh |  |
+| `--md` |  | switch | the text is the messenger's Markdown |  |
+| `--no-backup` |  | switch | do not back the file up before deleting it |  |
+| `--no-input` |  | switch | never prompt or open an interactive login |  |
+| `--no-preview` |  | switch | no preview card for a link in the text |  |
+| `--no-record` |  | switch | do not keep this run, whatever the configuration says |  |
+| `--no-registries` |  | switch | do not ask the public ban lists |  |
+| `--notify` |  | switch | tell the chat's members about it |  |
+| `--offline` |  | switch | answer from what was recorded and never connect |  |
+| `--port` | `<port>` | number | the local port for --http |  |
+| `--public-url` | `<url>` | string | the public https address of the tunnel |  |
+| `--record` |  | switch | keep this run under runs: ids and timings, never content |  |
+| `--regex` |  | switch | the words are one regular expression |  |
+| `--send-id` | `<id>` | id | identify a send attempt, so a retry reuses it |  |
+| `--silent` |  | switch | deliver without a notification |  |
+| `--thread` |  | switch | the stored reply chain instead of time neighbours |  |
+| `--timezone` | `<zone>` | string | the IANA timezone dates and times are read in |  |
+| `--yes` |  | switch | go ahead with the write without asking or previewing first |  |
+| `--analyze` |  | switch | also analyze with the configured provider |  |
+| `--catch-up` |  | switch | prepare local search after this run |  |
+| `--extract` |  | switch | also read the text inside the files written |  |
+| `--mark-read` |  | switch | also mark the chat read up to the newest message shown; the other person sees it |  |
+| `--no-catch-up` |  | switch | skip local preparation after this run |  |
+| `--retract` |  | switch | take the owner's vote back |  |
+| `--revoke` |  | switch | forget every login given to a browser app |  |
+| `--track` |  | switch | also do it daily while serve runs |  |
+| `--transcribe` |  | switch | also transcribe voice messages not transcribed yet, on this machine |  |
+| `--catch-up-chunks` | `<n>` | count | at most this many chunks prepared after the run | chunks |
+| `--catch-up-messages` | `<n>` | count | skip the graph rebuild above this many messages | messages |
+| `--concurrency` | `<n>` | count | requests to the source at once | requests |
+| `--deep` | `<n>` | count | also check the top n in full, one a second | people |
+| `--max-actions` | `<n>` | count | at most this many actions in one run | actions |
+| `--max-chats` | `<n>` | count | at most this many chats in one run | chats |
+| `--max-chunks` | `<n>` | count | at most this many chunks in one run | chunks |
+| `--max-gaps` | `<n>` | count | at most this many gaps repaired in one run | gaps |
+| `--max-input-bytes` | `<bytes>` | count | at most this many bytes of buffered stdin | bytes |
+| `--max-messages` | `<n>` | count | at most this many messages in one run | messages |
+| `--max-replies` | `<n>` | count | at most this many replies read | replies |
+| `--max-tokens` | `<n>` | count | at most this many model tokens in one run | tokens |
+| `--thread-bytes` | `<n>` | count | at most this many bytes in each thread context | bytes |
+| `--thread-hops` | `<n>` | count | at most this many links from the hit | links |
+| `--thread-messages` | `<n>` | count | at most this many messages in each thread context | messages |
+| `--batch` | `<id>` | id | the batch to act on, by the id that listed it |  |
+| `--component` | `<name>` | string | the ranking component to read the evidence of |  |
+| `--counters` | `<names>` | list | the counters to read: views, reactions, comments |  |
+| `--failed` |  | switch | every chat whose newest job failed or died |  |
+| `--left` |  | switch | only the chats this account has left |  |
+| `--others` |  | switch | every session but this one |  |
+| `--saved` | `<name\|id>` | string | run a saved search, or an earlier run by its id |  |
+| `--selection` | `<json>` | string | the resolved ranking selection a drilldown returned |  |
+| `--add` | `<chat>` | id | put this chat into the set being changed; repeat it for more |  |
+| `--all-can-pin` | `<on\|off>` | choice | every member may pin messages |  |
+| `--anonymous` |  | switch | nobody sees who voted for what |  |
+| `--approval` |  | switch | who joins by the link asks first, and an admin lets them in |  |
+| `--can` | `<rights>` | list | what an admin may do, comma-separated |  |
+| `--channel` |  | switch | a channel instead of a group |  |
+| `--closed` | `<on\|off>` | choice | close it to new messages, or reopen it |  |
+| `--comment-to` | `<post>` | id | comment on this channel post |  |
+| `--description` | `<text>` | string | the new description |  |
+| `--expire-time` | `<time>` | time | it stops working at this time |  |
+| `--first-name` | `<name>` | string | the account's first name |  |
+| `--hidden` | `<on\|off>` | choice | hide it from the list, or show it |  |
+| `--last-name` | `<name>` | string | the account's last name |  |
+| `--max-uses` | `<n>` | count | at most this many people join by it | people |
+| `--members-see-link` | `<on\|off>` | choice | members may see the invite link |  |
+| `--multiple` |  | switch | people may pick several answers |  |
+| `--only-admins-add` | `<on\|off>` | choice | only admins may add members |  |
+| `--only-admins-call` | `<on\|off>` | choice | only admins may start a call |  |
+| `--only-owner-edits-info` | `<on\|off>` | choice | only the owner may change the name and photo |  |
+| `--photo` | `<file>` | path | an image file: a profile or chat photo, or a photo to send |  |
+| `--pinned` | `<on\|off>` | choice | pin it at the top of the list, or unpin it |  |
+| `--remove` | `<chat>` | id | take this chat out of the set being changed; repeat it for more |  |
+| `--reply-to` | `<message>` | id | answer this message in the same chat |  |
+| `--revote` |  | switch | people may change their vote |  |
+| `--send-as` | `<id>` | id | send as this identity of the chat |  |
+| `--voice` | `<file>` | path | an Ogg Opus file sent as a voice message |  |
+| `--filter` | `<query>` | string | a query every result must also match, beside the search's own words |  |
 
 <!-- flags: end -->
 

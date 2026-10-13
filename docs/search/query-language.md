@@ -659,7 +659,7 @@ Strict `corrections` пуст; version/fieldsVersion/presetVersion/timezone/orde
 Pagination `hasMore` не означает полноту сетевого архива.
 
 AST: `{version:1,language:"lucene-v1",root:...}`; ключи в snake_case: Boolean clauses имеют must/should/must_not occurrences, range — `lower_inclusive`/`upper_inclusive`.
-AST: `{version:1,language:"lucene-v1",root:...}`; Boolean clauses имеют must/should/mustNot occurrences.
+AST: `{version:1,language:"lucene-v1",root:...}`; Boolean clauses имеют must/should/must_not occurrences.
 Raw SQL, regexp flags или authority allow-list в AST не принимаются как executable instructions.
 Low-level `searchStore` и `MessagesService.search` без language сохраняют старую discovery semantics
 для существующих callers; CLI и MCP явно выбирают standard default. Для scripted stable contract указывайте language явно.

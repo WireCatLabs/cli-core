@@ -86,11 +86,11 @@ const periodOf = (range: DateRange | undefined) => {
   const clauses: string[] = []
   const params: SqlValue[] = []
   if (range?.lower !== undefined) {
-    clauses.push(`m.sent_at ${range.lowerInclusive ? ">=" : ">"} ?`)
+    clauses.push(`m.sent_at ${range.lower_inclusive ? ">=" : ">"} ?`)
     params.push(range.lower)
   }
   if (range?.upper !== undefined) {
-    clauses.push(`m.sent_at ${range.upperInclusive ? "<=" : "<"} ?`)
+    clauses.push(`m.sent_at ${range.upper_inclusive ? "<=" : "<"} ?`)
     params.push(range.upper)
   }
   return { sql: clauses.join(" AND ") || "1", params }
