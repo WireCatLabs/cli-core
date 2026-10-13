@@ -1,5 +1,4 @@
-// biome-ignore lint/style/noRestrictedImports: a type, and the shape an unreadable result carries for the commands
-import type { ActionableError } from "../cli/recovery.js"
+import type { ActionableError } from "../domain/recovery.js"
 import type { Engine } from "./engine.js"
 
 export type { Engine } from "./engine.js"
