@@ -385,6 +385,11 @@ export interface NoteSearch {
   indexState(): Promise<NoteIndexState | undefined>
   /** Live notes' chunks with no vector of `model`, by hash from `after`, each with its text cut again. */
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<NoteChunkToEmbed[]>
+  /** Whether any live chunk in this scope has a vector of `model`: none means meaning search has nothing to rank. */
+  embedded(
+    model: string,
+    options: { folderIds?: string[]; withInternal?: boolean; source?: Note["source"] },
+  ): Promise<boolean>
   /** Notes nearest in meaning to `query`, each scored by its best chunk. Vectors are unit length. */
   nearest(
     model: string,
@@ -451,6 +456,18 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
             ? []
             : [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
         })
+    },
+    embedded: async (model, { folderIds, withInternal, source }) => {
+      drain()
+      const scope = live(folderIds, source, withInternal)
+      return (
+        database
+          .prepare(
+            `SELECT 1 FROM chunks k JOIN embeddings v ON v.model = ? AND v.content_hash = k.content_hash
+              WHERE 1 = 1${scope.sql} LIMIT 1`,
+          )
+          .get(model, ...scope.params) !== undefined
+      )
     },
     nearest: async (model, query, { limit, folderIds, withInternal, source }) => {
       drain()
