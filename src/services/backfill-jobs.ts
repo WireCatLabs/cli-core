@@ -6,6 +6,8 @@ import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { carries } from "../background/processes.js"
 import type { AppIdentity } from "../cli/app.js"
 import { envName } from "../cli/app.js"
+import { recordLogFor } from "../cli/runs/record-log.js"
+import { childTrace } from "../cli/runs/scope.js"
 
 export interface Job {
   id: string
@@ -25,6 +27,8 @@ export interface Job {
   result?: Record<string, unknown>
   error?: { code: string; message: string }
   cancelRequestedAt?: string
+  /** Its commands' trace (`TRACEPARENT`), so `runs list` names the runs it made. */
+  traceId?: string
 }
 
 export const JOB_STATES = ["running", "done", "partial", "failed", "cancelled", "died"] as const
@@ -67,14 +71,47 @@ export const readJob = (dir: string, id: string): Job | undefined => {
   }
 }
 
+/** `<id>.jsonl`: when the job started and how it ended, as log records. Its output stays in `<id>.log`, as it came. */
+const recordsPath = (dir: string, id: string) => join(dir, `${id}.jsonl`)
+
+/** A traced environment for a job's child, and the trace id to keep on the job. */
+export const tracedJob = (env: NodeJS.ProcessEnv): { env: NodeJS.ProcessEnv; traceId: string } => {
+  const trace = childTrace()
+  return { env: { ...env, TRACEPARENT: trace.traceparent }, traceId: trace.traceId }
+}
+
+export const jobStarted = (app: AppIdentity, dir: string, job: Job): void => {
+  saveJob(dir, job)
+  recordLogFor(recordsPath(dir, job.id), app, job.traceId ? { traceId: job.traceId } : {}).info({
+    event: "job.start",
+    job: job.id,
+    pid: job.pid,
+  })
+}
+
+/** Saves how the job ended, from inside it, and logs it. */
+export const finishJob = (app: AppIdentity, dir: string, id: string, change: Partial<Job>): void => {
+  updateJob(dir, id, change)
+  const job = readJob(dir, id)
+  if (!job) return
+  const outcome = stateOf(job)
+  recordLogFor(recordsPath(dir, id), app, job.traceId ? { traceId: job.traceId } : {})[job.error ? "error" : "info"]({
+    event: "job.exit",
+    job: id,
+    outcome,
+    ...(job.error ? { errorCode: job.error.code } : {}),
+  })
+}
+
 export const updateJob = (dir: string, id: string, change: Partial<Job>): void => {
   const job = readJob(dir, id)
   if (job) saveJob(dir, { ...job, ...change })
 }
 
-/** The job's record and its log. */
+/** The job's record and its logs. */
 export const removeJob = (dir: string, job: Job): void => {
   rmSync(jobPath(dir, job.id), { force: true })
+  rmSync(recordsPath(dir, job.id), { force: true })
   // The record says where its log is; only a log beside it is removed.
   if (dirname(job.log) === dir) rmSync(job.log, { force: true })
 }
@@ -134,8 +171,8 @@ export const startArchiveJob = (
   }
   saveJob(dir, job)
   const { [envName(app, "TIMEOUT")]: _timeout, ...inherited } = env
-  const childEnv = { ...inherited, [envName(app, "PROFILE")]: profile, [envName(app, "BACKFILL_JOB")]: id }
-  const pid = spawnJob(input.argv, childEnv, log)
-  saveJob(dir, { ...job, pid })
+  const traced = tracedJob({ ...inherited, [envName(app, "PROFILE")]: profile, [envName(app, "BACKFILL_JOB")]: id })
+  const pid = spawnJob(input.argv, traced.env, log)
+  jobStarted(app, dir, { ...job, pid, traceId: traced.traceId })
   return { job: id, pid, chat: input.chat, log }
 }

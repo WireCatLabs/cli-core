@@ -295,8 +295,13 @@ describe("a permission-level refusal", () => {
 
 describe("the journal written by max-cli before it was shared", () => {
   it("reads its numeric cid as the send id", () => {
-    const journal = new SendJournal(sendsPathFor("g-cid"))
-    journal.append({ at: "2026-09-24T08:00:00Z", profile: "g-cid", chatId: "1", outcome: "sent", cid: 77 } as never)
+    const path = sendsPathFor("g-cid")
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(
+      path,
+      `${JSON.stringify({ at: "2026-09-24T08:00:00Z", profile: "g-cid", chatId: "1", outcome: "sent", cid: 77 })}\n`,
+    )
+    const journal = new SendJournal(path)
 
     expect(journal.entries()).toEqual([
       { at: "2026-09-24T08:00:00Z", profile: "g-cid", chatId: "1", outcome: "sent", sendId: "77" },

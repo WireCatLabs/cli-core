@@ -364,9 +364,11 @@ export const messengerContext = (
   )) {
     base.renderer.warn(`permissions.${key} names no command and does nothing — \`config unset permissions.${key}\``)
   }
+  // Read when warning, not now: serve swaps the renderer's methods for log records after this.
+  const warn = (text: string) => base.renderer.warn(text)
   const guard =
-    messenger.guard?.(command, base.settings, base.renderer.warn) ??
-    guardFor(app, base.settings, base.renderer.warn, base.env, terminalAsker(command))
+    messenger.guard?.(command, base.settings, warn) ??
+    guardFor(app, base.settings, warn, base.env, terminalAsker(command))
 
   return {
     ...base,

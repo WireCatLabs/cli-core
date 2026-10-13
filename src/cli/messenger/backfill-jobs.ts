@@ -1,8 +1,10 @@
 export {
+  finishJob,
   isJob,
   JOB_STATES,
   type Job,
   type JobState,
+  jobStarted,
   jobsDir,
   listJobs,
   readJob,
@@ -11,5 +13,6 @@ export {
   saveJob,
   spawnDetached,
   stateOf,
+  tracedJob,
   updateJob,
 } from "../../services/backfill-jobs.js"

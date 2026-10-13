@@ -3,6 +3,8 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { join } from "node:path"
 import { CliError, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
+import { recordLogFor } from "../cli/runs/record-log.js"
+import { childTrace } from "../cli/runs/scope.js"
 import { currentArgv } from "./renamed-paths.js"
 import type { ServerSystem } from "./system.js"
 
@@ -25,6 +27,8 @@ export interface LastRun {
   exitCode: number
   /** The run's output file: an agent's report, a command's log. */
   output: string
+  /** Shared by every command the run started (`TRACEPARENT`), so `runs list` names them. */
+  traceId?: string
 }
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,39}$/
@@ -341,13 +345,21 @@ export const runSchedule = async (
     .replace(/\.\d+Z$/, "Z")
   const agent = schedule.kind === "agent"
   const output = join(runs, `${stamp}.${agent ? "md" : "log"}`)
-  const log = agent ? join(runs, `${stamp}.log`) : output
+  const errors = agent ? join(runs, `${stamp}.log`) : output
   const [program = "", ...args] = agent ? schedule.argv : [...system.entry, ...currentArgv(schedule.argv)]
+  const trace = childTrace()
   const childEnv = {
     ...env,
     ...schedule.environment,
+    TRACEPARENT: trace.traceparent,
     ...(agent ? { [`${app.envPrefix}_READ_ONLY`]: "1" } : {}),
   }
+  // The child's output is data, and an agent's is another program's: it is kept as it came. These lines say
+  // only when it ran and how it ended.
+  const log = recordLogFor(join(runs, `${stamp}.jsonl`), app, { traceId: trace.traceId })
+  const facts = { schedule: schedule.name, kind: schedule.kind }
+  const began = now().getTime()
+  log.info({ event: "schedule.start", ...facts })
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawn(program, args, { env: childEnv, cwd: folder, stdio: ["ignore", "pipe", "pipe"] })
     const out: Buffer[] = []
@@ -360,18 +372,24 @@ export const runSchedule = async (
     })
     child.on("close", (code) => {
       writeFileSync(output, Buffer.concat(agent ? out : [...out, ...err]), { mode: 0o600 })
-      if (agent) writeFileSync(log, Buffer.concat(err), { mode: 0o600 })
+      if (agent) writeFileSync(errors, Buffer.concat(err), { mode: 0o600 })
       resolve(code ?? 1)
     })
   })
-  const last: LastRun = { at: now().toISOString(), exitCode, output }
+  const ended = now()
+  log[exitCode === 0 ? "info" : "error"]({
+    event: "schedule.exit",
+    ...facts,
+    exitCode,
+    durationMs: ended.getTime() - began,
+  })
+  const last: LastRun = { at: ended.toISOString(), exitCode, output, traceId: trace.traceId }
   writeFileSync(join(folder, "last.json"), `${JSON.stringify(last, null, 2)}\n`, { mode: 0o600 })
   if (agent && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
 
-  for (const old of readdirSync(runs)
-    .sort()
-    .slice(0, -KEEP_RUNS * 2))
-    rmSync(join(runs, old), { force: true })
+  const stampOf = (file: string) => file.split(".")[0] ?? file
+  const kept = new Set([...new Set(readdirSync(runs).map(stampOf))].sort().slice(-KEEP_RUNS))
+  for (const file of readdirSync(runs)) if (!kept.has(stampOf(file))) rmSync(join(runs, file), { force: true })
 
   const title = `${app.command} ${schedule.name}`
   if (agent && exitCode === 0) {
@@ -381,7 +399,7 @@ export const runSchedule = async (
         .find((line) => line.trim()) ?? "report ready"
     await notify(system, env, title, `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`)
   } else if (exitCode !== 0) {
-    await notify(system, env, title, `failed (exit ${exitCode}) — ${agent ? log : output}`)
+    await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
   }
 
   if ("once" in schedule.when) {

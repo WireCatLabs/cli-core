@@ -1,5 +1,6 @@
 import type { MessageStore } from "../../store/store.js"
 import { failureKey } from "../failures.js"
+import type { ServeNotice } from "./serve-notice.js"
 
 export const STEMS_EVERY_MS = 30_000
 export const STEMS_SLICE_MS = 2_000
@@ -24,7 +25,7 @@ export const stemFills = ({
   sliceMs = STEMS_SLICE_MS,
 }: {
   withStore: <T>(work: (store: MessageStore) => Promise<T>) => Promise<T>
-  warn: (text: string) => void
+  warn: (notice: ServeNotice) => void
   everyMs?: number
   sliceMs?: number
 }): StemFills => {
@@ -45,7 +46,8 @@ export const stemFills = ({
   const tick = () => {
     slice = fillOnce()
       .catch((error) => {
-        warn(`the stems were not filled: ${failureKey(error)}`)
+        const errorCode = failureKey(error)
+        warn({ code: "stems_not_filled", errorCode, text: `the stems were not filled: ${errorCode}` })
         return true
       })
       .then((more) => {

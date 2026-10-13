@@ -370,7 +370,7 @@ export const sendGuard = ({
       try {
         journal.append({ at: now().toISOString(), profile, ...kept, ...(settles ? { reservation: settles } : {}) })
       } catch (error) {
-        warn(`this send is not in the send journal: ${error instanceof Error ? error.message : String(error)}`)
+        warn(`this send is not in the send journal: ${journalFailure(error)}`)
       }
     },
   }
@@ -428,3 +428,7 @@ export const sharedJournal = (guard: SendGuard, wire: { readonly journals: boole
         },
       }
     : guard
+
+/** `EACCES`, `ENOSPC` — the file system's code, not its sentence, which names the path and can quote more. */
+const journalFailure = (error: unknown): string =>
+  (error as NodeJS.ErrnoException | undefined)?.code ?? (error instanceof Error ? error.name : "error")

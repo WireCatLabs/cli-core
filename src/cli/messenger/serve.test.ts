@@ -110,8 +110,9 @@ describe("serve", () => {
 
     const records = stderr.map((line) => v.parse(logRecordSchema, JSON.parse(line)))
     expect(records).toContainEqual(
-      expect.objectContaining({ severity: "info", body: expect.stringContaining("listening for profile default") }),
+      expect.objectContaining({ severity: "info", body: "note", attributes: { event: "note", code: "listening" } }),
     )
+    expect(stderr.join("\n")).not.toContain("listening for profile")
     expect(records[0]?.resource).toEqual({ service: app.command, version: app.version })
   })
 

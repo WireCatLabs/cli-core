@@ -3,7 +3,7 @@ import type { AppIdentity } from "../app.js"
 import { isCliFailure } from "../failures.js"
 import { type DiagnosticEvent, type EventSink, providerErrorKey, renderEvent } from "./events.js"
 import { newRunId, type Run, runsDirFor, startRun } from "./run.js"
-import { inRun } from "./scope.js"
+import { enclosingTraceId, inRun, traceOf } from "./scope.js"
 
 export interface RecordingOptions {
   app: AppIdentity
@@ -21,6 +21,8 @@ export interface RecordingOptions {
   runsDir?: string
   keepDays?: number
   now?: () => Date
+  /** The caller's trace; otherwise the enclosing run's, otherwise `TRACEPARENT` from `env`. */
+  traceId?: string
 }
 
 /**
@@ -33,8 +35,14 @@ export interface RecordingOptions {
 export const recorded = async <T>(options: RecordingOptions, body: (events: EventSink) => Promise<T>): Promise<T> => {
   const recording = startRecording(options)
   try {
-    const answer = await inRun({ runId: recording.runId, command: options.command, startedAt: Date.now() }, () =>
-      body(recording.events),
+    const answer = await inRun(
+      {
+        runId: recording.runId,
+        command: options.command,
+        startedAt: Date.now(),
+        ...(recording.traceId ? { traceId: recording.traceId } : {}),
+      },
+      () => body(recording.events),
     )
     await recording.succeed(answer)
     return answer
@@ -47,6 +55,7 @@ export const recorded = async <T>(options: RecordingOptions, body: (events: Even
 export interface Recording {
   /** Given now, before the run is kept or not, so whatever the command writes can name it. */
   runId: string
+  traceId?: string
   events: EventSink
   succeed: (answer?: unknown) => Promise<void>
   /** Marks the error as dealt with, so the program's last catch does not keep it a second time. */
@@ -59,6 +68,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
   const now = options.now ?? (() => new Date())
   const startedAt = now()
   const runId = newRunId(startedAt, options.command)
+  const traceId = options.traceId ?? enclosingTraceId() ?? traceOf(options.env ?? process.env).traceId
 
   const open = (extra: { startedAt?: Date } = {}): Run =>
     startRun({
@@ -68,6 +78,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
       profile: options.profile,
       service: options.app.command,
       cliVersion: options.app.version,
+      ...(traceId === undefined ? {} : { traceId }),
       // The operation has happened or is under way, and failing the command now invites a retry
       // that sends twice.
       onError: (error) => {
@@ -96,6 +107,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
 
   return {
     runId,
+    ...(traceId === undefined ? {} : { traceId }),
     events,
     succeed: async (answer) => {
       const partial = partialOutcome(answer)
@@ -146,7 +158,7 @@ const outcomeOf = (error: unknown): { errorCode: string; providerError?: string 
  * paths cut to what follows `dist/` or `src/`. **Never `message`** — it can hold whatever the
  * failing line was handling.
  */
-export const crashOf = (error: unknown): { event: "crash"; errorName: string; frames: string[] } => {
+export const crashOf = (error: unknown): { event: "crash"; errorClass: string; frames: string[] } => {
   const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : ""
   const frames = stack
     .split("\n")
@@ -159,7 +171,7 @@ export const crashOf = (error: unknown): { event: "crash"; errorName: string; fr
       const file = /(?:^|\/)(?:dist|src)\/(.+)$/.exec(path)?.[1] ?? path.split("/").at(-1)
       return `${fn ?? "<anonymous>"} ${file}:${lineNumber}`
     })
-  return { event: "crash", errorName: error instanceof Error ? error.name : typeof error, frames }
+  return { event: "crash", errorClass: error instanceof Error ? error.name : typeof error, frames }
 }
 
 export const partialOutcome = (answer: unknown): import("./run.js").RunMetadata["partial"] => {

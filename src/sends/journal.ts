@@ -1,8 +1,9 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { resolvePaths } from "@wirecat/cli-base"
+import { logRecordOf, resolvePaths } from "@wirecat/cli-base"
 import type { LogRecord } from "@wirecat/cli-base/standards"
 import type { AppIdentity } from "../cli/app.js"
+import { LOG_ATTRIBUTES } from "../cli/runs/log-attributes.js"
 import { currentRun } from "../cli/runs/scope.js"
 import type { Id } from "../domain/models.js"
 import { withFileLock } from "./file-lock.js"
@@ -139,16 +140,18 @@ export class SendJournal {
 
   append(entry: SendEntry): void {
     const { at, ...attributes } = entry
-    const { runId, command } = currentRun()
-    const record: LogRecord = {
-      time: at,
+    const { runId, command, traceId } = currentRun()
+    const record = logRecordOf({
       severity: entry.outcome === "sent" || entry.outcome === "reserved" ? "info" : "warn",
-      body: entry.kind ?? "message",
-      run_id: runId,
+      event: attributes,
+      message: entry.kind ?? "message",
+      time: at,
+      runId,
+      ...(traceId === undefined ? {} : { traceId }),
       command,
-      attributes,
       resource: this.resource,
-    }
+      allow: LOG_ATTRIBUTES,
+    })
     mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 })
     appendFileSync(this.path, `${JSON.stringify(record)}\n`, { mode: 0o600 })
   }
