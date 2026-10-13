@@ -36,8 +36,8 @@ export const addMeetingHitSearchCommand = (
   annotate(
     meetings
       .command("search-page")
-      .description("bounded keyword search with configured stemming, explicit context filters and hit continuation")
-      .argument("<query>")
+      .description("find words in stored meetings, by context filters, one page at a time")
+      .argument("<query>", "words to find; each also matches its other word forms")
       .option("--meeting-id <id>", "restrict to a meeting in the selected account", integer)
       .option(
         "--identity-id <id>",
@@ -48,17 +48,34 @@ export const addMeetingHitSearchCommand = (
       .option("--project <name>", "confirmed membership in a canonical project, key or explicit alias")
       .option("--tag <name>", "an explicit meeting tag, by canonical name or alias")
       .option("--topic <name>", "an explicit meeting topic, by canonical name or alias")
-      .option("--since <date>", "meeting start at or after an ISO date or timestamp", timestamp)
-      .option("--until <date>", "meeting start at or before an ISO date or timestamp", timestamp)
-      .option("--limit <count>", "hit limit from 1 through 1000 (default 100)", integer)
-      .option("--after <cursor>", "opaque nextCursor from the same query, filters and selected account")
-      .option("--max-read-bytes <bytes>", "raw SQL read budget from 1 through 67108864 (default 4194304)", integer)
-      .action(async (query: string, options: MeetingHitSearchOptions & { identityId?: number }) => {
-        const { identityId, ...input } = options
-        const request = { ...input, participantIdentityId: identityId, signal: deps.signal() }
-        validateMeetingHitSearch(query, request)
-        deps.output(await (await deps.search())(query, request))
-      }),
+      .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", timestamp)
+      .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", timestamp)
+      .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
+      .option("--cursor <cursor>", "continue from the previous page's nextCursor, with the same query and filters")
+      .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
+      .action(
+        async (
+          query: string,
+          options: Omit<MeetingHitSearchOptions, "since" | "until" | "after"> & {
+            identityId?: number
+            sinceTime?: number
+            untilTime?: number
+            cursor?: string
+          },
+        ) => {
+          const { identityId, sinceTime, untilTime, cursor, ...input } = options
+          const request = {
+            ...input,
+            since: sinceTime,
+            until: untilTime,
+            after: cursor,
+            participantIdentityId: identityId,
+            signal: deps.signal(),
+          }
+          validateMeetingHitSearch(query, request)
+          deps.output(await (await deps.search())(query, request))
+        },
+      ),
     { origin: "handwritten", mutates: false },
   )
 }
