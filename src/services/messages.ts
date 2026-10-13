@@ -8,6 +8,7 @@ import { formatLocator, parseLocator } from "../domain/locator.js"
 import { type MessageLink, messageLinkTarget, validatePermalink } from "../domain/message-link.js"
 import type { Chat, Deletion, Discussion, Id, Message, Page, Provider, WindowedMessage } from "../domain/models.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
+import type { SkippedSource } from "../search/account-list.js"
 import { inSource, parseQuery, sourceOf } from "../search/query.js"
 import { type Match, search } from "../search/search.js"
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
@@ -131,6 +132,10 @@ export interface SearchFound extends Page<FoundMessage> {
   server?: ServerSearched
   query?: QueryMetadata
   coverage?: SearchCoverage
+  /** `--source` entries naming no account this search reads, and why. */
+  skipped?: SkippedSource[]
+  /** `search mail`: the mailboxes read. `search messages` answers `coverage.accounts`. */
+  accounts?: { resource: "mail"; provider: string; account: string }[]
   corrections: { from: string; to: string[] }[]
   /** Per chat of the page: how much of its history the store holds. */
   completeness: (ChatCompleteness & AccountKey)[]
@@ -1062,7 +1067,7 @@ export const scopeOf = async (
   if (chat !== undefined && parsed.chat !== undefined && parsed.chat !== chat) {
     throw new CliError("validation_error", `--chat and chat: name different chats: "${chat}" and "${parsed.chat}"`)
   }
-  const listed = await listedAccounts(store, account, source, messenger.app)
+  const listed = await listedAccounts(store, account, source, messenger.app, kind)
   if (listed && parsed.in !== undefined)
     throw new CliError("validation_error", "--source names the accounts — leave in: out, or put it in the list")
   const sourced = source === undefined || listed ? undefined : sourceOf("--source", source, providers)
@@ -1080,7 +1085,7 @@ export const scopeOf = async (
   const accounts = accountsOfKind(
     kind,
     given ??
-      listed ??
+      listed?.accounts ??
       (wanted === undefined || held.length === 0
         ? [account]
         : held.filter(({ provider }) => inSource(wanted, provider))),
@@ -1088,7 +1093,7 @@ export const scopeOf = async (
     wanted,
     messenger.app?.command,
     undefined,
-    listed !== undefined,
+    listed !== undefined || given !== undefined,
   )
   const named = parsed.chat ?? chat
   const scope: SearchScope = { accounts }

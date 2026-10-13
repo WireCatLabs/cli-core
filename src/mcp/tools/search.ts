@@ -121,11 +121,13 @@ export const mailSearchInput = (messenger: Messenger) =>
     ast: v.optional(v.unknown()),
     timezone: v.optional(v.string()),
     chat: v.optional(chatOf(messenger)),
-    account: v.optional(
+    source: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
-        v.description("only this mail account, by its address; every mail account when unset"),
+        v.description(
+          "only these mail accounts, comma-separated: email:<address>, or group:<name>; every one when unset",
+        ),
       ),
     ),
     newest: v.optional(v.pipe(v.boolean(), v.description("newest first instead of best first"))),
@@ -152,7 +154,7 @@ export const syncArgs = (args: {
       }
     : {}
 
-export type MessagesSearchArgs = v.InferOutput<ReturnType<typeof messagesSearchInput>> & { account?: string }
+export type MessagesSearchArgs = v.InferOutput<ReturnType<typeof messagesSearchInput>>
 
 const typedOf = (args: Record<string, unknown>): SearchParams =>
   Object.fromEntries(
@@ -235,7 +237,6 @@ export const answerMessagesSearch = async (
     context: args.context ?? 0,
     ...(args.chat === undefined ? {} : { chat: args.chat }),
     ...(args.source === undefined ? {} : { source: args.source }),
-    ...(args.account === undefined ? {} : { mailAccount: args.account }),
   })
   return { ...found, page: 1, limit: size }
 }

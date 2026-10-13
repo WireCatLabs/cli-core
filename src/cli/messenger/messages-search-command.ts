@@ -50,11 +50,15 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
         : `only this chat — the same as chat: in the query; ${messenger.chatArgument}`,
     )
   if (mail)
-    command.option("--account <address>", "only this mail account, by its address; every mail account when unset")
+    command.option(
+      "--source <accounts>",
+      "only these mail accounts, separated by commas: email:<address> as a hit shows it, email, mail or " +
+        "group:<name>; every mail account when unset",
+    )
   else
     command
       .option(
-        "--source <messenger>",
+        "--source <accounts>",
         "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; " +
           "or a list: group:work,telegram:Alice,email:me@example.com",
       )
@@ -100,7 +104,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       type === undefined ? given : given.length === 0 ? [TYPES[type]] : [`(${given.join(" ")}) AND ${TYPES[type]}`]
     const {
       chat,
-      account,
       source,
       regex,
       language,
@@ -114,7 +117,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       saved,
     } = this.opts<{
       chat?: string
-      account?: string
       source?: string
       regex?: boolean
       discover?: boolean
@@ -138,7 +140,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     const typed = {
       ...(chat === undefined ? {} : { chat }),
       ...(source === undefined ? {} : { source }),
-      ...(account === undefined ? {} : { mailAccount: account }),
       ...(discover === undefined ? {} : { discover }),
       ...(language === undefined ? {} : { language }),
       ...(timezone === undefined ? {} : { timezone }),
@@ -204,6 +205,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     noteServer(context, found.server)
     const { command } = messenger.app
     for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
+    for (const { source, reason } of found.skipped ?? []) context.renderer.note(`${source} not searched: ${reason}`)
     const stemming = found.query?.stemming
     const forms = (stemming?.applied ? stemming.terms : []).filter(({ stemmer }) => stemmer !== "none")
     if (forms.length > 0)

@@ -24,7 +24,8 @@ export interface ProposedAction {
   payload: unknown
   reason: string | null
   status: (typeof PROPOSAL_STATUSES)[number]
-  proposedBy: { type: Actor["type"]; id: string }
+  /** `name` is a bot's handle; `null` for a person. */
+  proposedBy: { type: Actor["type"]; id: string; name: string | null }
   decidedBy: { type: Actor["type"]; id: string } | null
   decidedAt: string | null
   executedAt: string | null
@@ -61,6 +62,9 @@ export interface ProposedActionsStore {
 
 type Row = Record<string, unknown>
 const iso = (value: unknown) => (value == null ? null : new Date(Number(value)).toISOString())
+const NAMED =
+  "SELECT p.*, b.name AS proposer_name FROM proposed_actions p " +
+  "LEFT JOIN bots b ON p.proposed_by_type = 'bot' AND b.id = p.proposed_by_id"
 const json = (value: unknown) => (value == null ? null : JSON.parse(String(value)))
 
 export const proposedActionsStoreOver = (context: StoreContext): ProposedActionsStore => {
@@ -81,7 +85,11 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
       payload: json(row.payload),
       reason: row.reason == null ? null : String(row.reason),
       status: row.status as ProposedAction["status"],
-      proposedBy: { type: row.proposed_by_type as Actor["type"], id: String(row.proposed_by_id) },
+      proposedBy: {
+        type: row.proposed_by_type as Actor["type"],
+        id: String(row.proposed_by_id),
+        name: row.proposer_name == null ? null : String(row.proposer_name),
+      },
       decidedBy:
         row.decided_by_type == null
           ? null
@@ -95,9 +103,7 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
     }
   }
   const rowOf = (id: string): Row => {
-    const row = /^\d+$/.test(id)
-      ? database.prepare("SELECT * FROM proposed_actions WHERE id = ?").get(Number(id))
-      : undefined
+    const row = /^\d+$/.test(id) ? database.prepare(`${NAMED} WHERE p.id = ?`).get(Number(id)) : undefined
     if (!row) throw new CliError("not_found", `no proposed action ${id}`)
     return row
   }
@@ -176,16 +182,14 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
     get: async (id) => actionOf(rowOf(id)),
     pending: async ({ limit = 100 } = {}) =>
       database
-        .prepare("SELECT * FROM proposed_actions WHERE status = 'proposed' ORDER BY created_at, id LIMIT ?")
+        .prepare(`${NAMED} WHERE p.status = 'proposed' ORDER BY p.created_at, p.id LIMIT ?`)
         .all(Math.min(Math.max(limit, 1), 500))
         .map(actionOf),
     list: async ({ status, limit = 100 } = {}) => {
       if (status !== undefined && !PROPOSAL_STATUSES.includes(status))
         throw new CliError("validation_error", `a status is one of ${PROPOSAL_STATUSES.join(", ")}`)
       return database
-        .prepare(
-          "SELECT * FROM proposed_actions WHERE (? IS NULL OR status = ?) ORDER BY created_at DESC, id DESC LIMIT ?",
-        )
+        .prepare(`${NAMED} WHERE (? IS NULL OR p.status = ?) ORDER BY p.created_at DESC, p.id DESC LIMIT ?`)
         .all(status ?? null, status ?? null, Math.min(Math.max(limit, 1), 500))
         .map(actionOf)
     },
