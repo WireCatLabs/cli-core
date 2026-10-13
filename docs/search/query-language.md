@@ -401,18 +401,18 @@ accounts провайдера/класса, включая `all`. Отрицат
 `--source` принимает и список через запятую: `--source group:work,telegram:Alice,max:202,email:me@work.example`.
 Элемент — группа (`group:<name>`), `app-или-messenger:account` (id аккаунта в хранилище, профиль любого
 приложения — `max:default` работает и из tg, — или имя аккаунта; `tg:` — то же, что `telegram:`) или голое слово
-`--source` (`max`, `all`). Профиль известен всем приложениям, как только его приложение что-то сохранило: при первой
+`--source` (`max`, `all`), провайдер или его псевдоним (`tg`), вид (`messages`, `mail`, `notes`, `meetings`). Папка
+заметок — `notes:<id>`, тот же id, что у найденной заметки; заметки, написанные в memo, — `notes:internal`. Профиль известен всем приложениям, как только его приложение что-то сохранило: при первой
 записи оно отмечает в хранилище (`store_settings`, ключ `profiles`), какой аккаунт у профиля.
 Группа хранится в хранилище для всех приложений: `config set accountGroups.work tg:tg2,max:Alice,email:me@work.example`,
 `config unset accountGroups.work`, видна в `config show`. Группа не включает другие группы.
-Из списка `search messages` берёт аккаунты сообщений и пропускает почтовые ящики, `search mail` — только почтовые
-ящики, `search conversations` — все; если подходящих не осталось — ошибка. Список и положительный `in:` вместе
+Из списка `search messages` и `search conversations` берут аккаунты сообщений, `search mail` — только почтовые
+ящики; остальные элементы названы в ответе в `skipped: [{ source, reason }]`. Если подходящих не осталось — ошибка. Список и положительный `in:` вместе
 отвергаются. Неизвестная группа или аккаунт — ошибка со списком того, что есть.
 
 Запланировано ([план](../dev/source-everywhere-plan.md)): у всего в хранилище есть вид (`messages`, `mail`,
 `notes`, `documents`, `meetings`), провайдер и аккаунт, и `--source` принимают все поиски — `search all`,
-`search mail`, `search notes`. Элемент — `провайдер:аккаунт` (как его показывает найденное), голый провайдер,
-голый вид или `group:<name>`. Что поиск не может использовать, он называет в `skipped`. `search notes --folder`,
+`search mail`, `search notes`. `search notes --folder`,
 `search mail --account` и `search all --meetings` заменит `--source`.
 
 ## Regex: term и body
