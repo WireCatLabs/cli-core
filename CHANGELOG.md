@@ -29,6 +29,12 @@ shape of this file.
   (`documents.metadata`, no migration), takes the page title as the note's title, and meaning search cuts the
   note's chunks at section starts. `title:`, `site:`, `lang:`, `author:` and `keyword:` search notes and files;
   on messages and mail they match nothing. Attachments keep only the text for now. `doctor` lists the two engines.
+- **A photo is found by what the chat said around it.** Every photo or image attachment gets one chunk for search by
+  meaning: its caption plus up to 3 messages before and after it in the same chat within 10 minutes, the chat title and
+  the sender's name, embedded with the same text model as messages when `conversations embed` runs. A hit is the
+  photo's message, with `matchedIn: "context"`. No schema change; word search is unchanged. The text comes from an
+  image provider (`src/images/`, registered like a reader with `registerImageProvider`, `context:1` built in), and the
+  chunk's hash names the provider and its version, so a newer version describes every image again.
 
 ### Fixed
 

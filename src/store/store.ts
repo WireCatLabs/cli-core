@@ -60,6 +60,7 @@ import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/documen
 import { drainEmailIndex, type MailStore, mailStoreOver, threadConversation } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import * as identities from "./sqlite/identities.js"
+import * as imageChunks from "./sqlite/image-chunks.js"
 import { drainInvolvementQueue } from "./sqlite/involvement-queue.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
@@ -347,6 +348,21 @@ export interface MessageStore {
     options: { after?: string; limit: number },
   ): Promise<ChunkToEmbed[]>
   saveVectors(model: string, dims: number, vectors: { hash: string; vector: Float32Array }[]): Promise<void>
+  /** The chat's live image attachments with the messages around each, and the chunk each already has. */
+  imagesToDescribe(
+    key: AccountKey,
+    chatId: Id,
+    window: { messages: number; withinMs: number },
+  ): Promise<imageChunks.ImageInput[]>
+  /** Makes these the chunks of their images, and drops the chat's image chunks not in `keep` (attachment pks). */
+  saveImageChunks(key: AccountKey, chatId: Id, chunks: imageChunks.ImageChunk[], keep: number[]): Promise<void>
+  /** Which of these chunk hashes already have a vector of `model`. */
+  embeddedHashes(model: string, hashes: string[]): Promise<Set<string>>
+  /** The images nearest in meaning to `query` by the text around them, as their message in its conversation. */
+  nearestImages(
+    key: AccountKey,
+    options: { chatId?: Id; model: string; since?: string; limit: number; query: Float32Array },
+  ): Promise<ConversationHit[]>
   /** The current build's distinct chunks, and how many have a vector of `model`. */
   vectorStatus(key: AccountKey, chatId: Id, model: string): Promise<{ chunks: number; embedded: number }>
   /** Drops the chat's vectors, or one model's; a vector another chat's chunk shares stays. */
@@ -697,6 +713,8 @@ export interface ConversationHit {
   chunk: { firstMessageId: Id; lastMessageId: Id }
   score: number
   stale: boolean
+  /** Set when the hit is an image, found by the text around it: its message is the chunk. */
+  matchedIn?: "context"
 }
 
 export interface StoredReadiness {
@@ -1194,6 +1212,53 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     saveVectors: async (model, dims, rows) => {
       inTransaction(() => vectors.saveVectors(context, model, dims, rows))
+    },
+
+    imagesToDescribe: async (key, chatId, window) => {
+      const chatKey = chatKeyOf(key, chatId)
+      return chatKey === undefined ? [] : imageChunks.imagesOfChat(context, chatKey, window)
+    },
+
+    saveImageChunks: async (key, chatId, chunks, keep) => {
+      const accountPk = findAccountPk(key)
+      const chatKey = chatKeyOf(key, chatId)
+      if (accountPk === undefined || chatKey === undefined) return
+      inTransaction(() => imageChunks.saveImageChunks(context, accountPk, chatKey, chunks, keep))
+    },
+
+    embeddedHashes: async (model, hashes) => imageChunks.embeddedHashes(context, model, hashes),
+
+    nearestImages: async (key, { chatId, model, since, limit, query }) => {
+      const accountPk = findAccountPk(key)
+      if (accountPk === undefined) return []
+      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
+      if (chatId !== undefined && chatKey === undefined) return []
+      const nearest = imageChunks.nearestImages(context, accountPk, {
+        ...(chatKey === undefined ? {} : { chatKey }),
+        ...(since === undefined ? {} : { since: Date.parse(since) }),
+        model,
+        limit,
+        query,
+      })
+      const hits: ConversationHit[] = []
+      for (const { chatId: chat, messageId, score } of nearest) {
+        const chatPk = findChatPk(accountPk, chat)
+        const conversation =
+          chatPk === undefined ? undefined : conversationQueries.conversationOf(context, chatPk, messageId)
+        const summary =
+          conversation === undefined
+            ? undefined
+            : conversationQueries.summariesOf(context, accountPk, [Number(conversation)]).get(Number(conversation))
+        if (summary)
+          hits.push({
+            summary,
+            chunk: { firstMessageId: messageId, lastMessageId: messageId },
+            score,
+            stale: false,
+            matchedIn: "context",
+          })
+      }
+      return hits
     },
 
     vectorStatus: async (key, chatId, model) => {

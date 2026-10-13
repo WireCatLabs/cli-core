@@ -399,6 +399,58 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/images/**", "!src/images/**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                  },
+                  {
+                    "group": ["drizzle-orm", "drizzle-orm/*"],
+                    "message": "drizzle-orm is a development dependency, bundled into dist at build time: import it through src/store/sqlite/drizzle/ (add what you need to core.ts), or tg and max crash at runtime"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
+                    ],
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/store/**",
+                      "**/services/**",
+                      "**/cli/**",
+                      "**/mcp/**",
+                      "**/attachments/extract.js",
+                      "**/readers/**"
+                    ],
+                    "message": "an image provider sits below the store, the services and the commands: it imports images/types and pure helpers, nothing else; the service layer calls the registry, so a provider never imports it"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

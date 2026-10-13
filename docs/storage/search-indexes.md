@@ -171,6 +171,15 @@ tokens; `CHUNK_CHARS`, `src/conversations/chunks.ts`). A chunk's text is `sender
 text is never stored — only the chunk's first and last message (`chunk_messages`) and the sha256 of its text
 (`chunks`, the table every kind of text is cut into).
 
+**Photos** get a chunk of their own, `chunks.chunkable_type = 'image'` pointing at the attachment: the text is
+what the `context` image provider (`src/images/context/`) makes from the photo's caption, up to 3 messages before
+and after it in the same chat within 10 minutes (`CONTEXT_MESSAGES`, `CONTEXT_MINUTES`), the chat title and the
+sender, and nothing when there is no caption and no such neighbour. The chunk's hash is taken over
+`provider:version` and the text, so a newer provider version or a new neighbour gives a new hash and a new vector.
+`conversations embed` writes these chunks after the conversation's. A meaning search can return one: the hit is the
+photo's message, `matchedIn: "context"`, beside the conversation's own hit. Providers register in
+`src/images/registry.ts`; the first that gives an image text describes it.
+
 Why chunks and not whole conversations: e5-small reads at most 512 tokens (EmbeddingGemma 2,048), and
 one long conversation covers many subjects. Why not single messages: «ок» or «да, давай» mean nothing alone.
 
