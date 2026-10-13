@@ -37,6 +37,7 @@ export type NotReadReason = "not_fetched" | "partial"
 export interface PersonContext {
   person: PersonRecord & { provider: Provider; id: Id }
   shared: SharedChat[]
+  /** Each way, the newest in a messenger dialog whatever `limits` says; mail only within them. */
   last: { fromThem: ContextMessage | null; fromMe: ContextMessage | null; fromThemAnywhere: ContextMessage | null }
   recent: { direct: ContextMessage[]; groups: ContextMessage[] }
   mentions: ContextMessage[]
@@ -132,6 +133,8 @@ export const personContext = async (
   const shared: SharedChat[] = []
   const notRead: PersonContext["notRead"] = []
   const direct: ContextMessage[] = []
+  /** The newest message each way in a dialog longer than the page, for `last`. */
+  const beyond: ContextMessage[] = []
   const theirs: ContextMessage[] = []
   const mentions: ContextMessage[] = []
   let cut = false
@@ -161,6 +164,17 @@ export const personContext = async (
       })
       direct.push(...page.items.map((message) => toContext(key, message, dialog.title)))
       cut ||= page.hasMore
+      if (page.hasMore)
+        for (const outgoing of [true, false]) {
+          const [newest] = (
+            await store.messages(key, dialog.id, {
+              limit: 1,
+              outgoing,
+              ...(since === undefined ? {} : { since: new Date(since).toISOString() }),
+            })
+          ).items
+          if (newest) beyond.push(toContext(key, newest, dialog.title))
+        }
     }
     if (key.provider === "email") {
       const mail = await mailWith(store, key, identity.id, messages, since)
@@ -182,6 +196,7 @@ export const personContext = async (
   }
 
   direct.sort(newestFirst)
+  const each = [...direct, ...beyond].sort(newestFirst)
   theirs.sort(newestFirst)
   mentions.sort(newestFirst)
   const inDialog = new Set(
@@ -203,8 +218,8 @@ export const personContext = async (
     person: { ...record, provider: asked.provider, id: found.id },
     shared: shared.sort((a, b) => Date.parse(b.lastMessageAt ?? "") - Date.parse(a.lastMessageAt ?? "")),
     last: {
-      fromThem: direct.find((message) => !message.outgoing) ?? null,
-      fromMe: direct.find((message) => message.outgoing === true) ?? null,
+      fromThem: each.find((message) => !message.outgoing) ?? null,
+      fromMe: each.find((message) => message.outgoing === true) ?? null,
       fromThemAnywhere: theirs[0] ?? null,
     },
     recent: { direct: kept.direct, groups: kept.groups },

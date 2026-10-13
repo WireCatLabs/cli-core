@@ -406,7 +406,14 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
       ),
     ).toBe(true)
     expect((await run(store, account, "alpha in:all")).items).toHaveLength(16)
+    expect((await run(store, account, "alpha in:messages")).items).toHaveLength(16)
     expect((await run(store, account, "alpha NOT in:bots")).items).toHaveLength(8)
+    if (provider === "telegram") {
+      const viaAlias = (await run(store, account, "alpha in:tg")).items
+      expect(viaAlias).toHaveLength(8)
+      expect(viaAlias.every(({ locator }) => locator.startsWith("msg:telegram/100/"))).toBe(true)
+      expect((await run(store, account, "alpha in:messages NOT in:tg")).items).toHaveLength(8)
+    }
     expect((await run(store, account, "NOT in:all")).items).toEqual([])
     await expect(run(store, account, "in:all", { limit: 10, accounts: [account] })).rejects.toThrow(
       "accounts it was given",
