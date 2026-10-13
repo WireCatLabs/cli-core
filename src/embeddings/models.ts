@@ -3,7 +3,7 @@ import type { ModelFile } from "../speech/models.js"
 
 /**
  * The text embedding models `conversations embed` can use, each **pinned to one commit** and checked by
- * sha256, as the speech models are. Measured 2026-10-02 through `@wirecat/cli-messaging-onnx`, 4 threads, a
+ * sha256, as the speech models are. Measured 2026-10-02 through `@wirecat/cli-core-onnx`, 4 threads, a
  * Ryzen AI 9 HX 470 laptop, 300-token chunks, Node 24 and Bun 1.3.14 alike
  * (`docs/storage/research/2026-10-02-embeddings.md`): e5-small ~10 chunks a second, EmbeddingGemma ~1.5.
  */

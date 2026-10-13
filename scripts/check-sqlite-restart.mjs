@@ -8,7 +8,7 @@ import { join } from "node:path"
 
 const { ensureSqlite } = await import("../dist/sqlite-runtime.js")
 await ensureSqlite()
-const { SQLITE_VERSION } = await import("@wirecat/cli-messaging-sqlite")
+const { SQLITE_VERSION } = await import("@wirecat/cli-core-sqlite")
 const { openCache } = await import("../dist/store/open.js")
 const { openStore } = await import("../dist/store/store.js")
 

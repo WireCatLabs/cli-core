@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **The native add-ons are `@wirecat/cli-core-sqlite` and `@wirecat/cli-core-onnx`** 1.0.1, the same builds as
+  `@wirecat/cli-messaging-sqlite`/`-onnx` 1.0.1, which are deprecated later. Only a caller that imports an add-on
+  directly needs the new name.
+
 ## 0.263.0 — 14.10.2026
 
 ### Changed — may break callers
