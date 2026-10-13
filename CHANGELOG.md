@@ -6,6 +6,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+## 0.256.0 — 13.10.2026
+
 ### Changed — may break callers
 
 - **A bare search word looks everywhere a message holds words:** its text, a voice note's transcript, a word of
