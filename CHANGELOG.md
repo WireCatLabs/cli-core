@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- Bounded meeting context reports `invalid_response` when an adapter returns absent parent/revision metadata or a null cue, rather than failing with an unclassified exception.
+
 ### Added
 
 - **Mentions: phones, e-mail addresses, links and Google documents found in stored message text** (store

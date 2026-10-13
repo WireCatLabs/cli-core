@@ -61,6 +61,8 @@ export const readMeetingHitContext = async (
   })
   checkMeetingCancelled(signal)
   if (
+    !page?.meeting ||
+    !page.transcript ||
     page.meeting.id !== parsed.meetingId ||
     page.meeting.accountId !== accountId ||
     page.meeting.deletedAt !== null ||
@@ -76,6 +78,7 @@ export const readMeetingHitContext = async (
   let previous = -1
   const all = page.rows.map((row) => {
     if (
+      !row ||
       typeof row.text !== "string" ||
       !Number.isSafeInteger(row.startMs) ||
       row.startMs < 0 ||
