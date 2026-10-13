@@ -24,7 +24,7 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
     command
       .argument("[query...]", "a strict Lucene query; none selects every stored message")
       .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
-      .option("--source <messenger>", "every held account of this messenger; personal, bots or all")
+      .option("--source <accounts>", "every held account of this messenger; personal, bots or all")
       .option("--exact", "bare words match exact forms rather than stems")
   command.option("--saved <name|id>", "run a saved report of this kind; typed report options replace stored options")
   command

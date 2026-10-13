@@ -34,7 +34,10 @@ const memory = (): Kept & { rows: Map<string, string> } => {
   const rows = new Map<string, string>()
   return {
     rows,
-    get: async (one) => rows.get(keyOf(one)),
+    get: async (one) => {
+      const text = rows.get(keyOf(one))
+      return text === undefined ? undefined : { text, source: "memory" }
+    },
     keep: async (one, text) => {
       if (text.trim() !== "") rows.set(keyOf(one), text)
     },
@@ -123,7 +126,7 @@ describe("hearing voice messages in a list", () => {
     await kept.close()
 
     const again = await openKept(messenger, "work", env)
-    expect(await again.get({ chatId: "7", messageId: "1" })).toBe("hello")
+    expect(await again.get({ chatId: "7", messageId: "1" })).toEqual({ text: "hello", source: "gigaam-v3" })
     expect(await again.get({ chatId: "7", messageId: "2" })).toBeUndefined()
     await again.close()
     const other = await openKept(messenger, "home", env)

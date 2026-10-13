@@ -147,6 +147,17 @@ export const resetAttachmentWords = (database: CacheDatabase): number => {
   const exists = database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'attachment_words'").get()
   if (!exists) return 0
   return inBatch(database, () => {
+    // Transcripts kept before they were copied to the voice attachment.
+    database
+      .prepare(
+        `UPDATE attachments SET text = t.text, extraction = 'text', extractor = 'speech:' || t.source,
+           extraction_error = NULL, extracted_at = t.heard_at, updated_at = t.updated_at
+         FROM message_transcripts t
+         WHERE attachments.attachable_type = 'message' AND attachments.attachable_id = t.message_id
+           AND (attachments.kind = 'voice' OR attachments.mime = 'audio/ogg')
+           AND coalesce(attachments.text, '') = '' AND coalesce(attachments.extraction, '') <> 'agent'`,
+      )
+      .run()
     const update = database.prepare("UPDATE attachments SET normalized_text = ? WHERE id = ?")
     for (const row of database
       .prepare("SELECT id AS attachment_id, text, normalized_text FROM attachments WHERE text IS NOT NULL")

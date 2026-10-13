@@ -60,7 +60,20 @@ describe("parseQuery", () => {
 
   it("**takes in: any messenger the store holds**, and only those", () => {
     expect(parseQuery("piso in:WhatsApp", { now: NOW, providers: ["whatsapp"] }).in).toBe("whatsapp")
-    expect(() => parseQuery("piso in:telegram", { now: NOW })).toThrow('in: takes personal, bots, all — not "telegram"')
+    expect(() => parseQuery("piso in:telegram", { now: NOW })).toThrow(
+      'in: takes personal, bots, all, messages, mail — not "telegram"',
+    )
+  })
+
+  it("**takes in: a kind or a provider's alias**, as --source does", () => {
+    const providers = ["telegram", "email", "folder"]
+    expect(parseQuery("piso in:tg", { now: NOW, providers }).in).toBe("telegram")
+    expect(parseQuery("piso in:messages", { now: NOW, providers }).in).toBe("messages")
+    expect(parseQuery("piso in:mail", { now: NOW, providers }).in).toBe("email")
+    expect(() => parseQuery("piso in:notes", { now: NOW, providers })).toThrow(
+      "in:notes names notes, which a message search does not read — search notes does",
+    )
+    expect(() => parseQuery("piso in:max", { now: NOW, providers })).toThrow('— not "max"')
   })
 
   it('reads a quoted "OR" and a lower-case or as words', () => {
@@ -76,7 +89,7 @@ describe("parseQuery", () => {
     ["from:alice from:bob", "from: is given twice"],
     ["after:yesterday", 'after: takes a day, 2026-01-31, or a count of days back, 7d — not "yesterday"'],
     ["before:2026-02-30", "before: takes a day"],
-    ["in:whatsapp", 'in: takes telegram, max, personal, bots, all — not "whatsapp"'],
+    ["in:whatsapp", 'in: takes telegram, max, personal, bots, all, messages, mail — not "whatsapp"'],
     ['chat:""', "chat: needs a value"],
   ])("refuses %s", (query, message) => {
     expect(() => parse(query)).toThrow(message)
