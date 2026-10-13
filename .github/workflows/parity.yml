@@ -3,12 +3,15 @@ name: Parity
 # Each CLI checks only the manifest of the shared-package version it pins, so a row this repository
 # gets wrong shows up there weeks later. This checks both CLIs' main against this manifest now.
 # Their main, not npm: a row lists a CLI in `in` once its main has it, and a release always trails that.
+# Built against this checkout, not their pin: the pin prints the last release's shape, which a change to
+# that shape can never match. The pinned pairing is each CLI's own `parity:check`.
 on:
   pull_request:
     paths:
       - parity.json
       - src/parity/**
       - .github/workflows/parity.yml
+      - scripts/parity/build-app.sh
   workflow_call:
   workflow_dispatch:
 
@@ -40,11 +43,14 @@ jobs:
           cache-dependency-path: |
             shared/pnpm-lock.yaml
             cli/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile && pnpm build
+      - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-messaging.tgz
         working-directory: shared
-      - run: pnpm install --frozen-lockfile && pnpm build
-        working-directory: cli
-      - run: node cli/dist/bin/${{ matrix.cli }}.js commands --json | node shared/dist/parity/bin.js ${{ matrix.cli }}
+      - name: Build ${{ matrix.cli }}-cli main against this cli-messaging
+        run: shared/scripts/parity/build-app.sh ${{ matrix.cli }} cli cli-messaging.tgz
+      - name: Check ${{ matrix.cli }}-cli against this manifest
+        run: |
+          node cli/dist/bin/${{ matrix.cli }}.js commands --json > commands.json
+          node shared/dist/parity/bin.js ${{ matrix.cli }} < commands.json
 
   wording:
     runs-on: ubuntu-latest
@@ -71,12 +77,12 @@ jobs:
             shared/pnpm-lock.yaml
             max/pnpm-lock.yaml
             tg/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile && pnpm build
+      - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-messaging.tgz
         working-directory: shared
-      - run: pnpm install --frozen-lockfile && pnpm build
-        working-directory: max
-      - run: pnpm install --frozen-lockfile && pnpm build
-        working-directory: tg
+      - name: Build max-cli main against this cli-messaging
+        run: shared/scripts/parity/build-app.sh max max cli-messaging.tgz
+      - name: Build tg-cli main against this cli-messaging
+        run: shared/scripts/parity/build-app.sh tg tg cli-messaging.tgz
       - run: |
           node max/dist/bin/max.js commands --json > max.json
           node tg/dist/bin/tg.js commands --json > tg.json
