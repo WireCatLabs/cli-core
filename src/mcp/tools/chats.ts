@@ -1,11 +1,14 @@
 import * as v from "valibot"
 import { registriesCover } from "../../botcheck/registries.js"
+import { listOf } from "../../cli/envelope.js"
+import { listQuery, queryInput as query } from "../../cli/list-query.js"
+import { chatAnswer } from "../../cli/messenger/chat-answers.js"
+import { CHATS_QUERY } from "../../cli/messenger/chat-queries.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
 import { listed } from "../../cli/paging.js"
 import { casKey } from "../../cli/registry-keys.js"
 import type { SendGuard } from "../../sends/guard.js"
-import { checkedFilter } from "../../services/chats.js"
 import { EVENTS_DAYS, onlineDeps, servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import { type AnyTool, chatOf, envelope, limit, page, paging, READ, tool } from "../tool.js"
@@ -19,20 +22,21 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "List chats",
       description:
         "Chats the owner is in, most recent first. Use it to find a chat's id before reading or sending. " +
-        "With search, kind or unread, every chat is searched, and partial says the messenger could not list them " +
-        "all. Returns { items, page, limit, hasMore, partial? }.",
-      input: v.object({
-        search: v.optional(v.pipe(v.string(), v.minLength(3), v.description("only chats whose name contains this"))),
-        kind: v.optional(v.picklist(["dialog", "group", "channel", "saved"])),
-        unread: v.optional(v.pipe(v.boolean(), v.description("only chats with unread messages"))),
-        limit,
-        page,
-      }),
+        "The list takes no filter yet: neither the messenger nor the store filters chats, so a query is refused.",
+      input: v.object({ query, limit, page }),
       annotations: READ,
-      served: async (services, { search, kind, unread, ...rest }, defaults) => {
-        const { size, number, window } = paging(rest, defaults)
-        const found = await services.chats.list(checkedFilter({ search, kind, unread }), window)
-        return { ...envelope(found, number, size), ...(found.partial ? { partial: true } : {}) }
+      output: { entity: "chat", list: true },
+      served: async (services, args, defaults) => {
+        listQuery("chats list", CHATS_QUERY, args.query)
+        const { size, number, window } = paging(args, defaults)
+        const found = await services.chats.list(window)
+        const account = await services.chats.account()
+        return listOf("chats list", {
+          items: found.items.map((one) => chatAnswer(account, one)),
+          limit: size,
+          has_more: found.hasMore,
+          page: number,
+        })
       },
     }),
 

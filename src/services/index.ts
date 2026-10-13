@@ -44,8 +44,8 @@ export type {
   ExtractStatus,
 } from "./attachments.js"
 export { attachmentsService } from "./attachments.js"
-export type { ChatFilter, ChatsService, MarkedRead, PageWindow } from "./chats.js"
-export { CHAT_SCAN, chatsService, EVENTS_DAYS } from "./chats.js"
+export type { ChatsService, MarkedRead, PageWindow } from "./chats.js"
+export { chatsService, EVENTS_DAYS } from "./chats.js"
 export type { BatchStatus, Built, ConversationsService, MessageLinks } from "./conversations.js"
 export { BATCH_SIZE, conversationsService } from "./conversations.js"
 export type { ServiceDeps } from "./deps.js"

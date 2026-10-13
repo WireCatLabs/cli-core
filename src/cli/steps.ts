@@ -34,6 +34,12 @@ export const STEPS = defineSteps([
     why: "a voice message is not heard yet; this hears it",
   },
   {
+    id: "chats.members",
+    command: "chats members list",
+    args: [{ name: "chat", required: true }],
+    why: "the chat's member list has everyone it lets you see",
+  },
+  {
     id: "models.download",
     command: "models text download",
     args: [{ name: "model", required: true }],
