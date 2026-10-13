@@ -1,6 +1,6 @@
 {
   "name": "@wirecat/cli-messaging",
-  "version": "0.257.0",
+  "version": "0.258.0",
   "description": "The messenger-neutral half of a messaging CLI: domain model, message locators, rendering, name resolution, the SQLite seam, the command skeleton and shared read commands, the send guard, run records and the message store",
   "license": "Apache-2.0",
   "author": "Viacheslav Ptsarev",
@@ -181,7 +181,7 @@
     "@types/node": "^22.20.4",
     "@types/pngjs": "6.0.5",
     "@vitest/coverage-v8": "^5.0.2",
-    "@wirecat/cli-base": "0.23.0",
+    "@wirecat/cli-base": "0.24.0",
     "commander": "15.0.0",
     "cspell": "10.3.6",
     "drizzle-kit": "1.0.0-rc.4",
@@ -200,7 +200,7 @@
   },
   "peerDependencies": {
     "@napi-rs/canvas": ">=0.1.69 <2",
-    "@wirecat/cli-base": ">=0.23.0 <0.24.0",
+    "@wirecat/cli-base": ">=0.24.0 <0.25.0",
     "commander": ">=15"
   },
   "bin": {
