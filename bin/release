@@ -4,6 +4,7 @@
 #
 #   bin/release           # publishes from GitHub Actions (.github/workflows/release.yml)
 #   bin/release --local   # publishes from this machine: NPM_TOKEN if exported, else the keyring
+#   bin/release --app-ref <branch>   # Parity builds tg-cli and max-cli at <branch> instead of their main
 #
 # The npm token is never printed and never written to a file — not on success, not in an error.
 set -eu
@@ -12,18 +13,22 @@ cd "$(dirname "$0")/.."
 package=@wirecat/cli-messaging
 
 mode=ci
-usage() { echo 'usage: bin/release [--local]' >&2; exit 2; }
+app_ref=main
+usage() { echo 'usage: bin/release [--local] [--app-ref <branch>]' >&2; exit 2; }
 # A function, so the arguments survive for the exec after the merge below.
 parse() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --local) mode=local ;;
+      --app-ref) [ $# -gt 1 ] || usage; app_ref=$2; shift ;;
       *) usage ;;
     esac
     shift
   done
 }
 parse "$@"
+# Parity runs only in the workflow; a local release would publish without checking that branch.
+[ "$mode" = ci ] || [ "$app_ref" = main ] || { echo "--app-ref needs the workflow release, not --local" >&2; exit 2; }
 git fetch -q origin
 [ "$(git branch --show-current)" = "main" ] || { echo "not on main" >&2; exit 1; }
 [ -z "$(git status --porcelain --untracked-files=no)" ] || { echo "uncommitted changes" >&2; exit 1; }
@@ -92,7 +97,7 @@ if [ "$mode" = ci ]; then
   }
   previous=$(last_run)
   echo "== starting the release workflow for $version =="
-  gh workflow run release.yml --ref main
+  gh workflow run release.yml --ref main -f app_ref="$app_ref"
   run=""
   for _ in $(seq 30); do
     run=$(last_run)

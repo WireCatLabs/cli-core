@@ -13,6 +13,10 @@ on:
         description: "Build and pack, run npm publish --dry-run, do not tag"
         type: boolean
         default: false
+      app_ref:
+        description: "Branch of tg-cli and max-cli that Parity builds"
+        type: string
+        default: main
 
 permissions: {}
 
@@ -28,6 +32,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       pack: true
+      app_ref: ${{ inputs.app_ref }}
 
   checks:
     if: github.ref == 'refs/heads/main' || inputs.dry_run
