@@ -2830,11 +2830,7 @@
       "in": "all"
     },
     "messages sync": {
-      "in": [],
-      "planned": {
-        "max": "each CLI’s next cli-core bump",
-        "tg": "each CLI’s next cli-core bump"
-      },
+      "in": "all",
       "options": {
         "--all": {
           "in": "all"
@@ -3837,13 +3833,6 @@
         "--output": "all",
         "--since-time": "all",
         "--to": "all"
-      }
-    },
-    "store fetch": {
-      "in": [],
-      "planned": {
-        "max": "each CLI’s next cli-core bump, which hides it",
-        "tg": "each CLI’s next cli-core bump, which hides it"
       }
     },
     "store gaps": {
