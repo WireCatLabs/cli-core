@@ -28,6 +28,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **`registerReader` (`@wirecat/cli-messaging/documents`)** adds a file reader or replaces one with the same id; `{ before: id }` puts it ahead of another. Each built-in format is one folder in `src/readers/`, behind the same registry; `extractText` reads as before.
 - **`queryFilter` (`src/store/sqlite/query-filter.ts`)** turns a validated list query and a column map into a
   `WHERE` condition with bound parameters, answering as cli-base's `evaluate` does. No list uses it yet.
 - **One file per entity schema** in `src/entities/`; `reference` is cli-base's.

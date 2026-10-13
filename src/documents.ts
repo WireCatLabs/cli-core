@@ -3,3 +3,5 @@ export { extractText, importEngine, MAX_FILE_BYTES, MAX_TEXT_CHARS } from "./att
 export { attachmentMaxBytes } from "./attachments/limits.js"
 export type { Sheet, SheetCell } from "./attachments/sheets.js"
 export { columnName, sheetText } from "./attachments/sheets.js"
+export { registerReader } from "./readers/registry.js"
+export type { ReadContext, Reader, Section } from "./readers/types.js"
