@@ -409,6 +409,12 @@ accounts провайдера/класса, включая `all`. Отрицат
 ящики, `search conversations` — все; если подходящих не осталось — ошибка. Список и положительный `in:` вместе
 отвергаются. Неизвестная группа или аккаунт — ошибка со списком того, что есть.
 
+Запланировано ([план](../dev/source-everywhere-plan.md)): у всего в хранилище есть вид (`messages`, `mail`,
+`notes`, `documents`, `meetings`), провайдер и аккаунт, и `--source` принимают все поиски — `search all`,
+`search mail`, `search notes`. Элемент — `провайдер:аккаунт` (как его показывает найденное), голый провайдер,
+голый вид или `group:<name>`. Что поиск не может использовать, он называет в `skipped`. `search notes --folder`,
+`search mail --account` и `search all --meetings` заменит `--source`.
+
 ## Regex: term и body
 
 `text:/alpha/` совпадает с термом alpha внутри текста, но не с alphabeta.

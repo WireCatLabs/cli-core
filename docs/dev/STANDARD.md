@@ -313,7 +313,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | Option | Value | Meaning | Default | Commands |
 |---|---|---|---|---|
 | `--accept-terms` |  | accept the model's licence terms, for a model that has its own |  | `models text download` |
-| `--account` | `<address>` | only this mail account, by its address; every mail account when unset |  | `search mail` (planned) |
+| `--account` | `<address>` | only this mail account, by its address; every mail account when unset. **goes: --source email:<address> replaces it — source-everywhere-plan.md** |  | `search mail` (planned) |
 | `--add` | `<chat>` | put a chat into a folder; repeat it for more |  | `bot webhooks set` (max-only), `chats folders update` |
 | `--after-id` | `<id>` | read what came after this message id; not with --after-time or the --before pair |  | `messages list` |
 | `--after-n` | `<n>` | how many messages after it |  | `messages context` |
@@ -415,7 +415,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--find-by-phone` | `<who>` | who finds the account by its number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--fingerprint` | `<hash>` | refuse if the inspected coverage plan changed |  | `store gaps repair` |
 | `--first-name` | `<name>` | your first name |  | `account update` |
-| `--folder` | `<id>` | only this notes folder, by its id; repeat it for more |  | `search notes` |
+| `--folder` | `<id>` | only this notes folder, by its id; repeat it for more. **goes: --source notes:<id> replaces it — source-everywhere-plan.md** |  | `search notes` |
 | `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all | `all` | `skill install` |
 | `--for-everyone` |  | delete for everyone in the chat, not only for you — they cannot get it back |  | `messages delete` |
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
@@ -461,7 +461,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-uses` | `<n>` | at most this many people join by it, 1 to 99999 |  | `chats link create` (tg-only), `chats link update` (tg-only) |
 | `--md` |  | read this messenger's Markdown; see its formatting guide for supported syntax |  | `bot messages edit`, `bot messages send`, `messages edit`, `messages send` |
 | `--measure` | `<name>` | the metric used to order a ranking; not with --score or --weights |  | `stats contacts top`, `stats messages top` |
-| `--meetings` | `[provider:account]` | also search one meeting account; with no value, the one stored account that holds meetings (put it after the query) |  | `search all` (planned) |
+| `--meetings` | `[provider:account]` | also search one meeting account; with no value, the one stored account that holds meetings (put it after the query). **goes: --source zoom:<account>, zoom or meetings replaces it; --max-meetings stays — source-everywhere-plan.md** |  | `search all` (planned) |
 | `--members-see-link` | `<on\|off>` | members may see the invite link |  | `chats update` (max-only) |
 | `--mentions-me` |  | require a mention of you or a reply to you |  | `replies edit` |
 | `--message` | `<message>` | the message to tag or untag: its id in --chat, or a msg: locator alone |  | `tags add`, `tags remove` |
@@ -569,7 +569,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--skip` | `<which>` | a folder leaves out chats that are muted, read or archived |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--sms` |  | phone login: ask Telegram to send the code by SMS, not to the app; Telegram may still refuse |  | `session start` (tg-only) |
 | `--solution` | `<text>` | with --quiz: what people see once they answered |  | `polls create` (tg-only) |
-| `--source` | `<messenger>` | every account of this messenger held in the store; personal, bots or all — the same as in: in the query |  | `search conversations`, `search messages`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `tags list`, `tags remove` |
+| `--source` | `<messenger>` | every account of this messenger held in the store; personal, bots or all — the same as in: in the query; or a list: group:work,telegram:Alice,email:me@example.com. **planned for search all, search mail and search notes: provider:account, a bare provider, a bare kind (messages, mail, notes, documents, meetings) or group:<name> — source-everywhere-plan.md** |  | `search all` (planned), `search conversations`, `search mail` (planned), `search messages`, `search notes` (planned), `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `tags list`, `tags remove` |
 | `--spoiler` |  | hide the --photo or video behind a spoiler until tapped |  | `messages send` (tg-only) |
 | `--start` | `<param>` | the start parameter the app reads |  | `chats app` (planned) |
 | `--state` | `<state>` | only those in this state: tasks open, done or dismissed; jobs running, done, failed, cancelled or died |  | `store jobs list`, `tasks list` |
@@ -702,6 +702,15 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
      partial matches. MCP `language=legacy` adds the same sentence to `next_steps`. Then
      `--language` leaves `search messages`, `searches create` and MCP together, with its parity
      entry. `--exact` stays: it turns forgiveness off.
+8. **A search says which accounts it read** (planned, [source-everywhere-plan.md](source-everywhere-plan.md)).
+   Every stored thing has a kind (`messages`, `mail`, `notes`, `documents`, `meetings`), a provider
+   and an account; `--source` takes `provider:account`, a bare provider, a bare kind or
+   `group:<name>`. `search all`, `search mail` and `search notes` answer
+   `accounts: [{ resource, provider, account }]` beside `searched` and `skipped`; `search messages`
+   answers the same list as `coverage.accounts`. A `--source` entry a search cannot use is named in
+   `skipped` as `{ source, reason }`. A hit's `provider:account` is a valid `--source` entry.
+9. **A hit that has a page elsewhere answers its `url`** (planned, same plan): a Google Drive document's
+   Google link. `url` is absent, not `null`, where there is none; meetings and attachments use the same key.
 
 ## Permissions
 
