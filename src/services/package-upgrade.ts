@@ -11,6 +11,10 @@ export interface PackageUpgradePorts {
   install: (argv: string[]) => number | Promise<number>
   afterUpdate?: () => ServerRestarts | Promise<ServerRestarts>
   onInstall?: (argv: readonly string[]) => void
+  /** The version the command now answers, read after the install; `undefined` when it cannot be read. */
+  installed?: () => string | undefined | Promise<string | undefined>
+  /** When npm published this version, ISO 8601; `undefined` when it cannot be read. */
+  publishedAt?: (version: string) => Promise<string | undefined>
 }
 
 export interface PackageUpgradeResult {
@@ -21,11 +25,14 @@ export interface PackageUpgradeResult {
   command: string | null
   updated: boolean
   restarted: readonly string[]
+  installed?: string
+  /** The package manager installed an older version than `latest`. */
+  heldBack?: { until: string | null; command: string }
 }
 
 export interface PackageUpgradeOutcome {
   result: PackageUpgradeResult
-  reason: "checked" | "unavailable" | "up_to_date" | "manual" | "updated"
+  reason: "checked" | "unavailable" | "up_to_date" | "manual" | "updated" | "held_back"
   left: readonly string[]
 }
 
@@ -53,10 +60,29 @@ export const upgradePackage = async (
   ports.onInstall?.(argv)
   const code = await ports.install(argv)
   if (code !== 0) throw new Error(`${argv[0]} exited with ${code}; ${command} is still ${current}`)
+  const installed = await ports.installed?.()
+  if (installed === undefined) return restart(result, ports)
+  const read = { ...result, installed }
+  if (!isNewer(latest, installed)) return restart(read, ports)
+  const heldBack = {
+    // pnpm 11 resolves `@latest` to the newest version older than minimumReleaseAge, 1 day by default.
+    until: installer === "pnpm" ? dayAfter(await ports.publishedAt?.(latest)) : null,
+    command: [...argv.slice(0, -1), `${packageName}@${latest}`].join(" "),
+  }
+  if (installed === current) return { result: { ...read, heldBack }, reason: "held_back", left: [] }
+  return { ...(await restart({ ...read, heldBack }, ports)), reason: "held_back" }
+}
+
+const restart = async (result: PackageUpgradeResult, ports: PackageUpgradePorts): Promise<PackageUpgradeOutcome> => {
   const servers = await ports.afterUpdate?.()
   return {
     result: { ...result, updated: true, restarted: servers?.restarted ?? [] },
     reason: "updated",
     left: servers?.left ?? [],
   }
+}
+
+const dayAfter = (published: string | undefined): string | null => {
+  const time = published === undefined ? Number.NaN : Date.parse(published)
+  return Number.isNaN(time) ? null : new Date(time + 24 * 60 * 60 * 1000).toISOString()
 }

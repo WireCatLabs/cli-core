@@ -150,6 +150,25 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       },
     }),
 
+    chats_documents_list: tool({
+      title: "Google documents linked in a chat",
+      description:
+        "Every Google Docs, Sheets, Slides, Forms or Drive link in a chat's stored messages, newest first, one item " +
+        "per link: { items: [{ url, documentId, title, inStore, locator, sentAt, sender: { id, name } }], page, " +
+        "limit, hasMore }. documentId is the Google file id in the URL, null when it carries none; title is the " +
+        "stored document's, null unless inStore. Reads the local store only.",
+      input: v.object({ chat, limit, page }),
+      annotations: { ...READ, openWorldHint: false },
+      stored: async (store, account, args, defaults) => {
+        const { size, number, window } = paging(args, defaults)
+        const found = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).chatDocuments.list(
+          args.chat,
+          window,
+        )
+        return envelope(found, number, size)
+      },
+    }),
+
     chats_tracking_list: tool({
       title: "Chats whose members are recorded daily",
       description:

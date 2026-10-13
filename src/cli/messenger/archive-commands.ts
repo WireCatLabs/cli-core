@@ -10,7 +10,7 @@ import { seal } from "../../sealed.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
-import { renderList } from "../paging.js"
+import { listed, renderList } from "../paging.js"
 import { fetchCommand, jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { admitPassword, linesOf, openFolder, runFileFor, saveManifest, sealRun, writeChanges } from "./export-folder.js"
@@ -88,11 +88,13 @@ const clearCommand = (messenger: Messenger): Command =>
  */
 const exportCommand = (messenger: Messenger): Command =>
   new Command("export")
-    .description("a chat's stored messages as JSON lines, oldest first; never asks the messenger")
+    .description(
+      "a chat's stored messages, oldest first: --jsonl one message per line, --json one { items, page, limit, hasMore } object; never asks the messenger",
+    )
     .argument("[chats...]", `${messenger.chatArgument}; several with --to`)
     .option(
       "--format <format>",
-      "jsonl (the default): one message per line; markdown: a transcript with a heading per day, replies and forwards quoted",
+      "jsonl: one message per line, the default with --output; markdown: a transcript with a heading per day, replies and forwards quoted",
     )
     .option("--since-time <time>", "only from this ISO 8601 time, or 30m / 2h / 1d ago, on")
     .option("--output <file>", "write JSON lines, or the transcript, to this new file, readable only by you")
@@ -217,7 +219,7 @@ const exportCommand = (messenger: Messenger): Command =>
       if (format === "markdown") context.streams.data(toMarkdown(title, messages).replace(/\n$/, ""))
       else if (format === "jsonl" || context.format === "jsonl")
         for (const message of messages) context.streams.data(JSON.stringify(message))
-      else if (context.format === "json") context.renderer.result({ items: messages })
+      else if (context.format === "json") context.renderer.result(listed(messages))
       else
         context.streams.data(
           renderMessages(messages, {

@@ -20,7 +20,7 @@ import {
   VAD,
   vadPath,
 } from "./index.js"
-import { decodeOgg, detector, SAMPLE_RATE, toModelRate } from "./recognize.js"
+import { decodeOgg, detector, loadSherpa, SAMPLE_RATE, toModelRate } from "./recognize.js"
 import { type Choice, choose, hearLocally, hearOnline } from "./transcribe.js"
 
 vi.mock("./recognize.js", async (original) => ({
@@ -126,7 +126,7 @@ describe("the voice detector", () => {
     flush(): void
     free(): void
   }
-  const sherpa = createRequire(import.meta.url)("sherpa-onnx") as { createVad(config: object): Vad }
+  const sherpa = loadSherpa() as unknown as { createVad(config: object): Vad }
 
   /** The stretches, in seconds of the recording, that the detector hands to the model. */
   const heard = (pcm: Float32Array, config: ReturnType<typeof detector>) => {
@@ -151,6 +151,32 @@ describe("the voice detector", () => {
   }
   const covers = (stretches: [number, number][], from: number, to: number) =>
     stretches.some(([start, end]) => start <= from && to <= end)
+
+  it("**logs to stderr, never stdout**: --json output stays data when the engine grows its buffer", () => {
+    const config = detector(fileURLToPath(fixture("silero_vad.onnx")))
+    // The engine's own `require("fs")`, which an ESM import of node:fs is not under vitest.
+    const writes = vi
+      .spyOn(createRequire(import.meta.url)("node:fs") as typeof import("node:fs"), "writeSync")
+      .mockImplementation((...[, , , length]: unknown[]) => Number(length))
+    try {
+      const vad = sherpa.createVad({ ...config, bufferSizeInSeconds: 0.05 })
+      for (let i = 0; i < 20; i++)
+        vad.acceptWaveform(new Float32Array(config.sileroVad.windowSize).fill(Math.sin(i) / 5))
+      vad.free()
+      const to = (fd: number) =>
+        writes.mock.calls
+          .filter(([one]) => one === fd)
+          .map(([, data, offset, length]) =>
+            Buffer.from(
+              (data as unknown as Uint8Array).subarray(Number(offset ?? 0), Number(offset ?? 0) + Number(length)),
+            ).toString(),
+          )
+      expect(to(1)).toEqual([])
+      expect(to(2).join("")).toContain("Overflow")
+    } finally {
+      writes.mockRestore()
+    }
+  })
 
   it("**keeps a quietly spoken sentence between two loud ones**, which the default setting dropped", async () => {
     // A LibriVox reading (public domain) with "На славу вышел кисель. Всем по нраву пришёлся, всем угодил."

@@ -98,8 +98,31 @@ export const detector = (vadModel: string) => ({
  *
  * `sherpa-onnx` is loaded here, on first use, so no other command pays for its 15 MB of WebAssembly.
  */
+let loaded: Sherpa | undefined
+
+/**
+ * The engine's WebAssembly writes its logs (a growing buffer says "Overflow! … No data loss!") with
+ * `printf`, which its file system sends straight to file descriptor 1 and so into `--json` output.
+ * `sherpa-onnx`'s own entry keeps that file system to itself; built here, descriptor 1 is pointed at 2.
+ */
+export const loadSherpa = (): Sherpa => {
+  if (loaded) return loaded
+  const load = createRequire(import.meta.url)
+  const wasm: { FS?: { getStream(fd: number): { nfd: number } | null } } = {}
+  load("sherpa-onnx/sherpa-onnx-wasm-nodejs.js")(wasm)
+  const stdout = wasm.FS?.getStream(1)
+  if (stdout) stdout.nfd = 2
+  const asr = load("sherpa-onnx/sherpa-onnx-asr.js")
+  const vad = load("sherpa-onnx/sherpa-onnx-vad.js")
+  loaded = {
+    createOfflineRecognizer: (config) => new asr.OfflineRecognizer(config, wasm),
+    createVad: (config) => vad.createVad(wasm, config),
+  }
+  return loaded
+}
+
 export const openRecognizer = (model: SpeechModel, path: (name: string) => string, vadModel: string): Recognizer => {
-  const sherpa = createRequire(import.meta.url)("sherpa-onnx") as Sherpa
+  const sherpa = loadSherpa()
   const engine = sherpa.createOfflineRecognizer({
     featConfig: { sampleRate: SAMPLE_RATE, featureDim: model.featureDim },
     modelConfig: { ...model.config(path), numThreads: 1, provider: "cpu", debug: 0 },

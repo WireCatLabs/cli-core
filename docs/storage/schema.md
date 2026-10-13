@@ -1402,7 +1402,7 @@ A tag's name, stored once. Which things carry it is `taggings`.
 
 ### `links`
 
-Every connection between two things that no column holds. Kinds: `blocked-by` (a task needs another task to finish first), `follow-up-of` (a task continues an earlier task), `links-to` (a document or note links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.
+Every connection between two things that no column holds. Kinds: `blocked-by` (a task needs another task to finish first), `follow-up-of` (a task continues an earlier task), `links-to` (a document, note or message links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -1413,7 +1413,7 @@ Every connection between two things that no column holds. Kinds: `blocked-by` (a
 | `to_id` | integer |  |  | null while the link names nobody yet |
 | `kind` | text | not null |  | the connection; the kinds are listed in the table's description |
 | `anchor` | text |  |  | The heading or block fragment the link points at inside its target, like `#Heading` or `#^block`; NULL for the whole target. |
-| `source` | text | not null |  | Where the link came from: `file` (written in a note file), `owner` (added by the owner) or `suggested` (proposed, not yet confirmed). |
+| `source` | text | not null |  | Where the link came from: `file` (written in a note file), `owner` (added by the owner), `suggested` (proposed, not yet confirmed) or `message` (written in a stored message's text). |
 | `target_text` | text |  |  | The target as written (e.g. a name in a note), kept while the link resolves to nobody; up to 500 characters. |
 | `target_folded` | text |  |  | target_text case- and accent-folded with any leading `@` removed, matched against new person names and aliases to resolve the link. |
 | `role` | text |  |  | The role the relation states, such as a job title in a `member-of` link; free text up to 200 characters. |

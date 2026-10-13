@@ -8,6 +8,7 @@ import { and, eq, isNull, type Placeholder, sql } from "./drizzle/core.js"
 import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"
 import { attachments, chats, messageRevisions, messages, messageTranscripts } from "./schema.js"
+import { intoVoiceAttachment } from "./transcripts.js"
 import { json, parsed, toMs } from "./values.js"
 import { purgeVectorsOf } from "./vectors.js"
 
@@ -199,11 +200,11 @@ export const upsertMessage = (
   context.database
     .prepare("UPDATE messages SET thread_root_id=? WHERE chat_id=? AND thread_external_id=? AND thread_root_id IS NULL")
     .run(pk, chatKey, message.id)
-  context.database
+  const heardFirst = context.database
     .prepare(
       "UPDATE message_transcripts SET message_id=? WHERE chat_id=? AND message_external_id=? AND message_id IS NULL",
     )
-    .run(pk, chatKey, message.id)
+    .run(pk, chatKey, message.id).changes
   message.attachments.forEach((attachment, position) => {
     statements.attachment.run({
       attachableId: pk,
@@ -222,6 +223,7 @@ export const upsertMessage = (
       providerRef: json(attachment.providerRef),
     })
   })
+  if (Number(heardFirst) > 0) intoVoiceAttachment(context, pk)
 }
 
 /**
