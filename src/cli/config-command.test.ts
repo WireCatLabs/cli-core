@@ -84,4 +84,34 @@ describe("config", () => {
 
     expect((await call(["config", "set", "limit", "5", "--defaults"], env)).code).toBe(5)
   })
+
+  it("**sets, shows and unsets defaultProfile without naming a profile**", async () => {
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    await call(["work", "config", "set", "limit", "5"], env)
+    await call(["home", "config", "set", "limit", "6"], env)
+
+    expect((await call(["config", "set", "defaultProfile", "home", "--json"], env)).answer).toMatchObject({
+      scope: "defaultProfile",
+      value: "home",
+    })
+    const shown = (await call(["config", "show", "--json"], env)).answer.settings
+    expect(shown.find((one: { setting: string }) => one.setting === "defaultProfile")).toEqual({
+      setting: "defaultProfile",
+      value: "home",
+      from: "config file",
+    })
+    expect((await call(["config", "set", "defaultProfile", "home", "--defaults"], env)).code).toBe(2)
+
+    expect((await call(["config", "unset", "defaultProfile", "--json"], env)).answer).toMatchObject({ value: null })
+    const after = (await call(["config", "show", "--json"], env)).answer.settings
+    expect(after.find((one: { setting: string }) => one.setting === "defaultProfile")).toMatchObject({ value: null })
+  })
+
+  it("refuses to change defaultProfile from a process locked to one profile", async () => {
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE_LOCK: "work" }
+
+    expect((await call(["config", "set", "defaultProfile", "home"], env)).code).toBe(5)
+  })
 })

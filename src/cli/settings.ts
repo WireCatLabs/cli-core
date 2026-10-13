@@ -310,7 +310,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const schema = v.strictObject(configEntries, objectMessage(Object.keys(configEntries)))
   const defaultsOnlyKeys = Object.keys(defaultsOnly)
   const botOnlyKeys = Object.keys(BOT_ONLY_ENTRIES)
-  const allSettings = [...Object.keys(profileEntries), ...botOnlyKeys, ...defaultsOnlyKeys]
+  const allSettings = [...Object.keys(profileEntries), ...botOnlyKeys, ...defaultsOnlyKeys, "defaultProfile"]
 
   const PROFILE = envName(app, "PROFILE")
   const PROFILE_LOCK = envName(app, "PROFILE_LOCK")
@@ -590,6 +590,15 @@ export const settingsFor = <T extends object = Record<never, never>>(
     }
 
     const config = readConfig(path)
+    if (setting === "defaultProfile") {
+      if (kind !== undefined) {
+        throw new CliError("validation_error", "defaultProfile is one for the whole file — drop --personal and --bot")
+      }
+      const { defaultProfile: _, ...rest } = config
+      const changed: Config = value === undefined ? rest : { ...rest, defaultProfile: usableProfileName(value) }
+      saveConfigFile(path, changed)
+      return changed.defaultProfile ?? null
+    }
     const section = kind === undefined ? undefined : (config[kind] ?? {})
     const current =
       section === undefined
