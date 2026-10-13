@@ -766,7 +766,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
       "strict Lucene filter: any message in a conversation must match; does not change the meaning query",
     )
     .option(
-      "--source <source>",
+      "--source <accounts>",
       "accounts to search: personal, bots, all, a provider, or a list like group:work,telegram:Alice,email:me@example.com; " +
         "defaults to the active account",
     )

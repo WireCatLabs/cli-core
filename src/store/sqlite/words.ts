@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { storedKinds } from "../../domain/attachments.js"
 import type { Id, Page, Provider } from "../../domain/models.js"
 import type { Term } from "../../search/query.js"
 import type { SqlValue } from "../driver.js"
@@ -142,10 +143,11 @@ const rowConditions = (resolved: Resolved, scope: SearchScope, joined: { chat: b
     else if (kind === "attachment")
       where.push("EXISTS (SELECT 1 FROM attachments a WHERE a.attachable_type = 'message' AND a.attachable_id = m.id)")
     else {
+      const kinds = storedKinds(kind)
       where.push(
-        "EXISTS (SELECT 1 FROM attachments a WHERE a.attachable_type = 'message' AND a.attachable_id = m.id AND a.kind = ?)",
+        `EXISTS (SELECT 1 FROM attachments a WHERE a.attachable_type = 'message' AND a.attachable_id = m.id AND a.kind IN (${kinds.map(() => "?").join(",")}))`,
       )
-      params.push(kind)
+      params.push(...kinds)
     }
   }
   // A chat marked not searchable is searched only when the search names it (plan S9).

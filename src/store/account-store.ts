@@ -60,6 +60,7 @@ const ACCOUNT_METHODS = [
   "conversationState",
   "messages",
   "countMessages",
+  "documentLinkMessages",
   "changes",
   "messagesWindow",
   "around",
