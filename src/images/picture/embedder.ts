@@ -18,10 +18,7 @@ export const openPictureEmbedder = async (
   directory: string,
   { threads = 4, canvas }: { threads?: number; canvas?: LoadCanvas } = {},
 ): Promise<PictureEmbedder> => {
-  const [{ Tokenizer }, ort] = await Promise.all([
-    import("@huggingface/tokenizers"),
-    import("@wirecat/cli-messaging-onnx"),
-  ])
+  const [{ Tokenizer }, ort] = await Promise.all([import("@huggingface/tokenizers"), import("@wirecat/cli-core-onnx")])
   const path = (name: string) => join(directory, model.id, name)
   const tokenizer = new Tokenizer(
     JSON.parse(readFileSync(path("tokenizer.json"), "utf8")),
