@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
+import { tagging } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { seedSearchRecipes } from "../../testing/search-recipes.js"
 import { run } from "../program.js"
@@ -102,10 +105,13 @@ describe("tags", () => {
       unchanged: ["work"],
     })
 
-    const listed = json(await call("tags", "list", "--tag", "work", "--json"))
-    expect(listed).toMatchObject({ page: 1, hasMore: false, limit: 4 })
+    const listed = v.parse(listEnvelopeSchema(tagging), json(await call("tags", "list", "tag:work", "--json")))
+    expect(listed.page).toEqual({ limit: 20, has_more: false })
     expect(listed.items.map(({ type }: { type: string }) => type)).toEqual(["chat", "contact", "message", "message"])
-    expect(json(await call("tags", "list", "--type", "contact", "--json")).items).toHaveLength(2)
+    expect(json(await call("tags", "list", "type:contact", "--json")).items).toHaveLength(2)
+    expect(json(await call("tags", "list", "tag:work sources:auto", "--json")).items).toEqual([])
+    expect(json(await call("tags", "list", "tag:work", "-type:message", "--json")).items).toHaveLength(2)
+    expect((await call("tags", "list", "--limt", "2", "--json")).code).toBe(2)
 
     const search = json(await call("search", "messages", "tag:work", "--json"))
     expect(search.items.map(({ id }: { id: string }) => id).sort()).toEqual(["101", "102", "103", "106", "107", "108"])
@@ -114,7 +120,7 @@ describe("tags", () => {
       removed: ["vip"],
       unchanged: ["gone"],
     })
-    expect(json(await call("tags", "list", "--tag", "vip", "--json")).items).toEqual([])
+    expect(json(await call("tags", "list", "tag:vip", "--json")).items).toEqual([])
   })
 
   it("**a backup keeps the tags**: restored, they list and match again", async () => {
@@ -124,7 +130,7 @@ describe("tags", () => {
     expect((await call("store", "backup", file, "--json")).code).toBe(0)
     await call("tags", "remove", "work", "--chat", "7", "--json")
     expect((await call("store", "restore", file, "--json")).code).toBe(0)
-    expect(json(await call("tags", "list", "--json")).items).toMatchObject([{ tag: "work", chatId: "7" }])
+    expect(json(await call("tags", "list", "--json")).items).toMatchObject([{ tag: "work", target: "chat:chat/500/7" }])
     expect(json(await call("search", "messages", "tag:work", "--json")).items.length).toBeGreaterThan(0)
   })
 
@@ -136,7 +142,7 @@ describe("tags", () => {
     const added = await call("tags", "add", "work", "--chat", "7")
     expect(added.stdout.join("")).toContain("chat 7: work")
     expect((await call("tags", "add", "work", "--chat", "7")).stderr).toContain("already there: work")
-    expect((await call("tags", "list")).stdout.join("")).toContain("work  chat  Work fixture (7)")
+    expect((await call("tags", "list")).stdout.join("")).toContain("work  chat  Work fixture (chat:chat/500/7)")
     expect((await call("tags", "remove", "work", "--chat", "7")).stdout.join("")).toContain("work removed")
   })
 
@@ -147,7 +153,7 @@ describe("tags", () => {
     [["tags", "add", "two words", "--chat", "7"], "is not a tag"],
     [["tags", "add", "work", "--chat", "7", "--message", "msg:chat/500/7/101"], "a locator already names the chat"],
     [["tags", "add", "work", "--message", "msg:chat/999/7/101"], "another account"],
-    [["tags", "list", "--type", "folder"], "--type takes chat, contact, message"],
+    [["tags", "list", "type:folder"], "type takes chat, contact, message"],
   ])("refuses %j with a validation error and an empty stdout", async (argv, message) => {
     const call = await setup()
     const result = await call(...argv, "--json")

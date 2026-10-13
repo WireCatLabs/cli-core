@@ -1,9 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
+import { type QueryAst, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
+import type * as v from "valibot"
 import { formatLocator, isLocator, parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
+import { formatReference } from "../domain/references.js"
 import { normalizeTag, type TagType } from "../domain/tags.js"
+import { tagging } from "../entities/tagging.js"
 import { pickPerson } from "../resolve.js"
 import type { AccountKey, MessageStore, StoredTag, TagTarget } from "../store/store.js"
+import { type ColumnMap, queryFilter } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./messages.js"
 
@@ -40,8 +45,52 @@ export interface TagsRemoved {
 export interface TagsService {
   add(target: TagTargetInput, tags: string[]): Promise<TagsAdded>
   remove(target: TagTargetInput, tags: string[], source?: "manual" | "auto"): Promise<TagsRemoved>
-  list(filter?: { tag?: string; type?: TagType; source?: "manual" | "auto" }): Promise<StoredTag[]>
+  list(request: {
+    query?: QueryAst
+    limit: number
+    offset: number
+  }): Promise<{ items: TaggingItem[]; has_more: boolean }>
 }
+
+export type TaggingItem = v.InferOutput<typeof tagging>
+
+export const TAGGING_QUERY = {
+  entity: "tagging",
+  backend: "sql",
+  fields: queryFieldsOf(tagging, {
+    exclude: ["target"],
+    examples: { tag: "tag:work", name: "name:*club*" },
+  }),
+} as const satisfies QueryRegistry
+
+const TAGGING_COLUMNS: ColumnMap = {
+  tag: { type: "kw", sql: "x.tag" },
+  type: { type: "enum", sql: "x.tag_type" },
+  name: { type: "kw", sql: "COALESCE(x.chat_title, x.name)" },
+  sources: {
+    where: (node) =>
+      node.operator === "wildcard"
+        ? { sql: "1", params: [] }
+        : node.value.toLowerCase() === "auto"
+          ? { sql: "x.auto = 1", params: [] }
+          : { sql: "(x.auto = 0 OR x.source = 'owner')", params: [] },
+  },
+  created_at: { type: "time", sql: "x.created_at" },
+}
+
+const taggingOf = (key: AccountKey, one: StoredTag): TaggingItem => ({
+  tag: one.tag,
+  type: one.type,
+  target:
+    one.type === "contact"
+      ? formatReference({ type: "contact", provider: key.provider, id: one.personId ?? "" })
+      : one.type === "message" && one.locator
+        ? one.locator
+        : formatReference({ type: "chat", provider: key.provider, account: key.account, chat: one.chatId ?? "" }),
+  name: (one.type === "contact" ? one.name : one.chatTitle) ?? null,
+  sources: one.sources ?? ["manual"],
+  created_at: one.createdAt,
+})
 
 const ONE_TARGET =
   "name one thing: --chat <chat>, --contact <person>, or --message <message> with --chat (or a msg: locator alone)"
@@ -100,13 +149,11 @@ export const tagsService = (deps: ServiceDeps): TagsService => {
         return { target: viewOf(account, target), removed, unchanged: tags.filter((tag) => !removed.includes(tag)) }
       }),
 
-    list: (filter = {}) =>
-      inStore((store, account) =>
-        store.tags(account, {
-          ...(filter.source === undefined ? {} : { source: filter.source }),
-          ...(filter.tag === undefined ? {} : { tag: normalizeTag(filter.tag) }),
-          ...(filter.type === undefined ? {} : { type: filter.type }),
-        }),
-      ),
+    list: ({ query, limit, offset }) =>
+      inStore(async (store, account) => {
+        const where = query ? queryFilter(query, TAGGING_COLUMNS, { command: "tags list" }) : undefined
+        const rows = await store.tags(account, { ...(where ? { where } : {}), window: { limit: limit + 1, offset } })
+        return { items: rows.slice(0, limit).map((one) => taggingOf(account, one)), has_more: rows.length > limit }
+      }),
   }
 }

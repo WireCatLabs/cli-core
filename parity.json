@@ -1088,7 +1088,7 @@
     "--type": {
       "value": "<names>",
       "meaning": "only these types",
-      "note": "each command names its own types — chats events the messenger's event types, comma-separated, as it names them; tags list chat, contact or message; tasks list question, request, mention or promise, and tasks add gives the new task one of them — search messages text, voice or file, and search notes internal or file — so it differs on purpose (Help text rule 4)"
+      "note": "each command names its own types — chats events the messenger's event types, comma-separated, as it names them; tasks add gives the new task question, request, mention or promise — search messages text, voice or file, and search notes internal or file — so it differs on purpose (Help text rule 4)"
     },
     "--types": {
       "value": "<value>",
@@ -3974,18 +3974,7 @@
       }
     },
     "tags list": {
-      "in": "all",
-      "options": {
-        "--source": {
-          "in": "all"
-        },
-        "--tag": {
-          "in": "all"
-        },
-        "--type": {
-          "in": "all"
-        }
-      }
+      "in": "all"
     },
     "tags remove": {
       "in": "all",
@@ -4050,19 +4039,7 @@
     "tasks list": {
       "in": "all",
       "options": {
-        "--before-time": {
-          "in": "all"
-        },
-        "--chat": {
-          "in": "all"
-        },
         "--limit": {
-          "in": "all"
-        },
-        "--state": {
-          "in": "all"
-        },
-        "--type": {
           "in": "all"
         }
       }

@@ -5,15 +5,16 @@ import { kindsOf } from "../../services/inbox.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
 import {
   closedStateOf,
+  TASK_QUERY,
   type TaskCard,
   type TaskLinkKind,
   type TaskPlan,
   type TaskView,
   taskLinkKindOf,
-  taskStateOf,
   taskTypeOf,
-  taskTypesOf,
 } from "../../services/tasks.js"
+import { renderAnswer } from "../envelope.js"
+import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { listed, positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
@@ -104,36 +105,25 @@ export const tasksCommand = (messenger: Messenger): Command => {
     "what waits on you — unanswered questions, mentions, requests, promises — kept in the local store; review and serve add them",
   )
 
-  tasks
-    .command("list")
-    .description("tasks, oldest first, with their message or note source")
-    .option("--state <state>", "only tasks in this state: open, done or dismissed", taskStateOf)
-    .option("--chat <chat>", `only this chat's tasks; ${messenger.chatArgument}`)
-    .option("--type <names>", "only these types, comma-separated: question, request, mention, promise", taskTypesOf)
-    .option("--before-time <time>", "only tasks opened before this ISO 8601 time, or 2h / 1d ago")
+  withQuery(tasks.command("list").description("tasks, oldest first, with their message or note source"), TASK_QUERY)
     .option("--limit <n>", "how many", positiveCount("--limit"))
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
-      const options = this.opts<{
-        state?: TaskView["state"]
-        chat?: string
-        type?: TaskView["kind"][]
-        beforeTime?: string
-        limit?: number
-      }>()
+      const query = listQuery(typedQuery(words), TASK_QUERY, "tasks list")
+      const { limit, offset } = pageOf(context.settings)
       const found = await context.withServices((services) =>
         services.tasks.list({
-          ...(options.state === undefined ? {} : { state: options.state }),
-          ...(options.chat === undefined ? {} : { chat: options.chat }),
-          ...(options.type === undefined ? {} : { types: options.type }),
-          ...(options.beforeTime === undefined ? {} : { before: momentOf(options.beforeTime, "--before-time") }),
-          ...(options.limit === undefined ? {} : { limit: options.limit }),
+          ...(query ? { query } : {}),
+          limit,
+          offset,
+          previews: context.format === "pretty",
         }),
       )
-      if (context.format === "jsonl") context.renderer.stream(found)
-      else if (context.format !== "pretty") context.renderer.result(listed(found))
-      else if (found.length === 0) context.renderer.note("no tasks — review and serve add them as questions arrive")
-      else context.streams.data(`${found.map(line).join("\n")}\n`)
+      renderAnswer(this, context, pagedList("tasks list", context.settings, found), () =>
+        found.items.length === 0 ? "" : `${(found.previews ?? []).map(line).join("\n")}\n`,
+      )
+      if (found.items.length === 0 && context.format === "pretty")
+        context.renderer.note("no tasks — review and serve add them as questions arrive")
     })
 
   planOptions(

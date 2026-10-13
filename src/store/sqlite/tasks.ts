@@ -15,6 +15,7 @@ import { actorOfOrigin, originOfActor } from "./actors.js"
 import { atomic } from "./atomic.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
+import type { Where } from "./query-filter.js"
 import { taskRowOf, thingOf } from "./things.js"
 import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
 
@@ -24,6 +25,12 @@ export { taskIdOf, taskRowOf } from "./things.js"
 export interface StoreTaskStore extends TaskStore, WorkTasks {
   /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
   rowOf(id: string): number | undefined
+  /** One account's tasks a list query keeps, oldest first, each with its title and last change. */
+  query(
+    account: string,
+    where: Where | undefined,
+    window: { limit: number; offset: number },
+  ): Promise<{ task: Task; title: string; updatedAt: Date }[]>
 }
 
 const COLUMNS =
@@ -112,6 +119,18 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
   return {
     ...workTasksOver(context),
     rowOf: (id) => taskRowOf(database, id),
+    query: async (account, where, { limit, offset }) => {
+      const project = inbox(account, false)
+      if (project === undefined) return []
+      return database
+        .prepare(
+          `SELECT ${COLUMNS}, t.title, t.updated_at FROM tasks t JOIN projects p ON p.id = t.project_id ` +
+            `WHERE t.package_id IS NOT NULL AND t.deleted_at IS NULL AND t.project_id = ? AND ${where?.sql ?? "1"} ` +
+            "ORDER BY t.created_at, t.id LIMIT ? OFFSET ?",
+        )
+        .all(project, ...(where?.params ?? []), limit, offset)
+        .map((row) => ({ task: toTask(row), title: String(row.title), updatedAt: new Date(Number(row.updated_at)) }))
+    },
     get: async (id) => {
       const row = taskRowOf(database, id)
       if (row === undefined) return undefined

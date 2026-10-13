@@ -8,6 +8,7 @@ import type { AccountKey } from "../store.js"
 import type { Actor } from "./actors.js"
 import type { EntityType } from "./entity-types.js"
 import type { StoreContext } from "./open.js"
+import type { Where } from "./query-filter.js"
 import { guardTagCreation, type TagCreationOptions } from "./tag-creation.js"
 import { emailOf, emailThreadOf, type Thing } from "./things.js"
 import { toIso } from "./values.js"
@@ -35,6 +36,9 @@ export interface TagFilter {
   source?: "manual" | "auto"
   tag?: string
   type?: TagType
+  /** A list query's condition over `tag`, `tag_type`, `created_at`, `source` and `auto` (1 when a rule claims it). */
+  where?: Where
+  window?: { limit: number; offset: number }
 }
 
 export const TAG_KINDS = ["tag", "topic"] as const
@@ -308,18 +312,32 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
     },
   ]
   const chosen = parts.filter(({ type }) => filter.type === undefined || filter.type === type)
+  const union = chosen.map(({ sql }) => sql + tagged).join(" UNION ALL ")
+  const where = [
+    ...(filter.where ? [filter.where] : []),
+    ...(filter.source === undefined
+      ? []
+      : [{ sql: filter.source === "auto" ? "x.auto = 1" : "(x.auto = 0 OR x.source = 'owner')", params: [] }]),
+  ]
   const rows = database
-    .prepare(`${chosen.map(({ sql }) => sql + tagged).join(" UNION ALL ")} ORDER BY 1, 2, 3, 4, 6, 8`)
-    .all(...chosen.flatMap(({ params }) => (filter.tag === undefined ? params : [...params, filter.tag])))
+    .prepare(
+      "SELECT * FROM (SELECT u.*, CASE u.type WHEN 'identity' THEN 'contact' WHEN 'email_thread' THEN 'chat' " +
+        "WHEN 'email' THEN 'message' ELSE u.type END AS tag_type, (u.type = 'chat' AND EXISTS (SELECT 1 FROM " +
+        `auto_tag_claims ac WHERE ac.chat_id = u.target_id AND ac.tag_id = u.tag_id)) AS auto FROM (${union}) u) x ` +
+        `WHERE ${where.length === 0 ? "1" : where.map(({ sql }) => `(${sql})`).join(" AND ")} ` +
+        "ORDER BY x.tag, x.type, x.created_at, x.chat_id, x.person_id, x.message_id" +
+        (filter.window ? " LIMIT ? OFFSET ?" : ""),
+    )
+    .all(
+      ...chosen.flatMap(({ params }) => (filter.tag === undefined ? params : [...params, filter.tag])),
+      ...where.flatMap(({ params }) => params),
+      ...(filter.window ? [filter.window.limit, filter.window.offset] : []),
+    )
   const result = rows.map((row): StoredTag => {
     const type = TAG_TYPE[String(row.type)] as TagType
     const chatId = row.chat_id == null ? undefined : String(row.chat_id)
     const messageId = row.message_id == null ? undefined : String(row.message_id)
-    const automatic =
-      row.type === "chat" &&
-      database
-        .prepare("SELECT 1 AS held FROM auto_tag_claims WHERE chat_id=? AND tag_id=?")
-        .get(Number(row.target_id), Number(row.tag_id))
+    const automatic = Number(row.auto) === 1
     return {
       ...(automatic
         ? { sources: (row.source === "owner" ? ["manual", "auto"] : ["auto"]) as ("manual" | "auto")[] }
@@ -335,7 +353,5 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       createdAt: toIso(Number(row.created_at)) as string,
     }
   })
-  return filter.source === undefined
-    ? result
-    : result.filter((entry) => (entry.sources ?? ["manual"]).includes(filter.source as "manual" | "auto"))
+  return result
 }

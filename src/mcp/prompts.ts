@@ -103,9 +103,9 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
         [
           `Tell me what waits on me in ${name}. Do not send, react, forward or mark anything read.`,
           `1. Call ${command}_read with command "review" once, new true: it opens tasks for what came in and closes what I answered.`,
-          `2. Call ${command}_read with command "tasks list", state open${chat ? ` and chat ${JSON.stringify(chat)}` : ""}.`,
-          "3. Digest per chat, oldest task first: who, what they want — from the message each task points at — and",
-          "how long it has been open. A task whose message is null is no longer in the store: say so.",
+          `2. Call ${command}_read with command "tasks list", query ${JSON.stringify(`state:open${chat ? ` chat:${JSON.stringify(chat)}` : ""}`)}.`,
+          "3. Digest per chat, oldest task first: who, what they want — from the message its source_message names, read",
+          "with messages show — and how long it has been open. A message no longer in the store: say so.",
           "4. For each, suggest one: I answer it (offer a draft), it is done, or it needs no answer.",
           `5. Only after I approve, close each with ${command}_write, command "tasks close" — as done, or dismissed with a reason.`,
           DATA,

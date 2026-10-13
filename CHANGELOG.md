@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`tasks list` and `tags list` narrow by one query and answer in the envelope.** The query comes last, in the
+  field names of the item: `tasks list state:open kind:question chat:7`, `tags list tag:work -type:message`.
+  `--state`, `--type`, `--chat` and `--before-time` (tasks) and `--tag`, `--type` and `--source` (tags) are gone,
+  and so are the MCP arguments of the same names: `tasks_list` and `tags_list` take `query`. Items are the `task`
+  and the new `tagging` entity, so a task no longer carries its message preview (`source_message` names the
+  message), and a tag names what it is on as `target`. Both lists page with `--limit` and `--page`, in SQL.
+
+### Added
+
+- **`withQuery`, `listQuery` and `queryArgument` (`src/cli/list-query.ts`)**: a list's positional `[query...]`, its
+  Fields help, its defaults and the MCP `query` argument, from one registry; `queryFilter` is exported from the store.
+
 ### Fixed
 
 - The parity manifest includes the shared `models image`, `models image download` and `models image list` commands already mounted by Telegram and MAX, so release checks accept their command discovery.
@@ -18,6 +32,8 @@ shape of this file.
 - The passage command declares a runnable cited-reference example and shares the existing `--bytes <bytes>` placeholder with other evidence reads.
 
 - Bounded meeting context reports `invalid_response` when an adapter returns absent parent/revision metadata or a null cue, rather than failing with an unclassified exception.
+
+- Retired catalog records leave shared note listings, word/meaning search and embedding preparation without deleting their indexed content or owner annotations. Re-entry restores their visibility with the same reference.
 
 ### Added
 
@@ -44,15 +60,12 @@ shape of this file.
   and `mentions rebuild`; the CLIs register it. New and edited messages get their mentions on the write
   that stores them; messages stored before version 7 need one `mentions rebuild`. New dependency `psl` (0.7 MB),
   for a link's site.
+
 ### Changed — may break callers
 
 - **The native add-ons are `@wirecat/cli-core-sqlite` and `@wirecat/cli-core-onnx`** 1.0.1, the same builds as
   `@wirecat/cli-messaging-sqlite`/`-onnx` 1.0.1, which are deprecated later. Only a caller that imports an add-on
   directly needs the new name.
-
-### Fixed
-
-- Retired catalog records leave shared note listings, word/meaning search and embedding preparation without deleting their indexed content or owner annotations. Re-entry restores their visibility with the same reference.
 
 ## 0.263.0 — 14.10.2026
 

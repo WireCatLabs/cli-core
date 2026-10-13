@@ -1593,9 +1593,9 @@ describe("the MCP server", () => {
 
     const added = await call("chat_tasks_add", { message: "msg:chat/500/7/101", type: "promise" })
     expect(added.body).toMatchObject({ kind: "promise", state: "open", origin: "agent", created: true })
-    expect((await call("chat_tasks_list", { state: "open", type: ["promise"] })).body).toMatchObject({
-      items: [{ id: added.body.id, message: { text: expect.any(String) } }],
-      hasMore: false,
+    expect((await call("chat_tasks_list", { query: "state:open kind:promise" })).body).toMatchObject({
+      items: [{ id: added.body.id, source_message: "msg:chat/500/7/101" }],
+      page: { has_more: false },
     })
     const planned = await call("chat_tasks_plan", { task: added.body.id, title: "Send the plan", due: "2h" })
     expect(planned.body).toMatchObject({ title: "Send the plan", dueAt: expect.any(String), nextCheckAt: null })
@@ -1666,9 +1666,9 @@ describe("the MCP server", () => {
 
     const added = await call("chat_tags_add", { tags: ["Paid"], chat: "7", message: "101" })
     expect(added.body).toMatchObject({ target: { type: "message", messageId: "101" }, added: ["paid"] })
-    expect((await call("chat_tags_list", { tag: "paid" })).body).toMatchObject({
-      items: [{ tag: "paid", type: "message", locator: "msg:chat/500/7/101" }],
-      hasMore: false,
+    expect((await call("chat_tags_list", { query: "tag:paid" })).body).toMatchObject({
+      items: [{ tag: "paid", type: "message", target: "msg:chat/500/7/101" }],
+      page: { has_more: false },
     })
     const found = await call("chat_search_messages", { text: "tag:paid OR tag:family", language: "lucene" })
     expect(found.body.items.map(({ id }: { id: string }) => id).sort()).toEqual(["101", "103", "108"])
@@ -3294,7 +3294,7 @@ describe("MCP prompts and resources", () => {
     const text = messages[0]?.content.type === "text" ? messages[0].content.text : ""
 
     expect(text).toContain('chat_read with command "review" once, new true')
-    expect(text).toContain('command "tasks list", state open and chat "Book club"')
+    expect(text).toContain('command "tasks list", query "state:open chat:\\"Book club\\""')
     expect(text).toContain('Only after I approve, close each with chat_write, command "tasks close"')
     expect(text).not.toContain("messages send")
   })

@@ -1,10 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { TAG_TYPES, type TagType } from "../../domain/tags.js"
-import type { TagTargetInput, TagTargetView } from "../../services/tags.js"
-import type { StoredTag } from "../../store/store.js"
-import { listed, positiveCount } from "../paging.js"
+import { TAGGING_QUERY, type TaggingItem, type TagTargetInput, type TagTargetView } from "../../services/tags.js"
+import { renderAnswer } from "../envelope.js"
+import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
+import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
 const targetOptions = (command: Command, messenger: Messenger, verb: string): Command =>
@@ -21,25 +21,11 @@ const describe = ({ type, chatId, personId, messageId }: TagTargetView) =>
       ? `person ${personId}`
       : `message ${messageId} in chat ${chatId}`
 
-const line = (one: StoredTag) => {
-  const target =
-    one.type === "contact"
-      ? `${one.name ?? ""} (${one.personId})`
-      : one.type === "chat"
-        ? `${one.chatTitle ?? ""} (${one.chatId})`
-        : `${one.locator}`
-  return `${one.tag}  ${one.type}  ${target.trim()}`
-}
+const line = (one: TaggingItem) => `${one.tag}  ${one.type}  ${one.name ?? ""} (${one.target})`
 
 const sourceOf = (value: string): "manual" | "auto" => {
   if (value !== "manual" && value !== "auto") throw new CliError("validation_error", "--source takes manual or auto")
   return value
-}
-
-const typeOf = (value: string): TagType => {
-  if (!(TAG_TYPES as readonly string[]).includes(value))
-    throw new CliError("validation_error", `--type takes ${TAG_TYPES.join(", ")}`)
-  return value as TagType
 }
 
 /** The owner's labels, in the local store only: `tag:` in a search finds what they label. */
@@ -111,22 +97,23 @@ export const tagsCommand = (messenger: Messenger): Command => {
       if (done.unchanged.length) context.renderer.note(`not there: ${done.unchanged.join(", ")}`)
     })
 
-  tags
-    .command("list")
-    .description("what is tagged: this account's chats and messages, and the people of its messenger")
-    .option("--tag <tag>", "only this tag")
-    .option("--source <manual|auto>", "only labels with this ownership claim", sourceOf)
-    .option("--type <names>", "only what is tagged of this type: chat, contact or message", typeOf)
-    .action(async function (this: Command) {
-      const context = messengerContext(this, messenger)
-      const filter = this.opts<{ tag?: string; type?: TagType; source?: "manual" | "auto" }>()
-      const found = await context.withServices((services) => services.tags.list(filter))
-      if (context.format === "jsonl") context.renderer.stream(found)
-      else if (context.format !== "pretty") context.renderer.result(listed(found))
-      else if (found.length === 0)
-        context.renderer.note("nothing is tagged — `tags add <tag> --chat <chat>` tags a chat")
-      else context.streams.data(`${found.map(line).join("\n")}\n`)
-    })
+  withQuery(
+    tags
+      .command("list")
+      .description("what is tagged: this account's chats and messages, and the people of its messenger"),
+    TAGGING_QUERY,
+  ).action(async function (this: Command, words: string[]) {
+    const context = messengerContext(this, messenger)
+    const query = listQuery(typedQuery(words), TAGGING_QUERY, "tags list")
+    const found = await context.withServices((services) =>
+      services.tags.list({ ...(query ? { query } : {}), ...pageOf(context.settings) }),
+    )
+    renderAnswer(this, context, pagedList("tags list", context.settings, found), () =>
+      found.items.length === 0 ? "" : `${found.items.map(line).join("\n")}\n`,
+    )
+    if (found.items.length === 0 && context.format === "pretty")
+      context.renderer.note("nothing is tagged — `tags add <tag> --chat <chat>` tags a chat")
+  })
 
   return tags
 }
