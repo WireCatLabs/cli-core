@@ -4,7 +4,7 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
-## Unreleased
+## 0.258.0 — 13.10.2026
 
 ### Added
 
@@ -23,7 +23,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
-- **Needs `@wirecat/cli-base` 0.23.** The peer range is now `>=0.23.0 <0.24.0`.
+- **Needs `@wirecat/cli-base` 0.24.** The peer range is now `>=0.24.0 <0.25.0`: `--debug` is in the vocabulary and
+  `commands --json` names exit code 1 `internal_error`.
 - **Run events, the send journal and the serve log write cli-base's log record.** Each line is
   `{ time, severity, body, runId, command, attributes, resource }`: the event or send entry is `attributes`, and
   `severity` says what it was — a warning is `warn`, a failed response or a crash `error`, a refused or failed

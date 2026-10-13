@@ -371,6 +371,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--after-n` | `<n>` | count | how many messages after it | messages |
 | `--timeout` | `<duration>` | duration | give up after this long |  |
 | `--dry-run` |  | switch | judge and plan; do nothing |  |
+| `--debug` |  | switch | on failure, show the full error record: cause and stack |  |
 
 <!-- flags: end -->
 
