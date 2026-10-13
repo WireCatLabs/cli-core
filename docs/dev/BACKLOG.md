@@ -17,5 +17,6 @@ Open work only. A finished item is deleted; its record is the merged pull reques
   cli-private.
 - **Google Drive documents in the one store** — drive-cli writes into the shared store so `search all`
   finds Drive documents; approved, not built: [drive-in-store-plan.md](drive-in-store-plan.md).
-- **Documents linked in a chat** — `chats documents list <chat>` in tg and max, with the message →
-  document link written by drive's `sync`; approved, not built: [chat-documents-plan.md](chat-documents-plan.md).
+- **Documents linked in a chat** — `chats documents list <chat>` and `store.notes.linkMessages` are built
+  here; tg and max still pin a release with them, and drive's `sync` still adds the two link passes:
+  [chat-documents-plan.md](chat-documents-plan.md).

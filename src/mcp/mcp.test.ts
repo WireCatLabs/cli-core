@@ -753,6 +753,7 @@ describe("the MCP server", () => {
       "chat_account_show",
       "chat_attachments_list",
       "chat_attachments_show",
+      "chat_chats_documents_list",
       "chat_chats_events",
       "chat_chats_folders_list",
       "chat_chats_folders_show",
@@ -1223,6 +1224,7 @@ describe("the MCP server", () => {
     const { client } = await connect(telegram, { config: levels({ messages: "deny" }) })
     expect((await client.listTools()).tools.map(({ name }) => name)).not.toContain("chat_messages_evidence")
     expect((await client.listTools()).tools.map(({ name }) => name)).not.toContain("chat_stats_charts")
+    expect((await client.listTools()).tools.map(({ name }) => name)).not.toContain("chat_chats_documents_list")
     expect(telegram.opened()).toBe(0)
   })
 
@@ -1248,6 +1250,11 @@ describe("the MCP server", () => {
     await call("chat_messages_list", { chat: "7" })
 
     expect((await call("chat_chats_members_history", { chat: "7" })).body).toEqual({ chatId: "7", items: [] })
+    expect((await call("chat_chats_documents_list", { chat: "7" })).body).toMatchObject({
+      items: [],
+      page: 1,
+      hasMore: false,
+    })
     expect((await call("chat_chats_tracking_list")).body).toEqual({ items: [] })
     expect((await call("chat_chats_tracking_show", { chat: "7" })).body).toEqual({
       chatId: "7",

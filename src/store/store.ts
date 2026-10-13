@@ -56,6 +56,7 @@ import * as completeness from "./sqlite/completeness.js"
 import { type ConversationEligibility, conversationEligibility } from "./sqlite/conversation-eligibility.js"
 import * as conversationQueries from "./sqlite/conversations.js"
 import { applyCounterObservations, type CounterTarget, counterStates, counterTargets } from "./sqlite/counters.js"
+import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
 import { drainEmailIndex, type MailStore, mailStoreOver, threadConversation } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import * as identities from "./sqlite/identities.js"
@@ -395,6 +396,8 @@ export interface MessageStore {
   ): Promise<Page<Message>>
   /** How many stored messages the chat has, sent at `since` or later when it is given. */
   countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
+  /** The chat's messages that may hold a Google document link, newest first, with the documents linked from each. */
+  documentLinkMessages(key: AccountKey, chatId: Id): Promise<DocumentLinkMessage[]>
   /** Saved or edited after `at` (ISO, this machine's clock), oldest first, and the ids deleted after it. */
   changes(key: AccountKey, chatId: Id, at: string): Promise<{ messages: Message[]; deleted: Id[] }>
   /**
@@ -1346,6 +1349,11 @@ const storeOver = (context: StoreContext): MessageStore => {
     countMessages: async (key, chatId, { since } = {}) => {
       const chatKey = chatKeyOf(key, chatId)
       return chatKey === undefined ? 0 : reads.countMessages(context, chatKey, since)
+    },
+
+    documentLinkMessages: async (key, chatId) => {
+      const chatKey = chatKeyOf(key, chatId)
+      return chatKey === undefined ? [] : documentLinkMessages(context, chatKey)
     },
 
     changes: async (key, chatId, at) => {
