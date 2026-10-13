@@ -36,6 +36,10 @@ export interface ServiceDeps {
   /** `false` keeps no search history: recording was turned off by name. Kept when unset. */
   history?: boolean
   searchCatchUp?: boolean
+  /** This account has picture search on (`pictureSearch`): its images are embedded and searched by their pixels. */
+  pictures?: boolean
+  /** Opens the picture model; tests give a fake. */
+  pictureEmbedder?: () => Promise<import("../images/picture/embedder.js").PictureEmbedder>
   agentText?: true
 }
 
@@ -91,7 +95,7 @@ export const onlineDeps = (
   messenger: Messenger,
   adapter: MessengerAdapter,
   guard: SendGuard,
-  where: { profile?: string; env?: NodeJS.ProcessEnv } = {},
+  where: { profile?: string; env?: NodeJS.ProcessEnv; pictures?: boolean } = {},
 ): ServiceDeps => ({
   messenger,
   ...where,

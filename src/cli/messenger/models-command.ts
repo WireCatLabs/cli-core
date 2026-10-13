@@ -3,6 +3,14 @@ import { Command, Option } from "commander"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, TEXT_MODELS, textModel } from "../../embeddings/models.js"
 import {
+  DEFAULT_IMAGE_MODEL,
+  IMAGE_MODELS,
+  imageModel,
+  imageModelsDirectory,
+  isImageModelInstalled,
+  placedImage,
+} from "../../images/picture/models.js"
+import {
   install,
   installedBytes,
   installFiles,
@@ -142,6 +150,67 @@ export const modelsCommand = (messenger: Messenger): Command => {
           try {
             const [vector] = await embedder.embed(["check"], "query")
             if (vector?.length !== model.dims)
+              throw new CliError("invalid_response", `${model.id} gave a vector of the wrong size`)
+          } finally {
+            await embedder.close()
+          }
+          context.renderer.result({ id: model.id, downloaded: true, works: true, directory })
+        },
+        { unbounded: true },
+      )
+    })
+
+  const image = models
+    .command("image")
+    .description("models that read pictures, for `images embed` and search by what a picture shows")
+
+  image
+    .command("list")
+    .description("the picture models, which are downloaded, and which one is the default")
+    .action(async function (this: Command) {
+      const context = baseContext(this, messenger.resolveSettings)
+      await context.run(async () => {
+        const directory = imageModelsDirectory(context.env)
+        const items = IMAGE_MODELS.map((model) => ({
+          id: model.id,
+          title: model.title,
+          languages: model.languages,
+          licence: model.licence,
+          size: megabytes(model.files.reduce((sum, file) => sum + file.bytes, 0)),
+          downloaded: isImageModelInstalled(model, directory),
+          default: model.id === DEFAULT_IMAGE_MODEL,
+        }))
+        if (context.format === "pretty") {
+          const line = (item: (typeof items)[number]) =>
+            `${item.default ? "*" : " "} ${item.id.padEnd(16)} ${item.size.padStart(7)}  ${item.downloaded ? "downloaded" : "—".padEnd(10)}  ${item.licence}  ${item.languages}`
+          context.streams.data(`${items.map(line).join("\n")}\n`)
+        } else if (context.format === "jsonl") context.renderer.stream(items)
+        else context.renderer.result({ ...listed(items), directory })
+      })
+    })
+
+  image
+    .command("download")
+    .argument("<model>", "a model id from `models image list`")
+    .description("download a picture model once, checked against the sha256 this version expects")
+    .action(async function (this: Command, id: string) {
+      const context = baseContext(this, messenger.resolveSettings)
+      await context.run(
+        async () => {
+          const model = imageModel(id)
+          const directory = imageModelsDirectory(context.env)
+          if (!isImageModelInstalled(model, directory)) {
+            context.renderer.note(
+              `${model.id}: ${megabytes(model.files.reduce((sum, file) => sum + file.bytes, 0))} from Hugging Face`,
+            )
+            await installFiles(placedImage(model, directory), { progress: (line) => context.renderer.note(line) })
+          }
+          context.renderer.note(`${model.id}: loading it once to check it works`)
+          const { openPictureEmbedder } = await import("../../images/picture/embedder.js")
+          const embedder = await openPictureEmbedder(model, directory)
+          try {
+            const vector = await embedder.embedQuery("check")
+            if (vector.length !== model.dims)
               throw new CliError("invalid_response", `${model.id} gave a vector of the wrong size`)
           } finally {
             await embedder.close()

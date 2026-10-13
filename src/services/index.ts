@@ -19,6 +19,7 @@ import { type MessagesService, messagesService } from "./messages.js"
 import { metadataService } from "./metadata.js"
 import { type ModerationService, moderationService } from "./moderation.js"
 import { type PeopleService, peopleService } from "./people.js"
+import { type PicturesService, picturesService, withPictures } from "./pictures.js"
 import { privatePeopleService } from "./private-people.js"
 import { type RankingsService, rankingsService } from "./rankings.js"
 import { type RetentionService, retentionService } from "./retention.js"
@@ -120,6 +121,7 @@ export interface Services {
   moderation: ModerationService
   conversations: ConversationsService
   embeddings: EmbeddingsService
+  pictures: PicturesService
   tags: TagsService
   searches: SearchesService
   tasks: TasksService
@@ -136,6 +138,7 @@ export type Override = (base: Services, deps: ServiceDeps) => Partial<Services>
 
 /** The shared services, with the messenger's `services` override applied — commands and MCP tools alike. */
 export const servicesFor = (deps: ServiceDeps): Services => {
+  const pictures = picturesService(deps)
   const base: Services = {
     metadata: metadataService(deps),
     privatePeople: privatePeopleService(deps),
@@ -144,7 +147,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
     retention: retentionService(deps),
     rankings: rankingsService(deps),
     topics: topicsService(deps),
-    messages: messagesService(deps),
+    messages: withPictures(messagesService(deps), pictures),
     chats: chatsService(deps),
     chatDocuments: chatDocumentsService(deps),
     mentions: mentionsService(deps),
@@ -158,6 +161,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
     moderation: moderationService(deps),
     conversations: conversationsService(deps),
     embeddings: embeddingsService(deps),
+    pictures,
     tags: tagsService(deps),
     attachments: attachmentsService(deps),
     searches: searchesService(deps),

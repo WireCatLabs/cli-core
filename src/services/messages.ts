@@ -37,6 +37,7 @@ import {
   searchLucene,
   statsLucene,
 } from "./messages-search.js"
+import type { PictureHit } from "./pictures.js"
 import { type SearchAllFound, type SearchAllRequest, searchAll } from "./search-all.js"
 import {
   type SearchAllIncludingMeetingsFound,
@@ -143,6 +144,13 @@ export interface SearchFound extends Page<FoundMessage> {
   wordsReady: boolean
   /** The same for the stems, in strict search: `false` until a stemmed search may run. */
   stemsReady?: boolean
+  /**
+   * The images nearest to what the words describe, found by their pixels and ranked on their own: not fused into
+   * `items`. Only when the profile turned picture search on and the model is downloaded; queries are English.
+   */
+  pictures?: PictureHit[]
+  /** Why a profile with picture search on has no `pictures` list: the model is not downloaded. */
+  picturesSkipped?: string
 }
 
 export interface SendRequest {

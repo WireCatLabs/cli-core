@@ -71,7 +71,7 @@ export interface Defaults {
   guard: SendGuard
   /** The profile's own entries, for a tool reading a setting of its own — `transcribeWith`. */
   settings: Pick<Settings, "configured" | "shared" | "profile"> &
-    Partial<Pick<Settings, "permissions" | "searchCatchUp" | "offline">> &
+    Partial<Pick<Settings, "permissions" | "searchCatchUp" | "pictureSearch" | "offline">> &
     AISettings
   env: NodeJS.ProcessEnv
   /** The server's open models, kept between `search_conversations` calls. */
@@ -299,7 +299,11 @@ const withNextSteps = (definition: AnyTool, result: object): object =>
     : { ...result, next_steps: definition.nextSteps }
 
 const callRunner = ({ messenger, session, withStore, withServices, defaults, around }: Registration): RunEntry => {
-  const where = { profile: defaults.settings.profile, env: defaults.env }
+  const where = {
+    profile: defaults.settings.profile,
+    env: defaults.env,
+    pictures: defaults.settings.pictureSearch,
+  }
   return async (key, definition, args, ctx) => {
     const run = `mcp ${key.replaceAll("_", " ")}`
     try {

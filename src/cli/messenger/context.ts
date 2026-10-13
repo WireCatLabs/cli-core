@@ -419,6 +419,7 @@ export const messengerContext = (
             // Turning recording off by name (--no-record, or record: false) keeps no search history either.
             history: base.settings.keepFailedRuns,
             searchCatchUp: base.settings.searchCatchUp,
+            pictures: base.settings.pictureSearch,
             guard,
             connection: async () => {
               if (base.settings.offline) throw new CliError("validation_error", OFFLINE)

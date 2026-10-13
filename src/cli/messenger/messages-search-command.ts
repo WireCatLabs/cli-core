@@ -216,6 +216,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     const { command } = messenger.app
     for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
     for (const { source, reason } of found.skipped ?? []) context.renderer.note(`${source} not searched: ${reason}`)
+    if (found.picturesSkipped) context.renderer.note(`pictures not searched: ${found.picturesSkipped}`)
     const stemming = found.query?.stemming
     const forms = (stemming?.applied ? stemming.terms : []).filter(({ stemmer }) => stemmer !== "none")
     if (forms.length > 0)
@@ -279,6 +280,12 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
           `hits in ${elsewhere.join(", ")} open in that messenger's own CLI, by the locator: messages context msg:…`,
         )
       }
+      if (found.pictures?.length)
+        context.streams.data(
+          `\n\nPictures, by what they show (an English query matches best):\n${found.pictures
+            .map(({ locator, score }) => `  ${locator}  ${score.toFixed(2)}`)
+            .join("\n")}\n`,
+        )
       if (found.items.length === 0)
         context.renderer.note(
           found.server && !found.server.skipped

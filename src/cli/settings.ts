@@ -88,6 +88,7 @@ const SHARED_PROFILE_ENTRIES = {
   speechModel: v.optional(v.string(plain("has to be a model id from `models audio list`, in quotes"))),
   catchUpMarksRead: v.optional(flag),
   searchCatchUp: v.optional(flag),
+  pictureSearch: v.optional(flag),
   ...AI_ENTRIES,
 }
 
@@ -188,6 +189,8 @@ export interface Settings extends AISettings {
   /** `inbox` and `review` mark each chat they show read, as `--mark-read` does; the other side sees it. Off unless set. */
   catchUpMarksRead: boolean
   searchCatchUp?: boolean
+  /** Search and `images embed` read the pictures themselves, with a model on this machine. Off until set. */
+  pictureSearch?: boolean
   limit: number
   /** Which page, 1-based. Per invocation only — a page number in a file is a setting nobody wants twice. */
   page: number
@@ -418,6 +421,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const senderColors = fromLayers("senderColors", false)
     const catchUpMarksRead = fromLayers("catchUpMarksRead", false)
     const searchCatchUp = fromLayers("searchCatchUp", false)
+    const pictureSearch = fromLayers("pictureSearch", false)
     const keepRunsForDays = fromLayers("keepRunsForDays", DEFAULT_KEEP_RUNS_FOR_DAYS)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
     const readOnlyLock = given(env[READ_ONLY]) !== undefined && env[READ_ONLY] !== "0" ? READ_ONLY : undefined
@@ -488,6 +492,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       senderColors: senderColors.value,
       catchUpMarksRead: catchUpMarksRead.value,
       searchCatchUp: searchCatchUp.value,
+      pictureSearch: pictureSearch.value,
       limit: limit.value,
       page: flags.page ?? 1,
       all: flags.all === true,
@@ -524,6 +529,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         senderColors: senderColors.from,
         catchUpMarksRead: catchUpMarksRead.from,
         searchCatchUp: searchCatchUp.from,
+        pictureSearch: pictureSearch.from,
         record: record.from,
         keepRunsForDays: keepRunsForDays.from,
         readOnly: readOnly.from,

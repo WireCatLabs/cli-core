@@ -116,6 +116,23 @@ caption, up to 3 messages before and after it in the same chat within 10 minutes
 `matchedIn: "context"`. A photo with no caption and no message near it has no chunk, and OCR or an agent's
 `attachments text set` stays the way to find what is written on it.
 
+## Find a picture by what it shows
+
+For a profile with `pictureSearch: true` (off until set), the picture itself can be searched. `models image download
+clip-b32` fetches the model once (CLIP ViT-B/32, 8-bit, about 155 MB, into the shared models folder under
+`models/image/`); `images embed [--chat <chat>] [--limit <n>]` downloads each image the store knows and has no
+vector for through the messenger, one at a time and without marking anything read, keeps its 512-number vector and
+the sha256 of its bytes, and drops the file. Run it again to go on: an image with a vector is not read twice. It
+needs the optional `@napi-rs/canvas` to decode the image.
+
+`search messages` with words then adds a `pictures` list beside its hits: the messages whose image is nearest the
+words, best first, each with `locator` and `score` (cosine, nothing under 0.22). The lane is ranked on its own and
+never changes the text hits. With picture search off there is no list. With it on and the model missing, `picturesSkipped` says so.
+
+**Write the query in English.** The model's text side knows English only, so a query in another language finds
+little. An agent translates the user's words first: "чек из магазина" is searched as "a shop receipt". Searching by
+the conversation around a photo (above) keeps working in every language.
+
 ## Partial batches and recovery
 
 An isolated failed file does not discard completed downloads or prevent independent later files.

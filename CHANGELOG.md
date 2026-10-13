@@ -15,6 +15,17 @@ shape of this file.
 
 ### Added
 
+- **Pictures are found by what they show, per profile, in their own lane.** Set `pictureSearch: true` in a profile
+  (off by default), run `models image download clip-b32` (CLIP ViT-B/32 8-bit, ~155 MB, MIT, in the shared WireCat
+  models folder under `models/image/`), then `images embed [--chat <chat>] [--limit <n>]`: each image the store knows
+  is downloaded through the messenger (one at a time, nothing marked read), turned into a 512-number vector and
+  dropped; only the vector and the sha256 of the bytes stay. A message search with words then returns `pictures`
+  beside its hits: the messages whose image is nearest the query (`locator`, `score`, floor 0.25), never mixed into
+  the text ranking. **Queries must be English** — the model's text side knows no other language, so an agent
+  translates first. Without the setting there is no `pictures` list; with it on but no model, `picturesSkipped` says so. No schema change:
+  Storage: the vector is the image's chunk at position 1 (`chunks`, `embeddings`, model `local:clip-b32:512`). Needs the
+  optional `@napi-rs/canvas` to read an image.
+
 - **Mentions: phones, e-mail addresses, links and Google documents found in stored message text** (store
   version 7). Each is kept where it was written, in one normalized form: `+7…` for a phone whose country is clear
   from how it is written, digits alone otherwise; a lower-case address; a link without `utm_*`, `fbclid` and the
@@ -71,6 +82,7 @@ shape of this file.
   with this package's by `failureContext` and kept by the CLI, MCP and meeting-tool error handlers alike.
 - Bounded transcript search hits carry reusable cue references. The shared context reader selects preceding and following cues in one read snapshot, preserves historical revisions and optional anchor fingerprints, and exposes explicit boundaries and byte clipping.
 - Shared passage formatting provides cited text or Markdown with timestamps, speaker labels, revision and coverage. Hosts can opt into the account-bound `meetings passage` CLI adapter and `meeting_passage` MCP tool; existing installed apps need a producer release and consumer integration.
+||||||| parent of 1376e689 (feat(images): picture search with CLIP, per account, as its own lane)
 
 ### Fixed
 

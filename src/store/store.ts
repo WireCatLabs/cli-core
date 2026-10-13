@@ -63,6 +63,7 @@ import { drainEmailIndex, type MailStore, mailStoreOver, threadConversation } fr
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import * as identities from "./sqlite/identities.js"
 import * as imageChunks from "./sqlite/image-chunks.js"
+
 import { drainInvolvementQueue } from "./sqlite/involvement-queue.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
@@ -127,6 +128,7 @@ import type { ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/wo
 import * as words from "./sqlite/words.js"
 
 /** Which account of which messenger a call is about. */
+export type PictureInput = imageChunks.PictureInput
 export interface AccountKey {
   provider: Provider
   account: Id
@@ -376,6 +378,20 @@ export interface MessageStore {
     key: AccountKey,
     options: { chatId?: Id; model: string; since?: string; limit: number; query: Float32Array },
   ): Promise<ConversationHit[]>
+  /** Live image attachments with no picture vector yet, in attachment order after `after`; `chatId` narrows it. */
+  picturesToEmbed(key: AccountKey, options: { chatId?: Id; after?: number; limit: number }): Promise<PictureInput[]>
+  /** Keeps each picture's vector of `model` and makes its hash the image's picture chunk. */
+  savePictures(
+    key: AccountKey,
+    model: string,
+    dims: number,
+    pictures: { attachmentPk: number; hash: string; bytes: number; occurredAt: number; vector: Float32Array }[],
+  ): Promise<void>
+  /** The images nearest to `query` by their picture vector of `model`, best first, as their message. */
+  nearestPictures(
+    key: AccountKey,
+    options: { chatId?: Id; model: string; since?: string; limit: number; query: Float32Array },
+  ): Promise<{ chatId: Id; messageId: Id; score: number }[]>
   /** The current build's distinct chunks, and how many have a vector of `model`. */
   vectorStatus(key: AccountKey, chatId: Id, model: string): Promise<{ chunks: number; embedded: number }>
   /** Drops the chat's vectors, or one model's; a vector another chat's chunk shares stays. */
@@ -1293,6 +1309,47 @@ const storeOver = (context: StoreContext): MessageStore => {
           })
       }
       return hits
+    },
+
+    picturesToEmbed: async (key, { chatId, after, limit }) => {
+      const accountPk = findAccountPk(key)
+      if (accountPk === undefined) return []
+      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
+      if (chatId !== undefined && chatKey === undefined) return []
+      return imageChunks.picturesToEmbed(context, accountPk, {
+        ...(chatKey === undefined ? {} : { chatKey }),
+        ...(after === undefined ? {} : { after }),
+        limit,
+      })
+    },
+
+    savePictures: async (key, model, dims, pictures) => {
+      const accountPk = findAccountPk(key)
+      if (accountPk === undefined) return
+      inTransaction(() => {
+        vectors.saveVectors(
+          context,
+          model,
+          dims,
+          pictures.map(({ hash, vector }) => ({ hash, vector })),
+        )
+        imageChunks.savePictureChunks(context, accountPk, pictures)
+      })
+    },
+
+    nearestPictures: async (key, { chatId, model, since, limit, query }) => {
+      const accountPk = findAccountPk(key)
+      if (accountPk === undefined) return []
+      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
+      if (chatId !== undefined && chatKey === undefined) return []
+      return imageChunks.nearestImages(context, accountPk, {
+        ...(chatKey === undefined ? {} : { chatKey }),
+        ...(since === undefined ? {} : { since: Date.parse(since) }),
+        model,
+        limit,
+        query,
+        position: imageChunks.PICTURE_POSITION,
+      })
     },
 
     vectorStatus: async (key, chatId, model) => {
