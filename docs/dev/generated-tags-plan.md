@@ -1,6 +1,6 @@
 # Plan — generated tags for notes, documents and messages, and a synonym guard
 
-Status: **proposal, 2026-10-13, second draft. Owner direction given, design not approved.** Owner (cli-private
+Status: **approved 2026-10-13 (owner, NEED-1017 A): `tags.folded` is unique.** Owner (cli-private
 journal `2026-10-13-field-test-followups.md`, NEED-1005 A, NEED-1017 and its review): generated tags are
 searchable at once, below the owner's; confirming one makes it the owner's; "all of it, embeddings too"; tags in
 any language, checked for duplicates through a transliterated form; no second table where a column will do; a
@@ -65,8 +65,7 @@ A generated tag is a `taggings` row, not a row in another table. New columns:
 - A new column `tags.folded`: the name lower-cased, Unicode-normalized, transliterated to Latin (one fixed table,
   GOST-like: `сео` → `seo`, `карточка` → `kartochka`), hyphens and spaces removed. It is what the duplicate check
   compares and what `tag:` also matches, so `tag:сео` finds `seo`.
-- Whether `folded` is a unique index (two tags can never fold to one form) or only a warning in preflight is an
-  open question below.
+- `folded` is a unique index: two tags can never fold to one form; preflight names the existing tag.
 
 ### Who sets tags
 
@@ -128,6 +127,6 @@ Each layer reports why it flagged a pair. None merges or refuses on its own: pre
 
 ## Open questions for the owner
 
-1. `tags.folded` unique (a hard stop: `seo` and `сео` can never both exist) or a preflight warning only.
+1. ~~`tags.folded` unique or a warning only~~ — unique (owner, 2026-10-13, NEED-1017 A).
 2. Do claims count in `tag:` filters of `search messages` too, or only in `search all` and notes search.
 3. Tag descriptions: written by the owner only, or proposed by an agent and confirmed.

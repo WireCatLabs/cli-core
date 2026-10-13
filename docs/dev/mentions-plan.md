@@ -36,24 +36,56 @@ Anchors on `origin/main`, 2026-10-13.
 
 ### One entity: `mentions`
 
-A row per value found in one place of one text.
+A row per value found in one place of one text. Not a `links` row (owner, NEED-1023 B): `links` joins two records
+the store already has (a document to a document, a person to a project); a mention is a value in a text that is
+not yet any record, and may never become one.
 
 | column | meaning |
 | --- | --- |
-| `kind` | `phone`, `email`, `url`, `document`, `person-name`, `place` — an enum; new kinds by plan |
-| `source_type`, `source_id` | the message, transcript, file text, note or document it was found in |
-| `start`, `end` | where in that text: the original spelling is read back from the source, never copied |
-| `value` | the normalized value: URL without tracking parameters, lower-case e-mail, a name's lemma, a phone in E.164 |
-| `domain` | for `url` and `email`: the registrable domain (`docs.google.com` → `google.com`, `www.example.co.uk` → `example.co.uk`) |
-| `method`, `version` | which rule found it, so a better rule can rebuild its own rows only |
+| `id` | |
+| `kind` | `phone`, `email`, `url`, `document`, `person-name`, `place` — an enum; a new kind by plan |
+| `source_type`, `source_id` | the message, note, document, attachment or meeting transcript it was found in |
+| `source_field` | which text of that row: `text`, `transcript`, `file_text`, `title` — a message has three |
+| `start`, `end` | where in that text; the original spelling is read back from the source, never copied |
+| `value` | the normalized value: E.164 phone, lower-case e-mail, URL without tracking parameters, document id, a name's lemma, a folded address |
+| `domain` | `url` and `email` only: the registrable domain (`docs.google.com` → `google.com`) |
+| `method`, `version` | which rule found it, so a better rule rebuilds its own rows only |
 | `confidence` | the rule's own score, 0–1 |
 | `status` | `found` → `linked` or `dismissed` |
-| `target_type`, `target_id` | once linked: identity, person, organization, document, place |
-| `author` | who linked or dismissed it: the owner, or an agent by name (as facts record it) |
+| `target_type`, `target_id` | once linked: identity, person, organization, document, place, chat |
+| `author` | who linked or dismissed it: the owner, or an agent by name |
+| `created_at`, `updated_at` | |
 
-Why a table of its own, not rows in `links`: volume (every link in 100,000 messages), its own indexes
-(`kind, value`; `domain`; `status`), and a review state that `links` does not have. A linked mention also
-writes the `links` row that relation needs, so relations stay where they are read today.
+Keys and indexes: unique `(source_type, source_id, source_field, start, kind)`; `(kind, value)` for `phone:` and
+"everywhere this number appears"; `(domain)`; `(status, kind)` for the review list; `(target_type, target_id)` for
+`mentions:<reference>`.
+
+**A linked mention is the relation itself.** "This message mentions person 12" is the mention row with its target;
+no second row in `links`, so there is one place to read and one to fix.
+
+**Linking by value or by occurrence** (proposed, NEED-1025):
+
+- `phone`, `email`, `url`, `document`: one value is one thing. `mentions confirm` links every mention with the
+  same `kind` and `value`, and a new mention of a linked value is linked at sync — no table of known values, the
+  earlier linked mention is the record.
+- `person-name`, `place`: one name can be several people («Ольга»). Linked one occurrence at a time; `mentions show`
+  offers the people with that name met in the same chat first.
+
+**Edits and rebuilds.** An edited text rebuilds its mentions; a decision survives: a `linked` or `dismissed` status
+is carried to the new row with the same `kind`, `value` and source. A rule `version` bump rebuilds only its kind.
+
+### `places`
+
+| column | meaning |
+| --- | --- |
+| `id` | |
+| `address` | as the owner wrote or confirmed it |
+| `folded` | lower-case, abbreviations expanded (`ул.` → `улица`), for matching mentions |
+| `latitude`, `longitude` | optional; never fetched from an outside service without asking |
+| `author`, `created_at`, `updated_at` | |
+
+A person or an organization relates to a place through `links` (`located-at`) — that is a relation between two
+records, which is what `links` holds.
 
 ### What finds each kind — rules, no model
 
@@ -68,12 +100,6 @@ writes the `links` row that relation needs, so relations stay where they are rea
 
 Unknown names and places are the weak kinds. They start as `found` with a lower confidence and are never
 shown as facts until linked. A language model may later re-check them — optional, per run, never by default.
-
-### Places are their own entity
-
-The owner wants addresses kept apart. A linked `place` mention points at a `places` row: the address as written
-by the owner, a normalized form, and optional coordinates, never fetched without asking. Persons and
-organizations relate to places through `links` (`located-at`).
 
 ### Links grouped by site
 
@@ -147,7 +173,10 @@ an index lookup.
 
 ## Open questions for the owner
 
-1. The entity's name: `mentions` (proposed) or another word.
+1. The entity's name: `mentions` (proposed) or another word (NEED-1027).
 2. ~~Phones stored as HMAC only or also in the clear~~ — in the clear (owner, 2026-10-13, NEED-1016 B).
-3. Should an agent's `confirm` of an obvious kind (a document id, an exact known phone) count without the
-   owner, or wait like its facts.
+3. ~~Rows in `links` or a table of its own~~ — its own table (owner, 2026-10-13, NEED-1023 B).
+4. Linking by value for phones, e-mail, links and documents, one occurrence at a time for names and places
+   (NEED-1025).
+5. Should an agent's `confirm` of an exact kind (a document id, a known phone) count without the owner, or wait like
+   its facts (NEED-1026).

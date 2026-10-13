@@ -56,6 +56,36 @@ One module, `src/embeddings/registry.ts`, one entry per embeddable field:
   chunker's cut, the prefix matches the role.
 - A `chunkable_type` in the store that the registry does not name fails `store doctor`.
 
+## Speed at volume
+
+Search reads only the vectors in its scope (the kind of text, the account, the chat), page by page from SQLite,
+and compares each with the query (`nearestChunks`, `src/store/sqlite/vectors.ts:246`). One table for every kind
+does not slow it: the cost is the number of vectors in scope, not the table's size. Measured on this machine, 384
+dimensions, read in pages of 5,000 as the store does ([cli-testing performance/search/vector-scan](https://github.com/WireCatLabs/cli-testing/blob/docs/gemma-drive-result/performance/search/vector-scan/README.md)):
+
+| vectors in scope | one search, warm |
+|---|---|
+| 10,000 | 33 ms |
+| 100,000 | 0.27 s |
+| 300,000 | 0.82 s |
+
+The owner's store holds about 17,400 chunks today. Past about 100,000 in one scope, in this order: keep the vectors
+in memory in the MCP server (no page reads), store them as 8-bit numbers (a quarter of the bytes), then an
+approximate index such as `sqlite-vec`. None is needed now.
+
+## No vector column on a main table
+
+A vector never goes into `notes`, `tags` or `messages` as a column, short fields included:
+
+- **A vector belongs to a model.** Two models live side by side (e5-small, EmbeddingGemma); a column holds one.
+- **The same text shares one vector.** `embeddings` is keyed by the text's hash: a forwarded message, a copied
+  paragraph or a tag name used twice is embedded once.
+- **A long text needs several vectors**, one per passage.
+- **Main tables stay small.** A 384-number vector is 1.5 kB a row; every ordinary query over that table would read
+  it.
+
+A short field is a registry entry of size `short`: one chunk, one vector, in the same two tables.
+
 ## Cost
 
 No change to speed expected: the same model, the same chunker, the same tables. The move itself rebuilds no
