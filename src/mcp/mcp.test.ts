@@ -3540,6 +3540,12 @@ describe("mcp config", () => {
     })
   })
 
+  it("passes a profile named default too, since a server started without one stops", () => {
+    const { config } = serverEntry(app, { profile: "default", execPath: "/usr/bin/node", scriptPath: PNPM, env: {} })
+
+    expect(config).toMatchObject({ mcpServers: { chat: { args: [PNPM, "default", "mcp"] } } })
+  })
+
   it("refuses npx, whose cache is cleared, and warns about a Node version manager", () => {
     expect(() =>
       serverEntry(app, {

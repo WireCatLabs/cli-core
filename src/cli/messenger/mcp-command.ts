@@ -324,12 +324,7 @@ export const serverEntry = (
   const server = {
     type: "stdio",
     command: execPath,
-    args: [
-      scriptPath,
-      ...(profile === "default" ? [] : [profile]),
-      "mcp",
-      ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry]),
-    ],
+    args: [scriptPath, profile, "mcp", ...(flags.permission ?? []).flatMap((entry) => ["--permission", entry])],
     ...(Object.keys(directories).length > 0 ? { env: directories } : {}),
   }
   return {
