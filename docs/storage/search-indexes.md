@@ -180,6 +180,12 @@ sender, and nothing when there is no caption and no such neighbour. The chunk's 
 photo's message, `matchedIn: "context"`, beside the conversation's own hit. Providers register in
 `src/images/registry.ts`; the first that gives an image text describes it.
 
+A photo's **picture** has a second chunk, `chunkable_type = 'image'` at `position = 1` (the context text is position
+0), whose hash is the sha256 of the image bytes and whose vector is in `embeddings` under the model key
+`local:clip-b32:512`, written by `images embed` for profiles with `pictureSearch` on. Position 0 and 1 never mix:
+`saveImageChunks` replaces position 0 alone, and a picture search reads position 1 alone. The vector of a deleted
+message's picture is dropped on the next `images embed`.
+
 Why chunks and not whole conversations: e5-small reads at most 512 tokens (EmbeddingGemma 2,048), and
 one long conversation covers many subjects. Why not single messages: «ок» or «да, давай» mean nothing alone.
 

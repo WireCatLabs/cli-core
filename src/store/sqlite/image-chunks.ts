@@ -107,18 +107,19 @@ export const saveImageChunks = (
   const inChat = sql`chunkable_id IN (SELECT a.id FROM attachments a JOIN messages m
     ON a.attachable_type = 'message' AND m.id = a.attachable_id WHERE m.chat_id = ${chatKey})`
   const gone: SQL = sql`chunkable_type = 'image' AND (
-    (${inChat} AND chunkable_id NOT IN (SELECT value FROM json_each(${JSON.stringify(keep)})))
+    (${inChat} AND position = 0 AND chunkable_id NOT IN (SELECT value FROM json_each(${JSON.stringify(keep)})))
     OR (account_id = ${accountPk} AND NOT EXISTS (SELECT 1 FROM attachments a WHERE a.id = chunkable_id)))`
   for (const { hash } of orm.all<{ hash: string }>(sql`SELECT content_hash AS hash FROM chunks WHERE ${gone}`))
     old.add(hash)
   orm.run(sql`DELETE FROM chunks WHERE ${gone}`)
   for (const { attachmentPk, hash, length, occurredAt } of chunks) {
     const held = orm.get<{ hash: string }>(
-      sql`SELECT content_hash AS hash FROM chunks WHERE chunkable_type = 'image' AND chunkable_id = ${attachmentPk}`,
+      sql`SELECT content_hash AS hash FROM chunks
+        WHERE chunkable_type = 'image' AND chunkable_id = ${attachmentPk} AND position = 0`,
     )
     if (held?.hash === hash) continue
     if (held) old.add(held.hash)
-    orm.run(sql`DELETE FROM chunks WHERE chunkable_type = 'image' AND chunkable_id = ${attachmentPk}`)
+    orm.run(sql`DELETE FROM chunks WHERE chunkable_type = 'image' AND chunkable_id = ${attachmentPk} AND position = 0`)
     orm.run(
       sql`INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope,
           account_id, occurred_at, created_at, updated_at)
@@ -151,7 +152,10 @@ export interface NearestImage {
 
 const SCAN_PAGE = 5_000
 
-/** The images of the account nearest to `query` by the vector of their context, best first. */
+/**
+ * The images of the account nearest to `query` by the vector of `model`, best first. Position 0 of an image is
+ * its context text, position 1 its picture (`PICTURE_POSITION`): a model's vectors only ever sit at one.
+ */
 export const nearestImages = (
   { orm }: StoreContext,
   accountPk: number,
@@ -161,7 +165,8 @@ export const nearestImages = (
     since,
     limit,
     query,
-  }: { chatKey?: number; model: string; since?: number; limit: number; query: Float32Array },
+    position = 0,
+  }: { chatKey?: number; model: string; since?: number; limit: number; query: Float32Array; position?: number },
 ): NearestImage[] => {
   const found: NearestImage[] = []
   let after = 0
@@ -172,7 +177,8 @@ export const nearestImages = (
           JOIN messages m ON m.id = a.attachable_id AND m.deleted_at IS NULL
           JOIN chats ch ON ch.id = m.chat_id
           JOIN embeddings v ON v.model = ${model} AND v.content_hash = k.content_hash
-        WHERE k.chunkable_type = 'image' AND ch.account_id = ${accountPk} AND k.id > ${after}
+        WHERE k.chunkable_type = 'image' AND k.position = ${position} AND ch.account_id = ${accountPk}
+          AND k.id > ${after}
           ${chatKey === undefined ? sql`` : sql`AND m.chat_id = ${chatKey}`}
           ${since === undefined ? sql`` : sql`AND k.occurred_at >= ${since}`}
         ORDER BY k.id LIMIT ${SCAN_PAGE}`,
@@ -183,4 +189,70 @@ export const nearestImages = (
     after = last.id
   }
   return found.sort((a, b) => b.score - a.score).slice(0, limit)
+}
+
+/** An image's own vector is its chunk at this position; position 0 is the text around it. */
+export const PICTURE_POSITION = 1
+
+export interface PictureInput {
+  attachmentPk: number
+  chatId: string
+  messageId: string
+  /** The attachment's place in its message, from 0. */
+  position: number
+  name: string | null
+  mime: string | null
+  kind: string
+  localPath: string | null
+  sentAt: number
+}
+
+/** Live image attachments of the account that have no picture chunk yet, oldest id first, from `after`. */
+export const picturesToEmbed = (
+  { orm }: StoreContext,
+  accountPk: number,
+  { chatKey, after, limit }: { chatKey?: number; after?: number; limit: number },
+): PictureInput[] =>
+  orm.all<PictureInput>(
+    sql`SELECT a.id AS attachmentPk, ch.external_id AS chatId, m.external_id AS messageId, a.position,
+        a.name, a.mime, a.kind, a.local_path AS localPath, m.sent_at AS sentAt
+      FROM attachments a JOIN messages m ON a.attachable_type = 'message' AND m.id = a.attachable_id
+        JOIN chats ch ON ch.id = m.chat_id
+      WHERE ch.account_id = ${accountPk} AND m.deleted_at IS NULL AND ${IS_IMAGE} AND a.id > ${after ?? 0}
+        ${chatKey === undefined ? sql`` : sql`AND m.chat_id = ${chatKey}`}
+        AND NOT EXISTS (SELECT 1 FROM chunks k WHERE k.chunkable_type = 'image' AND k.chunkable_id = a.id
+          AND k.position = ${PICTURE_POSITION})
+      ORDER BY a.id LIMIT ${limit}`,
+  )
+
+/** Makes each hash the picture chunk of its image; the vectors are saved apart, by `saveVectors`. */
+export const savePictureChunks = (
+  { orm, now }: StoreContext,
+  accountPk: number,
+  pictures: { attachmentPk: number; hash: string; bytes: number; occurredAt: number }[],
+): void => {
+  const at = now()
+  const scope =
+    orm.get<{ scope: string | null }>(sql`SELECT scope FROM accounts WHERE id = ${accountPk}`)?.scope ?? null
+  // A deleted message keeps no trace of its picture, as it keeps none of its text.
+  const gone = sql`chunkable_type = 'image' AND position = ${PICTURE_POSITION} AND account_id = ${accountPk}
+    AND NOT EXISTS (SELECT 1 FROM attachments a JOIN messages m ON a.attachable_type = 'message'
+      AND m.id = a.attachable_id WHERE a.id = chunkable_id AND m.deleted_at IS NULL)`
+  const dropped = orm.all<{ hash: string }>(sql`SELECT content_hash AS hash FROM chunks WHERE ${gone}`)
+  orm.run(sql`DELETE FROM chunks WHERE ${gone}`)
+  for (const { hash } of dropped)
+    orm.run(sql`DELETE FROM embeddings WHERE content_hash = ${hash}
+      AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ${hash})`)
+  for (const { attachmentPk, hash, bytes, occurredAt } of pictures) {
+    orm.run(
+      sql`DELETE FROM chunks WHERE chunkable_type = 'image' AND chunkable_id = ${attachmentPk}
+        AND position = ${PICTURE_POSITION}`,
+    )
+    orm.run(
+      sql`INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, scope,
+          account_id, occurred_at, created_at, updated_at)
+        VALUES ('image', ${attachmentPk}, ${PICTURE_POSITION}, 0, ${bytes}, ${hash}, ${scope}, ${accountPk},
+          ${occurredAt}, ${at}, ${at})`,
+    )
+  }
 }
