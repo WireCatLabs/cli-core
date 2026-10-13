@@ -2841,9 +2841,10 @@
       "in": "all"
     },
     "messages sync": {
-      "in": ["max"],
+      "in": [],
       "planned": {
-        "tg": "tg’s next cli-messaging bump"
+        "max": "each CLI’s next cli-messaging bump",
+        "tg": "each CLI’s next cli-messaging bump"
       },
       "options": {
         "--all": {
@@ -3873,9 +3874,9 @@
     "store fetch": {
       "in": [],
       "planned": {
-        "tg": "tg’s next cli-messaging bump, which hides it"
-      },
-      "reason": "max syncs with messages sync and never had store fetch"
+        "max": "each CLI’s next cli-messaging bump, which hides it",
+        "tg": "each CLI’s next cli-messaging bump, which hides it"
+      }
     },
     "store gaps": {
       "in": "all"
