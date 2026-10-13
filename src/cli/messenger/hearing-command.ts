@@ -54,7 +54,7 @@ export const hearForCommand = async (
   }
 }
 
-export { heard as heardItems } from "../../speech/hearing.js"
+export { heard as heardItems, hearingMissing } from "../../speech/hearing.js"
 
 /** The messages as a person reads them: the transcript under the text. */
 export const spokenItems = <T extends Message>(messages: readonly T[], hearing: Hearing | undefined): T[] =>

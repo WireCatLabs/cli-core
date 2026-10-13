@@ -36,6 +36,7 @@ const samples: Record<EntityName, unknown> = {
     score: 1,
   },
   "message.summary": { ref: message.ref, timestamp: at, sender_name: null, text: "synthetic" },
+  message_link: { ref: message.ref, url: null, access: "unavailable", reason: "offline" },
   chat: {
     ref: "chat:telegram/1/2",
     id: "2",
@@ -144,6 +145,7 @@ const samples: Record<EntityName, unknown> = {
 /** The names each entity's fields had elsewhere, which a schema must refuse. */
 const renamed: Partial<Record<EntityName, [from: string, to: string]>> = {
   message: ["ref", "locator"],
+  message_link: ["ref", "locator"],
   "message.hit": ["timestamp", "sent_at"],
   chat: ["title", "chat_title"],
   contact: ["description", "bio"],

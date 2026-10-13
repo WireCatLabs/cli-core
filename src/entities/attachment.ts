@@ -19,4 +19,16 @@ export const attachment = v.strictObject({
   text: v.optional(text),
   extraction: v.optional(v.strictObject({ origin: text, extractor: text, chars: count, error: v.optional(text) })),
   local_path: v.optional(text),
+  /** A bot's keyboard under the message, row by row; `messages press` presses one. */
+  buttons: v.optional(
+    v.array(
+      v.array(
+        v.strictObject({
+          kind: v.picklist(["callback", "link", "message", "chat", "contact", "location", "app", "clipboard", "other"]),
+          text,
+          url: v.optional(text),
+        }),
+      ),
+    ),
+  ),
 })

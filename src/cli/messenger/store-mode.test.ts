@@ -238,7 +238,7 @@ describe("a messenger whose history is read from the store", () => {
       const accepted = await call(["messages", name, "msg:chat/500/7/2", "--json"], env, connect, "store")
       expect(accepted.code).toBe(0)
       const result = JSON.parse(accepted.stdout)
-      const items: Message[] = name === "show" ? [result] : result.items
+      const items: Message[] = name === "show" ? [result.item] : result.items
       expect(items.some((one) => one.id === "2")).toBe(true)
     }
     expect(connects).toEqual([])
@@ -287,8 +287,8 @@ describe("a messenger whose history is read from the store", () => {
     for (const argv of [
       ["messages", "sync", "Book"],
       ["messages", "sync", "Book", "--estimate"],
-      ["messages", "list", "Book", "--after-id", "1"],
-      ["messages", "list", "Book", "--before-time", "2h"],
+      ["messages", "list", "Book", "id>1"],
+      ["messages", "list", "Book", "date<2h"],
     ]) {
       const { code, stderr } = await call(argv, env, connect, "store")
       expect(code, argv.join(" ")).toBe(2)
@@ -369,7 +369,9 @@ describe("a messenger whose history is read from the store", () => {
     )
     expect(JSON.parse(alone.stdout).items).toHaveLength(3)
     expect(served.stderr).toBe("")
-    expect(served.stdout).toBe(alone.stdout)
+    const { meta: _alone, ...first } = JSON.parse(alone.stdout)
+    const { meta: _served, ...second } = JSON.parse(served.stdout)
+    expect(second).toEqual(first)
   })
 
   it("leaves a server-mode messenger's empty chat an empty answer offline", async () => {

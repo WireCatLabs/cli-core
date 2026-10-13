@@ -1,26 +1,30 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { isLocator, parseLocator } from "../../domain/locator.js"
-import type { Message } from "../../domain/models.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
 import { readMail } from "../../services/mail-search.js"
-import { modelWith } from "../../speech/hearing.js"
-import { listed, positiveCount } from "../paging.js"
-import { listStart } from "./after.js"
+import { modelWith, spoken } from "../../speech/hearing.js"
+import type { AccountKey } from "../../store/store.js"
+import { itemOf, listOf, renderAnswer } from "../envelope.js"
+import { positiveCount } from "../paging.js"
 import { syncCommand } from "./backfill-command.js"
-import { type Messenger, messengerContext } from "./context.js"
+import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 import { linksCommand } from "./conversations-command.js"
 import { downloadSubcommand } from "./download-command.js"
 import {
   heardItems,
   hearForCommand,
-  hearingFields,
+  hearingMissing,
   MODEL_OPTION,
   spokenItems,
   TRANSCRIBE_OPTION,
 } from "./hearing-command.js"
+import { cursorOf, HISTORY_QUERY, historyWindow } from "./history-query.js"
+import { queryHelp } from "./list-query.js"
+import { messageItem, messageItems, type ReadMessage, viewOf } from "./message-items.js"
 import { commentsCommand } from "./messages-comments-command.js"
 import { deleteCommand } from "./messages-delete-command.js"
 import { editCommand } from "./messages-edit-command.js"
@@ -39,35 +43,29 @@ export const messagesCommand = (messenger: Messenger): Command => {
   const messages = new Command("messages").description("read and send messages")
   messages.addCommand(evidenceCommand(messenger))
 
-  messages
+  const list = messages
     .command("list")
     .description("a chat's messages, oldest to newest")
     .addHelpText("after", SAVE_HELP)
+    .addHelpText("after", queryHelp(HISTORY_QUERY))
     .argument("<chat>", messenger.chatArgument)
+    .argument("[query...]", "where to start and which topic: id<42, date>2026-10-01, topic:12")
     .option("--limit <n>", "how many", positiveCount("--limit"))
-    .option("--before-id <id>", "only messages older than this message id")
-    .option("--before-time <time>", "only messages older than this ISO 8601 time, or 2h / 1d ago")
-    .option("--after-id <id>", "only messages newer than this message id")
-    .option("--after-time <time>", "only messages newer than this ISO 8601 time, or 2h / 1d ago")
-    .option("--topic <id>", "only this forum topic; read back from its newest message or --before-id")
+    .option("--cursor <cursor>", "go on from where the last page stopped; page.next gives it")
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
     .option("--mark-read", "also mark the chat read up to the newest message shown; the other person sees it")
-    .action(async function (this: Command, chat: string) {
+    .action(async function (this: Command, chat: string, query: string[]) {
       const context = messengerContext(this, messenger)
-      const { beforeId, beforeTime, afterId, afterTime, topic, transcribe, model, markRead } = this.opts<{
-        beforeId?: string
-        beforeTime?: string
-        afterId?: string
-        afterTime?: string
-        topic?: string
+      const { cursor, transcribe, model, markRead } = this.opts<{
+        cursor?: string
         transcribe?: boolean
         model?: string
         markRead?: boolean
       }>()
-      const start = listStart({ beforeId, beforeTime, afterId, afterTime })
+      const window = historyWindow(query, cursor, "messages list")
       const hearWith = modelWith(transcribe, model)
-      if (markRead && topic !== undefined) {
+      if (markRead && window.threadId !== undefined) {
         throw new CliError(
           "validation_error",
           "--mark-read marks the whole chat; use `chats mark-read --topic` for one",
@@ -77,85 +75,78 @@ export const messagesCommand = (messenger: Messenger): Command => {
         throw new CliError("validation_error", "--mark-read tells the messenger; not with --offline")
       }
       const { limit } = context.settings
-      const { page, hearing, marked } = await context.withServices(async (services, connect) => {
-        const page = await services.messages.list(chat, {
-          limit,
-          ...start,
-          ...(topic === undefined ? {} : { threadId: topic }),
-        })
+      const { page, hearing, marked, reader } = await context.withServices(async (services, connect) => {
+        const page = await services.messages.list(chat, { limit, ...window })
+        const reader = await services.messages.reader()
         const newest = page.items.at(-1)
         const marked = markRead && newest ? await services.chats.markRead({ chat, until: newest.id }) : undefined
         const hearing = await hearForCommand(context, messenger, page.items, transcribe === true, hearWith, connect)
-        return { page, hearing, marked }
+        return { page, hearing, marked, reader }
       })
-      if (marked) context.renderer.note(`marked read up to ${marked.until}`)
-      const next = (items: typeof page.items) =>
-        start.after === undefined
-          ? `older messages: --before-id ${items[0]?.id}`
-          : `newer messages: --after-id ${items.at(-1)?.id}`
-      if (context.format === "pretty") {
-        // Straight to stdout: the pretty renderer keeps every string to one line, and a feed is many.
-        context.streams.data(
-          renderMessages(spokenItems(page.items, hearing), {
-            color: context.color,
-            verbosity: context.settings.detail,
-            senderColors: context.settings.senderColors,
-            profile: context.profile,
-            provider: messenger.provider,
-            locale: messenger.app.locale,
-          }),
-        )
-        if (page.hasMore) context.renderer.note(next(page.items))
-        return
-      }
-      if (context.format === "jsonl") {
-        context.renderer.stream(heardItems(page.items, hearing))
-        if (page.hasMore) context.renderer.note(next(page.items))
-        return
-      }
-      context.renderer.result({
-        items: heardItems(page.items, hearing),
-        page: 1,
-        limit,
-        hasMore: page.hasMore,
-        ...hearingFields(hearing, transcribe === true),
-        ...(marked ? { markedRead: { operationId: marked.operationId, until: marked.until } } : {}),
-      })
+      if (marked) context.renderer.note(`marked read up to ${marked.until} (operation ${marked.operationId})`)
+      const next = page.hasMore
+        ? cursorOf(window, { first: page.items[0]?.id, last: page.items.at(-1)?.id })
+        : undefined
+      renderAnswer(
+        this,
+        context,
+        listOf("messages list", {
+          items: messageItems(heardItems(page.items, hearing), reader),
+          limit,
+          has_more: page.hasMore,
+          ...(next === undefined ? {} : { cursor: next }),
+          args: { chat, ...(query.length > 0 ? { query: query.join(" ") } : {}) },
+          missing: hearingMissing(hearing, transcribe === true),
+        }),
+        () => renderMessages(spokenItems(page.items, hearing), viewOf(context, messenger)),
+      )
     })
+  annotate(list, { output: { entity: "message" }, query: HISTORY_QUERY })
 
   const readWindow = async (command: Command, chat: string, message: string | undefined, window: Window) => {
     const context = messengerContext(command, messenger)
     const target = targetOf(messenger, chat, message)
-    const found = await context.withServices((services) =>
-      services.messages.around(
+    const { found, reader } = await context.withServices(async (services) => ({
+      found: await services.messages.around(
         isLocator(chat) ? chat : target.chat,
         isLocator(chat) ? undefined : target.message,
         window,
       ),
-    )
+      reader: await services.messages.reader(),
+    }))
     const hearing = await hearForCommand(context, messenger, found, false)
-    printWindow(context, context.format === "pretty" ? spokenItems(found, hearing) : heardItems(found, hearing), window)
+    printWindow(command, context, heardItems(found, hearing), reader, window)
   }
 
   const readMailWindow = async (command: Command, locator: string, window: Window) => {
     const context = messengerContext(command, messenger)
-    printWindow(context, await context.withStore((store) => readMail(store, locator, window)), window)
+    const found = await context.withStore((store) => readMail(store, locator, window))
+    printWindow(command, context, found, parseLocator(locator), window)
   }
 
-  const printWindow = (context: ReturnType<typeof messengerContext>, found: Message[], window: Window) => {
-    if (context.format === "pretty") {
-      context.streams.data(
-        renderMessages(found, {
-          color: context.color,
-          verbosity: context.settings.detail,
-          senderColors: context.settings.senderColors,
-          profile: context.profile,
-          provider: messenger.provider,
-          locale: messenger.app.locale,
-        }),
-      )
-    } else if (context.format === "jsonl") context.renderer.stream(found)
-    else context.renderer.result(window.before === 0 && window.after === 0 ? found[0] : listed(found))
+  const printWindow = (
+    command: Command,
+    context: MessengerContext,
+    found: ReadMessage[],
+    reader: AccountKey,
+    window: Window,
+  ) => {
+    const view = () => renderMessages(found.map(spoken), viewOf(context, messenger))
+    if (window.before === 0 && window.after === 0) {
+      const one = found.find((item) => item.anchor) ?? found[0]
+      if (!one) throw new CliError("not_found", "no such message")
+      return renderAnswer(command, context, itemOf(messageItem(one, reader)), view)
+    }
+    renderAnswer(
+      command,
+      context,
+      listOf("messages context", {
+        items: messageItems(found, reader),
+        limit: window.before + window.after + 1,
+        has_more: false,
+      }),
+      view,
+    )
   }
 
   messages.addCommand(sendCommand(messenger))
@@ -195,16 +186,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
         if (found.stale) context.renderer.note("thread graph may be stale; stale links were not followed")
         if (found.stopped.length) context.renderer.note(`thread context stopped: ${found.stopped.join(", ")}`)
         if (context.format === "pretty") {
-          context.streams.data(
-            renderMessages(found.items, {
-              color: context.color,
-              verbosity: context.settings.detail,
-              senderColors: context.settings.senderColors,
-              profile: context.profile,
-              provider: messenger.provider,
-              locale: messenger.app.locale,
-            }),
-          )
+          context.streams.data(renderMessages(found.items, viewOf(context, messenger)))
           const links = renderThreadLinks(found)
           if (links) context.streams.data(`\n${links}\n`)
         } else if (context.format === "jsonl") context.renderer.stream([found])

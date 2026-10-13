@@ -31,6 +31,10 @@ export const message = v.strictObject({
   timestamp: time,
   edited_at: v.nullable(time),
   text,
+  /** What a voice message says, once heard. */
+  transcript: v.optional(text),
+  /** In a window of messages around one, the one asked for. */
+  anchor: v.optional(v.boolean()),
   /** A stretch of the text, transcript, file name or file text around what a search matched. */
   excerpt: v.optional(text),
   matched_in: v.optional(v.picklist(["text", "transcript", "filename", "file", "context"])),

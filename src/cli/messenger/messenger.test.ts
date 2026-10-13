@@ -4,12 +4,12 @@ import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import type { CommandInfo } from "@wirecat/cli-base/commands"
-import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import { parseMarkdown } from "../../domain/markdown.js"
 import type { Chat, Member, Message, WindowedMessage } from "../../domain/models.js"
-import { conversation } from "../../entities/index.js"
+import { conversation, ENTITIES } from "../../entities/index.js"
 import { sampleMeeting } from "../../meetings/testing/index.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { MEETINGS_UNNAMED } from "../../services/search-all-meetings.js"
@@ -117,6 +117,19 @@ const fake: MessengerAdapter = {
   logout: async () => {},
   close: async () => {},
 }
+
+/** `meta` differs run to run: its run id and how long it took. */
+const withoutMeta = <T extends { stdout: string[] }>(result: T): T => ({
+  ...result,
+  stdout: result.stdout.map((line) => {
+    try {
+      const { meta: _, ...rest } = JSON.parse(line)
+      return JSON.stringify(rest)
+    } catch {
+      return line
+    }
+  }),
+})
 
 const call = async (
   argv: string[],
@@ -310,8 +323,8 @@ describe("the shared read commands", () => {
       ["messages", "show", "msg:chat/500/7/3", "--json"],
       ["contacts", "list", "--json"],
     ]) {
-      const live = await call(argv, online, env)
-      const offline = await call([...argv, "--offline"], never, env)
+      const live = withoutMeta(await call(argv, online, env))
+      const offline = withoutMeta(await call([...argv, "--offline"], never, env))
       expect(live.code).toBe(0)
       expect(offline).toEqual({ ...live, stderr: [] })
     }
@@ -329,7 +342,7 @@ describe("the shared read commands", () => {
       ["2", true],
       ["3", undefined],
     ])
-    expect(JSON.parse(shown.stdout[0] ?? "")).toMatchObject({ id: "3", anchor: true })
+    expect(JSON.parse(shown.stdout[0] ?? "").item).toMatchObject({ id: "3", anchor: true, ref: "msg:chat/500/7/3" })
     expect(foreign.code).toBe(2)
   })
 
@@ -515,7 +528,7 @@ describe("the shared read commands", () => {
       { outcome: "sent", scheduledFor },
     ])
     expect(repeated.code).toBe(2)
-    expect(JSON.parse(listed.stdout[0] ?? "").items[0].scheduledFor).toBe("2030-01-01T09:00:00.000Z")
+    expect(JSON.parse(listed.stdout[0] ?? "").items[0].scheduled_for).toBe("2030-01-01T09:00:00.000Z")
   })
 
   it("**send nothing when --at-time is not a time**, and point at the queue when a scheduled send is lost", async () => {
@@ -865,7 +878,7 @@ describe("the shared read commands", () => {
     const lonelyModel = await call(["messages", "list", "Book", "--model", "gigaam-v3"], async () => reading, env)
 
     const newest = JSON.parse(marked.stdout[0] ?? "").items.at(-1).id
-    expect(JSON.parse(marked.stdout[0] ?? "").markedRead).toEqual({ operationId: expect.any(String), until: newest })
+    expect(marked.stderr.join("\n")).toMatch(new RegExp(`marked read up to ${newest} \\(operation \\S+\\)`))
     expect(marks).toEqual([["7", newest]])
     expect(offline.code).toBe(2)
     expect(lonelyModel.code).toBe(2)
@@ -1910,8 +1923,8 @@ describe("the shared read commands", () => {
 
     const shown = await call(["messages", "show", locator, "--json"], never, env)
     expect(shown.code).toBe(0)
-    const email = JSON.parse(shown.stdout[0] ?? "")
-    expect(email).toMatchObject({ id: "<a@example.test>", locator, anchor: true })
+    const email = JSON.parse(shown.stdout[0] ?? "").item
+    expect(email).toMatchObject({ id: "<a@example.test>", ref: locator, provider: "email", anchor: true })
     expect(email.text).toContain(body)
     expect(email.email.from).toMatchObject({ address: "alice@example.test", ref: expect.stringMatching(/^person:/) })
 
@@ -4018,7 +4031,8 @@ describe("messages transcribe", () => {
     const again = await call(["messages", "list", "Book", "--json"], async () => hearing, root)
     const person = await call(["messages", "list", "Book"], async () => hearing, root, { tty: true })
 
-    expect(JSON.parse(first.stdout[0] ?? "")).toMatchObject({ items: [{ transcript: "read me" }], unheard: [] })
+    expect(JSON.parse(first.stdout[0] ?? "")).toMatchObject({ items: [{ transcript: "read me" }] })
+    expect(JSON.parse(first.stdout[0] ?? "").missing).toBeUndefined()
     expect(JSON.parse(again.stdout[0] ?? "").items[0].transcript).toBe("read me")
     expect(person.stdout.join("")).toContain("🎤 read me")
     expect(asked).toBe(1)
@@ -4050,7 +4064,7 @@ describe("messages transcribe", () => {
       const shown = await call(["messages", "show", "Book", "1", "--json"], connect, root)
       const again = await call(["messages", "transcribe", "Book", "1", "--json"], connect, root)
 
-      expect(JSON.parse(shown.stdout[0] ?? "").transcript).toBe("synthetic zebrafinch")
+      expect(JSON.parse(shown.stdout[0] ?? "").item.transcript).toBe("synthetic zebrafinch")
       expect(JSON.parse(again.stdout[0] ?? "")).toMatchObject({ text: "synthetic zebrafinch", pending: false })
       expect(asked).toEqual(["transcribe"])
       expect(await found(root, connect)).toEqual(["1"])
@@ -4291,27 +4305,19 @@ describe("the guard, account and mcp config commands", () => {
       },
     }
 
-    const byId = await call(
-      ["messages", "list", "7", "--after-id", "41", "--limit", "3", "--jsonl"],
+    const byId = await call(["messages", "list", "7", "id>41", "--limit", "3", "--jsonl"], async () => forward, env)
+    await call(
+      ["messages", "list", "7", 'date>"2026-09-27T10:00:00Z"', "--limit", "3", "--json"],
       async () => forward,
       env,
     )
     await call(
-      ["messages", "list", "7", "--after-time", "2026-09-27T10:00:00Z", "--limit", "3", "--json"],
+      ["messages", "list", "7", 'date>="2026-09-27T00:00:00Z"', "--limit", "3", "--json"],
       async () => forward,
       env,
     )
-    await call(
-      ["messages", "list", "7", "--after-time", "2026-09-27", "--limit", "3", "--json"],
-      async () => forward,
-      env,
-    )
-    await call(
-      ["messages", "list", "7", "--after-id", "urn:li:msg:4F2", "--limit", "3", "--json"],
-      async () => forward,
-      env,
-    )
-    await call(["messages", "list", "7", "--after-time", "2h", "--limit", "3", "--json"], async () => forward, env)
+    await call(["messages", "list", "7", 'id>"urn:li:msg:4F2"', "--limit", "3", "--json"], async () => forward, env)
+    await call(["messages", "list", "7", "date>2h", "--limit", "3", "--json"], async () => forward, env)
 
     expect(asked.slice(0, 4)).toEqual([
       { id: "41" },
@@ -4320,7 +4326,7 @@ describe("the guard, account and mcp config commands", () => {
       { id: "urn:li:msg:4F2" },
     ])
     expect(asked[4]).toEqual({ time: expect.any(Number) })
-    expect(byId.stderr.join("\n")).toContain("--after-id 3")
+    expect(byId.stderr.join("\n")).toContain("--cursor after:3")
   })
 
   it("**read back from a moment with messages list --before-time**; a messenger that cannot is refused", async () => {
@@ -4334,13 +4340,9 @@ describe("the guard, account and mcp config commands", () => {
       },
     }
 
-    const read = await call(
-      ["messages", "list", "7", "--before-time", "2026-09-27T10:00:00Z", "--json"],
-      async () => back,
-      env,
-    )
-    const unable = await call(["messages", "list", "7", "--before-time", "2h"], async () => fake, env)
-    const both = await call(["messages", "list", "7", "--before-time", "2h", "--before-id", "5"], async () => back, env)
+    const read = await call(["messages", "list", "7", 'date<"2026-09-27T10:00:00Z"', "--json"], async () => back, env)
+    const unable = await call(["messages", "list", "7", "date<2h"], async () => fake, env)
+    const both = await call(["messages", "list", "7", "date<2h", "id<5"], async () => back, env)
 
     expect(read.code).toBe(0)
     expect(asked).toEqual([{ limit: expect.any(Number), time: Date.parse("2026-09-27T10:00:00Z") }])
@@ -4352,18 +4354,26 @@ describe("the guard, account and mcp config commands", () => {
     const env = sandbox()
     const online = async () => fake
 
-    expect((await call(["messages", "list", "7", "--before-id", "5", "--after-id", "2"], online, env)).code).toBe(2)
-    expect((await call(["messages", "list", "7", "--after-id", "2", "--offline"], online, env)).code).toBe(2)
-    const unable = await call(["messages", "list", "7", "--after-id", "2"], online, env)
+    expect((await call(["messages", "list", "7", "id<5", "id>2"], online, env)).code).toBe(2)
+    expect((await call(["messages", "list", "7", "id<5", "--cursor", "after:2"], online, env)).code).toBe(2)
+    expect((await call(["messages", "list", "7", "id:5 OR topic:2"], online, env)).code).toBe(2)
+    expect((await call(["messages", "list", "7", "book"], online, env)).code).toBe(2)
+    expect((await call(["messages", "list", "7", "id>2", "--offline"], online, env)).code).toBe(2)
+    const unable = await call(["messages", "list", "7", "id>2"], online, env)
     expect([unable.code, unable.stderr.join("\n")]).toEqual([2, expect.stringContaining("read forward")])
-    for (const [flag, bad] of [
-      ["--after-time", "2026-13-45"],
-      ["--after-id", "4 2"],
-      ["--after-id", " "],
+    for (const [bad, why] of [
+      ["date>2026-13-45", "query.invalid-date"],
+      ["id:42", "query.unsupported-operator"],
+      ["kind:group", "query.unknown-field"],
     ] as const) {
-      const refused = await call(["messages", "list", "7", flag, bad], online, env)
-      expect([refused.code, refused.stderr.join("\n")]).toEqual([2, expect.stringContaining(`${flag} takes`)])
+      const refused = await call(["messages", "list", "7", bad, "--json"], online, env)
+      expect([refused.code, refused.stdout.join("") + refused.stderr.join("")]).toEqual([
+        2,
+        expect.stringContaining(why),
+      ])
     }
+    const cursor = await call(["messages", "list", "7", "--cursor", "sideways:4"], online, env)
+    expect([cursor.code, cursor.stderr.join("\n")]).toEqual([2, expect.stringContaining("--cursor takes")])
   })
 
   it("**chats events** asks from 7 days back, keeps the --event names, and says when it was cut short", async () => {
@@ -4580,7 +4590,7 @@ describe("the guard, account and mcp config commands", () => {
 
     const listed = await call(["messages", "list", "7", "--jsonl"], online, env)
     expect(listed.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2", "3"])
-    expect(listed.stderr.join("\n")).toContain("--before-id 1")
+    expect(listed.stderr.join("\n")).toContain("--cursor before:1")
 
     const found = await call(["search", "messages", "chapter", "--jsonl"], online, env)
     expect(found.stdout.map((line) => JSON.parse(line).id)).toEqual(["3", "2", "1"])
@@ -4628,9 +4638,12 @@ describe("every list in --json", () => {
     ]) {
       const { code, stdout, stderr } = await call([...argv, "--json"], online, env)
       expect([argv.join(" "), code, stderr.join("\n")]).toEqual([argv.join(" "), 0, expect.any(String)])
-      expect([argv.join(" "), Object.keys(JSON.parse(stdout[0] ?? "null") ?? {})]).toEqual([
+      const keys = Object.keys(JSON.parse(stdout[0] ?? "null") ?? {})
+      expect([argv.join(" "), keys]).toEqual([
         argv.join(" "),
-        expect.arrayContaining(["items", "page", "limit", "hasMore"]),
+        expect.arrayContaining(
+          keys.includes("meta") ? ["items", "page", "meta"] : ["items", "page", "limit", "hasMore"],
+        ),
       ])
     }
   })
@@ -4657,8 +4670,9 @@ describe("message link command", () => {
       const result = await call(["messages", "link", "msg:chat/500/7/1", flag], connect, env)
       expect(result.code).toBe(0)
       expect(result.stdout.join("").trim().split("\n")).toHaveLength(1)
-      expect(JSON.parse(result.stdout.join(""))).toEqual({
-        locator: "msg:chat/500/7/1",
+      const answer = JSON.parse(result.stdout.join(""))
+      expect(flag === "--json" ? answer.item : answer).toEqual({
+        ref: "msg:chat/500/7/1",
         url: "https://provider.example/1",
         access: "restricted",
         reason: null,
@@ -4792,14 +4806,15 @@ describe("messages comments", () => {
     const comments = vi.fn(async () => ({ items: [comment], hasMore: true }))
     const connect = vi.fn(async () => ({ ...fake, discussionOf: async () => discussion, comments }))
 
-    const json = await call(
-      ["messages", "comments", "7", "42", "--limit", "5", "--before-id", "950", "--json"],
-      connect,
-      env,
-    )
+    const json = await call(["messages", "comments", "7", "42", "id<950", "--limit", "5", "--json"], connect, env)
     expect(json.code).toBe(0)
-    expect(JSON.parse(json.stdout.join(""))).toEqual({ discussion, items: [comment], hasMore: true })
-    expect(json.stderr.join("")).toContain("--before-id 901")
+    const answer = JSON.parse(json.stdout.join(""))
+    expect(answer.items).toMatchObject([{ id: "901", chat_id: "-1002", ref: "msg:chat/500/-1002/901" }])
+    expect(answer.page).toEqual({ limit: 5, has_more: true, cursor: "before:901" })
+    expect(answer.next[0]).toMatchObject({
+      step: "page.next",
+      args: { chat: "7", post: "42", query: "id<950", cursor: "before:901" },
+    })
     expect(comments).toHaveBeenCalledWith("7", "42", { limit: 5, before: "950" })
 
     const jsonl = await call(["messages", "comments", "7", "42", "--jsonl"], connect, env)
@@ -4808,5 +4823,36 @@ describe("messages comments", () => {
     const pretty = await call(["messages", "comments", "7", "42"], connect, env)
     expect(pretty.code).toBe(0)
     expect(pretty.stdout.join("")).toContain("synthetic comment")
+  })
+})
+
+describe("the messages reads answer in the envelope of their entity", () => {
+  it.each([
+    [["messages", "list", "Book"], "message", true],
+    [["messages", "list", "Book", "id<9"], "message", true],
+    [["messages", "context", "Book", "2"], "message", true],
+    [["messages", "show", "Book", "2"], "message", false],
+    [["messages", "comments", "7", "42", "id<950"], "message", true],
+    [["messages", "scheduled", "7"], "message", true],
+    [["messages", "link", "7", "1"], "message_link", false],
+  ] as const)("%j answers a %s", async (argv, entity, list) => {
+    const root = mkdtempSync(join(tmpdir(), "contract-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    rememberAccount(app, "default", "500", env)
+    const adapter: MessengerAdapter = {
+      ...fake,
+      scheduled: async () => [{ ...message, scheduledFor: "2030-01-01T09:00:00.000Z" }],
+      discussionOf: async () => ({ chatId: "-1002", messageId: "900" }),
+      comments: async () => ({ items: [{ ...message, id: "901", chatId: "-1002" }], hasMore: true }),
+      permalink: async () => ({ url: "https://provider.example/1", access: "restricted" as const, reason: null }),
+    }
+    const answer = await call([...argv, "--json"], async () => adapter, env)
+    expect([answer.code, answer.stderr.join("\n")]).toEqual([0, expect.any(String)])
+    const schema = ENTITIES[entity] as v.GenericSchema
+    const parsed = v.safeParse(
+      list ? listEnvelopeSchema(schema) : itemEnvelopeSchema(schema),
+      JSON.parse(answer.stdout[0] ?? ""),
+    )
+    expect(parsed.issues?.map((issue) => `${v.getDotPath(issue)}: ${issue.message}`)).toBeUndefined()
   })
 })

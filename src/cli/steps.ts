@@ -25,6 +25,15 @@ export const STEPS = defineSteps([
     why: "the local copy is missing messages; syncing brings them in",
   },
   {
+    id: "messages.transcribe",
+    command: "messages transcribe",
+    args: [
+      { name: "chat", required: true },
+      { name: "message", required: true },
+    ],
+    why: "a voice message is not heard yet; this hears it",
+  },
+  {
     id: "models.download",
     command: "models text download",
     args: [{ name: "model", required: true }],

@@ -2681,7 +2681,7 @@
       "in": ["tg"],
       "reason": "MAX personal accounts have no channel comments; MAX's comments are a Bot API path",
       "options": {
-        "--before-id": {
+        "--cursor": {
           "in": ["tg"],
           "reason": "MAX personal accounts have no channel comments"
         },
@@ -2778,19 +2778,10 @@
     "messages list": {
       "in": "all",
       "options": {
-        "--after-id": "all",
-        "--after-time": "all",
-        "--before-id": "all",
-        "--before-time": "all",
+        "--cursor": "all",
         "--limit": "all",
         "--mark-read": "all",
         "--model": "all",
-        "--topic": {
-          "in": ["tg"],
-          "planned": {
-            "max": "feat/messages-list-topic"
-          }
-        },
         "--transcribe": "all"
       }
     },
