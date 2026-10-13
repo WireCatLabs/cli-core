@@ -132,6 +132,20 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     await expect(run(store, account, "from:NoSuchPerson")).rejects.toThrow()
     await expect(run(store, account, 'chat:"NoSuchChat"')).rejects.toThrow()
   })
+  it("**has:file matches a Telegram document**, which Telegram stores as kind document", async () => {
+    const store = await open()
+    await store.saveChats(account, [chat("1")])
+    await store.saveMessages(
+      account,
+      "1",
+      [
+        message("1", "1", "", { attachments: [{ kind: "document", name: "plan.xlsx" }] }),
+        message("2", "1", "", { attachments: [{ kind: "voice", mime: "audio/ogg" }] }),
+      ],
+      { via: "history" },
+    )
+    expect(ids(await run(store, account, "has:file"))).toEqual([1])
+  })
   it("matches any attachment by file name, type and size without needing text", async () => {
     const store = await open()
     await store.saveChats(account, [chat("1")])

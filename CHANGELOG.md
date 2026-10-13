@@ -52,6 +52,10 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **`has:file` and `search messages --type file` find Telegram documents.** Telegram stores a file as kind
+  `document`, MAX as `file`; the filter matched only `file`, so in tg it found nothing. No store change: rows
+  already stored match.
+
 - **A kept voice transcript is found and reused.** It becomes the voice attachment's text (extractor
   `speech:<model>`), so `content:` finds it, including a transcript made before its message was stored;
   `store reindex` fills it in for transcripts kept before. `messages show` and `messages context` show it, and
