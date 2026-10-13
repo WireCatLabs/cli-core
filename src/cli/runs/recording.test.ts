@@ -178,7 +178,9 @@ describe("the runs command", () => {
       items: [{ runId: metadata?.runId }],
       hasMore: false,
     })
-    const shown = (await read(["runs", "show", metadata?.runId ?? "", "--json"])).answer
+    const short = (await read(["runs", "show", metadata?.runId ?? "", "--json"])).answer
+    expect(short).toMatchObject({ runId: metadata?.runId, eventCount: 2, events: [] })
+    const shown = (await read(["runs", "show", metadata?.runId ?? "", "-v", "--json"])).answer
     expect(shown.events.map((event: { event: string }) => event.event)).toEqual(["request", "response"])
     expect(shown.events[0]).not.toHaveProperty("runId")
     expect((await read(["runs", "path", metadata?.runId ?? "", "--json"])).answer.path).toContain(runsDir)

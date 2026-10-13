@@ -61,13 +61,27 @@ export const searchRuns = (
   const needle = query.toLowerCase()
   const offset = (page - 1) * limit
   const matches = []
-  for (const run of listRuns(dir)) {
+  for (const run of listRuns(dir, from === undefined ? {} : { since: from })) {
     if (
       (profile !== undefined && run.profile !== profile) ||
       (status !== undefined && run.status !== status) ||
       (from !== undefined && Date.parse(run.startedAt) < from)
     )
       continue
+    const metadataMatch =
+      (!errorCode ||
+        run.errorCode === errorCode ||
+        run.partial?.failures.some((failure) => failure.errorCode === errorCode)) &&
+      !operation &&
+      (!needle || JSON.stringify(run).toLowerCase().includes(needle))
+    // A finished run lists its operations and codes, so a run that cannot match is never opened.
+    // One still running, or killed, has no such list and is read.
+    const ruledOut =
+      !metadataMatch &&
+      !needle &&
+      ((operation !== undefined && run.operations !== undefined && !run.operations.includes(operation)) ||
+        (errorCode !== undefined && run.codes !== undefined && !run.codes.includes(errorCode)))
+    if (ruledOut) continue
     const found = findRun(dir, run.runId)
     const events = found ? readEvents(found.dir).map(safeEvent) : []
     const filtered = events.filter(
@@ -76,12 +90,6 @@ export const searchRuns = (
         (!operation || event.operation === operation) &&
         (!needle || JSON.stringify(event).toLowerCase().includes(needle)),
     )
-    const metadataMatch =
-      (!errorCode ||
-        run.errorCode === errorCode ||
-        run.partial?.failures.some((failure) => failure.errorCode === errorCode)) &&
-      !operation &&
-      (!needle || JSON.stringify(run).toLowerCase().includes(needle))
     if (!metadataMatch && filtered.length === 0) continue
     const metadata = {
       runId: run.runId,

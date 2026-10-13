@@ -39,3 +39,27 @@ describe.each(["max", "tg"])("recorded run truncation for %s", (command) => {
     }
   })
 })
+
+it("shows a run's failures and leaves the rest to -v", async () => {
+  const state = mkdtempSync(join(tmpdir(), "runs-command-"))
+  const env = { ...process.env, APP_STATE_DIR: state }
+  const app = { command: "tg", appName: "app-cli", envPrefix: "APP", description: "Synthetic CLI", version: "1.0.0" }
+  const item = startRun({ runsDir: runsDirFor(app, env), profile: "synthetic", command: "chats list", cliVersion: "1" })
+  item.logger.info({ event: "request", operation: "chats.list" })
+  item.logger.info({ event: "response", operation: "chats.list", outcome: "error", errorCode: "timeout" })
+  item.logger.info({ event: "warning", code: "slow_answer" })
+  await item.finish("failed", { errorCode: "timeout" })
+
+  const streams = captureStreams()
+  await run(["runs", "show", item.id, "--json"], { app, commands: () => [runsCommand(app)] }, { streams, env })
+
+  expect(JSON.parse(streams.stdout[0] ?? "")).toMatchObject({
+    status: "failed",
+    errorCode: "timeout",
+    eventCount: 3,
+    events: [
+      { event: "response", errorCode: "timeout" },
+      { event: "warning", code: "slow_answer" },
+    ],
+  })
+})

@@ -24,7 +24,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       const { limit } = this.opts<{ limit: number }>()
       const output = outputFor(this)
       const { renderer } = output
-      const runs = listRuns(dir(this))
+      const runs = listRuns(dir(this), { atLeast: limit + 1 })
       renderPage(
         { ...output, settings: { page: 1, limit, all: false } },
         { items: runs.slice(0, limit), hasMore: runs.length > limit },
@@ -37,11 +37,18 @@ export const runsCommand = (app: AppIdentity): Command => {
   command
     .command("show")
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
-    .description("one run: what it was, and one line per operation")
+    .description("one run: what it was, how it ended and what went wrong; -v for every event")
     .action(function (this: Command, id: string) {
       const { renderer } = outputFor(this)
       const found = runOrRefuse(this, id)
-      renderer.result({ ...found.metadata, directory: found.dir, events: readEvents(found.dir).map(readable) })
+      const events = readEvents(found.dir).map(readable)
+      const all = (this.optsWithGlobals<{ verbose?: number }>().verbose ?? 0) > 0
+      const shown = all ? events : events.filter(notable)
+      renderer.result({ ...found.metadata, directory: found.dir, eventCount: events.length, events: shown })
+      if (shown.length < events.length)
+        renderer.note(
+          `${events.length - shown.length} more events — \`${app.command} runs show ${id} -v\` shows them all`,
+        )
     })
 
   command
@@ -75,6 +82,10 @@ export const runsCommand = (app: AppIdentity): Command => {
 
   return command
 }
+
+/** What went wrong, and nothing that went right. */
+const notable = (event: Record<string, unknown>): boolean =>
+  event.outcome === "error" || event.event === "warning" || event.event === "crash"
 
 /** Drops what the logger puts on every line and `show` already prints once above the events. */
 const readable = ({ level, runId, command, profile, ...event }: Record<string, unknown>) => event
