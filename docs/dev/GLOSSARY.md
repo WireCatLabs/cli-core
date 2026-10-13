@@ -7,8 +7,8 @@ uses it differently today.
 - [STANDARD.md](STANDARD.md#command-names) binds all five CLIs. The verb, resource and flag meanings
   live in cli-base's vocabulary and are shown in [its tables](STANDARD.md#vocabulary-and-lint-rules);
   this page repeats a word only to show where it applies and where it is broken.
-- memo, drive and zm start from their lint baseline; each repository fixes its violations in its own
-  change.
+- Each CLI starts from its own lint baseline (`lint/baseline/`), which only shrinks; each repository
+  fixes its violations in its own change.
 - A rule changes in STANDARD first, in its own pull request, and the owner approves new wording.
   This page follows.
 - "Current violations" were found on 2026-10-12 from `<cli> commands --json` (tg 0.51.0,

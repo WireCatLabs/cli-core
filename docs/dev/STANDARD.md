@@ -2,12 +2,12 @@
 
 This page holds the rules for five CLIs: tg (tg-cli), max (max-cli), memo (cli-memo), drive (drive-cli)
 and zm (zoom-cli). It says how a command, an option, an answer, an error and an MCP tool are named and
-shaped, where code lives, and which documents each has. Each CLI's `CONVENTIONS.md` links it instead of
+shaped, where code lives, and which documents each has. A CLI's `CONVENTIONS.md` links it instead of
 keeping a copy.
 
-- **Every rule binds all five**, unless it names tg and max. memo, drive and zoom adopt it from a
-  baseline: `cli-dev lint` (from `@wirecat/cli-base`) wrote each repository's violations of the
-  [lint rules](#vocabulary-and-lint-rules) into `lint/baseline/`, and that list only shrinks.
+- **Every rule binds all five**, unless it names tg and max. Each CLI starts from its own baseline:
+  its violations of the [lint rules](#vocabulary-and-lint-rules) are listed in its `lint/baseline/`,
+  and that list only shrinks.
 - **tg and max only:** tg-cli and max-cli are one tool with two messengers behind it. The
   [parity manifest](#the-parity-manifest), the [option catalogue](#option-catalogue), `bot`, and every
   rule that asks for the same sentence or shape "in both tools" bind those two.
