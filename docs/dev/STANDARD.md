@@ -58,7 +58,9 @@ Explicit choices and gaps:
 - [Command names](#command-names) currently require immediate removal of renamed paths and no
   aliases. This differs from CLIG's deprecation guidance. The owner explicitly chose immediate
   relocation without a compatibility window. Old paths stop working at adoption; the release
-  notes and user docs give the new paths.
+  notes and user docs give the new paths. One owner-approved exception (2026-10-13):
+  `--language legacy` keeps working for one or two releases with a stderr line, then goes
+  ([Output](#output), rule 7).
 
 New commands are reviewed against this profile and the audit. Existing gaps require explicit
 implementation work with tests; citing a reference alone does not close them.
@@ -676,6 +678,30 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 
    Starting and stopping in the background is `server start` and `server stop` only; `serve` is
    the foreground command a unit or a person runs (rules 4 and 9).
+7. **A message search says which hits it forgave** (owner, 2026-10-13, option B of
+   [the typo plan](typo-search-default-plan.md)). Strict search runs first and its hits come back
+   unchanged. Only when it finds nothing does a plain word that is not a whole archive word get
+   help: a known beginning of three or more letters matches as a prefix, an unknown word matches
+   the archive words one edit away. Explicit syntax, phrases, fields, exclusions, an AST, `--exact`
+   and `--regex` stay strict.
+   - **`match` on a hit says how it matched.** A strict hit has no `match`. A forgiven hit has
+     `match: "corrected"` or `match: "beginnings"`; when both helped, `corrected` wins, since a
+     correction can turn a real word the archive lacks into another one. These are values the
+     `Match` type already has; no list of labels goes beside it.
+   - **`corrections` on the answer says what was searched instead of what was typed**:
+     `[{ from, to }]`, `from` the typed word, `to` the archive words searched for it. It lists only
+     corrections behind a returned hit, and is `[]` otherwise. A beginning is not a correction and
+     is not listed. The CLI prints each one as a note on stderr, `from → to`.
+   - **Nothing found points at `--discover`.** Partial matches stay opt-in. When the forgiving step
+     also finds nothing, the MCP answer adds a sentence naming `discover=true` to the tool's
+     existing `next_steps` string, and the CLI writes one line to stderr naming `--discover`. No new
+     key; stdout stays data. `search all` names `search messages --discover`, the one command that
+     has it.
+   - **`--language legacy` is deprecated.** For one or two releases it runs the old matching
+     unchanged and writes one stderr line: plain search now forgives typos, and `--discover` finds
+     partial matches. MCP `language=legacy` adds the same sentence to `next_steps`. Then
+     `--language` leaves `search messages`, `searches create` and MCP together, with its parity
+     entry. `--exact` stays: it turns forgiveness off.
 
 ## Permissions
 
