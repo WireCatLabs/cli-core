@@ -86,7 +86,12 @@ describe("search all --source", () => {
     expect(found.searched).toEqual(["messages", "meetings"])
     expect(keys(found.accounts)).toEqual(["messages synthetic:500", "meetings zoom:z1"])
     expect(found.items.some(({ kind }) => kind === "meeting")).toBe(true)
-    await store.saveAccount({ provider: "zoom", account: "z2" }, { name: null })
+    const other = sampleMeeting()
+    other.meeting.accountId = await store.saveAccount({ provider: "zoom", account: "z2" }, { name: null })
+    const narrowed = await search(store, { only: undefined, source: "zoom" })
+    expect(keys(narrowed.accounts)).toEqual(["meetings zoom:z1"])
+    expect(narrowed.skipped).toContainEqual({ source: "zoom:z2", reason: "no meetings stored for it" })
+    await store.meetings.saveMeeting(other)
     await expect(search(store, { only: undefined, source: "zoom" })).rejects.toThrow(
       "--source names several meeting accounts; search all reads one: zoom:z1, zoom:z2",
     )

@@ -1,7 +1,8 @@
 # Plan — one `--source` for every search
 
-Status: **model approved by the owner, 2026-10-13** (NEED-10 A, NEED-11 A). Built: work items 2 and 3 (the
-registry, `notes:<id>` and `notes:internal`, BUG-2, `search all --source` and `accounts`). Next: work item 4.
+Status: **model approved by the owner, 2026-10-13** (NEED-10 A, NEED-11 A). Built: work items 2–4 (the
+registry, `notes:<id>` and `notes:internal`, BUG-2, `--source` in every search with `accounts`, `in:` taking kinds and
+aliases, the three removals). Next: work item 5 (cli-memo).
 
 ## Goal
 
@@ -48,7 +49,7 @@ Anchors are on `origin/main`, 2026-10-13.
    - **notes, written in memo:** no account row. `search all` invents `notes` + `internal`
      (`search-all.ts:157-158`).
    - **notes, disk folders:** an `accounts` row of provider `folder` whose `external_id` is a ulid
-     (`src/store/sqlite/notes.ts:371-379`). Hits, `--folder` and the list parser all use the row id: a list
+     (`src/store/sqlite/notes.ts:371-379`). Hits and the list parser use the row id: a list
      names a folder `notes:<row id>` or by its name, memo's own notes `notes:internal`, and `folder:` is not a
      provider.
    - **documents:** the same `folder` rows, named `google-drive:<principal>`, where the principal is
@@ -58,20 +59,20 @@ Anchors are on `origin/main`, 2026-10-13.
 3. **Each search chooses accounts its own way.**
    - `search messages`: the active profile's account; `--source` or a positive `in:` widens it
      (`src/services/messages-search.ts:149-158`).
-   - `search mail`: every mailbox (`src/services/search-kind.ts:66`); `--account <address>` narrows
-     (`src/cli/messenger/messages-search-command.ts:50-51`). No `--source`.
-   - `search notes`: every folder; `--folder <id>` narrows (`src/cli/messenger/search-command.ts:157-161`).
-   - `search all`: no account option. Messages read every account (`search-all.ts:104`), except with
-     `--backend server`, which reads the active account only (`:103`); mail every mailbox (`:116`);
-     notes every folder (`:141-147`). Meetings need `--meetings provider:account`, or a bare
-     `--meetings` when one stored account holds meetings (`src/services/search-all-meetings.ts:150-204`).
+   - `search mail`: every mailbox; `--source email:<address>` narrows.
+   - `search notes`: memo's notes and every folder; `--source notes:internal,notes:<id>` narrows, in one store
+     query (`withInternal` in `src/store/sqlite/note-search.ts`), so `--offset` pages one list.
+   - `search all`: every account of every kind but meetings; `--source` names them, meetings included
+     (`src/services/search-all-meetings.ts`).
 4. **BUG-2, fixed.** `search messages` and `search mail` keep the accounts of their kind from a list, a bare
    kind or a provider alias, answer the rest as `skipped: [{ source, reason }]`, and fail only when nothing fits
    (`fitting` in `src/search/account-list.ts`). A bare `all`, `personal`, `bots` or a provider the store holds
    by that very name keeps the old path; it now drops meeting and notes accounts too. The `--language legacy`
-   path filters the same way but does not answer `skipped`. `in:` still takes the old words only.
-5. **`search all` says which accounts it read** as `accounts: [{ resource, provider, account }]`, with or
-   without `--source`; `search messages` answers `coverage.accounts`.
+   path filters the same way but does not answer `skipped`. A positive `in:` takes a bare provider, alias or the kind
+   `messages` or `mail` (`sourceOf` and `inSource` in `src/search/query.ts`).
+5. **`search all`, `search mail` and `search notes` say which accounts they read** as
+   `accounts: [{ resource, provider, account }]`, with or without `--source`; `search messages` answers
+   `coverage.accounts`.
 6. **Groups exist.** `accountGroups` in `store_settings`, saved by `config set accountGroups.<name>`
    (`src/store/store.ts:1496-1505`), listed by `config show` (`src/cli/store-settings.ts:95`). A group
    lists entries, never another group (`account-list.ts:30-37`).
@@ -128,12 +129,12 @@ the list fits it.
 - **`search all` with a list** gives each kind its entries. A kind with none is not read and appears
   in `skipped` as `{ resource, reason: "--source names no <kind> account" }`.
 - **Meetings** have no search index, so `search all` reads them only when `--source` names a meeting
-  account, provider or the `meetings` kind; otherwise `skipped` says "--source names no meetings account".
+  account, provider or the `meetings` kind; otherwise `skipped` says meetings were not searched.
   `--max-meetings` stays. **One meeting account per search**: the meeting cursor binds to one account, so a list
-  naming two is an error that names both, as a bare `--meetings` is today; reading several waits for a cursor
-  that spans accounts. `--source` and `--meetings` together are an error.
+  naming two that both hold meetings is an error that names both; of several, the one holding meetings is read and
+  the rest are in `skipped`. Reading several waits for a cursor that spans accounts.
 - **`--only` stays**: it picks kinds; `--source` picks accounts; the two intersect. `--only` gains
-  `documents` and `meetings` without `--meetings`.
+  `documents`.
 - `--backend server` in `search all` still asks the server for the active account only; `accounts`
   says so.
 
@@ -180,10 +181,12 @@ after the title.
 
 ## Removed (may break scripts; changelog)
 
-- `search notes --folder <id>` → `--source notes:<id>`.
-- `search mail --account <address>` → `--source email:<address>`.
-- `search all --meetings [provider:account]` → `--source zoom:<account>`, `--source zoom` or
-  `--source meetings`.
+Each fails with an error naming its replacement (`src/cli/removed-options.ts`; MCP `removed` in `src/mcp/tool.ts`):
+
+- `search notes --folder <id>` → `--source notes:<id>` (MCP `folders` → `source`).
+- `search mail --account <address>` → `--source email:<address>` (MCP `account` → `source`).
+- `search all --meetings [provider:account]` → `--source zoom:<account>`, `--source zoom`, `--source meetings`,
+  or `--source all` for every account and the meetings (MCP `meetings` → `source`).
 
 ## Work
 
@@ -195,14 +198,14 @@ Releases of this package, in order; each is one PR.
 2. **Registry and grammar**: `src/domain/providers.ts`; the parser resolves the four shapes through
    it; `notes:<row id>`, `notes:internal`; `drive:<profile>` through `profiles.drive`; groups may hold
    any entry. Each search filters by kind from the registry (BUG-2). Built, except `drive:<profile>`, which
-   waits for the drive switch (item 6), and a positive `in:` taking kinds and aliases.
+   waits for the drive switch (item 6).
 3. **`search all --source`**, `skipped` for unused entries and unnamed kinds, `accounts`, meetings by
    `--source`, `--only meetings` (built; MCP `search_all` takes `source`). `--only documents` waits for item 1.
 4. **`search notes --source`, `search mail --source`**, `accounts` (`search notes` pages with `--offset`, so memo's
    notes beside some folders need one store query, not the two ranked searches `search all` runs); the three removals; `parity.json`
    rows; MCP schemas (`search_all`, `search_notes`, `search_mail`) take `source` and lose the removed
    fields. The user documents are rewritten in the same PRs: [query-language.md](../search/query-language.md),
-   the generated `docs/commands.md`, the MCP descriptions.
+   the generated `docs/commands.md`, the MCP descriptions. Built.
 5. **cli-memo**: `memo search all` takes `--source` and passes it through, and prints a `skipped` entry by its
    `source` when it has no `resource`.
 6. **drive-cli**, in the drive switch PR: record the profile (above).

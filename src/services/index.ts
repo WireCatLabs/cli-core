@@ -227,10 +227,12 @@ export {
   type NotesEmbedded,
   type NotesEmbedOptions,
   type NotesFound,
+  type NotesFoundOf,
   type NotesQuery,
   type NotesSearchRequest,
   nearestNotes,
   searchNotes,
+  searchNotesOf,
   searchNotesQuery,
 } from "./notes-search.js"
 export {
@@ -263,7 +265,6 @@ export {
   type MeetingSearchCoverage,
   type MeetingSearchCursor,
   type MeetingSearchItem,
-  meetingAccountOf,
   RESOURCES_SEARCHED_WITH_MEETINGS,
   type ResourceWithMeetings,
   type SearchAllIncludingMeetingsFound,

@@ -131,6 +131,8 @@ export interface SearchFound extends Page<FoundMessage> {
   coverage?: SearchCoverage
   /** `--source` entries naming no account this search reads, and why. */
   skipped?: SkippedSource[]
+  /** `search mail`: the mailboxes read. `search messages` answers `coverage.accounts`. */
+  accounts?: { resource: "mail"; provider: string; account: string }[]
   corrections: { from: string; to: string[] }[]
   /** Per chat of the page: how much of its history the store holds. */
   completeness: (ChatCompleteness & AccountKey)[]

@@ -18,7 +18,9 @@ import {
 
 const MATCHES = 8
 
-type Input = v.ObjectSchema<v.ObjectEntries, undefined> | v.StrictObjectSchema<v.ObjectEntries, undefined>
+type Input =
+  | v.ObjectSchema<v.ObjectEntries, undefined>
+  | v.StrictObjectSchema<v.ObjectEntries, v.ErrorMessage<v.StrictObjectIssue> | undefined>
 
 /** One command an agent can find and run: its arguments are checked against `input` before `run`. */
 export interface McpCommand {
