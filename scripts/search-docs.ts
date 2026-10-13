@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { PRESETS } from "../dist/search/lucene/presets.js"
 import { QUERY_FIELDS, QUERY_OPERATORS } from "../dist/search/lucene/registry.js"
 import { QUERY_LIMITS } from "../dist/search/lucene/types.js"
+import { withGenerated } from "./generated-blocks.ts"
 
 const root = join(import.meta.dirname, "..")
 const guide = join(root, "docs/search/query-language.md")
@@ -45,21 +46,13 @@ const examples = recipes.recipes
       `### ${recipe.title}\n\n\`\`\`sh\ntg search messages '${recipe.query.replaceAll("'", "'\\''")}' --timezone UTC\n\`\`\`\n\nНа synthetic fixture: ${recipe.ids.length ? `ids ${recipe.ids.join(", ")}` : "ничего"}. В MAX замените первый аргумент \`tg\` на \`max\`.`,
   )
   .join("\n\n")
-let result = text
-for (const [name, body] of [
+const result = withGenerated(text, [
   ["fields", fields],
   ["operators", operators],
   ["presets", presets],
   ["limits", limits],
   ["recipes", examples],
-]) {
-  const start = `<!-- ${name}: generated -->`,
-    end = `<!-- ${name}: end -->`
-  if (!result.includes(start) || !result.includes(end)) throw new Error(`missing ${name} generation markers`)
-  const from = result.indexOf(start) + start.length,
-    to = result.indexOf(end, from)
-  result = `${result.slice(0, from)}\n\n${body}\n\n${result.slice(to)}`
-}
+])
 if (process.argv.includes("--check")) {
   if (result !== text) throw new Error("search reference drift — run pnpm search:docs")
 } else writeFileSync(guide, result)

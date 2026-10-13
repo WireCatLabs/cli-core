@@ -7,3 +7,4 @@
 - 2026-10-10: `.worktrees/docs-ai-schema` — detached worktree of `max-cli/docs_ai` for the schema spec and the journal; remove after its commits are on `docs_ai` main (`git -C ~/Projects/AI/max-cli/docs_ai worktree remove …`).
 - 2026-10-11: the empty `decisions` table (store version 1) — replaced by `facts` in version 2; drop it in the next migration that raises `minCompatible`, since dropping a table locks older builds out (feat/store-facts).
 - 2026-10-12: `.worktrees/meeting-search-filters`, branch `feat/meeting-search-filters`, and its `tsconfig.meeting-filters.json` / `vitest.meeting-filters.config.ts` — retained development worktree and diagnostic configs for the Oxc package-export resolution failure; remove only in the owner's approved cleanup batch.
+- /home/leemour/Projects/AI/cli-messaging-wt-standards-doc — worktree for docs/standards-registries (STANDARD tables from cli-base registries); remove after the PR merges — 2026-10-13

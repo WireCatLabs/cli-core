@@ -1,13 +1,14 @@
 # Glossary of command words and terms
 
-One word, one meaning, in every WireCat CLI: tg, max, memo and drive. This page lists the words for
+One word, one meaning, in every WireCat CLI: tg, max, memo, drive and zm. This page lists the words for
 commands, resources and JSON keys, the one meaning of each, the words it replaces, and where a CLI
 uses it differently today.
 
-- For tg and max, [STANDARD.md](STANDARD.md#command-names) is binding. The verb meanings live
-  there; this page repeats a verb only to show where it applies and where it is broken.
-- memo and drive are not bound by STANDARD. For them this page is the target vocabulary. Each
-  repository adopts it in its own change.
+- [STANDARD.md](STANDARD.md#command-names) binds all five CLIs. The verb, resource and flag meanings
+  live in cli-base's vocabulary and are shown in [its tables](STANDARD.md#vocabulary-and-lint-rules);
+  this page repeats a word only to show where it applies and where it is broken.
+- memo, drive and zm start from their lint baseline; each repository fixes its violations in its own
+  change.
 - A rule changes in STANDARD first, in its own pull request, and the owner approves new wording.
   This page follows.
 - "Current violations" were found on 2026-10-12 from `<cli> commands --json` (tg 0.51.0,

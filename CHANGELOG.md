@@ -6,6 +6,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Needs `@wirecat/cli-base` 0.22.** The peer range is now `>=0.22.0 <0.23.0`; a CLI still on cli-base 0.21
+  bumps it with this release.
+
 ## 0.256.0 — 13.10.2026
 
 ### Changed — may break callers

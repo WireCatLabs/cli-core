@@ -1,16 +1,25 @@
-# The standard for tg and max
+# The standard for the WireCat CLIs
 
-tg-cli and max-cli are one tool with two messengers behind it. This page holds the rules that make
-them one: how a command, an option, an answer and an MCP tool are named and shaped, where code
-lives, and which documents each has. It lives here because this package is where the two meet;
-both CLIs' `CONVENTIONS.md` link it instead of keeping a copy.
+This page holds the rules for five CLIs: tg (tg-cli), max (max-cli), memo (cli-memo), drive (drive-cli)
+and zm (zoom-cli). It says how a command, an option, an answer, an error and an MCP tool are named and
+shaped, where code lives, and which documents each has. Each CLI's `CONVENTIONS.md` links it instead of
+keeping a copy.
+
+- **Every rule binds all five**, unless it names tg and max. memo, drive and zoom adopt it from a
+  baseline: `cli-dev lint` (from `@wirecat/cli-base`) wrote each repository's violations of the
+  [lint rules](#vocabulary-and-lint-rules) into `lint/baseline/`, and that list only shrinks.
+- **tg and max only:** tg-cli and max-cli are one tool with two messengers behind it. The
+  [parity manifest](#the-parity-manifest), the [option catalogue](#option-catalogue), `bot`, and every
+  rule that asks for the same sentence or shape "in both tools" bind those two.
 
 How a pull request is checked against these rules is [REVIEW.md](REVIEW.md).
 
 A rule changes here first, in its own pull request, and the owner approves new wording — a new verb
-or option name especially. Then the code follows. A difference between the two CLIs is allowed only
-where one messenger lacks the feature, and it is written down with its reason in the
-[parity manifest](#the-parity-manifest).
+or option name especially. Then the code follows. A word — a verb, a resource, a view, a root word, a
+flag — or a lint rule is added to cli-base's registries (`@wirecat/cli-base/standards`) first; its table
+here is regenerated from them with `pnpm standard:docs`, and `pnpm docs:check` fails when the two differ.
+A difference between tg and max is allowed only where one messenger lacks the feature, and it is
+written down with its reason in the parity manifest.
 
 ## External references and our adoption profile
 
@@ -78,11 +87,8 @@ guessable from the others.
    never an implicit `default`, not even the only profile; with none the error says how to create one
    by name (`tg personal setup`). A command that touches no account (`account list`, `config show`)
    runs without one. A read across accounts covers all of them and says so.
-   The resource is a noun: **plural** for a
-   collection (`chats`, `contacts`, `messages`, `polls`, `reactions`, `recipients`, `replies`, `sends`,
-   `runs`, `topics`, `models`, `tags`, `searches`, `copies`, `attachments`, `tasks`), **singular** for what a profile has exactly
-   one of (`session`, `account`, `config`, `server`, `store`, `skill`, `cache`, `flood`). A group is never
-   named with a verb. `tags` and `searches` are the owner's own records in the local store, never
+   The resource is a noun from the [resource table](#resources): **plural** for a collection,
+   **singular** for what a profile has exactly one of. A group is never named with a verb. `tags` and `searches` are the owner's own records in the local store, never
    sent; their writes have their own keys (`tags.add`), so a read-only profile hides them.
    `tasks` are what waits on the owner — a question nobody answered, a mention, a request, a promise —
    kept in the local store by `src/tasks/` and never sent: `tasks list|add|close|stats`, the
@@ -99,52 +105,30 @@ guessable from the others.
    server and knows no document, or `attachments list`, which lists files, not links in text.
    drive's `sync` writes the message → document link. Owner's name and design, 2026-10-13
    ([plan](chat-documents-plan.md)).
-2. **Top-level words** only for what spans every chat or is the tool itself: `inbox`, `review`,
-   `watch`, `serve`, `doctor`, `upgrade`, `commands`, `complete`, `mcp`, `bot`, `stats`, `search`. Prefer an
+2. **Top-level words** only for what spans every chat or is the tool itself: the
+   [root words](#root-words). Prefer an
    existing resource or namespace before adding another root word. A new root needs a reason in
    its naming pull request: what existing group cannot express, which related commands it groups,
    and why the same hierarchy works for both CLIs. One new report never justifies its own root.
-3. **Verbs come from this list, each with one meaning.** A verb not on it is added here first.
-   - `list` many · `show` one · `search` find by text — the description says where it looks
-   - `related` what is nearest in meaning to one thing, without a query (`conversations related`)
-   - `info` facts about a singular thing itself — where it is, its size, its version, its schema
-     (`store info`) · `status` how a thing stands right now — a running process (`server status`)
-     or what the store holds per chat (`store status`)
-   - `check` verify, and change nothing — the answer says what is wrong and how to fix it
-     (`store check`)
-   - `test` run rules over what is already stored and say what they would have done, doing none of
-     it (`replies test`)
-   - `pause` / `resume` stop and restart what a running process does for a profile, without stopping
-     the process (`replies pause`)
-   - `create` / `delete` make or destroy a thing · `add` / `remove` put an existing thing into or
-     out of a set (members, admins, contacts, recipients, reactions) · `clear` empty a set
-   - `update` change a thing's fields · `set` / `unset` one named key · `rename` its name only
-   - `start` / `stop` / `restart` a running process · `start` / `end` a login session
-     · `install` / `uninstall` a system unit · `cancel` a job
+3. **Verbs come from the [verb table](#verbs), each with one meaning.** A verb not on it is added
+   to cli-base's vocabulary first. Where two verbs are close, the difference:
+   - `info` facts about a singular thing itself (`store info`) · `status` how a thing stands right
+     now — a running process (`server status`) or what the store holds per chat (`store status`)
+   - `check` verify and change nothing; the answer says what is wrong and how to fix it
+     (`store check`) · `test` run rules over what is already stored and say what they would have
+     done (`replies test`)
    - `sync` bring the local store up to date from the source — only what changed since the last
      run, or the whole list where the source cannot say what changed; `--all` for every chat or
      source (owner, 2026-10-12). It is the regular, repeatable catch-up (`contacts sync`).
-     · `fetch` one bounded pull of one named thing from the messenger into the store, not a
-     catch-up (`chats members fetch`) · `export` from the store to a file · `import` ·
-     `download` · `transcribe` · `extract` read the text inside files
-     already on this machine into the store (`attachments extract`)
-   - Every word for a command, a resource and a JSON key across tg, max, memo and drive, with
-     its one meaning and the words it replaces, is in the [glossary](GLOSSARY.md).
-   - `migrate` bring a file up to this build's schema · `backup` copy it somewhere safe ·
-     `restore` put a backup back in its place · `repair` bring a file's tables to this build's shape
-     without deleting anything — a table of the wrong shape is kept as a copy (`store repair`, its copies
-     in `store copies`)
-   - `link` / `unlink` record in the store that two identities are one person, or undo it — a
-     decision someone made, never inferred from a name (`contacts link`)
-   - `lookup` ask the messenger who is behind a phone number · `inspect` look at a link without
-     joining it
-   - the messenger's plain verbs: `send`, `edit`, `forward`, `pin`, `unpin`, `vote`, `close`,
-     `join`, `leave`, `block`, `unblock`, `mark-read`, `reset` (replace; the old one stops
-     working), `moderate` (apply a chat's rules: delete what breaks them, act on who broke them)
-   - A **noun as the last word** names a view and shows it: `server logs`, `chats events`,
-     `messages scheduled`, `messages context`, `runs path`, `mcp config`, `searches history`.
-     `top` is a ranked view under `stats`, for example `stats messages top`. `official` is the view
-     the messenger itself computed, under `stats`: `stats chats official`.
+     · `fetch` one bounded pull of one named thing into the store, not a catch-up
+     (`chats members fetch`)
+   - `repair` keeps a table of the wrong shape as a copy (`store repair`, its copies in `store copies`)
+   - `link` / `unlink` record a decision someone made, never one inferred from a name (`contacts link`)
+   - A **noun as the last word** names a view and shows it, from the [view table](#views):
+     `server logs`, `chats events`, `messages scheduled`, `mcp config`, `stats messages top`,
+     `stats chats official`.
+   - Every word for a command, a resource and a JSON key, with the words it replaces and where a CLI
+     still uses another, is in the [glossary](GLOSSARY.md).
 4. **One action or report, one leaf command.** A different action or independently useful report
    belongs in a nested command. Options choose the scope, measure, order or format of that action;
    they do not switch a search, send or list into another report. For example, ranking is
@@ -167,6 +151,8 @@ guessable from the others.
    - **How much, in a list or a fetch:** `--limit <n>` how many items, `--page <n>` which page,
      `--page-size <n>` how many one request to the messenger asks for. A count of pages is never an
      option: it means a different amount in each messenger.
+   - The flags with one meaning in every CLI are in the [flag table](#flags); every option tg and
+     max have is in the [option catalogue](#option-catalogue).
 6. **Arguments have fixed names:** `<chat>`, `<message>`, `<person>`, `<text>`, `<link>`,
    `<file>`, `<job>`, `<task>`.
 7. **One word per idea** in help, docs and errors. The **local store** is the message database
@@ -189,6 +175,207 @@ guessable from the others.
     bot has, as `bot watch --types` does.
 
 `bot api` is exempt: its names mirror each messenger's official Bot API operations.
+
+### Vocabulary and lint rules
+
+The tables below are generated from `@wirecat/cli-base/standards` by `pnpm standard:docs`; edit the
+registry, not the table. "Not" lists the words a term replaces.
+
+`cli-dev lint` checks a CLI's `commands --json` against these rules in each CLI's release check. Every
+severity fails the run; severity only orders the report. A violation that is not fixed yet is listed in
+that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent exception goes into
+`lint/overrides.json` with its rule, target and reason, at most 10 per repository. Generated commands
+(`bot api`) are exempt from the naming and length rules, not from the help rules.
+
+#### Verbs
+
+<!-- verbs: generated -->
+
+| Verb | Meaning | Not |
+|---|---|---|
+| `list` | show many | `ls` |
+| `show` | show one | `get`, `view` |
+| `search` | find by text; the description says where it looks | `find`, `query` |
+| `related` | what is nearest in meaning to one thing, without a query |  |
+| `info` | facts about a singular thing itself: where it is, its size, its version, its schema |  |
+| `status` | how a thing stands right now | `readiness` |
+| `check` | verify, and change nothing; the answer says what is wrong and how to fix it | `audit`, `preflight` |
+| `test` | run rules over what is already stored and say what they would have done, doing none of it |  |
+| `pause` | stop what a running process does for a profile, without stopping the process |  |
+| `resume` | restart what pause stopped |  |
+| `create` | make a thing | `mkdir` |
+| `delete` | destroy a thing | `rm`, `trash` |
+| `add` | put an existing thing into a set |  |
+| `remove` | take a thing out of a set |  |
+| `clear` | empty a set |  |
+| `update` | change a thing's fields | `plan` |
+| `set` | set one named key | `configure` |
+| `unset` | remove one named key |  |
+| `rename` | change a thing's name only |  |
+| `start` | start a running process, or a login session |  |
+| `stop` | stop a running process |  |
+| `restart` | stop and start a running process |  |
+| `end` | end a login session |  |
+| `install` | install a system unit |  |
+| `uninstall` | remove a system unit |  |
+| `cancel` | stop a job or a pending thing |  |
+| `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say | `refresh` |
+| `fetch` | one bounded pull of one named thing into the store, not a catch-up |  |
+| `export` | write from the store to a file |  |
+| `import` | bring a file or list the user gives into the store or the messenger, once |  |
+| `download` | save a file from the source to this machine |  |
+| `transcribe` | turn speech into text |  |
+| `extract` | read the text inside files already on this machine into the store |  |
+| `migrate` | bring a file up to this build's schema |  |
+| `backup` | copy a file somewhere safe |  |
+| `restore` | put a backup back in its place |  |
+| `repair` | bring a file's tables to this build's shape without deleting anything |  |
+| `link` | record that two identities are one person |  |
+| `unlink` | undo a link |  |
+| `lookup` | ask the messenger who is behind a phone number |  |
+| `inspect` | look at a link without joining it |  |
+| `send` | send a message |  |
+| `edit` | change a sent message |  |
+| `forward` | send an existing message on to another chat |  |
+| `pin` | pin a message or chat |  |
+| `unpin` | unpin a message or chat |  |
+| `vote` | answer a poll |  |
+| `close` | close a thing that stays: a poll, a task |  |
+| `join` | join a chat |  |
+| `leave` | leave a chat |  |
+| `block` | block a person |  |
+| `unblock` | unblock a person |  |
+| `mark-read` | mark a chat read; the other person sees it |  |
+| `reset` | replace a thing; the old one stops working |  |
+| `moderate` | apply a chat's rules: delete what breaks them, act on who broke them |  |
+| `confirm` | the owner accepts what an agent proposed | `accept`, `approve` |
+| `reject` | the owner refuses what an agent proposed | `decline`, `deny` |
+| `move` | move a file in the source |  |
+| `copy` | copy a file in the source |  |
+
+<!-- verbs: end -->
+
+#### Views
+
+<!-- views: generated -->
+
+| View | Meaning |
+|---|---|
+| `logs` | the log of a running process |
+| `events` | what happened in a thing over time |
+| `scheduled` | what is scheduled to happen |
+| `context` | what surrounds one thing |
+| `path` | where a thing is on this machine |
+| `config` | the configuration a thing needs |
+| `history` | past uses of a thing |
+| `top` | a ranked view under stats |
+| `official` | the view the messenger itself computed, under stats |
+
+<!-- views: end -->
+
+#### Resources
+
+<!-- resources: generated -->
+
+| Resource | Kind | Meaning | Not |
+|---|---|---|---|
+| `chats` | collection | conversations in a messenger |  |
+| `contacts` | collection | identities in a messenger's contact list |  |
+| `messages` | collection | posts in a messenger chat, or emails |  |
+| `polls` | collection | polls in a chat |  |
+| `reactions` | collection | reactions to a message |  |
+| `recipients` | collection | who a message goes to |  |
+| `replies` | collection | the automatic replies of a profile |  |
+| `sends` | collection | messages waiting to be sent, or sent by this tool |  |
+| `runs` | collection | past runs of this tool |  |
+| `topics` | collection | forum topics in a group |  |
+| `models` | collection | local or remote models |  |
+| `tags` | collection | labels the owner puts on things |  |
+| `searches` | collection | the owner's saved searches |  |
+| `copies` | collection | tables kept aside by a repair |  |
+| `attachments` | collection | files of stored messages |  |
+| `tasks` | collection | what waits on the owner |  |
+| `members` | collection | people in a chat |  |
+| `admins` | collection | administrators of a chat |  |
+| `tracking` | collection | the chats whose member lists are fetched daily |  |
+| `documents` | collection | files imported from Google Drive or Docs, or linked in a chat |  |
+| `notes` | collection | text the owner writes, or files from a notes folder |  |
+| `projects` | collection | the owner's work units with a task key |  |
+| `organizations` | collection | companies, teams, families or communities |  |
+| `identities` | collection | accounts of a person in one messenger or mailbox |  |
+| `facts` | collection | what happened, with evidence |  |
+| `memories` | collection | what an agent concluded, with evidence and scope |  |
+| `relationships` | collection | confirmed or suggested links between people, organizations and projects |  |
+| `session` | singular | this tool's login |  |
+| `account` | singular | the messenger or mail account behind a profile |  |
+| `config` | singular | a profile's settings |  |
+| `server` | singular | the long-running process of a profile |  |
+| `store` | singular | the local SQLite database the tools share |  |
+| `skill` | singular | the agent skill file of this tool |  |
+| `cache` | singular | max's per-profile cache |  |
+| `flood` | singular | what the messenger told this profile to hold off on |  |
+
+<!-- resources: end -->
+
+#### Root words
+
+<!-- root words: generated -->
+
+| Root word | Meaning |
+|---|---|
+| `inbox` | what waits across every chat |
+| `review` | go through what needs the owner |
+| `watch` | follow new events as they come |
+| `serve` | the long-running process |
+| `doctor` | check this machine's setup |
+| `upgrade` | install a newer version of this tool |
+| `commands` | the command tree as data |
+| `complete` | shell completion |
+| `mcp` | the MCP server and its setup |
+| `bot` | the profile's bot account |
+| `stats` | statistics |
+| `search` | searches across resources |
+
+<!-- root words: end -->
+
+#### Flags
+
+<!-- flags: generated -->
+
+| Flag | Value | Kind | Meaning | Unit |
+|---|---|---|---|---|
+| `--limit` | `<n>` | count | how many items | items |
+| `--page` | `<n>` | count | which page, from 1, where the source has no cursor |  |
+| `--page-size` | `<n>` | count | how many items one request to the source asks for | items |
+| `--cursor` | `<cursor>` | cursor | continue from where the previous page ended |  |
+| `--before-id` | `<id>` | id | read what came before this message id |  |
+| `--after-id` | `<id>` | id | read what came after this message id |  |
+| `--before-time` | `<time>` | time | read what came before this time |  |
+| `--after-time` | `<time>` | time | read what came after this time |  |
+| `--since-time` | `<time>` | time | only what came since this time |  |
+| `--at-time` | `<time>` | time | do it at this time |  |
+| `--before-n` | `<n>` | count | how many messages before it | messages |
+| `--after-n` | `<n>` | count | how many messages after it | messages |
+| `--timeout` | `<duration>` | duration | give up after this long |  |
+| `--dry-run` |  | switch | judge and plan; do nothing |  |
+
+<!-- flags: end -->
+
+#### Lint rules
+
+<!-- lint rules: generated -->
+
+| Rule | Severity | Applies to | Holds when |
+|---|---|---|---|
+| `unknown-verb` | high | command | a command's last word is a verb or view noun from the vocabulary; a top-level one may be a root word |
+| `unknown-resource` | medium | group | a group is a resource from the vocabulary (plural, or a registered singular) or a root word |
+| `flag-two-meanings` | high | flag | a flag takes the same kind of value in every command, and the one the vocabulary gives it |
+| `missing-command-help` | high | command | every command has a summary |
+| `command-help-too-long` | low | command | a summary is at most 80 characters |
+| `missing-argument-help` | high | argument | every argument is described |
+| `missing-option-help` | high | option | every option is described |
+
+<!-- lint rules: end -->
 
 ### Search hierarchy
 
@@ -656,9 +843,9 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 3. **A one-thing view answers the object itself** (`account show`, `store info`).
 4. **An error is one JSON object on stderr** in the machine modes —
    `{ "error": { "code", "message" } }` — stdout stays empty, and the exit code says which kind of
-   failure it was. Commander's own parse errors (a missing argument, a missing required option)
-   still print a text line and exit 1; they move to `validation_error` and 2. The codes are
-   cli-base's and the same in both tools:
+   failure it was. Commander's own parse errors (an unknown command or option, a missing argument,
+   a missing required option) are `validation_error` and exit 2, printed the same way; `--help` and
+   `--version` exit 0. The codes are cli-base's and the same in every CLI:
 
    | Code | Meaning |
    |---|---|
@@ -942,7 +1129,9 @@ drop. Flipped early, the row fails that CLI's `parity:check` on its next upgrade
 blocks the upgrade.
 
 **This repository checks every tool's `main` against its own manifest** (`.github/workflows/parity.yml`):
-on a pull request that touches the manifest or the check, on every push to `main`, and daily. It
+on a pull request that touches `parity.json`, `src/parity/` or the workflow, by hand, and inside full
+validation (`ci.yml`), which the release and the monthly run start. There is no run on a push to
+`main` and no daily run. It
 builds tg-cli and max-cli from their `main` and runs the same check, so a row flipped early fails
 here, before the release that would carry it — not weeks later, when a CLI upgrades. The published
 CLIs are not the reference: a release always trails `main`, so they lag every row that gains a CLI.
