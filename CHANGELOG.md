@@ -17,8 +17,9 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 - **`search notes --folder`, `search mail --account` and `search all --meetings` are removed** (MCP `search_notes`
   `folders`, `search_mail` `account`, `search_all` `meetings`). Each fails with an error naming its replacement:
   `--source notes:<folder id>` (and `notes:internal` for notes written in memo), `--source email:<address>`,
-  `--source zoom:<account>`, `zoom`, `meetings`, or `all` for every account and the meetings. `search all` without
-  such an entry answers a `skipped` entry for meetings; `--only meetings` and `--max-meetings` without one are an
+  `--source zoom:<account>`, `zoom`, `meetings`, or `all` for every account and the meetings; of several meeting
+  accounts the one holding meetings is read and the rest are in `skipped`. `search all` without such an entry answers
+  a `skipped` entry for meetings; `--only meetings` and `--max-meetings` without one are an
   error. `meetingAccountOf` and `SearchAllWithMeetingsRequest.meetingAccount` leave `./services`;
   `searchAllIncludingMeetings` keeps `meetingAccount`.
 - **`in:` and a bare `--source` word take a provider's alias and a kind** (`in:tg`, `in:messages`, `in:mail`);

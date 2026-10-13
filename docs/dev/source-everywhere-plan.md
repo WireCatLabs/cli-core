@@ -131,8 +131,8 @@ the list fits it.
 - **Meetings** have no search index, so `search all` reads them only when `--source` names a meeting
   account, provider or the `meetings` kind; otherwise `skipped` says meetings were not searched.
   `--max-meetings` stays. **One meeting account per search**: the meeting cursor binds to one account, so a list
-  naming two that both hold meetings is an error that names both; of several a bare word names, the one holding
-  meetings is read. Reading several waits for a cursor that spans accounts.
+  naming two that both hold meetings is an error that names both; of several, the one holding meetings is read and
+  the rest are in `skipped`. Reading several waits for a cursor that spans accounts.
 - **`--only` stays**: it picks kinds; `--source` picks accounts; the two intersect. `--only` gains
   `documents`.
 - `--backend server` in `search all` still asks the server for the active account only; `accounts`

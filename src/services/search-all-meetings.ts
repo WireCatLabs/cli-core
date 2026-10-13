@@ -336,6 +336,9 @@ const searchAllOfSource = async (
     ).values(),
   ]
   const meetings = await holdingMeetings(store, named("meetings"))
+  const empty = named("meetings")
+    .filter((one) => !meetings.some(({ provider, account }) => provider === one.provider && account === one.account))
+    .map(({ provider, account }) => ({ source: `${provider}:${account}`, reason: "no meetings stored for it" }))
   if (only.includes("meetings") && meetings.length > 1)
     throw new CliError(
       "validation_error",
@@ -359,5 +362,5 @@ const searchAllOfSource = async (
   const unnamed = only
     .filter((resource) => !read.includes(resource))
     .map((resource) => ({ resource, reason: `--source names no ${resource} account` }))
-  return { ...found, skipped: [...skipped, ...unnamed, ...found.skipped] }
+  return { ...found, skipped: [...skipped, ...empty, ...unnamed, ...found.skipped] }
 }

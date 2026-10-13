@@ -88,7 +88,9 @@ describe("search all --source", () => {
     expect(found.items.some(({ kind }) => kind === "meeting")).toBe(true)
     const other = sampleMeeting()
     other.meeting.accountId = await store.saveAccount({ provider: "zoom", account: "z2" }, { name: null })
-    expect(keys((await search(store, { only: undefined, source: "zoom" })).accounts)).toEqual(["meetings zoom:z1"])
+    const narrowed = await search(store, { only: undefined, source: "zoom" })
+    expect(keys(narrowed.accounts)).toEqual(["meetings zoom:z1"])
+    expect(narrowed.skipped).toContainEqual({ source: "zoom:z2", reason: "no meetings stored for it" })
     await store.meetings.saveMeeting(other)
     await expect(search(store, { only: undefined, source: "zoom" })).rejects.toThrow(
       "--source names several meeting accounts; search all reads one: zoom:z1, zoom:z2",
