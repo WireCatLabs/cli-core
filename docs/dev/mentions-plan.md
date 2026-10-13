@@ -1,6 +1,6 @@
 # Plan — mentions: phones, e-mail, links, documents, names and places found in text
 
-Status: **proposal, 2026-10-13. Owner direction given, design not approved.** The owner's words (cli-private
+Status: **approved 2026-10-13 (owner, NEED-1015 A); phones in the clear (NEED-1016 B).** The owner's words (cli-private
 journal `2026-10-13-field-test-followups.md`, NEED-1006): a command that pulls such values out and records
 them, then an agent and a person go through them; one entity with a kind field while they are not yet
 assigned, and a command to check and link them; names yes; addresses kept apart; links grouped by domain so
@@ -43,7 +43,7 @@ A row per value found in one place of one text.
 | `kind` | `phone`, `email`, `url`, `document`, `person-name`, `place` — an enum; new kinds by plan |
 | `source_type`, `source_id` | the message, transcript, file text, note or document it was found in |
 | `start`, `end` | where in that text: the original spelling is read back from the source, never copied |
-| `value` | the normalized value: URL without tracking parameters, lower-case e-mail, a name's lemma; for a phone, the HMAC (below) |
+| `value` | the normalized value: URL without tracking parameters, lower-case e-mail, a name's lemma, a phone in E.164 |
 | `domain` | for `url` and `email`: the registrable domain (`docs.google.com` → `google.com`, `www.example.co.uk` → `example.co.uk`) |
 | `method`, `version` | which rule found it, so a better rule can rebuild its own rows only |
 | `confidence` | the rule's own score, 0–1 |
@@ -59,7 +59,7 @@ writes the `links` row that relation needs, so relations stay where they are rea
 
 | kind | how | precision expected |
 | --- | --- | --- |
-| `phone` | [`libphonenumber-js`](https://github.com/catamphetamine/libphonenumber-js) `findPhoneNumbersInText`, default country from the account, `min` metadata (~80 kB); E.164 then HMAC | high |
+| `phone` | [`libphonenumber-js`](https://github.com/catamphetamine/libphonenumber-js) `findPhoneNumbersInText`, default country from the account, `min` metadata (~80 kB); stored as E.164 | high |
 | `email` | one tested pattern; lower-cased; domain through `tldts` | high |
 | `url` | a URL pattern plus bare domains with a known suffix; normalized (scheme, host lower-cased, `utm_*`, `fbclid`, fragment dropped); [`tldts`](https://github.com/remusao/tldts) gives `domain` from the public suffix list | high |
 | `document` | known URL shapes: Google Docs/Sheets/Drive ids today (the chat-documents parser), later Notion, GitHub | high |
@@ -84,9 +84,11 @@ organizations relate to places through `links` (`located-at`).
 
 ### Phones and privacy
 
-A phone mention's `value` is the HMAC with the key `phone_hmac` uses, so a mention links to an identity by
-equal hashes and `phone:+79215553535` hashes the query before it searches. The digits stay only in the source
-text, which the store holds anyway. Nothing writes the number to a log, an answer's metadata or a fixture.
+The owner chose digits in the store (NEED-1016 B), so `mentions list --kind phone` can list every number. A
+phone mention's `value` is the E.164 form; it links to an identity by hashing `value` with the `phone_hmac` key
+and comparing, so `identities` keeps only the hash. The store is the owner's and already holds the digits in
+message text; what stays the rule: no number in a log, an error, a fixture, a test or a document — tests use
+reserved fictional numbers.
 
 ### When it runs
 
@@ -140,12 +142,12 @@ an index lookup.
   Cyrillic domains, e-mail in brackets, names in six cases), and texts that must yield nothing.
 - A store test: sync writes mentions, an edited message replaces them, a deleted one removes them; a rule
   version bump rebuilds only its kind.
-- Privacy: no phone digits in `mentions`, in any JSON answer's metadata, or in logs.
+- Privacy: no phone digits in logs or errors; fixtures use fictional numbers only.
 - Search: `phone:` in two spellings finds the same messages; `domain:` groups subdomains.
 
 ## Open questions for the owner
 
 1. The entity's name: `mentions` (proposed) or another word.
-2. Phones stored as HMAC only (proposed) or also in the clear in the store.
+2. ~~Phones stored as HMAC only or also in the clear~~ — in the clear (owner, 2026-10-13, NEED-1016 B).
 3. Should an agent's `confirm` of an obvious kind (a document id, an exact known phone) count without the
    owner, or wait like its facts.
