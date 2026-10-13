@@ -29,6 +29,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   - `meetings search-page --after` is `--cursor`; its `--limit` takes `<n>`.
   - Every argument has a description, and the `search-page` summary fits in 80 characters.
 
+### Fixed
+
+- **Mail hints name `memo sync --mail`.** `search mail`, its MCP tool and the no-mail hint named
+  `memo mail <account> import`, which memo no longer has (cli-memo#122).
+
 ## 0.257.0 — 13.10.2026
 
 ### Changed — may break callers

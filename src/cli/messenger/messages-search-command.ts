@@ -32,7 +32,7 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
   command
     .description(
       mail
-        ? "search the mail imported into the local store — memo mail <account> import brings it in"
+        ? "search the mail imported into the local store — memo sync --mail brings it in"
         : messenger.serverSearch
           ? "search messenger messages in the local store and on the messenger's server (--backend); optionally fetches new messages with --sync-first; --discover searches the archive only"
           : "search messenger messages in the local store — what was read, fetched or kept by serve; optionally fetches new messages with --sync-first; --discover searches the archive only",
@@ -246,7 +246,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     }
     if (kind === "mail" || incomplete.some((chat) => chat.provider === "email")) {
       context.renderer.note(
-        "mail search covers imported messages only; older or unimported mail may be missing — `memo mail <account> import --since <date>` imports more",
+        "mail search covers imported messages only; older or unimported mail may be missing — `memo sync --mail --since-time <time>` imports more",
       )
     }
     if (context.format === "pretty") {
