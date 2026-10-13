@@ -9,7 +9,7 @@ import type { SendGuard } from "../sends/guard.js"
 import { conversationsService } from "../services/conversations.js"
 import { storedDeps } from "../services/deps.js"
 import { openStore } from "../store/store.js"
-import { chunkHash, chunkTextOf, cutChunks, splitText } from "./chunks.js"
+import { chunkHash, chunkTextOf, cutChunks, splitSections, splitText } from "./chunks.js"
 
 describe("cutChunks", () => {
   it("**cuts a conversation at message boundaries**, each chunk within the limit", () => {
@@ -173,5 +173,16 @@ describe("chunks in a build", () => {
     expect(edited[0]).toEqual(first[0])
     expect(edited[1]?.hash).not.toBe(first[1]?.hash)
     await store.close()
+  })
+})
+
+describe("splitSections", () => {
+  it("cuts at each section start and splits a long section inside its own bounds", () => {
+    const one = `# One\n${"alpha beta ".repeat(10)}\n`
+    const text = `${one}# Two\n${"gamma delta ".repeat(60)}`
+    const ranges = splitSections(text, [{ start: 0 }, { start: one.length }], 200)
+    expect(ranges.length).toBeGreaterThan(3)
+    expect(ranges[0]).toEqual({ start: 0, end: one.length })
+    for (const { start, end } of ranges) expect(start < one.length && end > one.length).toBe(false)
   })
 })

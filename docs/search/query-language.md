@@ -21,7 +21,8 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 (письмо не прочитано, прочитано, помечено флагом — как их показал почтовый ящик при импорте; письмо, для которого
 импорт этого не узнал, не находит ни `is:read`, ни `is:unread`)) и `search notes` (заметки всех папок сразу,
 `--source notes:<id>` — только одной, `notes:internal` — написанные в memo; у них только поля `text`, `exact`, `body`,
-`tag`, `date`, `in`), и для их MCP-инструментов `search_*` (`source` у каждого). Поле, которого у вида нет,
+`tag`, `date`, `in`, `has:text`, а у файлов-страниц ещё `title`, `site`, `lang`, `author`, `keyword` — то, что страница
+сообщает о себе; у сообщений и писем эти поля ничего не находят), и для их MCP-инструментов `search_*` (`source` у каждого). Поле, которого у вида нет,
 в `search all` пропускает этот вид, и ответ называет причину в `skipped`. `bot search messages`
 сохраняет legacy discovery; строгий поиск общего архива выбирает bot accounts через `in:bots`.
 
@@ -361,6 +362,11 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `size` | kw | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
 | `content` | txt | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase |
 | `transcript` | txt | NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed | `transcript:invoice` | term, phrase |
+| `title` | txt | every word, folded as text is; notes and files only | `title:"quarterly report"` | term, phrase |
+| `site` | kw | contained, folded as text is; notes and files only | `site:wikipedia` | term, phrase |
+| `lang` | kw | language tag or its prefix, lowercase; notes and files only | `lang:ru` | term, phrase |
+| `author` | kw | contained, folded as text is; notes and files only | `author:ivanov` | term, phrase |
+| `keyword` | kw | whole keyword, folded as text is; notes and files only | `keyword:invoices` | term, phrase |
 | `tag` | kw | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase |
 
 <!-- fields: end -->

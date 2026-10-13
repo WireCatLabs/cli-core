@@ -60,6 +60,22 @@ Explicit `attachments extract --ocr` remains available for bulk API extraction t
 models.ocr. It calls the configured external model and sends supported images/scanned
 PDF pages to it; it is not automatically triggered by transfer or agent OCR.
 
+## How an HTML page is read
+
+An HTML file (`.html`, `.htm`, `.xhtml`, or `text/html`) is read for its main text, not its markup. The reader
+parses the page with linkedom and takes the main content with defuddle: menus, footers and cookie banners are
+dropped, and the text is Markdown with headings, lists, tables, link text and image `alt` text. Nothing is
+fetched from the network.
+
+It also records what the page says about itself: title, description, author (also from JSON-LD), published
+date, `<html lang>`, site name, canonical link, keywords, `og:*` tags and the JSON-LD type. The headings become
+sections, and meaning search cuts its chunks at section starts. For files in notes folders the metadata is stored
+with the note and found by `title:`, `site:`, `lang:`, `author:` and `keyword:` ([search language](search/query-language.md)).
+The extractor is `html:v2`; a page that cannot be read this way (engine missing, no main text) falls back to the plain
+tag-stripping reader, `html:v1`, with the `<title>` as its only metadata.
+
+Attachments on messages keep the Markdown text; their metadata is not stored yet.
+
 ## Configure PDF previews and larger files
 
 Set these environment variables on the machine running the CLI or MCP server:

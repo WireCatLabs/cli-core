@@ -213,6 +213,8 @@ describe("engineStates", () => {
       unpdf: "built in",
       mammoth: "missing",
       "word-extractor": "built in",
+      linkedom: "built in",
+      "defuddle/node": "built in",
       "@napi-rs/canvas": "installed",
     })
   })

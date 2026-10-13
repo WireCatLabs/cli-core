@@ -46,7 +46,20 @@ export interface NoteHit {
 }
 
 /** The fields a note has. A message-only field (`from:`, `chat:`, …) is refused rather than matching nothing. */
-export const NOTE_FIELDS = ["text", "exact", "body", "tag", "date", "in", "has"] as const
+export const NOTE_FIELDS = [
+  "text",
+  "exact",
+  "body",
+  "tag",
+  "date",
+  "in",
+  "has",
+  "title",
+  "site",
+  "lang",
+  "author",
+  "keyword",
+] as const
 
 interface Fragment {
   sql: string
@@ -78,7 +91,7 @@ interface Corpus {
 const CORPORA: Corpus[] = [
   {
     type: "document",
-    view: "(SELECT id, account_id AS folder_id, external_id AS path, title, coalesce(body, '') AS text, updated_at, deleted_at FROM documents)",
+    view: "(SELECT id, account_id AS folder_id, external_id AS path, title, coalesce(body, '') AS text, metadata, updated_at, deleted_at FROM documents)",
     words: "document_words",
     stems: "document_stems",
     tagged: (tag) =>
@@ -94,7 +107,7 @@ const CORPORA: Corpus[] = [
   },
   {
     type: "note",
-    view: "(SELECT id, NULL AS folder_id, NULL AS path, title, body AS text, updated_at, deleted_at FROM notes)",
+    view: "(SELECT id, NULL AS folder_id, NULL AS path, title, body AS text, NULL AS metadata, updated_at, deleted_at FROM notes)",
     words: "note_words",
     stems: "note_stems",
     tagged: (tag) =>
@@ -232,6 +245,22 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       if (value.toLowerCase() !== "text")
         searchError("query.unknown-value", node.span, `has:${value} is a message field — notes take has:text`)
       return bound("length(trim(coalesce(n.text,''))) > 0")
+    }
+    if (field === "title" || field === "site" || field === "lang" || field === "author" || field === "keyword") {
+      const wanted = normalize(value)
+      if (wanted === "") return bound("0")
+      const folded = (key: string) => `coalesce(json_extract(n.metadata, '$.folded.${key}'), '')`
+      if (field === "keyword")
+        return bound("EXISTS (SELECT 1 FROM json_each(n.metadata, '$.folded.keywords') WHERE value = ?)", wanted)
+      if (field === "lang")
+        return bound(`(${folded("language")} = ? OR ${folded("language")} LIKE ? || '-%')`, wanted, wanted)
+      if (field === "title")
+        return bound(
+          `(instr(${folded("title")}, ?) > 0 OR instr(lower(coalesce(n.title, '')), lower(?)) > 0)`,
+          wanted,
+          value,
+        )
+      return bound(`instr(${folded(field)}, ?) > 0`, wanted)
     }
     if (field === "date") {
       const range = node.resolution?.date

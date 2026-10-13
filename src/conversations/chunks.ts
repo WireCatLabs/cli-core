@@ -74,6 +74,33 @@ export const splitText = (text: string, room: number, overlap = CHUNK_OVERLAP, c
   return ranges
 }
 
+/**
+ * Pieces that stay inside one section: the text is cut at each section start (`shift` moves the sections'
+ * own offsets, as when a title was put in front), and a section longer than `room` is split further.
+ */
+export const splitSections = (
+  text: string,
+  sections: { start: number }[],
+  room: number,
+  shift = 0,
+  check?: () => void,
+): TextRange[] => {
+  const cuts = [
+    ...new Set([0, ...sections.filter(({ start }) => start > 0).map(({ start }) => start + shift), text.length]),
+  ]
+    .filter((at) => at >= 0 && at <= text.length)
+    .sort((a, b) => a - b)
+  return cuts.slice(1).flatMap((end, index) => {
+    const start = cuts[index] ?? 0
+    const piece = text.slice(start, end)
+    if (piece.trim() === "") return []
+    return splitText(piece, room, CHUNK_OVERLAP, check).map((range) => ({
+      start: start + range.start,
+      end: start + range.end,
+    }))
+  })
+}
+
 export const chunkHash = (text: string): string => createHash("sha256").update(text).digest("hex")
 
 /**
