@@ -1,7 +1,8 @@
 import * as v from "valibot"
+import { itemOf } from "../../cli/envelope.js"
+import { folderAnswer, snakeKeys, wholeList } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
-import { listed } from "../../cli/paging.js"
 import { FOLDER_KINDS, FOLDER_SKIPS, type FolderKind, type FolderSkip } from "../../domain/models.js"
 import type { SendGuard } from "../../sends/guard.js"
 import type { FolderRulesEdit } from "../../services/folders.js"
@@ -41,11 +42,12 @@ export const folderTools = (messenger: Messenger): Record<string, AnyTool> => {
     chats_folders_list: tool({
       title: "Chat folders",
       description:
-        "The owner's chat folders, in the order the app shows them, with the chats added to each. Returns " +
-        "{ items, page, limit, hasMore }.",
+        "The owner's chat folders, in the order the app shows them, with the chats added to each (chat_ids).",
       input: v.object({}),
       annotations: READ,
-      online: async (adapter, _args, { guard }) => listed(await folders(adapter, guard).list()),
+      output: { entity: "folder", list: true },
+      online: async (adapter, _args, { guard }) =>
+        wholeList("chats folders list", (await folders(adapter, guard).list()).map(folderAnswer)),
     }),
     chats_folders_show: tool({
       title: "One chat folder",
@@ -54,7 +56,7 @@ export const folderTools = (messenger: Messenger): Record<string, AnyTool> => {
         "excluded }, each chat { id, title, kind }; a chat that cannot be found has title and kind null.",
       input: v.object({ folder: folderRef }),
       annotations: READ,
-      online: (adapter, args, { guard }) => folders(adapter, guard).show(args.folder),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await folders(adapter, guard).show(args.folder))),
     }),
     chats_folders_create: tool({
       title: "Create a chat folder",
@@ -62,7 +64,8 @@ export const folderTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ title: v.pipe(v.string(), v.minLength(1)), chats: chatList, ...rules }),
       annotations: WRITE,
       permission: "folders",
-      online: (adapter, args, { guard }) => folders(adapter, guard).create(args.title, args.chats ?? [], rulesOf(args)),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await folders(adapter, guard).create(args.title, args.chats ?? [], rulesOf(args)))),
     }),
     chats_folders_update: tool({
       title: "Change a chat folder",
@@ -76,13 +79,17 @@ export const folderTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "folders",
-      online: (adapter, args, { guard }) =>
-        folders(adapter, guard).update(args.folder, {
-          ...(args.title === undefined ? {} : { title: args.title }),
-          ...(args.add ? { add: args.add } : {}),
-          ...(args.remove ? { remove: args.remove } : {}),
-          ...rulesOf(args),
-        }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await folders(adapter, guard).update(args.folder, {
+              ...(args.title === undefined ? {} : { title: args.title }),
+              ...(args.add ? { add: args.add } : {}),
+              ...(args.remove ? { remove: args.remove } : {}),
+              ...rulesOf(args),
+            }),
+          ),
+        ),
     }),
     chats_folders_delete: tool({
       title: "Delete a chat folder",
@@ -90,7 +97,7 @@ export const folderTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ folder: folderRef }),
       annotations: WRITE,
       permission: "folders",
-      online: (adapter, args, { guard }) => folders(adapter, guard).delete(args.folder),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await folders(adapter, guard).delete(args.folder))),
     }),
     chats_folders_order: tool({
       title: "Order chat folders",
@@ -100,7 +107,7 @@ export const folderTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ folders: v.pipe(v.array(folderRef), v.minLength(1)) }),
       annotations: WRITE,
       permission: "folders",
-      online: (adapter, args, { guard }) => folders(adapter, guard).order(args.folders),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await folders(adapter, guard).order(args.folders))),
     }),
     chats_folders_join: tool({
       title: "Join a shared chat folder",
@@ -110,7 +117,7 @@ export const folderTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ link: v.pipe(v.string(), v.minLength(1)) }),
       annotations: WRITE,
       permission: "folders",
-      online: (adapter, args, { guard }) => folders(adapter, guard).join(args.link),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await folders(adapter, guard).join(args.link))),
     }),
   }
   if (messenger.folderOrder === false) delete definitions.chats_folders_order

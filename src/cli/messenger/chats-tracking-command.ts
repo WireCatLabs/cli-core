@@ -1,7 +1,15 @@
 import { Command } from "commander"
 import { TRACKED_DAYS } from "../../services/chats.js"
-import { listed } from "../paging.js"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { lines, snakeKeys, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
+
+interface TrackedAnswer {
+  chat_id: string
+  title: string | null
+  tracked_at: string
+  last_count: { day: string; participants: number | null; complete: boolean } | null
+}
 
 /** The chats whose member lists `serve` fetches daily; kept in the local store, never sent. */
 export const trackingCommand = (messenger: Messenger): Command => {
@@ -15,20 +23,23 @@ export const trackingCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const found = await context.withServices((services) => services.chats.tracked())
-      if (context.format === "pretty") {
-        context.renderer.stream(
-          found.map(({ chatId, title, trackedAt, lastCount }) => ({
-            chat: title ? `${title} (${chatId})` : chatId,
-            since: trackedAt.slice(0, 10),
-            last: lastCount
-              ? `${lastCount.day}: ${lastCount.participants ?? "?"}${lastCount.complete ? "" : " (partial)"}`
+      renderAnswer(
+        this,
+        context,
+        wholeList(
+          "chats tracking list",
+          found.map((one) => snakeKeys(one) as TrackedAnswer),
+        ),
+        lines(({ chat_id, title, tracked_at, last_count }) =>
+          [
+            title ? `${title} (${chat_id})` : chat_id,
+            tracked_at.slice(0, 10),
+            last_count
+              ? `${last_count.day}: ${last_count.participants ?? "?"}${last_count.complete ? "" : " (partial)"}`
               : "",
-          })),
-        )
-        return
-      }
-      if (context.format === "jsonl") context.renderer.stream(found)
-      else context.renderer.result({ ...listed(found), hasMore: false })
+          ].join("  "),
+        ),
+      )
     })
 
   tracking
@@ -37,7 +48,11 @@ export const trackingCommand = (messenger: Messenger): Command => {
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.chats.trackedChat(chat)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.chats.trackedChat(chat)))),
+      )
     })
 
   for (const [verb, tracked, description] of [
@@ -51,7 +66,11 @@ export const trackingCommand = (messenger: Messenger): Command => {
       .action(async function (this: Command, chat: string) {
         const context = messengerContext(this, messenger)
         refuseLocalWrite(context, messenger.app.command, `chats.tracking.${verb}`)
-        context.renderer.result(await context.withServices((services) => services.chats.track(chat, tracked)))
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys(await context.withServices((services) => services.chats.track(chat, tracked)))),
+        )
       })
   }
 

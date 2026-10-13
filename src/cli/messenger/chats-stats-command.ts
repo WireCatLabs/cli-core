@@ -1,8 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
-import type { StatsPeriod } from "../../services/chat-stats.js"
+import type { ChatStats, StatsPeriod } from "../../services/chat-stats.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { momentOf } from "../../services/moment.js"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { nextStep } from "../steps.js"
+import { snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 const PERIODS: StatsPeriod[] = ["day", "week"]
@@ -27,45 +30,53 @@ export const statsCommand = (messenger: Messenger): Command =>
           ...(timezone === undefined ? {} : { timezone }),
         }),
       )
-      if (!stats.complete) {
+      if (!stats.complete && stats.completeness.state === "complete")
         context.renderer.note(
-          stats.completeness.state === "complete"
-            ? "the messenger stopped reading joins and leaves before the period's start — those are lower bounds"
-            : `the store does not hold this chat whole, so these are lower bounds — \`${stats.fetch}\` fetches it`,
+          "the messenger stopped reading joins and leaves before the period's start — those are lower bounds",
         )
-      }
       if (!stats.members) context.renderer.note("joins and leaves were not asked of the messenger")
-      if (context.format !== "pretty") {
-        context.renderer.result(stats)
-        return
-      }
-      const { questions, members } = stats
-      const lines = [
-        `${stats.since} – ${stats.until}`,
-        `messages ${stats.messages}, from ${stats.senders} people; replies ${stats.replies}, threads ${stats.threads}`,
-        `reactions ${stats.reactions}${stats.views === undefined ? "" : `, views ${stats.views}`}${
-          stats.forwards === undefined ? "" : `, forwards ${stats.forwards}`
-        }${stats.comments === undefined ? "" : `, comments ${stats.comments}`}`,
-        `questions ${questions.asked}, answered ${questions.answered}${minutes(questions.medianMinutesToAnswer, "answer")}`,
-        ...(members
-          ? [
-              `joined ${members.joined}, left ${members.left}, net ${members.net}; ${members.wrote} of those who joined wrote${minutes(
-                members.medianMinutesToFirstMessage,
-                "first message",
-              )}`,
-            ]
-          : []),
-        ...(stats.series ?? []).map(({ key, messages, senders, joined, left }) =>
-          [
-            key,
-            `${messages} messages`,
-            `${senders} people`,
-            ...(joined === undefined ? [] : [`+${joined} −${left}`]),
-          ].join("  "),
-        ),
-      ]
-      context.streams.data(lines.join("\n"))
+      const { fetch, ...shown } = stats
+      const missing =
+        fetch === undefined
+          ? {}
+          : {
+              missing: [
+                {
+                  field: "messages",
+                  why: "the store does not hold this chat whole, so these are lower bounds",
+                  step: "messages.sync",
+                },
+              ],
+              next: [nextStep("messages.sync", { args: { chat: stats.chatId } })],
+            }
+      renderAnswer(this, context, itemOf(snakeKeys(shown), missing), () => view(stats))
     })
+
+const view = (stats: ChatStats): string => {
+  const { questions, members } = stats
+  const lines = [
+    `${stats.since} – ${stats.until}`,
+    `messages ${stats.messages}, from ${stats.senders} people; replies ${stats.replies}, threads ${stats.threads}`,
+    `reactions ${stats.reactions}${stats.views === undefined ? "" : `, views ${stats.views}`}${
+      stats.forwards === undefined ? "" : `, forwards ${stats.forwards}`
+    }${stats.comments === undefined ? "" : `, comments ${stats.comments}`}`,
+    `questions ${questions.asked}, answered ${questions.answered}${minutes(questions.medianMinutesToAnswer, "answer")}`,
+    ...(members
+      ? [
+          `joined ${members.joined}, left ${members.left}, net ${members.net}; ${members.wrote} of those who joined wrote${minutes(
+            members.medianMinutesToFirstMessage,
+            "first message",
+          )}`,
+        ]
+      : []),
+    ...(stats.series ?? []).map(({ key, messages, senders, joined, left }) =>
+      [key, `${messages} messages`, `${senders} people`, ...(joined === undefined ? [] : [`+${joined} −${left}`])].join(
+        "  ",
+      ),
+    ),
+  ]
+  return `${lines.join("\n")}\n`
+}
 
 const minutes = (value: number | null, what: string) => (value === null ? "" : `; median ${value} min to ${what}`)
 

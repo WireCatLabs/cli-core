@@ -1,3 +1,6 @@
+import { type QueryAst, queryError } from "@wirecat/cli-base/query"
+import type { NextStep } from "@wirecat/cli-base/standards"
+import type { Command } from "commander"
 import type * as v from "valibot"
 import type {
   Chat,
@@ -26,11 +29,14 @@ import type {
   pollVote as pollVoteSchema,
   topic as topicSchema,
 } from "../../entities/index.js"
+import type { ChatDocument } from "../../services/chat-documents.js"
 import type { FolderShown } from "../../services/folders.js"
 import type { MemberEvent } from "../../services/member-history.js"
-import type { AuditedMember } from "../../services/members-audit.js"
+import { AUDIT_MIN_SCORE, type AuditedMember, type MembersAudit } from "../../services/members-audit.js"
 import type { AccountKey } from "../../store/store.js"
-import { itemOf, type ListInput, listOf } from "../envelope.js"
+import { type AnswerOutput, itemOf, type ListInput, listOf, renderAnswer } from "../envelope.js"
+import { LIST_QUERY_GUIDE, nativeTerms } from "../list-query.js"
+import { positiveCount } from "../paging.js"
 import { nextStep } from "../steps.js"
 
 type Out<T extends v.GenericSchema> = v.InferOutput<T>
@@ -266,3 +272,64 @@ export const chatShown = (account: AccountKey, card: Parameters<typeof chatAnswe
       : {},
   )
 }
+
+/** The lowest score `score>=n` asks for; the audit's own floor when the query names none. */
+export const scoreFloor = (ast: QueryAst | undefined): number => {
+  const term = nativeTerms(ast, "chats members audit").get("score")
+  if (!term) return AUDIT_MIN_SCORE
+  const upper = term.operator === "range" ? (term.upper ?? "*") : term.value
+  if (term.operator !== "range" || upper !== "*")
+    queryError("query.unsupported-operator", term.span, "score takes a lower bound: score>=3", {
+      command: "chats members audit",
+      guide: LIST_QUERY_GUIDE,
+    })
+  const floor = Number(term.value)
+  return Math.ceil(term.lower_inclusive === false ? floor + 1 : floor)
+}
+
+export const auditAnswer = (audit: MembersAudit) =>
+  wholeList("chats members audit", audit.items.map(memberAnswer), {
+    ...(audit.more ? { meta: { truncated: true } } : {}),
+    ...(audit.fetch
+      ? {
+          missing: [
+            {
+              field: "reasons",
+              why: "never_wrote counts only stored messages, and the store does not hold the chat whole",
+              step: "messages.sync",
+            },
+          ],
+          next: [nextStep("messages.sync", { args: { chat: audit.chatId } })],
+        }
+      : {}),
+  })
+
+/** An answer with no entity yet: the item as it is, its keys in snake_case. */
+export const renderItem = (command: Command, output: AnswerOutput, value: unknown, next: NextStep[] = []): void =>
+  renderAnswer(command, output, itemOf(snakeKeys(value), { next }))
+
+/**
+ * `--limit` and `--page` for a list whose source takes a count but no offset: page n reads n pages and shows
+ * the last, so the step to the next page is honest.
+ */
+export const withPage = (command: Command): Command =>
+  command
+    .option("--limit <n>", "how many to show", positiveCount("--limit"))
+    .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
+
+export const pageOfRead = ({ hasMore }: { hasMore: boolean }, limit: number, page: number) => ({
+  limit,
+  has_more: hasMore,
+  page,
+})
+
+/** A document link in a chat's stored messages; `ref` is the message's locator. */
+export const documentLinkAnswer = ({ url, documentId, title, inStore, locator, sentAt, sender }: ChatDocument) => ({
+  url,
+  document_id: documentId,
+  title,
+  in_store: inStore,
+  ref: locator,
+  sent_at: sentAt,
+  sender,
+})

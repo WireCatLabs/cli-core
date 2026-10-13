@@ -203,9 +203,9 @@ export const adminService = (deps: ServiceDeps): AdminService => {
         throw new CliError("validation_error", "join requests are read from the messenger; not with --offline")
       // Telegram searches the whole pending list or one link's, never both (mtcute getInviteLinkMembers).
       if (window.search !== undefined && window.link !== undefined)
-        throw new CliError("validation_error", "--search and --link narrow the list two ways; use one")
+        throw new CliError("validation_error", "a name and a link narrow the list two ways; use one")
       if (window.search?.trim() === "" || window.link?.trim() === "")
-        throw new CliError("validation_error", "--search and --link need a value")
+        throw new CliError("validation_error", "a name or a link needs a value")
       const connection = await deps.connection()
       const list = capability(connection, "joinRequests", "read join requests")
       const { id: chatId } = await connection.resolve(chat)

@@ -1,10 +1,9 @@
 import { Command } from "commander"
-import type { ChatDocument } from "../../services/chat-documents.js"
-import { positiveCount, renderPage, window } from "../paging.js"
+import { listOf, renderAnswer } from "../envelope.js"
+import { positiveCount, window } from "../paging.js"
+import { nextStep } from "../steps.js"
+import { documentLinkAnswer, lines, pageOf } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
-
-const line = ({ sentAt, sender, title, url, inStore }: ChatDocument) =>
-  `${sentAt}  ${sender.name ?? sender.id ?? "?"}  ${title ?? url}  ${inStore ? "in store" : "not in store"}`
 
 /** `chats documents …`: the Google documents linked in a chat's stored messages. */
 export const documentsCommand = (messenger: Messenger): Command => {
@@ -22,11 +21,19 @@ export const documentsCommand = (messenger: Messenger): Command => {
         const found = await context.withServices((services) =>
           services.chatDocuments.list(chat, window(context.settings)),
         )
-        if (found.empty)
-          context.renderer.note(
-            `no stored messages in this chat — \`${messenger.app.command} messages sync ${found.chatId}\` fetches them`,
-          )
-        renderPage(context, found, (items) => items.map((item) => `${line(item)}\n`).join(""))
+        renderAnswer(
+          this,
+          context,
+          listOf("chats documents list", {
+            items: found.items.map(documentLinkAnswer),
+            ...pageOf(context.settings, found),
+            args: { chat },
+            ...(found.empty ? { next: [nextStep("messages.sync", { args: { chat: found.chatId } })] } : {}),
+          }),
+          lines(({ sent_at, sender, title, url, in_store }) =>
+            [sent_at, sender.name ?? sender.id ?? "?", title ?? url, in_store ? "in store" : "not in store"].join("  "),
+          ),
+        )
       }),
   )
   return documents

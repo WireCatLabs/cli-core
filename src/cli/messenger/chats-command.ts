@@ -1,13 +1,14 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { EVENTS_DAYS } from "../../services/chats.js"
-import { itemOf, listOf, renderAnswer } from "../envelope.js"
-import { listQuery, nativeTerms, timeBounds, withQuery } from "../list-query.js"
-import { window, withPaging } from "../paging.js"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { withQuery } from "../list-query.js"
+import { withPaging } from "../paging.js"
 import { groupCommands } from "./admin-commands.js"
 import { foldersCommand } from "./admin-folders-command.js"
 import { moderateCommand, rulesCommand } from "./admin-moderation-command.js"
-import { chatAnswer, chatEventAnswer, chatShown, lines, pageOf, snakeKeys, wholeList } from "./chat-answers.js"
+import { chatShown, lines, snakeKeys, wholeList } from "./chat-answers.js"
+import { chatEvents, chatsList } from "./chat-lists.js"
 import { CHATS_QUERY, EVENTS_QUERY } from "./chat-queries.js"
 import { botChatCommands } from "./chats-bots-command.js"
 import { documentsCommand } from "./chats-documents-command.js"
@@ -28,19 +29,11 @@ export const chatsCommand = (messenger: Messenger): Command => {
       CHATS_QUERY,
     ).action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
-      listQuery(this, CHATS_QUERY, words)
-      const wanted = window(context.settings)
-      const { page, account } = await context.withServices(async (services) => ({
-        page: await services.chats.list(wanted),
-        account: await services.chats.account(),
-      }))
+      const body = await context.withServices((services) => chatsList(services, words, context.settings))
       renderAnswer(
         this,
         context,
-        listOf("chats list", {
-          items: page.items.map((one) => chatAnswer(account, one)),
-          ...pageOf(context.settings, page),
-        }),
+        body,
         lines(({ id, title, kind, unread_count, last_message_at }) =>
           [id, kind, title ?? "", unread_count ? `${unread_count} unread` : "", last_message_at ?? ""].join("  "),
         ),
@@ -62,23 +55,16 @@ export const chatsCommand = (messenger: Messenger): Command => {
       EVENTS_QUERY,
     ).action(async function (this: Command, chat: string, words: string[]) {
       const context = messengerContext(this, messenger)
-      const { since } = timeBounds(nativeTerms(listQuery(this, EVENTS_QUERY, words), "chats events").get("time"))
-      const found = await context.withServices((services) =>
-        services.chats.events(chat, since === undefined ? {} : { since }),
-      )
+      const body = await context.withServices((services) => chatEvents(services, chat, words))
       renderAnswer(
         this,
         context,
-        wholeList(
-          "chats events",
-          found.events.map((one) => chatEventAnswer(found.chatId, one)),
-          found.more ? { meta: { truncated: true } } : {},
-        ),
+        body,
         lines(({ time, type, by, people }) =>
           [time, type, by?.name ?? by?.id ?? "", people.map((one) => one.name ?? one.id).join(", ")].join("  "),
         ),
       )
-      if (found.more) context.renderer.note("more history than one run reads; a later time bound reads less")
+      if (body.meta?.truncated) context.renderer.note("more history than one run reads; a later time bound reads less")
     }),
   )
 

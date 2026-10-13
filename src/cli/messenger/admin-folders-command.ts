@@ -3,12 +3,13 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { FOLDER_KINDS, FOLDER_SKIPS } from "../../domain/models.js"
 import type { FolderRulesEdit } from "../../services/folders.js"
-import { renderList } from "../paging.js"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { folderAnswer, lines, renderItem, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 const collect = (value: string, previous: string[] = []) => [...previous, value]
 
-const listOf =
+const wordsOf =
   <T extends string>(flag: string, allowed: readonly T[]) =>
   (value: string): T[] => {
     if (value.trim() === "none") return []
@@ -27,12 +28,12 @@ const withRules = (command: Command, messenger: Messenger, replaces: boolean): C
     .option(
       "--include <kinds>",
       `every chat of these kinds: ${FOLDER_KINDS.join(", ")}${set}`,
-      listOf("--include", FOLDER_KINDS),
+      wordsOf("--include", FOLDER_KINDS),
     )
     .option(
       "--skip <which>",
       `leave out chats that are ${FOLDER_SKIPS.join(", ")}${set}`,
-      listOf("--skip", FOLDER_SKIPS),
+      wordsOf("--skip", FOLDER_SKIPS),
     )
     .option("--exclude-chat <chat>", "never show this chat in it; repeat it for more", collect)
     .option("--pin <chat>", "pin this chat at the top of the folder; repeat it for more", collect)
@@ -59,21 +60,32 @@ const rulesOf = (command: Command): FolderRulesEdit => {
 /** `chats folders …`, in max-cli's words. */
 export const foldersCommand = (messenger: Messenger): Command => {
   const folders = new Command("folders").description("your chat folders")
-  folders
-    .command("list")
-    .description("your chat folders, in the order the app shows them")
-    .action(async function (this: Command) {
+  folders.addCommand(
+    annotate(new Command("list").description("your chat folders, in the order the app shows them"), {
+      output: { entity: "folder" },
+    }).action(async function (this: Command) {
       const context = messengerContext(this, messenger)
-      renderList(context.renderer, context.format, await context.withServices((services) => services.folders.list()))
-    })
-  folders
-    .command("show")
-    .description("one chat folder, with the names of the chats in it")
-    .argument("<folder>", "the folder's id, or its title exactly")
-    .action(async function (this: Command, folder: string) {
+      const found = await context.withServices((services) => services.folders.list())
+      renderAnswer(
+        this,
+        context,
+        wholeList("chats folders list", found.map(folderAnswer)),
+        lines(({ id, title, emoji, chat_ids }) => [id, emoji ?? "", title, `${chat_ids.length} chats`].join("  ")),
+      )
+    }),
+  )
+  folders.addCommand(
+    annotate(
+      new Command("show")
+        .description("one chat folder, with the names of the chats in it")
+        .argument("<folder>", "the folder's id, or its title exactly"),
+      { output: { entity: "folder" } },
+    ).action(async function (this: Command, folder: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.folders.show(folder)))
-    })
+      const found = await context.withServices((services) => services.folders.show(folder))
+      renderAnswer(this, context, itemOf(folderAnswer(found)))
+    }),
+  )
   folders.addCommand(
     withRules(
       annotate(new Command("create"), { mutates: true })
@@ -86,7 +98,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       const { chat = [] } = this.opts<{ chat?: string[] }>()
       const rules = rulesOf(this)
-      context.renderer.result(await context.withServices((services) => services.folders.create(title, chat, rules)))
+      renderItem(this, context, await context.withServices((services) => services.folders.create(title, chat, rules)))
     }),
   )
   folders.addCommand(
@@ -112,7 +124,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
         ...(remove === undefined ? {} : { remove }),
         ...rulesOf(this),
       }
-      context.renderer.result(await context.withServices((services) => services.folders.update(folder, edit)))
+      renderItem(this, context, await context.withServices((services) => services.folders.update(folder, edit)))
     }),
   )
   folders.addCommand(
@@ -121,7 +133,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
       .argument("<folder>", "folder id, or its title exactly")
       .action(async function (this: Command, folder: string) {
         const context = messengerContext(this, messenger)
-        context.renderer.result(await context.withServices((services) => services.folders.delete(folder)))
+        renderItem(this, context, await context.withServices((services) => services.folders.delete(folder)))
       }),
   )
   if (messenger.folderOrder !== false)
@@ -131,7 +143,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
         .argument("<folders...>", "folder ids, or titles exactly, first one first")
         .action(async function (this: Command, typed: string[]) {
           const context = messengerContext(this, messenger)
-          context.renderer.result(await context.withServices((services) => services.folders.order(typed)))
+          renderItem(this, context, await context.withServices((services) => services.folders.order(typed)))
         }),
     )
   if (messenger.folderJoin !== false)
@@ -143,7 +155,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
         .argument("<link>", "the folder's link, as t.me/addlist/…")
         .action(async function (this: Command, link: string) {
           const context = messengerContext(this, messenger)
-          context.renderer.result(await context.withServices((services) => services.folders.join(link)))
+          renderItem(this, context, await context.withServices((services) => services.folders.join(link)))
         }),
     )
   return folders

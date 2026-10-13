@@ -41,6 +41,35 @@ const fake = {
   resolve: async (typed: string) => chats.find((one) => one.id === typed) ?? chat(typed),
   chat: async (typed: string) => ({ ...chat(typed), members: [person("9")] }),
   history: async () => ({ items: [], hasMore: false }),
+  chatEvents: async (chatId: string) => ({
+    chatId,
+    since: at,
+    more: false,
+    events: [{ messageId: "5", timestamp: at, event: "join", by: { id: "9", name: null }, people: [person("9")] }],
+  }),
+  members: async (typed: string, { limit, offset }: { limit?: number; offset: number }) => {
+    const everyone = ["1", "2", "3"].map((id) => ({ ...person(id), role: "member" as const, hasPhoto: false }))
+    const end = limit === undefined ? everyone.length : offset + limit
+    return { chatId: typed, items: everyone.slice(offset, end), hasMore: end < everyone.length, participantsCount: 3 }
+  },
+  admins: async () => [],
+  inviteLinks: async (_chat: string, { limit, revoked }: { limit: number; revoked: boolean }) => {
+    const links = ["a", "b", "c"].map((id) => ({
+      link: `https://example.test/+${id}`,
+      approval: false,
+      expiresAt: null,
+      maxUses: null,
+      revoked,
+      joined: 1,
+    }))
+    return { items: links.slice(0, limit), hasMore: limit < links.length }
+  },
+  joinRequests: async (_chat: string, { limit }: { limit: number }) => {
+    const requests = ["1", "2", "3"].map((id) => ({ person: person(id), requestedAt: at }))
+    return { items: requests.slice(0, limit), hasMore: limit < requests.length }
+  },
+  answerJoinRequest: async () => ({ already: false }),
+  folders: async () => [{ id: "2", title: "Work", chatIds: ["7"], include: ["groups" as const] }],
   close: async () => {},
   logout: async () => {},
 } as unknown as MessengerAdapter
@@ -109,6 +138,13 @@ interface Row {
 const ROWS: Row[] = [
   { argv: ["chats", "list", "--limit", "1"], entity: "chat", list: true },
   { argv: ["chats", "show", "7"], entity: "chat", list: false },
+  { argv: ["chats", "events", "7", "time>=2d"], entity: "chat_event", list: true },
+  { argv: ["chats", "members", "list", "7", "--limit", "2"], entity: "member", list: true },
+  { argv: ["chats", "members", "audit", "7", "score>=1"], entity: "member", list: true },
+  { argv: ["chats", "link", "list", "7", "--limit", "2"], entity: "invite_link", list: true },
+  { argv: ["chats", "link", "list", "7", "revoked:true"], entity: "invite_link", list: true },
+  { argv: ["chats", "requests", "list", "7", "--limit", "2", "name:person"], entity: "join_request", list: true },
+  { argv: ["chats", "folders", "list"], entity: "folder", list: true },
 ]
 
 describe("chats, contacts and groups answer in the envelope of their entity", () => {

@@ -1,6 +1,8 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { guardedApp, guardedStart } from "../../sends/buttons.js"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `chats start` and `chats app` — a bot in a one-to-one chat with the personal account. */
@@ -12,9 +14,15 @@ export const botChatCommands = (messenger: Messenger): Command[] => [
     .action(async function (this: Command, bot: string) {
       const context = messengerContext(this, messenger)
       const { payload } = this.opts<{ payload?: string }>()
-      context.renderer.result(
-        await context.withMessenger((connection) =>
-          guardedStart(context.guard, connection, { chat: bot, ...(payload === undefined ? {} : { payload }) }),
+      renderAnswer(
+        this,
+        context,
+        itemOf(
+          snakeKeys(
+            await context.withMessenger((connection) =>
+              guardedStart(context.guard, connection, { chat: bot, ...(payload === undefined ? {} : { payload }) }),
+            ),
+          ),
         ),
       )
     }),
@@ -25,9 +33,18 @@ export const botChatCommands = (messenger: Messenger): Command[] => [
     .action(async function (this: Command, bot: string) {
       const context = messengerContext(this, messenger)
       const { start } = this.opts<{ start?: string }>()
-      context.renderer.result(
-        await context.withMessenger((connection) =>
-          guardedApp(context.guard, connection, { chat: bot, ...(start === undefined ? {} : { startParam: start }) }),
+      renderAnswer(
+        this,
+        context,
+        itemOf(
+          snakeKeys(
+            await context.withMessenger((connection) =>
+              guardedApp(context.guard, connection, {
+                chat: bot,
+                ...(start === undefined ? {} : { startParam: start }),
+              }),
+            ),
+          ),
         ),
       )
     }),

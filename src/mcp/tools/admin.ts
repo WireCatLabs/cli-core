@@ -1,11 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { itemOf } from "../../cli/envelope.js"
+import { queryInput as query } from "../../cli/list-query.js"
+import { snakeKeys } from "../../cli/messenger/chat-answers.js"
+import { inviteLinks, joinRequests } from "../../cli/messenger/chat-lists.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
 import { ADMIN_RIGHTS, GROUP_SETTINGS } from "../../domain/models.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
-import { type AnyTool, chatOf, limit, READ, tool, WRITE } from "../tool.js"
+import { type AnyTool, chatOf, limit, page, READ, tool, WRITE } from "../tool.js"
 
 type Answering = { chat: string; person?: string; all?: boolean; link?: string }
 
@@ -35,8 +39,16 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) =>
-        admin(adapter, guard).create({ title: args.title, people: args.people ?? [], channel: args.channel === true }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await admin(adapter, guard).create({
+              title: args.title,
+              people: args.people ?? [],
+              channel: args.channel === true,
+            }),
+          ),
+        ),
     }),
     chats_join: tool({
       title: "Join a group by its link",
@@ -46,7 +58,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ link: v.pipe(v.string(), v.minLength(1)) }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => admin(adapter, guard).join(args.link),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await admin(adapter, guard).join(args.link))),
     }),
     chats_leave: tool({
       title: "Leave a group",
@@ -54,7 +66,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ chat: chatOf(messenger) }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => admin(adapter, guard).leave(args.chat),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await admin(adapter, guard).leave(args.chat))),
     }),
     chats_update: tool({
       title: "Change a group",
@@ -78,19 +90,23 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) =>
-        admin(adapter, guard).update(args.chat, {
-          ...(args.title === undefined ? {} : { title: args.title }),
-          ...(args.description === undefined ? {} : { description: args.description }),
-          ...(args.settings === undefined ? {} : { settings: args.settings }),
-        }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await admin(adapter, guard).update(args.chat, {
+              ...(args.title === undefined ? {} : { title: args.title }),
+              ...(args.description === undefined ? {} : { description: args.description }),
+              ...(args.settings === undefined ? {} : { settings: args.settings }),
+            }),
+          ),
+        ),
     }),
     chats_link_show: tool({
       title: "A group's invite link",
       description: "The invite link of a group or channel, when the owner may see it. Reading changes nothing.",
       input: v.object({ chat: chatOf(messenger) }),
       annotations: READ,
-      online: (adapter, args, { guard }) => admin(adapter, guard).link(args.chat),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await admin(adapter, guard).link(args.chat))),
     }),
     chats_link_reset: tool({
       title: "Replace a group's invite link",
@@ -100,7 +116,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ chat: chatOf(messenger) }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => admin(adapter, guard).resetLink(args.chat),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await admin(adapter, guard).resetLink(args.chat))),
     }),
     chats_link_create: tool({
       title: "Make another invite link",
@@ -122,28 +138,29 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) =>
-        admin(adapter, guard).createLink(args.chat, {
-          approval: args.approval === true,
-          ...(args.expire_time === undefined ? {} : { expires: args.expire_time }),
-          ...(args.max_uses === undefined ? {} : { maxUses: args.max_uses }),
-        }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await admin(adapter, guard).createLink(args.chat, {
+              approval: args.approval === true,
+              ...(args.expire_time === undefined ? {} : { expires: args.expire_time }),
+              ...(args.max_uses === undefined ? {} : { maxUses: args.max_uses }),
+            }),
+          ),
+        ),
     }),
     chats_link_list: tool({
       title: "A group's invite links",
       description:
-        "The owner's own invite links of a group, newest first: { chatId, items: [{ link, approval, expiresAt, " +
-        "maxUses, primary, revoked, pending, joined }], hasMore }. revoked lists the stopped ones. Reading changes nothing.",
-      input: v.object({
-        chat: chatOf(messenger),
-        revoked: v.optional(v.pipe(v.boolean(), v.description("the stopped links instead"))),
-        limit,
-      }),
+        "The owner's own invite links of a group, newest first: { link, approval, expires_at, max_uses, primary, " +
+        "revoked, pending_count, joined_count }. query revoked:true lists the stopped ones. Reading changes nothing.",
+      input: v.object({ chat: chatOf(messenger), query, limit, page }),
       annotations: READ,
+      output: { entity: "invite_link", list: true },
       online: (adapter, args, defaults) =>
-        admin(adapter, defaults.guard).links(args.chat, {
+        inviteLinks(servicesFor(onlineDeps(messenger, adapter, defaults.guard)), args.chat, args.query, {
           limit: args.limit ?? defaults.limit,
-          revoked: args.revoked === true,
+          page: args.page ?? 1,
         }),
     }),
     chats_link_revoke: tool({
@@ -154,7 +171,8 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ chat: chatOf(messenger), link: v.pipe(v.string(), v.minLength(1)) }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => admin(adapter, guard).revokeLink(args.chat, args.link),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await admin(adapter, guard).revokeLink(args.chat, args.link))),
     }),
     chats_link_update: tool({
       title: "Change an invite link",
@@ -182,36 +200,30 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) =>
-        admin(adapter, guard).updateLink(args.chat, args.link, {
-          ...(args.approval === undefined ? {} : { approval: args.approval }),
-          ...(args.expire_time === undefined ? {} : { expires: args.expire_time }),
-          ...(args.max_uses === undefined ? {} : { maxUses: args.max_uses }),
-        }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await admin(adapter, guard).updateLink(args.chat, args.link, {
+              ...(args.approval === undefined ? {} : { approval: args.approval }),
+              ...(args.expire_time === undefined ? {} : { expires: args.expire_time }),
+              ...(args.max_uses === undefined ? {} : { maxUses: args.max_uses }),
+            }),
+          ),
+        ),
     }),
     chats_requests_list: tool({
       title: "Requests to join a group",
       description:
-        "Who asked to join a group or channel that needs an admin's approval, newest first: { chatId, items: " +
-        "[{ person, requestedAt, about }], hasMore }. Only admins see them. Reading tells nobody.",
-      input: v.object({
-        chat: chatOf(messenger),
-        limit,
-        search: v.optional(v.pipe(v.string(), v.minLength(1), v.description("only names or @usernames with this"))),
-        link: v.optional(
-          v.pipe(
-            v.string(),
-            v.minLength(1),
-            v.description("only those who asked through this invite link; not with search"),
-          ),
-        ),
-      }),
+        "Who asked to join a group or channel that needs an admin's approval, newest first: { person_id, name, " +
+        'username, requested_at, about? }. query narrows by name:ana or username:ana, or by link:"<invite link>" ' +
+        "— not both. Only admins see them. Reading tells nobody.",
+      input: v.object({ chat: chatOf(messenger), query, limit, page }),
       annotations: READ,
+      output: { entity: "join_request", list: true },
       online: (adapter, args, defaults) =>
-        admin(adapter, defaults.guard).requests(args.chat, {
+        joinRequests(servicesFor(onlineDeps(messenger, adapter, defaults.guard)), args.chat, args.query, {
           limit: args.limit ?? defaults.limit,
-          ...(args.search === undefined ? {} : { search: args.search }),
-          ...(args.link === undefined ? {} : { link: args.link }),
+          page: args.page ?? 1,
         }),
     }),
     chats_requests_accept: tool({
@@ -225,7 +237,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => answer(admin(adapter, guard), args, true),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await answer(admin(adapter, guard), args, true))),
     }),
     chats_requests_decline: tool({
       title: "Decline a request to join",
@@ -238,7 +250,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => answer(admin(adapter, guard), args, false),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await answer(admin(adapter, guard), args, false))),
     }),
     chats_members_add: tool({
       title: "Add people to a group",
@@ -256,8 +268,16 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) =>
-        admin(adapter, guard).addMembers(args.chat, args.people, args.history === true ? { history: true } : {}),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await admin(adapter, guard).addMembers(
+              args.chat,
+              args.people,
+              args.history === true ? { history: true } : {},
+            ),
+          ),
+        ),
     }),
     chats_members_remove: tool({
       title: "Remove people from a group",
@@ -268,7 +288,8 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => admin(adapter, guard).removeMembers(args.chat, args.people),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await admin(adapter, guard).removeMembers(args.chat, args.people))),
     }),
     chats_admins_add: tool({
       title: "Make someone an admin",
@@ -280,7 +301,8 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => admin(adapter, guard).addAdmin(args.chat, args.person, args.rights),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await admin(adapter, guard).addAdmin(args.chat, args.person, args.rights))),
     }),
     chats_admins_remove: tool({
       title: "Take admin rights back",
@@ -288,7 +310,8 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ chat: chatOf(messenger), person: v.pipe(v.string(), v.minLength(1)) }),
       annotations: WRITE,
       permission: "groups",
-      online: (adapter, args, { guard }) => admin(adapter, guard).removeAdmin(args.chat, args.person),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await admin(adapter, guard).removeAdmin(args.chat, args.person))),
     }),
   }
   if (messenger.inviteLinkList === false) delete definitions.chats_link_list
