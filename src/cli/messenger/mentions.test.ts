@@ -85,7 +85,10 @@ describe("mentions", () => {
     expect(page.items[2].locator).toBe("msg:chat/500/7/1")
     expect(listed.stderr).toContain("mentions rebuild")
 
-    const sites = JSON.parse((await chat("mentions", "list", "--domain", "Docs.Google.com", "--json")).stdout)
+    const phones = JSON.parse((await chat("mentions", "list", "89000000001", "--json")).stdout)
+    expect(phones.items.map(({ value }: { value: string }) => value)).toEqual(["+79000000001"])
+
+    const sites = JSON.parse((await chat("mentions", "list", "domain:Docs.Google.com", "kind:url", "--json")).stdout)
     expect(sites.items).toHaveLength(1)
 
     const phone = page.items[2]
@@ -98,9 +101,11 @@ describe("mentions", () => {
     expect((await chat("mentions", "list", "--json")).stderr).not.toContain("mentions rebuild")
   })
 
-  it("refuses a kind it does not know and a mention of nothing", async () => {
+  it("refuses a kind it does not know and a mention of nothing, and lists its fields in help", async () => {
     const chat = await setup()
-    expect((await chat("mentions", "list", "--kind", "fax")).code).not.toBe(0)
+    expect((await chat("mentions", "list", "kind:fax")).code).not.toBe(0)
+    const help = await chat("mentions", "list", "--help")
+    for (const field of ["kind", "status", "domain", "value"]) expect(help.stdout).toContain(field)
     const missing = await chat("mentions", "show", "999", "--json")
     expect(missing.code).not.toBe(0)
     expect(missing.stderr + missing.stdout).toContain("no mention 999")

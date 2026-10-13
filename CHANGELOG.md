@@ -39,8 +39,9 @@ shape of this file.
   from how it is written, digits alone otherwise; a lower-case address; a link without `utm_*`, `fbclid` and the
   fragment, with its site (`docs.google.com` → `google.com`). Phones are found by rules, not checked against a
   numbering plan: a number-like order id can slip in, and dates, sums, card and tax numbers are left out.
-  `mentionsCommand` adds `mentions list` (filters `--kind`, `--status`, `--domain`, `--value`), `mentions show <id>`
-  and `mentions rebuild [--kind]`; the CLIs register it. New and edited messages get their mentions on the write
+  `mentionsCommand` adds `mentions list [query...]` (fields `kind`, `status`, `domain`, `value`; a bare word is a
+  value, so `89001234567` finds `+79001234567`, and `domain:docs.google.com` means `google.com`), `mentions show <id>`
+  and `mentions rebuild`; the CLIs register it. New and edited messages get their mentions on the write
   that stores them; messages stored before version 7 need one `mentions rebuild`. New dependency `psl` (0.7 MB),
   for a link's site.
 ### Changed — may break callers
