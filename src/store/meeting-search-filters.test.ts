@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, expect, it } from "vitest"
+import { afterEach, expect, it, vi } from "vitest"
 import { sampleEvent, sampleMeeting } from "../meetings/testing/index.js"
-import { searchMeetingHits } from "../services/meeting-hit-search.js"
+import { refreshMeetingIndex, searchMeetingHits } from "../services/meeting-hit-search.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 
@@ -198,4 +198,9 @@ it("indexes what was saved since the last search before it reads", async () => {
   const result = await searchMeetingHits(f.store, "zeppelin", { accountId: f.accountId })
   expect(result.items.map((hit) => hit.meetingId)).toEqual([added.meeting.id])
   expect(result.coverage.indexing).toBe("ready")
+})
+it("stops refreshing when a batch makes no progress", async () => {
+  const indexSearch = vi.fn(async () => ({ indexed: 1, remaining: 2 }))
+  await refreshMeetingIndex({ indexSearch }, 1)
+  expect(indexSearch).toHaveBeenCalledTimes(2)
 })
