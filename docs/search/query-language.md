@@ -359,7 +359,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `filename` | keyword | NFKD/marks/NFC/lowercase v1, whole name | `filename:*.pdf` | term, phrase, wildcard, regex |
 | `mime` | keyword | lowercase; a value without / matches the first part; only where the messenger reports a type | `mime:"application/pdf" OR mime:image` | term, phrase, wildcard |
 | `size` | bytes | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
-| `content` | tokens | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase |
+| `content` | tokens | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote, and voice transcripts | `content:invoice` | term, phrase |
 | `transcript` | tokens | NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed | `transcript:invoice` | term, phrase |
 | `tag` | local-tag | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase |
 
