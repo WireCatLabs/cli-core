@@ -1,6 +1,8 @@
 # Plan — Google Drive documents in the one store
 
-Status: **approved by the owner, 2026-10-13.** Q1 answered: nothing in drive needs to survive the move; documents are rebuilt from drive's local copies.
+Status: **approved by the owner, 2026-10-13.** Q1: nothing in drive needs to survive the move; documents are rebuilt from drive's local copies.
+Q2: a `search all` hit for a Drive document shows its Google URL and its last Google edit time.
+Q3: `DRIVE_STORE` goes; `MESSAGING_STORE` is the only store override.
 
 ## Goal
 
@@ -61,20 +63,24 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 
 ## Work
 
-1. **cli-messaging (optional, owner question Q2):** `search all` note hits gain `url` from front matter
-   `sourceUrl`, and take their time from front matter `modifiedAt`, when there are such fields. No
-   schema change. Release it together with cm#1017.
+1. **cli-messaging (Q2):** Drive document hits in `search all` and `search notes` gain `url` from
+   front matter `sourceUrl` and take their time from front matter `modifiedAt`. The fields are
+   [source-everywhere-plan.md](source-everywhere-plan.md), "Fields of a Drive document hit" (its work
+   item 1). No schema change. Release it together with cm#1017.
 2. **cli-memo:** `memo folders list` shows `google-drive:` folders as drive's, not as "attach me";
-   `memo folders attach` refuses them (point 5).
+   `memo folders attach` refuses them (point 5). Merged in cli-memo#116.
 3. **drive-cli, after drive#19 merges:**
    1. `openIndex` opens `storePath(env)`: `openStore({ path: storePath(env), env, command: "drive" })`.
       An explicit path, so drive never runs the old-store cleanup (`src/store/store.ts:790-791`).
-   2. `DRIVE_STORE` goes; tests, smoke and the contract seed set `MESSAGING_STORE`
+   2. `DRIVE_STORE` goes (Q3); tests, smoke and the contract seed set `MESSAGING_STORE`
       (`drive-cli/src/testing.ts:30`, `scripts/smoke.ts:49`, `contracts/previous/seed.mjs:14`).
       Docs that describe `drive.db` and "share a store deliberately" are rewritten
       (`README.md:105-109`, `docs/configuration.md:23,84,126-131`, `docs/security.md:38`, `docs/usage.md:125`).
-   3. Move existing data, below.
-   4. Pin the cli-messaging release from item 1 (or the one with cm#1017).
+   3. Record the profile: every sync calls `store.saveProfile("drive", <profile>, { provider: "folder",
+      account: <folder external id> })`, so `--source drive:<profile>` and the hit's `account` can
+      name it ([source-everywhere-plan.md](source-everywhere-plan.md), "What the drive switch writes").
+   4. Move existing data, below.
+   5. Pin the cli-messaging release from item 1.
 
 ## Existing `drive.db` data
 
@@ -106,25 +112,17 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 
 ## Release order
 
-1. cli-messaging: release with cm#1017, plus item 1 if approved.
-2. cli-memo: item 2, pinned to that release. tg and max bump their pins only for item 1's `url`.
+1. cli-messaging: release with cm#1017 and item 1.
+2. cli-memo: a release with item 2, pinned to that release. tg and max bump their pins for item 1's `url`.
 3. drive-cli: drive#19 bumps to that release (it needs cm#1017), then the item 3 PR, rebased on it.
 
 ## Check
 
 - drive test: sync a fixture Google Doc with `MESSAGING_STORE` in the sandbox, then call `searchAll`
-  from cli-messaging. Expect one `note` item with a `document:` reference and the doc's title (and
-  `url`, with item 1).
+  from cli-messaging. Expect one `note` item with a `document:` reference, the doc's title, its `url`,
+  provider `drive` and the profile as `account`.
 - drive test: a profile whose `state.json` names another store file is rebuilt offline from
   snapshots; references point at the new rows; a rebuild cut off halfway completes on the next run.
 - memo test: `folders list` and `folders attach` treat a `google-drive:` folder as drive's.
 - After the releases, the owner runs `drive <profile> folders sync`, then
   `memo search all <word from a Google Doc>`. It returns the doc.
-
-## Open questions for the owner
-
-- **Q2 · Should a `search all` hit for a Drive document show its Google URL and the time it was last
-  edited in Google?** Yes adds item 1 and a pin bump in tg, max and memo. No leaves both to
-  `drive documents show`; the hit shows when drive last saved the text.
-- **Q3 · May `DRIVE_STORE` go?** One store means one override, `MESSAGING_STORE`. Keeping
-  `DRIVE_STORE` lets a second database come back.
