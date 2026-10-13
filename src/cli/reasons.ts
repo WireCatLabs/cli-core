@@ -1,3 +1,4 @@
+import type { FailureContext } from "@wirecat/cli-base"
 import { QUERY_REASONS } from "@wirecat/cli-base/query"
 import type { ErrorReason } from "@wirecat/cli-base/standards"
 import { defineReasons } from "@wirecat/cli-base/standards"
@@ -97,6 +98,7 @@ export const DETAILS = [
   "person_ids",
   "previous_chat_id",
   "profiles",
+  "provider_error",
   "provider",
   "recovery",
   "reference",
@@ -108,6 +110,7 @@ export const DETAILS = [
   "script",
   "send_id",
   "sent",
+  "settlement_failed",
   "span",
   "sqlite",
   "stage",
@@ -119,3 +122,27 @@ export const DETAILS = [
   "upgraded",
   "wanted",
 ] as const
+
+/** What a CLI adds to the shared registry: its own reasons, and the detail keys its adapters raise. */
+export interface AppErrors {
+  reasons?: readonly ErrorReason[]
+  details?: readonly string[]
+}
+
+const SHARED: FailureContext = { reasons: REASONS, details: DETAILS }
+const merged = new WeakMap<AppErrors, FailureContext>()
+
+/** The registry every error handler reads — the CLI's, MCP's and the meeting tools' — so none drops an app's keys. */
+export const failureContext = (errors?: AppErrors): FailureContext => {
+  if (!errors) return SHARED
+  const known = merged.get(errors)
+  if (known) return known
+  const unnamed = (errors.details ?? []).filter((key) => !/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(key))
+  if (unnamed.length > 0) throw new Error(`error details must be snake_case: ${unnamed.join(", ")}`)
+  const context = {
+    reasons: defineReasons([...REASONS, ...(errors.reasons ?? [])]),
+    details: [...new Set([...DETAILS, ...(errors.details ?? [])])],
+  }
+  merged.set(errors, context)
+  return context
+}

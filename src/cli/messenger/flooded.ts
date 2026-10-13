@@ -51,7 +51,7 @@ export const flooded = (
     }
     const waitMs = Number(details.retry_after_ms)
     if (error.code !== "rate_limited" || details.remembered === true || !Number.isFinite(waitMs) || waitMs <= 0) return
-    const providerError = providerErrorKey(details.providerError)
+    const providerError = providerErrorKey(details.provider_error)
     kept(() => {
       const deadline = memory.remember({
         operation,
@@ -98,7 +98,7 @@ export const flooded = (
             retry_after_ms: waitMs,
             retry_at: owed.until,
             remembered: true,
-            ...(owed.providerError ? { providerError: owed.providerError } : {}),
+            ...(owed.providerError ? { provider_error: owed.providerError } : {}),
           },
         )
       }

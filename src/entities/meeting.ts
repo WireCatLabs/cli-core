@@ -11,11 +11,11 @@ export const meeting = v.strictObject({
   location: v.optional(v.nullable(text)),
   /** The link that joins it. */
   url: v.nullable(text),
-  startedAt: v.nullable(time),
-  endedAt: v.nullable(time),
-  durationMs: v.nullable(count),
+  started_at: v.nullable(time),
+  ended_at: v.nullable(time),
+  duration_ms: v.nullable(count),
   timezone: v.optional(v.nullable(text)),
-  participantsCount: v.nullable(count),
-  createdAt: time,
-  updatedAt: time,
+  participants_count: v.nullable(count),
+  created_at: time,
+  updated_at: time,
 })

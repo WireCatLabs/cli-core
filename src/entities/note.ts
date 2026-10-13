@@ -5,12 +5,12 @@ export const note = v.strictObject({
   ref: reference,
   id,
   source: v.picklist(["file", "internal"]),
-  folderId: v.nullable(id),
+  folder_id: v.nullable(id),
   path: v.nullable(text),
   title: v.nullable(text),
   text,
-  createdAt: time,
+  created_at: time,
   /** When the store's copy last changed. */
-  updatedAt: time,
-  deletedAt: v.optional(v.nullable(time)),
+  updated_at: time,
+  deleted_at: v.optional(v.nullable(time)),
 })

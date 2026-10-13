@@ -16,12 +16,12 @@ export const task = v.strictObject({
   /** The chat it came from, as a `chat:` reference. */
   chat: v.optional(v.nullable(reference)),
   /** The message it came from. */
-  source: v.optional(v.nullable(reference)),
+  source_message: v.optional(v.nullable(reference)),
   priority: v.optional(v.nullable(v.number())),
   parent: v.optional(v.nullable(reference)),
-  dueAt: v.optional(v.nullable(time)),
-  closedAt: v.optional(v.nullable(time)),
+  due_at: v.optional(v.nullable(time)),
+  closed_at: v.optional(v.nullable(time)),
   reason: v.optional(v.nullable(text)),
-  createdAt: time,
-  updatedAt: v.optional(time),
+  created_at: time,
+  updated_at: v.optional(time),
 })

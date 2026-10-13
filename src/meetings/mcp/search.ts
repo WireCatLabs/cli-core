@@ -1,4 +1,4 @@
-import { CliError, errorObjectOf, isCliError, mcpErrorResult } from "@wirecat/cli-base"
+import { CliError, errorObjectOf, type FailureContext, isCliError, mcpErrorResult } from "@wirecat/cli-base"
 import { type MeetingHitSearch, validateMeetingHitSearch } from "../search-validation.js"
 
 const integer = { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER }
@@ -30,7 +30,12 @@ export const meetingSearchTool = {
     additionalProperties: false,
   },
 }
-export const callMeetingSearchTool = async (search: MeetingHitSearch, input: unknown, signal?: AbortSignal) => {
+export const callMeetingSearchTool = async (
+  search: MeetingHitSearch,
+  input: unknown,
+  signal?: AbortSignal,
+  failure: FailureContext = {},
+) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw new CliError("validation_error", "expected search argument object")
@@ -60,8 +65,8 @@ export const callMeetingSearchTool = async (search: MeetingHitSearch, input: unk
     signal?.throwIfAborted()
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
   } catch (error) {
-    const failure =
+    const thrown =
       !isCliError(error) && signal?.aborted ? new CliError("cancelled", "meeting search was cancelled") : error
-    return mcpErrorResult(errorObjectOf(failure))
+    return mcpErrorResult(errorObjectOf(thrown, failure))
   }
 }

@@ -8,9 +8,9 @@ export const contact = v.strictObject({
   name: v.nullable(text),
   username: v.nullable(text),
   alias: v.optional(v.nullable(text)),
-  displayName: v.optional(v.nullable(text)),
+  display_name: v.optional(v.nullable(text)),
   /** Whatever they wrote about themselves. */
   description: v.nullable(text),
   /** The newest message in a one-to-one chat with them. */
-  lastMessagedAt: v.nullable(time),
+  last_messaged_at: v.nullable(time),
 })

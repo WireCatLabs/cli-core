@@ -1,3 +1,5 @@
+import type { AppErrors } from "./reasons.js"
+
 /** Who a messenger CLI is: the word people type, where its files live, what its variables start with. */
 export interface AppIdentity {
   /** `tg`, `max` — in usage lines and in every message that tells somebody what to type. */
@@ -12,6 +14,8 @@ export interface AppIdentity {
   issues?: string
   /** The language of the transcript a person reads: its day headings and the word for "you". `ru-RU` when unset. */
   locale?: string
+  /** Error reasons and detail keys of its own — max's `max_code`, tg's `migrated_chat_id` — kept in every error it prints. */
+  errors?: AppErrors
 }
 
 export const envName = (app: AppIdentity, name: string): string => `${app.envPrefix}_${name}`

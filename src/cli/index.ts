@@ -247,6 +247,7 @@ export {
   usableProfileName,
 } from "./profile.js"
 export { createProgram, type ProgramDefinition, type ProgramOptions, type RunOptions, run } from "./program.js"
+export { type AppErrors, failureContext } from "./reasons.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export { runsCommand } from "./runs/command.js"
 export {

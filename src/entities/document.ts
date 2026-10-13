@@ -10,8 +10,8 @@ export const document = v.strictObject({
   mime: v.optional(text),
   size: v.optional(count),
   /** When its source last changed it. */
-  modifiedAt: v.nullable(time),
+  source_modified_at: v.nullable(time),
   /** When the store last read it; not the source's time. */
-  storedAt: v.optional(v.nullable(time)),
+  stored_at: v.optional(v.nullable(time)),
   owners: v.optional(v.array(text)),
 })

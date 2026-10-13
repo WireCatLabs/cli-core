@@ -282,7 +282,9 @@ const onlineCheck = async (command: Command, messenger: Messenger, remembered: s
   } catch (error) {
     const { health } = read
     const standing = standingOf(error) ?? health.standing
-    const providerError = providerErrorKey((error as { details?: { providerError?: unknown } })?.details?.providerError)
+    const providerError = providerErrorKey(
+      (error as { details?: { provider_error?: unknown } })?.details?.provider_error,
+    )
     return {
       ok: false,
       errorCode: codeOf(error),

@@ -1,3 +1,4 @@
+import { defineQuery, queryFieldsOf } from "@wirecat/cli-base/query"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { ENTITIES, type EntityName, entityDefinitions } from "./index.js"
@@ -6,20 +7,20 @@ const at = "2026-10-13T10:00:00.000Z"
 const message = {
   ref: "msg:telegram/1/2/3",
   id: "3",
-  chatId: "2",
-  chatTitle: "Synthetic chat",
-  senderId: "9",
-  senderName: "Synthetic sender",
+  chat_id: "2",
+  chat_title: "Synthetic chat",
+  sender_id: "9",
+  sender_name: "Synthetic sender",
   timestamp: at,
-  editedAt: null,
+  edited_at: null,
   text: "synthetic text",
   excerpt: "synthetic",
-  matchedIn: "text",
+  matched_in: "text",
   score: 1.5,
   outgoing: false,
   attachments: [{ kind: "file", position: 0, name: "a.pdf", mime: "application/pdf", size: 10, text: "body" }],
-  replyTo: null,
-  forwardedFrom: null,
+  reply_to: null,
+  forwarded_from: null,
 }
 const author = { type: "person", id: "1", name: null }
 
@@ -27,22 +28,22 @@ const samples: Record<EntityName, unknown> = {
   message,
   "message.hit": {
     ref: message.ref,
-    chatTitle: "Synthetic chat",
+    chat_title: "Synthetic chat",
     timestamp: at,
-    senderName: null,
+    sender_name: null,
     excerpt: "x",
-    matchedIn: "file",
+    matched_in: "file",
     score: 1,
   },
-  "message.summary": { ref: message.ref, timestamp: at, senderName: null, text: "synthetic" },
+  "message.summary": { ref: message.ref, timestamp: at, sender_name: null, text: "synthetic" },
   chat: {
     ref: "chat:telegram/1/2",
     id: "2",
     title: null,
     kind: "group",
-    unreadCount: null,
-    lastMessageAt: at,
-    participantsCount: 3,
+    unread_count: null,
+    last_message_at: at,
+    participants_count: 3,
   },
   person: { ref: "person:1", name: "Synthetic" },
   identity: { ref: "contact:telegram/9", provider: "telegram", account: "1", id: "9", name: null, username: null },
@@ -52,23 +53,23 @@ const samples: Record<EntityName, unknown> = {
     name: "Synthetic",
     username: null,
     description: null,
-    lastMessagedAt: null,
+    last_messaged_at: null,
   },
   account: { provider: "telegram", id: "1", name: null, username: null },
   note: {
     ref: "note:1",
     id: "1",
     source: "internal",
-    folderId: null,
+    folder_id: null,
     path: null,
     title: "t",
     text: "x",
-    createdAt: at,
-    updatedAt: at,
+    created_at: at,
+    updated_at: at,
   },
-  document: { ref: "document:1", id: "1", title: "t", url: null, modifiedAt: at, storedAt: at },
+  document: { ref: "document:1", id: "1", title: "t", url: null, source_modified_at: at, stored_at: at },
   attachment: { kind: "photo", width: 10, height: 10 },
-  task: { ref: "task:1", id: "1", title: null, kind: "question", state: "open", createdAt: at },
+  task: { ref: "task:1", id: "1", title: null, kind: "question", state: "open", created_at: at },
   fact: {
     ref: "fact:1",
     id: "1",
@@ -77,15 +78,15 @@ const samples: Record<EntityName, unknown> = {
     status: "accepted",
     project: null,
     subject: null,
-    occurredAt: null,
+    occurred_at: null,
     supersedes: null,
     author,
     model: null,
     scope: null,
-    source: "owner",
+    origin: "owner",
     evidence: [],
-    createdAt: at,
-    updatedAt: at,
+    created_at: at,
+    updated_at: at,
   },
   memory: {
     ref: "memory:1",
@@ -100,9 +101,9 @@ const samples: Record<EntityName, unknown> = {
     scope: "work",
     supersedes: null,
     evidence: ["msg:telegram/1/2/3"],
-    lastVerifiedAt: null,
-    createdAt: at,
-    updatedAt: at,
+    last_verified_at: null,
+    created_at: at,
+    updated_at: at,
   },
   meeting: {
     ref: "meeting:zoom/1",
@@ -111,12 +112,12 @@ const samples: Record<EntityName, unknown> = {
     account: "a",
     title: null,
     url: null,
-    startedAt: at,
-    endedAt: null,
-    durationMs: null,
-    participantsCount: null,
-    createdAt: at,
-    updatedAt: at,
+    started_at: at,
+    ended_at: null,
+    duration_ms: null,
+    participants_count: null,
+    created_at: at,
+    updated_at: at,
   },
   reference: "note:42",
 }
@@ -124,16 +125,16 @@ const samples: Record<EntityName, unknown> = {
 /** The names each entity's fields had elsewhere, which a schema must refuse. */
 const renamed: Partial<Record<EntityName, [from: string, to: string]>> = {
   message: ["ref", "locator"],
-  "message.hit": ["timestamp", "sentAt"],
-  chat: ["title", "chatTitle"],
+  "message.hit": ["timestamp", "sent_at"],
+  chat: ["title", "chat_title"],
   contact: ["description", "bio"],
-  note: ["updatedAt", "modifiedAt"],
-  document: ["mime", "mimeType"],
-  attachment: ["size", "totalBytes"],
+  note: ["updated_at", "modified_at"],
+  document: ["mime", "mime_type"],
+  attachment: ["size", "total_bytes"],
   task: ["state", "status"],
   fact: ["text", "statement"],
   memory: ["text", "body"],
-  meeting: ["url", "joinUrl"],
+  meeting: ["url", "join_url"],
 }
 
 const rename = (sample: unknown, [from, to]: [string, string]) => {
@@ -165,6 +166,33 @@ describe("entity definitions", () => {
   })
 
   it("keep times as ISO strings", () => {
-    expect(v.is(ENTITIES.meeting, { ...(samples.meeting as object), startedAt: 1_760_000_000_000 })).toBe(false)
+    expect(v.is(ENTITIES.meeting, { ...(samples.meeting as object), started_at: 1_760_000_000_000 })).toBe(false)
   })
+})
+
+const keysOf = (schema: unknown, path = ""): string[] => {
+  if (Array.isArray(schema)) return schema.flatMap((one) => keysOf(one, path))
+  if (schema === null || typeof schema !== "object") return []
+  return Object.entries(schema).flatMap(([key, value]) =>
+    key === "properties" && value && typeof value === "object"
+      ? Object.entries(value).flatMap(([name, inner]) => [`${path}${name}`, ...keysOf(inner, `${path}${name}.`)])
+      : keysOf(value, path),
+  )
+}
+
+describe("entity keys", () => {
+  it("are snake_case in every entity, nested ones too", () => {
+    const keys = keysOf(entityDefinitions())
+    expect(keys.length).toBeGreaterThan(100)
+    expect(keys.filter((key) => !/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(key.split(".").at(-1) ?? ""))).toEqual([])
+  })
+
+  it.each((Object.keys(ENTITIES) as EntityName[]).filter((name) => name !== "reference"))(
+    "give %s query fields a list can register",
+    (name) => {
+      const fields = queryFieldsOf(ENTITIES[name] as v.GenericSchema, { exclude: ["provider_metadata"] })
+      expect(fields.length).toBeGreaterThan(0)
+      expect(() => defineQuery({ entity: name, backend: "sql", fields })).not.toThrow()
+    },
+  )
 })
