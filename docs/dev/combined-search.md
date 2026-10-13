@@ -245,7 +245,7 @@ controls. Record mapping, freshness, coverage and latency, then seek approval fo
 ## Compatibility and release order
 
 This proposal includes the separately agreed breaking window required by the
-[stable-export policy](../../README.md#how-often-and-what-may-break).
+[stable-export policy](../REFERENCE.md#how-often-and-what-may-break).
 
 1. Build behind an internal entry point after approval. Keep default `MessagesService.search` and
    `searchStore` legacy semantics, and explicit language requests, until the coordinated breaking

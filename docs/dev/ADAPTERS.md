@@ -155,7 +155,7 @@ Some messengers push history to the client instead of answering a request for it
 ## Running the contract cases
 
 The `./testing` export has the kit. **It is not on the stable list yet**, so it can change in any
-release ([README, "How often, and what may break"](../../README.md#how-often-and-what-may-break)).
+release ([README, "How often, and what may break"](../REFERENCE.md#how-often-and-what-may-break)).
 
 - `contractSeed({ ids })` — a fixed set of chats, people and messages: a busy group with ten
   messages, a one-to-one chat, and two groups with the same title.
