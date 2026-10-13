@@ -120,6 +120,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
         { via: "history" },
       )
     expect(ids(await run(store, account, "has:file"))).toEqual([103, 104, 105, 106])
+    expect(ids(await run(store, account, "has:file has:text"))).toEqual([])
     expect(ids(await run(store, account, 'body:""'))).toEqual([0, 103, 104, 105, 106])
     expect(ids(await run(store, account, "body://"))).toEqual([0, 103, 104, 105, 106])
     expect(ids(await run(store, account, "kind:unknown"))).toEqual([103])

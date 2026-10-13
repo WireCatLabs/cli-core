@@ -352,7 +352,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `chat` | chat | account-scoped resolution | `chat:"Work fixture"` | term, phrase |
 | `date` | timestamp | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
 | `kind` | enum | private, saved, bot, service, group, channel, unknown | `kind:private` | term, phrase |
-| `has` | enum | attachment, link, file, photo, image, video, audio, voice, sticker, contact, location, poll | `has:file` | term, phrase |
+| `has` | enum | text, attachment, link, file, photo, image, video, audio, voice, sticker, contact, location, poll | `has:file` | term, phrase |
 | `topic` | id | string id, one chat required | `chat:7 AND topic:42` | term, phrase |
 | `in` | source | lowercase provider/account class | `in:bots` | term, phrase |
 | `preset` | enum | password, code, api-key, secret, card, bank, passport, phone, email, telegram-link, url, contact, location | `preset:secret` | term, phrase |

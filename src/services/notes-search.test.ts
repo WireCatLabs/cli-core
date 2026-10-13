@@ -113,6 +113,16 @@ describe("the notes' indexes", () => {
     })
   })
 
+  it("**has:text tells a read file from one kept by name only**", async () => {
+    const store = await open()
+    const folder = await store.notes.addFolder({ name: "drive" })
+    const read = await store.notes.saveFileNote({ folderId: folder.id, path: "a.md", title: "Lease", text: "rent" })
+    const named = await store.notes.saveFileNote({ folderId: folder.id, path: "b.md", title: "Lease scan", text: "" })
+    expect(await noteIds(store, "lease has:text")).toEqual([read.note.id])
+    expect(await noteIds(store, "lease -has:text")).toEqual([named.note.id])
+    await expect(noteIds(store, "has:photo")).rejects.toMatchObject({ details: { reason: "query.unknown-value" } })
+  })
+
   it("refuses a message-only field, naming the note fields", async () => {
     const store = await open()
     await expect(searchNotesQuery(store, { text: "from:alice", limit: 10 })).rejects.toThrow(

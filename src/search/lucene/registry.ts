@@ -145,6 +145,7 @@ export const QUERY_FIELDS = [
     normalization: "lowercase",
     support: "A1",
     values: [
+      "text",
       "attachment",
       "link",
       "file",

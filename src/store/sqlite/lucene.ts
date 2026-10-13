@@ -382,23 +382,25 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     } else if (field === "has") {
       const kind = value.toLowerCase()
       fragment =
-        kind === "link"
-          ? bound(
-              `(${mail ? "m.text LIKE '%' || ? || '%'" : "m.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)"} OR EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.kind IN ('share','webpage')))`,
-              mail ? "://" : quoted("://"),
-            )
-          : kind === "attachment"
+        kind === "text"
+          ? bound("length(trim(coalesce(m.text,''))) > 0")
+          : kind === "link"
             ? bound(
-                `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id)`,
+                `(${mail ? "m.text LIKE '%' || ? || '%'" : "m.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)"} OR EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.kind IN ('share','webpage')))`,
+                mail ? "://" : quoted("://"),
               )
-            : bound(
-                `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.kind IN (${storedKinds(
-                  kind,
+            : kind === "attachment"
+              ? bound(
+                  `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id)`,
                 )
-                  .map(() => "?")
-                  .join(",")}))`,
-                ...storedKinds(kind),
-              )
+              : bound(
+                  `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.kind IN (${storedKinds(
+                    kind,
+                  )
+                    .map(() => "?")
+                    .join(",")}))`,
+                  ...storedKinds(kind),
+                )
     } else if (field === "in") {
       const source = value.toLowerCase()
       const chosen = execution.accounts.filter(({ provider }) => inSource(source, provider))
