@@ -1,3 +1,4 @@
+import { QUERY_REASONS } from "@wirecat/cli-base/query"
 import type { ErrorReason } from "@wirecat/cli-base/standards"
 import { defineReasons } from "@wirecat/cli-base/standards"
 
@@ -5,32 +6,17 @@ type Entry = [reason: string, code: ErrorReason["code"], message: string]
 
 const validation = (reason: string, message: string): Entry => [reason, "validation_error", message]
 
+/** The query reasons only message search raises; the shared ones are cli-base's `QUERY_REASONS`. */
 const QUERY: Entry[] = [
   ["query.aborted", "the search was stopped before it finished"],
   ["query.conflict", "two parts of the query contradict each other"],
-  ["query.invalid-ast", "the query tree is not valid"],
   ["query.invalid-context", "the context size is out of range"],
-  ["query.invalid-date", "a date in the query cannot be read"],
-  ["query.invalid-escape", "an escape in the query is not valid"],
   ["query.invalid-limit", "the limit is out of range"],
-  ["query.invalid-regex", "a regular expression in the query is not valid"],
   ["query.invalid-scope", "the query selects no account"],
   ["query.invalid-size", "a size in the query cannot be read"],
-  ["query.invalid-syntax", "the query cannot be parsed"],
   ["query.invalid-tag", "a tag in the query is not valid"],
-  ["query.invalid-timezone", "the time zone is not known"],
   ["query.invalid-topic", "a topic in the query is not valid"],
-  ["query.missing-value", "a field in the query has no value"],
-  ["query.too-large", "the search is over one of its budgets"],
   ["query.topic-scope", "a topic needs its chat in the query"],
-  ["query.unclosed-literal", "a quote or bracket in the query is not closed"],
-  ["query.unknown-field", "a field in the query is not known"],
-  ["query.unknown-value", "a value in the query is not known"],
-  ["query.unsupported-field", "this search does not take that field"],
-  ["query.unsupported-operator", "this field does not take that operator"],
-  ["query.unsupported-regex", "that regular expression is not supported"],
-  ["query.unsupported-regex-flags", "regular expression flags are not supported"],
-  ["query.unsupported-version", "the query version is not supported"],
 ].map(([reason, message]) => validation(reason as string, message as string))
 
 const OTHERS: Entry[] = [
@@ -68,9 +54,10 @@ const OTHERS: Entry[] = [
 ]
 
 /** Every reason this package raises; cli-base's own are known to the handler already. */
-export const REASONS: ErrorReason[] = defineReasons(
-  [...QUERY, ...OTHERS].map(([reason, code, message]) => ({ reason, code, message, details: [] })),
-)
+export const REASONS: ErrorReason[] = defineReasons([
+  ...QUERY_REASONS,
+  ...[...QUERY, ...OTHERS].map(([reason, code, message]) => ({ reason, code, message, details: [] })),
+])
 
 /**
  * Detail keys an error from this package may carry, until each is registered on its own reason. Not `cause`:
@@ -87,10 +74,10 @@ export const DETAILS = [
   "built",
   "candidates",
   "chat",
-  "chatId",
+  "chat_id",
   "cli",
   "complete",
-  "emittedBytes",
+  "emitted_bytes",
   "exact",
   "forum",
   "guide",
@@ -99,27 +86,27 @@ export const DETAILS = [
   "index",
   "kind",
   "limit",
-  "limitSource",
-  "maxBytes",
+  "limit_source",
+  "max_bytes",
   "name",
-  "operationId",
-  "operationIds",
-  "partialOutput",
+  "operation_id",
+  "operation_ids",
+  "partial_output",
   "path",
   "permission",
-  "personIds",
-  "previousChatId",
+  "person_ids",
+  "previous_chat_id",
   "profiles",
   "provider",
   "recovery",
   "reference",
   "remembered",
-  "retryAt",
+  "retry_at",
   "runtime",
   "saved",
-  "scheduledFor",
+  "scheduled_for",
   "script",
-  "sendId",
+  "send_id",
   "sent",
   "span",
   "sqlite",

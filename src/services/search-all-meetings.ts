@@ -1,10 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
+import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
 import type { Messenger } from "../cli/messenger/context.js"
 import { formatMeetingReference } from "../domain/meeting-reference.js"
 import type { SearchHit } from "../meetings/index.js"
 import { entriesOfList, fitting } from "../search/account-list.js"
-import { parseLucene } from "../search/lucene/parser.js"
-import type { QueryNode } from "../search/lucene/types.js"
+import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { SearchFound, SearchQuery } from "./messages.js"
@@ -91,7 +91,7 @@ const meetingQuery = (text: string, exact?: boolean): { query: string } | { reas
       terms.push(node.value)
       return true
     }
-    if (!supported(parseLucene(text).root) || !terms.length)
+    if (!supported(parseLucene(text, SEARCH_QUERY).root) || !terms.length)
       return {
         reason:
           "meetings support letter/digit words joined by AND; phrases, OR/NOT, patterns and filters are unsupported",

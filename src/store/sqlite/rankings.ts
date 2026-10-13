@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { DateRange } from "@wirecat/cli-base/query"
 import type { CounterState } from "../../domain/counters.js"
 import {
   RANKING_GRAPH_LIMITS,
@@ -15,7 +16,6 @@ import {
   type ScoreComponents,
 } from "../../domain/rankings-options.js"
 import { rankingContextRange } from "../../domain/rankings-range.js"
-import type { DateRange } from "../../search/lucene/dates.js"
 import type { QueryExecution } from "../../search/lucene/resolved.js"
 import type { SqlValue } from "../driver.js"
 import { counterStates } from "./counters.js"
@@ -86,11 +86,11 @@ const periodOf = (range: DateRange | undefined) => {
   const clauses: string[] = []
   const params: SqlValue[] = []
   if (range?.lower !== undefined) {
-    clauses.push(`m.sent_at ${range.lowerInclusive ? ">=" : ">"} ?`)
+    clauses.push(`m.sent_at ${range.lower_inclusive ? ">=" : ">"} ?`)
     params.push(range.lower)
   }
   if (range?.upper !== undefined) {
-    clauses.push(`m.sent_at ${range.upperInclusive ? "<=" : "<"} ?`)
+    clauses.push(`m.sent_at ${range.upper_inclusive ? "<=" : "<"} ?`)
     params.push(range.upper)
   }
   return { sql: clauses.join(" AND ") || "1", params }

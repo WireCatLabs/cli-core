@@ -13,7 +13,7 @@ import { PRESETS } from "../../search/lucene/presets.js"
 import { parseBytes } from "../../search/lucene/registry.js"
 import type { QueryExecution, ResolvedNode, ResolvedPredicate } from "../../search/lucene/resolved.js"
 import { isStemmed } from "../../search/lucene/resolved.js"
-import { exhausted, QUERY_LIMITS, queryError } from "../../search/lucene/types.js"
+import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
 import { inSource } from "../../search/query.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
@@ -312,10 +312,10 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
           ? [
               ...(value === "*"
                 ? []
-                : [bound(`att.size ${node.lowerInclusive ? ">=" : ">"} ?`, parseBytes(value, node.span))]),
+                : [bound(`att.size ${node.lower_inclusive ? ">=" : ">"} ?`, parseBytes(value, node.span))]),
               ...(node.upper === undefined || node.upper === "*"
                 ? []
-                : [bound(`att.size ${node.upperInclusive ? "<=" : "<"} ?`, parseBytes(node.upper, node.span))]),
+                : [bound(`att.size ${node.upper_inclusive ? "<=" : "<"} ?`, parseBytes(node.upper, node.span))]),
             ]
           : [bound("att.size = ?", parseBytes(value, node.span))]
       const range = combine(conditions, "AND")
@@ -330,16 +330,16 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       fragment = /[\p{L}\p{N}]/u.test(text) ? bound(`m.id IN (${set.sql})`, ...set.params) : bound("0")
     } else if (field === "date") {
       const range = resolution?.date
-      if (!range) queryError("query.invalid-ast", node.span)
+      if (!range) searchError("query.invalid-ast", node.span)
       const conditions: Fragment[] = []
       if (range.lower !== undefined)
-        conditions.push(bound(`m.sent_at ${range.lowerInclusive ? ">=" : ">"} ?`, range.lower))
+        conditions.push(bound(`m.sent_at ${range.lower_inclusive ? ">=" : ">"} ?`, range.lower))
       if (range.upper !== undefined)
-        conditions.push(bound(`m.sent_at ${range.upperInclusive ? "<=" : "<"} ?`, range.upper))
+        conditions.push(bound(`m.sent_at ${range.upper_inclusive ? "<=" : "<"} ?`, range.upper))
       fragment = combine(conditions, "AND")
     } else if (field === "chat") {
       const chat = resolution?.chat
-      if (!chat) queryError("query.invalid-ast", node.span)
+      if (!chat) searchError("query.invalid-ast", node.span)
       fragment = bound(
         `m.chat_id IN (SELECT cc.id FROM ${corpus.threads} cc JOIN accounts aa ON aa.id=cc.account_id WHERE aa.provider=? AND aa.external_id=? AND cc.external_id=?)`,
         chat.account.provider,
@@ -355,10 +355,10 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
           sender.provider,
           sender.id,
         )
-      else queryError("query.invalid-ast", node.span)
+      else searchError("query.invalid-ast", node.span)
     } else if (field === "tag") {
       const tag = tagOf(value)
-      if (tag === undefined) queryError("query.invalid-tag", node.span)
+      if (tag === undefined) searchError("query.invalid-tag", node.span)
       fragment = bound(
         `m.id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.item}') OR ` +
           `m.chat_id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.thread}') OR ` +
@@ -412,7 +412,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
         : bound("0")
     } else if (field === "to" || field === "cc" || field === "bcc") {
       const who = resolution?.sender
-      if (!who) queryError("query.invalid-ast", node.span)
+      if (!who) searchError("query.invalid-ast", node.span)
       fragment = mail
         ? bound(
             "m.id IN (SELECT r.email_id FROM email_recipients r JOIN identities ii ON ii.id = r.identity_id WHERE r.role = ? AND ii.provider = ? AND ii.external_id = ?)",
@@ -451,7 +451,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
             : words.every((word) => new RegExp(`(^|[^\\p{L}\\p{N}])${word}`, "u").test(subject))
         }
       }
-    } else queryError("query.unsupported-field", node.span)
+    } else searchError("query.unsupported-field", node.span)
     return { node, fragment: { ...fragment, sql: `(${fragment.sql})` }, ...(test ? { test } : {}) }
   }
   const compile = (node: ResolvedNode): Fragment => {
@@ -463,7 +463,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     const clauses = node.clauses.map(({ occur, node }) => ({ occur, part: compile(node) }))
     const required = clauses.filter(({ occur }) => occur === "must")
     const optional = clauses.filter(({ occur }) => occur === "should")
-    const prohibited = clauses.filter(({ occur }) => occur === "mustNot")
+    const prohibited = clauses.filter(({ occur }) => occur === "must_not")
     const positive = required.length
       ? combine(
           required.map(({ part }) => part),
@@ -480,7 +480,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     return { ...result, exact: clauses.every(({ part }) => part.exact) }
   }
   check()
-  if (execution.accounts.length === 0) queryError("query.invalid-scope", { start: 0, end: 0 })
+  if (execution.accounts.length === 0) searchError("query.invalid-scope", { start: 0, end: 0 })
   const expression = compile(execution.root)
   const scopeParts = execution.accounts.map(({ provider, account }) => ({
     sql: "ac.provider=? AND ac.external_id=?",
@@ -675,7 +675,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     }
     const must = node.clauses.filter(({ occur }) => occur === "must")
     const should = node.clauses.filter(({ occur }) => occur === "should")
-    const not = node.clauses.filter(({ occur }) => occur === "mustNot")
+    const not = node.clauses.filter(({ occur }) => occur === "must_not")
     return (
       (must.length
         ? must.every(({ node }) => evaluate(node, row, text, attachments))

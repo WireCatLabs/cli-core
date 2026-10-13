@@ -141,7 +141,7 @@ describe("fetching every chat", () => {
       self: () => "500",
       chats: async () => {
         listed += 1
-        if (listed === 1) throw new CliError("rate_limited", "provider asks to wait", { retryAfterMs: 5 })
+        if (listed === 1) throw new CliError("rate_limited", "provider asks to wait", { retry_after_ms: 5 })
         return { items: [chat], hasMore: false }
       },
       history: async () => {
@@ -229,7 +229,7 @@ it("keeps earlier history pages and tells the caller when and where to resume", 
     self: () => "500",
     history: async () => {
       calls += 1
-      if (calls > 1) throw new CliError("rate_limited", "provider asks to wait", { retryAfterMs: 600000 })
+      if (calls > 1) throw new CliError("rate_limited", "provider asks to wait", { retry_after_ms: 600000 })
       const items = [messageAt(5), messageAt(4)]
       await store.saveMessages(account, "7", items, { via: "history" })
       return { items, hasMore: true }
@@ -253,7 +253,7 @@ it("keeps earlier history pages and tells the caller when and where to resume", 
     complete: false,
     ranges: [{ from: 4, to: 5 }],
     resume: { before: "4" },
-    issue: { code: "rate_limited", retryAfterMs: 600000 },
+    issue: { code: "rate_limited", retry_after_ms: 600000 },
   })
   expect(calls).toBe(2)
 })

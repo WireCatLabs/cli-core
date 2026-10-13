@@ -11,7 +11,7 @@ import { rootOf } from "./profile.js"
  * The major version of the JSON every command prints. The output types live in this package, so the
  * contract is this package's: raise it with a major version, when a field is removed or renamed.
  */
-export const CONTRACT = 0
+export const CONTRACT = 1
 
 /**
  * The discovery surface an agent reads instead of `--help`. It opens no store, no session and no
@@ -45,10 +45,10 @@ export const commandsCommand = (app: AppIdentity): Command => {
         version: app.version,
         contract: CONTRACT,
         description: root.description(),
-        globalOptions: describeOptions(root),
-        ...(scoped ? { scope: scoped.command.path, inheritedOptions: scoped.inheritedOptions } : {}),
+        global_options: describeOptions(root),
+        ...(scoped ? { scope: scoped.command.path, inherited_options: scoped.inheritedOptions } : {}),
         commands,
-        exitCodes: { ok: 0, [CRASH_CODE]: GENERIC_FAILURE, ...EXIT_CODES },
+        exit_codes: { ok: 0, [CRASH_CODE]: GENERIC_FAILURE, ...EXIT_CODES },
       })
     })
   command.addCommand(

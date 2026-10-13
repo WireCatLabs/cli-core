@@ -380,8 +380,8 @@ describe("ranking services and drilldown selection", () => {
     const replay = await service.top("messages", { ...saved, weights: { reactions: 1 }, measure: undefined, limit: 3 })
     expect(replay.items.map(({ id }) => id)).toEqual(["3", "2", "1"])
     expect(replay.items[0]?.drilldown.selection.execution.root).toMatchObject({
-      upperInclusive: false,
-      resolution: { date: { upperInclusive: false } },
+      upper_inclusive: false,
+      resolution: { date: { upper_inclusive: false } },
     })
   })
 })

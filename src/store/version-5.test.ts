@@ -40,7 +40,7 @@ it("finds by name a file stored before version 5", async () => {
   const old = await openCache(path)
   old.exec(`DROP TRIGGER attachment_name_words_ai; DROP TRIGGER attachment_name_words_au;
     DROP TRIGGER attachment_name_words_ad; DROP TABLE attachment_name_words;
-    DELETE FROM schema_migrations WHERE version = 5;`)
+    DELETE FROM schema_migrations WHERE version >= 5;`)
   old.close()
 
   const upgraded = await openStore({ path })

@@ -23,7 +23,7 @@ it("writes each entry as a log record of the run that sent it", () => {
     time: "2026-10-13T08:00:00.000Z",
     severity: "info",
     body: "message",
-    runId: "20261013T080000Z-messages-send-a81f2c",
+    run_id: "20261013T080000Z-messages-send-a81f2c",
     command: "messages send",
     attributes: { profile: "default", chatId: "1", outcome: "sent", length: 5 },
     resource: { service: "tg", version: "1.0.0" },
@@ -57,6 +57,6 @@ it("names one run for the whole process when nothing is running", () => {
     .trimEnd()
     .split("\n")
     .map((line) => JSON.parse(line))
-  expect(first.runId).toMatch(/-process-/)
-  expect(second.runId).toBe(first.runId)
+  expect(first.run_id).toMatch(/-process-/)
+  expect(second.run_id).toBe(first.run_id)
 })

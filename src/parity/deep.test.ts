@@ -14,7 +14,7 @@ const node = (path: string[], changes: Partial<CommandInfo> = {}): CommandInfo =
   commands: [],
   ...changes,
 })
-const side = (cli: string, command: CommandInfo): CommandsJson => ({ cli, globalOptions: [], commands: [command] })
+const side = (cli: string, command: CommandInfo): CommandsJson => ({ cli, global_options: [], commands: [command] })
 const tool = (name: string, schema: unknown, annotations = {}) => ({ name, inputSchema: schema, annotations })
 
 describe("direct parity evidence", () => {
@@ -23,7 +23,7 @@ describe("direct parity evidence", () => {
       commands: [
         node(["messages", "download"], {
           arguments: [{ name: "message", required: true, variadic: false, description: "id" }],
-          options: [{ flags: "--output <dir>", description: "save", takesValue: true, mandatory: false }],
+          options: [{ flags: "--output <dir>", description: "save", takes_value: true, mandatory: false }],
         }),
       ],
     })
@@ -31,7 +31,7 @@ describe("direct parity evidence", () => {
       commands: [
         node(["messages", "download"], {
           arguments: [{ name: "message", required: false, variadic: false, description: "id" }],
-          options: [{ flags: "--output-dir <dir>", description: "save", takesValue: true, mandatory: false }],
+          options: [{ flags: "--output-dir <dir>", description: "save", takes_value: true, mandatory: false }],
         }),
       ],
     })
@@ -44,10 +44,10 @@ describe("direct parity evidence", () => {
   })
   it("keeps aliases/defaults and global contracts separate from prose and preserves false vs absent", () => {
     const command = node(["list"], {
-      options: [{ flags: "-n, --limit <n>", default: 20, takesValue: true, mandatory: false, description: "read" }],
+      options: [{ flags: "-n, --limit <n>", default: 20, takes_value: true, mandatory: false, description: "read" }],
     })
     const changed = node(["list"], {
-      options: [{ flags: "--limit <n>", default: 30, takesValue: true, mandatory: false, description: "show" }],
+      options: [{ flags: "--limit <n>", default: 30, takes_value: true, mandatory: false, description: "show" }],
       mutates: false,
     })
     const result = comparePrograms(side("a", command), side("b", changed))
@@ -94,7 +94,9 @@ describe("direct parity evidence", () => {
     expect(result[0]).toMatchObject({ name: "only", present: ["a"], contracts: [] })
   })
   it("rejects duplicate paths and preserves array order for positional arguments", () => {
-    expect(() => commandMap({ cli: "a", globalOptions: [], commands: [node(["a"]), node(["a"])] })).toThrow("duplicate")
+    expect(() => commandMap({ cli: "a", global_options: [], commands: [node(["a"]), node(["a"])] })).toThrow(
+      "duplicate",
+    )
     expect(valueDifferences(["a", "b"], ["b", "a"], "arguments")).toHaveLength(1)
   })
   it("keeps a matrix exemption as an exemption, including its complete reason", () => {
@@ -106,8 +108,8 @@ describe("direct parity evidence", () => {
 })
 
 it("measures global response contracts and does not silently collapse duplicate tool names", () => {
-  const base = { ...side("a", node(["status"])), contract: 0, exitCodes: { timeout: 9 } }
-  const other = { ...side("b", node(["status"])), contract: 1, exitCodes: { timeout: 10 } }
+  const base = { ...side("a", node(["status"])), contract: 0, exit_codes: { timeout: 9 } }
+  const other = { ...side("b", node(["status"])), contract: 1, exit_codes: { timeout: 10 } }
   expect(comparePrograms(base, other).globals.map((one) => one.path)).toEqual(["contract", "exitCodes.timeout"])
   expect(() =>
     compareTools({ cli: "a", tools: [tool("a_read", {}), tool("a_read", {})] }, { cli: "b", tools: [] }),

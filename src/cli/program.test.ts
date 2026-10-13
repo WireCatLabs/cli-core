@@ -314,7 +314,7 @@ describe("consumer lifecycle in the shared shell", () => {
     expect(result.stderr).toHaveLength(1)
     expect(JSON.parse(result.stderr[0] ?? "").error).toMatchObject({
       code: "not_found",
-      details: { settlementFailed: true },
+      details: { settlement_failed: true },
     })
     expect(result.stderr.join("\n")).not.toContain("private handler content")
   })
@@ -525,7 +525,7 @@ it("bounds an unresponsive failure handler while preserving the original error",
     expect(await pending).toBe(6)
     expect(JSON.parse(streams.stderr[0] ?? "{}").error).toMatchObject({
       code: "not_found",
-      details: { settlementFailed: true },
+      details: { settlement_failed: true },
     })
   } finally {
     vi.useRealTimers()

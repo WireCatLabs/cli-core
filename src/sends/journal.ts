@@ -144,7 +144,7 @@ export class SendJournal {
       time: at,
       severity: entry.outcome === "sent" || entry.outcome === "reserved" ? "info" : "warn",
       body: entry.kind ?? "message",
-      runId,
+      run_id: runId,
       command,
       attributes,
       resource: this.resource,

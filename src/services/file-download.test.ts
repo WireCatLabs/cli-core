@@ -52,7 +52,7 @@ it("stops a rate-limited download batch without requesting later files", async (
     position,
     bytes: async function* () {
       read(position)
-      if (position === 1) throw new CliError("rate_limited", "wait", { retryAfterMs: 600000 })
+      if (position === 1) throw new CliError("rate_limited", "wait", { retry_after_ms: 600000 })
       yield Buffer.from("synthetic")
     },
   }))

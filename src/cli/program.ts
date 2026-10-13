@@ -419,9 +419,9 @@ const failed = (
 ): Failure => {
   const failure =
     settled.settlementFailed && isCliFailure(error)
-      ? new CliError(error.code, error.message, { ...error.details, ...settled })
+      ? new CliError(error.code, error.message, { ...error.details, settlement_failed: true })
       : error
-  const object = errorObjectOf(failure, { reasons: REASONS, details: [...DETAILS, "settlementFailed"] })
+  const object = errorObjectOf(failure, { reasons: REASONS, details: [...DETAILS, "settlement_failed"] })
   const command = commandPath(program, program.args.length > 0 ? program.args : rest) || app.command
   return {
     object,

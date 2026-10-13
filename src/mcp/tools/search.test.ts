@@ -1,8 +1,8 @@
+import { parseLucene } from "@wirecat/cli-base/query"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { settingsFor } from "../../cli/settings.js"
-import { parseLucene } from "../../search/lucene/parser.js"
 import type { SearchFound } from "../../services/messages.js"
 import { answerMessagesSearch, messagesSearchInput } from "./search.js"
 

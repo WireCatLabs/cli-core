@@ -104,7 +104,7 @@ export const guardedWrite = async <T>(
       throw new CliError(
         "outcome_unknown",
         "the command ended with a write in flight; check its result before continuing",
-        { operationId: attempt.operationId },
+        { operation_id: attempt.operationId },
       )
     once({ ...attempt, ...settled(done), outcome: "sent" })
     return done
@@ -114,7 +114,7 @@ export const guardedWrite = async <T>(
     if (code === "outcome_unknown" && error instanceof Error)
       throw new CliError("outcome_unknown", error.message, {
         ...(error as CliError).details,
-        operationId: attempt.operationId,
+        operation_id: attempt.operationId,
         retryable: false,
       })
     throw error

@@ -3,7 +3,7 @@ import { type CommandsJson, type Entry, expected, longName, type Manifest } from
 
 const descriptions = (program: CommandsJson): Map<string, string> => {
   const found = new Map<string, string>()
-  for (const option of program.globalOptions) found.set(`(global) ${longName(option.flags)}`, option.description)
+  for (const option of program.global_options) found.set(`(global) ${longName(option.flags)}`, option.description)
   const walk = (command: CommandInfo) => {
     for (const option of command.options)
       found.set(`${command.path.join(" ")} ${longName(option.flags)}`, option.description)

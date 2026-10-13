@@ -44,7 +44,7 @@ const chatOf = (state: {
       if (state.wait !== undefined) {
         const retryAfterMs = state.wait
         delete state.wait
-        throw new CliError("rate_limited", "wait", { retryAfterMs })
+        throw new CliError("rate_limited", "wait", { retry_after_ms: retryAfterMs })
       }
       const upper = before === undefined ? state.newest : Number(before) - 1
       const low = Math.max(1, upper - limit + 1)
@@ -476,7 +476,7 @@ describe("store fetch in the background", () => {
 
     expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({
       state: "partial",
-      issue: { code: "rate_limited", retryAfterMs: 600000, actions: expect.any(Array) },
+      issue: { code: "rate_limited", retry_after_ms: 600000, actions: expect.any(Array) },
     })
 
     const gone = spawned(2 ** 22 + 12345)

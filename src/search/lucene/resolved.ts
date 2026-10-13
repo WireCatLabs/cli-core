@@ -1,7 +1,6 @@
+import type { DateRange, Occur, Predicate, QueryNode, Span } from "@wirecat/cli-base/query"
 import type { AccountKey } from "../../store/store.js"
 import type { Stemmer } from "../stem.js"
-import type { DateRange } from "./dates.js"
-import type { Predicate, QueryNode, Span } from "./types.js"
 
 export type ResolvedPredicate = Predicate & {
   resolution?: {
@@ -14,7 +13,7 @@ export type ResolvedPredicate = Predicate & {
 }
 export type ResolvedNode =
   | ResolvedPredicate
-  | { kind: "boolean"; clauses: { occur: "must" | "should" | "mustNot"; node: ResolvedNode }[]; span: Span }
+  | { kind: "boolean"; clauses: { occur: Occur; node: ResolvedNode }[]; span: Span }
 export interface QueryExecution {
   root: ResolvedNode
   accounts: AccountKey[]

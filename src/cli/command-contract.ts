@@ -229,12 +229,12 @@ export const commandContract = (command: Command) => {
     [...options].map(([name, option]) => [
       name,
       {
-        type: option.takesValue ? "string" : "boolean",
+        type: option.takes_value ? "string" : "boolean",
         description: option.description,
         ...(option.choices ? { enum: option.choices } : {}),
         ...(option.default === undefined
           ? {}
-          : { default: option.takesValue ? String(option.default) : option.default }),
+          : { default: option.takes_value ? String(option.default) : option.default }),
       },
     ]),
   )

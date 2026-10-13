@@ -25,7 +25,7 @@ describe("a deadline that ends the command", () => {
       guardedWrite(guard, { operationId: "op-1", chatId: "-100", kind: "message" }, never),
     )
 
-    await expect(cut).rejects.toMatchObject({ code: "outcome_unknown", details: { operationIds: ["op-1"] } })
+    await expect(cut).rejects.toMatchObject({ code: "outcome_unknown", details: { operation_ids: ["op-1"] } })
     expect(entries).toEqual([
       {
         operationId: "op-1",
@@ -112,7 +112,7 @@ it("correlates provider unknown outcomes with the guarded operation id", async (
     }),
   ).rejects.toMatchObject({
     code: "outcome_unknown",
-    details: { operationId: "op-provider", sendId: "synthetic-send", retryable: false },
+    details: { operation_id: "op-provider", sendId: "synthetic-send", retryable: false },
   })
   expect(entries).toHaveLength(1)
 })

@@ -62,7 +62,7 @@ export const bufferedInput = (
             `buffered input exceeds ${maxBytes} bytes — use a smaller input or --max-input-bytes`,
             {
               reason: "input.too-large",
-              maxBytes,
+              max_bytes: maxBytes,
               retryable: false,
             },
           ),

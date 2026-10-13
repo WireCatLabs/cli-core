@@ -2,7 +2,7 @@ import { expect, it } from "vitest"
 import { withRecovery } from "./recovery.js"
 
 it("gives machine-readable wait and configuration actions without authorizing an uncertain write replay", () => {
-  expect(withRecovery({ code: "rate_limited", message: "wait", retryAfterMs: 30000 })).toMatchObject({
+  expect(withRecovery({ code: "rate_limited", message: "wait", retry_after_ms: 30000 })).toMatchObject({
     retryable: true,
     actions: [{ type: "wait", afterMs: 30000 }, { type: "retry" }],
   })

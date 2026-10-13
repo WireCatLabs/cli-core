@@ -119,9 +119,9 @@ export const topicsService = (deps: ServiceDeps): TopicsService => {
             "the group was upgraded but enabling topics did not finish; check the new chat before repeating",
             {
               ...(isCliError(error) ? error.details : {}),
-              operationId,
-              previousChatId,
-              chatId: first.chat.id,
+              operation_id: operationId,
+              previous_chat_id: previousChatId,
+              chat_id: first.chat.id,
               upgraded: first.chat.id !== previousChatId,
               forum: null,
               stage: "enable",
@@ -131,8 +131,8 @@ export const topicsService = (deps: ServiceDeps): TopicsService => {
       }
       if (!current.forum)
         throw new CliError("invalid_response", "Telegram did not confirm that topics were enabled", {
-          operationId,
-          chatId: current.chat.id,
+          operation_id: operationId,
+          chat_id: current.chat.id,
         })
       return {
         operationId,

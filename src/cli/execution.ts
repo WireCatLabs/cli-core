@@ -58,7 +58,7 @@ export const execution = (
     const cut = pending.filter((write) => !write.preparing)
     interrupted = cut.length
       ? new CliError("outcome_unknown", "the command ended with a write in flight — check before repeating it", {
-          operationIds: cut.map((write) => write.operationId),
+          operation_ids: cut.map((write) => write.operationId),
           retryable: false,
         })
       : error
@@ -128,9 +128,9 @@ export const execution = (
             {
               retryable: false,
               reason: "output.too-large",
-              maxBytes: maxOutputBytes,
-              emittedBytes: bytes,
-              partialOutput: bytes > 0,
+              max_bytes: maxOutputBytes,
+              emitted_bytes: bytes,
+              partial_output: bytes > 0,
             },
           )
         bytes += size

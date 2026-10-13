@@ -12,11 +12,11 @@ const command = (path: string, options: string[] = [], commands: CommandInfo[] =
   usage: "",
   origin: "handwritten",
   arguments: [],
-  options: options.map((flags) => ({ flags, description: "", takesValue: false, mandatory: false })),
+  options: options.map((flags) => ({ flags, description: "", takes_value: false, mandatory: false })),
   commands,
 })
 
-const program = (...commands: CommandInfo[]): CommandsJson => ({ cli: "tg", globalOptions: [], commands })
+const program = (...commands: CommandInfo[]): CommandsJson => ({ cli: "tg", global_options: [], commands })
 
 const manifest = (commands: Manifest["commands"], clis = ["max", "tg"]): Manifest => ({
   clis,
@@ -103,7 +103,7 @@ describe("parityProblems", () => {
     const native: CommandInfo = {
       ...command("bot api provider-operation", ["--native-field <value>"]),
       origin: "generated",
-      operationId: "providerOperation",
+      operation_id: "providerOperation",
     }
     const tree = (child: CommandInfo, flags = ["--all"]) =>
       program(command("bot", [], [command("bot api", flags, [child])]))

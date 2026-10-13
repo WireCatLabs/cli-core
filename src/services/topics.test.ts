@@ -88,7 +88,7 @@ describe("forum control through the shared service", () => {
     }
     await expect(f.service.enable("synthetic", { upgrade: true })).rejects.toMatchObject({
       code: "permission_error",
-      details: { previousChatId: "7", chatId: "8", upgraded: true, stage: "enable", forum: null },
+      details: { previous_chat_id: "7", chat_id: "8", upgraded: true, stage: "enable", forum: null },
     })
     expect(f.adapter.enableForum).not.toHaveBeenCalled()
     expect(f.records).toMatchObject([{ outcome: "sent" }, { outcome: "refused" }])

@@ -1,9 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import { type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
 import { type RankingInput, type RankingTarget, rankingOptions } from "../domain/rankings-options.js"
-import { timezoneOf } from "../search/lucene/dates.js"
 import { FIELD_VERSION, validateAst } from "../search/lucene/registry.js"
 import type { QueryExecution, ResolvedNode } from "../search/lucene/resolved.js"
-import type { QueryNode } from "../search/lucene/types.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 
 export interface RankingEntity {
@@ -143,15 +142,15 @@ export const readRankingSelection = async (store: MessageStore, input: unknown):
     }
     if (node.field === "date") {
       const range = object(resolution?.date)
-      if (!range || typeof range.lowerInclusive !== "boolean" || typeof range.upperInclusive !== "boolean") invalid()
+      if (!range || typeof range.lower_inclusive !== "boolean" || typeof range.upper_inclusive !== "boolean") invalid()
       const lower = finiteTime(range.lower),
         upper = finiteTime(range.upper)
       return {
         ...node,
         resolution: {
           date: {
-            lowerInclusive: range.lowerInclusive,
-            upperInclusive: range.upperInclusive,
+            lower_inclusive: range.lower_inclusive,
+            upper_inclusive: range.upper_inclusive,
             ...(lower === undefined ? {} : { lower }),
             ...(upper === undefined ? {} : { upper }),
           },

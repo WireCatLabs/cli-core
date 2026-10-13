@@ -27,7 +27,7 @@ describe("bounded command execution", () => {
     try {
       control.streams.data("{}")
     } catch (error) {
-      expect((error as CliError).details).toMatchObject({ partialOutput: true, emittedBytes: 3, retryable: false })
+      expect((error as CliError).details).toMatchObject({ partial_output: true, emitted_bytes: 3, retryable: false })
     }
     expect(streams.stdout).toEqual(["{}"])
     await control.finish()
@@ -61,7 +61,7 @@ describe("bounded command execution", () => {
         })
         return new Promise(() => {})
       }),
-    ).rejects.toMatchObject({ code: "outcome_unknown", details: { retryable: false, operationIds: ["op-synthetic"] } })
+    ).rejects.toMatchObject({ code: "outcome_unknown", details: { retryable: false, operation_ids: ["op-synthetic"] } })
     expect(cuts).toBe(1)
     await control.finish()
   })
@@ -114,6 +114,6 @@ it("sees writes inside an inner deadline and stops later writes across the whole
         ),
       ),
     ),
-  ).rejects.toMatchObject({ code: "outcome_unknown", details: { operationIds: ["op-nested"] } })
+  ).rejects.toMatchObject({ code: "outcome_unknown", details: { operation_ids: ["op-nested"] } })
   await control.finish()
 })

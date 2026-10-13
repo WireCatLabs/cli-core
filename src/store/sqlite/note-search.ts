@@ -9,7 +9,7 @@ import {
 } from "../../search/lucene/automaton.js"
 import type { ResolvedNode, ResolvedPredicate } from "../../search/lucene/resolved.js"
 import { isStemmed } from "../../search/lucene/resolved.js"
-import { exhausted, QUERY_LIMITS, queryError } from "../../search/lucene/types.js"
+import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
 import type { Stemmer } from "../../search/stem.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
@@ -174,7 +174,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
   const leaf = (node: ResolvedPredicate): Fragment => {
     const { field, operator, value } = node
     if (!(NOTE_FIELDS as readonly string[]).includes(field))
-      queryError(
+      searchError(
         "query.unsupported-field",
         node.span,
         `${field}: is not a note field — notes take ${NOTE_FIELDS.join(", ")}`,
@@ -223,27 +223,27 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
     }
     if (field === "tag") {
       const tag = tagOf(value)
-      if (tag === undefined) queryError("query.invalid-tag", node.span)
+      if (tag === undefined) searchError("query.invalid-tag", node.span)
       // A label on a folder or subfolder labels every note under it, at any depth.
       return corpus.tagged(tag)
     }
     if (field === "has") {
       // A document drive could not read is kept by its name alone; `-has:text` lists those.
       if (value.toLowerCase() !== "text")
-        queryError("query.unknown-value", node.span, `has:${value} is a message field — notes take has:text`)
+        searchError("query.unknown-value", node.span, `has:${value} is a message field — notes take has:text`)
       return bound("length(trim(coalesce(n.text,''))) > 0")
     }
     if (field === "date") {
       const range = node.resolution?.date
-      if (!range) queryError("query.invalid-ast", node.span)
+      if (!range) searchError("query.invalid-ast", node.span)
       return combine(
         [
           ...(range.lower === undefined
             ? []
-            : [bound(`n.updated_at ${range.lowerInclusive ? ">=" : ">"} ?`, range.lower)]),
+            : [bound(`n.updated_at ${range.lower_inclusive ? ">=" : ">"} ?`, range.lower)]),
           ...(range.upper === undefined
             ? []
-            : [bound(`n.updated_at ${range.upperInclusive ? "<=" : "<"} ?`, range.upper)]),
+            : [bound(`n.updated_at ${range.upper_inclusive ? "<=" : "<"} ?`, range.upper)]),
         ],
         "AND",
       )
@@ -262,7 +262,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
     const must = parts.filter(({ occur }) => occur === "must").map(({ part }) => part)
     const should = parts.filter(({ occur }) => occur === "should").map(({ part }) => part)
     const not = parts
-      .filter(({ occur }) => occur === "mustNot")
+      .filter(({ occur }) => occur === "must_not")
       .map(({ part }) =>
         part.exact ? { ...part, sql: `NOT coalesce(${part.sql},0)` } : { sql: "1", params: [], exact: false },
       )
@@ -342,7 +342,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       }
       const must = node.clauses.filter(({ occur }) => occur === "must")
       const should = node.clauses.filter(({ occur }) => occur === "should")
-      const not = node.clauses.filter(({ occur }) => occur === "mustNot")
+      const not = node.clauses.filter(({ occur }) => occur === "must_not")
       return (
         (must.length
           ? must.every(({ node }) => evaluate(node, row, text))

@@ -87,7 +87,7 @@ describe("strict search hints", () => {
     const store = await open({ "1": ["alpha beta"] })
     const fuzzy = await failure(run(store, "alpha~1"))
     expect(fuzzy.details).toMatchObject({ reason: "query.unsupported-operator" })
-    expect(fuzzy.message).toContain("--language legacy")
+    expect(fuzzy.message).not.toContain("legacy")
     expect(fuzzy.message).toContain("word*")
     const proximity = await failure(run(store, '"alpha beta"~2'))
     expect(proximity.message).toContain("proximity")

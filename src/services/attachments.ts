@@ -360,7 +360,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
                     : extraction?.status === "engine-missing"
                       ? `attachment engine-missing; ${engineMissing(extraction.engine)}; \`doctor\` lists the readers`
                       : `attachment ${status}; retry or skip this item`,
-                  { limitSource: ocr ? "provider" : "local" },
+                  { limit_source: ocr ? "provider" : "local" },
                 )),
           file.position + 1,
         )

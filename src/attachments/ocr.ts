@@ -74,8 +74,8 @@ export const ocrImage = async (bytes: Uint8Array, pipeline: OcrPipeline, signal?
       issue: withRecovery({
         code: isCliFailure(error) ? error.code : "provider_error",
         message: "OCR provider refused this item; retry or skip it",
-        ...(isCliFailure(error) && typeof error.details?.retryAfterMs === "number"
-          ? { retryAfterMs: error.details.retryAfterMs }
+        ...(isCliFailure(error) && typeof error.details?.retry_after_ms === "number"
+          ? { retry_after_ms: error.details.retry_after_ms }
           : {}),
       }),
     }
@@ -188,8 +188,8 @@ export const ocrPdf = async (
       issue: withRecovery({
         code: isCliFailure(error) ? error.code : "provider_error",
         message: "OCR provider refused this item; retry or skip it",
-        ...(isCliFailure(error) && typeof error.details?.retryAfterMs === "number"
-          ? { retryAfterMs: error.details.retryAfterMs }
+        ...(isCliFailure(error) && typeof error.details?.retry_after_ms === "number"
+          ? { retry_after_ms: error.details.retry_after_ms }
           : {}),
       }),
     }

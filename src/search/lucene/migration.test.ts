@@ -1,6 +1,6 @@
+import { parseLucene } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
 import { migrateLegacyQuery } from "./migration.js"
-import { parseLucene } from "./parser.js"
 
 describe("explicit legacy migration preview", () => {
   it("makes legacy OR grouping explicit and preserves quoted values/exclusions", () => {

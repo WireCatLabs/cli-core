@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { DateRange } from "../search/lucene/dates.js"
+import type { DateRange } from "@wirecat/cli-base/query"
 import type { ResolvedNode, ResolvedPredicate } from "../search/lucene/resolved.js"
 
 /** A common positive date range bounds reply events independently of author/body filters. */

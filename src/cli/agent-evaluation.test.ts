@@ -44,7 +44,7 @@ const definition: ProgramDefinition = {
           .argument("<text>")
           .action(() => {
             throw new CliError("outcome_unknown", "synthetic unknown outcome", {
-              operationId: "synthetic-operation",
+              operation_id: "synthetic-operation",
               retryable: false,
             })
           }),
@@ -100,7 +100,7 @@ const tasks: AgentTask[] = [
     check: (calls) =>
       calls.length === 1 &&
       calls[0]?.exitCode === 14 &&
-      JSON.parse(calls[0].stderr[0] ?? "{}").error.details?.operationId === "synthetic-operation",
+      JSON.parse(calls[0].stderr[0] ?? "{}").error.details?.operation_id === "synthetic-operation",
   },
 ]
 const baseline: AgentPolicy = async (task, call) => {
