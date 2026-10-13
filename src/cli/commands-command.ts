@@ -1,5 +1,6 @@
 import { CliError, EXIT_CODES, GENERIC_FAILURE } from "@wirecat/cli-base"
 import { type CommandInfo, describeOptions, describeProgram, flatten } from "@wirecat/cli-base/commands"
+import { CRASH_CODE } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import type { AppIdentity } from "./app.js"
 import { commandContract, findCommand } from "./command-contract.js"
@@ -47,7 +48,7 @@ export const commandsCommand = (app: AppIdentity): Command => {
         globalOptions: describeOptions(root),
         ...(scoped ? { scope: scoped.command.path, inheritedOptions: scoped.inheritedOptions } : {}),
         commands,
-        exitCodes: { ok: 0, generic_failure: GENERIC_FAILURE, ...EXIT_CODES },
+        exitCodes: { ok: 0, [CRASH_CODE]: GENERIC_FAILURE, ...EXIT_CODES },
       })
     })
   command.addCommand(

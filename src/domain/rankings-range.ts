@@ -24,7 +24,7 @@ export const rankingContextRange = (root: ResolvedNode): DateRange | undefined =
     throw new CliError(
       "validation_error",
       "reply rankings need one common positive date range; move date: outside Boolean alternatives",
-      { reason: "ambiguous_context_period" },
+      { reason: "period.ambiguous" },
     )
   return dates[0].node.resolution.date
 }

@@ -44,7 +44,7 @@ it("keeps agent membership proposed until an owner reviews its fingerprint, and 
   expect(accepted).toMatchObject({ changed: true, link: { confirmed: true } })
   await expect(
     store.knowledge.linkMeetingProject(key, meeting, project, { expectedFingerprint: proposed.link.fingerprint }),
-  ).rejects.toMatchObject({ details: { reason: "stale_meeting_project" } })
+  ).rejects.toMatchObject({ details: { reason: "meeting-project.stale" } })
   expect(await store.knowledge.linkMeetingProject(key, meeting, project)).toMatchObject({ changed: false })
   const reopened = await openStore({ path })
   opened.push(reopened)

@@ -493,9 +493,9 @@ export const embeddingsService = (deps: ServiceDeps): EmbeddingsService => {
       query,
       { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh },
     ) => {
-      if (!query.trim()) queryError("invalid_syntax", { start: 0, end: query.length }, "give words to search for")
+      if (!query.trim()) queryError("query.invalid-syntax", { start: 0, end: query.length }, "give words to search for")
       if (new TextEncoder().encode(query).length > QUERY_LIMITS.bytes)
-        queryError("query_limit", { start: 0, end: query.length }, "query is longer than 8 KiB")
+        queryError("query.too-large", { start: 0, end: query.length }, "query is longer than 8 KiB")
       const refreshed = await refreshSearch(deps, {
         chat,
         limit,

@@ -156,7 +156,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
         )
       if (metadata.length > maxEntries)
         throw new CliError("validation_error", "vocabulary exceeds the selected entry budget", {
-          reason: "vocabulary_entry_budget",
+          reason: "vocabulary.over-entry-budget",
         })
       const aliasSelection =
         "a.account_id IS NULL AND ((? AND a.aliasable_type='project' AND EXISTS " +
@@ -180,7 +180,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
       const bytes = metadata.reduce((total, row) => total + Number(row.bytes), 0) + Number(aliases?.bytes ?? 0)
       if (bytes > maxReadBytes)
         throw new CliError("validation_error", "vocabulary exceeds the selected input byte budget", {
-          reason: "vocabulary_byte_budget",
+          reason: "vocabulary.over-byte-budget",
         })
       const entries: VocabularyEntry[] = []
       if (projects)
@@ -263,7 +263,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
       ...(parts?.[2] && parts[2] !== "all" ? { scope: parts[2] as "personal" | "work" } : {}),
     })
     if (expected !== undefined && expected !== current.fingerprint)
-      throw new CliError("configuration_error", "vocabulary changed since the preview", { reason: "stale_vocabulary" })
+      throw new CliError("configuration_error", "vocabulary changed since the preview", { reason: "vocabulary.stale" })
     return parts && (parts[1] !== "all" || parts[2] !== "all") ? catalog() : current
   }
   const targetEntry = (current: VocabularyCatalog, target: VocabularyTarget) => {
@@ -348,7 +348,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
         const conflicts = matches(peers, name).filter((value) => value.id !== entry.id || value.kind !== entry.kind)
         if (conflicts.length)
           throw new CliError("configuration_error", "this alias already names another canonical record", {
-            reason: "vocabulary_alias_conflict",
+            reason: "vocabulary.alias-conflict",
             candidates: conflicts.map((value) => ({ kind: value.kind, id: value.id, name: value.name })),
           })
         const held = entry.aliases.find((alias) => storedName(alias.name) === normalized)

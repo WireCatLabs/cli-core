@@ -136,7 +136,7 @@ export const createTag = (
     throw new CliError("validation_error", `a tag's kind is one of ${TAG_KINDS.join(", ")}`)
   if (kind === "topic" && by !== "owner")
     throw new CliError("permission_error", "only the owner creates a topic — propose it for the owner to approve", {
-      reason: "owner_only_topic",
+      reason: "topic.owner-only",
     })
   const held = canonicalTagNamed(database, name)
   if (held)

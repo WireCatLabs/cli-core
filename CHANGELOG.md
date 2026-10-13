@@ -15,6 +15,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   `runs list` stops once it has `--limit`. On 6,000 generated runs: a missed `--error-code` 1.76 s → 16 ms,
   `runs list` 31 ms → 0.7 ms. A free-text query still reads events. A run the index does not name (kept by
   an older version, or by a process still running one) is read from its `run.json`.
+- **`--debug`:** on a failure, the person sees the whole record — cause and up to ten stack frames — after the
+  `✗` line; a machine gets it as a second JSON line after the error object.
+- **Entity schemas** (`src/entities/`): message (with the `message.hit` and `message.summary` views), chat,
+  person, identity, contact, account, note, document, attachment, task, fact, memory, meeting and reference,
+  and `entityDefinitions()` for an MCP `outputSchema`. Commands move onto them in later releases.
 
 ### Changed — may break callers
 
@@ -42,6 +47,20 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
     `meetings search-page` and `meetings sync`.
   - `meetings search-page --after` is `--cursor`; its `--limit` takes `<n>`.
   - Every argument has a description, and the `search-page` summary fits in 80 characters.
+- **One error object, on stderr and in MCP alike:** `{ error: { code, reason, message, param?, details?, next?,
+  runId? } }`. Details moved from the top of `error` into `error.details` (`candidates`, `operationId`,
+  `permission`…), and only registered keys stay — never `cause`. `retryable` appears only where a failure set it.
+  `actions` is gone from the top-level error, and the recovery hint is no longer chosen from the message text.
+  Per-item batch failures keep `actions` for now.
+- **Reasons are dotted ids from one registry** (`src/cli/reasons.ts`): `query_limit` → `query.too-large`,
+  `input_limit` → `input.too-large`, `output_limit` → `output.too-large`, `invalid_syntax` →
+  `query.invalid-syntax`, and the same for every other reason a `CliError` carries. A search error's message
+  names the new id. Status fields such as `stemming.reason` keep their values.
+- **A failure that is not a `CliError` is `internal_error`, exit 1,** with a fixed message; its own text,
+  which can hold anything, shows only under `--debug`. It replaces `generic_failure` here and in the meetings
+  MCP tools. An upgrade whose installer fails is now `provider_error` (`upgrade.install-failed`, exit 11).
+- `TaskError` is gone: a closed task is `validation_error` with `reason: "task.closed"`, a missing one
+  `not_found`. `MeetingError` is a `CliError` now.
 
 ### Fixed
 

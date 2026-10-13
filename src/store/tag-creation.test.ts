@@ -22,7 +22,7 @@ describe("native label creation review", () => {
     const { store, project } = await fixture()
     await expect(
       store.knowledge.addTags(null, { type: "project", id: project.id }, ["garden", "on-boarding"]),
-    ).rejects.toMatchObject({ details: { reason: "tag_review_required", candidates: [{ name: "onboarding" }] } })
+    ).rejects.toMatchObject({ details: { reason: "tag-review.required", candidates: [{ name: "onboarding" }] } })
     expect(await store.knowledge.tags(null, { type: "project", id: project.id })).toEqual([])
     expect((await store.knowledge.resolveVocabulary("garden")).matches).toEqual([])
   })
@@ -52,13 +52,13 @@ describe("native label creation review", () => {
           kind: input.kind,
           expectedCreationFingerprint: review.creationFingerprint,
         }),
-      ).rejects.toMatchObject({ details: { reason: "stale_tag_review" } })
+      ).rejects.toMatchObject({ details: { reason: "tag-review.stale" } })
     const second = await openStore({ path, now: () => 4000 })
     stores.push(second)
     await second.knowledge.createTag("garden")
     await expect(
       store.knowledge.createTag("on-boarding", { expectedCreationFingerprint: review.creationFingerprint }),
-    ).rejects.toMatchObject({ details: { reason: "stale_tag_review" } })
+    ).rejects.toMatchObject({ details: { reason: "tag-review.stale" } })
     await expect(
       store.knowledge.createTag("on-boarding", { expectedCreationFingerprint: "bad" }),
     ).rejects.toMatchObject({ code: "validation_error" })
@@ -67,7 +67,7 @@ describe("native label creation review", () => {
     const { store, project, tag } = await fixture()
     await store.knowledge.addVocabularyAlias({ kind: "tag", id: String(tag.id) }, "arrival")
     await expect(store.knowledge.createTag("arrivals", { kind: "topic" })).rejects.toMatchObject({
-      details: { reason: "tag_review_required", candidates: [{ id: String(tag.id) }] },
+      details: { reason: "tag-review.required", candidates: [{ id: String(tag.id) }] },
     })
     expect(await store.knowledge.addTags(null, { type: "project", id: project.id }, ["arrival"])).toEqual([
       "onboarding",

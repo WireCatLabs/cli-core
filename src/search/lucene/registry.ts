@@ -279,7 +279,8 @@ const UNITS: Record<string, number> = {
 export const parseBytes = (value: string, span: Span): number => {
   const [, amount, unit] = /^(\d+(?:\.\d+)?)\s*([a-z]*)$/iu.exec(value.trim()) ?? []
   const scale = UNITS[unit?.toLowerCase() ?? ""]
-  if (amount === undefined || scale === undefined) queryError("invalid_size", span, "use bytes or KB/MB/GB, e.g. 10MB")
+  if (amount === undefined || scale === undefined)
+    queryError("query.invalid-size", span, "use bytes or KB/MB/GB, e.g. 10MB")
   return Math.round(Number(amount) * scale)
 }
 
@@ -293,19 +294,19 @@ export const validatePredicate = (node: Predicate): void => {
       plain ? `use date${node.field === "after" ? ">=" : "<"}${node.value}` : "use date>=YYYY-MM-DD or date:[a TO b]",
     )
   }
-  if (!field) queryError("unknown_field", node.span, "use a field from the search field reference")
+  if (!field) queryError("query.unknown-field", node.span, "use a field from the search field reference")
   if (!(field.operators as readonly string[]).includes(node.operator))
-    queryError("unsupported_operator", node.span, `${field.name} takes ${field.operators.join(", ")}`)
-  if (node.value === "" && !["text", "exact", "body"].includes(node.field)) queryError("missing_value", node.span)
+    queryError("query.unsupported-operator", node.span, `${field.name} takes ${field.operators.join(", ")}`)
+  if (node.value === "" && !["text", "exact", "body"].includes(node.field)) queryError("query.missing-value", node.span)
   if ("values" in field && !field.values.includes(node.value.toLowerCase() as never))
-    queryError("unknown_value", node.span, `${field.name} takes ${field.values.join(", ")}`)
+    queryError("query.unknown-value", node.span, `${field.name} takes ${field.values.join(", ")}`)
   if (field.name === "size")
     for (const bound of node.operator === "range" ? [node.value, node.upper] : [node.value])
       if (bound !== undefined && bound !== "*") parseBytes(bound, node.span)
   if (field.name === "tag" && tagOf(node.value) === undefined)
-    queryError("invalid_tag", node.span, "a tag is 1-32 letters a-z, digits and hyphens")
+    queryError("query.invalid-tag", node.span, "a tag is 1-32 letters a-z, digits and hyphens")
   if (field.name === "topic" && !/^\d+$/u.test(node.value))
-    queryError("invalid_topic", node.span, "use a thread id in one chat")
+    queryError("query.invalid-topic", node.span, "use a thread id in one chat")
 }
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -319,19 +320,19 @@ const validSpan = (value: unknown): value is Span =>
 export const validateAst = (input: unknown): QueryAst => {
   const failure = { start: 0, end: 0 }
   if (!record(input) || input.version !== 1 || input.language !== "lucene-v1")
-    queryError("unsupported_version", failure)
+    queryError("query.unsupported-version", failure)
   let count = 0
   let bytes = 0
   const read = (value: unknown, depth: number): QueryNode => {
-    if (++count > QUERY_LIMITS.nodes || depth > QUERY_LIMITS.depth) queryError("query_limit", failure)
-    if (!record(value) || !validSpan(value.span)) queryError("invalid_ast", failure)
+    if (++count > QUERY_LIMITS.nodes || depth > QUERY_LIMITS.depth) queryError("query.too-large", failure)
+    if (!record(value) || !validSpan(value.span)) queryError("query.invalid-ast", failure)
     const span = { start: value.span.start, end: value.span.end }
     if (value.kind === "boolean") {
       if (!Array.isArray(value.clauses) || value.clauses.length === 0 || value.clauses.length > QUERY_LIMITS.nodes)
-        queryError("invalid_ast", span)
+        queryError("query.invalid-ast", span)
       const clauses = value.clauses.map((clause: unknown) => {
         if (!record(clause) || !["must", "should", "mustNot"].includes(String(clause.occur)))
-          queryError("invalid_ast", span)
+          queryError("query.invalid-ast", span)
         const occur = clause.occur as "must" | "should" | "mustNot"
         return { occur, node: read(clause.node, depth + 1) }
       })
@@ -343,10 +344,10 @@ export const validateAst = (input: unknown): QueryAst => {
       typeof value.value !== "string" ||
       !["term", "phrase", "wildcard", "regex", "range"].includes(String(value.operator))
     )
-      queryError("invalid_ast", span)
-    if (value.value.length + value.field.length > QUERY_LIMITS.bytes) queryError("query_limit", span)
+      queryError("query.invalid-ast", span)
+    if (value.value.length + value.field.length > QUERY_LIMITS.bytes) queryError("query.too-large", span)
     bytes += new TextEncoder().encode(value.value).length + value.field.length
-    if (bytes > QUERY_LIMITS.bytes) queryError("query_limit", span)
+    if (bytes > QUERY_LIMITS.bytes) queryError("query.too-large", span)
     const operator = value.operator as Operator
     if (
       operator === "range" &&
@@ -354,11 +355,11 @@ export const validateAst = (input: unknown): QueryAst => {
         typeof value.lowerInclusive !== "boolean" ||
         typeof value.upperInclusive !== "boolean")
     )
-      queryError("invalid_ast", span)
+      queryError("query.invalid-ast", span)
     if (typeof value.upper === "string") {
-      if (value.upper.length > QUERY_LIMITS.bytes) queryError("query_limit", span)
+      if (value.upper.length > QUERY_LIMITS.bytes) queryError("query.too-large", span)
       bytes += new TextEncoder().encode(value.upper).length
-      if (bytes > QUERY_LIMITS.bytes) queryError("query_limit", span)
+      if (bytes > QUERY_LIMITS.bytes) queryError("query.too-large", span)
     }
     const node: Predicate = {
       kind: "predicate",
@@ -434,5 +435,5 @@ export const QUERY_OPERATORS = [
     example: "invoice~1",
     semantics: "unsupported_operator; опечатки исправляет `--language legacy`, формы слова ловит prefix `word*`",
   },
-  { name: "boost / minimum / intervals", example: "invoice^2", semantics: "unsupported_operator" },
+  { name: "boost / minimum / intervals", example: "invoice^2", semantics: "query.unsupported-operator" },
 ] as const

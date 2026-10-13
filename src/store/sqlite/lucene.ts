@@ -106,7 +106,14 @@ const tooManyWords = ({ field, operator, value, span }: ResolvedPredicate, alone
   throw new CliError(
     "validation_error",
     `search: ${term}${alone ? " matches" : " and the patterns before it match"} more than ${QUERY_LIMITS.expansions} indexed words, the term expansions budget — use a longer prefix, or body:/…/ inside one chat`,
-    { reason: "query_limit", budget: "term expansions", complete: false, term, limit: QUERY_LIMITS.expansions, span },
+    {
+      reason: "query.too-large",
+      budget: "term expansions",
+      complete: false,
+      term,
+      limit: QUERY_LIMITS.expansions,
+      span,
+    },
   )
 }
 export type QueryGrouping = "chat" | "sender" | "time"
@@ -156,7 +163,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   const expanded = new Map<string, Fragment>()
   const check = () => {
     if (execution.signal?.aborted)
-      throw new CliError("validation_error", "search was aborted", { reason: "query_aborted", complete: false })
+      throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
     if (context.now() - started > QUERY_LIMITS.milliseconds) exhausted("time")
   }
   const patternOf = (pattern: string, node: ResolvedPredicate) => {
@@ -323,7 +330,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       fragment = /[\p{L}\p{N}]/u.test(text) ? bound(`m.id IN (${set.sql})`, ...set.params) : bound("0")
     } else if (field === "date") {
       const range = resolution?.date
-      if (!range) queryError("invalid_ast", node.span)
+      if (!range) queryError("query.invalid-ast", node.span)
       const conditions: Fragment[] = []
       if (range.lower !== undefined)
         conditions.push(bound(`m.sent_at ${range.lowerInclusive ? ">=" : ">"} ?`, range.lower))
@@ -332,7 +339,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       fragment = combine(conditions, "AND")
     } else if (field === "chat") {
       const chat = resolution?.chat
-      if (!chat) queryError("invalid_ast", node.span)
+      if (!chat) queryError("query.invalid-ast", node.span)
       fragment = bound(
         `m.chat_id IN (SELECT cc.id FROM ${corpus.threads} cc JOIN accounts aa ON aa.id=cc.account_id WHERE aa.provider=? AND aa.external_id=? AND cc.external_id=?)`,
         chat.account.provider,
@@ -348,10 +355,10 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
           sender.provider,
           sender.id,
         )
-      else queryError("invalid_ast", node.span)
+      else queryError("query.invalid-ast", node.span)
     } else if (field === "tag") {
       const tag = tagOf(value)
-      if (tag === undefined) queryError("invalid_tag", node.span)
+      if (tag === undefined) queryError("query.invalid-tag", node.span)
       fragment = bound(
         `m.id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.item}') OR ` +
           `m.chat_id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.thread}') OR ` +
@@ -362,7 +369,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       )
     } else if (mail && (field === "topic" || field === "kind")) {
       throw new CliError("validation_error", `search: ${field}: is a messenger field — mail has no ${field}`, {
-        reason: "unsupported_field",
+        reason: "query.unsupported-field",
         span: node.span,
       })
     } else if (field === "topic") fragment = bound("m.thread_external_id = ?", value)
@@ -403,7 +410,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
         : bound("0")
     } else if (field === "to" || field === "cc" || field === "bcc") {
       const who = resolution?.sender
-      if (!who) queryError("invalid_ast", node.span)
+      if (!who) queryError("query.invalid-ast", node.span)
       fragment = mail
         ? bound(
             "m.id IN (SELECT r.email_id FROM email_recipients r JOIN identities ii ON ii.id = r.identity_id WHERE r.role = ? AND ii.provider = ? AND ii.external_id = ?)",
@@ -442,7 +449,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
             : words.every((word) => new RegExp(`(^|[^\\p{L}\\p{N}])${word}`, "u").test(subject))
         }
       }
-    } else queryError("unsupported_field", node.span)
+    } else queryError("query.unsupported-field", node.span)
     return { node, fragment: { ...fragment, sql: `(${fragment.sql})` }, ...(test ? { test } : {}) }
   }
   const compile = (node: ResolvedNode): Fragment => {
@@ -471,7 +478,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     return { ...result, exact: clauses.every(({ part }) => part.exact) }
   }
   check()
-  if (execution.accounts.length === 0) queryError("invalid_scope", { start: 0, end: 0 })
+  if (execution.accounts.length === 0) queryError("query.invalid-scope", { start: 0, end: 0 })
   const expression = compile(execution.root)
   const scopeParts = execution.accounts.map(({ provider, account }) => ({
     sql: "ac.provider=? AND ac.external_id=?",

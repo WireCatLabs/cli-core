@@ -93,7 +93,7 @@ describe("a compiled ranking selection", () => {
     context.database.exec("UPDATE messages SET deleted_at=10 WHERE id=2")
     expect(keys(context, query(all()))).toEqual([1])
     expect(keys(context, { ...query(all()), chat: { account, chatId: "hidden" } })).toEqual([3])
-    expect(() => keys(context, { ...query(all()), accounts: [] })).toThrow("invalid_scope")
+    expect(() => keys(context, { ...query(all()), accounts: [] })).toThrow("query.invalid-scope")
   })
 
   it("evaluates the whole bounded Boolean detector set before aggregation", async () => {

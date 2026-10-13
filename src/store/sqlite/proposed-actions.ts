@@ -119,7 +119,7 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
       const row = rowOf(id)
       if (!from.includes(row.status as ProposedAction["status"]))
         throw new CliError("validation_error", `a ${String(row.status)} action cannot become ${to}`, {
-          reason: "proposal_state",
+          reason: "proposal.wrong-state",
         })
       database
         .prepare(`UPDATE proposed_actions SET status = ?, updated_at = ?${set} WHERE id = ?`)

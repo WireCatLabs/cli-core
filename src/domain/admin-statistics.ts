@@ -102,7 +102,7 @@ export const calculateAdminStatistics = (
     inspect()
     if (++work > RANKING_GRAPH_LIMITS.work)
       throw new CliError("validation_error", "admin statistics work budget exceeded — narrow scope", {
-        reason: "query_limit",
+        reason: "query.too-large",
         complete: false,
       })
   }

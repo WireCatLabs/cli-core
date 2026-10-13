@@ -152,7 +152,7 @@ describe("tag: in a strict search", () => {
     const { store } = await seeded()
     await expect(found(store, 'tag:"two words"')).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "invalid_tag" },
+      details: { reason: "query.invalid-tag" },
     })
   })
 })
@@ -168,7 +168,7 @@ describe("topics", () => {
     const { store } = await topicStore()
     await expect(store.knowledge.createTag("budget", { kind: "topic", by: "agent" })).rejects.toMatchObject({
       code: "permission_error",
-      details: { reason: "owner_only_topic" },
+      details: { reason: "topic.owner-only" },
     })
     expect(await store.knowledge.createTag("Budget", { kind: "topic" })).toMatchObject({
       name: "budget",

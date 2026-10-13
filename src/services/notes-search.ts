@@ -63,7 +63,7 @@ export const searchNotesQuery = async (
     throw new CliError(
       "validation_error",
       "the store asks for stemmers this tool does not know — upgrade this tool, or search exact forms with --exact",
-      { reason: "stemmer_unknown" },
+      { reason: "stemmer.unknown" },
     )
   return store.notes.search({
     root: resolve(ast.root),

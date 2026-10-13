@@ -8,7 +8,7 @@ describe("buffered input policy", () => {
     const release = provideInputPolicy(input, { maxBytes: 5 })
     await expect(bufferedInput(input)).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "input_limit" },
+      details: { reason: "input.too-large" },
     })
     expect(input.listenerCount("data")).toBe(0)
     release()

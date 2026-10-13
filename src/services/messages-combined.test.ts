@@ -254,7 +254,7 @@ describe("internal combined search", () => {
     const before = new AbortController()
     before.abort()
     await expect(searchCombined(store, account, { ...request("aurora"), signal: before.signal })).rejects.toMatchObject(
-      { details: { reason: "query_aborted" } },
+      { details: { reason: "query.aborted" } },
     )
     const during = new AbortController()
     const match = store.matchQuery
@@ -269,7 +269,7 @@ describe("internal combined search", () => {
     }
     await expect(
       searchCombined(interrupted, account, { ...request("aurora"), signal: during.signal }),
-    ).rejects.toMatchObject({ details: { reason: "query_aborted" } })
+    ).rejects.toMatchObject({ details: { reason: "query.aborted" } })
     expect(interrupted.matchQuery).toHaveBeenCalledTimes(1)
   })
 })
@@ -312,7 +312,7 @@ it("bounds hydrated candidate bytes, reranking work and elapsed time", async () 
     }),
   }
   await expect(searchCombined(oversized, account, request("aurora"))).rejects.toMatchObject({
-    details: { reason: "query_limit", budget: "body bytes" },
+    details: { reason: "query.too-large", budget: "body bytes" },
   })
   const expensive = {
     ...store,
@@ -320,12 +320,12 @@ it("bounds hydrated candidate bytes, reranking work and elapsed time", async () 
   }
   await expect(
     searchCombined(expensive, account, request(Array.from({ length: 110 }, () => "aurora").join(" "))),
-  ).rejects.toMatchObject({ details: { reason: "query_limit", budget: "work" } })
+  ).rejects.toMatchObject({ details: { reason: "query.too-large", budget: "work" } })
   vi.spyOn(performance, "now")
     .mockReturnValueOnce(0)
     .mockReturnValue(QUERY_LIMITS.milliseconds + 1)
   await expect(searchCombined(store, account, request("aurora"))).rejects.toMatchObject({
-    details: { reason: "query_limit", budget: "milliseconds" },
+    details: { reason: "query.too-large", budget: "milliseconds" },
   })
 })
 
@@ -333,7 +333,7 @@ it("refuses corrected AST expansion past the parser node budget", async () => {
   const store = await opened()
   await expect(
     searchCombined(store, account, request(Array.from({ length: 130 }, () => "rolluot").join(" "))),
-  ).rejects.toMatchObject({ details: { reason: "query_limit", budget: "nodes" } })
+  ).rejects.toMatchObject({ details: { reason: "query.too-large", budget: "nodes" } })
 })
 
 describe("implicit term intent", () => {

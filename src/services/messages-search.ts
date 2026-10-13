@@ -100,16 +100,16 @@ export const prepareLucene = async (
   messenger: Partial<Pick<Messenger, "savedChatId" | "app">>,
 ): Promise<Prepared> => {
   if (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > QUERY_PAGE_LIMIT)
-    queryError("invalid_limit", { start: 0, end: 0 }, `use 1–${QUERY_PAGE_LIMIT} results`)
+    queryError("query.invalid-limit", { start: 0, end: 0 }, `use 1–${QUERY_PAGE_LIMIT} results`)
   if (
     request.context !== undefined &&
     (!Number.isInteger(request.context) || request.context < 0 || request.context > 20)
   )
-    queryError("invalid_context", { start: 0, end: 0 }, "use 0–20 surrounding messages")
+    queryError("query.invalid-context", { start: 0, end: 0 }, "use 0–20 surrounding messages")
   if (request.ast !== undefined && request.text !== undefined)
-    queryError("query_conflict", { start: 0, end: 0 }, "give text or AST, not both")
+    queryError("query.conflict", { start: 0, end: 0 }, "give text or AST, not both")
   if (request.ast !== undefined && request.exact)
-    queryError("query_conflict", { start: 0, end: 0 }, "an AST names its fields — use field exact instead of exact")
+    queryError("query.conflict", { start: 0, end: 0 }, "an AST names its fields — use field exact instead of exact")
   const ast: QueryAst =
     request.ast !== undefined
       ? validateAst(request.ast)
@@ -167,7 +167,7 @@ export const prepareLucene = async (
   const chatLookup = scopeAccounts.some(({ provider }) => provider === MAIL) ? withMailThreads(store) : store
   const mailField = leaves.find(({ field }) => MAIL_FIELDS.has(field))
   if (mailField && !scopeAccounts.some(({ provider }) => provider === MAIL))
-    queryError("unsupported_field", mailField.span, `${mailField.field}: is a mail field — search mail reads it`)
+    queryError("query.unsupported-field", mailField.span, `${mailField.field}: is a mail field — search mail reads it`)
   const globalChat =
     request.chat === undefined ? undefined : await chatAmong(messenger, chatLookup, scopeAccounts, request.chat)
   const resolve = async (node: QueryNode): Promise<ResolvedNode> => {
@@ -209,7 +209,7 @@ export const prepareLucene = async (
       : undefined)
   if (leaves.some(({ field }) => field === "topic")) {
     if (!globalChat && (chats.length !== 1 || !requiresChat(ast.root, chats[0] as QueryNode)))
-      queryError("topic_scope", { start: 0, end: 0 }, "name one required chat or use --chat")
+      queryError("query.topic-scope", { start: 0, end: 0 }, "name one required chat or use --chat")
   }
   const wordsReady = (await store.searchIndexState())?.ready === true
   if (hasText(ast.root) && !wordsReady) await indexNotReady(store, messenger.app?.command)
@@ -284,12 +284,12 @@ const stemsNotReady = (state: StemsState | undefined, command: string | undefine
       "validation_error",
       `this store has no stems yet — \`${cli}store migrate\` builds them, or ${exact}`,
       {
-        reason: "index_not_ready",
+        reason: "index.not-ready",
         index: "message_stems",
       },
     )
   const details = {
-    reason: "index_not_ready",
+    reason: "index.not-ready",
     index: "message_stems",
     cause: state.cause,
     done: state.filledThrough,
@@ -328,7 +328,7 @@ const indexNotReady = async (store: MessageStore, command: string | undefined): 
   throw new CliError(
     "validation_error",
     `the word index is not ready: ${progress}. ${state ? `Each search builds a little more; ${migrate} finishes it now` : `${migrate} builds it`}. Searches without words (has:, kind:, date:) work meanwhile`,
-    { reason: "index_not_ready" },
+    { reason: "index.not-ready" },
   )
 }
 export const coverageOf = async (

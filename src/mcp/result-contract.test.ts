@@ -28,8 +28,8 @@ describe("MCP result contract", () => {
       expect(response.structuredContent).toEqual({ text: visible })
       expect(response.content[1]).toEqual({ type: "text", text: JSON.stringify({ text: visible }) })
     }
-    expect(failed(new CliError("validation_error", hidden, { title: hidden })).structuredContent).toMatchObject({
-      error: { message: visible, title: visible },
+    expect(failed(new CliError("validation_error", hidden, { name: hidden })).structuredContent).toMatchObject({
+      error: { message: visible, details: { name: visible } },
     })
   })
   it("advertises only objects that it can return as structured content", () => {
@@ -45,14 +45,16 @@ describe("MCP result contract", () => {
     expect(answered(image, 0).structuredContent).toEqual({ chart: "synthetic" })
     expect(() => answered(image, 100)).toThrow("byte limit")
   })
-  it("keeps explicit retry guidance and refuses automatic replay by default", () => {
-    expect(failed(new Error("synthetic")).structuredContent).toMatchObject({ error: { retryable: false } })
+  it("keeps explicit retry guidance and never shows the text of an unexpected failure", () => {
+    expect(failed(new Error("synthetic private text")).structuredContent).toEqual({
+      error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
+    })
     expect(
       failed(new CliError("outcome_unknown", "synthetic", { operationId: "op-synthetic" })).structuredContent,
-    ).toMatchObject({ error: { code: "outcome_unknown", operationId: "op-synthetic", retryable: false } })
+    ).toMatchObject({ error: { code: "outcome_unknown", details: { operationId: "op-synthetic" } } })
     expect(
       failed(new CliError("rate_limited", "synthetic", { retryable: true, retryAfterMs: 1000 })).structuredContent,
-    ).toMatchObject({ error: { retryable: true, retryAfterMs: 1000 } })
+    ).toMatchObject({ error: { details: { retryable: true, retryAfterMs: 1000 } } })
   })
 })
 

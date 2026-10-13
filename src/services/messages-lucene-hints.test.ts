@@ -74,7 +74,7 @@ describe("strict search hints", () => {
     expect(await ids(store, "text:/[А-Я]вартал/")).toEqual([3])
     expect(await ids(store, "body:/квартира.*/")).toEqual([])
     expect(await ids(store, "body:/Квартира.*/")).toEqual([1])
-    expect((await failure(run(store, "text:/[ﬁ]/"))).details).toMatchObject({ reason: "unsupported_regex" })
+    expect((await failure(run(store, "text:/[ﬁ]/"))).details).toMatchObject({ reason: "query.unsupported-regex" })
   })
 
   it("finds one exact word that the index merges with another, through a body: regex", async () => {
@@ -86,7 +86,7 @@ describe("strict search hints", () => {
   it("explains that ~ is not strict search and where fuzzy matching is", async () => {
     const store = await open({ "1": ["alpha beta"] })
     const fuzzy = await failure(run(store, "alpha~1"))
-    expect(fuzzy.details).toMatchObject({ reason: "unsupported_operator" })
+    expect(fuzzy.details).toMatchObject({ reason: "query.unsupported-operator" })
     expect(fuzzy.message).toContain("--language legacy")
     expect(fuzzy.message).toContain("word*")
     const proximity = await failure(run(store, '"alpha beta"~2'))
@@ -102,7 +102,7 @@ describe("strict search hints", () => {
     for (const query of ["к*", 'к* chat:"Chat 2"', "text:/к.*/ date>=2026-01-01"]) {
       const error = await failure(run(store, query))
       expect(error.details, query).toMatchObject({
-        reason: "query_limit",
+        reason: "query.too-large",
         budget: "term expansions",
         limit: QUERY_LIMITS.expansions,
         complete: false,
@@ -132,7 +132,7 @@ describe("strict search hints", () => {
       termsReady: false,
     }
     const filling = await failure(run(stuck({ ...partial, builtAt: null }), "alpha", { app }))
-    expect(filling.details).toMatchObject({ reason: "index_not_ready" })
+    expect(filling.details).toMatchObject({ reason: "index.not-ready" })
     expect(filling.message).toContain("index is not ready")
     expect(filling.message).toContain("25% built (message 50 of 200)")
     expect(filling.message).toContain("`tg store migrate` finishes it")

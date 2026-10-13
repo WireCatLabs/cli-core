@@ -33,7 +33,7 @@ export const readSecret = async (
   if (signal?.aborted) throw cancelled()
   if (input.isTTY && policy.noInput)
     throw new CliError("validation_error", "interactive input is disabled — provide the input through a pipe", {
-      reason: "input_required",
+      reason: "input.required",
     })
   if (!input.isTTY) {
     return (
@@ -62,7 +62,7 @@ export const readSecret = async (
     bytes += Buffer.byteLength(chunk)
     if (bytes > Math.min(policy.maxBytes ?? MAX_SECRET_INPUT, MAX_SECRET_INPUT)) {
       inputFailure = new CliError("validation_error", "secret input exceeds its byte limit", {
-        reason: "input_limit",
+        reason: "input.too-large",
         retryable: false,
       })
       reader.close()

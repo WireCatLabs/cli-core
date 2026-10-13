@@ -282,14 +282,14 @@ export const resetStems = (
     throw new CliError(
       "validation_error",
       "the store asks for stemmers this tool does not know — upgrade this tool, or choose again with config set searchStemmers.*",
-      { reason: "stemmer_unknown" },
+      { reason: "stemmer.unknown" },
     )
   }
   if (state.built !== null && newer(snowballOf(state.built), snowballOf(`snowball-${SNOWBALL_VERSION}`))) {
     throw new CliError(
       "validation_error",
       `the stems were built by Snowball ${snowballOf(state.built).join(".")}, newer than this tool's ${SNOWBALL_VERSION} — upgrade this tool`,
-      { reason: "stemmer_newer", built: state.built, wanted: state.wanted },
+      { reason: "stemmer.newer", built: state.built, wanted: state.wanted },
     )
   }
   inBatch(database, () => {

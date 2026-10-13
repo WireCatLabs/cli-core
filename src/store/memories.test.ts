@@ -29,11 +29,11 @@ describe("memories", () => {
     }
     await expect(store.memories.add({ ...input, scope: undefined as unknown as "work" })).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "memory_scope_required" },
+      details: { reason: "memory.scope-required" },
     })
     await expect(store.memories.add({ ...input, evidence: [] })).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "memory_evidence_required" },
+      details: { reason: "memory.evidence-required" },
     })
     await expect(store.memories.add({ ...input, evidence: ["note:999"] })).rejects.toMatchObject({ code: "not_found" })
     expect(await store.memories.list()).toEqual([])

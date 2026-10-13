@@ -44,7 +44,8 @@ describe("running a messenger CLI", () => {
     expect(stdout).toEqual([])
     expect(JSON.parse(stderr[0] ?? "").error).toMatchObject({
       code: "validation_error",
-      candidates: [{ id: "1" }],
+      reason: "input.invalid",
+      details: { candidates: [{ id: "1" }] },
     })
   })
 
@@ -311,7 +312,10 @@ describe("consumer lifecycle in the shared shell", () => {
     expect(result.code).toBe(6)
     expect(result.stdout).toEqual([])
     expect(result.stderr).toHaveLength(1)
-    expect(JSON.parse(result.stderr[0] ?? "").error).toMatchObject({ code: "not_found", settlementFailed: true })
+    expect(JSON.parse(result.stderr[0] ?? "").error).toMatchObject({
+      code: "not_found",
+      details: { settlementFailed: true },
+    })
     expect(result.stderr.join("\n")).not.toContain("private handler content")
   })
 
@@ -349,7 +353,7 @@ describe.each(["max", "tg"])("shared shell contract for %s", (name) => {
     expect(await run(["messages", "list", "--offline", "--no-record"], provider, options)).toBe(6)
     expect(streams.stdout).toEqual([])
     expect(JSON.parse(streams.stderr[0] ?? "")).toMatchObject({
-      error: { code: "not_found", message: "nothing recorded", retryable: false, actions: expect.any(Array) },
+      error: { code: "not_found", reason: "item.not-found", message: "nothing recorded" },
     })
   })
 })
@@ -460,7 +464,7 @@ describe("machine failures", () => {
     expect(streams.stderr).toHaveLength(1)
     expect(JSON.parse(streams.stderr[0] ?? "").error).toMatchObject({
       code: "not_found",
-      candidates: [{ id: "7" }],
+      details: { candidates: [{ id: "7" }] },
     })
   })
 
@@ -480,8 +484,7 @@ describe("machine failures", () => {
     )
     expect(code).toBe(6)
     expect(streams.stderr).toHaveLength(1)
-    expect(streams.stderr[0]).toContain("✗ synthetic missing item")
-    expect(streams.stderr[0]).toContain("Check the item ID or path")
+    expect(streams.stderr[0]).toBe("✗ synthetic missing item")
   })
 
   it("uses JSON for a preparation failure before command options have been parsed", async () => {
@@ -520,7 +523,10 @@ it("bounds an unresponsive failure handler while preserving the original error",
     )
     await vi.advanceTimersByTimeAsync(1000)
     expect(await pending).toBe(6)
-    expect(JSON.parse(streams.stderr[0] ?? "{}").error).toMatchObject({ code: "not_found", settlementFailed: true })
+    expect(JSON.parse(streams.stderr[0] ?? "{}").error).toMatchObject({
+      code: "not_found",
+      details: { settlementFailed: true },
+    })
   } finally {
     vi.useRealTimers()
   }

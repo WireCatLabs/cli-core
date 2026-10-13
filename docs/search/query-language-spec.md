@@ -73,10 +73,10 @@ Wildcard и regex literals text нормализуются той же `fold` (N
 (`foldRegex`): обычные, экранированные не-ASCII и quoted literals, члены классов и диапазоны
 (диапазон до 4096 code points раскрывается и сворачивается; шире — только если концы не меняются).
 `\D \W \S` и прочие ASCII escapes не трогаются. Символ без единственной свёрнутой формы →
-`unsupported_regex` с alternative. Это сознательное отличие от Lucene, где regex не анализируется.
+`query.unsupported-regex` с alternative. Это сознательное отличие от Lucene, где regex не анализируется.
 body regex остаётся raw и case-sensitive.
 Доказанный prefix лишь сокращает dictionary enumeration; OR/nullable prefix не должен терять terms.
-Vocabulary общий для store, без chat/date условия: превышение `expansions` — `query_limit` с
+Vocabulary общий для store, без chat/date условия: превышение `expansions` — `query.too-large` с
 `budget:"term expansions"`, `term`, `limit`, span; alternative — длиннее prefix или body regex в чате.
 Folding v1 сливает разные слова (мой/мои, año/ano); это known limit до смены NORMALIZER_VERSION.
 FIELD_VERSION не меняется: поле не переименовано, а regex, молча не находивший ничего, теперь находит;
@@ -107,7 +107,7 @@ FIELD_VERSION не меняется: новое поле, ничего не пе
 FIELD_VERSION не меняется: поле `text` не переименовано, у слова без поля шире охват; сохранённые поиски
 разбираются заново и получают это поведение.
 Поля почты (to/cc/bcc/subject/mailbox/label/is): поиск без почтового аккаунта отвергает их
-(`unsupported_field`), в поиске по мессенджерам и почте сразу они совпадают только с почтой. label — синоним
+(`query.unsupported-field`), в поиске по мессенджерам и почте сразу они совпадают только с почтой. label — синоним
 mailbox. is: `unread` — `emails.read = 0`, `read` — `emails.read = 1`, `starred` — `emails.flagged = 1`;
 NULL (импорт не знал состояния) не совпадает ни с одним значением, а NOT is:unread его включает (NOT coalesce).
 У сообщений мессенджеров нет состояния прочтения по сообщению (только `chats.unread_count` на чат),

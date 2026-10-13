@@ -1,12 +1,14 @@
 import { join } from "node:path"
 import {
   CliError,
+  errorObjectOf,
+  errorRecordOf,
   exitCodeFor,
-  GENERIC_FAILURE,
+  exitCodeOfError,
   processStreams,
+  renderError,
   resolvePaths,
   type Streams,
-  visibleControls,
 } from "@wirecat/cli-base"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
@@ -18,7 +20,7 @@ import { isCliFailure, isCommanderFailure } from "./failures.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile } from "./profile.js"
-import { withRecovery } from "./recovery.js"
+import { DETAILS, REASONS } from "./reasons.js"
 import { recorded, wasSettled } from "./runs/recording.js"
 import { type GlobalFlags, parseDuration, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
 
@@ -75,6 +77,7 @@ export const createProgram = (
     .option("--jsonl", "machine-readable output: one JSON object per line, for streaming and jq")
     .option("--quiet", "diagnostics off; a failure is still said")
     .option("--trace", "the connection's own log lines on stderr — never message content")
+    .option("--debug", "on a failure, its whole record — cause and stack — in place of the short line")
     .option("--timeout <duration>", "give up on the whole command after this — 30s, 2m, 500ms")
     .option("--offline", "answer from what was recorded and never connect; fails if nothing was")
     .option("--no-input", "never prompt or open interactive login; piped input remains available")
@@ -116,9 +119,9 @@ export type RunOptions = BaseEnvironment & Record<string, unknown>
 export const run = async (argv: string[], definition: ProgramDefinition, options: RunOptions = {}): Promise<number> => {
   const streams = options.streams ?? processStreams
   const delimiter = argv.indexOf("--")
-  const machine = argv
-    .slice(0, delimiter < 0 ? undefined : delimiter)
-    .some((word) => word === "--json" || word === "--jsonl" || word === "--agent-json")
+  const flags = argv.slice(0, delimiter < 0 ? undefined : delimiter)
+  const machine = flags.some((word) => word === "--json" || word === "--jsonl" || word === "--agent-json")
+  const debug = flags.includes("--debug")
   const reporting = machine ? { ...options, tty: false } : options
   const control = execution(streams, { maxOutputBytes: 0 })
   let restoreInput: (() => void) | undefined
@@ -245,10 +248,9 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     const message =
       `"${profile}" is not a command, so it was read as a profile name — and no command followed it. ` +
       `Run \`${command} --help\` for the commands, or \`${command} ${profile} account show\` if "${profile}" is your profile.`
-    const failure = new CliError("validation_error", message)
+    const failure = new CliError("validation_error", message, { param: "profile" })
     const settled = await settleFailure(failure, { definition, program, rest, profile, options })
-    report(streams, reporting, { code: "validation_error", message, ...settled })
-    return exitCodeFor("validation_error")
+    return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
   }
 
   try {
@@ -282,20 +284,11 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       }
       const failure = new CliError("validation_error", message)
       const settled = await settleFailure(failure, { definition, program, rest, profile, options })
-      report(streams, reporting, { code: "validation_error", message, ...settled })
-      return exitCodeFor("validation_error")
+      return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
     }
     const settled = await settleFailure(error, { definition, program, rest, profile, options })
-    if (isCliFailure(error)) {
-      report(streams, reporting, { code: error.code, message: error.message, ...error.details, ...settled })
-      return signalExit ?? exitCodeFor(error.code)
-    }
-    report(streams, reporting, {
-      code: "generic_failure",
-      message: error instanceof Error ? error.message : String(error),
-      ...settled,
-    })
-    return signalExit ?? GENERIC_FAILURE
+    const exit = report(streams, reporting, failed(definition, program, rest, error, settled, debug))
+    return signalExit ?? exit
   } finally {
     restoreInput?.()
     options.signal?.removeEventListener("abort", externalAbort)
@@ -410,22 +403,41 @@ const commandPath = (program: Command, rest: string[]): string => {
   return words.join(" ")
 }
 
-interface ReportedError {
-  code: string
-  message: string
-  [detail: string]: unknown
+interface Failure {
+  object: ReturnType<typeof errorObjectOf>
+  record?: ReturnType<typeof errorRecordOf>
+  cli: string
+}
+
+const failed = (
+  { app }: ProgramDefinition,
+  program: Command,
+  rest: string[],
+  error: unknown,
+  settled: { settlementFailed?: true },
+  debug: boolean,
+): Failure => {
+  const failure =
+    settled.settlementFailed && isCliFailure(error)
+      ? new CliError(error.code, error.message, { ...error.details, ...settled })
+      : error
+  const object = errorObjectOf(failure, { reasons: REASONS, details: [...DETAILS, "settlementFailed"] })
+  const command = commandPath(program, program.args.length > 0 ? program.args : rest) || app.command
+  return {
+    object,
+    cli: app.command,
+    ...(debug
+      ? { record: errorRecordOf(failure, object, { command, service: app.command, version: app.version }) }
+      : {}),
+  }
 }
 
 /**
  * **A failure never reaches stdout.** It goes to stderr — as JSON when nobody is watching, because
  * an exit code says which kind of thing went wrong and nothing about which chat or how long to wait.
  */
-const report = (streams: Streams, options: BaseEnvironment, error: ReportedError): void => {
+const report = (streams: Streams, options: BaseEnvironment, { object, record, cli }: Failure): number => {
   const interactive = options.tty ?? process.stdout.isTTY === true
-  const recovered = withRecovery(error)
-  streams.diagnostic(
-    interactive
-      ? `✗ ${visibleControls(error.message)}\n${recovered.actions.map((action) => `  ${visibleControls(action.message)}${action.afterMs === undefined ? "" : ` (${Math.ceil(action.afterMs / 1000)} s)`}`).join("\n")}`
-      : JSON.stringify({ error: recovered }),
-  )
+  streams.diagnostic(renderError(object, { cli, interactive, ...(record ? { record } : {}) }))
+  return exitCodeOfError(object)
 }

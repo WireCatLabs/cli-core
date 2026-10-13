@@ -71,7 +71,7 @@ describe.each(["max", "tg"])("the shared upgrade command for %s", (command) => {
     const ports = fake()
     ports.install = vi.fn(() => 7)
     const result = await call(command, ["upgrade", "--json", "--no-record"], ports)
-    expect(result.code).toBe(1)
+    expect(result.code).toBe(11)
     expect(result.stdout).toEqual([])
     expect(JSON.parse(result.stderr.at(-1) ?? "").error.message).toContain(`${command} is still 1.0.0`)
     expect(ports.install).toHaveBeenCalledOnce()

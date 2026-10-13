@@ -36,7 +36,7 @@ describe("proposed actions", () => {
     expect((await store.proposedActions.pending()).map(({ proposedBy }) => proposedBy.name)).toEqual(["helper"])
 
     await expect(store.proposedActions.executed(reply.id)).rejects.toMatchObject({
-      details: { reason: "proposal_state" },
+      details: { reason: "proposal.wrong-state" },
     })
     expect(await store.proposedActions.approve(reply.id)).toMatchObject({
       status: "approved",

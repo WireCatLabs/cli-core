@@ -137,7 +137,8 @@ describe("a messenger that pushes its history", () => {
 
     const { code, stderr } = await call(["serve"], env, connect, stop.signal, "store")
     expect(code).not.toBe(0)
-    expect(stderr).toContain("history sync broke")
+    expect(stderr).toContain("internal_error")
+    expect(stderr).not.toContain("history sync broke")
     expect(existsSync(join(root, "state", "serve", "default.lock"))).toBe(false)
   })
 })

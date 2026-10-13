@@ -857,15 +857,20 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
    id is in the send journal.
 3. **A one-thing view answers the object itself** (`account show`, `store info`).
 4. **An error is one JSON object on stderr** in the machine modes —
-   `{ "error": { "code", "message" } }` — stdout stays empty, and the exit code says which kind of
-   failure it was. Commander's own parse errors (an unknown command or option, a missing argument,
+   `{ "error": { "code", "reason", "message", "param"?, "details"?, "next"?, "runId"? } }`, the same
+   object MCP answers with `isError` — stdout stays empty, and the exit code says which kind of
+   failure it was. `reason` is a registered id (`query.too-large`, `src/cli/reasons.ts`, or the code's
+   own from cli-base); branch on `code` and `reason`, never on `message`. `details` holds only
+   registered keys and never a cause. A person sees `✗ message` and at most one `→ next step` line;
+   `--debug` adds the failure's whole record, cause and stack included. A failure that is not ours
+   is `internal_error` (exit 1) with a fixed message: its own text can carry anything. Commander's own parse errors (an unknown command or option, a missing argument,
    a missing required option) are `validation_error` and exit 2, printed the same way; `--help` and
    `--version` exit 0. The codes are cli-base's and the same in every CLI:
 
    | Code | Meaning |
    |---|---|
    | 0 | ok |
-   | 1 | generic failure |
+   | 1 | internal error — a bug, not a refusal |
    | 2 | validation error — the command line is wrong |
    | 3 | configuration error |
    | 4 | authentication error |

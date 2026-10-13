@@ -107,7 +107,7 @@ export const meetingProjectsStoreOver = ({ database, now }: StoreContext): Meeti
           (!held || linkOf(held, accountId).fingerprint !== options.expectedFingerprint)
         )
           throw new CliError("configuration_error", "meeting membership changed since review", {
-            reason: "stale_meeting_project",
+            reason: "meeting-project.stale",
           })
         if (held && (Number(held.confirmed) === 1 || by === "agent"))
           return { link: linkOf(held, accountId), changed: false }

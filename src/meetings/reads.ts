@@ -1,11 +1,9 @@
+import { CliError } from "@wirecat/cli-base"
 import type { MeetingDetails, MeetingFilter, MeetingStore } from "./store.js"
 
-export class MeetingError extends Error {
-  constructor(
-    readonly code: "validation_error" | "not_found" | "configuration_error",
-    message: string,
-  ) {
-    super(message)
+export class MeetingError extends CliError {
+  constructor(code: "validation_error" | "not_found" | "configuration_error", message: string) {
+    super(code, message)
   }
 }
 export const positiveInteger = (value: unknown): number => {

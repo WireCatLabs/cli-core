@@ -137,13 +137,13 @@ describe("MCP meeting reads", () => {
       throw new Error("Read failed")
     }
     expect((await callMeetingTool(store, "meetings_list", {})).structuredContent).toEqual({
-      error: { code: "generic_failure", message: "Meeting read failed" },
+      error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
     })
     store.meetings = async () => {
       throw "failure"
     }
     expect((await callMeetingTool(store, "meetings_list", {})).structuredContent).toEqual({
-      error: { code: "generic_failure", message: "Meeting read failed" },
+      error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
     })
   })
 })

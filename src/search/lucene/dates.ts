@@ -5,13 +5,13 @@ export const timezoneOf = (given?: string): string => {
   try {
     new Intl.DateTimeFormat("en", { timeZone: zone }).format(0)
   } catch {
-    queryError("invalid_timezone", { start: 0, end: 0 }, "use an IANA timezone such as Europe/Madrid")
+    queryError("query.invalid-timezone", { start: 0, end: 0 }, "use an IANA timezone such as Europe/Madrid")
   }
   return zone
 }
 const calendar = (value: string, span: Span) => {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value))
-    queryError("invalid_date", span, "use an ISO date or a quoted timestamp with offset")
+    queryError("query.invalid-date", span, "use an ISO date or a quoted timestamp with offset")
   const year = Number(value.slice(0, 4)),
     month = Number(value.slice(5, 7)),
     day = Number(value.slice(8, 10))
@@ -19,7 +19,7 @@ const calendar = (value: string, span: Span) => {
   date.setUTCFullYear(year, month - 1, day)
   date.setUTCHours(0, 0, 0, 0)
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day)
-    queryError("invalid_date", span)
+    queryError("query.invalid-date", span)
   return date
 }
 export const dayBoundary = (value: string, zone: string, next: boolean, span: Span): number => {
@@ -47,7 +47,7 @@ export const dayBoundary = (value: string, zone: string, next: boolean, span: Sp
     else hi = mid
   }
   if (dayAt(lo) !== wanted)
-    queryError("invalid_date", span, "this calendar day does not exist in the selected timezone")
+    queryError("query.invalid-date", span, "this calendar day does not exist in the selected timezone")
   return lo
 }
 const AGO = /^(\d+)(m|h|d)$/u
@@ -91,7 +91,7 @@ export const dateEndpoint = (
     }
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u.test(value))
     queryError(
-      "invalid_date",
+      "query.invalid-date",
       span,
       "use an ISO date, today, yesterday, 30m/2h/7d ago, or a quoted timestamp with offset",
     )
@@ -103,7 +103,7 @@ export const dateEndpoint = (
     Number(value.slice(14, 16)) > 59 ||
     Number(value.slice(17, 19)) > 59
   )
-    queryError("invalid_date", span)
+    queryError("query.invalid-date", span)
   return { time, inclusive }
 }
 export const dateRange = (

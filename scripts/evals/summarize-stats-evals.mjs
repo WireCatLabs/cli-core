@@ -105,7 +105,7 @@ for (const name of names) {
       fetches[0].messageId === "p10" &&
       JSON.stringify(fetches[0].fields) === JSON.stringify(supported),
     cursor:
-      calls.some((one) => one.body.error?.reason === "selection_changed") &&
+      calls.some((one) => one.body.error?.reason === "selection.changed") &&
       primary.filter((one) => one.kind === "advance").length === 1 &&
       calls.filter(
         (one) =>

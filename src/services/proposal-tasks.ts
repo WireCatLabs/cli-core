@@ -19,7 +19,7 @@ export const approveAsTask = async (
   const proposal = await store.proposedActions.get(id)
   if (proposal.status !== "proposed")
     throw new CliError("validation_error", `a ${proposal.status} action cannot be approved`, {
-      reason: "proposal_state",
+      reason: "proposal.wrong-state",
     })
   if (proposal.account === null)
     throw new CliError("validation_error", "a proposal names the account that would act; this one names none")

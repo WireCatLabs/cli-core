@@ -40,7 +40,7 @@ export const tagCreationReview = (
     Number(metadata?.bytes ?? 0) + Number(aliasMetadata?.bytes ?? 0) > 4 * 1024 * 1024
   )
     throw new CliError("validation_error", "label creation review exceeds its metadata budget", {
-      reason: "tag_review_budget",
+      reason: "tag-review.over-budget",
     })
   const rows = database.prepare("SELECT id,name,kind FROM tags ORDER BY id").all()
   const aliases = database
@@ -100,14 +100,14 @@ export const guardTagCreation = (
   const review = tagCreationReview(context, name, kind)
   if (expected !== undefined && expected !== review.creationFingerprint)
     throw new CliError("configuration_error", "labels changed since the creation review", {
-      reason: "stale_tag_review",
+      reason: "tag-review.stale",
     })
   if (review.candidates.length && expected === undefined)
     throw new CliError(
       "validation_error",
       "similar labels exist; reuse one or review this distinct label before creation",
       {
-        reason: "tag_review_required",
+        reason: "tag-review.required",
         ...review,
       },
     )

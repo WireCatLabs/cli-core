@@ -25,7 +25,7 @@ describe("Lucene 9.12.3 grammar port", () => {
     it(`matches upstream syntax acceptance: ${JSON.stringify(row.query)}`, () => {
       if (!row.parsed) expect(reason(() => parseLucene(row.query))).toBeDefined()
       else if (/[~^@]/u.test(row.query) || row.query.startsWith("fn:"))
-        expect(reason(() => parseLucene(row.query))).toBe("unsupported_operator")
+        expect(reason(() => parseLucene(row.query))).toBe("query.unsupported-operator")
       else expect(parseLucene(row.query)).toMatchObject({ version: 1, language: "lucene-v1" })
     })
   it("preserves clause occurrences and adjacency", () => {
@@ -46,14 +46,14 @@ describe("Lucene 9.12.3 grammar port", () => {
     expect(parseLucene("text:hello\\:world").root).toMatchObject({ value: "hello:world", operator: "term" })
     expect(parseLucene("text:\\u03b1").root).toMatchObject({ value: "α" })
     expect(parseLucene("text:a\\*").root).toMatchObject({ value: "a*", operator: "term" })
-    expect(reason(() => parseLucene("foo\\u0xyz"))).toBe("invalid_escape")
+    expect(reason(() => parseLucene("foo\\u0xyz"))).toBe("query.invalid-escape")
   })
   it("rejects excessive text, nodes, groups and malformed syntax with spans", () => {
-    expect(reason(() => parseLucene("x".repeat(QUERY_LIMITS.bytes + 1)))).toBe("query_limit")
-    expect(reason(() => parseLucene("a ".repeat(300)))).toBe("query_limit")
-    expect(reason(() => parseLucene(`${"(".repeat(33)}alpha${")".repeat(33)}`))).toBe("query_limit")
-    expect(reason(() => parseLucene('"unterminated'))).toBe("unclosed_literal")
-    expect(reason(() => parseLucene("alpha [TO wrong TO]"))).toBe("invalid_syntax")
+    expect(reason(() => parseLucene("x".repeat(QUERY_LIMITS.bytes + 1)))).toBe("query.too-large")
+    expect(reason(() => parseLucene("a ".repeat(300)))).toBe("query.too-large")
+    expect(reason(() => parseLucene(`${"(".repeat(33)}alpha${")".repeat(33)}`))).toBe("query.too-large")
+    expect(reason(() => parseLucene('"unterminated'))).toBe("query.unclosed-literal")
+    expect(reason(() => parseLucene("alpha [TO wrong TO]"))).toBe("query.invalid-syntax")
   })
   it.each([">", ">=", "<", "<="])("reads the Elasticsearch spelling date:%s as the colon-less comparison", (op) => {
     const { span, ...colon } = parseLucene(`date:${op}2026-10-10`).root
@@ -70,16 +70,16 @@ describe("versioned structured AST and field registry", () => {
     expect(QUERY_FIELDS.map(({ name }) => name)).toContain("body")
   })
   it.each([
-    ["unknown:foo", "unknown_field"],
-    ['tag:"two words"', "invalid_tag"],
-    [`tag:${"a".repeat(33)}`, "invalid_tag"],
-    ["kind:dialog", "unknown_value"],
-    ["has:imaginary", "unknown_value"],
-    ["preset:money", "unknown_value"],
-    ["from:ali*", "unsupported_operator"],
-    ["topic:abc", "invalid_topic"],
-    ["text:[a TO b]", "unsupported_operator"],
-    ['from:""', "missing_value"],
+    ["unknown:foo", "query.unknown-field"],
+    ['tag:"two words"', "query.invalid-tag"],
+    [`tag:${"a".repeat(33)}`, "query.invalid-tag"],
+    ["kind:dialog", "query.unknown-value"],
+    ["has:imaginary", "query.unknown-value"],
+    ["preset:money", "query.unknown-value"],
+    ["from:ali*", "query.unsupported-operator"],
+    ["topic:abc", "query.invalid-topic"],
+    ["text:[a TO b]", "query.unsupported-operator"],
+    ['from:""', "query.missing-value"],
   ])("validates %s", (query, expected) => expect(reason(() => validateFields(parseLucene(query)))).toBe(expected))
   it.each([
     ["after:2026-09-01", "use date>=2026-09-01"],
@@ -113,6 +113,6 @@ describe("versioned structured AST and field registry", () => {
       clauses: [],
     }
     recursive.clauses.push({ occur: "must", node: recursive })
-    expect(reason(() => validateAst({ ...ast, root: recursive }))).toBe("query_limit")
+    expect(reason(() => validateAst({ ...ast, root: recursive }))).toBe("query.too-large")
   })
 })

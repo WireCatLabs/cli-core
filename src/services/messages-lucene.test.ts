@@ -126,8 +126,8 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     expect(ids(await run(store, account, "kind:bot"))).toEqual([105])
     expect(ids(await run(store, account, "kind:service"))).toEqual([106])
     expect(ids(await run(store, account, "has:file AND chat:4 AND topic:42"))).toEqual([104])
-    await expect(run(store, account, "topic:42")).rejects.toThrow("topic_scope")
-    await expect(run(store, account, "chat:3 OR topic:42")).rejects.toThrow("topic_scope")
+    await expect(run(store, account, "topic:42")).rejects.toThrow("query.topic-scope")
+    await expect(run(store, account, "chat:3 OR topic:42")).rejects.toThrow("query.topic-scope")
     expect(ids(await run(store, account, "topic:42", { limit: 100, chat: "3" }))).toEqual([103])
     await expect(run(store, account, "from:NoSuchPerson")).rejects.toThrow()
     await expect(run(store, account, 'chat:"NoSuchChat"')).rejects.toThrow()
@@ -177,7 +177,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     expect(ids(await run(store, account, "size:{1KB TO 300KB}"))).toEqual([])
     expect(ids(await run(store, account, "size:1024"))).toEqual([2])
     expect(ids(await run(store, account, "has:file AND NOT filename:*.pdf"))).toEqual([1])
-    await expect(run(store, account, "size:big")).rejects.toThrow("invalid_size")
+    await expect(run(store, account, "size:big")).rejects.toThrow("query.invalid-size")
   })
   it("folds a file-name regex like the names it is compared with", async () => {
     const store = await open()
@@ -196,7 +196,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     expect(ids(await run(store, account, "filename:/[А-Я]+\\.PDF/"))).toEqual([2])
     expect(ids(await run(store, account, "filename:СЧЁТ.pdf"))).toEqual([2])
     expect(ids(await run(store, account, "filename:INVOICE*"))).toEqual([1])
-    await expect(run(store, account, "filename:/[ﬁ]/")).rejects.toThrow("unsupported_regex")
+    await expect(run(store, account, "filename:/[ﬁ]/")).rejects.toThrow("query.unsupported-regex")
   })
   it("counts a link preview without a typed URL as a link", async () => {
     const store = await open()
@@ -307,11 +307,11 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
       ids(await run(store, account, "alpha AND kind:private")),
     )
     await expect(run(store, account, "body:/a{4000}/ OR body:/b{4000}/ OR body:/c{4000}/")).rejects.toThrow("states")
-    await expect(run(store, account, "body:/~alpha/")).rejects.toThrow("unsupported_regex")
-    await expect(run(store, account, "text:/(/")).rejects.toThrow("invalid_regex")
-    await expect(run(store, account, "alpha", { limit: 0 })).rejects.toThrow("invalid_limit")
+    await expect(run(store, account, "body:/~alpha/")).rejects.toThrow("query.unsupported-regex")
+    await expect(run(store, account, "text:/(/")).rejects.toThrow("query.invalid-regex")
+    await expect(run(store, account, "alpha", { limit: 0 })).rejects.toThrow("query.invalid-limit")
     await expect(searchStore(store, account, { language: "lucene", text: "alpha", ast, limit: 1 })).rejects.toThrow(
-      "query_conflict",
+      "query.conflict",
     )
   })
   it("orders equal timestamps by qualified message ids before applying the page limit", async () => {
@@ -378,9 +378,9 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
       searchStore(store, account, { language: "legacy", timezone: "UTC", text: "a", limit: 1 }),
     ).rejects.toThrow("require the Lucene")
     expect(ids(await run(store, account, 'text:""'))).toEqual([])
-    await expect(run(store, account, "alpha", { limit: 10, context: 21 })).rejects.toThrow("invalid_context")
-    await expect(run(store, account, "body:/alpha/i")).rejects.toThrow("unsupported_regex_flags")
-    await expect(run(store, account, "alpha~1")).rejects.toThrow("unsupported_operator")
+    await expect(run(store, account, "alpha", { limit: 10, context: 21 })).rejects.toThrow("query.invalid-context")
+    await expect(run(store, account, "body:/alpha/i")).rejects.toThrow("query.unsupported-regex-flags")
+    await expect(run(store, account, "alpha~1")).rejects.toThrow("query.unsupported-operator")
     await expect(
       searchStore(Object.assign(Object.create(store) as MessageStore, { matchQuery: undefined }), account, {
         language: "lucene",

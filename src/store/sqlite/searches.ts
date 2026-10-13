@@ -88,7 +88,7 @@ export const saveSearch = (
   const taken = findSearch(context, name)
   if (taken && !replace)
     throw new CliError("validation_error", `a saved search is already named "${name}" — --replace overwrites it`, {
-      reason: "name_taken",
+      reason: "name.taken",
     })
   const values = [search.command, search.params, search.language, search.version, search.fieldsVersion, now()]
   if (taken)

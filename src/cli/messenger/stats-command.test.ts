@@ -222,7 +222,8 @@ describe("stats charts", () => {
     vi.spyOn(rendering, "chartRenderer").mockRejectedValue(new Error("renderer failed"))
     const badRenderer = await call(["--output", join(root, "failed.svg")])
     expect(badRenderer.code).not.toBe(0)
-    expect(badRenderer.stderr).toContain("renderer failed")
+    expect(badRenderer.stderr).toContain("internal_error")
+    expect(badRenderer.stderr).not.toContain("renderer failed")
     expect(existsSync(join(root, "failed.svg"))).toBe(false)
   })
 
