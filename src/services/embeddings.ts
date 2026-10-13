@@ -6,6 +6,8 @@ import type { Id } from "../domain/models.js"
 import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel } from "../embeddings/models.js"
 import { type RemoteModel, remoteKey } from "../embeddings/remote.js"
+import { CONTEXT_MESSAGES, CONTEXT_MINUTES } from "../images/context/index.js"
+import { registeredImageProviders } from "../images/registry.js"
 import { QUERY_LIMITS, searchError } from "../search/lucene/types.js"
 import {
   type AccountKey,
@@ -188,6 +190,8 @@ export interface FoundConversation {
   chunk: { firstMessageId: Id; lastMessageId: Id }
   /** The best chunk's cosine, −1 to 1; `null` when only words found it. */
   score: number | null
+  /** `context`: the hit is an image, found by the messages around it; its message is `chunk`. */
+  matchedIn?: "context"
   by: ("meaning" | "words")[]
   /** The chunk's text changed after it was embedded: the score is for what it said then (NEED-550 B). */
   stale: boolean
@@ -457,7 +461,84 @@ export const embeddingsService = (deps: ServiceDeps): EmbeddingsService => {
       left = Math.max(0, left - batch.length)
       progress?.(embedded, left)
     }
+    embedded += await embedImages(chatId, target, embedder, check)
     return { chat: chatId, model: target.id, embedded, skipped }
+  }
+
+  /**
+   * One chunk per image of the chat: the text its first image provider gives it, embedded like a message. The
+   * chunk's hash names the provider and its version, so a newer provider describes every image again.
+   */
+  const embedImages = async (
+    chatId: Id,
+    target: Target,
+    embedder: Embedder,
+    check: (() => void) | undefined,
+  ): Promise<number> => {
+    const providers = registeredImageProviders()
+    if (providers.length === 0) return 0
+    const store = await deps.store()
+    const account = await deps.account()
+    const images = await store.imagesToDescribe(account, chatId, {
+      messages: CONTEXT_MESSAGES,
+      withinMs: CONTEXT_MINUTES * 60_000,
+    })
+    const described: { attachmentPk: number; hash: string; text: string; occurredAt: number }[] = []
+    for (const image of images) {
+      check?.()
+      for (const provider of providers) {
+        const { text } = await provider.describe(
+          { kind: image.kind, name: image.name, mime: image.mime, localPath: image.localPath },
+          {
+            chatTitle: image.chatTitle,
+            sender: image.sender,
+            caption: image.caption,
+            sentAt: image.sentAt,
+            before: image.before,
+            after: image.after,
+          },
+        )
+        if (text?.trim()) {
+          described.push({
+            attachmentPk: image.attachmentPk,
+            hash: chunkHash(`${provider.id}:${provider.version}\n${text}`),
+            text,
+            occurredAt: image.sentAt,
+          })
+          break
+        }
+      }
+    }
+    const have = await store.embeddedHashes(
+      target.key,
+      described.map(({ hash }) => hash),
+    )
+    const missing = [...new Map(described.filter(({ hash }) => !have.has(hash)).map((one) => [one.hash, one])).values()]
+    for (let at = 0; at < missing.length; at += PER_REQUEST) {
+      const batch = missing.slice(at, at + PER_REQUEST)
+      const vectors = await embedder.embed(
+        batch.map(({ text }) => text),
+        "passage",
+      )
+      check?.()
+      await store.saveVectors(
+        target.key,
+        target.dims,
+        batch.map(({ hash }, index) => ({ hash, vector: vectors[index] as Float32Array })),
+      )
+    }
+    await store.saveImageChunks(
+      account,
+      chatId,
+      described.map(({ attachmentPk, hash, text, occurredAt }) => ({
+        attachmentPk,
+        hash,
+        length: text.length,
+        occurredAt,
+      })),
+      described.map(({ attachmentPk }) => attachmentPk),
+    )
+    return missing.length
   }
 
   return {
@@ -555,6 +636,18 @@ export const embeddingsService = (deps: ServiceDeps): EmbeddingsService => {
             })
             for (const hit of hits) sources.set(hit.summary.id, one)
             meaning.push(...hits)
+            const images = await store.nearestImages(one, {
+              ...scope,
+              ...(since === undefined ? {} : { since }),
+              model: target.key,
+              limit: Math.max(limit, CANDIDATES),
+              query: vector as Float32Array,
+            })
+            for (const hit of images) {
+              if (eligibility && !eligibility.conversations.includes(hit.summary.id)) continue
+              sources.set(hit.summary.id, one)
+              meaning.push(hit)
+            }
           }
         })
       }
@@ -773,8 +866,16 @@ const fused = (
   const merged = new Map<string, FoundConversation & { fused: number }>()
   meaning
     .filter(({ score }) => score > minimumCosine)
-    .forEach(({ summary, chunk, score, stale }, index) => {
-      merged.set(summary.id, { summary, chunk, score, by: ["meaning"], stale, fused: 1 / (RRF_K + index + 1) })
+    .forEach(({ summary, chunk, score, stale, matchedIn }, index) => {
+      merged.set(matchedIn ? `${summary.id}#${chunk.firstMessageId}` : summary.id, {
+        summary,
+        chunk,
+        score,
+        by: ["meaning"],
+        stale,
+        ...(matchedIn ? { matchedIn } : {}),
+        fused: 1 / (RRF_K + index + 1),
+      })
     })
   words.forEach(({ summary, chunk }, index) => {
     const share = 1 / (RRF_K + index + 1)

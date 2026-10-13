@@ -108,6 +108,14 @@ base64 encoding and metadata within the configured preview budget; a client may 
 response/image limits. CLI JSON retains its general output budget: use `--max-output-bytes 50000000`
 for a larger response, or `0` to disable that output bound explicitly.
 
+## Find a photo by its conversation
+
+A photo is searchable by meaning without being read: `conversations embed` gives each photo a chunk made of its
+caption, up to 3 messages before and after it in the same chat within 10 minutes, the chat title and the sender
+(`context` image provider, `src/images/`). `conversations search` then returns the photo's message with
+`matchedIn: "context"`. A photo with no caption and no message near it has no chunk, and OCR or an agent's
+`attachments text set` stays the way to find what is written on it.
+
 ## Partial batches and recovery
 
 An isolated failed file does not discard completed downloads or prevent independent later files.
