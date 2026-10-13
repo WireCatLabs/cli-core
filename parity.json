@@ -2841,7 +2841,11 @@
       "in": "all"
     },
     "messages sync": {
-      "in": "all",
+      "in": [],
+      "planned": {
+        "max": "each CLI’s next cli-messaging bump",
+        "tg": "each CLI’s next cli-messaging bump"
+      },
       "options": {
         "--all": {
           "in": "all"
@@ -3865,6 +3869,13 @@
         "--output": "all",
         "--since-time": "all",
         "--to": "all"
+      }
+    },
+    "store fetch": {
+      "in": [],
+      "planned": {
+        "max": "each CLI’s next cli-messaging bump, which hides it",
+        "tg": "each CLI’s next cli-messaging bump, which hides it"
       }
     },
     "store gaps": {
