@@ -212,6 +212,12 @@ export interface EmailFilter extends MailFilter {
   until?: number
 }
 
+export interface EmailRef {
+  externalId: string
+  deleted: boolean
+  mailboxes: { externalId: string; kind: string | null }[]
+}
+
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
 export interface MailStore {
   saveThread(input: ThreadSave): Promise<ThreadDetails>
@@ -221,6 +227,8 @@ export interface MailStore {
   email(accountId: number, externalId: string): Promise<Email | null>
   /** Newest first. */
   emails(filter?: EmailFilter): Promise<Email[]>
+  /** Each matching email's Message-ID and mailboxes, without text or people: cheap over a whole mailbox. */
+  emailRefs(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailRef[]>
   mailboxes(accountId: number): Promise<Mailbox[]>
   /**
    * Sets each email's membership among the `scanned` mailboxes to the ones it was found in; membership outside
@@ -930,6 +938,22 @@ export const mailStoreOver = (
       )
       .all(...params, limit, offset)
       .map((row) => emailOf(database, row))
+  },
+  async emailRefs(filter = {}) {
+    const [where, params] = emailWhere(filter)
+    return database
+      .prepare(
+        `SELECT e.external_id, e.deleted_at IS NOT NULL AS deleted,
+           (SELECT json_group_array(json_object('externalId', b.external_id, 'kind', b.kind))
+              FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id WHERE m.email_id = e.id) AS boxes
+         FROM emails e WHERE ${where}`,
+      )
+      .all(...params)
+      .map((row) => ({
+        externalId: String(row.external_id),
+        deleted: Boolean(row.deleted),
+        mailboxes: JSON.parse(String(row.boxes)) as EmailRef["mailboxes"],
+      }))
   },
   async mailboxes(accountId) {
     return database

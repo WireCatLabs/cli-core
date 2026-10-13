@@ -26,6 +26,8 @@ shape of this file.
   Storage: the vector is the image's chunk at position 1 (`chunks`, `embeddings`, model `local:clip-b32:512`). Needs the
   optional `@napi-rs/canvas` to read an image.
 
+- **`mail.emailRefs(filter)`: each email's Message-ID, mailboxes and deleted mark, without text.** A sync that
+  checks a whole mailbox (305,000 emails) for deletions no longer loads every body.
 - **Mentions: phones, e-mail addresses, links and Google documents found in stored message text** (store
   version 7). Each is kept where it was written, in one normalized form: `+7…` for a phone whose country is clear
   from how it is written, digits alone otherwise; a lower-case address; a link without `utm_*`, `fbclid` and the

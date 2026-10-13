@@ -19,6 +19,7 @@ export type {
   EmailInput,
   EmailInThread,
   EmailRecipient,
+  EmailRef,
   EmailThread,
   EmailVectorHit,
   Mailbox,

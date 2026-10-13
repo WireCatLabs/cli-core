@@ -139,6 +139,29 @@ describe("mail store", () => {
     expect(await found("bob@example.com")).toEqual(["<other@example.com>"])
   })
 
+  it("lists references with mailboxes and the deleted mark, without text", async () => {
+    const { mail } = await seeded()
+    await mail.saveThread(
+      thread([
+        email(),
+        email({
+          externalId: "<second@example.com>",
+          receivedAt: 3100,
+          mailboxes: [{ externalId: "Label_1", name: "Projects", kind: "label" }],
+        }),
+      ]),
+    )
+    await mail.markDeleted(1, ["<first@example.com>"], 5000)
+
+    expect(await mail.emailRefs({ accountId: 1 })).toEqual([
+      { externalId: "<second@example.com>", deleted: false, mailboxes: [{ externalId: "Label_1", kind: "label" }] },
+    ])
+    expect((await mail.emailRefs({ accountId: 1, includeDeleted: true })).map(({ deleted }) => deleted).sort()).toEqual(
+      [false, true],
+    )
+    expect(await mail.emailRefs({ accountId: 1, since: 3200 })).toEqual([])
+  })
+
   it("sets membership only among the scanned mailboxes", async () => {
     const { mail } = await seeded()
     const archive = { externalId: "Archive", name: "Archive", kind: "archive" }
