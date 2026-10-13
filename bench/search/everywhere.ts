@@ -3,6 +3,8 @@
 //
 //   node everywhere.ts <repo with dist/> <messages> <files>
 //
+// Results: everywhere-results.md.
+//
 // Every message has a few words; every 20th file name and text holds the searched words, and one
 // spreadsheet of 75k characters repeats them on every row. Nothing here opens the owner's store.
 import { mkdtempSync } from "node:fs"
