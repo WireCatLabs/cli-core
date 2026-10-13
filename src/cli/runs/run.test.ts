@@ -139,6 +139,22 @@ describe("reading runs back", () => {
     expect(listRuns(dir).map((item) => item.runId)).toEqual([run.id])
   })
 
+  it("reads a run the day's index does not name from its own run.json", async () => {
+    const dir = runsDir()
+    const indexed = begin(dir, "chats list", () => new Date("2026-09-20T10:00:00.000Z"))
+    await indexed.finish("success")
+    const index = join(dir, "2026-09-20", "index.jsonl")
+    const kept = readFileSync(index, "utf8")
+    const missing = begin(dir, "messages send", () => new Date("2026-09-20T11:00:00.000Z"))
+    await missing.finish("failed")
+    writeFileSync(index, kept)
+
+    expect(listRuns(dir).map(({ runId, status }) => ({ runId, status }))).toEqual([
+      { runId: missing.id, status: "failed" },
+      { runId: indexed.id, status: "success" },
+    ])
+  })
+
   it("does not open a day before the one asked for", async () => {
     const dir = runsDir()
     const old = begin(dir, "chats list", () => new Date("2026-09-18T10:00:00.000Z"))

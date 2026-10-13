@@ -13,8 +13,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   records the operations and codes its events named (`operations`, `codes` in `run.json`), so a search by
   `--error-code` or `--operation` opens only the runs that can match, `--since-time` skips older days, and
   `runs list` stops once it has `--limit`. On 6,000 generated runs: a missed `--error-code` 1.76 s → 16 ms,
-  `runs list` 31 ms → 0.7 ms. A free-text query still reads events. A day without an index (runs from an
-  older version) is read run by run.
+  `runs list` 31 ms → 0.7 ms. A free-text query still reads events. A run the index does not name (kept by
+  an older version, or by a process still running one) is read from its `run.json`.
 
 ### Changed — may break callers
 

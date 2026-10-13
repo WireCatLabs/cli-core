@@ -219,19 +219,16 @@ export const listRuns = (
   return runs
 }
 
+/**
+ * The index says what it holds; a run it does not name — written before there was an index, by an older
+ * process still running, or when the append failed — is read from its own `run.json`.
+ */
 const runsOfDay = (dayDir: string): RunMetadata[] => {
-  let raw: string
+  const latest = new Map<string, RunMetadata>()
+  let raw = ""
   try {
     raw = readFileSync(join(dayDir, INDEX), "utf8")
-  } catch {
-    return safeReaddir(dayDir)
-      .filter((entry) => entry !== INDEX)
-      .sort()
-      .reverse()
-      .flatMap((entry) => readRun(join(dayDir, entry)) ?? [])
-  }
-
-  const latest = new Map<string, RunMetadata>()
+  } catch {}
   for (const line of raw.split("\n")) {
     if (line.trim() === "") continue
     try {
@@ -240,6 +237,11 @@ const runsOfDay = (dayDir: string): RunMetadata[] => {
     } catch {
       // A torn line from a killed process; that run's next line, or its run.json, still says it.
     }
+  }
+  for (const entry of safeReaddir(dayDir)) {
+    if (entry === INDEX || latest.has(entry)) continue
+    const metadata = readRun(join(dayDir, entry))
+    if (metadata) latest.set(metadata.runId, metadata)
   }
   return [...latest.values()].sort((a, b) => (a.runId < b.runId ? 1 : a.runId > b.runId ? -1 : 0))
 }
