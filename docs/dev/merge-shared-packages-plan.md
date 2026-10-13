@@ -167,11 +167,11 @@ So the order is strict, and each step finishes everywhere before the next:
 
 Status, 2026-10-14:
 - Steps 1, 2, 4 and 5 done. Repository renamed 2026-10-13 21:45 UTC; #1072 renamed the package, #1080 moved the
-  add-ons. `@wirecat/cli-core` 0.262.0 is the same code as cli-messaging 0.261.0. The add-ons are on npm as
+  add-ons. `@wirecat/cli-core` 0.262.0 follows cli-messaging 0.261.0 (plus #1071 and #1073). The add-ons are on npm as
   `@wirecat/cli-core-sqlite` / `-onnx` 1.0.1.
 - Step 6: all three trusted publishers failed with npm 404 until the owner re-created them (cli-private
   `bin/npm-trust-cli-core`).
-- Step 3: tg, max, drive and the docs site are on cli-core in `main`. memo and zoom switch when they adopt 0.261+.
+- Step 3: tg, max, drive and the docs site are on cli-core in `main`; tg 0.53.0 is released on it. memo and zoom switch when they adopt 0.261+.
   The last `@wirecat/cli-messaging` and the deprecation of the three old names wait until every app's latest
   release is on cli-core (cli-private `bin/publish-cli-messaging-final` checks that).
 - Kept on the old name on purpose: data folders, `MESSAGING_*` variables, the export format, and local checkout
