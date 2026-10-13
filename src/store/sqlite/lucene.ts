@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { storedKinds } from "../../domain/attachments.js"
 import type { Page } from "../../domain/models.js"
 import { tagOf } from "../../domain/tags.js"
 import {
@@ -384,8 +385,12 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
                 `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id)`,
               )
             : bound(
-                `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.kind=?)`,
-                kind,
+                `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.kind IN (${storedKinds(
+                  kind,
+                )
+                  .map(() => "?")
+                  .join(",")}))`,
+                ...storedKinds(kind),
               )
     } else if (field === "in") {
       const source = value.toLowerCase()

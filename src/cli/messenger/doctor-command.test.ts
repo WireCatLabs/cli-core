@@ -88,6 +88,13 @@ describe("doctor", () => {
     })
   })
 
+  it("**says which optional file readers are installed**", async () => {
+    const { env } = setup()
+    const { answer } = await call(["doctor", "--json"], env, refused)
+
+    expect(answer.readers).toEqual({ unpdf: "installed", mammoth: "installed", "@napi-rs/canvas": "installed" })
+  })
+
   it("**never calls the login ok without --online**", async () => {
     const { env } = setup()
     const { answer } = await call(["doctor", "--json"], env, refused)

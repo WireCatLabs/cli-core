@@ -120,9 +120,15 @@ guessable from the others.
    - `update` change a thing's fields · `set` / `unset` one named key · `rename` its name only
    - `start` / `stop` / `restart` a running process · `start` / `end` a login session
      · `install` / `uninstall` a system unit · `cancel` a job
-   - `fetch` from the messenger into the store · `export` from the store to a file · `import` ·
-     `download` · `transcribe` · `sync` take a whole list again · `extract` read the text inside files
+   - `sync` bring the local store up to date from the source — only what changed since the last
+     run, or the whole list where the source cannot say what changed; `--all` for every chat or
+     source (owner, 2026-10-12). It is the regular, repeatable catch-up (`contacts sync`).
+     · `fetch` one bounded pull of one named thing from the messenger into the store, not a
+     catch-up (`chats members fetch`) · `export` from the store to a file · `import` ·
+     `download` · `transcribe` · `extract` read the text inside files
      already on this machine into the store (`attachments extract`)
+   - Every word for a command, a resource and a JSON key across tg, max, memo and drive, with
+     its one meaning and the words it replaces, is in the [glossary](GLOSSARY.md).
    - `migrate` bring a file up to this build's schema · `backup` copy it somewhere safe ·
      `restore` put a backup back in its place · `repair` bring a file's tables to this build's shape
      without deleting anything — a table of the wrong shape is kept as a copy (`store repair`, its copies

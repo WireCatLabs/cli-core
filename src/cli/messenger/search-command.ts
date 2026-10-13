@@ -57,6 +57,11 @@ const allCommand = (messenger: Messenger): Command => {
     )
     .argument("<query...>", 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges')
     .addHelpText("after", SAVE_HELP)
+    .addHelpText(
+      "after",
+      `transcript: narrows a message search to voice transcripts, content: to the text of files, filename: to their names — \`${messenger.app.command} search all 'content:invoice'\`.
+--json: the list is items; each result's reference is ref, with its kind (search messages gives locator).`,
+    )
     .option(
       "--only <resources>",
       "only these resources, separated by commas: messages, mail, notes; meetings when --source names a meeting account",
@@ -132,6 +137,7 @@ const notesCommand = (messenger: Messenger): Command =>
         "text model, by meaning; each hit says which found it and what it links to",
     )
     .argument("<query...>", 'strict Lucene query: words, "phrases", AND/OR/NOT, tag: and date ranges')
+    .addHelpText("after", "--json: the list is hits, not items; each note's reference is ref.")
     .option("--type <internal|file>", "only notes written in memo, or only notes from a folder", noteTypeOf)
     .option(
       "--source <accounts>",

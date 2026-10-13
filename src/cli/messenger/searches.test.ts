@@ -169,3 +169,25 @@ describe("searches", () => {
     expect((await call("searches", "list", "--json")).code).toBe(0)
   })
 })
+
+it("tells in each search's help what transcript:, content: and filename: narrow to and which keys hold the answer", async () => {
+  const help = async (...path: string[]) => {
+    const streams = captureStreams()
+    await run(
+      ["search", ...path, "--help"],
+      { app, commands: () => [searchCommand(messenger)] },
+      { streams, tty: false },
+    )
+    return streams.stdout.join("")
+  }
+  const messages = await help("messages")
+  expect(messages).toContain("A bare word looks in message text, voice transcripts, file names and file text")
+  expect(messages).toContain("transcript:")
+  expect(messages).toContain("chat search messages 'content:invoice'")
+  expect(messages).toContain("each hit's reference is locator")
+  expect(await help("mail")).toContain("each email's reference is locator")
+  const all = await help("all")
+  expect(all).toContain("transcript: narrows a message search to voice transcripts")
+  expect(all).toContain("each result's reference is ref")
+  expect(await help("notes")).toContain("the list is hits, not items")
+})

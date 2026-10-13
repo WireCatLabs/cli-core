@@ -356,7 +356,9 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
                   status === "missing" ? "not_found" : "validation_error",
                   status === "too-large"
                     ? "attachment exceeds an extraction, decompression or OCR size limit"
-                    : `attachment ${status}; ${status === "engine-missing" ? "install the required optional reader package" : "retry or skip this item"}`,
+                    : extraction?.status === "engine-missing"
+                      ? `attachment engine-missing; reading it needs the optional package ${extraction.engine}, installed where this tool is (for a global npm install: npm install -g ${extraction.engine}); \`doctor\` lists the readers`
+                      : `attachment ${status}; retry or skip this item`,
                   { limitSource: ocr ? "provider" : "local" },
                 )),
           file.position + 1,

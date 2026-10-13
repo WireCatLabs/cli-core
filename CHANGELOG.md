@@ -29,6 +29,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- A file note keeps up to 2 000 000 characters of text (was 200 000), the same cap as the document readers, so a long spreadsheet or PDF read by them can be saved whole and found by a word anywhere in it. Measured on a generated 2M-character note: saving takes about 50 ms, the first search that indexes it about 0.7 s, later searches 2–3 ms (stemmed) and about 90 ms (exact), and the store grows about 9 MiB.
+
+- **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each
+  `installed` or `missing`, resolved the way extraction loads them.
+
 - **`search all --source <accounts>`** (MCP `search_all` `source`): the same list `search messages` takes —
   `provider:account` as a hit shows it, a provider, a kind or `group:<name>`. Each resource reads the accounts of
   its kind, a resource the list names none of is in `skipped` (`--source names no notes account`), an entry
@@ -51,6 +56,26 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   until it does, every item reads `inStore: false`. No migration.
 
 ### Fixed
+
+- **Search help says what `content:` narrows to and where the answer keeps its references.** `search messages`,
+  `search mail` and `search all` say `content:` narrows a search to the text of files and `filename:` to their
+  names, with an example; each search's help names its `--json` list (`items`, or `hits` for
+  notes) and the reference key (`locator` for messages and mail, `ref` for all and notes). An agent compared a
+  plain word in one tool with `content:` in another and reported a missing feature.
+
+- Preparing note chunks for embedding builds each note's text once per batch instead of once per chunk; a full pass over a 2M-character note's chunks went from about 186 ms to 37 ms per batch of 8.
+
+- **A file not read for want of an optional package names the package.** The per-file issue from
+  `attachments extract` and `messages download --extract` said only "install the required optional reader
+  package"; it now names it and the global npm install line.
+
+- **The local speech engine no longer writes to stdout.** sherpa-onnx's WebAssembly printed its own logs
+  (`circular-buffer.cc … Overflow! … No data loss!`) straight to file descriptor 1, ahead of the `--json` answer of
+  `messages list --transcribe` and `messages transcribe`. They go to stderr now.
+
+- **`has:file` and `search messages --type file` find Telegram documents.** Telegram stores a file as kind
+  `document`, MAX as `file`; the filter matched only `file`, so in tg it found nothing. No store change: rows
+  already stored match.
 
 - **A kept voice transcript is found and reused.** It becomes the voice attachment's text (extractor
   `speech:<model>`), so search finds it (`transcript:` alone), including a transcript made before its message was stored;
