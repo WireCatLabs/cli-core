@@ -285,8 +285,8 @@ describe("a messenger whose history is read from the store", () => {
     const { connects, connect } = pushing()
 
     for (const argv of [
-      ["store", "fetch", "Book"],
-      ["store", "fetch", "Book", "--estimate"],
+      ["messages", "sync", "Book"],
+      ["messages", "sync", "Book", "--estimate"],
       ["messages", "list", "Book", "--after-id", "1"],
       ["messages", "list", "Book", "--before-time", "2h"],
     ]) {

@@ -37,7 +37,7 @@ and on a slow CI runner a few of those cross vitest's 5 s limit (max-cli
 [`TESTING.md`](https://github.com/WireCatLabs/max-cli/blob/main/docs/dev/TESTING.md#no-test-waits-for-real)).
 On 2026-09-29 the slowest test here took 57 ms. The waits that exist are reached without sleeping:
 
-- `store fetch --pause` is the pause between pages; a test passes `--pause 1ms`. A short "wait N
+- `messages sync --pause` is the pause between pages; a test passes `--pause 1ms`. A short "wait N
   seconds" from the provider is slept, so a test's fake asks for a few milliseconds.
 - The MCP session takes `idleMs`, `maxAgeMs` and `now` (`src/mcp/session.ts`); a test hands in its
   own clock.

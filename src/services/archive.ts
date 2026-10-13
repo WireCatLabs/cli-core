@@ -34,11 +34,11 @@ const pushed = (deps: ServiceDeps, what: string) => {
 /** The most messages a provider hands out per history request — Telegram's cap. */
 export const PAGE = 100
 
-/** How `store fetch` reads a messenger's history, where it says nothing of its own. */
+/** How `messages sync` reads a messenger's history, where it says nothing of its own. */
 export const FETCHING: Fetching = { page: PAGE, maxPageSize: PAGE, pause: "1s", maxPages: 10, orderBy: "id" }
 
 /**
- * What a held stretch is keyed by, for `store fetch` and `download --all` alike: the message id, or its
+ * What a held stretch is keyed by, for `messages sync` and `download --all` alike: the message id, or its
  * send time in milliseconds. Not a safe integer means the messenger's ids do not order a chat.
  */
 export const keyOf =
@@ -226,7 +226,7 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
         return deps.withConnection((adapter) =>
           archiveService({ ...deps, withConnection: undefined, connection: async () => adapter }).fetch(chat, options),
         )
-      pushed(deps, "`store fetch`")
+      pushed(deps, "`messages sync`")
       options.stop.throwIfAborted()
       const connection = await deps.connection()
       const history = capability(connection, "history", "read a chat's history")
@@ -252,7 +252,7 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
         return deps.withConnection((adapter) =>
           archiveService({ ...deps, withConnection: undefined, connection: async () => adapter }).fetchAll(options),
         )
-      pushed(deps, "`store fetch --all`")
+      pushed(deps, "`messages sync --all`")
       const connection = await deps.connection()
       const list = capability(connection, "chats", "list its chats")
       const chats: Chat[] = []

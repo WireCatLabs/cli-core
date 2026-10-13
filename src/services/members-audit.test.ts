@@ -108,7 +108,7 @@ describe("chats members audit", () => {
       { id: "35", score: 2, reasons: ["burst_join", "mass_invited"] },
     ])
     expect(audit).toMatchObject({ chatId: "7", read: 11, participantsCount: 40, more: false, unknown: ["deleted"] })
-    expect(audit.fetch).toBe("chat store fetch 7")
+    expect(audit.fetch).toBe("chat messages sync 7")
     expect(calls).toEqual(["members 0"])
   })
 

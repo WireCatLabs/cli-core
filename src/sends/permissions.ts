@@ -436,6 +436,7 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   // shared which document link, and when.
   if ((top === "attachments" && next === "list") || (top === "chats" && next === "documents")) return "messages"
   if (top === "store" && (next === "gaps" || next === "jobs")) return path.join(".")
+  if (top === "messages" && next === "sync") return "messages"
   if (SHOW_MESSAGES.has(top) || (top === "contacts" && (next === "context" || next === "timeline"))) return "messages"
   if ((RESOURCES as readonly string[]).includes(top)) return path.join(".")
   return undefined

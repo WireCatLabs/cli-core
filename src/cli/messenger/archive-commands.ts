@@ -11,7 +11,7 @@ import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
 import { listed, renderList } from "../paging.js"
-import { fetchCommand, jobsCommand } from "./backfill-command.js"
+import { jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { admitPassword, linesOf, openFolder, runFileFor, saveManifest, sealRun, writeChanges } from "./export-folder.js"
 import { gapsCommand } from "./gaps-command.js"
@@ -23,7 +23,6 @@ export const storeCommand = (messenger: Messenger): Command => {
   const store = new Command("store")
     .description("the local store of messages")
     .addCommand(statusCommand(messenger))
-    .addCommand(fetchCommand(messenger))
     .addCommand(gapsCommand(messenger))
     .addCommand(jobsCommand(messenger))
     .addCommand(exportCommand(messenger))

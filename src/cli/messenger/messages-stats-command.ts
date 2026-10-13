@@ -99,7 +99,7 @@ export const messagesStatsCommand = (messenger: Messenger): Command =>
       const incomplete = stats.completeness.filter((one) => one.state !== "complete").length
       if (incomplete > 0)
         context.renderer.note(
-          `${incomplete} of the chats counted are not held in full, so these are lower bounds — \`${messenger.app.command} store fetch <chat>\` fetches one`,
+          `${incomplete} of the chats counted are not held in full, so these are lower bounds — \`${messenger.app.command} messages sync <chat>\` syncs one`,
         )
       if (context.format === "pretty") {
         const width = String(Math.max(0, ...stats.items.map(({ count }) => count))).length

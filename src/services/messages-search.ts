@@ -55,7 +55,7 @@ export type QueryStemming =
   | { applied: false; reason: "building" | "stemmer_unknown"; done: number; total: number; pending: number }
 export interface SearchCoverage {
   state: "complete" | "partial" | "unknown" | "stale"
-  /** The oldest `store fetch` of the chats in scope; `null` when one of them was never fetched. */
+  /** The oldest `messages sync` of the chats in scope; `null` when one of them was never fetched. */
   lastSyncedAt: string | null
   /** Every account in scope has handed the store its whole chat list at least once. */
   inventoryComplete: boolean
@@ -380,10 +380,10 @@ export const coverageOf = async (
       ? null
       : selectedChat
         ? neverFetched || behindCount
-          ? `${command} store fetch ${selectedChat.chatId}`
+          ? `${command} messages sync ${selectedChat.chatId}`
           : null
         : neverFetched || behindCount || !ownInventory
-          ? `${command} store fetch --all --background`
+          ? `${command} messages sync --all --background`
           : null
   const state =
     selectedChat && completeness.length > 0 && completeness.every(({ state }) => state === "complete")

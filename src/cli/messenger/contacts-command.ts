@@ -120,7 +120,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
           if (!one.complete)
             context.renderer.note(
               `${one.chat.title ?? one.chat.id}: not stored whole, so older messages of theirs may be missing — ` +
-                `\`${messenger.app.command} store fetch ${one.chat.id}\``,
+                `\`${messenger.app.command} messages sync ${one.chat.id}\``,
             )
         }
         context.renderer.result(found)
@@ -136,7 +136,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       for (const chat of found.notRead) {
         context.renderer.note(
           `${chat.title ?? chat.chatId}: ${chat.reason === "not_fetched" ? "nothing" : "only part"} of it is stored — ` +
-            `\`${messenger.app.command} store fetch ${chat.chatId}\``,
+            `\`${messenger.app.command} messages sync ${chat.chatId}\``,
         )
       }
       if (found.hasMore) context.renderer.note("cut at --limit; a larger one shows more")

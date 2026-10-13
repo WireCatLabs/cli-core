@@ -4,7 +4,7 @@ const count = new Intl.NumberFormat("en")
 
 /**
  * One line on what the archive held for a search, when it could hold more or nothing was found:
- * "searched 12,430 messages in 37 chats — 5 never fetched, 2 behind; `tg store fetch --all --background` fetches them".
+ * "searched 12,430 messages in 37 chats — 5 never fetched, 2 behind; `tg messages sync --all --background` fetches them".
  */
 export const archiveSummary = (coverage: SearchCoverage, hits: number): string | undefined => {
   const { neverFetched, behind, withGaps } = coverage.chats

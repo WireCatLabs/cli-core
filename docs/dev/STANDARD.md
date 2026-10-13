@@ -343,7 +343,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--agent` | `<agent>` | install the skill for this agent; asks at a terminal, otherwise none |  | `setup` |
 | `--agent-json` |  | agent-safe JSON output: control and direction characters visible in strings and keys; combine with --jsonl for streams |  | every command (planned) |
 | `--ai` |  | call the configured reply model with stored message data; requires reply consent, otherwise uses fallback |  | `replies test` |
-| `--all` |  | every row, no paging. **chats requests accept and decline take every pending request instead — Telegram counts them against its hourly limit first; MAX has no way to answer them all at once and refuses it, naming chats requests list — so it differs on purpose (Help text rule 4)** |  | `attachments list`, `chats list`, `chats members list`, `chats requests accept`, `chats requests decline`, `contacts list`, `inbox`, `messages download`, `review`, `store export`, `store fetch` |
+| `--all` |  | every row, no paging. **chats requests accept and decline take every pending request instead — Telegram counts them against its hourly limit first; MAX has no way to answer them all at once and refuses it, naming chats requests list — so it differs on purpose (Help text rule 4)** |  | `attachments list`, `chats list`, `chats members list`, `chats requests accept`, `chats requests decline`, `contacts list`, `inbox`, `messages download`, `messages sync`, `review`, `store export` |
 | `--all-bots` |  | also read every other bot's copy on this machine that readOtherBots allows |  | `bot contacts show`, `bot messages between`, `bot search messages` |
 | `--all-can-pin` | `<on\|off>` | every member may pin messages |  | `chats update` |
 | `--allow-any-file` |  | send a --file even from credential folders or the tool's own folders |  | `bot messages send`, `messages send` |
@@ -368,7 +368,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m |  | `messages send` |
 | `--attachment` | `<n>` | which file of the message, from 1; needed when it has more than one |  | `attachments show`, `attachments text set` |
 | `--backend` | `<archive\|server\|both>` | where to search: the local archive, the messenger's server, or both (default: both; message discovery uses archive only) |  | `search all` (planned), `search messages` |
-| `--background` |  | run as a job that outlives this command; `store jobs show` follows it |  | `store fetch`, `store gaps repair` |
+| `--background` |  | run as a job that outlives this command; `store jobs show` follows it |  | `messages sync`, `store gaps repair` |
 | `--base-url` | `<url>` | a server with OpenAI's /v1/embeddings: Gemini, Jina, or Ollama and LM Studio on this machine |  | `conversations build`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `search conversations` |
 | `--batch` | `<id>` | the batch id `conversations batches next` printed |  | `conversations links add` |
 | `--before-id` | `<id>` | read what came before this message id; not with --before-time |  | `chats media` (planned), `messages comments` (tg-only), `messages evidence`, `messages list` |
@@ -383,10 +383,10 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--calls` | `<who>` | who may call: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--can` | `<rights>` | what they may do, comma-separated: read, members, admins, info, pin, link, post, edit, delete. **lists the rights each messenger has — MAX has `read`, Telegram does not — so it differs on purpose (Help text rule 4)** |  | `bot chats admins add`, `chats admins add` |
 | `--caption-above` |  | show the text above the --photo or --file, not below it |  | `messages send` (tg-only) |
-| `--catch-up` |  | prepare local search after this fetch |  | `store fetch`, `store gaps repair` |
-| `--catch-up-chunks` | `<n>` | at most this many local vector chunks |  | `store fetch`, `store gaps repair` |
-| `--catch-up-messages` | `<n>` | skip a graph rebuild above this message budget |  | `store fetch`, `store gaps repair` |
-| `--catch-up-time` | `<duration>` | time budget for local preparation |  | `store fetch`, `store gaps repair` |
+| `--catch-up` |  | prepare local search after this run |  | `messages sync`, `store gaps repair` |
+| `--catch-up-chunks` | `<n>` | at most this many local vector chunks |  | `messages sync`, `store gaps repair` |
+| `--catch-up-messages` | `<n>` | skip a graph rebuild above this message budget |  | `messages sync`, `store gaps repair` |
+| `--catch-up-time` | `<duration>` | time budget for local preparation |  | `messages sync`, `store gaps repair` |
 | `--channel` |  | a private channel instead of a group; people join it by its link |  | `chats create` |
 | `--chart-kind` | `<messages\|active\|membership>` | what to draw: messages, active authors, or joins and leaves | `messages` | `stats charts` |
 | `--chat` | `<chat>` | a chat, by id or name; repeat it for more. **chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4); both message searches resolve stored names without networking** |  | `attachments extract`, `attachments list`, `chats folders create`, `contacts context`, `conversations batches next`, `conversations batches status`, `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations list`, `conversations status`, `metadata get`, `metadata refresh`, `review`, `search conversations`, `search mail`, `search messages`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `stats tasks show`, `tags add`, `tags auto`, `tags remove`, `tasks link`, `tasks list` |
@@ -422,7 +422,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--emoji` | `<emoji>` | the folder's icon |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--encrypt` |  | compress and encrypt with a password, typed at a hidden prompt or piped on stdin; never kept |  | `store backup`, `store export` |
 | `--error-code` | `<code>` | filter diagnostic runs by a stable error code |  | `runs search` |
-| `--estimate` |  | only say what the fetch would cost, from this machine's copy; nothing is sent. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `store fetch` |
+| `--estimate` |  | only say what the fetch would cost, from this machine's copy; nothing is sent. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `messages sync` |
 | `--events` |  | also print edits, deletions and reactions; every line then names its event. **watch updates use this flag independently of the group event --type filter** |  | `bot watch`, `watch` |
 | `--every` | `<duration>` | repeat at this interval: 30m, 2h, 1d |  | `schedule agent`, `schedule command` |
 | `--exact` |  | bare words and quotes match their exact form only, as exact:word does; text: still matches every form |  | `search all`, `search mail`, `search messages`, `search notes`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
@@ -459,10 +459,10 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--kind` | `<kind>` | only chats of this kind: dialog, group, channel or saved |  | `chats list`, `inbox`, `review`, `store export`, `tasks agenda`, `tasks link` |
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
 | `--language` | `<lucene\|legacy>` | the query language: strict Lucene or legacy discovery | `lucene` | `search messages`, `searches create` |
-| `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch`, `store fetch` |
+| `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch`, `messages sync` |
 | `--last-name` | `<name>` | your last name |  | `account update` |
 | `--left` |  | only the chats this account has left |  | `store clear` |
-| `--limit` | `<n>` | how many: rows to show, or messages one run fetches. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `attachments extract`, `attachments list`, `bot chats members list` (max-only), `bot contacts show`, `bot messages between`, `bot messages list`, `bot search messages`, `bot store fetch`, `calls list` (planned), `chats documents list` (planned), `chats link list` (tg-only), `chats list`, `chats media` (planned), `chats members list`, `chats requests list`, `contacts context`, `contacts list`, `contacts timeline`, `conversations list`, `conversations related`, `inbox`, `messages comments` (tg-only), `messages evidence`, `messages list`, `metadata refresh`, `polls voters` (tg-only), `runs list`, `runs search`, `search all`, `search conversations`, `search mail`, `search messages`, `search notes`, `searches create`, `searches history`, `sends list`, `stats chats newcomers`, `stats chats retention`, `stats contacts evidence`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages evidence`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `store fetch`, `store gaps repair`, `tags auto`, `tasks list` |
+| `--limit` | `<n>` | how many: rows to show, or messages one run fetches. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `attachments extract`, `attachments list`, `bot chats members list` (max-only), `bot contacts show`, `bot messages between`, `bot messages list`, `bot search messages`, `bot store fetch`, `calls list` (planned), `chats documents list` (planned), `chats link list` (tg-only), `chats list`, `chats media` (planned), `chats members list`, `chats requests list`, `contacts context`, `contacts list`, `contacts timeline`, `conversations list`, `conversations related`, `inbox`, `messages comments` (tg-only), `messages evidence`, `messages list`, `messages sync`, `metadata refresh`, `polls voters` (tg-only), `runs list`, `runs search`, `search all`, `search conversations`, `search mail`, `search messages`, `search notes`, `searches create`, `searches history`, `sends list`, `stats chats newcomers`, `stats chats retention`, `stats contacts evidence`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages evidence`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `store gaps repair`, `tags auto`, `tasks list` |
 | `--lines` | `<n>` | how many lines | `50` | `server logs` |
 | `--link` | `<link>` | an invite link: only the requests made through it. **chats requests list filters by it; accept and decline take it with --all — one link, worded for each command (Help text rule 4)** |  | `chats requests accept`, `chats requests decline`, `chats requests list` |
 | `--local` |  | use the model on this machine, never the messenger |  | `messages transcribe` (tg-only) |
@@ -501,7 +501,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--no-as-reply` |  | send without linking to the matched message |  | `replies edit` |
 | `--no-backup` |  | delete the store without backing it up first |  | `store reset` |
 | `--no-ban` |  | remove without banning; by default a removed person cannot come back by the link |  | `bot chats moderate` |
-| `--no-catch-up` |  | skip local preparation after this fetch |  | `store fetch`, `store gaps repair` |
+| `--no-catch-up` |  | skip local preparation after this run |  | `messages sync`, `store gaps repair` |
 | `--no-contacts-only` |  | do not require a contact |  | `replies edit` |
 | `--no-hours` |  | clear the working window |  | `replies edit` |
 | `--no-input` |  | never prompt or open an interactive login; piped input remains available |  | every command |
@@ -535,8 +535,8 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--output-dir` | `<dir>` | the folder to write into, created if missing. **`attachments extract` takes it only with --download, and has no default there, so extraction never fills the working folder unasked** | `.` | `attachments extract`, `messages download` |
 | `--outside` | `<hours>` | answer outside this 24-hour window, such as 09:00-19:00 |  | `replies edit` |
 | `--page` | `<n>` | which page, starting at 1 |  | `attachments list`, `attachments show`, `chats documents list` (planned), `chats list`, `chats members list`, `contacts list`, `runs search` |
-| `--page-size` | `<n>` | how many items one request to the messenger asks for; the messenger's own if not given. **the default is each messenger's own page: 30 on MAX, 100 on Telegram** |  | `bot store fetch`, `store fetch`, `store gaps repair` |
-| `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `bot store fetch`, `messages download`, `store fetch`, `store gaps repair` |
+| `--page-size` | `<n>` | how many items one request to the messenger asks for; the messenger's own if not given. **the default is each messenger's own page: 30 on MAX, 100 on Telegram** |  | `bot store fetch`, `messages sync`, `store gaps repair` |
+| `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `bot store fetch`, `messages download`, `messages sync`, `store gaps repair` |
 | `--payload` | `<text>` | the start parameter the bot reads; a link's own ?start= when not given |  | `chats start` (planned) |
 | `--people` | `<ids>` | only these sender ids, comma-separated; empty for any |  | `replies edit` |
 | `--per-chat` | `<limit>` | at most this many per chat, such as 1/12h |  | `replies edit` |
@@ -586,7 +586,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--show-phone` |  | print the whole phone number |  | `account show`, `contacts profile` |
 | `--silent` |  | deliver without a notification |  | `bot messages send`, `messages forward`, `messages send`, `polls create` |
 | `--since` | `<id-or-time>` | from this message id, an ISO 8601 time, or 2h / 1d ago; each command says its default. **becomes `--since-time` everywhere — NEED-485** |  | `inbox` (planned), `review` (planned) |
-| `--since-time` | `<time>` | from this ISO 8601 time, or 2h / 1d ago; each command says its default |  | `bot chats moderate`, `bot store fetch`, `chats events`, `chats members history`, `chats moderate`, `contacts context`, `contacts timeline`, `conversations list`, `inbox`, `replies test`, `review`, `runs search`, `search conversations`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `store export`, `store fetch` |
+| `--since-time` | `<time>` | from this ISO 8601 time, or 2h / 1d ago; each command says its default |  | `bot chats moderate`, `bot store fetch`, `chats events`, `chats members history`, `chats moderate`, `contacts context`, `contacts timeline`, `conversations list`, `inbox`, `messages sync`, `replies test`, `review`, `runs search`, `search conversations`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `store export` |
 | `--size` | `<n>` | messages to answer per batch, 10–200; 50 by default |  | `conversations batches next`, `conversations batches status`, `conversations build` |
 | `--skip` | `<which>` | a folder leaves out chats that are muted, read or archived |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--sms` |  | phone login: ask Telegram to send the code by SMS, not to the app; Telegram may still refuse |  | `session start` (tg-only) |
@@ -757,7 +757,7 @@ whose values are levels. It holds for a command the owner types and for an agent
    key starts with a resource, so a misspelled one is refused rather than ignored. Every command
    maps to exactly one key, checked by a test over `commands --json`:
    - a command that shows messages from outside `messages` counts as `messages` — `inbox`,
-     `review`, `watch`, `serve`, `store fetch|export|search`, the MCP resources and prompts, and
+     `review`, `watch`, `serve`, `messages sync`, `store export|search`, the MCP resources and prompts, and
      what tells who sent what — `attachments list`, `chats documents list` (planned);
    - housekeeping is never gated — `config`, `session`, `doctor`, `commands`, `complete`,
      `upgrade`, `skill`, `models`, `server`, `runs`, `sends`, `recipients`, `mcp`, and `store`'s
@@ -964,7 +964,7 @@ Approved2026-10-07. These additive shared surfaces are implemented in the search
   uses `from_dir`, `download`, `output_dir` and `limit`, matching CLI semantics. A bounded
   scan returns `cursor`; pass it as MCP `cursor` or CLI `--cursor` to continue.
 - `messages download --extract` extracts only the files this download mapped to stored attachments.
-- Per-profile `searchCatchUp` defaults to false. `store fetch --catch-up` or `--no-catch-up` overrides
+- Per-profile `searchCatchUp` defaults to false. `messages sync --catch-up` or `--no-catch-up` overrides
   it; `--catch-up-chunks`, `--catch-up-messages` and `--catch-up-time` bound local preparation.
   Defaults are500chunks,10,000messages and30seconds for the fetched chat. It never downloads a model
   or activates a remote embedding/analysis provider.

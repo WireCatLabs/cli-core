@@ -24,7 +24,7 @@ export const documentsCommand = (messenger: Messenger): Command => {
         )
         if (found.empty)
           context.renderer.note(
-            `no stored messages in this chat — \`${messenger.app.command} store fetch ${found.chatId}\` fetches them`,
+            `no stored messages in this chat — \`${messenger.app.command} messages sync ${found.chatId}\` fetches them`,
           )
         renderPage(context, found, (items) => items.map((item) => `${line(item)}\n`).join(""))
       }),

@@ -9,6 +9,7 @@ import { readMail } from "../../services/mail-search.js"
 import { modelWith } from "../../speech/hearing.js"
 import { listed, positiveCount } from "../paging.js"
 import { listStart } from "./after.js"
+import { syncCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { linksCommand } from "./conversations-command.js"
 import { downloadSubcommand } from "./download-command.js"
@@ -226,6 +227,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages.addCommand(messageLinkCommand(messenger))
   messages.addCommand(commentsCommand(messenger))
   messages.addCommand(linksCommand(messenger))
+  messages.addCommand(syncCommand(messenger))
   return messages
 }
 

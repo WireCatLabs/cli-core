@@ -1721,7 +1721,9 @@ describe("the shared read commands", () => {
     })
     expect(typo.answer.items[0]).toMatchObject({ match: "corrected", score: expect.any(Number) })
     expect(typo.stderr.join("\n")).toContain("chaptr → chapter")
-    expect(typo.stderr.join("\n")).toContain("1 of the chats searched are not held in full — `chat store fetch <chat>`")
+    expect(typo.stderr.join("\n")).toContain(
+      "1 of the chats searched are not held in full — `chat messages sync <chat>`",
+    )
 
     expect((await json("from:Olga", "chapter")).answer.items).toHaveLength(3)
     expect((await json("from:me", "chapter")).answer.items).toEqual([])
@@ -1760,7 +1762,7 @@ describe("the shared read commands", () => {
     })
     const mail = await call(["search", "mail", "chapter", "--json"], never, env)
     expect(mail.code).toBe(0)
-    expect(mail.stderr.join("\n")).not.toContain("store fetch")
+    expect(mail.stderr.join("\n")).not.toContain("messages sync")
     expect(mail.stderr.join("\n").match(/mail search covers imported messages only/g)).toHaveLength(1)
     expect(mail.stderr.join("\n")).toContain("memo mail <account> import --since <date>")
     const answer = JSON.parse(mail.stdout[0] ?? "")
@@ -2518,7 +2520,7 @@ describe("the shared read commands", () => {
       expect(online.stdout).toHaveLength(1)
       expect(JSON.parse(online.stdout[0] ?? "null")).toMatchObject({
         members: { joined: 0, left: 0 },
-        fetch: "chat store fetch 7",
+        fetch: "chat messages sync 7",
       })
       expect(asked).toEqual(["chatEvents"])
       const roster = async () =>

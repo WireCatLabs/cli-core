@@ -182,7 +182,7 @@ describe("chats documents list", () => {
     const { call } = await setup()
     const empty = await call("chats", "documents", "list", "8", "--json")
     expect(json(empty)).toEqual({ items: [], page: 1, limit: 20, hasMore: false })
-    expect(empty.stderr).toContain("chat store fetch 8")
+    expect(empty.stderr).toContain("chat messages sync 8")
   })
 
   it("prints one line per link for a person", async () => {

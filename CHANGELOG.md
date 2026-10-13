@@ -8,6 +8,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
+- `store fetch` is now `messages sync` (owner, 2026-10-12): same arguments, options, output and permission key (`messages`). `store fetch` stops working. A background job or a schedule saved with `store fetch` runs as `messages sync`, so `store jobs retry` and `schedule exec` keep working. Help hints, the parity manifest and the option catalogue name the new path. `bot store fetch` keeps its name for now.
 - **A bare search word looks everywhere a message holds words:** its text, a voice note's transcript, a word of
   a file's name and a file's text (owner, 2026-10-13). Each hit says where (`matchedIn`: `text`, `transcript`,
   `filename`, `file`) and its `excerpt` comes from there. Hits with the word in the text rank first, then

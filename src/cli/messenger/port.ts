@@ -146,7 +146,7 @@ export interface ServerReads {
   chats(window: { limit?: number; offset: number }): Promise<Page<Chat>>
   /**
    * Oldest to newest. `before` is a message id, or whatever the messenger pages by, as typed.
-   * `reactions: false` when they are not wanted — `store fetch` — where reading them costs a request.
+   * `reactions: false` when they are not wanted — `messages sync` — where reading them costs a request.
    */
   history(chat: string, window: { limit: number; before?: string; reactions?: false }): Promise<Page<Message>>
   /** One person and the chats this account shares with them, newest first. A chat that is not a person is refused. */

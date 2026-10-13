@@ -4,7 +4,7 @@ import { toIso } from "./values.js"
 
 /** The sync state that marks a chat fetched back to its first message (phase 2 plan S10). */
 export const historyStartKey = (chatId: Id): string => `history_start:${chatId}`
-/** Set when a `store fetch` run holds the chat's newest page; its `at` is when. */
+/** Set when a `messages sync` run holds the chat's newest page; its `at` is when. */
 export const fetchedKey = (chatId: Id): string => `fetched:${chatId}`
 /** Set when the store was handed the account's whole chat list (`markChatsLeft`); its `at` is when. */
 export const CHAT_LIST_KEY = "chat_list_complete"
@@ -18,7 +18,7 @@ export interface ChatCompleteness {
   /** More than one stretch held, with history missing between them. */
   gaps: boolean
   reachesStart: boolean
-  /** When a `store fetch` last read the chat's newest page; `null` when none has. */
+  /** When a `messages sync` last read the chat's newest page; `null` when none has. */
   fetchedAt: string | null
 }
 
