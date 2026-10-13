@@ -1,7 +1,7 @@
 # Conventions
 
-**How commands, options, answers and MCP tools of tg and max are named and shaped is
-[`STANDARD.md`](STANDARD.md)** — it lives here, and both CLIs link it.
+**How commands, options, answers and MCP tools of the WireCat CLIs — tg, max, memo, drive and zm — are
+named and shaped is [`STANDARD.md`](STANDARD.md)** — it lives here, and every CLI links it.
 
 **How tg and max are released and checked live is [`RELEASING.md`](RELEASING.md)**: the steps
 their `release` and `test-live` skills share.
