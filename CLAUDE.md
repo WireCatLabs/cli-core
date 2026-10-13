@@ -18,7 +18,7 @@ the one page that covers what you are about to touch:
    pushing, and take a migration number in [COORDINATION.md](docs/dev/COORDINATION.md#store-migrations) before writing it.
 4. **A change reaches tg-cli and max-cli only through a release.** Both pin an exact version.
 5. **Release when a consumer needs the merged code; there is no fixed gap between releases** —
-   [README, "How often, and what may break"](README.md#how-often-and-what-may-break).
+   [README, "How often, and what may break"](docs/REFERENCE.md#how-often-and-what-may-break).
    `bin/release` publishes the next free version through GitHub; stable-export breaks still
    follow the README policy.
 
