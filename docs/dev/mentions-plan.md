@@ -65,21 +65,24 @@ no second row in `links`, so there is one place to read and one to fix. `target_
 columns, like every polymorphic pair in the store (`taggings`, `links`, `chunks`), not one `phone:123` string: a
 string cannot be indexed by type or joined without parsing.
 
-**Exact kinds point at one original record; the decision is made on it once** (owner, 2026-10-13, ASK-231,
-NEED-1029):
+**Exact kinds: the value is the key; the original record is the identity, made only when it has an owner**
+(owner, 2026-10-13, ASK-231, ASK-232, NEED-1031):
 
-- `email` → an `identities` row (`provider = email`, `external_id` = the lower-case address). 453 such rows already
-  exist, each linked to a person by `identity_links`.
-- `phone` → an `identities` row (`provider = phone`, `external_id` = E.164). No new table.
-- `document` → the `documents` row; unresolved until the document is stored.
-- `url` → no original record: `value` and `domain` already find every occurrence. A URL that names a stored thing
-  points at it (`document`, `chat`).
-
-At sync the extractor finds or creates the original and sets the mention's target at once: there is nothing to
-review per occurrence, and the row starts as `linked`. "Whose number is this" is one `identity_links` row (identity → person), with its history in
-`identity_link_events`; moving the number to another person changes that row, never the mentions. "Every text that
-mentions Валерий" is mentions whose target is person 12, plus mentions whose target is an identity linked to person
-12 — one join on indexed columns.
+- A person or an organization has many ways to reach it — e-mail addresses, phones, messenger accounts. Each is
+  one `identities` row; `identity_links` gives the row its owner (one owner per identity, many identities per
+  owner). The schema allows this today; the data does not use it yet: each of the 541 linked identities in the
+  owner's store has a person of its own, and no person has two (FIND-1194).
+- A phone or an e-mail mention does not create an identity. Its `value` (E.164, lower-case address) is as exact as
+  an id: "where is this number" is the `(kind, value)` index; "where is Валерий's number" joins his identities
+  to mentions on `(provider, external_id) = (kind, value)`. Nothing is copied, so moving a number to another
+  person changes one `identity_links` row and no mention.
+- An identity is created when a number or an address gets an owner (`mentions confirm <id> person:12`), or when a
+  messenger already knows it. Numbers nobody owns stay mentions only: 31 reads of `identities` in 18 files
+  (contacts, roster, rankings, retention) treat an identity as someone met, and thousands of shop and courier
+  numbers from texts would fill them.
+- `phone` is a new `provider`; `email` exists (453 rows).
+- `document` → the `documents` row; `url` → no original record (`value` and `domain`), or the stored document or
+  chat it names. These two set the mention's target at sync.
 
 Rejected: one mention as the primary and the others pointing at it. The primary is itself an occurrence in a text;
 an edit or a deletion removes it and breaks the chain, and choosing the primary is a decision nobody needs.
@@ -163,7 +166,8 @@ links domains list               sites by number of links
 places list | show | add         addresses as their own records
 ```
 
-Exact kinds need no confirm per mention (above). An agent's link of a `phone` or `email` identity to a person is
+A phone or an e-mail is confirmed once per value: `confirm` finds or creates the identity and gives it its owner,
+and every mention of that value follows (above). An agent's link of a `phone` or `email` identity to a person is
 final when the match is exact — the same number in the person's contact card or `phone_hmac` (owner, NEED-1026 A);
 an agent's link of a name or a place waits for the owner, as its facts do. The owner's is final. `mentions show`
 offers candidates: known people whose name matches the stem, the identity whose `phone_hmac` equals the mention's.
@@ -197,6 +201,8 @@ an index lookup.
 1. ~~The entity's name~~ — `mentions` (owner, 2026-10-13, NEED-1027 A).
 2. ~~Phones stored as HMAC only or also in the clear~~ — in the clear (owner, 2026-10-13, NEED-1016 B).
 3. ~~Rows in `links` or a table of its own~~ — its own table (owner, 2026-10-13, NEED-1023 B).
-4. ~~Linking by value~~ — replaced by original records: phones and e-mail are `identities`, linked to a person
-   once (owner's direction, ASK-231); confirming `provider = phone` in `identities` is NEED-1029.
+4. ~~Linking by value~~ — one owner per identity, found from mentions by value; an identity only once it has an
+   owner (ASK-231, ASK-232, NEED-1031).
+6. An identity owned by an organization (a shop's number, `info@`): `identity_links.person_id` admits only a person
+   today (NEED-1032).
 5. ~~An agent's confirm of exact kinds~~ — final on an exact match; names and places wait (owner, NEED-1026 A).
