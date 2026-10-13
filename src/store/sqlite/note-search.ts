@@ -46,7 +46,7 @@ export interface NoteHit {
 }
 
 /** The fields a note has. A message-only field (`from:`, `chat:`, …) is refused rather than matching nothing. */
-export const NOTE_FIELDS = ["text", "exact", "body", "tag", "date", "in"] as const
+export const NOTE_FIELDS = ["text", "exact", "body", "tag", "date", "in", "has"] as const
 
 interface Fragment {
   sql: string
@@ -226,6 +226,12 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       if (tag === undefined) queryError("query.invalid-tag", node.span)
       // A label on a folder or subfolder labels every note under it, at any depth.
       return corpus.tagged(tag)
+    }
+    if (field === "has") {
+      // A document drive could not read is kept by its name alone; `-has:text` lists those.
+      if (value.toLowerCase() !== "text")
+        queryError("query.unknown-value", node.span, `has:${value} is a message field — notes take has:text`)
+      return bound("length(trim(coalesce(n.text,''))) > 0")
     }
     if (field === "date") {
       const range = node.resolution?.date
