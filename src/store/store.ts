@@ -48,6 +48,7 @@ import * as attachmentRows from "./sqlite/attachments.js"
 import { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
 import * as batches from "./sqlite/batches.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
+import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import type { ChatMetadata } from "./sqlite/chats.js"
 import * as metadataQueries from "./sqlite/chats.js"
 import * as chatQueries from "./sqlite/chats.js"
@@ -637,6 +638,7 @@ export interface MessageStore {
   readonly knowledge: KnowledgeStore
   /** Notes, the links between anything and anything, and the owner's organisations and projects. */
   readonly notes: NotesStore
+  readonly catalog: CatalogStore
   /** Choices that hold until replaced, each with its evidence. */
   readonly facts: FactsStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
@@ -895,6 +897,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   let tasks: MessageStore["tasks"] | undefined
   let knowledge: MessageStore["knowledge"] | undefined
   let notes: MessageStore["notes"] | undefined
+  let catalog: CatalogStore | undefined
   let facts: MessageStore["facts"] | undefined
   let memories: MessageStore["memories"] | undefined
   let proposedActions: MessageStore["proposedActions"] | undefined
@@ -1772,6 +1775,10 @@ const storeOver = (context: StoreContext): MessageStore => {
     get notes() {
       notes ??= { ...notesStoreOver(context), ...noteSearchOver(context) }
       return notes
+    },
+    get catalog() {
+      catalog ??= catalogStoreOver(context)
+      return catalog
     },
     get facts() {
       facts ??= factsStoreOver(context)
