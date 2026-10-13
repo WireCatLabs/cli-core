@@ -7,6 +7,7 @@ name: Parity
 # that shape can never match. The pinned pairing is each CLI's own `parity:check`.
 # A pull request builds a CLI's branch of the same name instead of its main when one exists
 # (scripts/parity/app-ref.sh), so a change the CLI must adopt can merge green before its release.
+# `app_ref` names that branch outright, for a release whose CLIs adopt it on a branch (bin/release --app-ref).
 on:
   pull_request:
     paths:
@@ -16,7 +17,16 @@ on:
       - scripts/parity/build-app.sh
       - scripts/parity/app-ref.sh
   workflow_call:
+    inputs:
+      app_ref:
+        type: string
+        default: main
   workflow_dispatch:
+    inputs:
+      app_ref:
+        description: "Branch of tg-cli and max-cli to build"
+        type: string
+        default: main
 
 permissions:
   contents: read
@@ -36,6 +46,7 @@ jobs:
         run: shared/scripts/parity/app-ref.sh ${{ matrix.cli }} >> "$GITHUB_OUTPUT"
         env:
           PR_BRANCH: ${{ github.head_ref }}
+          APP_REF: ${{ inputs.app_ref }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: WireCatLabs/${{ matrix.cli }}-cli
@@ -72,10 +83,12 @@ jobs:
         run: shared/scripts/parity/app-ref.sh max >> "$GITHUB_OUTPUT"
         env:
           PR_BRANCH: ${{ github.head_ref }}
+          APP_REF: ${{ inputs.app_ref }}
       - id: tg
         run: shared/scripts/parity/app-ref.sh tg >> "$GITHUB_OUTPUT"
         env:
           PR_BRANCH: ${{ github.head_ref }}
+          APP_REF: ${{ inputs.app_ref }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: WireCatLabs/max-cli
