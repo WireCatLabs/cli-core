@@ -28,9 +28,10 @@ export const toMarkdown = (title: string, messages: Message[], timeZone?: string
     const edited = message.editedAt ? " · edited" : ""
     lines.push("", `**${clock.format(when)} ${nameOf(message)}**${edited}`)
     const answered = message.replyTo ?? (message.replyToId === undefined ? undefined : byId.get(message.replyToId))
-    if (answered) lines.push(...quote(`**${nameOf(answered)}:** ${literal(visibleControls(answered.text))}`))
+    if (answered)
+      for (const line of quote(`**${nameOf(answered)}:** ${literal(visibleControls(answered.text))}`)) lines.push(line)
     else if (message.replyToId !== undefined) lines.push(`> in reply to message ${singleLine(message.replyToId)}`)
-    if (message.forwardedFrom) lines.push(...forwarded(message.forwardedFrom))
+    if (message.forwardedFrom) for (const line of forwarded(message.forwardedFrom)) lines.push(line)
     if (message.text) lines.push(visibleControls(message.text))
     lines.push(...message.attachments.map((attachment) => `- ${attachmentLine(attachment)}`))
   }

@@ -28,6 +28,8 @@ shape of this file.
 - **Search, `inbox`, `review` and a person's context work on a store with very many chats.** The chat-coverage
   check built one SQL parameter per chat and failed past 32,766 chats, and several steps passed every chat as
   function arguments, which Node refuses past about 125,000. Both now read any number of chats.
+- **A message of very many lines prints and exports.** The pretty and Markdown views passed each line as a function
+  argument, and a text or forward past about 125,000 lines stopped with "Maximum call stack size exceeded".
 - **`messages send --file` says a file of 2 GiB or more is too large.** Node does not read a file that size, and the
   error said only "it cannot be read".
 
