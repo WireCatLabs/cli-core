@@ -52,6 +52,14 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **`store check` passes the schema check for a file a newer build wrote that this build may still write**
+  (`minCompatible` at or below what it speaks), and says so; a file it may not write fails it with
+  `<command> upgrade`. Before, any file ahead of the build failed it.
+- **`store check` says when the typo vocabulary is behind the stored messages**: `wordIndex` gains `newest` and
+  `termsReady`, and the note names `store migrate`. `ready` still means only that every message is in the word index.
+- **`store fetch <chat> --catch-up` names the commands that finish search preparation** when it stopped at a
+  bound (`conversations build --chat`, then `conversations embed --chat`).
+
 - **`search messages` and `search mail` keep only the accounts of their kind from `--source`** and name the rest in
   a new answer field, `skipped: [{ source, reason }]`; they fail only when nothing in the list fits. A meeting
   account or a notes folder named in `--source`, or reached by `--source all`, no longer counts among the accounts
