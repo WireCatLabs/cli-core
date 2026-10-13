@@ -29,11 +29,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
-- **File readers ship with the package.** `unpdf` and `mammoth` move from optional peers to dependencies, so
-  PDF and Word text is read on every install, a global pnpm one included; only `@napi-rs/canvas`, the native
-  page renderer that scanned-PDF OCR needs, stays optional. `doctor` `readers` says `built in` for them.
-- **More formats are read:** Word 97–2003 `.doc` (`word-extractor`), RTF, HTML and OpenDocument presentations
-  (`.odp`). `.xls` and `.ppt` stay unsupported.
+- A file note keeps up to 2 000 000 characters of text (was 200 000), the same cap as the document readers, so a long spreadsheet or PDF read by them can be saved whole and found by a word anywhere in it. Measured on a generated 2M-character note: saving takes about 50 ms, the first search that indexes it about 0.7 s, later searches 2–3 ms (stemmed) and about 90 ms (exact), and the store grows about 9 MiB.
 
 - **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each
   `installed` or `missing`, resolved the way extraction loads them.
@@ -60,6 +56,14 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   until it does, every item reads `inStore: false`. No migration.
 
 ### Fixed
+
+- **Search help says what `content:` narrows to and where the answer keeps its references.** `search messages`,
+  `search mail` and `search all` say `content:` narrows a search to the text of files and `filename:` to their
+  names, with an example; each search's help names its `--json` list (`items`, or `hits` for
+  notes) and the reference key (`locator` for messages and mail, `ref` for all and notes). An agent compared a
+  plain word in one tool with `content:` in another and reported a missing feature.
+
+- Preparing note chunks for embedding builds each note's text once per batch instead of once per chunk; a full pass over a 2M-character note's chunks went from about 186 ms to 37 ms per batch of 8.
 
 - **A file not read for want of an optional package names the package.** The per-file issue from
   `attachments extract` and `messages download --extract` said only "install the required optional reader

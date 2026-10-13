@@ -2,6 +2,8 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { MAX_TEXT_CHARS } from "../attachments/limits.js"
+import { searchNotesQuery } from "../services/notes-search.js"
 import { openCache } from "./open.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
 
@@ -163,5 +165,26 @@ describe("people named in notes, over rows written directly", () => {
       ["@Bob Sample", null],
       ["Rin Example", "person:11"],
     ])
+  })
+})
+
+describe("file note length", () => {
+  it("keeps as much text as the document readers return, and finds a word at its end", async () => {
+    const store = await open(fresh())
+    const folder = await store.notes.addFolder({ name: "Drive" })
+    const text = `${"аренда кровати ".repeat(Math.floor((MAX_TEXT_CHARS - 20) / 15))}lastneedle`
+    const { note } = await store.notes.saveFileNote({ folderId: folder.id, path: "core.md", title: "core", text })
+    expect((await store.notes.note(note.ref)).text).toHaveLength(text.length)
+    expect(
+      (await searchNotesQuery(store, { text: "lastneedle", limit: 5, exact: true })).items.map((hit) => hit.ref),
+    ).toContain(note.ref)
+    await expect(
+      store.notes.saveFileNote({
+        folderId: folder.id,
+        path: "over.md",
+        title: "over",
+        text: "x".repeat(MAX_TEXT_CHARS + 1),
+      }),
+    ).rejects.toThrow(`0–${MAX_TEXT_CHARS} characters`)
   })
 })
