@@ -356,5 +356,24 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "-- A query tree kept in a search — `params.ast` and a ranking's `params.selection` — takes cli-base 0.26's keys:\n-- `lower_inclusive`, `upper_inclusive` and the occur `must_not`. A text replace keeps every key in place, so\n-- `params` stays the canonical text that history matches on; inside a JSON string these quotes are escaped, so a\n-- message's words never match.\nUPDATE searches SET params = json_set(params, '$.ast', json(\n  replace(replace(replace(json_extract(params, '$.ast'),\n    '\"lowerInclusive\":', '\"lower_inclusive\":'),\n    '\"upperInclusive\":', '\"upper_inclusive\":'),\n    '\"occur\":\"mustNot\"', '\"occur\":\"must_not\"')))\nWHERE json_type(params, '$.ast') = 'object';",
       "UPDATE searches SET params = json_set(params, '$.selection', json(\n  replace(replace(replace(json_extract(params, '$.selection'),\n    '\"lowerInclusive\":', '\"lower_inclusive\":'),\n    '\"upperInclusive\":', '\"upper_inclusive\":'),\n    '\"occur\":\"mustNot\"', '\"occur\":\"must_not\"')))\nWHERE json_type(params, '$.selection') = 'object';"
     ]
+  },
+  {
+    "name": "20261013215247_version-7-mentions",
+    "statements": [
+      "CREATE TABLE `mention_pending` (\n\t`source_type` text NOT NULL,\n\t`source_id` integer NOT NULL,\n\tCONSTRAINT `mention_pending_pk` PRIMARY KEY(`source_type`, `source_id`)\n);",
+      "CREATE TABLE `mentions` (\n\t`id` integer PRIMARY KEY,\n\t`kind` text NOT NULL,\n\t`source_type` text NOT NULL,\n\t`source_id` integer NOT NULL,\n\t`source_field` text NOT NULL,\n\t`start_offset` integer NOT NULL,\n\t`end_offset` integer NOT NULL,\n\t`value` text NOT NULL,\n\t`domain` text,\n\t`method` text NOT NULL,\n\t`version` integer NOT NULL,\n\t`confidence` real NOT NULL,\n\t`status` text NOT NULL,\n\t`target_type` text,\n\t`target_id` integer,\n\t`author` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `mentions_source_type_source_id_source_field_start_offset_kind_unique` UNIQUE(`source_type`,`source_id`,`source_field`,`start_offset`,`kind`)\n);",
+      "CREATE INDEX `mentions_by_kind_value` ON `mentions` (`kind`,`value`);",
+      "CREATE INDEX `mentions_by_domain` ON `mentions` (`domain`) WHERE domain IS NOT NULL;",
+      "CREATE INDEX `mentions_by_status_kind` ON `mentions` (`status`,`kind`);",
+      "CREATE INDEX `mentions_by_target_type_target_id` ON `mentions` (`target_type`,`target_id`) WHERE target_id IS NOT NULL;"
+    ]
+  },
+  {
+    "name": "20261013215251_version-7-mentions-triggers",
+    "statements": [
+      "-- Finding mentions needs JS, so the triggers only queue the message and the store's next write finds them.\n-- Messages stored before version 7 are not queued here: `mentions rebuild` reads them in batches.\nCREATE TRIGGER mention_pending_message_ai AFTER INSERT ON messages WHEN new.text <> '' BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('message', new.id);\nEND;",
+      "CREATE TRIGGER mention_pending_message_au AFTER UPDATE OF text ON messages WHEN old.text IS NOT new.text BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('message', new.id);\nEND;",
+      "CREATE TRIGGER mentions_message_ad AFTER DELETE ON messages BEGIN\n  DELETE FROM mentions WHERE source_type = 'message' AND source_id = old.id;\n  DELETE FROM mention_pending WHERE source_type = 'message' AND source_id = old.id;\nEND;"
+    ]
   }
 ]

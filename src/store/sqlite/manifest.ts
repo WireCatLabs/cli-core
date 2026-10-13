@@ -24,6 +24,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261011172120_version-4-task-next-check", version: 4, minCompatible: 1 },
   { name: "20261013090001_version-5-file-name-words", version: 5, minCompatible: 1 },
   { name: "20261013201057_version-6-query-tree-keys", version: 6, minCompatible: 1 },
+  { name: "20261013215247_version-7-mentions", version: 7, minCompatible: 1 },
+  { name: "20261013215251_version-7-mentions-triggers", version: 7, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

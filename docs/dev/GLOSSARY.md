@@ -46,6 +46,7 @@ another meaning.
 | `info` | facts about a singular thing itself | tg, max | — | none |
 | `move` / `copy` | a file in the source | drive | — | none; not in STANDARD (drive only) |
 | `restore` | put a backup back, or take a thing out of the trash | tg, max, drive | — | drive `files restore` (out of the trash: a second meaning) |
+| `rebuild` | compute again, from what the store holds, what the tool derives from it, keeping the owner's decisions | tg, max | — | none; tg/max `store reindex` is not in STANDARD's list |
 
 Verbs used but not in STANDARD's list, by CLI. Each needs a row above or a rename.
 
@@ -75,11 +76,12 @@ Verbs used but not in STANDARD's list, by CLI. Each needs a row above or a renam
 | organization | a company, team, family or community | entity | none |
 | person | one human, across every messenger and mail (`person:<uid>`) | user, people | tg bot help: "user:<id> for a person", "the person's user id"; drive `people` |
 | contact | one identity in a messenger's contact list | user | none found beyond the above |
-| identity | one account of a person in one messenger or mailbox (`contact:<provider>/<id>`) | contact (when meaning the account), user | memo `note <identity>` takes `<messenger>:<name>` |
+| identity | one way to reach a person or an organization: an account in a messenger or mailbox, an e-mail address, a phone (`contact:<provider>/<id>`) | contact (when meaning the account), user | memo `note <identity>` takes `<messenger>:<name>` |
 | key document | **open (NEED-990)**: no CLI, help text or doc defines it today | — | — |
 | fact | what happened: a statement, question, decision or promise, with evidence | memory | none |
 | memory | what an agent concluded, with evidence and scope | fact, summary | none |
 | relationship | a confirmed or suggested link between a person, organization or project | relation, link | memo `tasks relations` (task to task); drive `links` (links between references) |
+| mention | a phone, e-mail address, link or document found in one place of a stored text, normalized; found → linked or dismissed | extraction, entity, link (`links` joins two stored records) | none |
 | reference | the typed name of any stored thing: `msg:`, `chat:`, `contact:`, `note:`, `document:`, `person:`, `task:`, `fact:`, `memory:` (`src/domain/references.ts`) | ref, id | see [Output keys](#output-keys) |
 | locator | the reference of one message: `msg:<provider>/<account>/<chat>/<message>` only (`src/domain/locator.ts`) | ref | memo `search` puts `note:` and `task:` references in `locator` (`cli-memo/src/search/command.ts:82,123`) |
 | profile | the name of one login of this CLI on this machine; chosen, never assumed | account (for this meaning) | memo `mail <account>`, `--account`; drive help "account profiles"; tg/max `contacts profile` (a person's card: another meaning) |

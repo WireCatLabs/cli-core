@@ -753,6 +753,55 @@ const NEW = {
         c("text_end", "integer", { note: "where it ends inside the last message's text" }),
       ],
     },
+    {
+      name: "mentions",
+      doc: "A phone, e-mail address, link or Google document found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.",
+      cols: [
+        id(),
+        c("kind", "text", { notnull: true, note: "`phone`, `email`, `url`, `document`" }),
+        ...poly("source", "the text's row: `message`"),
+        c("source_field", "text", { notnull: true, note: "which text of that row: `text`" }),
+        c("start_offset", "integer", { notnull: true, note: "where it is written in that text, in UTF-16 units" }),
+        c("end_offset", "integer", {
+          notnull: true,
+          note: "where it ends, exclusive; what was written is read back from the source, never copied",
+        }),
+        c("value", "text", {
+          notnull: true,
+          note: "normalized: `+` and digits for a phone with a known country, digits alone otherwise; a lower-case address; a link without tracking parameters or fragment; a Google file id",
+        }),
+        c("domain", "text", {
+          note: "`url` and `email`: the site from the public suffix list, `google.com` for `docs.google.com`",
+        }),
+        c("method", "text", { notnull: true, note: "what found it: `rules`" }),
+        c("version", "integer", {
+          notnull: true,
+          note: "the kind's rule version, so a changed rule redoes its kind alone",
+        }),
+        c("confidence", "real", { notnull: true, note: "the rule's own score, 0–1" }),
+        c("status", "text", { notnull: true, note: "`found`, then `linked` or `dismissed`" }),
+        c("target_type", "text", { note: "once linked: what it names, a singular table name" }),
+        c("target_id", "integer", { note: "the row in the `target_type` table" }),
+        c("author", "text", { note: "who linked or dismissed it: `owner` or an agent by name" }),
+        ...ts(),
+      ],
+      keys: [
+        "UNIQUE (source_type, source_id, source_field, start_offset, kind)",
+        "INDEX (kind, value)",
+        "INDEX (domain) WHERE domain IS NOT NULL",
+        "INDEX (status, kind)",
+        "INDEX (target_type, target_id) WHERE target_id IS NOT NULL",
+      ],
+    },
+    {
+      name: "mention_pending",
+      doc: "Texts written or edited since their mentions were found: triggers enqueue, the store's next write finds them.",
+      cols: [
+        c("source_type", "text", { notnull: true, note: "the text's row: `message`" }),
+        c("source_id", "integer", { notnull: true }),
+      ],
+      keys: ["PRIMARY KEY (source_type, source_id)"],
+    },
   ],
   tags: [
     {

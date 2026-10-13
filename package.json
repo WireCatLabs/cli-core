@@ -164,6 +164,7 @@
     "lossless-json": "4.3.0",
     "mammoth": "1.13.0",
     "ogg-opus-decoder": "1.7.5",
+    "psl": "1.15.0",
     "qrcode-generator": "2.0.4",
     "sherpa-onnx": "1.13.8",
     "string-width": "8.3.0",

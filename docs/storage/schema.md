@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-79 tables, 17 full-text indexes.
+81 tables, 17 full-text indexes.
 
 ## Conventions
 
@@ -1628,6 +1628,44 @@ Which messages a conversation's chunk is cut from. One row per `conversation` ro
 | `text_end` | integer |  |  | where it ends inside the last message's text |
 
 *Keys and indexes:* `INDEX (first_message_id)`, `INDEX (last_message_id)`
+
+### `mentions`
+
+A phone, e-mail address, link or Google document found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `kind` | text | not null |  | `phone`, `email`, `url`, `document` |
+| `source_type` | text | not null |  | the text's row: `message` |
+| `source_id` | integer | not null |  | the row in the `source_type` table |
+| `source_field` | text | not null |  | which text of that row: `text` |
+| `start_offset` | integer | not null |  | where it is written in that text, in UTF-16 units |
+| `end_offset` | integer | not null |  | where it ends, exclusive; what was written is read back from the source, never copied |
+| `value` | text | not null |  | normalized: `+` and digits for a phone with a known country, digits alone otherwise; a lower-case address; a link without tracking parameters or fragment; a Google file id |
+| `domain` | text |  |  | `url` and `email`: the site from the public suffix list, `google.com` for `docs.google.com` |
+| `method` | text | not null |  | what found it: `rules` |
+| `version` | integer | not null |  | the kind's rule version, so a changed rule redoes its kind alone |
+| `confidence` | real | not null |  | the rule's own score, 0–1 |
+| `status` | text | not null |  | `found`, then `linked` or `dismissed` |
+| `target_type` | text |  |  | once linked: what it names, a singular table name |
+| `target_id` | integer |  |  | the row in the `target_type` table |
+| `author` | text |  |  | who linked or dismissed it: `owner` or an agent by name |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (source_type, source_id, source_field, start_offset, kind)`, `INDEX (kind, value)`, `INDEX (domain) WHERE domain IS NOT NULL`, `INDEX (status, kind)`, `INDEX (target_type, target_id) WHERE target_id IS NOT NULL`
+
+### `mention_pending`
+
+Texts written or edited since their mentions were found: triggers enqueue, the store's next write finds them.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `source_type` | text | not null |  | the text's row: `message` |
+| `source_id` | integer | not null |  | the row in the `source_type` table |
+
+*Keys and indexes:* `PRIMARY KEY (source_type, source_id)`
 
 ## Store
 

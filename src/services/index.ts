@@ -14,6 +14,7 @@ import type { ServiceDeps } from "./deps.js"
 import { type EmbeddingsService, embeddingsService } from "./embeddings.js"
 import { type FoldersService, foldersService } from "./folders.js"
 import { type InboxService, inboxService } from "./inbox.js"
+import { type MentionsService, mentionsService } from "./mentions.js"
 import { type MessagesService, messagesService } from "./messages.js"
 import { metadataService } from "./metadata.js"
 import { type ModerationService, moderationService } from "./moderation.js"
@@ -108,6 +109,7 @@ export interface Services {
   messages: MessagesService
   chats: ChatsService
   chatDocuments: ChatDocumentsService
+  mentions: MentionsService
   people: PeopleService
   inbox: InboxService
   archive: ArchiveService
@@ -145,6 +147,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
     messages: messagesService(deps),
     chats: chatsService(deps),
     chatDocuments: chatDocumentsService(deps),
+    mentions: mentionsService(deps),
     people: peopleService(deps),
     inbox: inboxService(deps),
     archive: archiveService(deps),
