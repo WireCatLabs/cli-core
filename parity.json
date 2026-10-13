@@ -6,7 +6,8 @@
     },
     "--account": {
       "value": "<address>",
-      "meaning": "only this mail account, by its address; every mail account when unset"
+      "meaning": "only this mail account, by its address; every mail account when unset",
+      "note": "removed: --source email:<address> replaces it; tg and max drop it with their next cli-messaging bump"
     },
     "--add": {
       "value": "<chat>",
@@ -399,7 +400,8 @@
     },
     "--folder": {
       "value": "<id>",
-      "meaning": "only this notes folder, by its id; repeat it for more"
+      "meaning": "only this notes folder, by its id; repeat it for more",
+      "note": "removed: --source notes:<id> replaces it; tg and max drop it with their next cli-messaging bump"
     },
     "--for": {
       "value": "<agents>",
@@ -555,7 +557,7 @@
     },
     "--max-meetings": {
       "value": "<n|all>",
-      "meaning": "how many meetings --meetings looks through, newest first; all looks through every one (default 100)"
+      "meaning": "how many of the meeting account's meetings to look through, newest first; all looks through every one (default 100)"
     },
     "--max-messages": {
       "value": "<n>",
@@ -587,7 +589,8 @@
     },
     "--meetings": {
       "value": "[provider:account]",
-      "meaning": "also search one meeting account; with no value, the one stored account that holds meetings (put it after the query)"
+      "meaning": "also search one meeting account; with no value, the one stored account that holds meetings (put it after the query)",
+      "note": "removed: --source zoom:<account>, zoom, meetings or all replaces it; tg and max drop it with their next cli-messaging bump"
     },
     "--members-see-link": {
       "value": "<on|off>",
@@ -729,7 +732,7 @@
     },
     "--only": {
       "value": "<resources>",
-      "meaning": "only these resources, separated by commas: messages, mail, notes; meetings with --meetings"
+      "meaning": "only these resources, separated by commas: messages, mail, notes; meetings when --source names a meeting account"
     },
     "--only-admins-add": {
       "value": "<on|off>",
@@ -991,8 +994,9 @@
       "meaning": "with --quiz: what people see once they answered"
     },
     "--source": {
-      "value": "<messenger>",
-      "meaning": "every account of this messenger held in the store; personal, bots or all — the same as in: in the query"
+      "value": "<accounts>",
+      "meaning": "which accounts: personal, bots or all, a provider, or a list of provider:account as a hit shows it, a provider, a kind (messages, mail, notes, documents, meetings) or group:<name> — the same as in: in the query",
+      "note": "each search reads the accounts of its own kinds and names the rest in skipped — source-everywhere-plan.md"
     },
     "--spoiler": {
       "meaning": "hide the --photo or video behind a spoiler until tapped"
@@ -1779,6 +1783,36 @@
           "in": ["max"],
           "planned": {
             "tg": "tg-cli backlog: chats delete and clear"
+          }
+        }
+      }
+    },
+    "chats documents": {
+      "in": [],
+      "planned": {
+        "max": "chat documents (docs/dev/chat-documents-plan.md)",
+        "tg": "chat documents (docs/dev/chat-documents-plan.md)"
+      }
+    },
+    "chats documents list": {
+      "in": [],
+      "planned": {
+        "max": "chat documents (docs/dev/chat-documents-plan.md)",
+        "tg": "chat documents (docs/dev/chat-documents-plan.md)"
+      },
+      "options": {
+        "--limit": {
+          "in": [],
+          "planned": {
+            "max": "chat documents (docs/dev/chat-documents-plan.md)",
+            "tg": "chat documents (docs/dev/chat-documents-plan.md)"
+          }
+        },
+        "--page": {
+          "in": [],
+          "planned": {
+            "max": "chat documents (docs/dev/chat-documents-plan.md)",
+            "tg": "chat documents (docs/dev/chat-documents-plan.md)"
           }
         }
       }
@@ -3163,6 +3197,13 @@
             "tg": "each CLI’s next cli-messaging bump"
           }
         },
+        "--source": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
+          }
+        },
         "--timezone": "all"
       }
     },
@@ -3221,6 +3262,13 @@
         "--limit": "all",
         "--newest": "all",
         "--offset": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
+          }
+        },
+        "--source": {
           "in": [],
           "planned": {
             "max": "each CLI’s next cli-messaging bump",
@@ -3294,9 +3342,22 @@
       "options": {
         "--exact": "all",
         "--filter": "all",
-        "--folder": "all",
+        "--folder": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
+          }
+        },
         "--limit": "all",
         "--offset": "all",
+        "--source": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
+          }
+        },
         "--tag": "all",
         "--timezone": "all",
         "--type": "all"

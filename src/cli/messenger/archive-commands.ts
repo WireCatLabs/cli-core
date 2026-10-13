@@ -10,7 +10,7 @@ import { seal } from "../../sealed.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
-import { renderList } from "../paging.js"
+import { listed, renderList } from "../paging.js"
 import { fetchCommand, jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { admitPassword, linesOf, openFolder, runFileFor, saveManifest, sealRun, writeChanges } from "./export-folder.js"
@@ -217,7 +217,7 @@ const exportCommand = (messenger: Messenger): Command =>
       if (format === "markdown") context.streams.data(toMarkdown(title, messages).replace(/\n$/, ""))
       else if (format === "jsonl" || context.format === "jsonl")
         for (const message of messages) context.streams.data(JSON.stringify(message))
-      else if (context.format === "json") context.renderer.result({ items: messages })
+      else if (context.format === "json") context.renderer.result(listed(messages))
       else
         context.streams.data(
           renderMessages(messages, {
