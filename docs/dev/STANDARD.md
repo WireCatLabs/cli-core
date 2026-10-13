@@ -711,6 +711,22 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
    `skipped` as `{ source, reason }`. A hit's `provider:account` is a valid `--source` entry.
 9. **A hit that has a page elsewhere answers its `url`** (planned, same plan): a Google Drive document's
    Google link. `url` is absent, not `null`, where there is none; meetings and attachments use the same key.
+10. **A file without text says what would give it text** (planned). Each item of
+    `attachments list --needs-text` carries `nextStep: { reason, command }`, one step, the first
+    one that applies: `command` is the full command line for this file, or `null` when none
+    exists. The MCP tool answers the same field.
+
+    | `reason` | When | `command` |
+    |---|---|---|
+    | `not-downloaded` | the file is not on this machine | `<cli> messages download <chat> <message>` |
+    | `reader-missing` | its reader package will not load | the install line `doctor` names |
+    | `reader` | a reader can read it and nobody ran it | `<cli> attachments extract --chat <chat>` |
+    | `transcription` | a voice message | `<cli> messages transcribe <chat> <message>` |
+    | `agent` | an image or a scan: no local reader | `<cli> attachments text set <locator> --attachment <n> --text-file <path>`, run by whoever read it |
+    | `too-large` | over the size limit | `null`; the limit is named in the note |
+    | `unsupported` | no way to read this format here, other audio and video included | `null` |
+
+    One field, not a list: an agent does the step, then lists again.
 
 ## Permissions
 
