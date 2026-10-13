@@ -66,9 +66,9 @@ columns, like every polymorphic pair in the store (`taggings`, `links`, `chunks`
 string cannot be indexed by type or joined without parsing.
 
 **Exact kinds: the value is the key; the original record is the identity, made only when it has an owner**
-(owner, 2026-10-13, ASK-231, ASK-232, NEED-1031):
+(owner, 2026-10-13, ASK-231, ASK-232, NEED-1031 A):
 
-- A person or an organization has many ways to reach it — e-mail addresses, phones, messenger accounts. Each is
+- A person or an organization has many ways to reach it (an organization since NEED-1032 A) — e-mail addresses, phones, messenger accounts. Each is
   one `identities` row; `identity_links` gives the row its owner (one owner per identity, many identities per
   owner). The schema allows this today; the data does not use it yet: each of the 541 linked identities in the
   owner's store has a person of its own, and no person has two (FIND-1194).
@@ -202,7 +202,8 @@ an index lookup.
 2. ~~Phones stored as HMAC only or also in the clear~~ — in the clear (owner, 2026-10-13, NEED-1016 B).
 3. ~~Rows in `links` or a table of its own~~ — its own table (owner, 2026-10-13, NEED-1023 B).
 4. ~~Linking by value~~ — one owner per identity, found from mentions by value; an identity only once it has an
-   owner (ASK-231, ASK-232, NEED-1031).
-6. An identity owned by an organization (a shop's number, `info@`): `identity_links.person_id` admits only a person
-   today (NEED-1032).
+   owner (ASK-231, ASK-232; owner, 2026-10-13, NEED-1031 A).
+6. ~~An identity owned by an organization~~ — yes: `identity_links` gets a nullable `organization_id` beside
+   `person_id`, exactly one of the two set (a CHECK), each a foreign key; `identity_link_events` the same
+   (owner, 2026-10-13, NEED-1032 A). Phase 1.
 5. ~~An agent's confirm of exact kinds~~ — final on an exact match; names and places wait (owner, NEED-1026 A).
