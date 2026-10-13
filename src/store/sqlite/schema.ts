@@ -1617,6 +1617,51 @@ export const chunkMessages = sqliteTable(
   ],
 )
 
+/**
+ * A phone, e-mail address, link or document found in one place of one stored text. Derived: `mentions rebuild`
+ * finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.
+ */
+export const mentions = sqliteTable(
+  "mentions",
+  {
+    id: integer("id").primaryKey(),
+    kind: text("kind").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: integer("source_id").notNull(),
+    sourceField: text("source_field").notNull(),
+    startOffset: integer("start_offset").notNull(),
+    endOffset: integer("end_offset").notNull(),
+    value: text("value").notNull(),
+    domain: text("domain"),
+    method: text("method").notNull(),
+    version: integer("version").notNull(),
+    confidence: real("confidence").notNull(),
+    status: text("status").notNull(),
+    targetType: text("target_type"),
+    targetId: integer("target_id"),
+    author: text("author"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.sourceType, table.sourceId, table.sourceField, table.startOffset, table.kind),
+    index("mentions_by_kind_value").on(table.kind, table.value),
+    index("mentions_by_domain").on(table.domain).where(sql`domain IS NOT NULL`),
+    index("mentions_by_status_kind").on(table.status, table.kind),
+    index("mentions_by_target_type_target_id").on(table.targetType, table.targetId).where(sql`target_id IS NOT NULL`),
+  ],
+)
+
+/** Texts written or edited since their mentions were found: queued by triggers, emptied by JS. */
+export const mentionPending = sqliteTable(
+  "mention_pending",
+  {
+    sourceType: text("source_type").notNull(),
+    sourceId: integer("source_id").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.sourceType, table.sourceId] })],
+)
+
 /** Settings of the store file itself, shared by every profile, tg and MAX — unlike a profile's config file. */
 export const storeSettings = sqliteTable("store_settings", {
   key: text("key").primaryKey(),

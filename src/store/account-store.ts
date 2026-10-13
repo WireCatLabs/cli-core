@@ -64,6 +64,8 @@ const ACCOUNT_METHODS = [
   "messages",
   "countMessages",
   "documentLinkMessages",
+  "mentions",
+  "mention",
   "changes",
   "messagesWindow",
   "around",

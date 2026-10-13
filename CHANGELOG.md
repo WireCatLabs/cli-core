@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Mentions: phones, e-mail addresses, links and Google documents found in stored message text** (store
+  version 7). Each is kept where it was written, in one normalized form: `+7…` for a phone whose country is clear
+  from how it is written, digits alone otherwise; a lower-case address; a link without `utm_*`, `fbclid` and the
+  fragment, with its site (`docs.google.com` → `google.com`). Phones are found by rules, not checked against a
+  numbering plan: a number-like order id can slip in, and dates, sums, card and tax numbers are left out.
+  `mentionsCommand` adds `mentions list` (filters `--kind`, `--status`, `--domain`, `--value`), `mentions show <id>`
+  and `mentions rebuild [--kind]`; the CLIs register it. New and edited messages get their mentions on the write
+  that stores them; messages stored before version 7 need one `mentions rebuild`. New dependency `psl` (0.7 MB),
+  for a link's site.
 ### Changed — may break callers
 
 - **The native add-ons are `@wirecat/cli-core-sqlite` and `@wirecat/cli-core-onnx`** 1.0.1, the same builds as

@@ -6,6 +6,7 @@ import type { Link, LinkInput } from "../conversations/link.js"
 import type { DownloadedFile } from "../domain/attachments.js"
 import type { ChannelTagMatch } from "../domain/channel-tags.js"
 import type { CounterObservations, CounterState } from "../domain/counters.js"
+import type { MentionKind } from "../domain/mentions.js"
 import type {
   Chat,
   ChatKind,
@@ -73,6 +74,17 @@ import type { MeetingContextReadCapabilities, MeetingReadCapabilities } from "./
 import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
 import { meetingStoreOver } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
+import {
+  drainMentions,
+  listMentions,
+  type MentionFilter,
+  type MentionsRebuild,
+  type MentionsState,
+  mentionsState,
+  rebuildMentions,
+  type StoredMention,
+  showMention,
+} from "./sqlite/mentions.js"
 import * as messageWrites from "./sqlite/messages.js"
 import { noteSearchOver } from "./sqlite/note-search.js"
 import { type NotesStore, notesStoreOver } from "./sqlite/notes.js"
@@ -415,6 +427,23 @@ export interface MessageStore {
   countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
   /** The chat's messages that may hold a Google document link, newest first, with the documents linked from each. */
   documentLinkMessages(key: AccountKey, chatId: Id): Promise<DocumentLinkMessage[]>
+  /** The account's phones, e-mail addresses, links and documents found in message text, newest message first. */
+  mentions(
+    key: AccountKey,
+    filter: MentionFilter,
+    window: { limit?: number; offset: number },
+  ): Promise<{ items: StoredMention[]; hasMore: boolean }>
+  /** One mention of the account, with the text around it; `undefined` for another account's or a missing id. */
+  mention(
+    key: AccountKey,
+    id: number,
+  ): Promise<(StoredMention & { before: string; after: string; sameValue: number }) | undefined>
+  /** Finds the mentions of every stored message again, every account's; decisions stay. */
+  rebuildMentions(options?: {
+    kinds?: readonly MentionKind[]
+    onBatch?: (done: number, total: number) => void
+  }): Promise<MentionsRebuild>
+  mentionsState(): Promise<MentionsState>
   /** Saved or edited after `at` (ISO, this machine's clock), oldest first, and the ids deleted after it. */
   changes(key: AccountKey, chatId: Id, at: string): Promise<{ messages: Message[]; deleted: Id[] }>
   /**
@@ -848,6 +877,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     try {
       body()
       stems.drainStems(database, stemmerFor)
+      drainMentions(database, context.now())
       drainInvolvementQueue(database)
       database.exec("COMMIT")
     } catch (error) {
@@ -1425,6 +1455,22 @@ const storeOver = (context: StoreContext): MessageStore => {
       return chatKey === undefined ? [] : documentLinkMessages(context, chatKey)
     },
 
+    mentions: async (key, filter, window) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined
+        ? { items: [], hasMore: false }
+        : listMentions(database, accountKey, filter, window)
+    },
+
+    mention: async (key, id) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined ? undefined : showMention(database, accountKey, id)
+    },
+
+    rebuildMentions: async (options = {}) => rebuildMentions(database, { now: context.now(), ...options }),
+
+    mentionsState: async () => mentionsState(database),
+
     changes: async (key, chatId, at) => {
       const chatKey = chatKeyOf(key, chatId)
       return chatKey === undefined
@@ -1838,6 +1884,13 @@ export type {
   TranscriptContextPage,
 } from "./sqlite/meeting-reads.js"
 export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
+export type {
+  MentionFilter,
+  MentionStatus,
+  MentionsRebuild,
+  MentionsState,
+  StoredMention,
+} from "./sqlite/mentions.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
 export type { ProposedAction } from "./sqlite/proposed-actions.js"

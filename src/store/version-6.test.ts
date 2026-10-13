@@ -5,6 +5,7 @@ import { parseLucene } from "@wirecat/cli-base/query"
 import { expect, it } from "vitest"
 import { validateAst } from "../search/lucene/registry.js"
 import { searchRecordOf } from "../services/searches.js"
+import { rollBackTo } from "../testing/older-store.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 
@@ -41,7 +42,7 @@ it("rewrites the query trees of saved searches, rankings and runs stored before 
     ["words", text],
   ] as const)
     insert.run(name, record.command, record.params, record.language, record.version, record.fieldsVersion)
-  old.exec("DELETE FROM schema_migrations WHERE version >= 6")
+  rollBackTo(old, 6)
   old.close()
 
   const upgraded = await openStore({ path })

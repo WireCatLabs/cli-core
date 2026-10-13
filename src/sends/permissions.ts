@@ -98,6 +98,7 @@ export const RESOURCES = [
   "bot",
   "conversations",
   "tags",
+  "mentions",
   "search",
   "searches",
   "tasks",
@@ -311,6 +312,7 @@ const NAMED_WRITE_KEYS = [
   "contacts.notes.remove",
   "tags.auto",
   "metadata.refresh",
+  "mentions.rebuild",
   "tags.add",
   "tags.remove",
   "tasks.add",
@@ -435,6 +437,8 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   // Which files a message has, and where they are saved, tells as much as a message does; so does who
   // shared which document link, and when.
   if ((top === "attachments" && next === "list") || (top === "chats" && next === "documents")) return "messages"
+  // A mention is a piece of a message's text: reading one is reading messages; rebuilding writes only derived rows.
+  if (top === "mentions") return next === "rebuild" ? "mentions.rebuild" : "messages"
   if (top === "store" && (next === "gaps" || next === "jobs")) return path.join(".")
   if (top === "messages" && next === "sync") return "messages"
   if (SHOW_MESSAGES.has(top) || (top === "contacts" && (next === "context" || next === "timeline"))) return "messages"

@@ -8,8 +8,8 @@ export interface GoogleDocumentLink {
 const LINK = /https?:\/\/(?:(?:docs|drive|sheets|slides)\.google\.com|forms\.gle)(?:[/?#][^\s<>"'`]*)?/gi
 const ID = /^[\w-]{10,}$/
 
-// Closing brackets stay when the URL opened them, as some Drive links do.
-const trimmed = (url: string): string => {
+/** A URL as written, without the sentence's punctuation after it; closing brackets stay when the URL opened them. */
+export const trimUrl = (url: string): string => {
   let end = url.length
   for (;;) {
     const last = url[end - 1]
@@ -25,14 +25,15 @@ const trimmed = (url: string): string => {
   return url.slice(0, end)
 }
 
-const idOf = (url: string): string | null => {
+/** The Google file id a Docs, Sheets, Slides, Forms or Drive URL carries; `null` for any other URL. */
+export const googleDocumentId = (url: string): string | null => {
   let parsed: URL
   try {
     parsed = new URL(url)
   } catch {
     return null
   }
-  if (parsed.hostname.toLowerCase() === "forms.gle") return null
+  if (!/^(?:docs|drive|sheets|slides)\.google\.com$/.test(parsed.hostname.toLowerCase())) return null
   const segments = parsed.pathname.split("/")
   const at = segments.indexOf("d")
   const candidate = at < 0 ? parsed.searchParams.get("id") : segments[segments[at + 1] === "e" ? at + 2 : at + 1]
@@ -42,6 +43,6 @@ const idOf = (url: string): string | null => {
 /** Every Google document link in the text, in order; the reader and drive's link writer both use it. */
 export const googleDocumentLinks = (text: string): GoogleDocumentLink[] =>
   [...text.matchAll(LINK)].map(([match]) => {
-    const url = trimmed(match)
-    return { url, documentId: idOf(url) }
+    const url = trimUrl(match)
+    return { url, documentId: googleDocumentId(url) }
   })
