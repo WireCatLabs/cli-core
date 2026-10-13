@@ -114,17 +114,21 @@ export const execution = (
             result = JSON.stringify(projectFields(JSON.parse(text), paths))
           } catch (error) {
             if (error instanceof CliError) throw error
-            throw new CliError("invalid_response", "this output is not a JSON result — --fields cannot project it", {
-              retryable: false,
-              reason: "output.fields-unavailable",
-            })
+            throw new CliError(
+              "invalid_response",
+              "this output is not a JSON result — --json=<fields> cannot pick from it",
+              {
+                retryable: false,
+                reason: "output.fields-unavailable",
+              },
+            )
           }
         }
         const size = Buffer.byteLength(result) + 1
         if (maxOutputBytes !== 0 && bytes + size > maxOutputBytes)
           throw new CliError(
             "invalid_response",
-            `machine output exceeds ${maxOutputBytes} bytes — reduce --limit, select --fields or raise --max-output-bytes`,
+            `machine output exceeds ${maxOutputBytes} bytes — reduce --limit, pick fields with --json=a,b or raise --max-output-bytes`,
             {
               retryable: false,
               reason: "output.too-large",

@@ -18,11 +18,13 @@ import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { isCliFailure, isCommanderFailure } from "./failures.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
+import { checkJson, liftJson } from "./json-fields.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile } from "./profile.js"
 import { failureContext } from "./reasons.js"
 import { recorded, wasSettled } from "./runs/recording.js"
 import { type GlobalFlags, parseDuration, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
+import { commandAt } from "./steps.js"
 
 export interface ProgramDefinition {
   app: AppIdentity
@@ -72,8 +74,7 @@ export const createProgram = (
       (_, level: number) => level + 1,
       0,
     )
-    .option("--json", "machine-readable output: one JSON value on stdout, nothing else")
-    .option("--agent-json", "JSON for AI agents: invisible controls are visible; ordinary --json preserves text")
+    .option("--json", "machine-readable output: one JSON value on stdout; --json=id,text keeps only those fields")
     .option("--jsonl", "machine-readable output: one JSON object per line, for streaming and jq")
     .option("--quiet", "diagnostics off; a failure is still said")
     .option("--trace", "the connection's own log lines on stderr — never message content")
@@ -83,7 +84,6 @@ export const createProgram = (
     .option("--no-input", "never prompt or open interactive login; piped input remains available")
     .option("--max-input-bytes <bytes>", "maximum buffered input bytes (default: 16777216)")
     .option("--max-output-bytes <bytes>", "maximum machine output bytes (default: 4194304; 0 disables)")
-    .option("--fields <paths>", "comma-separated item or object fields: id,text; preserve pagination and operation ids")
     .option("--brief", "found messages and mail as reference, title, time, sender and excerpt only")
     .option("--full", "found messages and mail with their whole text and every provider field")
     .option("--dry-run", "preview parsed arguments and permissions before running the action")
@@ -120,7 +120,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   const streams = options.streams ?? processStreams
   const delimiter = argv.indexOf("--")
   const flags = argv.slice(0, delimiter < 0 ? undefined : delimiter)
-  const machine = flags.some((word) => word === "--json" || word === "--jsonl" || word === "--agent-json")
+  const machine = flags.some((word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl")
   const debug = flags.includes("--debug")
   const reporting = machine ? { ...options, tty: false } : options
   const control = execution(streams, { maxOutputBytes: 0 })
@@ -172,8 +172,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     const commandEnv = options.env ?? process.env
     const headless =
       machine || flags.input === false || Boolean(commandEnv.CI) || (options.tty ?? process.stdout.isTTY) !== true
-    if (flags.fields !== undefined && !machine && (options.tty ?? process.stdout.isTTY) === true)
-      throw new CliError("validation_error", "--fields requires machine output — add --json or --jsonl")
+    checkJson(action, requested, !flags.jsonl && (options.tty ?? process.stdout.isTTY) === true)
     control.configure({
       ...(flags.fields === undefined ? {} : { fields: flags.fields }),
       maxOutputBytes:
@@ -239,8 +238,11 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
 
   // Before commander, not inside it: commander has no hook that runs before it decides which
   // subcommand it is looking at.
-  const { profile, rest } = liftProfile(argv, commandWords(program))
+  const { profile, rest: lifted } = liftProfile(argv, commandWords(program))
   if (profile !== undefined) program.setOptionValue("profile", profile)
+  const requested = liftJson(lifted, (words) => commandAt(program, commandPath(program, words)))
+  const rest = requested.argv
+  if (requested.fields !== undefined) program.setOptionValue("fields", requested.fields)
 
   // A bare word with nothing after it would make commander print help **on stdout**, which breaks
   // the one contract this program has and says nothing about why.

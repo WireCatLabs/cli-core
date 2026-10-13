@@ -508,7 +508,6 @@ held data only; [the guide](docs/rankings.md#find-questions-and-posts-that-need-
 explicit reply attribution, selected answerers, unknown joining dates and bounded evidence.
 
 
-For agent consumption, global `--agent-json` renders control and direction characters visibly in JSON
-strings and keys. `--json` retains raw values; `--agent-json --jsonl` applies the safe form to every
-streamed record. MCP already uses this form. MCP contact searches keep third-party registries off
+`--json` prints text as it was written; MCP answers show control and direction characters visibly in
+strings and keys. `--json=id,text` keeps only those fields. MCP contact searches keep third-party registries off
 unless the caller explicitly sets `registries: true`.

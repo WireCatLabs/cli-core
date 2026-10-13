@@ -158,7 +158,6 @@ export interface GlobalFlags {
   profile?: string
   json?: boolean
   jsonl?: boolean
-  agentJson?: boolean
   quiet?: boolean
   verbose?: number
   trace?: boolean
@@ -178,7 +177,6 @@ export interface Settings extends AISettings {
   profile: string
   json: boolean
   jsonl: boolean
-  agentJson?: boolean
   quiet: boolean
   /** How much of what the model knows a human view shows: `-v`, `-vv`. */
   detail: 0 | 1 | 2
@@ -482,7 +480,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
       profile: usableProfileName(profile.value),
       json: flags.json === true,
       jsonl: flags.jsonl === true,
-      agentJson: flags.agentJson === true,
       quiet: flags.quiet === true,
       detail: Math.min(2, Math.max(0, flags.verbose ?? 0)) as 0 | 1 | 2,
       trace: flags.trace === true,

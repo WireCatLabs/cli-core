@@ -1,9 +1,29 @@
-import { projectFields as coreProjectFields } from "@wirecat/cli-base"
-
-export { fieldsOf } from "@wirecat/cli-base"
+import { CliError, fieldsOf as coreFieldsOf, projectFields as coreProjectFields } from "@wirecat/cli-base"
 
 /** cli-base keeps `operation_id` and `send_id`; this package's results still say `operationId` and `sendId`. */
 const CORRELATION = ["operationId", "sendId"]
 
-export const projectFields = (value: unknown, fields: readonly string[]): unknown =>
-  coreProjectFields(value, [...fields, ...CORRELATION.filter((name) => !fields.includes(name))])
+const named = <T>(work: () => T): T => {
+  try {
+    return work()
+  } catch (error) {
+    if (error instanceof CliError && error.code === "validation_error")
+      throw new CliError("validation_error", "--json takes comma-separated field paths, for example --json=id,text", {
+        param: "--json",
+      })
+    throw error
+  }
+}
+
+export const fieldsOf = (value: string): string[] => named(() => coreFieldsOf(value))
+
+const isItemAnswer = (value: unknown): value is { item: unknown } =>
+  typeof value === "object" && value !== null && !Array.isArray(value) && "item" in value && "meta" in value
+
+/** An item answer keeps its `next`, `missing` and `meta`; only the item is cut down. */
+export const projectFields = (value: unknown, fields: readonly string[]): unknown => {
+  const kept = [...fields, ...CORRELATION.filter((name) => !fields.includes(name))]
+  return named(() =>
+    isItemAnswer(value) ? { ...value, item: coreProjectFields(value.item, kept) } : coreProjectFields(value, kept),
+  )
+}

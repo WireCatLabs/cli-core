@@ -1984,7 +1984,7 @@ describe("the shared read commands", () => {
     expect(full.text).toContain(body)
     expect(full.providerMetadata).toBeDefined()
     expect(full.email.labels).toEqual(["Starred"])
-    const [picked] = (await search("--fields", "locator,text")).items
+    const [picked] = (await search("--json=locator,text")).items
     expect(picked.text).toContain(body)
     expect((await call(["search", "mail", "chapter", "--brief", "--full", "--json"], never, env)).code).toBe(2)
   })

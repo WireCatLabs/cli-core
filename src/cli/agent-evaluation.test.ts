@@ -126,7 +126,7 @@ const baseline: AgentPolicy = async (task, call) => {
       await call(read)
       break
     case "compact-output":
-      await call([...read, "--fields", "id"])
+      await call([...read, "--json=id"])
       break
     case "unknown-write":
       await call(["messages", "send", "synthetic-chat", "synthetic text", "--json"])

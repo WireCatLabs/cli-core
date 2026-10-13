@@ -9,6 +9,13 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`--json [fields]` replaces `--fields` and `--agent-json`, which are gone.** `--json=id,text` keeps those fields
+  of each item, or of the one `item`, and the envelope around them. `--json id,text` works too when every name is a
+  field of the command's declared answer, so a command word or a positional argument is never taken. A bare
+  `--json` prints every field in a pipe; at a terminal, a command that declares its answer names its fields
+  instead (`output.choose-fields`), and an unknown field is `output.unknown-field`. MCP answers keep showing
+  invisible characters visibly; CLI JSON keeps text as written.
+
 - **An adapter names a provider's refusal `provider_error`** in an error's details, not `providerError`.
   The flood memory, `doctor`, run records and request events read only that key, and it now reaches the printed
   error object.
@@ -19,6 +26,16 @@ shape of this file.
 
 ### Added
 
+- **The answer envelope** (`src/cli/envelope.ts`): `listOf` and `itemOf` build `{items, page, next?, missing?}` and
+  `{item, next?, missing?}`; `meta` (`run_id`, `duration_ms`) is added in one place for the CLI and MCP.
+  `renderAnswer` prints it: the envelope for a machine, the items and a `→` line per next step for a person. A list
+  with more rows starts its `next` with `page.next`.
+- **The next-step registry** (`src/cli/steps.ts`): `page.next`, `messages.sync`, `models.download`. A step is
+  printed or answered only when this CLI (or this MCP server) has its command; a test parses every step against the
+  command tree. The model-download hints of `conversations` use it, so a CLI without `models` no longer names it.
+- **MCP tools answer with a generated `outputSchema`** once a tool declares `output: { entity, list }`: the
+  entity's envelope schema, bundled, no `$ref`. `tools_search` shows it per command. Tools are registered in name
+  order.
 - **`AppIdentity.errors`: a CLI's own error reasons and detail keys** (`max_code`, `migrated_chat_id`), merged
   with this package's by `failureContext` and kept by the CLI, MCP and meeting-tool error handlers alike.
 
