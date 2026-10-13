@@ -8,7 +8,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
-- `store fetch` is now `messages sync` (owner, 2026-10-12): same arguments, options, output and permission key (`messages`). `store fetch` still runs for three releases, hidden from help and `commands`, and prints one line on stderr that names `messages sync`. A background job or a schedule saved with `store fetch` runs as `messages sync`, so `store jobs retry` and `schedule exec` keep working. Help hints, the parity manifest and the option catalogue name the new path. `bot store fetch` keeps its name for now.
+- `store fetch` is now `messages sync` (owner, 2026-10-12): same arguments, options, output and permission key (`messages`). `store fetch` stops working. A background job or a schedule saved with `store fetch` runs as `messages sync`, so `store jobs retry` and `schedule exec` keep working. Help hints, the parity manifest and the option catalogue name the new path. `bot store fetch` keeps its name for now.
 
 ### Added
 

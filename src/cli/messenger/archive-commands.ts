@@ -11,7 +11,7 @@ import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
 import { listed, renderList } from "../paging.js"
-import { jobsCommand, syncCommand } from "./backfill-command.js"
+import { jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { admitPassword, linesOf, openFolder, runFileFor, saveManifest, sealRun, writeChanges } from "./export-folder.js"
 import { gapsCommand } from "./gaps-command.js"
@@ -28,19 +28,8 @@ export const storeCommand = (messenger: Messenger): Command => {
     .addCommand(exportCommand(messenger))
     .addCommand(clearCommand(messenger))
   for (const command of storeMaintenanceCommands(messenger)) store.addCommand(command)
-  store.addCommand(deprecatedFetchCommand(messenger), { hidden: true })
   return store
 }
-
-/** The old name of `messages sync`, kept for a few releases so saved scripts and agents' skills still run (NEED-985). */
-const deprecatedFetchCommand = (messenger: Messenger): Command =>
-  syncCommand(messenger)
-    .name("fetch")
-    .hook("preAction", (command) => {
-      messengerContext(command, messenger).renderer.note(
-        `store fetch is now messages sync — \`${messenger.app.command} messages sync\`; the old name will stop working`,
-      )
-    })
 
 /**
  * What the local store holds, per chat — read from the store alone. Whether a fetch reached a
