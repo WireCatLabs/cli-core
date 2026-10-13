@@ -45,7 +45,11 @@ const check = async (args: string[], expected: number, signal?: NodeJS.Signals, 
     })
     assert.equal(code, expected, diagnostics)
     if (pipe) assert.equal(diagnostics, "")
-    else assert.equal(JSON.parse(diagnostics.trim()).error.retryable, false)
+    else {
+      const { error } = JSON.parse(diagnostics.trim())
+      assert.ok(error.code && error.reason, diagnostics)
+      assert.equal(error.stack, undefined)
+    }
   } finally {
     if (timer) clearTimeout(timer)
     child.stdin.destroy()
