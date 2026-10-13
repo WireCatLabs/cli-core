@@ -10,6 +10,7 @@ import { document } from "./document.js"
 import { fact } from "./fact.js"
 import { reference } from "./fields.js"
 import { folder } from "./folder.js"
+import { hit } from "./hit.js"
 import { identity } from "./identity.js"
 import { inviteLink } from "./invite-link.js"
 import { joinRequest } from "./join-request.js"
@@ -41,6 +42,7 @@ export {
   document,
   fact,
   folder,
+  hit,
   identity,
   inviteLink,
   joinRequest,
@@ -60,7 +62,18 @@ export {
 
 export const ENTITIES = {
   message,
-  "message.hit": v.pick(message, ["ref", "chat_title", "timestamp", "sender_name", "excerpt", "matched_in", "score"]),
+  "message.hit": v.pick(message, [
+    "ref",
+    "chat_title",
+    "timestamp",
+    "sender_name",
+    "excerpt",
+    "matched_in",
+    "score",
+    "found_in",
+    "discovery",
+    "context",
+  ]),
   "message.summary": v.pick(message, ["ref", "timestamp", "sender_name", "text"]),
   message_link: messageLink,
   chat,
@@ -69,6 +82,18 @@ export const ENTITIES = {
   contact,
   account,
   note,
+  "note.hit": v.pick(note, [
+    "ref",
+    "source",
+    "folder_id",
+    "path",
+    "title",
+    "updated_at",
+    "excerpt",
+    "found_by",
+    "links",
+  ]),
+  hit,
   document,
   attachment,
   task,

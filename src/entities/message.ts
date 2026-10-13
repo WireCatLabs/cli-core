@@ -39,6 +39,21 @@ export const message = v.strictObject({
   excerpt: v.optional(text),
   matched_in: v.optional(v.picklist(["text", "transcript", "filename", "file", "context"])),
   score: v.optional(v.number()),
+  /** Where a search found it: the local archive, the messenger's server, or both. */
+  found_in: v.optional(v.picklist(["archive", "server", "both"])),
+  /** A discovery search's partial match: how much of the question it covers, and which words it lacks. */
+  discovery: v.optional(
+    v.strictObject({
+      coverage: v.number(),
+      matched_terms: v.array(text),
+      missing_terms: v.array(text),
+      parent: v.optional(reference),
+    }),
+  ),
+  /** The messages around a search hit, or its thread, oldest first; the hit itself is among them. */
+  context: v.optional(
+    v.array(v.strictObject({ ref: reference, timestamp: time, sender_name: v.nullable(text), text })),
+  ),
   outgoing: v.nullable(v.boolean()),
   attachments: v.array(attachment),
   reply_to: v.nullable(quoted),
