@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createFileLogger, type FileLogger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../app.js"
@@ -37,6 +37,10 @@ export interface RunMetadata {
   providerError?: string
   /** Written only because it failed: recording was not asked for. */
   keptBecauseFailed?: boolean
+  /** Every operation its events named, so a search by operation need not open them. */
+  operations?: string[]
+  /** Every `errorCode` and warning `code` its events carried, for the same reason. */
+  codes?: string[]
 }
 
 export interface StartRunOptions {
@@ -82,6 +86,10 @@ export const runsDirFor = (app: AppIdentity, env: NodeJS.ProcessEnv = process.en
  *
  * `run.json` is written **now**, with `status: "running"`, and again by `finish`. A directory
  * holding events and no metadata is a special case `runs list` would carry forever.
+ *
+ * Each write also appends the metadata to the day's `index.jsonl`, which `runs list` and `runs search`
+ * read instead of every `run.json`. It is only a cache: pruned with its day, and a day without one is read
+ * the slow way.
  */
 export const startRun = (options: StartRunOptions): Run => {
   const now = options.now ?? (() => new Date())
@@ -101,11 +109,28 @@ export const startRun = (options: StartRunOptions): Run => {
   const events = join(dir, "events.jsonl")
   writeFileSync(events, "", { flag: "a", mode: 0o600 })
 
-  const logger = createFileLogger({
+  const file = createFileLogger({
     path: events,
     base: { runId: id, command: options.command, profile: options.profile },
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   })
+  const operations = new Set<string>()
+  const codes = new Set<string>()
+  const noted =
+    (write: (event: object, message?: string) => void) =>
+    (event: object, message?: string): void => {
+      const { operation, errorCode, code } = event as Record<string, unknown>
+      if (typeof operation === "string") operations.add(operation)
+      for (const value of [errorCode, code]) if (typeof value === "string") codes.add(value)
+      write(event, message)
+    }
+  const logger: FileLogger = {
+    debug: noted(file.debug),
+    info: noted(file.info),
+    warn: noted(file.warn),
+    error: noted(file.error),
+    close: file.close,
+  }
 
   const metadata: RunMetadata = {
     runId: id,
@@ -137,6 +162,8 @@ export const startRun = (options: StartRunOptions): Run => {
         status,
         completedAt: completedAt.toISOString(),
         durationMs: completedAt.getTime() - startedAt.getTime(),
+        operations: [...operations].sort(),
+        codes: [...codes].sort(),
       })
 
       // Pino writes through a plain append stream, and a process that exits before it flushes
@@ -161,27 +188,66 @@ const runId = (startedAt: Date, command: string): string => {
   return `${stamp}-${slug}-${randomUUID().slice(0, 6)}`
 }
 
+const INDEX = "index.jsonl"
+
 const writeRunFile = (dir: string, metadata: RunMetadata): void => {
   // Atomic, so a reader never sees half of one — and 0600, because it names a profile and a
   // command even though it carries nothing of what was said.
   writeSecurely(join(dir, "run.json"), `${JSON.stringify(metadata, null, 2)}\n`, 0o600)
+  try {
+    appendFileSync(join(dir, "..", INDEX), `${JSON.stringify(metadata)}\n`, { mode: 0o600 })
+  } catch {
+    // The index only makes reading faster; a day without one is read run by run.
+  }
 }
 
-/** Newest first, which is the order anyone asking "what did I just do" wants. */
-export const listRuns = (runsDir: string): RunMetadata[] => {
+/**
+ * Newest first, which is the order anyone asking "what did I just do" wants. Days before `since` are
+ * not opened, nor any day once `atLeast` runs are in hand.
+ */
+export const listRuns = (
+  runsDir: string,
+  { since, atLeast = Number.POSITIVE_INFINITY }: { since?: number; atLeast?: number } = {},
+): RunMetadata[] => {
+  const first = since === undefined ? undefined : day(new Date(since))
   const runs: RunMetadata[] = []
 
   for (const date of days(runsDir).sort().reverse()) {
-    for (const entry of safeReaddir(join(runsDir, date)).sort().reverse()) {
-      const metadata = readRun(join(runsDir, date, entry))
-      if (metadata) runs.push(metadata)
-    }
+    if ((first !== undefined && date < first) || runs.length >= atLeast) break
+    runs.push(...runsOfDay(join(runsDir, date)))
   }
   return runs
 }
 
+const runsOfDay = (dayDir: string): RunMetadata[] => {
+  let raw: string
+  try {
+    raw = readFileSync(join(dayDir, INDEX), "utf8")
+  } catch {
+    return safeReaddir(dayDir)
+      .filter((entry) => entry !== INDEX)
+      .sort()
+      .reverse()
+      .flatMap((entry) => readRun(join(dayDir, entry)) ?? [])
+  }
+
+  const latest = new Map<string, RunMetadata>()
+  for (const line of raw.split("\n")) {
+    if (line.trim() === "") continue
+    try {
+      const metadata = JSON.parse(line) as RunMetadata
+      if (typeof metadata.runId === "string") latest.set(metadata.runId, metadata)
+    } catch {
+      // A torn line from a killed process; that run's next line, or its run.json, still says it.
+    }
+  }
+  return [...latest.values()].sort((a, b) => (a.runId < b.runId ? 1 : a.runId > b.runId ? -1 : 0))
+}
+
 export const findRun = (runsDir: string, id: string): { dir: string; metadata: RunMetadata } | undefined => {
-  for (const date of days(runsDir)) {
+  const stamped = /^(\d{4})(\d{2})(\d{2})T/.exec(id)
+  const likely = stamped ? [`${stamped[1]}-${stamped[2]}-${stamped[3]}`] : []
+  for (const date of [...likely, ...days(runsDir)]) {
     const dir = join(runsDir, date, id)
     const metadata = readRun(dir)
     if (metadata) return { dir, metadata }

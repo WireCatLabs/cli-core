@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -108,6 +108,48 @@ describe("reading runs back", () => {
     expect(listRuns(dir).map((run) => run.command)).toEqual(["messages send", "chats list"])
     expect(findRun(dir, older.id)?.metadata.command).toBe("chats list")
     expect(findRun(dir, "no-such-run")).toBeUndefined()
+  })
+
+  it("reads the day's index rather than every run, the latest line of each run winning", async () => {
+    const dir = runsDir()
+    const finished = begin(dir, "chats list", () => new Date("2026-09-20T10:00:00.000Z"))
+    finished.logger.info({ event: "response", operation: "chats.list", errorCode: "timeout" })
+    finished.logger.warn({ event: "warning", code: "slow_answer" })
+    await finished.finish("failed")
+    const running = begin(dir, "messages send", () => new Date("2026-09-20T11:00:00.000Z"))
+
+    const index = readFileSync(join(dir, "2026-09-20", "index.jsonl"), "utf8")
+      .trimEnd()
+      .split("\n")
+    expect(index).toHaveLength(3)
+    expect(listRuns(dir).map(({ runId, status }) => ({ runId, status }))).toEqual([
+      { runId: running.id, status: "running" },
+      { runId: finished.id, status: "failed" },
+    ])
+    expect(listRuns(dir)[1]).toMatchObject({ operations: ["chats.list"], codes: ["slow_answer", "timeout"] })
+    expect(statSync(join(dir, "2026-09-20", "index.jsonl")).mode & 0o777).toBe(0o600)
+  })
+
+  it("reads a day without an index run by run", async () => {
+    const dir = runsDir()
+    const run = begin(dir, "chats list", () => new Date("2026-09-20T10:00:00.000Z"))
+    await run.finish("success")
+    rmSync(join(dir, "2026-09-20", "index.jsonl"))
+
+    expect(listRuns(dir).map((item) => item.runId)).toEqual([run.id])
+  })
+
+  it("does not open a day before the one asked for", async () => {
+    const dir = runsDir()
+    const old = begin(dir, "chats list", () => new Date("2026-09-18T10:00:00.000Z"))
+    await old.finish("success")
+    const recent = begin(dir, "chats list", () => new Date("2026-09-20T10:00:00.000Z"))
+    await recent.finish("success")
+    writeFileSync(join(dir, "2026-09-18", "index.jsonl"), "not json at all\n")
+
+    expect(listRuns(dir, { since: Date.parse("2026-09-19T00:00:00.000Z") }).map((run) => run.runId)).toEqual([
+      recent.id,
+    ])
   })
 
   it("answers with nothing at all when nothing was ever recorded", () => {

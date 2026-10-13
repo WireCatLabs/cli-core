@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync } from "node:fs"
+import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
@@ -34,4 +34,25 @@ it("searches error codes, partial IDs and safe events with profile isolation and
   expect(searchRuns(dir, { errorCode: "rate_limited", limit: 1 }).hasMore).toBe(true)
   expect(searchRuns(dir, { errorCode: "rate_limited", limit: 1, page: 2 }).items).toHaveLength(1)
   expect(() => searchRuns(dir, { since: "not a date" })).toThrow("--since")
+})
+
+it("finds a code a finished run's events carried without opening the runs that carried none", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "run-search-"))
+  const hit = startRun({ runsDir: dir, profile: "work", command: "messages send", cliVersion: "1.0.0" })
+  hit.logger.info({ event: "response", operation: "messages.send", outcome: "error", errorCode: "timeout" })
+  await hit.finish("success")
+  const miss = startRun({ runsDir: dir, profile: "work", command: "chats list", cliVersion: "1.0.0" })
+  miss.logger.info({ event: "response", operation: "chats.list" })
+  await miss.finish("success")
+  writeFileSync(
+    join(miss.dir, "events.jsonl"),
+    '{"event":"response","operation":"messages.send","errorCode":"timeout"}\n',
+  )
+  const killed = startRun({ runsDir: dir, profile: "work", command: "messages send", cliVersion: "1.0.0" })
+  killed.logger.info({ event: "response", operation: "messages.send", errorCode: "timeout" })
+  await killed.logger.close()
+
+  const ids = (search: Parameters<typeof searchRuns>[1]) => searchRuns(dir, search).items.map((item) => item.runId)
+  expect(ids({ errorCode: "timeout" }).sort()).toEqual([hit.id, killed.id].sort())
+  expect(ids({ operation: "messages.send" }).sort()).toEqual([hit.id, killed.id].sort())
 })

@@ -4,6 +4,23 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`runs search` and `runs list` read a per-day index instead of every run.** Each run appends its metadata to
+  `runs/<day>/index.jsonl` when it starts and when it ends; the index goes with its day. A finished run also
+  records the operations and codes its events named (`operations`, `codes` in `run.json`), so a search by
+  `--error-code` or `--operation` opens only the runs that can match, `--since-time` skips older days, and
+  `runs list` stops once it has `--limit`. On 6,000 generated runs: a missed `--error-code` 1.76 s → 16 ms,
+  `runs list` 31 ms → 0.7 ms. A free-text query still reads events. A day without an index (runs from an
+  older version) is read run by run.
+
+### Changed — may break callers
+
+- **`runs show` prints only what went wrong.** The answer keeps the run's metadata and adds `eventCount`;
+  `events` holds the failed responses, warnings and the crash. `-v` shows every event, as before.
+
 ## 0.257.0 — 13.10.2026
 
 ### Changed — may break callers
