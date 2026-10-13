@@ -22,6 +22,14 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   note's chunks at section starts. `title:`, `site:`, `lang:`, `author:` and `keyword:` search notes and files;
   on messages and mail they match nothing. Attachments keep only the text for now. `doctor` lists the two engines.
 
+### Fixed
+
+- **`config set defaultProfile <name>` and `config unset defaultProfile` work without naming a profile.** The
+  command asked for a profile first and failed when several existed, though `defaultProfile` is how you choose
+  one. It is written at the top level of the file and reported as `scope: "defaultProfile"`; `--defaults`,
+  `--personal` and `--bot` are refused for it, and so is a process under `<PREFIX>_PROFILE_LOCK`.
+  `config show` lists it.
+
 ## 0.261.0 — 13.10.2026
 
 ### Changed — may break callers
@@ -742,7 +750,6 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 - **`store.find` refuses a `chatId` without its `account`.** A chat id is one account's; without the account it
   matched that id's chat in every account of the store. It is now a `validation_error`; no caller here or in
   tg, max, memo or zoom passes one.
-||||||| parent of 218ca10a (fix(messages): list reads past the messenger's page cap up to --limit)
 
 ## 0.232.0 — 11.10.2026
 

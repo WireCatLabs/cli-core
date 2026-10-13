@@ -73,7 +73,7 @@ export const configCommand = (
         pathsOverridden: overridden,
         settings: [...config.allSettings, "commandTimeoutMs"]
           .filter((setting) => bot || setting !== "readOtherBots")
-          .map((setting) => sourced(settings, setting)),
+          .map((setting) => sourced(settings, setting, config.schema)),
         storeSettings: await storeSettings(env),
       })
 
@@ -107,7 +107,10 @@ export const configCommand = (
         bot,
       } = this.opts<{ defaults?: boolean; personal?: boolean; bot?: boolean }>()
       const { settings, renderer, env } = baseContext(this, (flags, options) =>
-        config.resolveSettings(flags, { ...options, needsProfile: !everyone && !isStoreSetting(setting) }),
+        config.resolveSettings(flags, {
+          ...options,
+          needsProfile: !everyone && setting !== "defaultProfile" && !isStoreSetting(setting),
+        }),
       )
       if (isStoreSetting(setting)) {
         if (everyone || personal || bot)
@@ -133,15 +136,20 @@ export const configCommand = (
         return
       }
       const defaults = everyone === true
+      if (setting === "defaultProfile" && (defaults || personal || bot))
+        throw new CliError(
+          "validation_error",
+          "defaultProfile is one for the whole file — drop --defaults, --personal and --bot",
+        )
       if (personal && bot)
         throw new CliError("validation_error", "--personal and --bot name different sections; use one")
       const kind = bot ? "bot" : personal ? "personal" : undefined
       const lock = envName(app, "PROFILE_LOCK")
-      if (defaults && env[lock]) {
-        // The defaults are every other profile's settings too.
+      if ((defaults || setting === "defaultProfile") && env[lock]) {
+        // The defaults are every other profile's settings too, and defaultProfile picks one of them.
         throw new CliError(
           "permission_error",
-          `this process is locked to profile ${settings.profile} (${lock}) — --defaults changes every profile`,
+          `this process is locked to profile ${settings.profile} (${lock}) — ${setting === "defaultProfile" ? setting : "--defaults"} changes other profiles`,
         )
       }
       if (
@@ -155,14 +163,14 @@ export const configCommand = (
       }
       if (action === "set") refuseUnknownKey(this, setting, String(given), permissionKey)
       const saved = config.changeSetting(settings.configPath, {
-        profile: defaults ? undefined : settings.profile,
+        profile: defaults || setting === "defaultProfile" ? undefined : settings.profile,
         setting,
         value: action === "set" ? String(given) : undefined,
         kind,
       })
       renderer.result({
         configFile: settings.configPath,
-        scope: scopeOf(kind, defaults ? undefined : settings.profile),
+        scope: setting === "defaultProfile" ? "defaultProfile" : scopeOf(kind, defaults ? undefined : settings.profile),
         setting,
         value: saved,
       })
@@ -214,7 +222,11 @@ const scopeOf = (kind: string | undefined, profile: string | undefined): string 
   [kind, profile === undefined ? "defaults" : `profiles.${profile}`].filter(Boolean).join(".")
 
 /** A shared setting from what was resolved; a messenger's own from the file, where it lives. */
-const sourced = (settings: Settings, setting: string) => {
+const sourced = (settings: Settings, setting: string, schema: Configuration["schema"]) => {
+  if (setting === "defaultProfile") {
+    const named = loadConfigFile(settings.configPath, schema, () => ({ profiles: {} })).defaultProfile
+    return { setting, value: named ?? null, from: named === undefined ? "default" : "config file" }
+  }
   if (setting === "models") {
     return {
       setting,
