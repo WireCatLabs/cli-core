@@ -1,7 +1,7 @@
+import { parseLucene, type QueryAst } from "@wirecat/cli-base/query"
 import type { Provider } from "../../domain/models.js"
 import { parseQuery, type Term } from "../query.js"
-import { parseLucene } from "./parser.js"
-import type { QueryAst } from "./types.js"
+import { SEARCH_QUERY } from "./types.js"
 
 export interface SavedQuery {
   version: 1
@@ -41,5 +41,5 @@ export const migrateLegacyQuery = (
   ]
   if ((text.match(/"/gu)?.length ?? 0) % 2 !== 0)
     warnings.push("Legacy accepted an unclosed quote; the interpreted phrase has been closed explicitly.")
-  return { from: "legacy-v1", to: "lucene-v1", query, ast: parseLucene(query), warnings }
+  return { from: "legacy-v1", to: "lucene-v1", query, ast: parseLucene(query, SEARCH_QUERY), warnings }
 }

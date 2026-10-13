@@ -50,11 +50,11 @@ describe("MCP result contract", () => {
       error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
     })
     expect(
-      failed(new CliError("outcome_unknown", "synthetic", { operationId: "op-synthetic" })).structuredContent,
-    ).toMatchObject({ error: { code: "outcome_unknown", details: { operationId: "op-synthetic" } } })
+      failed(new CliError("outcome_unknown", "synthetic", { operation_id: "op-synthetic" })).structuredContent,
+    ).toMatchObject({ error: { code: "outcome_unknown", details: { operation_id: "op-synthetic" } } })
     expect(
-      failed(new CliError("rate_limited", "synthetic", { retryable: true, retryAfterMs: 1000 })).structuredContent,
-    ).toMatchObject({ error: { details: { retryable: true, retryAfterMs: 1000 } } })
+      failed(new CliError("rate_limited", "synthetic", { retryable: true, retry_after_ms: 1000 })).structuredContent,
+    ).toMatchObject({ error: { details: { retryable: true, retry_after_ms: 1000 } } })
   })
 })
 

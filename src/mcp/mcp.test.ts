@@ -6,6 +6,7 @@ import { Client, type ElicitResult } from "@modelcontextprotocol/client"
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server"
 import { serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError, captureStreams } from "@wirecat/cli-base"
+import { parseLucene } from "@wirecat/cli-base/query"
 import { skillResource } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
 import { PNG } from "pngjs"
@@ -24,7 +25,7 @@ import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
 import { SAVE_NEXT_STEPS } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
-import { parseLucene } from "../search/lucene/parser.js"
+import { astJson } from "../search/lucene/registry.js"
 import type { SendGuard } from "../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../sends/journal.js"
 import { conversationsService } from "../services/conversations.js"
@@ -1044,7 +1045,10 @@ describe("the MCP server", () => {
     const opened = telegram.opened()
     for (const recipe of searchRecipes.recipes) {
       const textual = await call("chat_search_messages", { text: recipe.query, language: "lucene", timezone: "UTC" })
-      const structured = await call("chat_search_messages", { ast: parseLucene(recipe.query), timezone: "UTC" })
+      const structured = await call("chat_search_messages", {
+        ast: astJson(parseLucene(recipe.query)),
+        timezone: "UTC",
+      })
       expect(textual.isError, recipe.title).toBe(false)
       expect(structured.body).toEqual(textual.body)
       expect(textual.body.items.map((item: { id: string }) => item.id).sort()).toEqual(recipe.ids)

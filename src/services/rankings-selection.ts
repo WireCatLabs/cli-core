@@ -1,9 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import { type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
 import { type RankingInput, type RankingTarget, rankingOptions } from "../domain/rankings-options.js"
-import { timezoneOf } from "../search/lucene/dates.js"
-import { FIELD_VERSION, validateAst } from "../search/lucene/registry.js"
+import { astJson, FIELD_VERSION, validateAst } from "../search/lucene/registry.js"
 import type { QueryExecution, ResolvedNode } from "../search/lucene/resolved.js"
-import type { QueryNode } from "../search/lucene/types.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 
 export interface RankingEntity {
@@ -118,7 +117,8 @@ export const readRankingSelection = async (store: MessageStore, input: unknown):
     } else if (typeof node.operator !== "string") invalid()
   }
   checkShape(execution.root)
-  const ast = validateAst({ version: 1, language: "lucene-v1", root: execution.root })
+  // A selection keeps the parser's own tree, not the JSON form that MCP and stored searches use.
+  const ast = validateAst(astJson({ version: 1, language: "lucene-v1", root: execution.root as QueryNode }))
   const bind = (node: QueryNode, value: unknown): ResolvedNode => {
     const rawNode = object(value)
     if (node.kind === "boolean") {

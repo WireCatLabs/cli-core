@@ -49,7 +49,7 @@ export const flooded = (
       })
       return
     }
-    const waitMs = Number(details.retryAfterMs)
+    const waitMs = Number(details.retry_after_ms)
     if (error.code !== "rate_limited" || details.remembered === true || !Number.isFinite(waitMs) || waitMs <= 0) return
     const providerError = providerErrorKey(details.providerError)
     kept(() => {
@@ -76,7 +76,7 @@ export const flooded = (
       throw new CliError(
         "rate_limited",
         `${name} asked this profile to wait, ${Math.ceil(waitMs / 1000)} s are left — nothing was sent to ${name}`,
-        { retryAfterMs: waitMs, retryAt: new Date(at).toISOString(), remembered: true },
+        { retry_after_ms: waitMs, retry_at: new Date(at).toISOString(), remembered: true },
       )
     }
     if (waitMs >= ANNOUNCE_WAIT_MS)
@@ -95,8 +95,8 @@ export const flooded = (
           "rate_limited",
           `${name} asked to wait before ${operation} again, ${Math.ceil(waitMs / 1000)} s are left — nothing was sent to ${name}`,
           {
-            retryAfterMs: waitMs,
-            retryAt: owed.until,
+            retry_after_ms: waitMs,
+            retry_at: owed.until,
             remembered: true,
             ...(owed.providerError ? { providerError: owed.providerError } : {}),
           },

@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import type { RegistryOptions } from "../botcheck/registries.js"
 import { botCheckService } from "../botcheck/service.js"
 import { capability, type MessengerAdapter } from "../cli/messenger/port.js"
@@ -16,7 +17,6 @@ import type {
   Page,
   SenderIdentity,
 } from "../domain/models.js"
-import { timezoneOf } from "../search/lucene/dates.js"
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { AccountStore } from "../store/account-store.js"

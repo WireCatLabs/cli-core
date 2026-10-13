@@ -65,7 +65,7 @@ describe("a run directory", () => {
     for (const line of lines) v.parse(logRecordSchema, JSON.parse(line))
     expect(JSON.parse(lines[0] as string)).toMatchObject({
       body: "request",
-      runId: run.id,
+      run_id: run.id,
       command: "chats list",
       resource: { service: "tg", version: "0.0.0" },
       attributes: { event: "request", operation: "messages.list" },

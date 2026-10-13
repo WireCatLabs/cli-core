@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { DateRange } from "@wirecat/cli-base/query"
 import type { CounterState } from "../../domain/counters.js"
 import {
   RANKING_GRAPH_LIMITS,
@@ -15,7 +16,6 @@ import {
   type ScoreComponents,
 } from "../../domain/rankings-options.js"
 import { rankingContextRange } from "../../domain/rankings-range.js"
-import type { DateRange } from "../../search/lucene/dates.js"
 import type { QueryExecution } from "../../search/lucene/resolved.js"
 import type { SqlValue } from "../driver.js"
 import { counterStates } from "./counters.js"

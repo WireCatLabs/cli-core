@@ -10,11 +10,11 @@ const mcp = (flags: string[]): CommandInfo => ({
   usage: "",
   origin: "handwritten",
   arguments: [],
-  options: flags.map((name) => ({ flags: name, description: "", takesValue: false, mandatory: false })),
+  options: flags.map((name) => ({ flags: name, description: "", takes_value: false, mandatory: false })),
   commands: [],
 })
 
-const program = (cli: string): CommandsJson => ({ cli, globalOptions: [], commands: [mcp(["--allow-send"])] })
+const program = (cli: string): CommandsJson => ({ cli, global_options: [], commands: [mcp(["--allow-send"])] })
 
 const side = (cli: string, overrides: Partial<CliSide> = {}): CliSide => ({
   commit: "abc1234",
@@ -59,7 +59,7 @@ describe("the parity audit", () => {
 
   it("passes every --allow- option of mcp without treating it as configured exposure", () => {
     const flags = ["--allow-send", "--confirm-send", "--allow-delete"]
-    expect(allowFlags({ cli: "max", globalOptions: [], commands: [mcp(flags)] })).toEqual([
+    expect(allowFlags({ cli: "max", global_options: [], commands: [mcp(flags)] })).toEqual([
       "--allow-send",
       "--allow-delete",
     ])
@@ -91,7 +91,7 @@ describe("the parity audit", () => {
     const report = renderAudit(
       input(
         { tools: ["max_messages_send", "max_chats_check"] },
-        { program: { cli: "tg", globalOptions: [], commands: [mcp([])] }, pages: { "docs/usage.md": "## a\n" } },
+        { program: { cli: "tg", global_options: [], commands: [mcp([])] }, pages: { "docs/usage.md": "## a\n" } },
       ),
     )
     expect(report).toContain("🔴 **tg against this manifest** — 1 difference(s) `mcp --allow-send:")

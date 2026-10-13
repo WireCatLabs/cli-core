@@ -13,7 +13,7 @@ const fields = [
   "|---|---|---|---|---|",
   ...QUERY_FIELDS.map(
     (field) =>
-      `| \`${field.name}\` | ${field.type} | ${"values" in field ? field.values.join(", ") : field.normalization} | \`${field.example}\` | ${field.operators.join(", ")} |`,
+      `| \`${field.name}\` | ${field.type} | ${field.values ? field.values.join(", ") : field.normalization} | \`${field.example}\` | ${field.operators.join(", ")} |`,
   ),
 ].join("\n")
 const operators = [

@@ -127,17 +127,17 @@ export const comparePrograms = (left: CommandsJson, right: CommandsJson): Progra
     commands,
     globals: valueDifferences(
       {
-        options: optionContracts(left.globalOptions),
+        options: optionContracts(left.global_options),
         contract: (left as CommandsJson & { contract?: number }).contract,
-        exitCodes: (left as CommandsJson & { exitCodes?: unknown }).exitCodes,
+        exitCodes: (left as CommandsJson & { exit_codes?: unknown }).exit_codes,
       },
       {
-        options: optionContracts(right.globalOptions),
+        options: optionContracts(right.global_options),
         contract: (right as CommandsJson & { contract?: number }).contract,
-        exitCodes: (right as CommandsJson & { exitCodes?: unknown }).exitCodes,
+        exitCodes: (right as CommandsJson & { exit_codes?: unknown }).exit_codes,
       },
     ),
-    globalHelp: valueDifferences(proseOf(optionMap(left.globalOptions)), proseOf(optionMap(right.globalOptions))),
+    globalHelp: valueDifferences(proseOf(optionMap(left.global_options)), proseOf(optionMap(right.global_options))),
   }
 }
 

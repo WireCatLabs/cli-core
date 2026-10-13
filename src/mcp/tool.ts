@@ -299,7 +299,7 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
         if (Buffer.byteLength(JSON.stringify(args)) > MAX_BUFFERED_INPUT)
           throw new CliError("validation_error", "tool arguments exceed the buffered input limit", {
             reason: "input.too-large",
-            maxBytes: MAX_BUFFERED_INPUT,
+            max_bytes: MAX_BUFFERED_INPUT,
             retryable: false,
           })
         assertStatsPermissionsCurrent(key.split("_"), defaults.settings.permissions ?? {})
@@ -427,7 +427,7 @@ export const answered = (value: object, maxBytes = DEFAULT_OUTPUT_BYTES): CallTo
       throw new CliError(
         "invalid_response",
         "tool output exceeds its byte limit — reduce limit or use a narrower request",
-        { reason: "output.too-large", maxBytes, retryable: false },
+        { reason: "output.too-large", max_bytes: maxBytes, retryable: false },
       )
     return result
   }

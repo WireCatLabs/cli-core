@@ -13,11 +13,11 @@ const command = (path: string, options: string[] = [], commands: CommandInfo[] =
   usage: "",
   origin: "handwritten",
   arguments: [],
-  options: options.map((flags) => ({ flags, description: flags, takesValue: false, mandatory: false })),
+  options: options.map((flags) => ({ flags, description: flags, takes_value: false, mandatory: false })),
   commands,
 })
 
-const program = (cli: string, ...commands: CommandInfo[]): CommandsJson => ({ cli, globalOptions: [], commands })
+const program = (cli: string, ...commands: CommandInfo[]): CommandsJson => ({ cli, global_options: [], commands })
 
 const manifest: Manifest = {
   clis: ["max", "tg"],

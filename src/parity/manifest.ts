@@ -39,7 +39,7 @@ export interface Manifest {
 /** What `commands --json` prints, as far as the check reads it. */
 export interface CommandsJson {
   cli: string
-  globalOptions: readonly OptionInfo[]
+  global_options: readonly OptionInfo[]
   commands: readonly CommandInfo[]
 }
 
@@ -170,7 +170,7 @@ export const parityProblems = (manifest: Manifest, cli: Cli, program: CommandsJs
   }
   program.commands.forEach(walk)
 
-  const problems = compareOptions(cli, "(global)", manifest.globalOptions, program.globalOptions)
+  const problems = compareOptions(cli, "(global)", manifest.globalOptions, program.global_options)
   const paths = [...new Set([...found.keys(), ...Object.keys(manifest.commands)])].sort()
   for (const path of paths) {
     if (coveringRow(manifest, path)) continue
@@ -180,7 +180,7 @@ export const parityProblems = (manifest: Manifest, cli: Cli, program: CommandsJs
     if (
       !row &&
       command?.origin === "generated" &&
-      command.operationId &&
+      command.operation_id &&
       path.startsWith("bot api ") &&
       nativeApi &&
       expected(nativeApi, cli) !== false

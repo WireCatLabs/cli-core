@@ -82,7 +82,14 @@ it("reuses core projection while preserving metadata-only empty selections", () 
   expect(projectFields({ id: "example", sendId: "example-send" }, [])).toEqual({ sendId: "example-send" })
   expect(projectFields([{ id: "example" }, null, 3], [])).toEqual([{}, null, 3])
   expect(projectFields({ items: null, id: "example" }, [])).toEqual({})
-  expect(projectFields(value, fieldsOf("items.id"))).toEqual(coreProjectFields(value, fieldsOf("items.id")))
+  expect(projectFields(value, fieldsOf("items.id"))).toEqual({
+    ...(coreProjectFields(value, fieldsOf("items.id")) as object),
+    items: [
+      { id: "example", operationId: "example-operation", sendId: "example-send" },
+      { id: "second-example" },
+      null,
+    ],
+  })
 })
 
 it("rejects unsafe direct paths and excessive selections before projection", () => {

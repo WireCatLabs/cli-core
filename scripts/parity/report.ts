@@ -135,7 +135,7 @@ export const renderReports = (bundle: DeepBundle, output: string): void => {
         commands.push(
           `- ${cli}: ${inlineJson(node.usage)}, ${node.description}; arguments ${inlineJson(node.arguments)}; mutates ${inlineJson(node.mutates)}, state ${inlineJson(node.state)}; argv ${matrixStatus(side, path)}.`,
         )
-      for (const option of node?.options ?? (path === "(global)" ? side.program.globalOptions : [])) {
+      for (const option of node?.options ?? (path === "(global)" ? side.program.global_options : [])) {
         const name = option.flags.match(/--[\w-]+/)?.[0] ?? option.flags
         commands.push(`  - ${cli} ${inlineJson(option)}; argv ${matrixStatus(side, path, name)}.`)
       }

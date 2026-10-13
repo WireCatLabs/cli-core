@@ -10,12 +10,12 @@ export interface ActionableError {
   message: string
   retryable: boolean
   actions: RecoveryAction[]
-  retryAfterMs?: number
+  retry_after_ms?: number
   [key: string]: unknown
 }
 
 export const withRecovery = (error: { code: string; message: string; [key: string]: unknown }): ActionableError => {
-  const wait = Number(error.retryAfterMs)
+  const wait = Number(error.retry_after_ms)
   const rate = error.code === "rate_limited" || error.status === 429
   const actions: RecoveryAction[] = []
   if (rate) {

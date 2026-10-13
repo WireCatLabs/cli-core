@@ -49,7 +49,7 @@ describe("scoped command discovery", () => {
     expect(result.code).toBe(0)
     const packet = JSON.parse(result.stdout)
     expect(Object.keys(packet).sort()).toEqual(
-      ["cli", "version", "contract", "description", "globalOptions", "commands", "exitCodes"].sort(),
+      ["cli", "version", "contract", "description", "global_options", "commands", "exit_codes"].sort(),
     )
     expect(packet.commands.map((command: { name: string }) => command.name)).toEqual([
       "commands",
@@ -59,7 +59,7 @@ describe("scoped command discovery", () => {
       "chats",
       "contacts",
     ])
-    expect(packet.exitCodes.validation_error).toBe(2)
+    expect(packet.exit_codes.validation_error).toBe(2)
   })
 
   it("canonicalizes aliases and includes all inherited options while omitting unrelated commands", async () => {
@@ -73,22 +73,22 @@ describe("scoped command discovery", () => {
       usage: "app bot messages send <text> [options]",
       mutates: true,
       arguments: [{ name: "text", required: true }],
-      options: [{ flags: "--silent", takesValue: false }],
+      options: [{ flags: "--silent", takes_value: false }],
     })
-    expect(packet.inheritedOptions).toMatchObject([
+    expect(packet.inherited_options).toMatchObject([
       { path: ["bot"], options: [{ flags: "--account <name>" }] },
       { path: ["bot", "messages"], options: [{ flags: "--scope <chat>" }] },
     ])
     const full = JSON.parse((await call([])).stdout)
-    expect(packet.globalOptions).toEqual(full.globalOptions)
-    expect(packet.exitCodes).toEqual(full.exitCodes)
+    expect(packet.global_options).toEqual(full.global_options)
+    expect(packet.exit_codes).toEqual(full.exit_codes)
     expect(result.stdout.length).toBeLessThan(JSON.stringify(full).length)
   })
 
   it("includes a group's descendants and their metadata", async () => {
     const packet = JSON.parse((await call(["bot", "messages"])).stdout)
     expect(packet.commands[0].commands).toMatchObject([{ path: ["bot", "messages", "send"], mutates: true }])
-    expect(packet.inheritedOptions).toMatchObject([{ path: ["bot"] }])
+    expect(packet.inherited_options).toMatchObject([{ path: ["bot"] }])
   })
 
   it.each([["missing"], ["private"], ["bot", "missing"], ["bot", "messages", "send", "missing"]])(

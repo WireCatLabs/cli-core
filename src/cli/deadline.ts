@@ -45,7 +45,7 @@ export const withDeadline = async <T>(
               "outcome_unknown",
               `\`--timeout\` ended the command after ${ms}ms with ${cut.length === 1 ? "a write" : `${cut.length} writes`} ` +
                 "in flight; the messenger may or may not have carried it out — check before repeating it",
-              { operationIds: cut.map((write) => write.operationId), retryable: false },
+              { operation_ids: cut.map((write) => write.operationId), retryable: false },
             )
           : new CliError("timeout", `the command did not finish within ${ms}ms — \`--timeout\` ended it`)
       stopWrites(writes, timedOut)

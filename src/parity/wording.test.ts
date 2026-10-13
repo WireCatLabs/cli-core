@@ -11,10 +11,10 @@ const program = (cli: string, pause: string): CommandsJson => {
     usage: "",
     origin: "handwritten",
     arguments: [],
-    options: [{ flags: "--pause <duration>", description: pause, takesValue: true, mandatory: false }],
+    options: [{ flags: "--pause <duration>", description: pause, takes_value: true, mandatory: false }],
     commands: [],
   }
-  return { cli, globalOptions: [], commands: [fetch] }
+  return { cli, global_options: [], commands: [fetch] }
 }
 
 const manifest = (note?: string, clis = ["max", "tg"]): Manifest => ({

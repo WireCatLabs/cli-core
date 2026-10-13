@@ -1,7 +1,6 @@
+import type { DateRange, Predicate, QueryNode, Span } from "@wirecat/cli-base/query"
 import type { AccountKey } from "../../store/store.js"
 import type { Stemmer } from "../stem.js"
-import type { DateRange } from "./dates.js"
-import type { Predicate, QueryNode, Span } from "./types.js"
 
 export type ResolvedPredicate = Predicate & {
   resolution?: {

@@ -1,15 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
+import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
 import type { AppIdentity } from "../cli/app.js"
 import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
 import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel } from "../embeddings/models.js"
 import { entriesOfList, fitting, type SkippedSource } from "../search/account-list.js"
-import { dateRange, timezoneOf } from "../search/lucene/dates.js"
-import { parseLucene } from "../search/lucene/parser.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
-import type { QueryNode } from "../search/lucene/types.js"
+import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { createStemmer, DEFAULT_STEMMERS } from "../search/stem.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -38,7 +37,9 @@ export const searchNotesQuery = async (
   request: NotesSearchRequest,
 ): Promise<{ items: NoteHit[]; hasMore: boolean }> => {
   if (!request.text.trim()) throw new CliError("validation_error", "say what to find in the notes")
-  const ast = validateFields(parseLucene(request.text, { defaultField: request.exact ? "exact" : "text" }))
+  const ast = validateFields(
+    parseLucene(request.text, { ...SEARCH_QUERY, defaultField: request.exact ? "exact" : "text" }),
+  )
   const timezone = timezoneOf(request.timezone)
   const resolve = (node: QueryNode): ResolvedNode => {
     if (node.kind === "boolean")

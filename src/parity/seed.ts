@@ -62,7 +62,7 @@ export const seedPrograms = (manifest: Manifest, programs: readonly CommandsJson
     }
   }
 
-  seedOptions(next.globalOptions, new Map(programs.map((program) => [program.cli, program.globalOptions])))
+  seedOptions(next.globalOptions, new Map(programs.map((program) => [program.cli, program.global_options])))
   const paths = new Set([...trees.values()].flatMap((tree) => [...tree.keys()]))
   for (const path of [...paths].sort()) {
     if (coveringRow(next, path)) continue

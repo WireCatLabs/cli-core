@@ -15,7 +15,7 @@ export const pageProblems = (page: string, cli: Cli, manifest: Manifest, program
     command.commands.forEach(walk)
   }
   program.commands.forEach(walk)
-  const globals = new Set(program.globalOptions.flatMap((option) => optionsOf(option.flags)))
+  const globals = new Set(program.global_options.flatMap((option) => optionsOf(option.flags)))
   // Commander adds this automatically; command introspection lists only explicit options.
   globals.add("--help")
 

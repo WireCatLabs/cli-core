@@ -215,7 +215,7 @@ export const sendGuard = ({
         "confirmation_required",
         `chat ${chatId} is not on the recipient list of profile ${profile} — ` +
           `the owner adds it with \`${command} ${profile} recipients add ${chatId}\``,
-        { chatId },
+        { chat_id: chatId },
       )
     }
     // Adding somebody to a group writes to them as surely as a message does.
@@ -226,7 +226,7 @@ export const sendGuard = ({
         `${strangers.join(", ")} ${strangers.length === 1 ? "is" : "are"} not on the recipient list of profile ${profile} — ` +
           `the owner adds the one-to-one chat with each person (\`${command} ${profile} recipients add <chat>\`); ` +
           "a chat added to the list earlier is added again to be recognised",
-        { personIds: strangers },
+        { person_ids: strangers },
       )
     }
   }
@@ -261,7 +261,7 @@ export const sendGuard = ({
         throw new CliError(
           "validation_error",
           "this send id was tried under another identity; repeat it with the same --send-as, or it may post twice",
-          { sendId, retryable: false },
+          { send_id: sendId, retryable: false },
         )
       }
       return false
@@ -285,7 +285,7 @@ export const sendGuard = ({
         "rate_limited",
         `profile ${profile} has sent ${used} messages in the hour around ${new Date(at).toISOString()}, and its limit is ` +
           `${sendsPerHour} (sendsPerHour) — the next send is possible at ${next}`,
-        { retryAfterMs: nextMs - now().getTime(), retryAt: next },
+        { retry_after_ms: nextMs - now().getTime(), retry_at: next },
       )
     }
     return true
@@ -330,7 +330,7 @@ export const sendGuard = ({
           throw new CliError(
             "validation_error",
             "this topic creation was already attempted; check topics list and do not repeat an unknown creation",
-            { sendId: request.sendId, retryable: false },
+            { send_id: request.sendId, retryable: false },
           )
         }
         return true

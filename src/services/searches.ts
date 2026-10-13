@@ -1,9 +1,9 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
+import { parseLucene, type QueryAst } from "@wirecat/cli-base/query"
 import type { AdminReport } from "../domain/admin-statistics.js"
 import type { RankingInput, RankingTarget } from "../domain/rankings-options.js"
-import { parseLucene } from "../search/lucene/parser.js"
-import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
-import { QUERY_VERSION, type QueryAst } from "../search/lucene/types.js"
+import { astJson, FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
+import { QUERY_VERSION, SEARCH_QUERY } from "../search/lucene/types.js"
 import type { MessageStore, SearchCommand, SearchRecord, StoredSearch } from "../store/store.js"
 import { isAdminSelection, readAdminSelection } from "./admin-statistics.js"
 import type { ServiceDeps } from "./deps.js"
@@ -111,7 +111,7 @@ const checked = (params: SearchParams): SearchParams => {
   } else if (languageOf(params) === "lucene") {
     if (params.ast !== undefined) validateAst(params.ast)
     else if (params.text !== undefined)
-      validateFields(parseLucene(params.text, { defaultField: params.exact ? "exact" : "text" }))
+      validateFields(parseLucene(params.text, { ...SEARCH_QUERY, defaultField: params.exact ? "exact" : "text" }))
   }
   return params
 }
@@ -133,7 +133,7 @@ const both = (stored: QueryAst, words: string): QueryAst => ({
     kind: "boolean",
     clauses: [
       { occur: "must", node: stored.root },
-      { occur: "must", node: parseLucene(words).root },
+      { occur: "must", node: parseLucene(words, SEARCH_QUERY).root },
     ],
     span: { start: 0, end: 0 },
   },
@@ -221,7 +221,7 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
               "validation_error",
               `saved search "${search.name}" is a --regex search; it takes no more words`,
             )
-          if (params.ast !== undefined) params.ast = both(validateAst(params.ast), extra)
+          if (params.ast !== undefined) params.ast = astJson(both(validateAst(params.ast), extra))
           else if (params.text === undefined) params.text = extra
           else params.text = language === "lucene" ? `(${params.text}) AND (${extra})` : `${params.text} ${extra}`
         }

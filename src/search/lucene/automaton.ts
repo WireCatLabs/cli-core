@@ -1,6 +1,8 @@
 // Grammar port: Lucene 9.12.3 util/automaton/RegExp.java (Apache-2.0); see scripts/search-reference notices.
+
+import type { Span } from "@wirecat/cli-base/query"
 import { fold } from "../../store/normalize.js"
-import { exhausted, QUERY_LIMITS, queryError, type Span } from "./types.js"
+import { exhausted, QUERY_LIMITS, searchError } from "./types.js"
 
 type Atom = { kind: "char"; ranges: [number, number][]; negate: boolean } | { kind: "empty" } | { kind: "epsilon" }
 type Expression =
@@ -33,7 +35,7 @@ export const compileAutomaton = (pattern: string, span: Span = { start: 0, end: 
   if (chars.length > QUERY_LIMITS.pattern) exhausted("pattern")
   let at = 0,
     depth = 0
-  const failure = () => queryError("query.invalid-regex", span, "use the supported Lucene regex subset")
+  const failure = () => searchError("query.invalid-regex", span, "use the supported Lucene regex subset")
   const character = (): string => {
     if (at >= chars.length) return failure()
     return chars[at++] as string
@@ -82,7 +84,7 @@ export const compileAutomaton = (pattern: string, span: Span = { start: 0, end: 
     do {
       children.push(repeat())
     } while (at < chars.length && ![")", "|", "&"].includes(chars[at] ?? ""))
-    if (chars[at] === "&") queryError("query.unsupported-regex", span, "automaton intersection is not supported")
+    if (chars[at] === "&") searchError("query.unsupported-regex", span, "automaton intersection is not supported")
     return children.length === 1 ? (children[0] as Expression) : { kind: "concat", children }
   }
   const repeat = (): Expression => {
@@ -116,7 +118,7 @@ export const compileAutomaton = (pattern: string, span: Span = { start: 0, end: 
     if (predefinedAtom) return predefinedAtom
     const c = character()
     if (c === "~" || c === "<")
-      queryError("query.unsupported-regex", span, "complement, named automata and numeric intervals are not supported")
+      searchError("query.unsupported-regex", span, "complement, named automata and numeric intervals are not supported")
     if (c === ".") return any
     if (c === "#") return { kind: "empty" }
     if (c === "@") return { kind: "repeat", child: any, min: 0, max: null }
@@ -132,7 +134,7 @@ export const compileAutomaton = (pattern: string, span: Span = { start: 0, end: 
         return { kind: "epsilon" }
       }
       if (chars[at] === "?")
-        queryError("query.unsupported-regex", span, "JavaScript groups and lookaround are not Lucene operators")
+        searchError("query.unsupported-regex", span, "JavaScript groups and lookaround are not Lucene operators")
       const child = union()
       if (character() !== ")") return failure()
       return child
@@ -161,7 +163,7 @@ export const compileAutomaton = (pattern: string, span: Span = { start: 0, end: 
       const ranges: [number, number][] = []
       for (const choice of choices) {
         if (choice.kind !== "char" || choice.negate)
-          queryError(
+          searchError(
             "query.unsupported-regex",
             span,
             "negative predefined classes inside a negated class are not supported",
@@ -277,7 +279,7 @@ export const wildcardPattern = (value: string): string => {
     const c = chars[at] as string
     if (c === "\\") {
       const escaped = chars[++at]
-      if (escaped === undefined) queryError("query.invalid-escape", { start: 0, end: value.length })
+      if (escaped === undefined) searchError("query.invalid-escape", { start: 0, end: value.length })
       pattern += /[|&?*+(){}[\].#@<>"~\\]/u.test(escaped) ? `\\${escaped}` : escaped
     } else pattern += c === "*" ? ".*" : c === "?" ? "." : /[|&?*+(){}[\].#@<>"~\\]/u.test(c) ? `\\${c}` : c
   }
@@ -286,7 +288,7 @@ export const wildcardPattern = (value: string): string => {
 
 const FOLD_RANGE = 4096
 const unfoldable = (span: Span, what: string): never =>
-  queryError(
+  searchError(
     "query.unsupported-regex",
     span,
     `${what} has no single lowercase form without accents, which is what text: words are — write it that way, or use body:/…/ to match the original text`,
