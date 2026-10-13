@@ -52,6 +52,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **A person's context names their last message and yours whatever the message limit.** `last.fromThem` and
+  `last.fromMe` were looked for only in the messages returned, so `memo context … --limit 1` gave `fromMe: null`
+  while `--limit 2` gave the message. They now come from the whole stored dialog; mail is still read within
+  the limit. `MessageStore.messages` takes `outgoing` to keep only the owner's or only the others' messages.
+
 - **`store check` passes the schema check for a file a newer build wrote that this build may still write**
   (`minCompatible` at or below what it speaks), and says so; a file it may not write fails it with
   `<command> upgrade`. Before, any file ahead of the build failed it.

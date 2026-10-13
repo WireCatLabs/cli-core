@@ -8,7 +8,7 @@ import type { SendGuard } from "../sends/guard.js"
 import { historyStartKey, type MessageStore, openStore } from "../store/store.js"
 import { type ServiceDeps, storedDeps } from "./deps.js"
 import { peopleService } from "./people.js"
-import { identityIn } from "./person-context.js"
+import { identityIn, personContext } from "./person-context.js"
 
 const tg = { provider: "telegram", account: "500" }
 const max = { provider: "max", account: "900" }
@@ -110,6 +110,15 @@ describe("contacts context", () => {
     expect(found.last.fromThem?.text).toBe("from the first Ana")
     expect(found.last.fromMe?.text).toBe("to the first Ana")
     expect(found.shared).toContainEqual(expect.objectContaining({ provider: "telegram", chatId: "11" }))
+  })
+
+  it("finds the last message each way in the whole dialog, however few messages it returns", async () => {
+    const newestOnly = await personContext(store, tg, "11", { messages: 1 })
+    expect(texts(newestOnly.recent.direct)).toEqual(["to the first Ana"])
+    expect(newestOnly.last.fromThem?.text).toBe("from the first Ana")
+
+    await store.saveMessages(tg, "11", [message("11", "3", "11", "from the first Ana again")], { via: "test" })
+    expect((await personContext(store, tg, "11", { messages: 1 })).last.fromMe?.text).toBe("to the first Ana")
   })
 
   it("keeps two people with one name apart and refuses to guess between them", async () => {

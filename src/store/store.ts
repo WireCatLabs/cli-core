@@ -388,11 +388,11 @@ export interface MessageStore {
     chatId: Id,
   ): Promise<{ enabledAt: string; builtAt: string | null; algorithmVersion: number | null } | undefined>
   /** Oldest to newest, like a provider's history page. */
-  /** `threadId` keeps one forum topic's. */
+  /** `threadId` keeps one forum topic's; `outgoing` only the owner's (true) or only the others' (false). */
   messages(
     key: AccountKey,
     chatId: Id,
-    window: { limit: number; before?: Id; since?: string; threadId?: Id },
+    window: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean },
   ): Promise<Page<Message>>
   /** How many stored messages the chat has, sent at `since` or later when it is given. */
   countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
