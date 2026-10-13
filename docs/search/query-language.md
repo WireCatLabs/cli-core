@@ -658,7 +658,7 @@ Strict `corrections` пуст; version/fieldsVersion/presetVersion/timezone/orde
   `index.not-ready`; запрос только по метаданным (`has:file`, `kind:`) работает и честно отвечает `false`.
 Pagination `hasMore` не означает полноту сетевого архива.
 
-MCP принимает `text` или versioned `ast`, не оба; текст и structured input проходят один validator.
+AST: `{version:1,language:"lucene-v1",root:...}`; ключи в snake_case: Boolean clauses имеют must/should/must_not occurrences, range — `lower_inclusive`/`upper_inclusive`.
 AST: `{version:1,language:"lucene-v1",root:...}`; Boolean clauses имеют must/should/mustNot occurrences.
 Raw SQL, regexp flags или authority allow-list в AST не принимаются как executable instructions.
 Low-level `searchStore` и `MessagesService.search` без language сохраняют старую discovery semantics

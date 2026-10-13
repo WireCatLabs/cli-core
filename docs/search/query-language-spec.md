@@ -41,8 +41,8 @@ suffix/functions. Не заявляется полная Lucene compatibility д
 ## Configuration и versioned request
 
 `QueryAst = {version:1,language:"lucene-v1",root}`; spans — UTF-16 offsets `[start,end)`.
-Predicate nodes: field/operator/value/range endpoints/inclusivity/span. Boolean nodes:
-clauses с `must|should|mustNot` и root spans. Raw AST reconstruct/validation отвергает malformed,
+Predicate nodes: field/operator/value/upper/`lower_inclusive`/`upper_inclusive`/span. Boolean nodes:
+clauses с `must|should|must_not` и root spans. Raw AST reconstruct/validation отвергает malformed,
 unknown fields, illegal combinations, версии и budgets; caller resolution/SQL/authority не доверяются.
 Comparison `field>=value` также принимается в записи Elasticsearch `field:>=value` (и `:>`, `:<`, `:<=`) —
 тот же range node; это сознательное расширение pinned grammar, другого синтаксиса оно не добавляет.

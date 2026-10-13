@@ -349,5 +349,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER attachment_name_words_ad AFTER DELETE ON attachments BEGIN\n  DELETE FROM attachment_name_words WHERE rowid = old.id;\nEND;",
       "INSERT INTO attachment_name_words (rowid, name)\n  SELECT id, replace(replace(replace(replace(name, 'й', 'и'), 'Й', 'И'), 'ё', 'е'), 'Ё', 'Е')\n  FROM attachments WHERE name IS NOT NULL;"
     ]
+  },
+  {
+    "name": "20261013201057_version-6-query-tree-keys",
+    "statements": [
+      "-- A query tree kept in a search's `params.ast` takes the keys MCP now accepts: `lower_inclusive`,\n-- `upper_inclusive` and the occur `must_not`. Only `ast` is touched: a ranking `selection` keeps the parser's own\n-- tree. A text replace keeps every key in place, so `params` stays the canonical text that history matches on;\n-- inside a JSON string these quotes are escaped, so a message's words never match.\nUPDATE searches SET params = json_set(params, '$.ast', json(\n  replace(replace(replace(json_extract(params, '$.ast'),\n    '\"lowerInclusive\":', '\"lower_inclusive\":'),\n    '\"upperInclusive\":', '\"upper_inclusive\":'),\n    '\"occur\":\"mustNot\"', '\"occur\":\"must_not\"')))\nWHERE json_type(params, '$.ast') = 'object';"
+    ]
   }
 ]
