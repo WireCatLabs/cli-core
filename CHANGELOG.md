@@ -52,6 +52,10 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **The local speech engine no longer writes to stdout.** sherpa-onnx's WebAssembly printed its own logs
+  (`circular-buffer.cc … Overflow! … No data loss!`) straight to file descriptor 1, ahead of the `--json` answer of
+  `messages list --transcribe` and `messages transcribe`. They go to stderr now.
+
 - **`has:file` and `search messages --type file` find Telegram documents.** Telegram stores a file as kind
   `document`, MAX as `file`; the filter matched only `file`, so in tg it found nothing. No store change: rows
   already stored match.
