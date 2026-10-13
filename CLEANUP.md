@@ -8,3 +8,4 @@
 - 2026-10-11: the empty `decisions` table (store version 1) — replaced by `facts` in version 2; drop it in the next migration that raises `minCompatible`, since dropping a table locks older builds out (feat/store-facts).
 - 2026-10-12: `.worktrees/meeting-search-filters`, branch `feat/meeting-search-filters`, and its `tsconfig.meeting-filters.json` / `vitest.meeting-filters.config.ts` — retained development worktree and diagnostic configs for the Oxc package-export resolution failure; remove only in the owner's approved cleanup batch.
 - 2026-10-13: `../cli-messaging-wt-parity-link`, branch `ci/parity-link-checkout` — worktree for building tg-cli and max-cli against this checkout in Parity; remove once merged.
+- 2026-10-13: `../cli-messaging-wt-parity-branch`, branch `ci/parity-same-name-branch` — worktree for Parity building an app's same-name branch; remove once merged.
