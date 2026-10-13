@@ -75,3 +75,46 @@ it("installs successfully with no host restart capability", async () => {
   expect(outcome.left).toEqual([])
   expect(ports.install).toHaveBeenCalledOnce()
 })
+
+describe("reading back what the package manager installed", () => {
+  const pnpm = (installed: string) => {
+    const ports = fake()
+    ports.installer = () => "pnpm"
+    ports.installed = () => installed
+    ports.publishedAt = async () => "2026-10-12T01:25:01.496Z"
+    ports.afterUpdate = vi.fn(() => ({ restarted: [], left: [] }))
+    return ports
+  }
+
+  it("**says an older version than latest was installed**, and how to get latest", async () => {
+    const outcome = await upgradePackage(input, pnpm("1.5.0"))
+    expect(outcome.reason).toBe("held_back")
+    expect(outcome.result).toMatchObject({
+      latest: "2.0.0",
+      installed: "1.5.0",
+      updated: true,
+      heldBack: { until: "2026-10-13T01:25:01.496Z", command: "pnpm add -g @synthetic/cli@2.0.0" },
+    })
+  })
+
+  it("**is not updated when the version did not change**, and restarts nothing", async () => {
+    const ports = pnpm("1.0.0")
+    const outcome = await upgradePackage(input, ports)
+    expect(outcome.result).toMatchObject({ installed: "1.0.0", updated: false })
+    expect(ports.afterUpdate).not.toHaveBeenCalled()
+  })
+
+  it("names no release-age time for another package manager", async () => {
+    const ports = fake()
+    ports.installed = () => "1.5.0"
+    const outcome = await upgradePackage(input, ports)
+    expect(outcome.result.heldBack).toEqual({ until: null, command: "npm install -g @synthetic/cli@2.0.0" })
+  })
+
+  it("reports latest as installed when it was", async () => {
+    const outcome = await upgradePackage(input, pnpm("2.0.0"))
+    expect(outcome.reason).toBe("updated")
+    expect(outcome.result).toMatchObject({ installed: "2.0.0", updated: true })
+    expect(outcome.result).not.toHaveProperty("heldBack")
+  })
+})

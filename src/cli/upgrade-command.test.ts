@@ -104,3 +104,17 @@ it("keeps a plain pretty update summary without a host restart port", async () =
   expect(result.stdout.join("\n")).toContain("max 1.0.0 → 2.0.0")
   expect(result.stdout.join("\n")).not.toContain("restarted")
 })
+
+it("**says plainly when the package manager installed an older version than latest**", async () => {
+  const ports = fake()
+  ports.installer = () => "pnpm"
+  ports.installed = () => "1.5.0"
+  ports.publishedAt = async () => "2026-10-12T01:25:01.496Z"
+  const result = await call("tg", ["upgrade"], ports, true)
+  expect(result.code).toBe(0)
+  expect(result.stdout.join("\n")).toContain("tg 1.0.0 → 1.5.0; 2.0.0 is held back")
+  expect(result.stderr.join("\n")).toContain(
+    "installed 1.5.0, not 2.0.0: pnpm installs a version only once it is older than its minimum release age " +
+      "(1 day by default, so after 2026-10-13T01:25:01.496Z) — `pnpm add -g @synthetic/tg@2.0.0` installs it now",
+  )
+})

@@ -1,10 +1,8 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { SAVE_HELP } from "../../meetings/index.js"
-import { searchNotes } from "../../services/notes-search.js"
-import type { SearchedResource } from "../../services/search-all.js"
+import { searchNotesOf } from "../../services/notes-search.js"
 import {
-  meetingAccountOf,
   RESOURCES_SEARCHED_WITH_MEETINGS,
   type ResourceWithMeetings,
   type SearchAllIncludingMeetingsFound,
@@ -23,7 +21,7 @@ const onlyOf = (value: string): ResourceWithMeetings[] => {
   if (unknown !== undefined || chosen.length === 0)
     throw new CliError(
       "validation_error",
-      `--only takes ${RESOURCES_SEARCHED_WITH_MEETINGS.join(", ")}, separated by commas; meetings with --meetings`,
+      `--only takes ${RESOURCES_SEARCHED_WITH_MEETINGS.join(", ")}, separated by commas; meetings when --source names a meeting account`,
     )
   return [...new Set(chosen)] as ResourceWithMeetings[]
 }
@@ -32,16 +30,6 @@ const lineOf = (item: SearchAllIncludingMeetingsFound["items"][number]): string 
   item.kind === "meeting"
     ? `meeting · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}\n  ${item.timestamp ?? "time unknown"}  ${singleLine(item.text).slice(0, 200)}\n`
     : `${item.kind} · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}\n  ${item.timestamp}${item.from?.name ? `  ${singleLine(item.from.name)}` : ""}  ${singleLine(item.text)}\n`
-
-/** Commander gives `--meetings` the next word, so `--meetings budget` before the query takes the query's first word. */
-const accountAfterQuery = (value: string) => {
-  if (!value.includes(":"))
-    throw new CliError(
-      "validation_error",
-      `--meetings takes provider:account, got "${value}"; put a bare --meetings after the query`,
-    )
-  return meetingAccountOf(value)
-}
 
 const maxMeetingsOf = (value: string): number | "all" => {
   if (value === "all") return "all"
@@ -63,7 +51,7 @@ const allCommand = (messenger: Messenger): Command => {
         ? "search messenger messages, mail and notes in the local store, and the messenger's server for messages " +
           "(--backend; mail and notes are local only)"
         : "search messenger messages, mail and notes in the local store") +
-        ", and with --meetings a meeting account's transcripts — best match first; not tasks, people, memories or " +
+        ", and a meeting account's transcripts when --source names one — best match first; not tasks, people, memories or " +
         "projects. Use it when you do not know where something was written; search mail, messages or notes reads one " +
         "kind with all its fields",
     )
@@ -71,16 +59,17 @@ const allCommand = (messenger: Messenger): Command => {
     .addHelpText("after", SAVE_HELP)
     .option(
       "--only <resources>",
-      "only these resources, separated by commas: messages, mail, notes; meetings with --meetings",
+      "only these resources, separated by commas: messages, mail, notes; meetings when --source names a meeting account",
       onlyOf,
     )
     .option(
-      "--meetings [provider:account]",
-      "also search one meeting account; with no value, the one stored account that holds meetings (put it after the query)",
+      "--source <accounts>",
+      "only these accounts, separated by commas: provider:account as a hit shows it, a provider, a kind or " +
+        "group:<name>; each resource reads the ones of its kind, and meetings only when it names one",
     )
     .option(
       "--max-meetings <n|all>",
-      "how many meetings --meetings looks through, newest first; all looks through every one (default 100)",
+      "how many of the meeting account's meetings to look through, newest first; all looks through every one (default 100)",
       maxMeetingsOf,
     )
     .option("--limit <n>", "how many", positiveCount("--limit"))
@@ -89,46 +78,36 @@ const allCommand = (messenger: Messenger): Command => {
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
   return backendOptions(command, messenger).action(async function (this: Command, words: string[]) {
     const context = messengerContext(this, messenger)
-    const { only, meetings, maxMeetings, limit, offset, exact, timezone } = this.opts<{
+    const { only, source, maxMeetings, limit, offset, exact, timezone } = this.opts<{
       only?: ResourceWithMeetings[]
-      meetings?: string | true
+      source?: string
       maxMeetings?: number | "all"
       limit?: number
       offset?: number
       exact?: boolean
       timezone?: string
     }>()
-    if (meetings === undefined && only?.includes("meetings"))
-      throw new CliError("validation_error", "--only meetings needs --meetings")
-    if (meetings === undefined && maxMeetings !== undefined)
-      throw new CliError("validation_error", "--max-meetings needs --meetings")
-    if (meetings !== undefined && offset !== undefined)
-      throw new CliError("validation_error", "--offset pages messages, mail and notes; not with --meetings yet")
-    const meetingAccount = typeof meetings === "string" ? accountAfterQuery(meetings) : undefined
-    const request = {
-      text: words.join(" "),
-      limit: limit ?? context.settings.limit,
-      ...(offset === undefined ? {} : { offset }),
-      ...(exact ? { exact: true } : {}),
-      ...(timezone === undefined ? {} : { timezone }),
-      ...backendRequest(this),
-      env: context.env,
-    }
     const found = await context.withServices<SearchAllIncludingMeetingsFound>((services) =>
-      meetings === undefined
-        ? services.messages.searchAll({
-            ...request,
-            ...(only === undefined ? {} : { only: only.filter((one): one is SearchedResource => one !== "meetings") }),
-          })
-        : services.messages.searchAllWithMeetings({
-            ...request,
-            ...(only === undefined ? {} : { only }),
-            ...(meetingAccount === undefined ? {} : { meetingAccount }),
-            ...(maxMeetings === undefined ? {} : { maxMeetings }),
-          }),
+      services.messages.searchAllWithMeetings({
+        text: words.join(" "),
+        limit: limit ?? context.settings.limit,
+        ...(offset === undefined ? {} : { offset }),
+        ...(exact ? { exact: true } : {}),
+        ...(timezone === undefined ? {} : { timezone }),
+        ...backendRequest(this),
+        env: context.env,
+        ...(only === undefined ? {} : { only }),
+        ...(source === undefined ? {} : { source }),
+        ...(maxMeetings === undefined ? {} : { maxMeetings }),
+      }),
     )
     noteServer(context, found.server)
-    for (const { resource, reason } of found.skipped) context.renderer.note(`${resource} not searched: ${reason}`)
+    if (context.format === "pretty")
+      context.renderer.note(
+        `searched: ${found.accounts.map(({ provider, account }) => `${provider}:${account}`).join(", ") || "nothing"}`,
+      )
+    for (const { resource, source, reason } of found.skipped)
+      context.renderer.note(`${resource ?? source} not searched: ${reason}`)
     if (found.notes?.meaningSkipped) context.renderer.note(`notes by words only: ${found.notes.meaningSkipped}`)
     if (found.meetings?.complete === false)
       context.renderer.note(
@@ -155,9 +134,9 @@ const notesCommand = (messenger: Messenger): Command =>
     .argument("<query...>", 'strict Lucene query: words, "phrases", AND/OR/NOT, tag: and date ranges')
     .option("--type <internal|file>", "only notes written in memo, or only notes from a folder", noteTypeOf)
     .option(
-      "--folder <id>",
-      "only this notes folder, by its id; repeat it for more",
-      (value: string, previous: string[] = []) => [...previous, value],
+      "--source <accounts>",
+      "only these notes accounts, separated by commas: notes:internal for notes written in memo, notes:<folder id> " +
+        "as a hit shows it, notes, documents or group:<name>",
     )
     .option("--tag <tag>", "only notes with this tag")
     .option("--filter <query>", "a query every hit must also match; it does not change the search by meaning")
@@ -169,7 +148,7 @@ const notesCommand = (messenger: Messenger): Command =>
       const context = messengerContext(this, messenger)
       const options = this.opts<{
         type?: Note["source"]
-        folder?: string[]
+        source?: string
         tag?: string
         filter?: string
         limit?: number
@@ -177,20 +156,24 @@ const notesCommand = (messenger: Messenger): Command =>
         exact?: boolean
         timezone?: string
       }>()
-      const found = await context.withStore((store) =>
-        searchNotes(store, words.join(" "), {
+      const found = await context.withStore((store, account) =>
+        searchNotesOf(store, account, words.join(" "), {
           limit: options.limit ?? context.settings.limit,
           command: messenger.app.command,
           env: context.env,
           ...(options.offset === undefined ? {} : { offset: options.offset }),
           ...(options.type === undefined ? {} : { source: options.type }),
-          ...(options.folder === undefined ? {} : { folderIds: options.folder }),
+          ...(options.source === undefined ? {} : { accounts: options.source }),
+          app: messenger.app,
           ...(options.tag === undefined ? {} : { tag: options.tag }),
           ...(options.filter === undefined ? {} : { filter: options.filter }),
           ...(options.exact ? { exact: true } : {}),
           ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
         }),
       )
+      if (context.format === "pretty")
+        context.renderer.note(`searched: ${found.accounts.map(({ account }) => `notes:${account}`).join(", ")}`)
+      for (const { source, reason } of found.skipped) context.renderer.note(`${source} not searched: ${reason}`)
       if (found.meaningSkipped) context.renderer.note(`by words only: ${found.meaningSkipped}`)
       if (context.format === "jsonl") return context.renderer.stream(found.hits)
       if (context.format !== "pretty") return context.renderer.result(found)

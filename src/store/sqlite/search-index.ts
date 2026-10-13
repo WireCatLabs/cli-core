@@ -14,6 +14,10 @@ export interface SearchIndexState {
   ready: boolean
   /** The typo vocabulary covers the messages up to this one; 0 while it is not built. */
   termsThrough: number
+  /** The newest stored message. */
+  newest: number
+  /** The typo vocabulary covers every stored message; `ready` does not wait for it. */
+  termsReady: boolean
   builtAt: string | null
 }
 
@@ -37,12 +41,16 @@ export const searchIndexState = (database: CacheDatabase): SearchIndexState | un
   const watermark = Number(row.watermark)
   const filledThrough = Number(row.filled_through)
   const pending = pendingNormalization(database)
+  const termsThrough = Number(row.terms_through)
+  const newest = newestMessage(database)
   return {
     watermark,
     filledThrough,
     pendingNormalization: pending,
     ready: filledThrough >= watermark && pending === 0,
-    termsThrough: Number(row.terms_through),
+    termsThrough,
+    newest,
+    termsReady: termsThrough >= newest,
     builtAt: row.built_at === null ? null : new Date(Number(row.built_at)).toISOString(),
   }
 }
@@ -77,7 +85,7 @@ export const fillSearchIndex = (
   const filled: SearchIndexFill = { normalized: 0, indexed: 0, terms: 0 }
   const before = searchIndexState(database)
   // Every search asks; when all is built it must not take the write lock.
-  if (!before || (before.ready && before.termsThrough >= newestMessage(database))) return filled
+  if (!before || (before.ready && before.termsReady)) return filled
   if (before.pendingNormalization > 0) {
     filled.normalized = backfillNormalized(database, {
       batch,

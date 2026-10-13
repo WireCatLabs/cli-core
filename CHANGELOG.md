@@ -6,6 +6,50 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`search all` answers a required `accounts` field, and a `skipped` entry may carry `source` in place of
+  `resource`** (`SearchAllFound`, `SearchAllIncludingMeetingsFound`): a fake that builds the answer adds
+  `accounts`, and code reading `skipped[].resource` handles `undefined`.
+- **`--source` lists:** `folder:<ulid>` is no longer accepted — a folder is `notes:<id>`; `personal` and `bots`
+  inside a list hold messenger accounts only, no mailbox; when nothing in a list fits the search, the error reads
+  `--source names nothing <search> reads: …`, in place of "mailboxes only" and "no mailbox".
+- **`search notes --folder`, `search mail --account` and `search all --meetings` are removed** (MCP `search_notes`
+  `folders`, `search_mail` `account`, `search_all` `meetings`). Use
+  `--source notes:<folder id>` (and `notes:internal` for notes written in memo), `--source email:<address>`,
+  `--source zoom:<account>`, `zoom`, `meetings`, or `all` for every account and the meetings; of several meeting
+  accounts the one holding meetings is read and the rest are in `skipped`. `search all` without such an entry answers
+  a `skipped` entry for meetings; `--only meetings` and `--max-meetings` without one are an
+  error. `meetingAccountOf` and `SearchAllWithMeetingsRequest.meetingAccount` leave `./services`;
+  `searchAllIncludingMeetings` keeps `meetingAccount`.
+- **`in:` and a bare `--source` word take a provider's alias and a kind** (`in:tg`, `in:messages`, `in:mail`);
+  `in:notes`, `in:documents` and `in:meetings` are an error naming the search that reads them, and an unknown word's
+  error lists `messages, mail` too.
+- **Every `--source` that names accounts shows `<accounts>` in help**, in place of `<messenger>` and `<source>`.
+
+### Added
+
+- **`search all --source <accounts>`** (MCP `search_all` `source`): the same list `search messages` takes —
+  `provider:account` as a hit shows it, a provider, a kind or `group:<name>`. Each resource reads the accounts of
+  its kind, a resource the list names none of is in `skipped` (`--source names no notes account`), an entry
+  `--only` leaves out is in `skipped` as `{ source, reason }`, and meetings are read when the list names one
+  meeting account (`--only meetings` and `--max-meetings` then work without `--meetings`; `--meetings` beside
+  `--source` is an error).
+- **`search notes --source` and `search mail --source`** (MCP `source`): `notes:internal`, `notes:<folder id>`,
+  `email:<address>`, a kind or `group:<name>`; an entry naming nothing the search reads is in `skipped`. Memo's notes
+  beside some folders are one store query (`withInternal` on `NoteQuery`, `NotesQuery` and `notes.nearest`), so
+  `--offset` pages one list; `search all` reads them the same way. `searchNotesOf` in `./services` resolves the
+  list. Both answer `accounts`.
+- **`search all` answers `accounts: [{ resource, provider, account }]`**, every account it read, with or without
+  `--source` — memo's shape. Pretty mode prints `searched: provider:account, …` on stderr. `skipped` entries may
+  now carry `source` instead of `resource`.
+- A fact's and a memory's `author`, and a proposed action's `proposedBy`, carry `name`: the bot's handle for an agent, `null` for a person — the shape the agent log's `actor` already had.
+- **`chats documents list <chat>`** (and the MCP tool `chats_documents_list`) lists every Google Docs, Sheets,
+  Slides, Forms or Drive link in a chat's stored messages, newest first: `{ url, documentId, title, inStore, locator,
+  sentAt, sender }` in the list envelope. It reads the local store only, under the `messages` permission.
+  `store.notes.linkMessages({ documents, since? })` writes the message → document link drive's `sync` will call;
+  until it does, every item reads `inStore: false`. No migration.
+
 ### Fixed
 
 - **A kept voice transcript is found and reused.** It becomes the voice attachment's text (extractor
@@ -13,6 +57,40 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   `store reindex` fills it in for transcripts kept before. `messages show` and `messages context` show it, and
   `messages transcribe` answers it without hearing the message again, unless `--model`/`--local` asks for a
   different model than the one that heard it.
+
+- **`upgrade` reads back the version it installed** when the host passes `installed` (and, for the time,
+  `publishedAt`). The result gains `installed`; `updated` is false when the version did not change; when the package
+  manager installed an older version than `latest` — pnpm 11 holds a version for 1 day by default
+  (`minimumReleaseAge`) — the result carries `heldBack: { until, command }`, the reason is `held_back`, and a warning
+  names the exact-version command that installs it now. Before, it reported the npm `latest` as installed.
+
+- **`store export`'s help says what reaches stdout**: `--jsonl` one message per line, `--json` one list object
+  object. It said "as JSON lines" and called `jsonl` the default, which holds only with `--output`.
+
+- **A person's context names their last message and yours whatever the message limit.** `last.fromThem` and
+  `last.fromMe` were looked for only in the messages returned, so `memo context … --limit 1` gave `fromMe: null`
+  while `--limit 2` gave the message. They now come from the whole stored dialog; mail is still read within
+  the limit. `MessageStore.messages` takes `outgoing` to keep only the owner's or only the others' messages.
+
+- **`store check` passes the schema check for a file a newer build wrote that this build may still write**
+  (`minCompatible` at or below what it speaks), and says so; a file it may not write fails it with
+  `<command> upgrade`. Before, any file ahead of the build failed it.
+- **`store check` says when the typo vocabulary is behind the stored messages**: `wordIndex` gains `newest` and
+  `termsReady`, and the note names `store migrate`. `ready` still means only that every message is in the word index.
+- **`store fetch <chat> --catch-up` names the commands that finish search preparation** when it stopped at a
+  bound (`conversations build --chat`, then `conversations embed --chat`).
+
+- **`search messages` and `search mail` keep only the accounts of their kind from `--source`** and name the rest in
+  a new answer field, `skipped: [{ source, reason }]`; they fail only when nothing in the list fits. A meeting
+  account or a notes folder named in `--source`, or reached by `--source all`, no longer counts among the accounts
+  `search messages` read. `--source` also takes a bare kind (`messages`, `mail`, `notes`, `meetings`) and a
+  provider's alias (`tg` for `telegram`, whatever app runs), resolved through one registry,
+  `src/domain/providers.ts`. A notes folder is `notes:<id>`, the id its hits show, and memo's own notes
+  `notes:internal`.
+
+- **`store export --json` answers the list envelope** `{ items, page, limit, hasMore }` — `page: 1`, `limit` the
+  count, `hasMore: false` — like every other list. It answered `{ items }` alone. `--output` and `--to` still answer
+  what they wrote.
 
 ## 0.255.0 — 12.10.2026
 
