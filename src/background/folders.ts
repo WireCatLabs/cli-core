@@ -25,9 +25,9 @@ const repointAgents = (appName: string, from: string, to: string, env: NodeJS.Pr
 
 /**
  * Moves the CLI's folders, the shared store's and the shared cache's out of `~/Library` on macOS, at
- * program start. A move that cannot happen now never stops the command: it warns, and this run keeps
- * using the old folders through the `*_DIR` overrides, so the new ones stay empty and the next run
- * tries again.
+ * program start, then the store and models into the WireCat folder. A move that cannot happen now warns,
+ * and this run keeps using the old folders, so the next run tries again. Only a state no command should run
+ * on stops it: two different stores, a move that could not be put back, another process still moving.
  */
 export const migrateFolders = (
   app: Pick<AppIdentity, "command" | "appName" | "envPrefix">,

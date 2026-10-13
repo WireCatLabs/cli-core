@@ -200,12 +200,13 @@ describe("a move cut short finishes on the next start", () => {
     seed(next, "wirecat.db.partial-99999", "ro")
     seed(oldModels, "audio/m.bin", "model")
     seed(next, "models.partial-99999/audio/m.bin", "mo")
+    seed(next, "notes.partial-1", "another tool's")
 
     run()
 
     expect(read(next, "wirecat.db")).toBe("rows")
     expect(read(next, "models/audio/m.bin")).toBe("model")
-    expect(readdirSync(next).filter((entry) => entry.includes(".partial-"))).toEqual([])
+    expect(readdirSync(next).filter((entry) => entry.includes(".partial-"))).toEqual(["notes.partial-1"])
   })
 })
 

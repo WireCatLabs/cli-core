@@ -308,7 +308,7 @@ export const migrateToWirecatFolder = (
   const lock = join(target, ".moving.lock")
   waitForLock(lock, lockWaitMs)
   try {
-    for (const name of readdirSync(target).filter((entry) => entry.includes(PARTIAL)))
+    for (const name of readdirSync(target).filter((entry) => /^(wirecat\.db.*|models)\.partial-\d+$/.test(entry)))
       rmSync(join(target, name), { recursive: true, force: true })
     try {
       if (!storeOverridden) moveStore(app, oldState, target, env, holdersOf, move, warn)
