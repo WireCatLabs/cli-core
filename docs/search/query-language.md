@@ -14,14 +14,14 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 
 Этот профиль — для всех команд `search`: `search all` (сообщения, почта и заметки сразу — с неё
 начинать, если неизвестно, где написано), `search messages` (только сообщения мессенджеров), `search mail`
-(только почта, импортированная `memo mail <account> import`, во всех почтовых аккаунтах сразу, а `--account <адрес>` —
+(только почта, импортированная `memo mail <account> import`, во всех почтовых аккаунтах сразу, а `--source email:<адрес>` —
 в одном; `chat:` и `--chat` там — тред по id или теме, полей `kind` и
 `topic` нет; только у почты — `to:`, `cc:`, `bcc:` (человек, как в `from:`), `subject:` (слова темы) и
 `mailbox:` (папка или ярлык по id или имени; `label:` — то же самое), `is:unread`, `is:read` и `is:starred`
 (письмо не прочитано, прочитано, помечено флагом — как их показал почтовый ящик при импорте; письмо, для которого
 импорт этого не узнал, не находит ни `is:read`, ни `is:unread`)) и `search notes` (заметки всех папок сразу,
-`--folder <id>` — только одной; у них только поля `text`, `exact`, `body`, `tag`, `date`, `in`), и для их MCP-инструментов
-`search_*` (`account` у `search_mail`, `folders` у `search_notes`). Поле, которого у вида нет,
+`--source notes:<id>` — только одной, `notes:internal` — написанные в memo; у них только поля `text`, `exact`, `body`,
+`tag`, `date`, `in`), и для их MCP-инструментов `search_*` (`source` у каждого). Поле, которого у вида нет,
 в `search all` пропускает этот вид, и ответ называет причину в `skipped`. `bot search messages`
 сохраняет legacy discovery; строгий поиск общего архива выбирает bot accounts через `in:bots`.
 
@@ -392,7 +392,8 @@ MAX — нет, там ищите по расширению (`filename:*.pdf`). 
 
 Default scope `search messages` — активный account; `search mail` читает все почтовые аккаунты, `search notes` —
 все папки заметок. `in:` с положительным условием или `--source` явно выбирает
-accounts провайдера/класса, включая `all`. Отрицательный `in:` не расширяет scope.
+accounts провайдера/класса, включая `all`; `in:` берёт и псевдоним провайдера (`in:tg`) и вид (`in:messages`,
+`in:mail`), как голое слово `--source`. Отрицательный `in:` не расширяет scope.
 При заданном caller allow-list из `accounts` query не может его расширить;
 `--source` и положительный `in:` тогда отвергаются. `--source` остаётся provider scope,
 а не свежестью данных. Чат, запрещённый для общего поиска, читается лишь при обязательном
@@ -407,17 +408,20 @@ accounts провайдера/класса, включая `all`. Отрицат
 Группа хранится в хранилище для всех приложений: `config set accountGroups.work tg:tg2,max:Alice,email:me@work.example`,
 `config unset accountGroups.work`, видна в `config show`. Группа не включает другие группы.
 Из списка `search messages` и `search conversations` берут аккаунты сообщений, `search mail` — только почтовые
-ящики; остальные элементы названы в ответе в `skipped: [{ source, reason }]`. Если подходящих не осталось — ошибка. Список и положительный `in:` вместе
+ящики, `search notes` — `notes:internal` и папки заметок одним запросом (страницы `--offset` идут по одному списку);
+остальные элементы названы в ответе в `skipped: [{ source, reason }]`. Если подходящих не осталось — ошибка. Список и положительный `in:` вместе
 отвергаются. Неизвестная группа или аккаунт — ошибка со списком того, что есть.
 
 `search all --source` (MCP `source`) берёт тот же список: каждый вид читает свои аккаунты из него, вид, которого
 список не называет, не читается и есть в `skipped` (`--source names no notes account`), а элемент, чей вид `--only`
 оставил за бортом, — тоже в `skipped`. Встречи читаются, только если список называет аккаунт встреч (`zoom:<id>`,
-`zoom`, `meetings`), и только один. Ответ `search all` называет каждый прочитанный аккаунт:
-`accounts: [{ resource, provider, account }]`; в обычном режиме — строка `searched: …` в stderr.
+`zoom`, `meetings`; `all` — все аккаунты и встречи), и только один; голое `zoom` или `meetings` берёт тот аккаунт, где
+встречи есть. Без такого элемента `skipped` говорит, что встречи не искались. Ответы `search all`, `search mail` и
+`search notes` называют каждый прочитанный аккаунт: `accounts: [{ resource, provider, account }]`; в обычном режиме —
+строка `searched: …` в stderr.
 
-Запланировано ([план](../dev/source-everywhere-plan.md)): `--source` у `search mail` и `search notes`;
-`search notes --folder`, `search mail --account` и `search all --meetings` заменит `--source`.
+`search notes --folder`, `search mail --account` и `search all --meetings` (MCP `folders`, `account`, `meetings`)
+удалены: ошибка называет замену — `--source notes:<id>`, `--source email:<адрес>`, `--source zoom:<id>`.
 
 ## Regex: term и body
 

@@ -8,6 +8,7 @@ import type { SearchFound } from "../../services/messages.js"
 import { NO_MAIL, type SearchKind } from "../../services/search-kind.js"
 import { environmentOf } from "../context.js"
 import { positiveCount } from "../paging.js"
+import { removedOptions } from "../removed-options.js"
 import { archiveSummary } from "./archive-summary.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
@@ -48,11 +49,15 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
         : `only this chat — the same as chat: in the query; ${messenger.chatArgument}`,
     )
   if (mail)
-    command.option("--account <address>", "only this mail account, by its address; every mail account when unset")
+    removedOptions(command, { "--account": "--source email:<address> names the mail account" }).option(
+      "--source <accounts>",
+      "only these mail accounts, separated by commas: email:<address> as a hit shows it, email, mail or " +
+        "group:<name>; every mail account when unset",
+    )
   else
     command
       .option(
-        "--source <messenger>",
+        "--source <accounts>",
         "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; " +
           "or a list: group:work,telegram:Alice,email:me@example.com",
       )
@@ -98,7 +103,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       type === undefined ? given : given.length === 0 ? [TYPES[type]] : [`(${given.join(" ")}) AND ${TYPES[type]}`]
     const {
       chat,
-      account,
       source,
       regex,
       language,
@@ -112,7 +116,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       saved,
     } = this.opts<{
       chat?: string
-      account?: string
       source?: string
       regex?: boolean
       discover?: boolean
@@ -136,7 +139,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     const typed = {
       ...(chat === undefined ? {} : { chat }),
       ...(source === undefined ? {} : { source }),
-      ...(account === undefined ? {} : { mailAccount: account }),
       ...(discover === undefined ? {} : { discover }),
       ...(language === undefined ? {} : { language }),
       ...(timezone === undefined ? {} : { timezone }),

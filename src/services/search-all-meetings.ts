@@ -6,7 +6,7 @@ import { entriesOfList, fitting } from "../search/account-list.js"
 import { parseLucene } from "../search/lucene/parser.js"
 import type { QueryNode } from "../search/lucene/types.js"
 import { codeOf } from "../sends/guarded.js"
-import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
+import type { AccountKey, MessageStore } from "../store/store.js"
 import type { SearchFound, SearchQuery } from "./messages.js"
 import { RRF_K } from "./notes-search.js"
 import {
@@ -269,37 +269,17 @@ export const searchAllIncludingMeetings = async (
 }
 
 export interface SearchAllWithMeetingsRequest extends Omit<SearchAllIncludingMeetingsRequest, "meetingAccount"> {
-  /** Omitted: the one stored account that holds meetings; several is a validation error, none skips meetings. */
-  meetingAccount?: AccountKey
   /**
    * `--source`: each kind reads the accounts the list names of it and a kind it names none of is skipped.
-   * Meetings are read only when it names a meeting account.
+   * Meetings are read only when it names a meeting account; without it they are skipped.
    */
   source?: string
 }
 
-/** `provider:account`, split on the first colon: a meeting account's own id may hold colons. */
-export const meetingAccountOf = (value: string): AccountKey => {
-  const colon = value.indexOf(":")
-  if (colon < 1 || colon === value.length - 1)
-    throw new CliError(
-      "validation_error",
-      `a meeting account is provider:account, such as zoom:<account>; got "${value}"`,
-    )
-  return { provider: value.slice(0, colon), account: value.slice(colon + 1) }
-}
+/** Meetings have no index to search every account at once, so they are read only when named. */
+export const MEETINGS_UNNAMED = "meetings are searched only when --source names a meeting account, zoom or meetings"
 
-const accountsWithMeetings = async (store: MessageStore) => {
-  const held: StoredAccount[] = []
-  for (const stored of await store.storedAccounts())
-    if ((await store.meetings.meetings({ accountId: stored.id, limit: 1 })).length) held.push(stored)
-  return held
-}
-
-/**
- * `search all --meetings`: never falls back to the caller's own account, which for a messenger CLI is
- * not a meeting account and would silently find nothing.
- */
+/** `search all`: every kind but meetings, unless `--source` names a meeting account. */
 export const searchAllWithMeetings = async (
   store: MessageStore,
   account: AccountKey,
@@ -310,24 +290,9 @@ export const searchAllWithMeetings = async (
   if (request.source !== undefined)
     return searchAllOfSource(store, account, request.source, request, messenger, searchMessages)
   const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
-  if (request.meetingAccount || !only.includes("meetings"))
-    return searchAllIncludingMeetings(store, account, request, messenger, searchMessages)
-  const held = await accountsWithMeetings(store)
-  if (held.length > 1) {
-    const names = held.map((one) => `${one.provider}:${one.account}`)
-    throw new CliError("validation_error", `several stored accounts hold meetings; name one of: ${names.join(", ")}`, {
-      accounts: names,
-    })
-  }
-  const [one] = held
-  if (one)
-    return searchAllIncludingMeetings(
-      store,
-      account,
-      { ...request, meetingAccount: { provider: one.provider, account: one.account, scope: one.scope } },
-      messenger,
-      searchMessages,
-    )
+  if (only.length === 1 && only[0] === "meetings")
+    throw new CliError("validation_error", `--only meetings: ${MEETINGS_UNNAMED}`)
+  if (request.maxMeetings !== undefined) throw new CliError("validation_error", `--max-meetings: ${MEETINGS_UNNAMED}`)
   const found = await searchAll(
     store,
     account,
@@ -335,7 +300,20 @@ export const searchAllWithMeetings = async (
     messenger,
     searchMessages,
   )
-  return { ...found, skipped: [...found.skipped, { resource: "meetings", reason: "no stored account holds meetings" }] }
+  return only.includes("meetings")
+    ? { ...found, skipped: [...found.skipped, { resource: "meetings", reason: MEETINGS_UNNAMED }] }
+    : found
+}
+
+/** Of several meeting accounts, the ones that hold meetings: a bare `zoom` names every row, signed in or not. */
+const holdingMeetings = async (store: MessageStore, named: AccountKey[]): Promise<AccountKey[]> => {
+  if (named.length < 2) return named
+  const holding: AccountKey[] = []
+  for (const key of named) {
+    const { id } = await store.storedAccount(key)
+    if ((await store.meetings.meetings({ accountId: id, limit: 1 })).length) holding.push(key)
+  }
+  return holding.length ? holding : named
 }
 
 const searchAllOfSource = async (
@@ -346,8 +324,6 @@ const searchAllOfSource = async (
   messenger: Partial<Pick<Messenger, "savedChatId" | "app">>,
   searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
 ): Promise<SearchAllIncludingMeetingsFound> => {
-  if (request.meetingAccount)
-    throw new CliError("validation_error", "--source names the meeting account — leave --meetings out")
   const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
   const entries = entriesOfList(source, await listContextOf(store, account, messenger.app))
   const { skipped } = fitting(entries, only, "search all", (kind) => `--only leaves ${kind} out`)
@@ -359,7 +335,7 @@ const searchAllOfSource = async (
         .map(({ provider, account }) => [`${provider}\u0000${account}`, { provider, account }] as const),
     ).values(),
   ]
-  const meetings = named("meetings")
+  const meetings = await holdingMeetings(store, named("meetings"))
   if (only.includes("meetings") && meetings.length > 1)
     throw new CliError(
       "validation_error",

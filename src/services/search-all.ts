@@ -6,7 +6,7 @@ import { INTERNAL_NOTES, kindOf } from "../domain/providers.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
 import { MAX_SEARCH_OFFSET, type SearchFound, type SearchQuery, searchStore } from "./messages.js"
-import { RRF_K, searchNotes } from "./notes-search.js"
+import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
 export const RESOURCES_SEARCHED = ["messages", "mail", "notes"] as const
@@ -161,49 +161,37 @@ export const searchAll = async (
   for (const resource of only) {
     try {
       if (resource === "notes") {
-        const folders = (await store.notes.folders()).map(({ id }) => id)
-        const chosen = request.scope?.notes?.map(({ account }) => account)
-        const internal = chosen === undefined || chosen.includes(INTERNAL_NOTES)
-        const folderIds = chosen === undefined ? folders : folders.filter((id) => chosen.includes(id))
-        // The store reads memo's notes beside every folder or alone, never beside some folders: two searches then.
-        const whole = internal && folderIds.length === folders.length
-        const runs = whole
-          ? [{}]
-          : [...(internal ? [{ source: "internal" as const }] : []), ...(folderIds.length ? [{ folderIds }] : [])]
-        for (const run of runs) {
-          const found = await searchNotes(store, request.text, {
-            limit: window,
-            command,
-            ...run,
-            ...(request.exact ? { exact: true } : {}),
-            ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
-            ...(request.env === undefined ? {} : { env: request.env }),
-          })
-          hasMore ||= found.hasMore
-          notes ??= {
-            by: found.by,
-            ...(found.meaningSkipped === undefined ? {} : { meaningSkipped: found.meaningSkipped }),
-          }
-          lists.push(
-            found.hits.map((hit) => ({
-              kind: "note",
-              ref: hit.ref,
-              provider: "notes",
-              account: hit.folderId ?? INTERNAL_NOTES,
-              title: hit.title,
-              timestamp: hit.modifiedAt,
-              text: hit.line,
-              foundBy: hit.foundBy,
-            })),
-          )
+        const chosen = request.scope?.notes
+        const found = await searchNotes(store, request.text, {
+          limit: window,
+          command,
+          ...(chosen === undefined ? {} : notesScopeOf(chosen)),
+          ...(request.exact ? { exact: true } : {}),
+          ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
+          ...(request.env === undefined ? {} : { env: request.env }),
+        })
+        hasMore ||= found.hasMore
+        notes = {
+          by: found.by,
+          ...(found.meaningSkipped === undefined ? {} : { meaningSkipped: found.meaningSkipped }),
         }
-        accounts.push(
-          ...[...(internal ? [INTERNAL_NOTES] : []), ...folderIds].map((account) => ({
-            resource,
+        lists.push(
+          found.hits.map((hit) => ({
+            kind: "note",
+            ref: hit.ref,
             provider: "notes",
-            account,
+            account: hit.folderId ?? INTERNAL_NOTES,
+            title: hit.title,
+            timestamp: hit.modifiedAt,
+            text: hit.line,
+            foundBy: hit.foundBy,
           })),
         )
+        const read = chosen?.map(({ account }) => account) ?? [
+          INTERNAL_NOTES,
+          ...(await store.notes.folders()).map(({ id }) => id),
+        ]
+        accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
       } else lists.push(await messagesOf(resource))
       searched.push(resource)
     } catch (error) {

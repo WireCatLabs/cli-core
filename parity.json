@@ -4,11 +4,6 @@
     "--accept-terms": {
       "meaning": "accept the model's licence terms, for a model that has its own"
     },
-    "--account": {
-      "value": "<address>",
-      "meaning": "only this mail account, by its address; every mail account when unset",
-      "note": "goes: --source email:<address> replaces it — source-everywhere-plan.md"
-    },
     "--add": {
       "value": "<chat>",
       "meaning": "put a chat into a folder; repeat it for more"
@@ -398,11 +393,6 @@
       "value": "<name>",
       "meaning": "your first name"
     },
-    "--folder": {
-      "value": "<id>",
-      "meaning": "only this notes folder, by its id; repeat it for more",
-      "note": "goes: --source notes:<id> replaces it — source-everywhere-plan.md"
-    },
     "--for": {
       "value": "<agents>",
       "meaning": "which agents a skill is installed for: claude, agents or all",
@@ -557,7 +547,7 @@
     },
     "--max-meetings": {
       "value": "<n|all>",
-      "meaning": "how many meetings --meetings looks through, newest first; all looks through every one (default 100)"
+      "meaning": "how many of the meeting account's meetings to look through, newest first; all looks through every one (default 100)"
     },
     "--max-messages": {
       "value": "<n>",
@@ -586,11 +576,6 @@
     "--measure": {
       "value": "<name>",
       "meaning": "the metric used to order a ranking; not with --score or --weights"
-    },
-    "--meetings": {
-      "value": "[provider:account]",
-      "meaning": "also search one meeting account; with no value, the one stored account that holds meetings (put it after the query)",
-      "note": "goes: --source zoom:<account>, zoom or meetings replaces it; --max-meetings stays — source-everywhere-plan.md"
     },
     "--members-see-link": {
       "value": "<on|off>",
@@ -732,7 +717,7 @@
     },
     "--only": {
       "value": "<resources>",
-      "meaning": "only these resources, separated by commas: messages, mail, notes; meetings with --meetings or --source"
+      "meaning": "only these resources, separated by commas: messages, mail, notes; meetings when --source names a meeting account"
     },
     "--only-admins-add": {
       "value": "<on|off>",
@@ -994,9 +979,9 @@
       "meaning": "with --quiz: what people see once they answered"
     },
     "--source": {
-      "value": "<messenger>",
-      "meaning": "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; or a list: group:work,telegram:Alice,email:me@example.com",
-      "note": "search all takes provider:account, a bare provider, a bare kind (messages, mail, notes, documents, meetings) or group:<name> as <accounts>; search mail and search notes are planned — source-everywhere-plan.md"
+      "value": "<accounts>",
+      "meaning": "which accounts: personal, bots or all, a provider, or a list of provider:account as a hit shows it, a provider, a kind (messages, mail, notes, documents, meetings) or group:<name> — the same as in: in the query",
+      "note": "each search reads the accounts of its own kinds and names the rest in skipped — source-everywhere-plan.md"
     },
     "--spoiler": {
       "meaning": "hide the --photo or video behind a spoiler until tapped"
@@ -3175,13 +3160,6 @@
             "tg": "each CLI’s next cli-messaging bump"
           }
         },
-        "--meetings": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
-          }
-        },
         "--offset": {
           "in": [],
           "planned": {
@@ -3249,13 +3227,6 @@
     "search mail": {
       "in": "all",
       "options": {
-        "--account": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
-          }
-        },
         "--chat": "all",
         "--context": "all",
         "--exact": "all",
@@ -3271,8 +3242,8 @@
         "--source": {
           "in": [],
           "planned": {
-            "max": "source-everywhere-plan.md",
-            "tg": "source-everywhere-plan.md"
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
           }
         },
         "--timezone": "all"
@@ -3342,14 +3313,13 @@
       "options": {
         "--exact": "all",
         "--filter": "all",
-        "--folder": "all",
         "--limit": "all",
         "--offset": "all",
         "--source": {
           "in": [],
           "planned": {
-            "max": "source-everywhere-plan.md",
-            "tg": "source-everywhere-plan.md"
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
           }
         },
         "--tag": "all",

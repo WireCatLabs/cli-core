@@ -14,6 +14,17 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 - **`--source` lists:** `folder:<ulid>` is no longer accepted — a folder is `notes:<id>`; `personal` and `bots`
   inside a list hold messenger accounts only, no mailbox; when nothing in a list fits the search, the error reads
   `--source names nothing <search> reads: …`, in place of "mailboxes only" and "no mailbox".
+- **`search notes --folder`, `search mail --account` and `search all --meetings` are removed** (MCP `search_notes`
+  `folders`, `search_mail` `account`, `search_all` `meetings`). Each fails with an error naming its replacement:
+  `--source notes:<folder id>` (and `notes:internal` for notes written in memo), `--source email:<address>`,
+  `--source zoom:<account>`, `zoom`, `meetings`, or `all` for every account and the meetings. `search all` without
+  such an entry answers a `skipped` entry for meetings; `--only meetings` and `--max-meetings` without one are an
+  error. `meetingAccountOf` and `SearchAllWithMeetingsRequest.meetingAccount` leave `./services`;
+  `searchAllIncludingMeetings` keeps `meetingAccount`.
+- **`in:` and a bare `--source` word take a provider's alias and a kind** (`in:tg`, `in:messages`, `in:mail`);
+  `in:notes`, `in:documents` and `in:meetings` are an error naming the search that reads them, and an unknown word's
+  error lists `messages, mail` too.
+- **Every `--source` that names accounts shows `<accounts>` in help**, in place of `<messenger>` and `<source>`.
 
 ### Added
 
@@ -23,6 +34,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   `--only` leaves out is in `skipped` as `{ source, reason }`, and meetings are read when the list names one
   meeting account (`--only meetings` and `--max-meetings` then work without `--meetings`; `--meetings` beside
   `--source` is an error).
+- **`search notes --source` and `search mail --source`** (MCP `source`): `notes:internal`, `notes:<folder id>`,
+  `email:<address>`, a kind or `group:<name>`; an entry naming nothing the search reads is in `skipped`. Memo's notes
+  beside some folders are one store query (`withInternal` on `NoteQuery`, `NotesQuery` and `notes.nearest`), so
+  `--offset` pages one list; `search all` reads them the same way. `searchNotesOf` in `./services` resolves the
+  list. Both answer `accounts`.
 - **`search all` answers `accounts: [{ resource, provider, account }]`**, every account it read, with or without
   `--source` — memo's shape. Pretty mode prints `searched: provider:account, …` on stderr. `skipped` entries may
   now carry `source` instead of `resource`.

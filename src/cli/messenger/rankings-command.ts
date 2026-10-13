@@ -54,7 +54,7 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
       ]),
     )
     .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
-    .option("--source <messenger>", "every held account of this messenger; personal, bots or all")
+    .option("--source <accounts>", "every held account of this messenger; personal, bots or all")
     .option("--timezone <zone>", "the IANA timezone for dates and active days")
     .option("--exact", "bare words match exact forms rather than stems")
     .option("--limit <n>", "ranked rows, 1–100", positiveCount("--limit"))

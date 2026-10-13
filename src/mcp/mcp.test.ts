@@ -31,6 +31,7 @@ import { conversationsService } from "../services/conversations.js"
 import { storedDeps } from "../services/deps.js"
 import { embeddingsService } from "../services/embeddings.js"
 import { servicesFor } from "../services/index.js"
+import { MEETINGS_UNNAMED } from "../services/search-all-meetings.js"
 import { openStore } from "../store/store.js"
 import { pdf } from "../testing/files.js"
 import { commandsClient } from "../testing/mcp-commands-client.js"
@@ -1073,7 +1074,9 @@ describe("the MCP server", () => {
     expect((await call("chat_search_messages", { text: "chapter", source: "all" })).body.items).toHaveLength(1)
     const unheld = await call("chat_search_messages", { text: "chapter", source: "nowhere" })
     expect(unheld.isError).toBe(true)
-    expect(JSON.stringify(unheld.body)).toContain('--source takes chat, personal, bots, all — not \\"nowhere\\"')
+    expect(JSON.stringify(unheld.body)).toContain(
+      '--source takes chat, personal, bots, all, messages, mail — not \\"nowhere\\"',
+    )
     expect(telegram.opened()).toBe(1)
   })
 
@@ -1088,6 +1091,7 @@ describe("the MCP server", () => {
     expect(all.body.searched).toEqual(["messages", "notes"])
     expect(all.body.skipped).toEqual([
       { resource: "mail", reason: expect.stringContaining("memo mail <account> import") },
+      { resource: "meetings", reason: MEETINGS_UNNAMED },
     ])
     const notes = await call("chat_search_notes", { text: "chapter" })
     expect(notes.body).toMatchObject({ by: "words", hits: [] })
@@ -1097,7 +1101,7 @@ describe("the MCP server", () => {
     expect(telegram.opened()).toBe(1)
   })
 
-  it("search_mail reads every mail account, and account narrows it to one", async () => {
+  it("search_mail reads every mail account, and source narrows it to one", async () => {
     const { call, env } = await connect(scripted())
     await call("chat_chats_list")
     const store = await openStore({ path: env.MESSAGING_STORE })
@@ -1125,17 +1129,23 @@ describe("the MCP server", () => {
       "<alice@example.test>",
       "<bob@example.test>",
     ])
-    const one = await call("chat_search_mail", { text: "chapter", account: "bob@example.test" })
+    const one = await call("chat_search_mail", { text: "chapter", source: "email:bob@example.test" })
     expect(one.body.items.map(({ id }: { id: string }) => id)).toEqual(["<bob@example.test>"])
+    expect(one.body.accounts).toEqual([{ resource: "mail", provider: "email", account: "bob@example.test" }])
     expect(one.body).not.toHaveProperty("coverage")
+    const removed = await call("chat_search_mail", { text: "chapter", account: "bob@example.test" })
+    expect(removed.isError).toBe(true)
+    expect(JSON.stringify(removed.body)).toContain(
+      "account was removed — source: email:<address> names the mail account",
+    )
     expect(one.body.items[0]).toMatchObject({
       excerpt: "Reading group Which chapter next?",
       email: { from: { address: "bob@example.test" }, thread: "chat:email/bob%40example.test/thread-1" },
     })
     expect(one.body.items[0]).not.toHaveProperty("text")
-    const brief = await call("chat_search_mail", { text: "chapter", account: "bob@example.test", detail: "brief" })
+    const brief = await call("chat_search_mail", { text: "chapter", source: "email:bob@example.test", detail: "brief" })
     expect(brief.body.items[0]).not.toHaveProperty("email")
-    const full = await call("chat_search_mail", { text: "chapter", account: "bob@example.test", detail: "full" })
+    const full = await call("chat_search_mail", { text: "chapter", source: "email:bob@example.test", detail: "full" })
     expect(full.body.items[0].text).toBe("Reading group\n\nWhich chapter next?")
     const first = await call("chat_search_mail", { text: "chapter", limit: 1 })
     expect(first.body.nextOffset).toBe(1)
@@ -1148,7 +1158,7 @@ describe("the MCP server", () => {
     ])
   })
 
-  it("search_all takes meetings: the one stored meeting account, or one named; never without asking", async () => {
+  it("search_all reads meetings only from a meeting account source names; never without asking", async () => {
     const telegram = scripted()
     const { call, env } = await connect(telegram)
     await call("chat_messages_list", { chat: "7" })
@@ -1169,8 +1179,9 @@ describe("the MCP server", () => {
 
     const plain = await call("chat_search_all", { text: "chapter" })
     expect(plain.body.items.map((item: { kind: string }) => item.kind)).not.toContain("meeting")
-    for (const meetings of [true, "zoom:zm-profile:alice"]) {
-      const found = await call("chat_search_all", { text: "chapter", meetings })
+    expect(plain.body.skipped).toContainEqual({ resource: "meetings", reason: MEETINGS_UNNAMED })
+    for (const source of ["all", "zoom:zm-profile:alice", "meetings"]) {
+      const found = await call("chat_search_all", { text: "chapter", source })
       expect(found.isError).toBe(false)
       expect(found.body.searched).toContain("meetings")
       expect(found.body.items).toContainEqual(
@@ -1179,12 +1190,15 @@ describe("the MCP server", () => {
     }
     const unasked = await call("chat_search_all", { text: "chapter", only: ["meetings"] })
     expect(unasked.isError).toBe(true)
-    expect(JSON.stringify(unasked.body)).toContain("needs meetings")
-    const every = await call("chat_search_all", { text: "chapter", meetings: true, max_meetings: "all" })
+    expect(JSON.stringify(unasked.body)).toContain(MEETINGS_UNNAMED)
+    const every = await call("chat_search_all", { text: "chapter", source: "zoom", max_meetings: "all" })
     expect(every.body.meetings).toMatchObject({ complete: true })
     const bounded = await call("chat_search_all", { text: "chapter", max_meetings: 5 })
     expect(bounded.isError).toBe(true)
-    expect(JSON.stringify(bounded.body)).toContain("max_meetings needs meetings")
+    expect(JSON.stringify(bounded.body)).toContain(MEETINGS_UNNAMED)
+    const removed = await call("chat_search_all", { text: "chapter", meetings: true })
+    expect(removed.isError).toBe(true)
+    expect(JSON.stringify(removed.body)).toContain("meetings was removed — source names the meeting account")
   })
 
   it("prepares stored evidence with a cursor and typed failures without connecting", async () => {

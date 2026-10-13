@@ -9,6 +9,7 @@ import { parseMarkdown } from "../../domain/markdown.js"
 import type { Chat, Member, Message, WindowedMessage } from "../../domain/models.js"
 import { sampleMeeting } from "../../meetings/testing/index.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
+import { MEETINGS_UNNAMED } from "../../services/search-all-meetings.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { searchRecipes, seedSearchRecipes } from "../../testing/search-recipes.js"
@@ -1712,7 +1713,9 @@ describe("the shared read commands", () => {
     expect((await json("from:me", "chapter")).answer.items).toEqual([])
     expect((await json("from:Nadie", "chapter")).error).toBe('from:Nadie — nobody matches "Nadie"')
     expect((await json("has:photo")).error).toBe("has:photo — the store holds no photo; it holds attachment, link")
-    expect((await json("in:nowhere", "chapter")).error).toBe('in: takes chat, personal, bots, all — not "nowhere"')
+    expect((await json("in:nowhere", "chapter")).error).toBe(
+      'in: takes chat, personal, bots, all, messages, mail — not "nowhere"',
+    )
     const both = await json("chat:Elsewhere", "chapter", "--chat", "Book")
     expect(both.code).toBe(2)
     expect(both.error).toBe('--chat and chat: name different chats: "Book" and "Elsewhere"')
@@ -1845,11 +1848,22 @@ describe("the shared read commands", () => {
       ["<b@example.test>", false],
     ])
 
-    const one = await call(["search", "mail", "chapter", "--account", "Owner@example.test", "--json"], never, env)
-    expect(JSON.parse(one.stdout[0] ?? "").items.map(({ id }: { id: string }) => id)).toEqual(["<a@example.test>"])
-    const unheld = await call(["search", "mail", "chapter", "--account", "other@example.test", "--json"], never, env)
+    const one = await call(["search", "mail", "chapter", "--source", "email:Owner@example.test", "--json"], never, env)
+    const narrowed = JSON.parse(one.stdout[0] ?? "")
+    expect(narrowed.items.map(({ id }: { id: string }) => id)).toEqual(["<a@example.test>"])
+    expect(narrowed.accounts).toEqual([{ resource: "mail", provider: "email", account: "owner@example.test" }])
+    const unheld = await call(
+      ["search", "mail", "chapter", "--source", "email:other@example.test", "--json"],
+      never,
+      env,
+    )
     expect(unheld.code).not.toBe(0)
     expect(unheld.stderr.join("\n")).toContain("owner@example.test")
+    const removed = await call(["search", "mail", "chapter", "--account=owner@example.test", "--json"], never, env)
+    expect(removed.code).toBe(2)
+    expect(removed.stderr.join("\n")).toContain(
+      "--account was removed — --source email:<address> names the mail account",
+    )
   })
 
   it("**messages show** and **messages context** open an email by its locator, whole, with its thread", async () => {
@@ -2060,6 +2074,16 @@ describe("the shared read commands", () => {
       (await call(["search", "notes", "chapter", "--type", "file", "--json"], never, env)).stdout[0] ?? "",
     )
     expect(files.hits).toHaveLength(0)
+    const written = JSON.parse(
+      (await call(["search", "notes", "chapter", "--source", "notes:internal,email", "--json"], never, env))
+        .stdout[0] ?? "",
+    )
+    expect(written.hits).toHaveLength(1)
+    expect(written.accounts).toEqual([{ resource: "notes", provider: "notes", account: "internal" }])
+    expect(written.skipped).toEqual([{ source: "email", reason: "a mailbox — search mail reads it" }])
+    const folder = await call(["search", "notes", "chapter", "--folder", "4", "--json"], never, env)
+    expect(folder.code).toBe(2)
+    expect(folder.stderr.join("\n")).toContain("--folder was removed — --source notes:<folder id> names the folder")
     expect(never).not.toHaveBeenCalled()
   })
 
@@ -2133,7 +2157,7 @@ describe("the shared read commands", () => {
     expect(plain.stderr.join("\n")).toContain("--backend")
   })
 
-  it("**search all --meetings** adds the one stored meeting account, and refuses to guess between several", async () => {
+  it("**search all** reads meetings only when --source names a meeting account, and refuses to guess between several", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-meetings-"))
     const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -2166,8 +2190,9 @@ describe("the shared read commands", () => {
     expect(kinds(plain)).toEqual(new Set(["message"]))
     expect(plain.searched).not.toContain("meetings")
     expect(plain).not.toHaveProperty("meetings")
+    expect(plain.skipped).toContainEqual({ resource: "meetings", reason: MEETINGS_UNNAMED })
 
-    const named = await call(["search", "all", "chapter", "--meetings", "zoom:zm-profile:alice", "--json"], never, env)
+    const named = await call(["search", "all", "chapter", "--source", "all", "--json"], never, env)
     expect(named.code).toBe(0)
     const answer = JSON.parse(named.stdout[0] ?? "")
     expect(kinds(answer)).toEqual(new Set(["message", "meeting"]))
@@ -2180,23 +2205,28 @@ describe("the shared read commands", () => {
     })
 
     const only = JSON.parse(
-      (await call(["search", "all", "chapter", "--only", "meetings", "--meetings", "--json"], never, env)).stdout[0] ??
+      (await call(["search", "all", "chapter", "--source", "zoom:zm-profile:alice", "--json"], never, env)).stdout[0] ??
         "",
     )
     expect(kinds(only)).toEqual(new Set(["meeting"]))
 
-    const pretty = await call(["search", "all", "chapter", "--meetings"], never, env, { tty: true })
+    const pretty = await call(["search", "all", "chapter", "--source", "all"], never, env, { tty: true })
     expect(pretty.stdout.join("")).toMatch(/meeting · zoom · Reading circle {2}meeting:\d+\/\d+/)
 
     const unasked = await call(["search", "all", "chapter", "--only", "meetings", "--json"], never, env)
     expect(unasked.code).toBe(2)
-    expect(unasked.stderr.join("\n")).toContain("--only meetings needs --meetings")
-    const bare = await call(["search", "all", "--meetings", "chapter", "three", "--json"], never, env)
-    expect(bare.code).toBe(2)
-    expect(bare.stderr.join("\n")).toContain("provider:account")
+    expect(unasked.stderr.join("\n")).toContain(`--only meetings: ${MEETINGS_UNNAMED}`)
+    for (const removed of [
+      ["chapter", "--meetings"],
+      ["--meetings", "zoom:zm-profile:alice", "chapter"],
+    ]) {
+      const gone = await call(["search", "all", ...removed, "--json"], never, env)
+      expect(gone.code).toBe(2)
+      expect(gone.stderr.join("\n")).toContain("--meetings was removed — --source names the meeting account")
+    }
 
     await meetingIn("zm-profile:bob")
-    const several = await call(["search", "all", "chapter", "--meetings", "--json"], never, env)
+    const several = await call(["search", "all", "chapter", "--source", "meetings", "--json"], never, env)
     expect(several.code).toBe(2)
     expect(several.stderr.join("\n")).toContain("zoom:zm-profile:alice, zoom:zm-profile:bob")
     expect(never).not.toHaveBeenCalled()
@@ -2226,7 +2256,7 @@ describe("the shared read commands", () => {
       throw new Error("search must never connect")
     })
     const search = async (...extra: string[]) =>
-      call(["search", "all", "chapter", "--only", "meetings", "--meetings", ...extra, "--json"], never, env)
+      call(["search", "all", "chapter", "--source", "meetings", ...extra, "--json"], never, env)
 
     const one = JSON.parse((await search("--max-meetings", "1")).stdout[0] ?? "")
     expect(one.items).toEqual([])
@@ -2240,26 +2270,24 @@ describe("the shared read commands", () => {
     expect(zero.stderr.join("\n")).toContain("--max-meetings takes a whole number from 1, or all")
     const alone = await call(["search", "all", "chapter", "--max-meetings", "5", "--json"], never, env)
     expect(alone.code).toBe(2)
-    expect(alone.stderr.join("\n")).toContain("--max-meetings needs --meetings")
+    expect(alone.stderr.join("\n")).toContain(`--max-meetings: ${MEETINGS_UNNAMED}`)
   })
 
-  it("**search all --meetings** skips meetings with a reason when no stored account holds any", async () => {
+  it("**search all** skips meetings with a reason when --source names no meeting account", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-no-meetings-"))
     const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
     })
-    const found = await call(["search", "all", "chapter", "--meetings", "--json"], never, env)
+    const found = await call(["search", "all", "chapter", "--source", "all", "--json"], never, env)
     expect(found.code).toBe(0)
     const answer = JSON.parse(found.stdout[0] ?? "")
     expect(answer.items.length).toBeGreaterThan(0)
-    expect(answer.skipped).toContainEqual({ resource: "meetings", reason: "no stored account holds meetings" })
-    const alone = JSON.parse(
-      (await call(["search", "all", "chapter", "--only", "meetings", "--meetings", "--json"], never, env)).stdout[0] ??
-        "",
-    )
-    expect(alone).toMatchObject({ items: [], searched: [] })
+    expect(answer.skipped).toContainEqual({ resource: "meetings", reason: "--source names no meetings account" })
+    const alone = await call(["search", "all", "chapter", "--source", "meetings", "--json"], never, env)
+    expect(alone.code).toBe(2)
+    expect(alone.stderr.join("\n")).toContain("--source names nothing search all reads: meetings")
   })
 
   it("**search all --source** reads the accounts it names and says which, pretty on stderr", async () => {
@@ -2395,7 +2423,7 @@ describe("the shared read commands", () => {
       "--source and in: name different messengers: other and chat",
     )
     expect(await failed("chapter", "--source", "nowhere")).toContain(
-      '--source takes chat, other, personal, bots, all — not "nowhere"',
+      '--source takes chat, other, personal, bots, all, messages, mail — not "nowhere"',
     )
     expect(await failed("--regex", "chapter", "--source", "all")).toContain("--regex reads the account it runs as")
     expect(await failed("from:Olga", "chapter", "in:all")).toContain('"Olga" matches 2 people in different accounts')

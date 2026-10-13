@@ -478,6 +478,9 @@ export const searchLucene = async (
     query: queryOf(prepared.timezone, request.newest, prepared.stemming),
     ...(coverage ? { coverage } : {}),
     ...(prepared.skipped ? { skipped: prepared.skipped } : {}),
+    ...(request.kind === "mail"
+      ? { accounts: mailAccounts.map(({ provider, account }) => ({ resource: "mail" as const, provider, account })) }
+      : {}),
   }
 }
 const QUERY_PAGE_LIMIT = 1000
