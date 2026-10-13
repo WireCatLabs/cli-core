@@ -252,6 +252,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `reject` | the owner refuses what an agent proposed | `decline`, `deny` |
 | `move` | move a file in the source |  |
 | `copy` | copy a file in the source |  |
+| `run` | run a saved job once, now, as its timer would |  |
 
 <!-- verbs: end -->
 
@@ -270,6 +271,8 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `history` | past uses of a thing |
 | `top` | a ranked view under stats |
 | `official` | the view the messenger itself computed, under stats |
+| `transcript` | the text of speech: a voice message or a meeting recording |
+| `evidence` | the stored messages or lines a result or a reference rests on |
 
 <!-- views: end -->
 
@@ -306,6 +309,13 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
 | `relationships` | collection | confirmed or suggested links between people, organizations and projects |  |
+| `files` | collection | files in the source, such as Google Drive, read and changed there |  |
+| `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
+| `meetings` | collection | stored meetings, from Zoom or another provider |  |
+| `recordings` | collection | the files a provider recorded of a meeting |  |
+| `jobs` | collection | work this tool runs in the background or on a timer |  |
+| `actions` | collection | what an agent proposes to do; the owner confirms or rejects each |  |
+| `aliases` | collection | other names of one thing |  |
 | `session` | singular | this tool's login |  |
 | `account` | singular | the messenger or mail account behind a profile |  |
 | `config` | singular | a profile's settings |  |
@@ -314,6 +324,8 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `skill` | singular | the agent skill file of this tool |  |
 | `cache` | singular | max's per-profile cache |  |
 | `flood` | singular | what the messenger told this profile to hold off on |  |
+| `vocabulary` | singular | the owner's catalogue of canonical names, with their aliases |  |
+| `api` | singular | the source's own API, one command per operation |  |
 
 <!-- resources: end -->
 
@@ -353,6 +365,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--before-time` | `<time>` | time | read what came before this time |  |
 | `--after-time` | `<time>` | time | read what came after this time |  |
 | `--since-time` | `<time>` | time | only what came since this time |  |
+| `--until-time` | `<time>` | time | only what came up to and including this time |  |
 | `--at-time` | `<time>` | time | do it at this time |  |
 | `--before-n` | `<n>` | count | how many messages before it | messages |
 | `--after-n` | `<n>` | count | how many messages after it | messages |
@@ -367,11 +380,13 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 
 | Rule | Severity | Applies to | Holds when |
 |---|---|---|---|
-| `unknown-verb` | high | command | a command's last word is a verb or view noun from the vocabulary; a top-level one may be a root word |
+| `unknown-verb` | high | command | a command's last word is a verb or view noun from the vocabulary; a top-level one may be a root word; under search, a resource or all |
 | `unknown-resource` | medium | group | a group is a resource from the vocabulary (plural, or a registered singular) or a root word |
 | `flag-two-meanings` | high | flag | a flag takes the same kind of value in every command, and the one the vocabulary gives it |
 | `missing-command-help` | high | command | every command has a summary |
 | `command-help-too-long` | low | command | a summary is at most 80 characters |
+| `command-example-count` | medium | command | a leaf command has one to three examples; generated commands are exempt |
+| `faulty-help-example-parameters` | high | command | an example starts with the tool, runs its own command, and gives only arguments and options it takes |
 | `missing-argument-help` | high | argument | every argument is described |
 | `missing-option-help` | high | option | every option is described |
 

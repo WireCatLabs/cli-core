@@ -27,7 +27,7 @@ export const botContext = (command: Command, bot: BotMessenger) => {
   const words = botWords(bot, profile)
   const registry = bot.registry?.(command, profile) ?? new ChatRegistry(bot.app, profile, env)
   const recipients = () => new RecipientList(files.recipients, words)
-  const journal = () => new SendJournal(files.journal)
+  const journal = () => new SendJournal(files.journal, { service: bot.app.command, version: bot.app.version })
   const connect = async (token: string, options: BotConnectOptions = {}): Promise<BotAdapter> => {
     const adapter = await bot.connect(command, token, { ...options, track: base.track })
     base.track(adapter)

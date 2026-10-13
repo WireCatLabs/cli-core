@@ -7,7 +7,13 @@ import { searchRuns } from "./search.js"
 
 it("searches error codes, partial IDs and safe events with profile isolation and pagination", async () => {
   const dir = mkdtempSync(join(tmpdir(), "run-search-"))
-  const run = startRun({ runsDir: dir, profile: "work", command: "messages download", cliVersion: "1.0.0" })
+  const run = startRun({
+    runsDir: dir,
+    profile: "work",
+    command: "messages download",
+    service: "tg",
+    cliVersion: "1.0.0",
+  })
   run.logger.info({
     event: "response",
     operation: "messages.download",
@@ -20,7 +26,13 @@ it("searches error codes, partial IDs and safe events with profile isolation and
     partial: { failed: 1, failures: [{ id: "50", stage: "download", errorCode: "rate_limited" }] },
   })
   appendFileSync(join(run.dir, "events.jsonl"), "{invalid JSON\n")
-  const other = startRun({ runsDir: dir, profile: "other", command: "messages download", cliVersion: "1.0.0" })
+  const other = startRun({
+    runsDir: dir,
+    profile: "other",
+    command: "messages download",
+    service: "tg",
+    cliVersion: "1.0.0",
+  })
   await other.finish("failed", { errorCode: "rate_limited" })
   const result = searchRuns(dir, { profile: "work", errorCode: "rate_limited", status: "partial" })
   expect(result.items).toHaveLength(1)
@@ -38,19 +50,24 @@ it("searches error codes, partial IDs and safe events with profile isolation and
 
 it("finds a code a finished run's events carried without opening the runs that carried none", async () => {
   const dir = mkdtempSync(join(tmpdir(), "run-search-"))
-  const hit = startRun({ runsDir: dir, profile: "work", command: "messages send", cliVersion: "1.0.0" })
+  const hit = startRun({ runsDir: dir, profile: "work", command: "messages send", service: "tg", cliVersion: "1.0.0" })
   hit.logger.info({ event: "response", operation: "messages.send", outcome: "error", errorCode: "timeout" })
   await hit.finish("success")
-  const miss = startRun({ runsDir: dir, profile: "work", command: "chats list", cliVersion: "1.0.0" })
+  const miss = startRun({ runsDir: dir, profile: "work", command: "chats list", service: "tg", cliVersion: "1.0.0" })
   miss.logger.info({ event: "response", operation: "chats.list" })
   await miss.finish("success")
   writeFileSync(
     join(miss.dir, "events.jsonl"),
     '{"event":"response","operation":"messages.send","errorCode":"timeout"}\n',
   )
-  const killed = startRun({ runsDir: dir, profile: "work", command: "messages send", cliVersion: "1.0.0" })
+  const killed = startRun({
+    runsDir: dir,
+    profile: "work",
+    command: "messages send",
+    service: "tg",
+    cliVersion: "1.0.0",
+  })
   killed.logger.info({ event: "response", operation: "messages.send", errorCode: "timeout" })
-  await killed.logger.close()
 
   const ids = (search: Parameters<typeof searchRuns>[1]) => searchRuns(dir, search).items.map((item) => item.runId)
   expect(ids({ errorCode: "timeout" }).sort()).toEqual([hit.id, killed.id].sort())

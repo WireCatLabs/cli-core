@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { logRecordSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
 import { defaultRule } from "../../replies/rules.js"
@@ -97,6 +99,20 @@ describe("serve", () => {
     expect(answer).toMatchObject({ profile: "default", kept: { message: 1, delete: 1 } })
     expect(seen.lock).toMatchObject({ pid: process.pid, version: "1.0.0", listeningAt: expect.any(String) })
     expect(existsSync(lockOf(root))).toBe(false)
+  })
+
+  it("writes each diagnostic off a terminal as a log record", async () => {
+    const { env } = setup()
+    const stop = new AbortController()
+    setTimeout(() => stop.abort(), 20)
+
+    const { stderr } = await call(["serve", "--json"], env, [], stop.signal)
+
+    const records = stderr.map((line) => v.parse(logRecordSchema, JSON.parse(line)))
+    expect(records).toContainEqual(
+      expect.objectContaining({ severity: "info", body: expect.stringContaining("listening for profile default") }),
+    )
+    expect(records[0]?.resource).toEqual({ service: app.command, version: app.version })
   })
 
   it("refuses while another serve of the profile is alive, and says which", async () => {

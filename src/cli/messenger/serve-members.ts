@@ -1,4 +1,5 @@
 import type { AccountKey, MessageStore } from "../../store/store.js"
+import { failureKey } from "../failures.js"
 
 /** After connecting, `serve` waits this long before its first member fetch: catch-up comes first. */
 export const FIRST_FETCH_MS = 60_000
@@ -45,7 +46,7 @@ export const memberFetches = ({
           done.fetched += 1
         } catch (error) {
           done.failed += 1
-          warn(`members of ${chatId} were not fetched: ${error instanceof Error ? error.message : String(error)}`)
+          warn(`members of ${chatId} were not fetched: ${failureKey(error)}`)
         }
       }
     })
@@ -53,9 +54,7 @@ export const memberFetches = ({
   const tick = () => {
     const next = Date.now() + everyMs
     round = fetchAll()
-      .catch((error) =>
-        warn(`the daily member fetch failed: ${error instanceof Error ? error.message : String(error)}`),
-      )
+      .catch((error) => warn(`the daily member fetch failed: ${failureKey(error)}`))
       .finally(() => {
         if (!stopped) timer = setTimeout(tick, Math.max(0, next - Date.now()))
       })

@@ -218,6 +218,27 @@ export const launchd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
   }
 }
 
+/**
+ * serve's log lines for a person: a log record as `time severity body`, anything else — a line from an
+ * older serve, the summary it prints on stop — as it is. A journal's own prefix is kept.
+ */
+export const readableLog = (text: string): string =>
+  text
+    .split("\n")
+    .map((line) => {
+      const start = line.indexOf("{")
+      if (start < 0) return line
+      try {
+        const record = JSON.parse(line.slice(start)) as { time?: unknown; severity?: unknown; body?: unknown }
+        if (typeof record.time !== "string" || typeof record.severity !== "string" || typeof record.body !== "string")
+          return line
+        return `${line.slice(0, start)}${record.time} ${record.severity.padEnd(5)} ${record.body}`
+      } catch {
+        return line
+      }
+    })
+    .join("\n")
+
 export const tail = (path: string | undefined, lines: number): string =>
   path && existsSync(path) ? `${readFileSync(path, "utf8").split("\n").filter(Boolean).slice(-lines).join("\n")}\n` : ""
 

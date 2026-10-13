@@ -406,7 +406,7 @@ export const guardFor = (
     permissionSources: settings.permissionSources,
     ...(ask ? { ask } : {}),
     sendsPerHour: settings.sendsPerHour,
-    journal: new SendJournal(sendsPathFor(app, settings.profile, env)),
+    journal: new SendJournal(sendsPathFor(app, settings.profile, env), { service: app.command, version: app.version }),
     recipients: new RecipientList(recipientsPathFor(app, settings.profile, env), app.command),
     flood: new FloodMemory(floodPathFor(app, settings.profile, env)),
     warn,

@@ -14,7 +14,13 @@ describe.each(["max", "tg"])("recorded run truncation for %s", (command) => {
     const app = { command, appName: "app-cli", envPrefix: "APP", description: "Synthetic CLI", version: "1.0.0" }
     const dir = runsDirFor(app, env)
     for (let i = 0; i < 2; i++) {
-      const item = startRun({ runsDir: dir, profile: "synthetic", command: "chats list", cliVersion: app.version })
+      const item = startRun({
+        runsDir: dir,
+        profile: "synthetic",
+        command: "chats list",
+        service: "tg",
+        cliVersion: app.version,
+      })
       await item.finish("success")
     }
     const before = listRuns(dir).map((item) => item.runId)
@@ -44,7 +50,13 @@ it("shows a run's failures and leaves the rest to -v", async () => {
   const state = mkdtempSync(join(tmpdir(), "runs-command-"))
   const env = { ...process.env, APP_STATE_DIR: state }
   const app = { command: "tg", appName: "app-cli", envPrefix: "APP", description: "Synthetic CLI", version: "1.0.0" }
-  const item = startRun({ runsDir: runsDirFor(app, env), profile: "synthetic", command: "chats list", cliVersion: "1" })
+  const item = startRun({
+    runsDir: runsDirFor(app, env),
+    profile: "synthetic",
+    command: "chats list",
+    service: "tg",
+    cliVersion: "1",
+  })
   item.logger.info({ event: "request", operation: "chats.list" })
   item.logger.info({ event: "response", operation: "chats.list", outcome: "error", errorCode: "timeout" })
   item.logger.info({ event: "warning", code: "slow_answer" })

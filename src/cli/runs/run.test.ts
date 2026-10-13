@@ -1,13 +1,13 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { logRecordSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
 import { findRun, listRuns, pruneRuns, readEvents, startRun } from "./run.js"
 
 const runsDir = () => join(mkdtempSync(join(tmpdir(), "runs-")), "runs")
 
-// Every run a test starts is finished after it: the log opens its file asynchronously, and one
-// left open outlived the test's sandbox and failed the whole run with ENOENT.
 const started: ReturnType<typeof startRun>[] = []
 afterEach(async () => {
   await Promise.all(started.splice(0).map((run) => run.finish("success")))
@@ -18,6 +18,7 @@ const begin = (dir: string, command = "chats list", now?: () => Date) => {
     runsDir: dir,
     command,
     profile: "default",
+    service: "tg",
     cliVersion: "0.0.0",
     ...(now ? { now } : {}),
   })
@@ -33,8 +34,6 @@ describe("a run directory", () => {
     const metadata = JSON.parse(readFileSync(join(run.dir, "run.json"), "utf8")) as Record<string, unknown>
     expect(metadata).toMatchObject({ command: "chats list", profile: "default", status: "running" })
     expect(metadata.completedAt).toBeUndefined()
-
-    await run.logger.close()
   })
 
   it("is named so that it sorts, and reads without being opened", async () => {
@@ -42,8 +41,6 @@ describe("a run directory", () => {
 
     expect(run.id).toMatch(/^20260920T084431Z-messages-send-[0-9a-f]{6}$/)
     expect(run.dir).toContain(join("2026-09-20", run.id))
-
-    await run.logger.close()
   })
 
   // Windows has no owner-only mode bits.
@@ -55,25 +52,28 @@ describe("a run directory", () => {
       expect(statSync(run.dir).mode & 0o777).toBe(0o700)
       expect(statSync(join(run.dir, "run.json")).mode & 0o777).toBe(0o600)
       expect(statSync(join(run.dir, "events.jsonl")).mode & 0o777).toBe(0o600)
-
-      await run.logger.close()
     },
   )
 
-  it("writes one JSON object per event, and no colour ever", async () => {
+  it("writes one log record per event, and no colour ever", async () => {
     const run = begin(runsDir())
     run.logger.info({ event: "request", operation: "messages.list" })
     run.logger.info({ event: "response", operation: "messages.list", durationMs: 12 })
     await run.finish("success", { requests: 1 })
 
-    const events = readEvents(run.dir)
-    expect(events).toHaveLength(2)
-    expect(events[0]).toMatchObject({
-      event: "request",
-      operation: "messages.list",
+    const lines = readFileSync(join(run.dir, "events.jsonl"), "utf8").trimEnd().split("\n")
+    for (const line of lines) v.parse(logRecordSchema, JSON.parse(line))
+    expect(JSON.parse(lines[0] as string)).toMatchObject({
+      body: "request",
       runId: run.id,
       command: "chats list",
+      resource: { service: "tg", version: "0.0.0" },
+      attributes: { event: "request", operation: "messages.list" },
     })
+    expect(readEvents(run.dir)).toMatchObject([
+      { event: "request", operation: "messages.list", severity: "info" },
+      { event: "response", durationMs: 12 },
+    ])
     // biome-ignore lint/suspicious/noControlCharactersInRegex: an escape sequence is what must not be there.
     expect(readFileSync(join(run.dir, "events.jsonl"), "utf8")).not.toMatch(/\u001b\[/)
   })
@@ -177,8 +177,6 @@ describe("reading runs back", () => {
     writeFileSync(join(run.dir, "events.jsonl"), '{"event":"request","seq":1}\n{"event":"resp')
 
     expect(readEvents(run.dir)).toEqual([{ event: "request", seq: 1 }])
-
-    await run.logger.close()
   })
 })
 
@@ -207,10 +205,8 @@ describe("what is kept, and for how long", () => {
     const dir = runsDir()
     mkdirSync(join(dir, "2020-01-01"), { recursive: true })
 
-    const run = begin(dir)
+    begin(dir)
 
     expect(readdirSync(dir)).not.toContain("2020-01-01")
-
-    await run.logger.close()
   })
 })

@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { CliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { type AccountKey, type MessageStore, openStore } from "../../store/store.js"
 import { memberFetches as exportedFetches } from "../index.js"
@@ -74,7 +75,7 @@ describe("serve's daily member fetch", () => {
       withStore: (work) => work(store, account),
       fetch: async (_store, _account, chatId) => {
         fetched.push(chatId)
-        if (chatId === "7") throw new Error("flood wait")
+        if (chatId === "7") throw new CliError("rate_limited", "flood wait")
       },
       warn: (text) => warned.push(text),
       firstMs: 1,
@@ -87,7 +88,7 @@ describe("serve's daily member fetch", () => {
 
     expect(fetched).toEqual(["7", "9"])
     expect(fetches.summary()).toEqual({ fetched: 1, failed: 1 })
-    expect(warned).toEqual(["members of 7 were not fetched: flood wait"])
+    expect(warned).toEqual(["members of 7 were not fetched: rate_limited"])
   })
 
   it("does nothing when stopped before its first round, and leaves no timer behind", async () => {
