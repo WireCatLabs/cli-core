@@ -1,57 +1,87 @@
 # Plan — generated tags for notes, documents and messages, and a synonym guard
 
-Status: **proposal, 2026-10-13. Owner direction given, design not approved.** Owner (cli-private journal
-`2026-10-13-field-test-followups.md`, NEED-1005 A): generated tags are searchable at once, below the owner's;
-confirming one makes it the owner's; "all of it, embeddings too".
+Status: **proposal, 2026-10-13, second draft. Owner direction given, design not approved.** Owner (cli-private
+journal `2026-10-13-field-test-followups.md`, NEED-1005 A, NEED-1017 and its review): generated tags are
+searchable at once, below the owner's; confirming one makes it the owner's; "all of it, embeddings too"; tags in
+any language, checked for duplicates through a transliterated form; no second table where a column will do; a
+model (local, OpenAI or Anthropic) or an agent may set tags.
 
 ## Goal
 
-An agent or a rule tags notes, Drive documents and messages so that `tag:` and `search all` find them by
-topic, without the owner tagging each one. The owner's tags stay apart and rank first. A new tag name that
-means the same as an existing one (`seo` and «поисковая оптимизация», `semcore` and `semantic-core`) is caught
-before it is created.
+An agent, a model or a rule tags notes, Drive documents and messages so that `tag:` and `search all` find them by
+topic, without the owner tagging each one. The owner's tags rank first. A new tag that means the same as an
+existing one (`seo`, `сео`, «поисковая оптимизация»; `semcore` and `semantic-core`) is caught before it is
+created.
 
 ## Current state
 
-Anchors on `origin/main`, 2026-10-13.
+Anchors on `origin/main` 8a30bc29, 2026-10-13.
 
-1. **Rule-made tags are already kept apart — for chats only.** `auto_tag_claims` holds a chat, a tag, the
-   `algorithm`, a `score` and the matching `fields` (`src/store/sqlite/schema.ts:1352-1367`); the rules are
-   keyword patterns on a channel's title and description (`src/domain/channel-tags.ts`). The owner's tags are
-   `taggings` rows.
-2. **The vocabulary checks new names by letter pairs.** `memo vocabulary preflight|audit` compares names with a
-   bigram Dice score (`src/domain/vocabulary.ts:13-31`); the answer carries `semantic: "not-requested"`
-   (`src/store/sqlite/vocabulary.ts:56`) — the place for a meaning check is reserved. Creating a tag or topic is
-   the owner's (`memo vocabulary create`); an agent's request becomes a proposed action (`docs/dev/KNOWLEDGE.md`).
-3. **Tag names are `a-z0-9-`, up to 32 characters** (`src/domain/tags.ts:6`). Whether a Russian project
-   translates its tags is an open owner decision.
-4. **Notes and documents already have vectors** (e5-small passages, `src/services/notes-search.ts`).
+1. **Two tables hold the same relation.** `taggings` is polymorphic (`tag_id`, `taggable_type`, `taggable_id`),
+   with `source`, `author_type`, `author_id` and `main` (`src/store/sqlite/schema.ts:1424-1445`). Rule-made chat
+   tags live apart in `auto_tag_claims` (`chat_id`, `tag_id`, `algorithm`, `score`, `fields`;
+   `schema.ts:1352-1367`), filled by keyword rules on a chat's title and description
+   (`src/domain/channel-tags.ts`).
+2. **Tag names are `a-z0-9-`, up to 32 characters** (`src/domain/tags.ts:6`), lower-cased.
+3. **The vocabulary checks new names by letter pairs** (bigram Dice, `src/domain/vocabulary.ts:13-31`) for
+   projects, tags and topics; its answer carries `semantic: "not-requested"` (`src/store/sqlite/vocabulary.ts:56`).
+4. **Notes and documents already have vectors**: e5-small passages in the shared `chunks` and `embeddings` tables.
+   How vectors are made is planned apart: [embedding-registry-plan.md](embedding-registry-plan.md).
 
 ## Design
 
-### Claims for every taggable thing
+### One table: `taggings`
 
-Generalize `auto_tag_claims` to `tag_claims`: `taggable_type`, `taggable_id` (chat, message, note, document),
-`tag_id`, `algorithm` (`rules:<version>`, `vectors:<model>`, `agent:<name>`), `score`, `evidence` (fields or
-the passages that matched), `status` (`claimed`, `confirmed`, `rejected`), `author`, times. Chat claims move
-over unchanged.
+A generated tag is a `taggings` row, not a row in another table. New columns:
 
-- **Search:** `tag:x` matches the owner's taggings and live claims; a hit says which (`tagged_by: owner` or
-  the algorithm), and owner taggings rank above claims of the same tag.
-- **Confirm:** turns a claim into a `taggings` row by the owner. **Reject:** keeps the claim as `rejected`, so
-  the same algorithm does not claim it again.
-- **No new verb for an agent.** An agent's `tags add` writes a claim (as its facts wait); the owner's writes a
-  tagging. `tags confirm <ref> <tag>` and `tags reject <ref> <tag>` use the glossary's words.
+| column | meaning |
+| --- | --- |
+| `status` | `confirmed` (the owner's, every row today) · `claimed` (generated, not yet seen) · `rejected` |
+| `algorithm` | `rules:<version>`, `vectors:<model>`, `model:<provider>:<model>`, `agent:<name>`; null for the owner's |
+| `score` | the algorithm's own score, 0–1; null for the owner's |
+| `evidence` | the fields or passages that matched, as JSON; never message text copied into logs |
 
-### Who claims
+- `source`, `author_type`, `author_id` keep their meaning: who wrote the row.
+- `auto_tag_claims` moves into `taggings` (`status = claimed`, `algorithm`, `score`, `fields` → `evidence`) and is
+  dropped in the same migration.
+- The unique key `(tag_id, taggable_type, taggable_id)` stays: one thing has one row per tag. **Confirm** updates a
+  claim to `confirmed` and makes the owner its author; **reject** sets `rejected`, so no algorithm claims it again.
+- A claim never sets `main = 1` (the main topic stays the owner's).
+- **The cost:** about 30 reads of `taggings` in 10 files assume every row is the owner's (`src/store/sqlite/tags.ts`
+  13, `lucene.ts` 3, `note-search.ts` 3, `chats.ts` 2, `accounts.ts` 2, and one each in five more). Each read
+  names the statuses it wants; a store test fails when a read path returns a `claimed` or `rejected` row where
+  only confirmed ones belong.
 
-1. **Rules, at sync, no model:** a tag's aliases and keywords (kept on the vocabulary entry) matched on stems
-   against the text. Cheap, explainable, runs on every new text.
-2. **Vectors, at sync when vectors are made:** each tag gets a short description by the owner; a note or
-   document whose passages are near the description (cosine above a measured floor) gets a claim. No extra
-   model: the passages are embedded already; a tag description is one vector.
-3. **An agent, on request:** reads a note or document and adds tags from the vocabulary. A name not in the
-   vocabulary goes through the guard below and, if new, becomes a proposed vocabulary entry for the owner.
+### Search
+
+- `tag:x` matches `confirmed` and `claimed` rows; owner rows rank above claims of the same tag; each hit says
+  who tagged it (`tagged_by: owner` or the algorithm). `rejected` rows never match.
+- `tags list` shows claims apart from the owner's tags, with counts.
+
+### Tags in any language
+
+- The `a-z0-9-` rule goes (a STANDARD PR, and `tag:` in the query language accepts any letters). A tag keeps the
+  spelling it was created with, lower-cased.
+- A new column `tags.folded`: the name lower-cased, Unicode-normalized, transliterated to Latin (one fixed table,
+  GOST-like: `сео` → `seo`, `карточка` → `kartochka`), hyphens and spaces removed. It is what the duplicate check
+  compares and what `tag:` also matches, so `tag:сео` finds `seo`.
+- Whether `folded` is a unique index (two tags can never fold to one form) or only a warning in preflight is an
+  open question below.
+
+### Who sets tags
+
+1. **Rules, at sync, no model:** a tag's aliases and keywords (on the vocabulary entry) matched on stems.
+2. **Vectors, at sync when vectors are made:** a tag's name and description get one vector; a note or document
+   whose passages are near it (cosine above a measured floor) gets a claim. No extra model.
+3. **A model, on request:** `tags suggest <ref|query> --model <provider:model>` sends the text to a model with the
+   vocabulary and records claims (`algorithm = model:<provider>:<model>`). A local model runs on this machine;
+   OpenAI or Anthropic receive the owner's text, so a remote model is named on every run — never a default, never
+   chosen by the tool — and uses the embedding keys already kept per provider (`src/cli/embedding-keys.ts`).
+4. **An agent:** reads the thing itself and calls `tags add`; an agent's `tags add` writes a claim, the owner's a
+   confirmed row. No new dependency.
+
+A name not in the vocabulary, from 3 or 4, goes through the guard and becomes a proposed vocabulary entry for the
+owner; it is never created by a model or an agent.
 
 ### Synonym guard, cheapest first
 
@@ -59,41 +89,45 @@ Run by `vocabulary preflight` before any new name, and by `vocabulary audit` ove
 
 1. Normalize: case, hyphens, spaces, Unicode forms (exists).
 2. Letter pairs (exists).
-3. Word stems (Snowball, exists in search): `redirect` / `redirects`.
-4. Edit distance against vocabulary names and aliases, with the typo corrector's code: `semcore` / `semcor`.
-5. Transliteration: `seo` / `сео`, `kartochka` / `карточка` — matters while tags are Latin-only.
-6. Co-occurrence: two tags on nearly the same things (overlap above a measured share) — a merge suggestion.
-7. Meaning: the e5 cosine of names and descriptions; fills the reserved `semantic` field. The only layer that
-   catches `seo` and «поисковая оптимизация».
+3. Transliteration: compare `folded` forms: `seo` / `сео`.
+4. Word stems (Snowball, exists in search): `redirect` / `redirects`, `карточка` / `карточки`.
+5. Edit distance on `folded`, with the typo corrector's code: `semcore` / `semcor`.
+6. Co-occurrence: two tags on nearly the same things — a merge suggestion.
+7. Meaning: e5 cosine of names and descriptions; fills the reserved `semantic` field. The only layer that catches
+   `seo` and «поисковая оптимизация». Tag to tag is a symmetric comparison, so both sides take the `query: `
+   prefix, as the [e5 model card](https://huggingface.co/intfloat/multilingual-e5-small) prescribes for semantic
+   similarity.
 
 Each layer reports why it flagged a pair. None merges or refuses on its own: preflight asks; audit lists.
 
 ## Cost
 
-- **Search:** a tag is an index lookup; claims add one join. No measurable change expected; measured in
-  the search benchmark before release.
-- **Sync:** rules are a stem lookup per text. Vector claims compare each new passage with a few hundred tag
-  vectors — microseconds per passage next to the embedding itself.
-- **Creating a tag:** the meaning check embeds one name. In a CLI process that loads the model, about 1 s;
-  warm (MCP server), about 10 ms (measured for e5 on queries: `cli-testing performance/search/local-documents`).
+- **Search:** a tag is an index lookup; the status filter adds one column to it.
+- **Sync:** rules are a stem lookup per text; vector claims compare each new passage with a few hundred tag
+  vectors — microseconds next to the embedding itself.
+- **Creating a tag:** the meaning check embeds one name; about 1 s in a CLI process that loads the model, about
+  10 ms warm (measured for e5 on queries: `cli-testing performance/search/local-documents`).
+- **A model run:** the model's own time and, for a remote one, its price; on request only.
 
 ## Phases
 
-1. `tag_claims` for chats, messages, notes and documents; `tag:` reads claims; `tags confirm|reject`;
-   an agent's `tags add` claims. Guard layers 3–5.
-2. Rule claims at sync from vocabulary keywords; tag descriptions.
-3. Vector claims and the meaning layer; co-occurrence in `audit`. Floors measured on the owner's notes
-   (private), totals to cli-testing.
+1. `taggings.status|algorithm|score|evidence`, `auto_tag_claims` moved in; every read names its statuses;
+   `tags confirm|reject`; an agent's `tags add` claims. Any-language names with `tags.folded`; guard layers 3–5.
+2. Rule claims at sync from vocabulary keywords; tag descriptions; `tags suggest --model`.
+3. Vector claims and the meaning layer through the embedding registry; co-occurrence in `audit`. Floors measured
+   on the owner's notes (private), totals to cli-testing.
 
 ## Tests
 
-- Store: a claim and a tagging of the same tag; confirm turns one into the other; reject is not re-claimed;
-  chat claims migrated.
-- Search: `tag:x` finds both, owner first; the hit names who tagged it.
+- Store: a claim and a confirmed tag; confirm and reject; reject is not re-claimed; chat claims migrated; a read
+  path that should see only confirmed rows does.
+- Search: `tag:x` finds both, owner first; `tag:сео` finds `seo`; the hit names who tagged it.
 - Guard: tables of pairs each layer must flag and pairs it must not (`seo` / `sem`).
-- An agent cannot create a vocabulary entry or a tagging of its own.
+- A model or an agent cannot create a vocabulary entry or a confirmed tagging.
+- A remote model is never called without `--model` naming it.
 
 ## Open questions for the owner
 
-1. Do claims count in `tag:` filters of `search messages` too, or only in `search all` and notes search.
-2. Tag descriptions: written by the owner only, or proposed by an agent and confirmed.
+1. `tags.folded` unique (a hard stop: `seo` and `сео` can never both exist) or a preflight warning only.
+2. Do claims count in `tag:` filters of `search messages` too, or only in `search all` and notes search.
+3. Tag descriptions: written by the owner only, or proposed by an agent and confirmed.

@@ -39,8 +39,12 @@ Open work only. A finished item is deleted; its record is the merged pull reques
 - **EmbeddingGemma for documents** — ours already ships it as an option; on documents it was not compared
   with e5-small. Measured together with the reranker; the default for notes changes only on that result.
 - **Generated tags for notes, documents and messages, searchable at once** — claims kept apart from the owner's
-  tags, below them in `tag:`; a synonym guard from stems to meaning. Owner: do it all, vectors too (NEED-1005 A).
+  tags, below them in `tag:`, kept as a status on `taggings`; tags in any language with a transliterated form for
+  the duplicate check; a model or an agent may set them. Owner: do it all, vectors too (NEED-1005 A).
   Proposal: [generated-tags-plan.md](generated-tags-plan.md).
+- **One registry for what gets a vector** — short fields (tag names, titles) and long texts each embedded one
+  way; only registry fields get vectors; a test fails on writes around it. Owner direction 2026-10-13.
+  Proposal: [embedding-registry-plan.md](embedding-registry-plan.md).
 - **Mentions: phones, e-mail, links grouped by site, documents, names and places found in text** — one entity
   with a kind, reviewed by an agent and the owner, linked to people, organizations, documents and places; rules,
   no model, by default. Owner direction NEED-1006 A. Proposal: [mentions-plan.md](mentions-plan.md).
