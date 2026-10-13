@@ -29,6 +29,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **File readers ship with the package.** `unpdf` and `mammoth` move from optional peers to dependencies, so
+  PDF and Word text is read on every install, a global pnpm one included; only `@napi-rs/canvas`, the native
+  page renderer that scanned-PDF OCR needs, stays optional. `doctor` `readers` says `built in` for them.
+- **More formats are read:** Word 97–2003 `.doc` (`word-extractor`), RTF, HTML and OpenDocument presentations
+  (`.odp`). `.xls` and `.ppt` stay unsupported.
 - A file note keeps up to 2 000 000 characters of text (was 200 000), the same cap as the document readers, so a long spreadsheet or PDF read by them can be saved whole and found by a word anywhere in it. Measured on a generated 2M-character note: saving takes about 50 ms, the first search that indexes it about 0.7 s, later searches 2–3 ms (stemmed) and about 90 ms (exact), and the store grows about 9 MiB.
 
 - **`doctor` lists the optional file readers** under `readers`: `unpdf`, `mammoth` and `@napi-rs/canvas`, each
