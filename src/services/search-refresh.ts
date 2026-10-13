@@ -84,14 +84,9 @@ export const refreshSearch = async (deps: ServiceDeps, request: SearchQuery): Pr
       result.complete = false
       continue
     }
-    candidates.push(
-      ...(scoped === undefined
-        ? (await store.chats(selected, {})).items.map(({ id }) => ({
-            account: selected,
-            chatId: id,
-          }))
-        : scoped.filter((chat) => sameAccount(chat.account, selected))),
-    )
+    if (scoped === undefined)
+      for (const { id } of (await store.chats(selected, {})).items) candidates.push({ account: selected, chatId: id })
+    else for (const chat of scoped) if (sameAccount(chat.account, selected)) candidates.push(chat)
   }
   const eligible =
     "root" in execution ? candidates.filter((chat) => matchesChat(execution.root, chat) !== false) : candidates

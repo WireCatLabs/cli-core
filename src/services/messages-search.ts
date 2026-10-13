@@ -349,7 +349,7 @@ export const coverageOf = async (
         ? [selectedChat.chatId]
         : []
       : (await store.chats(selected, {})).items.map(({ id }) => id)
-    completeness.push(...(await store.chatCompleteness(selected, chatIds)).map((chat) => ({ ...chat, ...selected })))
+    for (const chat of await store.chatCompleteness(selected, chatIds)) completeness.push({ ...chat, ...selected })
     const wanted = new Set(chatIds)
     for (const one of await store.chatStats(selected))
       if (wanted.has(one.chatId)) stats.set(statKey(selected, one.chatId), one)

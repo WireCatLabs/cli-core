@@ -152,7 +152,7 @@ export const newIn = async (
     (chat) => chat.lastMessageAt !== null && Date.parse(chat.lastMessageAt) > startOf(chat.id),
   )
   const changed = byRecency(ofKinds(changedAll, kinds))
-  const cut = Math.max(since, ...changed.map((chat) => Date.parse(chat.lastMessageAt ?? "")))
+  const cut = changed.reduce((latest, chat) => Math.max(latest, Date.parse(chat.lastMessageAt ?? "")), since)
   const { heard: wanted, quiet } = heard(changed, all)
   const { read, skipped } = capped(wanted, INBOX_CHATS)
 
@@ -174,8 +174,8 @@ export const newIn = async (
     // The earliest start among the chats that changed; with none, how far the checks already reach.
     since: new Date(
       changed.length > 0
-        ? Math.min(...changed.map((chat) => startOf(chat.id)))
-        : Math.max(since, ...ofKinds(page.items, kinds).map((chat) => startOf(chat.id))),
+        ? changed.reduce((earliest, chat) => Math.min(earliest, startOf(chat.id)), Number.POSITIVE_INFINITY)
+        : ofKinds(page.items, kinds).reduce((latest, chat) => Math.max(latest, startOf(chat.id)), since),
     ).toISOString(),
     until: new Date(cut).toISOString(),
     chats,
@@ -252,7 +252,7 @@ export const reviewIn = async (
   const changed = byRecency(
     page.items.filter((one) => one.lastMessageAt !== null && Date.parse(one.lastMessageAt) > startOf(one.id)),
   )
-  const cut = Math.max(since, ...changed.map((one) => Date.parse(one.lastMessageAt ?? "")))
+  const cut = changed.reduce((latest, one) => Math.max(latest, Date.parse(one.lastMessageAt ?? "")), since)
   const only = chat === undefined ? undefined : (await adapter.resolve(chat)).id
   const { heard: wanted, quiet } =
     only === undefined
@@ -269,7 +269,8 @@ export const reviewIn = async (
     if (!more) checked[id] = new Date(cut).toISOString()
   }
   const partial = page.hasMore
-  const earliest = changed.length > 0 ? Math.min(...changed.map((one) => startOf(one.id))) : since
+  const earliest =
+    changed.length > 0 ? changed.reduce((low, one) => Math.min(low, startOf(one.id)), Number.POSITIVE_INFINITY) : since
   const found: Review = {
     since: new Date(points === undefined ? since : earliest).toISOString(),
     until: new Date(cut).toISOString(),

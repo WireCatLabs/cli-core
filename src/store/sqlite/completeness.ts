@@ -38,9 +38,9 @@ export const chatCompleteness = ({ database }: StoreContext, accountKey: number,
            AS start,
          (SELECT s.updated_at FROM sync_cursors s WHERE s.account_id = c.account_id AND s.key = 'fetched:' || c.external_id)
            AS fetched
-       FROM chats c WHERE c.account_id = ? AND c.external_id IN (${chatIds.map(() => "?").join(", ")})`,
+       FROM chats c WHERE c.account_id = ? AND c.external_id IN (SELECT value FROM json_each(?))`,
     )
-    .all(accountKey, ...chatIds)
+    .all(accountKey, JSON.stringify(chatIds))
     .map((row): ChatCompleteness => {
       const stretches = Number(row.stretches)
       const reachesStart = Number(row.start) === 1
