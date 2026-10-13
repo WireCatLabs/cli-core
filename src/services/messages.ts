@@ -814,7 +814,7 @@ const searchPage = async (
 ): Promise<SearchFound> => {
   const { text, pattern, chat, source, accounts, senders, limit, newest = false, context = 0 } = request
   if (request.signal?.aborted)
-    throw new CliError("validation_error", "search was aborted", { reason: "query_aborted", complete: false })
+    throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
   validateSearchDialect(request)
   if (request.thread) threadBounds(request.thread)
   if (request.discover !== undefined && typeof request.discover !== "boolean")

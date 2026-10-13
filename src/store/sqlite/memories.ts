@@ -167,12 +167,12 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       const kind = oneOf(input.kind, MEMORY_KINDS, "a memory's kind")
       if (input.scope === undefined || input.scope === null)
         throw new CliError("validation_error", "a memory needs its scope — personal or work; there is no default", {
-          reason: "memory_scope_required",
+          reason: "memory.scope-required",
         })
       const scope = oneOf(input.scope, MEMORY_SCOPES, "a memory's scope")
       if (!Array.isArray(input.evidence) || input.evidence.length === 0)
         throw new CliError("validation_error", "a memory needs at least one piece of evidence it rests on", {
-          reason: "memory_evidence_required",
+          reason: "memory.evidence-required",
         })
       const body = input.body?.trim() ?? ""
       if (!body || body.length > 20_000)

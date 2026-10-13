@@ -75,7 +75,7 @@ export const execution = (
         abort(
           new CliError("timeout", `the command did not finish within ${timeoutMs}ms`, {
             retryable: false,
-            reason: "command_timeout",
+            reason: "command.timed-out",
           }),
         ),
       timeoutMs,
@@ -116,7 +116,7 @@ export const execution = (
             if (error instanceof CliError) throw error
             throw new CliError("invalid_response", "this output is not a JSON result — --fields cannot project it", {
               retryable: false,
-              reason: "projection_unavailable",
+              reason: "output.fields-unavailable",
             })
           }
         }
@@ -127,7 +127,7 @@ export const execution = (
             `machine output exceeds ${maxOutputBytes} bytes — reduce --limit, select --fields or raise --max-output-bytes`,
             {
               retryable: false,
-              reason: "output_limit",
+              reason: "output.too-large",
               maxBytes: maxOutputBytes,
               emittedBytes: bytes,
               partialOutput: bytes > 0,

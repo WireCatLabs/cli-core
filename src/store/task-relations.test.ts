@@ -54,7 +54,7 @@ it("keeps blocking directional, rejects cycles and updates readiness when blocke
   expect(await store.tasks.linkTask(b.id, a.id, "blocked-by", "owner")).toMatchObject({ changed: false })
   await store.tasks.linkTask(c.id, b.id, "blocked-by", "owner")
   await expect(store.tasks.linkTask(a.id, c.id, "blocked-by", "owner")).rejects.toMatchObject({
-    details: { reason: "task_dependency_cycle" },
+    details: { reason: "task.dependency-cycle" },
   })
   expect((await store.tasks.readyTasks("RES")).items.map((x) => x.key)).toEqual([a.key])
   expect(await store.tasks.taskReadiness(b.id)).toEqual({ ready: false, blockers: [{ task: a.ref, state: "open" }] })

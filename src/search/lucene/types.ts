@@ -48,7 +48,7 @@ export function queryError(reason: string, span: Span, alternative?: string): ne
 }
 export function exhausted(budget: string): never {
   throw new CliError("validation_error", `search exceeded its ${budget} budget — narrow the chat or date range`, {
-    reason: "query_limit",
+    reason: "query.too-large",
     budget,
     complete: false,
   })

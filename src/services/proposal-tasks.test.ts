@@ -37,7 +37,7 @@ it("approves a proposal as the account's task, records it, and lists it with the
 
   expect(task).toMatchObject({ source: proposalSource(proposal.id), sourceKind: "proposed_action", kind: "request" })
   expect(approved).toMatchObject({ status: "approved", result: { task: task.id } })
-  await expect(approveAsTask(store, proposal.id)).rejects.toMatchObject({ details: { reason: "proposal_state" } })
+  await expect(approveAsTask(store, proposal.id)).rejects.toMatchObject({ details: { reason: "proposal.wrong-state" } })
   const listed = await tasksService(storeOnlyDeps(store, account, { app, env: {} })).list({})
   expect(listed.map(({ id }) => id)).toEqual([task.id])
   expect(listed[0]).toMatchObject({ message: null })

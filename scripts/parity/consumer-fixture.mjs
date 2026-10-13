@@ -263,7 +263,7 @@ try {
   }
   await assert.rejects(
     service.messages.search({ text: "кафе", limit: 20, signal: AbortSignal.abort() }),
-    (error) => error.details.reason === "query_aborted",
+    (error) => error.details.reason === "query.aborted",
   )
   checks.push({ name: "pre-aborted query", pass: true })
   const anchor = recipes.messages[0]

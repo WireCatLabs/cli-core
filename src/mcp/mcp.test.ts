@@ -1969,7 +1969,7 @@ describe("the MCP server", () => {
     expect(result.isError).toBe(true)
     expect(result.body.error).toMatchObject({
       code: "permission_error",
-      permission: "conversations.links",
+      details: { permission: "conversations.links" },
     })
     expect(backend.opened()).toBe(0)
   })
@@ -2116,7 +2116,7 @@ describe("the MCP server", () => {
     const missing = await call("chat_chats_show", { chat: "Bok" })
     expect(missing).toMatchObject({
       isError: true,
-      body: { error: { code: "not_found", message: "no chat matches Bok", retryable: false } },
+      body: { error: { code: "not_found", message: "no chat matches Bok" } },
     })
     expect(telegram.closed()).toBe(0)
 
@@ -2344,7 +2344,9 @@ describe("three tools in place of one per command", () => {
     expect(await run("chat_read", { command: "messages list", arguments: { chat: "7", limit: "many" } })).toMatchObject(
       {
         isError: true,
-        body: { error: { code: "validation_error", arguments: { properties: { limit: expect.anything() } } } },
+        body: {
+          error: { code: "validation_error", details: { arguments: { properties: { limit: expect.anything() } } } },
+        },
       },
     )
   })

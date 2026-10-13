@@ -56,7 +56,7 @@ const presets: Record<ScorePreset, RankingWeights> = {
   engaging: { "reactions-per-message": 0.5, "replies-from-others-per-message": 0.5 },
 }
 function invalid(message: string): never {
-  throw new CliError("validation_error", message, { reason: "invalid_ranking" })
+  throw new CliError("validation_error", message, { reason: "ranking.invalid" })
 }
 
 export const rankingOptions = (target: RankingTarget, input: RankingInput): RankingOptions => {

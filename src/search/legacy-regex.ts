@@ -18,7 +18,7 @@ export const isolatedRegex = async (
   if (texts.length > QUERY_LIMITS.candidates) exhausted("candidate rows")
   if (texts.reduce((sum, text) => sum + Buffer.byteLength(text), 0) > QUERY_LIMITS.bodyBytes) exhausted("body bytes")
   if (options.signal?.aborted)
-    throw new CliError("validation_error", "search was aborted", { reason: "query_aborted", complete: false })
+    throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
   const worker =
     options.worker?.(pattern.source, pattern.flags, texts) ??
     new Worker(workerSource, {
@@ -41,7 +41,7 @@ export const isolatedRegex = async (
       worker.once("error", () => reject(new CliError("validation_error", "the regex worker failed")))
       worker.once("exit", () => reject(new CliError("validation_error", "the regex worker exited before answering")))
       abort = () =>
-        reject(new CliError("validation_error", "search was aborted", { reason: "query_aborted", complete: false }))
+        reject(new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false }))
       options.signal?.addEventListener("abort", abort, { once: true })
       timer = setTimeout(
         () =>
@@ -49,7 +49,7 @@ export const isolatedRegex = async (
             new CliError(
               "validation_error",
               "legacy regex exceeded its time budget — narrow the query or use Lucene regex",
-              { reason: "query_limit", budget: "time", complete: false },
+              { reason: "query.too-large", budget: "time", complete: false },
             ),
           ),
         options.timeoutMs ?? QUERY_LIMITS.milliseconds,

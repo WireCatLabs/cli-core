@@ -146,7 +146,7 @@ describe("saved searches", () => {
     })
     await expect(searches.create("invoices", { text: "paid" })).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "name_taken" },
+      details: { reason: "name.taken" },
     })
     const replaced = await searches.create("invoices", { text: "paid", by: "day" }, { replace: true })
     expect([replaced.id, replaced.command, replaced.params.text]).toEqual([saved.id, "stats", "paid"])
@@ -157,9 +157,9 @@ describe("saved searches", () => {
   })
 
   it.each([
-    ["42", { text: "invoice" }, "invalid_name"],
-    ["bad name", { text: "invoice" }, "invalid_name"],
-    ["typo", { text: "foo:bar" }, "unknown_field"],
+    ["42", { text: "invoice" }, "name.invalid"],
+    ["bad name", { text: "invoice" }, "name.invalid"],
+    ["typo", { text: "foo:bar" }, "query.unknown-field"],
     ["regex", { text: "(", regex: true }, undefined],
   ])("refuses %s before saving it", async (name, params, reason) => {
     const { searches } = await setup()
@@ -197,7 +197,7 @@ describe("saved searches", () => {
     await store.saveSearch("old", searchRecordOf("search", { text: "renamed:field" }))
     await expect(searches.resolve("old", {})).rejects.toMatchObject({
       code: "validation_error",
-      message: expect.stringContaining('saved search "old": search: unknown_field'),
+      message: expect.stringContaining('saved search "old": search: query.unknown-field'),
     })
   })
 

@@ -43,7 +43,7 @@ export const parseStemmers = (value: unknown): Stemmers => {
     throw new CliError(
       "validation_error",
       `${script} words cannot be stemmed with ${JSON.stringify(choice)} — choose ${allowed.join(", ")}`,
-      { reason: "invalid_stemmer", script, allowed: [...allowed] },
+      { reason: "stemmer.invalid", script, allowed: [...allowed] },
     )
   }
   return {
@@ -64,7 +64,7 @@ const latinOf = (value: unknown): string => {
     throw new CliError(
       "validation_error",
       `latin words cannot be stemmed with ${JSON.stringify(value)} — choose none, or one or more of english, spanish joined by commas`,
-      { reason: "invalid_stemmer", script: "latin", allowed: [...LATIN_STEMMERS] },
+      { reason: "stemmer.invalid", script: "latin", allowed: [...LATIN_STEMMERS] },
     )
   return named.length ? named.join(",") : "none"
 }

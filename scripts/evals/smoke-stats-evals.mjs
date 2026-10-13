@@ -43,7 +43,7 @@ const evidenceArgs = [
 const first = read(...evidenceArgs)
 assert.ok(first.nextCursor)
 assert.equal(invoke(["__advance"]).body.changed, true)
-assert.equal(invoke([...evidenceArgs, "--cursor", first.nextCursor, "--json"]).body.error.reason, "selection_changed")
+assert.equal(invoke([...evidenceArgs, "--cursor", first.nextCursor, "--json"]).body.error.reason, "selection.changed")
 const counters = read("stats", "messages", "counters", "show", "--chat", "9")
 assert.equal(counters.items.find(({ messageId }) => messageId === "p10").counters[0].value, 0)
 const selection = JSON.stringify({

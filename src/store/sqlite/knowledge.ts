@@ -650,7 +650,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           .all(aliasName, normalizeVocabularyName(wanted))
         if (alias.length)
           throw new CliError("configuration_error", "the project name or key already aliases an existing project", {
-            reason: "vocabulary_alias_conflict",
+            reason: "vocabulary.alias-conflict",
             candidates: alias.map((row) => ({ kind: "project", id: String(row.id), name: String(row.name) })),
           })
         let chosen = wanted

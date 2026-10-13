@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import { type Installer, isNewer, updateCommand } from "@wirecat/cli-base/update"
 
 export interface ServerRestarts {
@@ -59,7 +60,10 @@ export const upgradePackage = async (
   if (!argv) return { result, reason: "manual", left: [] }
   ports.onInstall?.(argv)
   const code = await ports.install(argv)
-  if (code !== 0) throw new Error(`${argv[0]} exited with ${code}; ${command} is still ${current}`)
+  if (code !== 0)
+    throw new CliError("provider_error", `${argv[0]} exited with ${code}; ${command} is still ${current}`, {
+      reason: "upgrade.install-failed",
+    })
   const installed = await ports.installed?.()
   if (installed === undefined) return restart(result, ports)
   const read = { ...result, installed }

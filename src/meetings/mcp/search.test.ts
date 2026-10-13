@@ -56,7 +56,9 @@ it("hides unexpected backend errors and preserves cancellation", async () => {
     ),
   ).toMatchObject({
     isError: true,
-    structuredContent: { error: { code: "generic_failure", message: "Meeting search failed" } },
+    structuredContent: {
+      error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
+    },
   })
   const controller = new AbortController()
   controller.abort()

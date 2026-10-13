@@ -36,10 +36,10 @@ const decodeEscapes = (raw: string, span: Span): string => {
       out += raw[at]
       continue
     }
-    if (++at >= raw.length) queryError("invalid_escape", span)
+    if (++at >= raw.length) queryError("query.invalid-escape", span)
     if (raw[at] === "u") {
       const hex = raw.slice(at + 1, at + 5)
-      if (!/^[0-9a-fA-F]{4}$/.test(hex)) queryError("invalid_escape", span)
+      if (!/^[0-9a-fA-F]{4}$/.test(hex)) queryError("query.invalid-escape", span)
       out += String.fromCharCode(Number.parseInt(hex, 16))
       at += 4
     } else out += raw[at]
@@ -64,10 +64,14 @@ const tokensOf = (text: string): Token[] => {
         if (text[at] === "\\" && (c === '"' || text[at + 1] === "/")) at++
         at++
       }
-      if (at >= text.length) queryError("unclosed_literal", { start, end: at })
+      if (at >= text.length) queryError("query.unclosed-literal", { start, end: at })
       at++
       if (c === "/" && /^[dgimsuvy]+(?:$|[ \t\n\r)])/.test(text.slice(at)))
-        queryError("unsupported_regex_flags", { start: at, end: at + 1 }, "Lucene regex does not take JavaScript flags")
+        queryError(
+          "query.unsupported-regex-flags",
+          { start: at, end: at + 1 },
+          "Lucene regex does not take JavaScript flags",
+        )
       kind = c === '"' ? "quoted" : "regex"
     } else if (range && c !== "]" && c !== "}") {
       while (at < text.length && !whitespace(text[at] ?? "") && !["]", "}"].includes(text[at] ?? "")) at++
@@ -96,7 +100,7 @@ const tokensOf = (text: string): Token[] => {
       while (at < text.length) {
         const next = text[at] ?? ""
         if (next === "\\") {
-          if (at + 1 >= text.length) queryError("invalid_escape", { start: at, end: at + 1 })
+          if (at + 1 >= text.length) queryError("query.invalid-escape", { start: at, end: at + 1 })
           at += 2
           continue
         }
@@ -122,7 +126,7 @@ export const parseLucene = (
   { defaultField = "text" }: { defaultField?: "text" | "exact" } = {},
 ): QueryAst => {
   if (text.length > QUERY_LIMITS.bytes || new TextEncoder().encode(text).length > QUERY_LIMITS.bytes)
-    queryError("query_limit", { start: 0, end: text.length })
+    queryError("query.too-large", { start: 0, end: text.length })
   const tokens = tokensOf(text)
   let at = 0
   let count = 0
@@ -130,17 +134,17 @@ export const parseLucene = (
   const peek = () => tokens[at] as Token
   const take = () => tokens[at++] as Token
   const expect = (kind: string) => {
-    if (peek().kind !== kind) queryError("invalid_syntax", peek().span)
+    if (peek().kind !== kind) queryError("query.invalid-syntax", peek().span)
     return take()
   }
   const built = <T extends QueryNode>(node: T): T => {
-    if (++count > QUERY_LIMITS.nodes) queryError("query_limit", node.span)
+    if (++count > QUERY_LIMITS.nodes) queryError("query.too-large", node.span)
     return node
   }
   const combine = (clauses: Clause[], occur: "must" | "should"): Clause => {
     const first = clauses[0]
     const last = clauses.at(-1)
-    if (!first || !last) queryError("invalid_syntax", peek().span)
+    if (!first || !last) queryError("query.invalid-syntax", peek().span)
     if (clauses.length === 1) return first
     return {
       node: built({
@@ -151,7 +155,7 @@ export const parseLucene = (
     }
   }
   const query = (field: string, implicit = false): QueryNode => {
-    if (++depth > QUERY_LIMITS.depth) queryError("query_limit", peek().span)
+    if (++depth > QUERY_LIMITS.depth) queryError("query.too-large", peek().span)
     const clauses: Clause[] = []
     do {
       clauses.push(disjunction(field, implicit))
@@ -191,7 +195,7 @@ export const parseLucene = (
       if (operator.kind === ":" && ["<", ">", "<=", ">="].includes(peek().kind)) operator = take()
       if (["<", ">", "<=", ">="].includes(operator.kind)) {
         const value = take()
-        if (!["term", "number", "quoted"].includes(value.kind)) queryError("invalid_syntax", value.span)
+        if (!["term", "number", "quoted"].includes(value.kind)) queryError("query.invalid-syntax", value.span)
         const decoded = decodeEscapes(value.kind === "quoted" ? value.raw.slice(1, -1) : value.raw, value.span)
         const lower = operator.kind.startsWith(">")
         const node = built<Predicate>({
@@ -216,13 +220,13 @@ export const parseLucene = (
     } else if (["[", "{"].includes(peek().kind)) {
       const opening = take()
       const lower = take()
-      if (!["rangeValue", "quoted"].includes(lower.kind)) queryError("invalid_syntax", lower.span)
+      if (!["rangeValue", "quoted"].includes(lower.kind)) queryError("query.invalid-syntax", lower.span)
       const separator = take()
-      if (separator.raw !== "TO") queryError("invalid_syntax", separator.span)
+      if (separator.raw !== "TO") queryError("query.invalid-syntax", separator.span)
       const upper = take()
-      if (!["rangeValue", "quoted"].includes(upper.kind)) queryError("invalid_syntax", upper.span)
+      if (!["rangeValue", "quoted"].includes(upper.kind)) queryError("query.invalid-syntax", upper.span)
       const closing = take()
-      if (!["]", "}"].includes(closing.kind)) queryError("invalid_syntax", closing.span)
+      if (!["]", "}"].includes(closing.kind)) queryError("query.invalid-syntax", closing.span)
       const decode = (t: Token) => decodeEscapes(t.kind === "quoted" ? t.raw.slice(1, -1) : t.raw, t.span)
       node = built({
         kind: "predicate",
@@ -236,9 +240,9 @@ export const parseLucene = (
       })
     } else {
       const token = take()
-      if (!["term", "number", "quoted", "regex"].includes(token.kind)) queryError("invalid_syntax", token.span)
+      if (!["term", "number", "quoted", "regex"].includes(token.kind)) queryError("query.invalid-syntax", token.span)
       const raw = ["term", "number"].includes(token.kind) ? token.raw : token.raw.slice(1, -1)
-      if (field === "fn") queryError("unsupported_operator", token.span, "interval functions are not supported")
+      if (field === "fn") queryError("query.unsupported-operator", token.span, "interval functions are not supported")
       const wildcard = ["term", "number"].includes(token.kind) && /(?<!\\)[*?]/u.test(raw)
       node = built({
         kind: "predicate",
@@ -252,14 +256,14 @@ export const parseLucene = (
     }
     if (peek().kind === "~")
       queryError(
-        "unsupported_operator",
+        "query.unsupported-operator",
         peek().span,
         node.kind === "predicate" && node.operator === "phrase"
           ? "proximity (~) is not in strict search — drop the ~ for the exact phrase, or search the words with AND"
           : "fuzzy matching (~) is not in strict search — drop the ~ and add --language legacy, which corrects typos, or use a prefix such as word* to catch word forms",
       )
     if (["^", "@"].includes(peek().kind))
-      queryError("unsupported_operator", peek().span, "boost and minimum-should-match are not supported")
+      queryError("query.unsupported-operator", peek().span, "boost and minimum-should-match are not supported")
     return { node, ...(modifier ? { modifier } : {}) }
   }
   const root = query(defaultField, true)

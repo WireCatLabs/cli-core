@@ -136,7 +136,7 @@ for (const context of manifest.contexts) {
         )
     if (task === 8)
       tracePassed =
-        outputs.some((one) => one.error?.reason === "selection_changed") &&
+        outputs.some((one) => one.error?.reason === "selection.changed") &&
         primary.filter((one) => one.kind === "advance").length === 1 &&
         outputs.filter((one) => one.items?.some((item) => item.person) && one.included === 1).length >= 3
   } else if (context.variant === "discovery") {

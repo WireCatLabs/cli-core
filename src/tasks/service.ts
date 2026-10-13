@@ -1,4 +1,5 @@
-import { type ClosedState, closeTask, type Task, TaskError, type TaskKind, type TaskOrigin } from "./model.js"
+import { CliError } from "@wirecat/cli-base"
+import { type ClosedState, closeTask, type Task, type TaskKind, type TaskOrigin } from "./model.js"
 import type { TaskFilter, TaskStore } from "./store.js"
 
 export interface NewTask {
@@ -37,7 +38,7 @@ export function createTaskService({
 }: TaskServiceOptions) {
   async function find(id: string): Promise<Task> {
     const task = await store.get(id)
-    if (!task) throw new TaskError("not_found", `no task ${id}`)
+    if (!task) throw new CliError("not_found", `no task ${id}`)
     return task
   }
 

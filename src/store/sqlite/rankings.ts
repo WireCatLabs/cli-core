@@ -119,7 +119,7 @@ const graphIn = (context: StoreContext, execution: QueryExecution, request: Rank
     throw new CliError(
       "validation_error",
       "ranking reply context exceeds its node or byte budget — narrow chat/date scope",
-      { reason: "query_limit", budget: "reply context", complete: false },
+      { reason: "query.too-large", budget: "reply context", complete: false },
     )
   const rows = database
     .prepare(
@@ -136,7 +136,7 @@ const graphIn = (context: StoreContext, execution: QueryExecution, request: Rank
     bytes += Buffer.byteLength(String(row.text ?? "")) + Buffer.byteLength(String(row.metadata ?? ""))
     if (bytes > RANKING_GRAPH_LIMITS.bytes || nodes.length >= RANKING_GRAPH_LIMITS.nodes)
       throw new CliError("validation_error", "ranking reply ancestors exceed their graph budget", {
-        reason: "query_limit",
+        reason: "query.too-large",
         budget: "reply ancestors",
         complete: false,
       })
@@ -274,7 +274,7 @@ export const rankQuery = (
           : 0
         if (size > RANKING_GRAPH_LIMITS.bytes)
           throw new CliError("validation_error", "ranking word text exceeds its byte budget — narrow chat/date scope", {
-            reason: "query_limit",
+            reason: "query.too-large",
             budget: "ranking text",
             complete: false,
           })

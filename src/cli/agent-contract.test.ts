@@ -132,7 +132,7 @@ describe("agent CLI contract", () => {
       },
     )
     expect(prompted.result).toBe(2)
-    expect(JSON.parse(prompted.stderr[0] ?? "").error.reason).toBe("input_required")
+    expect(JSON.parse(prompted.stderr[0] ?? "").error.reason).toBe("input.required")
   })
 
   it("reports a command's own unknown outcome when --timeout stops it, never a plain timeout", async () => {
@@ -151,7 +151,7 @@ describe("agent CLI contract", () => {
     )
     expect(result.result).toBe(2)
     expect(result.stdout).toEqual([])
-    expect(JSON.parse(result.stderr[0] ?? "").error.reason).toBe("input_required")
+    expect(JSON.parse(result.stderr[0] ?? "").error.reason).toBe("input.required")
   })
 
   it("allows headless setup to verify existing credentials without prompting", async () => {
@@ -166,7 +166,7 @@ describe("agent CLI contract", () => {
       await readSecret("credential", { input: environmentOf(command).stdin })
     })
     expect(result.result).toBe(2)
-    expect(JSON.parse(result.stderr[0] ?? "").error.reason).toBe("input_required")
+    expect(JSON.parse(result.stderr[0] ?? "").error.reason).toBe("input.required")
   })
 
   it("allows explicit piped credentials while --no-input is set", async () => {
@@ -202,7 +202,10 @@ describe("agent CLI contract", () => {
     const bounded = await invoke(["messages", "send", "synthetic", "--json", "--max-output-bytes", "4"])
     expect(bounded.result).not.toBe(0)
     expect(bounded.stdout).toEqual([])
-    expect(JSON.parse(bounded.stderr[0] ?? "").error).toMatchObject({ reason: "output_limit", retryable: false })
+    expect(JSON.parse(bounded.stderr[0] ?? "").error).toMatchObject({
+      reason: "output.too-large",
+      details: { retryable: false },
+    })
   })
 
   it("publishes a separately versioned schema without changing the application version", async () => {

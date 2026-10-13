@@ -164,7 +164,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
   let expansions = 0
   const check = () => {
     if (query.signal?.aborted)
-      throw new CliError("validation_error", "search was aborted", { reason: "query_aborted", complete: false })
+      throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
     if (context.now() - started > QUERY_LIMITS.milliseconds) exhausted("time")
   }
   const tests = new Map<ResolvedPredicate, (text: string) => boolean>()
@@ -174,7 +174,11 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
   const leaf = (node: ResolvedPredicate): Fragment => {
     const { field, operator, value } = node
     if (!(NOTE_FIELDS as readonly string[]).includes(field))
-      queryError("unsupported_field", node.span, `${field}: is not a note field — notes take ${NOTE_FIELDS.join(", ")}`)
+      queryError(
+        "query.unsupported-field",
+        node.span,
+        `${field}: is not a note field — notes take ${NOTE_FIELDS.join(", ")}`,
+      )
     if ((field === "text" || field === "exact") && value === "") return bound("0")
     if (isStemmed(node)) {
       if (!query.stemmer) throw new Error("a stemmed leaf reached the notes search without the store's stemmer")
@@ -219,13 +223,13 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
     }
     if (field === "tag") {
       const tag = tagOf(value)
-      if (tag === undefined) queryError("invalid_tag", node.span)
+      if (tag === undefined) queryError("query.invalid-tag", node.span)
       // A label on a folder or subfolder labels every note under it, at any depth.
       return corpus.tagged(tag)
     }
     if (field === "date") {
       const range = node.resolution?.date
-      if (!range) queryError("invalid_ast", node.span)
+      if (!range) queryError("query.invalid-ast", node.span)
       return combine(
         [
           ...(range.lower === undefined

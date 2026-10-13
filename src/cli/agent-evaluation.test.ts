@@ -100,7 +100,7 @@ const tasks: AgentTask[] = [
     check: (calls) =>
       calls.length === 1 &&
       calls[0]?.exitCode === 14 &&
-      JSON.parse(calls[0].stderr[0] ?? "{}").error.operationId === "synthetic-operation",
+      JSON.parse(calls[0].stderr[0] ?? "{}").error.details?.operationId === "synthetic-operation",
   },
 ]
 const baseline: AgentPolicy = async (task, call) => {
@@ -111,7 +111,7 @@ const baseline: AgentPolicy = async (task, call) => {
       break
     case "ambiguity": {
       const failure = await call(["messages", "list", "ambiguous", "--json"])
-      const candidate = JSON.parse(failure.stderr[0] ?? "{}").error.candidates[1].id
+      const candidate = JSON.parse(failure.stderr[0] ?? "{}").error.details.candidates[1].id
       await call(["messages", "list", candidate, "--json"])
       break
     }

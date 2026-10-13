@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 export const TASK_KINDS = ["question", "request", "mention", "promise"] as const
 export const TASK_STATES = ["open", "done", "dismissed"] as const
 export const TASK_ORIGINS = ["rule", "agent", "owner"] as const
@@ -29,17 +30,8 @@ export interface Task {
   closedBy?: TaskOrigin
 }
 
-export class TaskError extends Error {
-  constructor(
-    readonly code: "not_found" | "closed",
-    message: string,
-  ) {
-    super(message)
-    this.name = "TaskError"
-  }
-}
-
 export function closeTask(task: Task, state: ClosedState, by: TaskOrigin, at: Date, reason?: string): Task {
-  if (task.state !== "open") throw new TaskError("closed", `task ${task.id} is already ${task.state}`)
+  if (task.state !== "open")
+    throw new CliError("validation_error", `task ${task.id} is already ${task.state}`, { reason: "task.closed" })
   return { ...task, state, closedAt: at, closedBy: by, ...(reason === undefined ? {} : { reason }) }
 }

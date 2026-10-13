@@ -81,6 +81,6 @@ it("returns standard typed receipt errors without changing legacy append error i
     await store.meetings.appendTranscripts({ accountId, externalId: "missing", now: 1000, transcripts })
   } catch (error) {
     expect(error).toBeInstanceOf(MeetingError)
-    expect(error).not.toBeInstanceOf(CliError)
+    expect(error).toBeInstanceOf(CliError)
   }
 })

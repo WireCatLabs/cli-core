@@ -62,7 +62,7 @@ const nameOf = (value: string): string => {
     throw new CliError(
       "validation_error",
       `"${singleLine(value)}" cannot name a saved search — use up to 64 letters a–z, digits and hyphens, not only digits`,
-      { reason: "invalid_name" },
+      { reason: "name.invalid" },
     )
   return name
 }

@@ -55,7 +55,7 @@ export interface AdminStoreResult {
   fingerprint: string
   byteLimit: number
 }
-function fail(message: string, reason = "query_limit"): never {
+function fail(message: string, reason = "query.too-large"): never {
   throw new CliError("validation_error", message, { reason, complete: false })
 }
 const joined =
@@ -221,7 +221,7 @@ export const adminStatisticsQuery = (
     }
     if (request.evidence) {
       const rows = calculated.evidence.get(adminEntityKey(request.evidence.entity))
-      if (!rows) fail("report row is no longer eligible — rerun its report", "selection_changed")
+      if (!rows) fail("report row is no longer eligible — rerun its report", "selection.changed")
       let offset = 0
       if (request.evidence.cursor) {
         if (request.evidence.cursor.length > 4096) fail("invalid evidence cursor", "invalid_cursor")
@@ -238,7 +238,7 @@ export const adminStatisticsQuery = (
             cursor.fingerprint !== fingerprint ||
             cursor.entity !== adminEntityKey(request.evidence.entity)
           )
-            fail("stored evidence changed — restart the report", "selection_changed")
+            fail("stored evidence changed — restart the report", "selection.changed")
           offset = cursor.offset
         } catch (error) {
           if (error instanceof CliError) throw error
@@ -252,7 +252,7 @@ export const adminStatisticsQuery = (
         const pks = [row.pk, ...(row.related === undefined ? [] : [row.related])]
         const hits = hitsByPk(context, pks),
           message = hits[0]
-        if (!message) fail("report evidence changed — rerun its report", "selection_changed")
+        if (!message) fail("report evidence changed — rerun its report", "selection.changed")
         const item = {
           message,
           counters: counterStates(context, row.pk, context.now(), 86_400_000),

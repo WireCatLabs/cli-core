@@ -35,7 +35,7 @@ export const retentionQuery = (
   )
   if (count > 10_000)
     throw new CliError("validation_error", "retention exceeds 10000 stays — narrow the join period", {
-      reason: "query_limit",
+      reason: "query.too-large",
       complete: false,
     })
   const dayOf = calendarKey(options.timezone, "day")
@@ -147,7 +147,7 @@ export const retentionQuery = (
   const serialized = JSON.stringify({ options: fixedOptions, stays, unknownJoin, archive })
   if (Buffer.byteLength(serialized) > 8 * 1024 * 1024)
     throw new CliError("validation_error", "retention fingerprint exceeds 8 MiB — narrow the join period", {
-      reason: "query_limit",
+      reason: "query.too-large",
       complete: false,
     })
   const fingerprint = createHash("sha256").update(serialized).digest("hex")
@@ -173,7 +173,7 @@ export const retentionQuery = (
       offset = cursor.offset
     } catch {
       throw new CliError("validation_error", "retention evidence changed or cursor is invalid — restart the report", {
-        reason: "selection_changed",
+        reason: "selection.changed",
       })
     }
   }

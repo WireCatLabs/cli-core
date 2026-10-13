@@ -1,5 +1,6 @@
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
-import { createTaskService, type NewTask, type Task, TaskError } from "./index.js"
+import { createTaskService, type NewTask, type Task } from "./index.js"
 import { memoryTaskStore } from "./testing/index.js"
 
 const question: NewTask = {
@@ -96,7 +97,7 @@ describe("closing", () => {
 
     await expect(
       service.close(task.id, { as: "dismissed", by: "owner", reason: "no-reply-needed" }),
-    ).rejects.toMatchObject({ code: "closed" })
+    ).rejects.toMatchObject({ code: "validation_error", details: { reason: "task.closed" } })
   })
 
   it("names a task that does not exist", async () => {
@@ -104,7 +105,7 @@ describe("closing", () => {
 
     const error = await service.close("missing", { as: "done", by: "owner" }).catch((caught: unknown) => caught)
 
-    expect(error).toBeInstanceOf(TaskError)
+    expect(error).toBeInstanceOf(CliError)
     expect(error).toMatchObject({ code: "not_found", message: "no task missing" })
   })
 })

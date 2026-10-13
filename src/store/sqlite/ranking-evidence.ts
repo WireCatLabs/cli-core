@@ -50,7 +50,7 @@ export const rankingEvidence = (
   request: RankingEvidenceRequest,
 ): RankedEvidence => {
   if (!Number.isSafeInteger(request.limit) || request.limit < 1 || request.limit > 100)
-    fail("evidence limit must be 1–100", "invalid_limit")
+    fail("evidence limit must be 1–100", "query.invalid-limit")
   if (
     !(request.options.components as readonly string[]).includes(request.component) &&
     !(request.options.target === "contacts" && request.component === "messages")
@@ -75,7 +75,7 @@ export const rankingEvidence = (
       .get(...params, ...identityParams)
     if (!ranked)
       throw new CliError("not_found", "ranking row is no longer eligible in this selection — run stats top again", {
-        reason: "selection_changed",
+        reason: "selection.changed",
       })
     const targetSql = `${filtered} AND ac.provider=? AND ac.external_id=? AND ${request.options.target === "messages" ? "c.external_id=? AND m.external_id=?" : "i.external_id=?"}`
     const targetParams = [...params, ...identityParams]
@@ -113,7 +113,7 @@ export const rankingEvidence = (
       .get(...targetParams)
     const total = Number(size?.n ?? 0)
     if (total > 50_000 || Number(size?.bytes ?? 0) > FINGERPRINT_BYTES)
-      fail("evidence exceeds its fingerprint budget — narrow chat/date scope", "query_limit")
+      fail("evidence exceeds its fingerprint budget — narrow chat/date scope", "query.too-large")
     const ordered = `${rows} ORDER BY m.sent_at,ac.provider,ac.external_id,c.external_id,m.external_id`
     const seed = JSON.stringify([
       execution.root,
@@ -132,7 +132,7 @@ export const rankingEvidence = (
         const serialized = JSON.stringify(row)
         fingerprintBytes += Buffer.byteLength(serialized) + 1
         if (fingerprintBytes > FINGERPRINT_BYTES)
-          fail("evidence exceeds its fingerprint budget — narrow chat/date scope", "query_limit")
+          fail("evidence exceeds its fingerprint budget — narrow chat/date scope", "query.too-large")
         hash.update(serialized).update("\n")
       }
     }
@@ -196,7 +196,7 @@ export const rankingEvidence = (
       items.push(item)
     }
     if (selected.length > 0 && items.length === 0)
-      fail("one evidence row exceeds 64 KiB — use messages show for that locator", "output_limit")
+      fail("one evidence row exceeds 64 KiB — use messages show for that locator", "evidence.row-too-large")
     const next = offset + items.length
     result = {
       items,

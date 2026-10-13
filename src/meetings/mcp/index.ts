@@ -1,3 +1,4 @@
+import { errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import {
   listed,
@@ -147,17 +148,8 @@ export const callMeetingTool = async (store: MeetingStore, name: string, input: 
     if (CONTENT_READS.has(name)) result = { ...result, next_steps: SAVE_NEXT_STEPS }
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
   } catch (error) {
-    const result = {
-      error: {
-        code: error instanceof MeetingError ? error.code : "generic_failure",
-        message: error instanceof MeetingError ? error.message : "Meeting read failed",
-      },
-    }
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result) }],
-      structuredContent: result,
-      isError: true,
-    }
+    const { content, structuredContent } = mcpErrorResult(errorObjectOf(error))
+    return { content, structuredContent, isError: true as const }
   }
 }
 

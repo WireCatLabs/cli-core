@@ -149,7 +149,7 @@ describe("stemmed strict search", () => {
     await store.saveStemmers({ cyrillic: "russian", latin: "english" })
     const refused = await failure(search(store, "running"))
     expect(refused.details).toMatchObject({
-      reason: "index_not_ready",
+      reason: "index.not-ready",
       index: "message_stems",
       cause: "stemmer_changed",
       built: "snowball-3.1.1 cyrillic=russian latin=english,spanish",
@@ -180,6 +180,6 @@ describe("stemmed strict search", () => {
     const { store } = await open(TEXTS)
     await store.saveStemmers({ cyrillic: "none", latin: "english" })
     const refused = await failure(searchLucene(store, account, { text: "квартира", language: "lucene", limit: 10 }))
-    expect(refused.details).toMatchObject({ reason: "index_not_ready", cause: "stemmer_changed" })
+    expect(refused.details).toMatchObject({ reason: "index.not-ready", cause: "stemmer_changed" })
   })
 })

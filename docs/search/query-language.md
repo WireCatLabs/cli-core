@@ -283,7 +283,7 @@ tg search messages 'content:"оплата до" NOT text:оплата' --timezon
 | wildcard | `text:invo*` | Полный term; * — любое число символов, ? — один |
 | regex | `text:/pass(port)?/` | Полный term; bounded subset Lucene RegExp; буквы text приводятся как в индексе |
 | fuzzy / proximity | `invoice~1` | unsupported_operator; опечатки исправляет `--language legacy`, формы слова ловит prefix `word*` |
-| boost / minimum / intervals | `invoice^2` | unsupported_operator |
+| boost / minimum / intervals | `invoice^2` | query.unsupported-operator |
 
 <!-- operators: end -->
 
@@ -444,7 +444,7 @@ accounts провайдера/класса, включая `all`; `in:` берё
 так же, как в индексе: `text:/Квартир.*/` = `text:/квартир.*/`, `text:/счёт/` находит «счёт» и «счет».
 Это касается и букв в классах: `[А-Я]` работает как `[а-я]`. Операторы, `\d \w \s` и их
 отрицания `\D \W \S` не меняются. Символ, у которого нет одной такой буквы (лигатура `ﬁ` внутри
-класса, отдельный знак ударения), даёт `unsupported_regex` с подсказкой — не пустой ответ.
+класса, отдельный знак ударения), даёт `query.unsupported-regex` с подсказкой — не пустой ответ.
 Так же приводится regex по `filename`: `filename:/Invoice.*/` находит `invoice.pdf`, а `filename:/счёт.*/` —
 `Счет.pdf`.
 
@@ -455,14 +455,14 @@ accounts провайдера/класса, включая `all`; `in:` берё
 quoted literals, `#` (пустой язык), `@` (любая строка), Unicode code points и ASCII predefined
 classes `\d \D \w \W \s \S`. Последние подтверждены **именно для Lucene 9.12.3** reference fixtures;
 это не обещание всего JavaScript RegExp. `^` и `$` — literal characters, не JS anchors.
-Intersection `&`, complement `~`, named automata и numeric intervals дают `unsupported_regex`;
+Intersection `&`, complement `~`, named automata и numeric intervals дают `query.unsupported-regex`;
 negative predefined class внутри negated class также пока unsupported.
 Lookaround, `(?:...)`, backreferences и `/i` suffix не являются поддержанными JS extensions.
 
 Pattern исполняется NFA без backtracking, с work/state limits. Для text regex/wildcard
 bounded vocabulary expansion использует безопасный literal prefix, если он доказан.
 Словарь общий для всего архива: короткий prefix вроде `к*` на большом архиве даёт больше
-10 000 слов и отвергается — `query_limit` с `budget: "term expansions"`, `term` и `limit`.
+10 000 слов и отвергается — `query.too-large` с `budget: "term expansions"`, `term` и `limit`.
 Фильтр чата или даты здесь не помогает. Удлините prefix (`квартир*`) либо ищите `body` regex
 внутри одного чата.
 Широкий body/preset scan выше бюджета отвергается до чтения всех тел.
@@ -589,23 +589,23 @@ Detector сообщает **кандидата**, а не подтверждён
 
 <!-- limits: end -->
 
-`query_limit` — reason внутри `validation_error`, с `budget` и `complete:false`;
+`query.too-large` — reason внутри `validation_error`, с `budget` и `complete:false`;
 сузьте чат/дату/pattern. Для `term expansions` сужать надо сам pattern — см. выше. Timeout/abort освобождает worker и timer. Предел времени проверяется
 между синхронными SQLite calls и bounded batches; уже выполняющийся SQLite statement не прерывается.
 NFA work budget ограничивает один match; legacy JS worker принудительно завершается на deadline.
 Query page: 1–1000 results, context: прежняя CLI/MCP модель. SQL и FTS получают bound values.
 
 Syntax/field/operator errors несут UTF-16 span `[start,end)`, reason и guide/alternative;
-CLI печатает позицию с единицы. `~` после слова (fuzzy) даёт `unsupported_operator` с подсказкой:
+CLI печатает позицию с единицы. `~` после слова (fuzzy) даёт `query.unsupported-operator` с подсказкой:
 опечатки исправляет `--language legacy` (без `~`), формы слова ловит prefix `word*`.
-`index_not_ready` говорит, насколько построен word index (процент или сколько сообщений ждут
+`index.not-ready` говорит, насколько построен word index (процент или сколько сообщений ждут
 нормализации), и точную команду: `<cli> store migrate` достраивает его сразу; каждый поиск тоже
 строит понемногу. Запросы без слов (`has:`, `kind:`, `date:`) работают и до этого.
-Для слов в `text` нужен ещё индекс основ: пока он не готов, ответ — `index_not_ready` с
+Для слов в `text` нужен ещё индекс основ: пока он не готов, ответ — `index.not-ready` с
 `index: "message_stems"`, `cause` (`building`, `stemmer_changed` после смены стеммеров,
 `stemmer_unknown` — стеммеры знает только более новая версия), `done`/`total` и командой
 (`store migrate` или `store reindex`). Подмены точным поиском нет; `exact:` и `--exact` работают и до этого.
-`unsupported_field` отличается от `unknown_field`; incomplete archive — состояние охвата, не syntax error.
+`query.unsupported-field` отличается от `query.unknown-field`; incomplete archive — состояние охвата, не syntax error.
 
 ## Миграция legacy
 
@@ -655,7 +655,7 @@ Strict `corrections` пуст; version/fieldsVersion/presetVersion/timezone/orde
   `null`, когда архив держит что может. Чат, скачанный до окна (`--since-time`), остаётся `partial` и `next` не
   вызывает. Агенту: если ничего не найдено, а `next` задан, сначала выполнить его (или спросить владельца).
 - `wordsReady` — реальное состояние word index для любого запроса. Запрос со словами при `false` даёт
-  `index_not_ready`; запрос только по метаданным (`has:file`, `kind:`) работает и честно отвечает `false`.
+  `index.not-ready`; запрос только по метаданным (`has:file`, `kind:`) работает и честно отвечает `false`.
 Pagination `hasMore` не означает полноту сетевого архива.
 
 MCP принимает `text` или versioned `ast`, не оба; текст и structured input проходят один validator.

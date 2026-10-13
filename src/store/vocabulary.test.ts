@@ -59,7 +59,7 @@ describe("canonical vocabulary", () => {
     for (const name of ["shared-example", "HAR", "Harbour Example"])
       await expect(store.knowledge.addVocabularyAlias({ kind: "project", id: other.id }, name)).rejects.toMatchObject({
         code: "configuration_error",
-        details: { reason: "vocabulary_alias_conflict" },
+        details: { reason: "vocabulary.alias-conflict" },
       })
     expect(
       (await store.knowledge.vocabulary({ kind: "project" })).entries.find((entry) => entry.id === other.id)?.aliases,
@@ -74,13 +74,13 @@ describe("canonical vocabulary", () => {
       store.knowledge.addVocabularyAlias({ kind: "project", id: project.id }, "shared-name", {
         expectedFingerprint: preview.fingerprint,
       }),
-    ).rejects.toMatchObject({ details: { reason: "vocabulary_alias_conflict" } })
+    ).rejects.toMatchObject({ details: { reason: "vocabulary.alias-conflict" } })
     await expect(store.knowledge.addProject({ name: "Shared-name", key: "NEW", scope: "work" })).rejects.toMatchObject({
-      details: { reason: "vocabulary_alias_conflict" },
+      details: { reason: "vocabulary.alias-conflict" },
     })
     await store.knowledge.addVocabularyAlias({ kind: "project", id: other.id }, "NEW")
     await expect(store.knowledge.addProject({ name: "New Example", key: "NEW" })).rejects.toMatchObject({
-      details: { reason: "vocabulary_alias_conflict" },
+      details: { reason: "vocabulary.alias-conflict" },
     })
     expect((await store.knowledge.projects()).length).toBe(2)
   })
@@ -111,7 +111,7 @@ describe("canonical vocabulary", () => {
       store.knowledge.addVocabularyAlias(target, "harbour-old", { expectedFingerprint: preview.fingerprint }),
     ).rejects.toMatchObject({
       code: "configuration_error",
-      details: { reason: "stale_vocabulary" },
+      details: { reason: "vocabulary.stale" },
     })
     await expect(store.knowledge.addVocabularyAlias(target, "agent-alias", { by: "agent" })).rejects.toMatchObject({
       code: "permission_error",
@@ -192,11 +192,11 @@ describe("canonical vocabulary", () => {
     const { store, project } = await fixture()
     await expect(store.knowledge.vocabulary({ maxEntries: 1 })).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "vocabulary_entry_budget" },
+      details: { reason: "vocabulary.over-entry-budget" },
     })
     await expect(store.knowledge.vocabulary({ maxReadBytes: 1 })).rejects.toMatchObject({
       code: "validation_error",
-      details: { reason: "vocabulary_byte_budget" },
+      details: { reason: "vocabulary.over-byte-budget" },
     })
     for (const options of [
       { maxEntries: 0 },

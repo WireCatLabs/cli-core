@@ -122,10 +122,10 @@
     }
   ],
   "negative": [
-    { "query": "foo:bar", "code": "validation_error", "reason": "unknown_field" },
-    { "query": "tag:\"two words\"", "code": "validation_error", "reason": "invalid_tag" },
-    { "query": "size>10TB", "code": "validation_error", "reason": "invalid_size" },
-    { "query": "invoice~1", "code": "validation_error", "reason": "unsupported_operator" },
-    { "query": "kind:person", "code": "validation_error", "reason": "unknown_value" }
+    { "query": "foo:bar", "code": "validation_error", "reason": "query.unknown-field" },
+    { "query": "tag:\"two words\"", "code": "validation_error", "reason": "query.invalid-tag" },
+    { "query": "size>10TB", "code": "validation_error", "reason": "query.invalid-size" },
+    { "query": "invoice~1", "code": "validation_error", "reason": "query.unsupported-operator" },
+    { "query": "kind:person", "code": "validation_error", "reason": "query.unknown-value" }
   ]
 }

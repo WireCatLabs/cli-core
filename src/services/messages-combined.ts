@@ -58,7 +58,7 @@ export const searchCombined = async (
   const started = performance.now()
   const check = () => {
     if (request.signal?.aborted)
-      throw new CliError("validation_error", "search was aborted", { reason: "query_aborted", complete: false })
+      throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
     if (performance.now() - started > QUERY_LIMITS.milliseconds) exhausted("milliseconds")
   }
   check()

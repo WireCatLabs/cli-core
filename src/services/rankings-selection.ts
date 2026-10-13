@@ -25,7 +25,7 @@ export const RANKING_SELECTION_BYTES = 64 * 1024
 const object = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 function invalid(message = "ranking selection is invalid — obtain a new drilldown from stats top"): never {
-  throw new CliError("validation_error", message, { reason: "invalid_selection" })
+  throw new CliError("validation_error", message, { reason: "selection.invalid" })
 }
 const id = (value: unknown): string =>
   typeof value === "string" && value.length > 0 && value.length <= 256 ? value : invalid()
@@ -96,7 +96,7 @@ export const readRankingSelection = async (store: MessageStore, input: unknown):
   const held = await store.accounts()
   if (accounts.some((account) => !held.some((candidate) => same(candidate, account))))
     throw new CliError("permission_error", "ranking selection names an account not held in this store", {
-      reason: "selection_scope",
+      reason: "selection.out-of-scope",
     })
   const scopedChat = (value: unknown): NonNullable<QueryExecution["chat"]> => {
     const chat = object(value)

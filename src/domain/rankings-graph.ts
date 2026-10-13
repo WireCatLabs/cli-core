@@ -38,7 +38,7 @@ export interface RankingGraphRow {
 export const RANKING_GRAPH_LIMITS = { nodes: 50_000, depth: 256, work: 10_000_000, bytes: 8_388_608 } as const
 const exhausted = (budget: string): never => {
   throw new CliError("validation_error", `ranking exceeded ${budget} — narrow its chat or date scope`, {
-    reason: "query_limit",
+    reason: "query.too-large",
     budget,
     complete: false,
   })

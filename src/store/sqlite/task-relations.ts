@@ -62,7 +62,7 @@ export const validateTaskRelation = (database: CacheDatabase, from: number, to: 
   if (reached.length > 10000) throw new CliError("validation_error", "task dependency traversal exceeds 10000 nodes")
   if (reached.some((row) => Number(row.id) === from))
     throw new CliError("validation_error", "this task relationship would create a cycle", {
-      reason: "task_dependency_cycle",
+      reason: "task.dependency-cycle",
     })
 }
 

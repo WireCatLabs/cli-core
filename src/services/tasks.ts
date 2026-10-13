@@ -1,4 +1,4 @@
-import { CliError, singleLine } from "@wirecat/cli-base"
+import { CliError, isCliError, singleLine } from "@wirecat/cli-base"
 import { isLocator, parseLocator } from "../domain/locator.js"
 import { formatReference } from "../domain/references.js"
 import type { AccountKey, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
@@ -196,8 +196,10 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
           const closed = await service(store).close(id, { as, by, ...(reason === undefined ? {} : { reason }) })
           return taskView(store, account, closed)
         } catch (error) {
-          if (error instanceof Error && "code" in error && error.code === "closed")
-            throw new CliError("validation_error", `${error.message}; a closed task stays closed`)
+          if (isCliError(error) && error.details.reason === "task.closed")
+            throw new CliError("validation_error", `${error.message}; a closed task stays closed`, {
+              reason: "task.closed",
+            })
           throw error
         }
       }),

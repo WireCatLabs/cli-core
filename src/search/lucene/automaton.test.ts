@@ -50,7 +50,7 @@ describe("Lucene 9.12.3 regex subset", () => {
     expect(literal.test("axx")).toBe(false)
     expect(compileAutomaton(wildcardPattern("alph*")).test("alpha")).toBe(true)
     expect(compileAutomaton(wildcardPattern("alpha")).test("xalpha")).toBe(false)
-    expect(() => wildcardPattern("a\\")).toThrow("invalid_escape")
+    expect(() => wildcardPattern("a\\")).toThrow("query.invalid-escape")
   })
   it("bounds pattern size, nesting, repetition/state expansion and total match work", () => {
     expect(() => compileAutomaton("x".repeat(1025))).toThrow("pattern")
@@ -88,7 +88,7 @@ describe("folding a text: regex", () => {
     expect(matches("[\\-x]", "-")).toBe(true)
   })
   it("refuses what has no single folded form instead of matching nothing", () => {
-    expect(() => folded(".\u0301")).toThrow("unsupported_regex")
+    expect(() => folded(".\u0301")).toThrow("query.unsupported-regex")
     expect(() => folded("[ﬁ]")).toThrow("body:")
     expect(() => folded("[a-\u{10ffff}]")).not.toThrow()
     expect(() => folded("[A-\u{10ffff}]")).toThrow("the range")

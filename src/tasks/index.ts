@@ -6,7 +6,6 @@ export {
   TASK_STATES,
   TASK_VERDICTS,
   type Task,
-  TaskError,
   type TaskKind,
   type TaskOrigin,
   type TaskState,

@@ -33,7 +33,7 @@ export const bufferedInput = (
   const state = input as NodeJS.ReadableStream & { readableEnded?: boolean; destroyed?: boolean }
   if (state.readableEnded) return Promise.resolve(Buffer.alloc(0))
   if (state.destroyed)
-    return Promise.reject(new CliError("validation_error", "input closed before EOF", { reason: "input_closed" }))
+    return Promise.reject(new CliError("validation_error", "input closed before EOF", { reason: "input.closed" }))
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     let bytes = 0
@@ -47,7 +47,7 @@ export const bufferedInput = (
       reject(cause)
     }
     const aborted = () => error(new CliError("cancelled", "input cancelled", { retryable: false }))
-    const closed = () => error(new CliError("validation_error", "input closed before EOF", { reason: "input_closed" }))
+    const closed = () => error(new CliError("validation_error", "input closed before EOF", { reason: "input.closed" }))
     const end = () => {
       cleanup()
       resolve(Buffer.concat(chunks, bytes))
@@ -61,7 +61,7 @@ export const bufferedInput = (
             "validation_error",
             `buffered input exceeds ${maxBytes} bytes — use a smaller input or --max-input-bytes`,
             {
-              reason: "input_limit",
+              reason: "input.too-large",
               maxBytes,
               retryable: false,
             },

@@ -17,7 +17,7 @@ export const normalizeTag = (value: string): string => {
     throw new CliError(
       "validation_error",
       `"${singleLine(value)}" is not a tag — use 1–32 letters a–z, digits and hyphens`,
-      { reason: "invalid_tag" },
+      { reason: "tag.invalid" },
     )
   return tag
 }

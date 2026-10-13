@@ -74,6 +74,6 @@ describe("relative dates", () => {
     expect(dateRange("2026-10-01", "30m", true, false, "UTC", span, now)).toMatchObject({ upper: now - 1_800_000 })
   })
   it("still refuses an unknown word", () => {
-    expect(() => dateRange("tomorrow", "*", true, true, "UTC", span, now)).toThrow("invalid_date")
+    expect(() => dateRange("tomorrow", "*", true, true, "UTC", span, now)).toThrow("query.invalid-date")
   })
 })
