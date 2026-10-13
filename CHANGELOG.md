@@ -4,12 +4,17 @@ Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.21
 version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
 break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
 
-## Unreleased
+## 0.259.0 — 13.10.2026
 
 ### Added
 
 - **`has:text` in search.** Messages: the message has text. Notes and documents: the entry has text; `-has:text`
   lists the files drive kept by name only because it could not read them. Other `has:` values stay message-only.
+
+### Fixed
+
+- **`parity.json` lists `--debug`** as a global option of every CLI. cli-base 0.24 adds it to every command, so
+  `cli-messaging-parity` failed tg and max on it.
 
 ## 0.258.0 — 13.10.2026
 
