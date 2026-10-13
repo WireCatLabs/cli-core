@@ -1091,14 +1091,14 @@ describe("the MCP server", () => {
     expect(all.body.items.map((item: { kind: string }) => item.kind)).toContain("message")
     expect(all.body.searched).toEqual(["messages", "notes"])
     expect(all.body.skipped).toEqual([
-      { resource: "mail", reason: expect.stringContaining("memo mail <account> import") },
+      { resource: "mail", reason: expect.stringContaining("memo sync --mail") },
       { resource: "meetings", reason: MEETINGS_UNNAMED },
     ])
     const notes = await call("chat_search_notes", { text: "chapter" })
     expect(notes.body).toMatchObject({ by: "words", hits: [] })
     const mail = await call("chat_search_mail", { text: "chapter" })
     expect(mail.isError).toBe(true)
-    expect(JSON.stringify(mail.body)).toContain("memo mail <account> import")
+    expect(JSON.stringify(mail.body)).toContain("memo sync --mail")
     expect(telegram.opened()).toBe(1)
   })
 
