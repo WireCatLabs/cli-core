@@ -9,6 +9,8 @@ shape of this file.
 
 ### Fixed
 
+- The passage command declares a runnable cited-reference example and shares the existing `--bytes <bytes>` placeholder with other evidence reads.
+
 - Bounded meeting context reports `invalid_response` when an adapter returns absent parent/revision metadata or a null cue, rather than failing with an unclassified exception.
 
 ### Added

@@ -32,7 +32,7 @@ export const addMeetingPassageCommand = (
       .argument("<reference>", "retained transcript cue reference from a search hit")
       .option("--before-n <n>", "preceding cues (default 3)", count)
       .option("--after-n <n>", "following cues (default 3); at most 999 surrounding cues in total", count)
-      .option("--bytes <n>", "cue JSON byte budget (default 65536); the anchor must fit", count)
+      .option("--bytes <bytes>", "cue JSON byte budget (default 65536); the anchor must fit", count)
       .option(
         "--max-read-bytes <bytes>",
         "stored text byte budget (default 4194304); boundary probes read metadata only",
@@ -73,6 +73,10 @@ export const addMeetingPassageCommand = (
           deps.output(result, format)
         },
       ),
-    { origin: "handwritten", mutates: false },
+    {
+      origin: "handwritten",
+      mutates: false,
+      examples: [`${program.name()} meetings passage meeting:1/1/1/0 --json`],
+    },
   )
 }
