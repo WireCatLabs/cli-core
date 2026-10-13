@@ -198,11 +198,13 @@ Releases of this package, in order; each is one PR.
    waits for the drive switch (item 6), and a positive `in:` taking kinds and aliases.
 3. **`search all --source`**, `skipped` for unused entries and unnamed kinds, `accounts`, meetings by
    `--source`, `--only meetings` (built; MCP `search_all` takes `source`). `--only documents` waits for item 1.
-4. **`search notes --source`, `search mail --source`**, `accounts`; the three removals; `parity.json`
+4. **`search notes --source`, `search mail --source`**, `accounts` (`search notes` pages with `--offset`, so memo's
+   notes beside some folders need one store query, not the two ranked searches `search all` runs); the three removals; `parity.json`
    rows; MCP schemas (`search_all`, `search_notes`, `search_mail`) take `source` and lose the removed
    fields. The user documents are rewritten in the same PRs: [query-language.md](../search/query-language.md),
    the generated `docs/commands.md`, the MCP descriptions.
-5. **cli-memo**: `memo search all` takes `--source` and passes it through.
+5. **cli-memo**: `memo search all` takes `--source` and passes it through, and prints a `skipped` entry by its
+   `source` when it has no `resource`.
 6. **drive-cli**, in the drive switch PR: record the profile (above).
 7. **Each CLI**: the login and profile-create offer to join a group.
 
