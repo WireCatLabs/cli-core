@@ -57,9 +57,12 @@ it("search hit refs open exact sparse-position context through both shared CLI a
   program.command("meetings")
   const output = vi.fn()
   addMeetingPassageCommand(program, { read, signal: () => undefined, output })
-  await program.parseAsync(["meetings", "passage", f.ref, "--before", "2", "--after", "1", "--format", "markdown"], {
-    from: "user",
-  })
+  await program.parseAsync(
+    ["meetings", "passage", f.ref, "--before-n", "2", "--after-n", "1", "--format", "markdown"],
+    {
+      from: "user",
+    },
+  )
   const result = output.mock.calls[0]?.[0]
   expect(result?.packet.items.map((cue: { position: number }) => cue.position)).toEqual([3, 9, 20, 24])
   expect(result?.content).toContain(`\`${f.ref}\``)
@@ -246,7 +249,9 @@ it("keeps CLI JSON structured and refuses MCP overrides, malformed limits and ca
   program.command("meetings")
   const output = vi.fn()
   addMeetingPassageCommand(program, { read, signal: () => undefined, output })
-  await program.parseAsync(["--json", "meetings", "passage", f.ref, "--before", "0", "--after", "0"], { from: "user" })
+  await program.parseAsync(["--json", "meetings", "passage", f.ref, "--before-n", "0", "--after-n", "0"], {
+    from: "user",
+  })
   expect(output.mock.calls[0]?.[1]).toBe("json")
   expect(JSON.parse(output.mock.calls[0]?.[0].content).target_ref).toBe(f.ref)
   for (const input of [
