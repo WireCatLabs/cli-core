@@ -1,6 +1,6 @@
 # Plan — mentions: phones, e-mail, links, documents, names and places found in text
 
-Status: **approved 2026-10-13 (owner, NEED-1015 A); phones in the clear (NEED-1016 B).** The owner's words (cli-private
+Status: **approved 2026-10-13 (owner, NEED-1015 A); phones in the clear (NEED-1016 B); name `mentions` (NEED-1027 A).** The owner's words (cli-private
 journal `2026-10-13-field-test-followups.md`, NEED-1006): a command that pulls such values out and records
 them, then an agent and a person go through them; one entity with a kind field while they are not yet
 assigned, and a command to check and link them; names yes; addresses kept apart; links grouped by domain so
@@ -61,15 +61,33 @@ Keys and indexes: unique `(source_type, source_id, source_field, start, kind)`; 
 `mentions:<reference>`.
 
 **A linked mention is the relation itself.** "This message mentions person 12" is the mention row with its target;
-no second row in `links`, so there is one place to read and one to fix.
+no second row in `links`, so there is one place to read and one to fix. `target_type` and `target_id` are two
+columns, like every polymorphic pair in the store (`taggings`, `links`, `chunks`), not one `phone:123` string: a
+string cannot be indexed by type or joined without parsing.
 
-**Linking by value or by occurrence** (proposed, NEED-1025):
+**Exact kinds point at one original record; the decision is made on it once** (owner, 2026-10-13, ASK-231,
+NEED-1029):
 
-- `phone`, `email`, `url`, `document`: one value is one thing. `mentions confirm` links every mention with the
-  same `kind` and `value`, and a new mention of a linked value is linked at sync — no table of known values, the
-  earlier linked mention is the record.
-- `person-name`, `place`: one name can be several people («Ольга»). Linked one occurrence at a time; `mentions show`
-  offers the people with that name met in the same chat first.
+- `email` → an `identities` row (`provider = email`, `external_id` = the lower-case address). 453 such rows already
+  exist, each linked to a person by `identity_links`.
+- `phone` → an `identities` row (`provider = phone`, `external_id` = E.164). No new table.
+- `document` → the `documents` row; unresolved until the document is stored.
+- `url` → no original record: `value` and `domain` already find every occurrence. A URL that names a stored thing
+  points at it (`document`, `chat`).
+
+At sync the extractor finds or creates the original and sets the mention's target at once: there is nothing to
+review per occurrence, and the row starts as `linked`. "Whose number is this" is one `identity_links` row (identity → person), with its history in
+`identity_link_events`; moving the number to another person changes that row, never the mentions. "Every text that
+mentions Валерий" is mentions whose target is person 12, plus mentions whose target is an identity linked to person
+12 — one join on indexed columns.
+
+Rejected: one mention as the primary and the others pointing at it. The primary is itself an occurrence in a text;
+an edit or a deletion removes it and breaks the chain, and choosing the primary is a decision nobody needs.
+
+**Names and places are linked one occurrence at a time.** The text «Ольга» does not say which Ольга; two messages
+in two chats can mean two people. Each name mention gets its own target (`person` or `place`). `mentions show`
+offers the people with that name met in the same chat first, and `mentions confirm --chat` links every «Ольга» of
+one chat to one person in one step — still one target per row, so one wrong chat is fixed alone.
 
 **Edits and rebuilds.** An edited text rebuilds its mentions; a decision survives: a `linked` or `dismissed` status
 is carried to the new row with the same `kind`, `value` and source. A rule `version` bump rebuilds only its kind.
@@ -111,8 +129,9 @@ shown as facts until linked. A language model may later re-check them — option
 ### Phones and privacy
 
 The owner chose digits in the store (NEED-1016 B), so `mentions list --kind phone` can list every number. A
-phone mention's `value` is the E.164 form; it links to an identity by hashing `value` with the `phone_hmac` key
-and comparing, so `identities` keeps only the hash. The store is the owner's and already holds the digits in
+phone mention's `value` is the E.164 form, and so is its `phone` identity's `external_id`. A messenger identity
+that has only `phone_hmac` (a Telegram contact) is matched by hashing the E.164 value with the same key; a match
+links the `phone` identity to that contact's person. The store is the owner's and already holds the digits in
 message text; what stays the rule: no number in a log, an error, a fixture, a test or a document — tests use
 reserved fictional numbers.
 
@@ -144,8 +163,10 @@ links domains list               sites by number of links
 places list | show | add         addresses as their own records
 ```
 
-An agent's `confirm` waits for the owner, as its facts do; the owner's is final. `mentions show` offers
-candidates: known people whose name matches the stem, the identity whose `phone_hmac` equals the mention's.
+Exact kinds need no confirm per mention (above). An agent's link of a `phone` or `email` identity to a person is
+final when the match is exact — the same number in the person's contact card or `phone_hmac` (owner, NEED-1026 A);
+an agent's link of a name or a place waits for the owner, as its facts do. The owner's is final. `mentions show`
+offers candidates: known people whose name matches the stem, the identity whose `phone_hmac` equals the mention's.
 
 ## Cost
 
@@ -173,10 +194,9 @@ an index lookup.
 
 ## Open questions for the owner
 
-1. The entity's name: `mentions` (proposed) or another word (NEED-1027).
+1. ~~The entity's name~~ — `mentions` (owner, 2026-10-13, NEED-1027 A).
 2. ~~Phones stored as HMAC only or also in the clear~~ — in the clear (owner, 2026-10-13, NEED-1016 B).
 3. ~~Rows in `links` or a table of its own~~ — its own table (owner, 2026-10-13, NEED-1023 B).
-4. Linking by value for phones, e-mail, links and documents, one occurrence at a time for names and places
-   (NEED-1025).
-5. Should an agent's `confirm` of an exact kind (a document id, a known phone) count without the owner, or wait like
-   its facts (NEED-1026).
+4. ~~Linking by value~~ — replaced by original records: phones and e-mail are `identities`, linked to a person
+   once (owner's direction, ASK-231); confirming `provider = phone` in `identities` is NEED-1029.
+5. ~~An agent's confirm of exact kinds~~ — final on an exact match; names and places wait (owner, NEED-1026 A).
