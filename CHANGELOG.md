@@ -6,6 +6,8 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+## 0.261.0 — 13.10.2026
+
 ### Changed — may break callers
 
 - **Needs `@wirecat/cli-base` 0.26.** The peer range is now `>=0.26.0 <0.27.0`. `commands --json` says
