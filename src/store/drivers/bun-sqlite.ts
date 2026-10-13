@@ -26,7 +26,7 @@ let customised = false
  */
 const ownLibrary = async (): Promise<string | undefined> => {
   try {
-    const { libraryFor } = await import("@wirecat/cli-messaging-sqlite")
+    const { libraryFor } = await import("@wirecat/cli-core-sqlite")
     return libraryFor()
   } catch {
     return undefined

@@ -21,7 +21,7 @@ export interface SqliteRuntime {
 /**
  * Run first by `tg` and `max`, before their program is imported. A Linux distribution's Node takes
  * the system's `libsqlite3`; when that one cannot hold the store, the command starts again on the
- * SQLite of `@wirecat/cli-messaging-sqlite`. Restarting here, before anything is read or sent, is
+ * SQLite of `@wirecat/cli-core-sqlite`. Restarting here, before anything is read or sent, is
  * what makes it safe — later in the command it could repeat an action.
  */
 export const ensureSqlite = async (runtime: SqliteRuntime = nodeRuntime()): Promise<void> => {
@@ -79,7 +79,7 @@ export const nodeRuntime = (): SqliteRuntime => ({
     ),
   library: async (musl) => {
     try {
-      const { libraryFor, SQLITE_VERSION } = await import("@wirecat/cli-messaging-sqlite")
+      const { libraryFor, SQLITE_VERSION } = await import("@wirecat/cli-core-sqlite")
       const path = libraryFor({ musl })
       return path === undefined ? undefined : { path, version: SQLITE_VERSION }
     } catch {

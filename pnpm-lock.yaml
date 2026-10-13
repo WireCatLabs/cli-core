@@ -32,10 +32,10 @@ importers:
       '@valibot/to-json-schema':
         specifier: 1.8.0
         version: 1.8.0(valibot@1.5.0(typescript@7.0.2))
-      '@wirecat/cli-messaging-onnx':
+      '@wirecat/cli-core-onnx':
         specifier: 1.0.1
         version: 1.0.1
-      '@wirecat/cli-messaging-sqlite':
+      '@wirecat/cli-core-sqlite':
         specifier: 1.0.1
         version: 1.0.1
       '@xmldom/xmldom':
@@ -1440,11 +1440,11 @@ packages:
       commander:
         optional: true
 
-  '@wirecat/cli-messaging-onnx@1.0.1':
-    resolution: {integrity: sha512-e0ewPI3k417jvzoXy4I/4KW3PBnGWhRXy/YDshya0+d1D8QlajmswGpsh6UJlVr3DbAPuQLLc0qkqgGmh1+eNw==}
+  '@wirecat/cli-core-onnx@1.0.1':
+    resolution: {integrity: sha512-4oLtnyhm8W69oCWYqCWYtUQEhaJYitivQmgLkKHAsPOCEJlZG8+IUzchEgGyq3X1rWFs66wRw6uVnKHjYRMyyQ==}
 
-  '@wirecat/cli-messaging-sqlite@1.0.1':
-    resolution: {integrity: sha512-hnB4eL6ER/++nTPrlSCAUzDJH7MN3V+Obx9B2xXMwBN1KrLkJHIrybQCikfNOnwnyrkultSkLulM7vd+qSG5Hg==}
+  '@wirecat/cli-core-sqlite@1.0.1':
+    resolution: {integrity: sha512-dFkTE3+XdvZwrt7bZZEd2fzdqR2vFgnnGPOhmBKGNa7uKQHjOdqJL8Q9O5cajIjy5o8Gl0LVn0OZbYajhLvQ1A==}
 
   '@xmldom/xmldom@0.8.15':
     resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
@@ -3801,11 +3801,11 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@wirecat/cli-messaging-onnx@1.0.1':
+  '@wirecat/cli-core-onnx@1.0.1':
     dependencies:
       onnxruntime-common: 1.30.0
 
-  '@wirecat/cli-messaging-sqlite@1.0.1': {}
+  '@wirecat/cli-core-sqlite@1.0.1': {}
 
   '@xmldom/xmldom@0.8.15': {}
 

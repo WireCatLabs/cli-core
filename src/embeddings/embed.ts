@@ -135,10 +135,7 @@ export const openEmbedder = async (
   directory: string,
   { threads = defaultThreads() }: { threads?: number } = {},
 ): Promise<Embedder> => {
-  const [{ Tokenizer }, ort] = await Promise.all([
-    import("@huggingface/tokenizers"),
-    import("@wirecat/cli-messaging-onnx"),
-  ])
+  const [{ Tokenizer }, ort] = await Promise.all([import("@huggingface/tokenizers"), import("@wirecat/cli-core-onnx")])
   const path = (name: string) => join(directory, model.id, name)
   const tokenizer = new Tokenizer(
     JSON.parse(readFileSync(path("tokenizer.json"), "utf8")),
