@@ -32,24 +32,18 @@ Open work only. A finished item is deleted; its record is the merged pull reques
   ([rerankers](https://github.com/WireCatLabs/cli-testing/blob/docs/search-everywhere-and-qmd/performance/search/local-documents/README.md#rerankers-on-these-queries)).
   One run of 25 queries per corpus, no held-out set — the message cross-encoder also looked good on dev and
   failed held-out. Before building: a fresh query set, partly the owner's, run once with the setup frozen.
-  Open: score alone (better first place) or qmd's blend (never loses an exact hit).
+  Owner (NEED-1004): behind its own flag, off by default; score alone or qmd's blend is decided after the
+  second, frozen run.
 - **No query-expansion model** — qmd rewrites each query with a 1.7B model. Our callers are agents that can
   search again in other words; the skills say so. A model for this stays optional and off by default, if ever.
 - **EmbeddingGemma for documents** — ours already ships it as an option; on documents it was not compared
   with e5-small. Measured together with the reranker; the default for notes changes only on that result.
-- **Generated tags for notes and documents, searchable at once** — an agent (or a rule) tags notes and documents
-  so search finds them by topic. Kept apart from the owner's tags the way rule-made chat tags already are: a claim
-  row with its algorithm and score (`auto_tag_claims`, `src/domain/channel-tags.ts`), never in the owner's
-  taggings. `tag:` matches them below the owner's tags; confirming one turns it into the owner's tag. Generated
-  tags use the vocabulary; a new name goes through preflight, which compares letter pairs today; add, cheapest
-  first: word stems, edit distance against the vocabulary (the typo corrector's code), transliteration, tags that
-  sit on nearly the same items, and the `semantic` check the vocabulary already reserves. New verbs go to
-  STANDARD first; owner decides the kind and ranking.
-- **Values pulled out of text** — phone numbers, e-mail addresses, URLs and their domains, document ids,
-  normalized and indexed as fields (`phone:`, `email:`, `domain:`) because plain text search misses a value
-  written another way (`+7 921…` against `8921…`), and because they link people and documents across
-  sources. Headings of notes and documents, so a hit names its section. Not addresses or names by pattern:
-  people are linked by the agent with confirmation, as tags. Needs a plan and the owner's choice of fields.
+- **Generated tags for notes, documents and messages, searchable at once** — claims kept apart from the owner's
+  tags, below them in `tag:`; a synonym guard from stems to meaning. Owner: do it all, vectors too (NEED-1005 A).
+  Proposal: [generated-tags-plan.md](generated-tags-plan.md).
+- **Mentions: phones, e-mail, links grouped by site, documents, names and places found in text** — one entity
+  with a kind, reviewed by an agent and the owner, linked to people, organizations, documents and places; rules,
+  no model, by default. Owner direction NEED-1006 A. Proposal: [mentions-plan.md](mentions-plan.md).
 - **Embedding throughput** — notes, mail and documents embed in one session on `min(8, cores)` threads
   (`src/services/notes-search.ts`), 8 of 24 cores here; one text per `session.run` (`src/embeddings/embed.ts`).
   The worker benchmark split the same 8 threads between workers (1.04–1.1×); more sessions with 8 threads each
