@@ -57,6 +57,12 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **Search help says what `content:` narrows to and where the answer keeps its references.** `search messages`,
+  `search mail` and `search all` say `content:` narrows a search to the text of files and `filename:` to their
+  names, with an example; each search's help names its `--json` list (`items`, or `hits` for
+  notes) and the reference key (`locator` for messages and mail, `ref` for all and notes). An agent compared a
+  plain word in one tool with `content:` in another and reported a missing feature.
+
 - Preparing note chunks for embedding builds each note's text once per batch instead of once per chunk; a full pass over a 2M-character note's chunks went from about 186 ms to 37 ms per batch of 8.
 
 - **A file not read for want of an optional package names the package.** The per-file issue from
