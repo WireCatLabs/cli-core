@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-79 tables, 16 full-text indexes.
+79 tables, 17 full-text indexes.
 
 ## Conventions
 
@@ -696,6 +696,14 @@ Full-text index.
 
 ```sql
 CREATE VIRTUAL TABLE attachment_words USING fts5( normalized_text, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
+```
+
+### `attachment_name_words`
+
+Full-text index.
+
+```sql
+CREATE VIRTUAL TABLE attachment_name_words USING fts5( name, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
 ```
 
 ## Documents, notes and memories

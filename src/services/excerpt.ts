@@ -22,3 +22,9 @@ export const excerpt = (text: string, query: string, size = 240): string => {
   const end = start + size
   return `${start > 0 ? "…" : ""}${flat.slice(start, end).trim()}${end < flat.length ? "…" : ""}`
 }
+
+/** A hit with its excerpt, taken from where the words were found; the text of that place is not passed on. */
+export const withExcerpt = <T extends { text: string; matchedText?: string }>(
+  { matchedText, ...hit }: T,
+  query: string,
+): Omit<T, "matchedText"> & { excerpt: string } => ({ ...hit, excerpt: excerpt(matchedText ?? hit.text, query) })

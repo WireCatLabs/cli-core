@@ -18,7 +18,7 @@ import {
   type ChatStats,
   type MessageStore,
 } from "../store/store.js"
-import { excerpt } from "./excerpt.js"
+import { withExcerpt } from "./excerpt.js"
 import { mailAround, mergeMail, withMailThreads } from "./mail-search.js"
 import { chatAmong, type SearchFound, type SearchQuery, senderAmong } from "./messages.js"
 import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
@@ -454,7 +454,7 @@ export const searchLucene = async (
     request.kind === "mail" ? { completeness: [], coverage: undefined } : await coverageOf(store, prepared, messenger)
   const items = await Promise.all(
     found.items.map(async (item) => {
-      const hit = { ...item, excerpt: excerpt(item.text, request.text ?? "") }
+      const hit = withExcerpt(item, request.text ?? "")
       if (!request.context) return hit
       const locator = parseLocator(hit.locator)
       return {

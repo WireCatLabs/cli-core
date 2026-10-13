@@ -1787,5 +1787,5 @@ export {
 } from "./sqlite/stems.js"
 export type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
 export { inboxKey } from "./sqlite/tasks.js"
-export type { ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"
+export type { MatchPlace, ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"

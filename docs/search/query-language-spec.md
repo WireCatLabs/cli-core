@@ -98,6 +98,14 @@ FROM attachment_words WHERE attachment_words MATCH ?))`; term и phrase, normali
 не задаёт fts, поэтому слова файлов не входят в bm25-ранжирование (оно AND-ит все обязательные слова
 против message_words) и не правятся опечатками. Точное условие, поэтому NOT content точен.
 FIELD_VERSION не меняется: новое поле, ничего не переименовано.
+Слово без поля (`Predicate.implicit`; `text:` его снимает) — `text`/`exact` term или phrase, к которому
+добавлены: `attachment_words` (расшифровки и тексты файлов) и слово имени файла (имена читаются один раз
+за запрос). Запрос ведут множества (driver) и ранжирование LEFT JOIN по `message_words`/`message_stems`;
+ряды без совпадения в тексте упорядочены tier: расшифровка 1, имя файла 2, текст файла 3. `content:`
+теперь только тексты файлов (без `speech:`), `transcript:` — только расшифровки. `matchedIn` считается для
+страницы ответа. Legacy (`words.ts`) и `--backend` server search по-прежнему ищут только текст.
+FIELD_VERSION не меняется: поле `text` не переименовано, у слова без поля шире охват; сохранённые поиски
+разбираются заново и получают это поведение.
 Поля почты (to/cc/bcc/subject/mailbox/label/is): поиск без почтового аккаунта отвергает их
 (`unsupported_field`), в поиске по мессенджерам и почте сразу они совпадают только с почтой. label — синоним
 mailbox. is: `unread` — `emails.read = 0`, `read` — `emails.read = 1`, `starred` — `emails.flagged = 1`;

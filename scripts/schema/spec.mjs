@@ -1234,7 +1234,7 @@ const GROUPS = [
     "attachments",
     "Attachments",
     "Files of a message, an email or a meeting, with their extracted text.",
-    ["attachments", "~attachment_words"],
+    ["attachments", "~attachment_words", "~attachment_name_words"],
     [],
   ],
   [

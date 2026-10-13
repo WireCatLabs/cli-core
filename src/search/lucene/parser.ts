@@ -150,11 +150,11 @@ export const parseLucene = (
       }),
     }
   }
-  const query = (field: string): QueryNode => {
+  const query = (field: string, implicit = false): QueryNode => {
     if (++depth > QUERY_LIMITS.depth) queryError("query_limit", peek().span)
     const clauses: Clause[] = []
     do {
-      clauses.push(disjunction(field))
+      clauses.push(disjunction(field, implicit))
     } while (!["EOF", ")"].includes(peek().kind))
     const result = combine(clauses, "must")
     depth--
@@ -162,29 +162,31 @@ export const parseLucene = (
       return built({ kind: "boolean", clauses: [{ node: result.node, occur: "mustNot" }], span: result.node.span })
     return result.node
   }
-  const disjunction = (field: string): Clause => {
-    const clauses = [conjunction(field)]
+  const disjunction = (field: string, implicit: boolean): Clause => {
+    const clauses = [conjunction(field, implicit)]
     while (peek().kind === "OR") {
       take()
-      clauses.push(conjunction(field))
+      clauses.push(conjunction(field, implicit))
     }
     return combine(clauses, "should")
   }
-  const conjunction = (field: string): Clause => {
-    const clauses = [clause(field)]
+  const conjunction = (field: string, implicit: boolean): Clause => {
+    const clauses = [clause(field, implicit)]
     while (peek().kind === "AND") {
       take()
-      clauses.push(clause(field))
+      clauses.push(clause(field, implicit))
     }
     return combine(clauses, "must")
   }
-  const clause = (inherited: string): Clause => {
+  const clause = (inherited: string, inheritedImplicit: boolean): Clause => {
     let modifier: Clause["modifier"]
     if (["+", "-", "NOT", "!"].includes(peek().kind)) modifier = take().kind === "+" ? "must" : "mustNot"
     let field = inherited
+    let implicit = inheritedImplicit
     if (peek().kind === "term" && [":", "=", "<", ">", "<=", ">="].includes(tokens[at + 1]?.kind ?? "")) {
       const token = take()
       field = decodeEscapes(token.raw, token.span)
+      implicit = false
       let operator = take()
       if (operator.kind === ":" && ["<", ">", "<=", ">="].includes(peek().kind)) operator = take()
       if (["<", ">", "<=", ">="].includes(operator.kind)) {
@@ -208,7 +210,7 @@ export const parseLucene = (
     let node: QueryNode
     if (peek().kind === "(") {
       const start = take().span.start
-      node = query(field)
+      node = query(field, implicit)
       const end = expect(")").span.end
       node = { ...node, span: { start, end } }
     } else if (["[", "{"].includes(peek().kind)) {
@@ -245,6 +247,7 @@ export const parseLucene = (
           token.kind === "regex" ? "regex" : token.kind === "quoted" ? "phrase" : wildcard ? "wildcard" : "term",
         value: token.kind === "regex" || wildcard ? raw : decodeEscapes(raw, token.span),
         span: token.span,
+        ...(implicit ? { implicit: true as const } : {}),
       })
     }
     if (peek().kind === "~")
@@ -259,7 +262,7 @@ export const parseLucene = (
       queryError("unsupported_operator", peek().span, "boost and minimum-should-match are not supported")
     return { node, ...(modifier ? { modifier } : {}) }
   }
-  const root = query(defaultField)
+  const root = query(defaultField, true)
   expect("EOF")
   return { version: 1, language: "lucene-v1", root }
 }

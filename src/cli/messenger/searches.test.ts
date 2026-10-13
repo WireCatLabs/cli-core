@@ -80,7 +80,7 @@ describe("searches", () => {
 
     const first = json(await call("search", "messages", "--saved", "invoices", "--json"))
     expect([first.items.map(({ id }: { id: string }) => id), first.limit, first.hasMore]).toEqual([
-      ["106", "102"],
+      ["106", "105"],
       2,
       true,
     ])
@@ -88,7 +88,7 @@ describe("searches", () => {
       ids(json(await call("search", "messages", "--saved", "invoices", "alpha", "--limit", "5", "--json"))),
     ).toEqual(["101", "106"])
     const stats = json(await call("stats", "messages", "show", "--saved", "invoices", "--by", "sender", "--json"))
-    expect(stats.total).toBe(3)
+    expect(stats.total).toBe(4)
 
     const history = json(await call("searches", "history", "--json"))
     const runs = history.items.map(
@@ -115,7 +115,12 @@ describe("searches", () => {
     expect((await call("store", "backup", file, "--json")).code).toBe(0)
     await call("searches", "delete", "invoices", "--json")
     expect((await call("store", "restore", file, "--json")).code).toBe(0)
-    expect(ids(json(await call("search", "messages", "--saved", "invoices", "--json")))).toEqual(["101", "102", "106"])
+    expect(ids(json(await call("search", "messages", "--saved", "invoices", "--json")))).toEqual([
+      "101",
+      "102",
+      "105",
+      "106",
+    ])
   })
 
   it("keeps no history with --no-record, and none of a refused query", async () => {
@@ -166,7 +171,7 @@ describe("searches", () => {
   })
 })
 
-it("tells in each search's help what content: narrows to and which keys hold the answer", async () => {
+it("tells in each search's help what transcript:, content: and filename: narrow to and which keys hold the answer", async () => {
   const help = async (...path: string[]) => {
     const streams = captureStreams()
     await run(
@@ -177,10 +182,13 @@ it("tells in each search's help what content: narrows to and which keys hold the
     return streams.stdout.join("")
   }
   const messages = await help("messages")
-  expect(messages).toContain("content: narrows a search to the text of files")
+  expect(messages).toContain("A bare word looks in message text, voice transcripts, file names and file text")
+  expect(messages).toContain("transcript:")
   expect(messages).toContain("chat search messages 'content:invoice'")
   expect(messages).toContain("each hit's reference is locator")
   expect(await help("mail")).toContain("each email's reference is locator")
-  expect(await help("all")).toContain("each result's reference is ref")
+  const all = await help("all")
+  expect(all).toContain("transcript: narrows a message search to voice transcripts")
+  expect(all).toContain("each result's reference is ref")
   expect(await help("notes")).toContain("the list is hits, not items")
 })

@@ -151,8 +151,11 @@ version's package) — plain text, HTML, RTF, Word through `mammoth`, Word 97–
 PDF's text layer through `unpdf` (dependencies of this package, loaded on first use: `src/attachments/extract.ts`),
 ODF/OOXML/EPUB through the built-in readers (`src/attachments/documents.ts`) — or what an agent wrote back after reading a scan
 (`origin`: `extracted` or `agent`; an extraction never replaces an agent's text). Its words are in
-`attachment_words`, contentless FTS5 with rowid = attachment pk, kept by triggers; `content:` compiles to an
-exact condition over it and stays out of bm25 ranking, which ANDs required words into `message_words`. No
+`attachment_words`, contentless FTS5 with rowid = attachment pk, kept by triggers; a voice note's transcript
+is its attachment's text with extractor `speech:<source>`. `content:` (file text) and `transcript:` compile to
+exact conditions over it. A bare word (`Predicate.implicit`) also matches there and in file names: its leaf
+ORs those sets in (`elsewhere`), the query is driven by the union of the sets and ranked by `message_words`
+joined LEFT, with hits outside the message text tiered transcript → file name → file text (`lucene.ts`). No
 foreign key, so the purges of older builds still work; triggers erase the text when its message is tombstoned
 or deleted, or its attachment deleted (NEED-393 A, tested against 0.49.0). `store reindex` rebuilds the index.
 `attachments list --needs-text` and `attachments text set` (MCP `attachments_list`, `attachments_text_set`) are

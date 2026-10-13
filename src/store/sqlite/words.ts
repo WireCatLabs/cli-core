@@ -55,7 +55,15 @@ export interface WordOptions {
 
 /** A hit with its relevance — bm25 turned round so higher is better; `null` from steps that do not rank. */
 /** `exact: false`: a stemmed search found it only through another form of the words. */
-export type ScoredHit = StoredHit & { score: number | null; exact?: boolean }
+export type ScoredHit = StoredHit & {
+  score: number | null
+  exact?: boolean
+  /** Where the words were: the message's text, a voice note's transcript, a file's name or a file's text. */
+  matchedIn?: MatchPlace
+  /** The text of that place, for the excerpt; never part of an answer. */
+  matchedText?: string
+}
+export type MatchPlace = "text" | "transcript" | "filename" | "file"
 
 interface Resolved {
   accountPks: number[]

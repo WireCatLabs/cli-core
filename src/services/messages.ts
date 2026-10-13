@@ -20,6 +20,7 @@ import type { AccountStore } from "../store/account-store.js"
 import type {
   AccountKey,
   ChatCompleteness,
+  MatchPlace,
   MessageStore,
   SearchCommand,
   SearchScope,
@@ -115,6 +116,8 @@ export interface SearchQuery {
 export type FoundMessage = StoredHit & {
   discovery?: { coverage: number; matchedTerms: string[]; missingTerms: string[]; parent?: string }
   match?: Match
+  /** Where the words were: the text, a voice note's transcript, a file's name or a file's text. */
+  matchedIn?: MatchPlace
   score?: number | null
   exact?: boolean
   source?: HitSource

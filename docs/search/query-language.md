@@ -66,7 +66,7 @@ Boolean-синтаксис, фразы в кавычках, wildcard, AST, `--ex
 tg search messages 'invoice' --timezone UTC
 ```
 
-На synthetic fixture: ids 101, 102, 106. В MAX замените первый аргумент `tg` на `max`.
+На synthetic fixture: ids 101, 102, 105, 106. В MAX замените первый аргумент `tg` на `max`.
 
 ### Другие формы слова
 
@@ -106,7 +106,7 @@ tg search messages '"invoice paid"' --timezone UTC
 tg search messages 'from:("Alice Synthetic" OR "Bob Synthetic") AND invoice' --timezone UTC
 ```
 
-На synthetic fixture: ids 101, 102, 106. В MAX замените первый аргумент `tg` на `max`.
+На synthetic fixture: ids 101, 102, 105, 106. В MAX замените первый аргумент `tg` на `max`.
 
 ### Чат по имени
 
@@ -114,7 +114,7 @@ tg search messages 'from:("Alice Synthetic" OR "Bob Synthetic") AND invoice' --t
 tg search messages 'chat:"Work fixture" AND invoice' --timezone UTC
 ```
 
-На synthetic fixture: ids 101, 102, 106. В MAX замените первый аргумент `tg` на `max`.
+На synthetic fixture: ids 101, 102, 105, 106. В MAX замените первый аргумент `tg` на `max`.
 
 ### Диапазон дат
 
@@ -138,7 +138,7 @@ tg search messages 'from:"Bob Synthetic"' --timezone UTC
 tg search messages 'invoice date>=2026-01-21' --timezone UTC
 ```
 
-На synthetic fixture: ids 102, 106. В MAX замените первый аргумент `tg` на `max`.
+На synthetic fixture: ids 102, 105, 106. В MAX замените первый аргумент `tg` на `max`.
 
 ### Личная переписка
 
@@ -242,7 +242,7 @@ tg search messages 'tag:family' --timezone UTC
 tg search messages 'invoice NOT tag:work' --timezone UTC
 ```
 
-На synthetic fixture: ids 101. В MAX замените первый аргумент `tg` на `max`.
+На synthetic fixture: ids 101, 105. В MAX замените первый аргумент `tg` на `max`.
 
 ### Слово внутри файла
 
@@ -359,7 +359,8 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `filename` | keyword | NFKD/marks/NFC/lowercase v1, whole name | `filename:*.pdf` | term, phrase, wildcard, regex |
 | `mime` | keyword | lowercase; a value without / matches the first part; only where the messenger reports a type | `mime:"application/pdf" OR mime:image` | term, phrase, wildcard |
 | `size` | bytes | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
-| `content` | tokens | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote, and voice transcripts | `content:invoice` | term, phrase |
+| `content` | tokens | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase |
+| `transcript` | tokens | NFKD/marks/NFC/lowercase v1; what a voice message said, as transcribed | `transcript:invoice` | term, phrase |
 | `tag` | local-tag | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase |
 
 <!-- fields: end -->
@@ -380,13 +381,22 @@ MAX — нет, там ищите по расширению (`filename:*.pdf`). 
 `--contact <person>` или `--message <id> --chat <chat>`; они живут только в локальном хранилище и
 никуда не отправляются. Метка — 1–32 символа a–z, цифры и дефис, регистр не важен; `NOT tag:work`
 точен.
+Слово без поля ищется везде, где сообщение хранит слова: в его тексте, в расшифровке голосового, в
+имени файла (слово имени, не имя целиком) и в тексте файла. Каждое найденное сообщение говорит, где
+слово нашлось (`matchedIn`: `text`, `transcript`, `filename`, `file`), и отрывок берётся оттуда же.
+Сначала идут сообщения со словом в тексте (по bm25), затем расшифровки, имена файлов и тексты файлов,
+внутри каждой группы — новые раньше: длинная таблица со словом в каждой строке не вытесняет короткие
+сообщения. Сузить поиск до одного места: `text:` — только написанное в сообщении, `transcript:` —
+только расшифровки, `content:` — только текст файлов, `filename:` — имя файла целиком. Файл по имени
+или по тексту сразу: `filename:*договор* OR content:договор`.
 `content:договор` ищет внутри файлов: подходит сообщение, в тексте хотя бы одного файла которого
 есть это слово (или фраза в кавычках). Текст файлов кладёт в локальное хранилище
 `attachments extract` — из того, что сохранил `messages download` (или сам скачивает с `--download`):
 обычный текст, Word и PDF с текстовым слоем. Сканы и фото читает агент и записывает текст обратно.
-Расшифровка голосового (`messages transcribe`, `--transcribe`) тоже становится текстом его вложения.
-`text:` по-прежнему ищет только написанное в сообщении, а слова файлов не влияют на порядок
-результатов; `content:` берёт только term и phrase, без wildcard и regex.
+Расшифровка голосового (`messages transcribe`, `--transcribe`) хранится отдельно и находится словом
+без поля или `transcript:`. В файлах и расшифровках слово ищется в точной форме: других форм слова
+(основ Snowball) там пока нет, и `слово*` с исправлением опечаток читают только текст сообщений.
+`content:` и `transcript:` берут только term и phrase, без wildcard и regex.
 `date` понимает и относительные даты: `date:today` и `date:yesterday` — календарный день в
 `--timezone`; `date:7d` — с момента 7 дней назад (также `30m`, `2h`); `date>=7d` и
 `date:[30d TO 7d}` — то же в сравнении и диапазоне. Отсчёт идёт от момента запроса.

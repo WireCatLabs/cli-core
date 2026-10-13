@@ -339,5 +339,15 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `tasks` ADD `next_check_at` integer;",
       "CREATE INDEX `tasks_by_project_id_status_next_check_at` ON `tasks` (`project_id`,`status`,`next_check_at`);"
     ]
+  },
+  {
+    "name": "20261013090001_version-5-file-name-words",
+    "statements": [
+      "-- Words of an attachment's file name, rowid = attachment id, so a bare search word finds a file by its name\n-- without reading every name. unicode61 folds case and Latin accents but not й and ё, which normalize()\n-- folds into и and е: the triggers fold those two so a query normalized in JS still matches.\nCREATE VIRTUAL TABLE attachment_name_words USING fts5(\n  name,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2');",
+      "CREATE TRIGGER attachment_name_words_ai AFTER INSERT ON attachments WHEN new.name IS NOT NULL BEGIN\n  INSERT INTO attachment_name_words (rowid, name)\n    VALUES (new.id, replace(replace(replace(replace(new.name, 'й', 'и'), 'Й', 'И'), 'ё', 'е'), 'Ё', 'Е'));\nEND;",
+      "CREATE TRIGGER attachment_name_words_au AFTER UPDATE OF name ON attachments\n  WHEN old.name IS NOT new.name BEGIN\n  DELETE FROM attachment_name_words WHERE rowid = old.id;\n  INSERT INTO attachment_name_words (rowid, name)\n    SELECT new.id, replace(replace(replace(replace(new.name, 'й', 'и'), 'Й', 'И'), 'ё', 'е'), 'Ё', 'Е')\n    WHERE new.name IS NOT NULL;\nEND;",
+      "CREATE TRIGGER attachment_name_words_ad AFTER DELETE ON attachments BEGIN\n  DELETE FROM attachment_name_words WHERE rowid = old.id;\nEND;",
+      "INSERT INTO attachment_name_words (rowid, name)\n  SELECT id, replace(replace(replace(replace(name, 'й', 'и'), 'Й', 'И'), 'ё', 'е'), 'Ё', 'Е')\n  FROM attachments WHERE name IS NOT NULL;"
+    ]
   }
 ]
