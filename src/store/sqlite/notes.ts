@@ -1,4 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
+import { MAX_TEXT_CHARS } from "../../attachments/limits.js"
+import { googleDocumentLinks } from "../../domain/google-documents.js"
 import { parseReference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { CacheDatabase, CacheStatement } from "../driver.js"
@@ -13,7 +15,7 @@ import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
 import { canonicalThingReference, referenceOfThing, storedThing, type Thing, thingOf } from "./things.js"
 
 export const NOTE_FORMATS = ["obsidian", "markdown"] as const
-export const LINK_ORIGINS = ["file", "owner", "suggested"] as const
+export const LINK_ORIGINS = ["file", "owner", "suggested", "message"] as const
 
 /** A notes folder: an `accounts` row of provider `folder`. Where it is on disk is this computer's config. */
 export interface NoteFolder {
@@ -84,6 +86,13 @@ export interface FileNoteInput {
 
 export type NoteTag = Label
 
+/** A stored document and the Google file id its links carry. */
+export interface MessageDocument {
+  /** `document:<id>`, as `drive documents show` takes it. */
+  reference: string
+  fileId: string
+}
+
 export interface NotesStore extends NoteSearch {
   addFolder(input: { name: string; format?: NoteFolder["format"] }): Promise<NoteFolder>
   folders(): Promise<NoteFolder[]>
@@ -113,6 +122,12 @@ export interface NotesStore extends NoteSearch {
   removeLink(id: string): Promise<{ id: string; removed: true }>
   /** The links a file states, replacing what its last import stated; links the owner added stay. */
   replaceFileLinks(documentId: string, links: Omit<LinkInput, "from" | "origin">[]): Promise<Link[]>
+  /**
+   * Links every stored message whose text holds a Google link to one of the documents, in any account; a link
+   * already there is kept, not doubled. `since` (ISO 8601) looks only at messages stored at or after it.
+   * Answers how many links it added.
+   */
+  linkMessages(input: { documents: MessageDocument[]; since?: string }): Promise<number>
   /**
    * The tags a file states, replacing what its last import stated. A tag the owner added stays, even when
    * the file stops stating it; a file tag the owner also added becomes the owner's.
@@ -388,7 +403,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       inTransaction(() => {
         const folder = Number(folderRow(input.folderId).id)
         const path = textOf(input.path, "a note's path", 4096)
-        const text = textOf(input.text, "a note's text", 200_000, true)
+        const text = textOf(input.text, "a note's text", MAX_TEXT_CHARS, true)
         const frontMatter = input.frontMatter == null ? null : JSON.stringify(input.frontMatter)
         const at = now()
         const found = database
@@ -599,6 +614,42 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         database.prepare("DELETE FROM links WHERE from_type = 'document' AND from_id = ? AND source = 'file'").run(id)
         return links.map((link) => insertLink(context, { ...link, from: `document:${id}`, origin: "file" }))
       }),
+    linkMessages: async ({ documents, since }) => {
+      const after = since === undefined ? null : Date.parse(since)
+      if (after !== null && Number.isNaN(after))
+        throw new CliError("validation_error", `since takes an ISO 8601 time, not "${since}"`)
+      return inTransaction(() => {
+        const candidates = database.prepare(
+          "SELECT m.id, m.text FROM messages_fts f JOIN messages m ON m.id = f.rowid " +
+            "WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND (? IS NULL OR m.created_at >= ?)",
+        )
+        const existing = database.prepare(
+          "SELECT 1 FROM links WHERE from_type = 'message' AND from_id = ? AND to_type = 'document' AND to_id = ? " +
+            `AND kind = ${linkKind("links-to")}`,
+        )
+        const insert = database.prepare(
+          "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, confirmed, author, created_at, updated_at) " +
+            `VALUES ('message', ?, 'document', ?, ${linkKind("links-to")}, 'message', 1, 'rule', ?, ?)`,
+        )
+        const at = now()
+        let added = 0
+        for (const { reference, fileId } of documents) {
+          const document = requiredThing(database, reference, "the document")
+          if (document.type !== "document")
+            throw new CliError("validation_error", `${reference} is not a document; give document:<id>`)
+          // The trigram index needs three characters, and no Google file id is that short.
+          if (fileId.length < 3) continue
+          for (const row of candidates.all(`"${fileId.replaceAll('"', '""')}"`, after, after)) {
+            const id = Number(row.id)
+            if (!googleDocumentLinks(String(row.text)).some((link) => link.documentId === fileId)) continue
+            if (existing.get(id, document.id)) continue
+            insert.run(id, document.id, at, at)
+            added += 1
+          }
+        }
+        return added
+      })
+    },
     replaceFileTags: async (documentId, tags) =>
       inTransaction(() => {
         const id = Number(documentRow(documentId).id)

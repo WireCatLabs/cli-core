@@ -203,6 +203,14 @@ export const syncCommand = (messenger: Messenger): Command => {
         )
         if (jobId) updateJob(jobs, jobId, { finishedAt: new Date().toISOString(), result })
         context.renderer.result(result)
+        const prepared = "prepared" in result ? result.prepared : undefined
+        if (prepared && !prepared.complete && "chat" in result && result.chat !== null) {
+          const command = messenger.app.command
+          context.renderer.note(
+            `search is not fully prepared for this chat (${prepared.reason}) — ` +
+              `\`${command} conversations build --chat ${result.chat}\`, then \`${command} conversations embed --chat ${result.chat}\``,
+          )
+        }
       } catch (error) {
         if (jobId) {
           const code = isCliFailure(error) ? error.code : "generic_failure"

@@ -1,6 +1,7 @@
 import { dirname, resolve } from "node:path"
 import { writeSecurely } from "@wirecat/cli-base"
 import { Command } from "commander"
+import { engineStates } from "../../attachments/extract.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { storePath } from "../../store/path.js"
@@ -157,6 +158,7 @@ const diagnose = async (
         hint: `\`${app.command} doctor --online\` logs in once and checks it; it sends nothing`,
       },
       store: await storeSummary(env),
+      readers: engineStates(),
       sends: sendsState(new SendJournal(sendsPathFor(app, profile, env))),
       flood: floodState(new FloodMemory(flood)),
       runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },

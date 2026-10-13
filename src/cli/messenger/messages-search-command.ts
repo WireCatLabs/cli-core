@@ -14,6 +14,8 @@ import { backendOptions, backendRequest, noteServer } from "./search-backend-opt
 import { syncOptions, syncRequest } from "./search-sync-options.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
 
+const PLACES = { transcript: "transcript", filename: "file name", file: "file text" } as const
+
 const TYPES = { text: "NOT has:attachment", voice: "has:voice", file: "has:file" } as const
 type MessageType = keyof typeof TYPES
 
@@ -48,11 +50,15 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
         : `only this chat — the same as chat: in the query; ${messenger.chatArgument}`,
     )
   if (mail)
-    command.option("--account <address>", "only this mail account, by its address; every mail account when unset")
+    command.option(
+      "--source <accounts>",
+      "only these mail accounts, separated by commas: email:<address> as a hit shows it, email, mail or " +
+        "group:<name>; every mail account when unset",
+    )
   else
     command
       .option(
-        "--source <messenger>",
+        "--source <accounts>",
         "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; " +
           "or a list: group:work,telegram:Alice,email:me@example.com",
       )
@@ -75,7 +81,14 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
   }
   command.option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
   command.addHelpText("after", SAVE_HELP)
-  if (mail) return command.action(searchAction(messenger, kind))
+  if (mail)
+    return command
+      .addHelpText(
+        "after",
+        `content: narrows a search to the text of attachments, filename: to their names —
+\`${messenger.app.command} search mail 'content:invoice'\`. --json: the list is items; each email's reference is locator.`,
+      )
+      .action(searchAction(messenger, kind))
   return command
     .addHelpText(
       "after",
@@ -83,6 +96,9 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
 \`${messenger.app.command} messages sync --all --background\` (the last 90 days of every chat); the answer's
 coverage says what was searched and coverage.next what would improve it. Mail is \`${messenger.app.command} search mail\`;
 everything at once is \`${messenger.app.command} search all\`.
+A bare word looks in message text, voice transcripts, file names and file text. text:, transcript:,
+content: (the text of files) and filename: (their names) narrow it to one —
+\`${messenger.app.command} search messages 'content:invoice'\`. --json: the list is items; each hit's reference is locator.
 Search guide: https://github.com/WireCatLabs/cli-messaging/blob/main/docs/search/query-language.md`,
     )
     .option("--regex", "the words are one regular expression, case-insensitive, tested against every stored text")
@@ -98,7 +114,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       type === undefined ? given : given.length === 0 ? [TYPES[type]] : [`(${given.join(" ")}) AND ${TYPES[type]}`]
     const {
       chat,
-      account,
       source,
       regex,
       language,
@@ -112,7 +127,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       saved,
     } = this.opts<{
       chat?: string
-      account?: string
       source?: string
       regex?: boolean
       discover?: boolean
@@ -136,7 +150,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     const typed = {
       ...(chat === undefined ? {} : { chat }),
       ...(source === undefined ? {} : { source }),
-      ...(account === undefined ? {} : { mailAccount: account }),
       ...(discover === undefined ? {} : { discover }),
       ...(language === undefined ? {} : { language }),
       ...(timezone === undefined ? {} : { timezone }),
@@ -202,6 +215,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     noteServer(context, found.server)
     const { command } = messenger.app
     for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
+    for (const { source, reason } of found.skipped ?? []) context.renderer.note(`${source} not searched: ${reason}`)
     const stemming = found.query?.stemming
     const forms = (stemming?.applied ? stemming.terms : []).filter(({ stemmer }) => stemmer !== "none")
     if (forms.length > 0)
@@ -251,7 +265,11 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
           .map(({ hit, at }) => {
             const title = hit.chatTitle ?? hit.chatId
             const links = hit.thread ? renderThreadLinks(hit.thread) : ""
-            return `${spans ? `${at.provider} · ${title}` : title}  ${hit.locator}\n${renderMessages(hit.thread?.items ?? hit.context ?? [hit], options)}${links ? `\n${links}` : ""}`
+            const place =
+              hit.matchedIn && hit.matchedIn !== "text" && "excerpt" in hit
+                ? `\n  found in the ${PLACES[hit.matchedIn]}: ${String(hit.excerpt)}`
+                : ""
+            return `${spans ? `${at.provider} · ${title}` : title}  ${hit.locator}\n${renderMessages(hit.thread?.items ?? hit.context ?? [hit], options)}${place}${links ? `\n${links}` : ""}`
           })
           .join("\n\n"),
       )

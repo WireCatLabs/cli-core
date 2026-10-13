@@ -147,11 +147,15 @@ MCP tools write through `services.tags` with their own permission keys (`tags.ad
 
 **The text of files** (version 19) is `attachment_texts`, one row per attachment: what `attachments extract`
 read from the file `messages download` saved (`attachments.local_path`, written by the download since this
-version's package) — plain text, Word through `mammoth`, a PDF's text layer through `unpdf`, both optional peer
-packages loaded on first use (`src/attachments/extract.ts`) — or what an agent wrote back after reading a scan
+version's package) — plain text, HTML, RTF, Word through `mammoth`, Word 97–2003 through `word-extractor`, a
+PDF's text layer through `unpdf` (dependencies of this package, loaded on first use: `src/attachments/extract.ts`),
+ODF/OOXML/EPUB through the built-in readers (`src/attachments/documents.ts`) — or what an agent wrote back after reading a scan
 (`origin`: `extracted` or `agent`; an extraction never replaces an agent's text). Its words are in
-`attachment_words`, contentless FTS5 with rowid = attachment pk, kept by triggers; `content:` compiles to an
-exact condition over it and stays out of bm25 ranking, which ANDs required words into `message_words`. No
+`attachment_words`, contentless FTS5 with rowid = attachment pk, kept by triggers; a voice note's transcript
+is its attachment's text with extractor `speech:<source>`. `content:` (file text) and `transcript:` compile to
+exact conditions over it. A bare word (`Predicate.implicit`) also matches there and in file names: its leaf
+ORs those sets in (`elsewhere`), the query is driven by the union of the sets and ranked by `message_words`
+joined LEFT, with hits outside the message text tiered transcript → file name → file text (`lucene.ts`). No
 foreign key, so the purges of older builds still work; triggers erase the text when its message is tombstoned
 or deleted, or its attachment deleted (NEED-393 A, tested against 0.49.0). `store reindex` rebuilds the index.
 `attachments list --needs-text` and `attachments text set` (MCP `attachments_list`, `attachments_text_set`) are
@@ -279,11 +283,10 @@ account's prefix matches. Meeting hits carry their numeric source identities and
 Because `MeetingStore.search` pages meetings before matching their rows, the service visits
 candidate meetings serially and keeps a source cursor inside a meeting's hit list. Sparse pages
 can report unknown `hasMore` at the scan limit. The candidate bound does not bound the store's raw
-hit allocation, and offsets do not give a snapshot. `search all --meetings` and the `search_all`
-tool's `meetings` input reach it through `messages.searchAllWithMeetings`, which never lets the
-meeting account default to the messenger's own: without a named account it takes the one stored
-account that holds a meeting, refuses when several do and skips meetings when none does. Without the
-option both call the existing `searchAll`. No meeting reference resolver or vector index is introduced.
+hit allocation, and offsets do not give a snapshot. `search all --source` and the `search_all`
+tool's `source` reach it through `messages.searchAllWithMeetings`, which never lets the meeting account
+default to the messenger's own: it reads meetings only from the one meeting account the list names (of
+several a bare `zoom` names, the one that holds meetings), and otherwise answers `skipped` for meetings. No meeting reference resolver or vector index is introduced.
 
 **Server search beside the archive.** `messages.search` with `backend: both|server` first runs
 `searchServer` (`src/services/server-search.ts`): it turns the resolved query into at most three

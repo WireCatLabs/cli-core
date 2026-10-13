@@ -55,7 +55,7 @@ const call = async (argv: string[]) => {
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "bot-command-"))
-  env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+  env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
   keyring = memoryKeyring()
   typed = "good"
   connected = []

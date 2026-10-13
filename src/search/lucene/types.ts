@@ -25,6 +25,8 @@ export interface Predicate {
   lowerInclusive?: boolean
   upperInclusive?: boolean
   span: Span
+  /** A bare word, under no field: it searches every place a message holds words, not only its text. */
+  implicit?: true
 }
 export type QueryNode = Predicate | { kind: "boolean"; clauses: { occur: Occur; node: QueryNode }[]; span: Span }
 export interface QueryAst {

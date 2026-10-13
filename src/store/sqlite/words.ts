@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { storedKinds } from "../../domain/attachments.js"
 import type { Id, Page, Provider } from "../../domain/models.js"
 import type { Term } from "../../search/query.js"
 import type { SqlValue } from "../driver.js"
@@ -54,7 +55,15 @@ export interface WordOptions {
 
 /** A hit with its relevance — bm25 turned round so higher is better; `null` from steps that do not rank. */
 /** `exact: false`: a stemmed search found it only through another form of the words. */
-export type ScoredHit = StoredHit & { score: number | null; exact?: boolean }
+export type ScoredHit = StoredHit & {
+  score: number | null
+  exact?: boolean
+  /** Where the words were: the message's text, a voice note's transcript, a file's name or a file's text. */
+  matchedIn?: MatchPlace
+  /** The text of that place, for the excerpt; never part of an answer. */
+  matchedText?: string
+}
+export type MatchPlace = "text" | "transcript" | "filename" | "file"
 
 interface Resolved {
   accountPks: number[]
@@ -142,10 +151,11 @@ const rowConditions = (resolved: Resolved, scope: SearchScope, joined: { chat: b
     else if (kind === "attachment")
       where.push("EXISTS (SELECT 1 FROM attachments a WHERE a.attachable_type = 'message' AND a.attachable_id = m.id)")
     else {
+      const kinds = storedKinds(kind)
       where.push(
-        "EXISTS (SELECT 1 FROM attachments a WHERE a.attachable_type = 'message' AND a.attachable_id = m.id AND a.kind = ?)",
+        `EXISTS (SELECT 1 FROM attachments a WHERE a.attachable_type = 'message' AND a.attachable_id = m.id AND a.kind IN (${kinds.map(() => "?").join(",")}))`,
       )
-      params.push(kind)
+      params.push(...kinds)
     }
   }
   // A chat marked not searchable is searched only when the search names it (plan S9).

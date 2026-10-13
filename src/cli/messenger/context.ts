@@ -349,9 +349,13 @@ export const refuseLocalWrite = (context: MessengerContext, command: string, per
   )
 }
 
-export const messengerContext = (command: Command, messenger: Messenger): MessengerContext => {
+export const messengerContext = (
+  command: Command,
+  messenger: Messenger,
+  resolving: Pick<ResolveOptions, "needsProfile"> = {},
+): MessengerContext => {
   const { app, provider } = messenger
-  const base = baseContext(command, messenger.resolveSettings)
+  const base = baseContext(command, (flags, options) => messenger.resolveSettings(flags, { ...options, ...resolving }))
   const { profile } = base.settings
   refuseDenied(command, base.settings)
   for (const key of unknownPermissionKeys(

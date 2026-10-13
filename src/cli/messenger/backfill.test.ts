@@ -55,7 +55,7 @@ const chatOf = (state: {
 
 const setup = () => {
   const root = mkdtempSync(join(tmpdir(), "backfill-"))
-  return { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+  return { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
 }
 
 const call = async (
@@ -801,6 +801,9 @@ describe("post-fetch catch-up controls", () => {
       env,
     )
     expect(bounded.answer).toMatchObject({ prepared: { reason: "message_bound", complete: false } })
+    expect(bounded.stderr).toContain(
+      "search is not fully prepared for this chat (message_bound) — `chat conversations build --chat 7`, then `chat conversations embed --chat 7`",
+    )
     expect(
       (await call(["messages", "sync", "7", "--catch-up", "--catch-up-chunks", "20001", "--json"], chatOf(state), env))
         .code,

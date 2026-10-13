@@ -58,7 +58,7 @@ const machine = (platform: NodeJS.Platform, entry = ["/opt/node", "/opt/chat/bin
 const call = async (argv: string[], env: NodeJS.ProcessEnv, system: ServerSystem) => {
   const streams = captureStreams()
   const code = await run(
-    ["schedule", ...argv],
+    [...(env.CHAT_PROFILE ? [] : ["default"]), "schedule", ...argv],
     { app, commands: () => [scheduleCommand(messenger)] },
     { streams, env, system },
   )

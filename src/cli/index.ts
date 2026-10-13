@@ -132,7 +132,7 @@ export {
   provideInputPolicy,
 } from "./input-policy.js"
 export { accountCommand } from "./messenger/account-command.js"
-export { accountFileFor, rememberAccount } from "./messenger/accounts.js"
+export { accountFileFor, profilesHere, rememberAccount } from "./messenger/accounts.js"
 export { storeCommand } from "./messenger/archive-commands.js"
 export { attachmentsCommand } from "./messenger/attachments-command.js"
 export { chatsCommand } from "./messenger/chats-command.js"
@@ -285,6 +285,7 @@ export {
   flag,
   fromFile,
   type GlobalFlags,
+  NONE_NAMED,
   type ProfileKind,
   parseDuration,
   plain,

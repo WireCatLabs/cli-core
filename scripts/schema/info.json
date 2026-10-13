@@ -82,6 +82,14 @@
       "idx": []
     },
     {
+      "name": "attachment_name_words",
+      "virtual": true,
+      "sql": "CREATE VIRTUAL TABLE attachment_name_words USING fts5(\n  name,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2')",
+      "cols": [],
+      "fks": [],
+      "idx": []
+    },
+    {
       "name": "attachment_words",
       "virtual": true,
       "sql": "CREATE VIRTUAL TABLE attachment_words USING fts5(\n  normalized_text,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2')",

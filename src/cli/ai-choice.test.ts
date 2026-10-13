@@ -14,6 +14,7 @@ const setup = () => {
   const env = {
     ...process.env,
     APP_CONFIG_DIR: root,
+    APP_PROFILE: "default",
     APP_STATE_DIR: join(root, "state"),
     OPENAI_API_KEY: "",
     ANTHROPIC_API_KEY: "",

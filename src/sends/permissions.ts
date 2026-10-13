@@ -432,8 +432,9 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   if (top === "conversations" && next === "links") return "conversations.links"
   // Vectors are written to the local store only, and the text never leaves the machine (phase 5 E10).
   if (top === "conversations" && next === "embed") return "conversations.embed"
-  // Which files a message has, and where they are saved, tells as much as a message does.
-  if (top === "attachments" && next === "list") return "messages"
+  // Which files a message has, and where they are saved, tells as much as a message does; so does who
+  // shared which document link, and when.
+  if ((top === "attachments" && next === "list") || (top === "chats" && next === "documents")) return "messages"
   if (top === "store" && (next === "gaps" || next === "jobs")) return path.join(".")
   if (top === "messages" && next === "sync") return "messages"
   if (SHOW_MESSAGES.has(top) || (top === "contacts" && (next === "context" || next === "timeline"))) return "messages"

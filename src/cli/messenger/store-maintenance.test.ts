@@ -172,6 +172,30 @@ describe("store check", () => {
   })
 })
 
+describe("store check on a file a newer build wrote", () => {
+  const ahead = async (minCompatible: number) => {
+    const env = envFor()
+    const database = await seeded(env)
+    migrate(database, { migrations: [...MIGRATIONS, { version: latest + 1, minCompatible, statements: [] }] })
+    database.close()
+    return call(["store", "check", "--json"], env)
+  }
+
+  it("**passes the schema check when this build may still write the file**", async () => {
+    const { answer, stderr } = await ahead(1)
+    expect(answer.checks.schema).toBe(true)
+    expect(answer.schema).toMatchObject({ version: latest + 1, minCompatible: 1, speaks: latest })
+    expect(stderr.join("\n")).toContain(`the file is at schema ${latest + 1}, newer than this build's ${latest}`)
+  })
+
+  it("**fails it when this build may not, and says to upgrade**", async () => {
+    const { answer, stderr } = await ahead(latest + 1)
+    expect(answer.checks.schema).toBe(false)
+    expect(answer.ok).toBe(false)
+    expect(stderr.join("\n")).toContain("`chat upgrade`")
+  })
+})
+
 describe("a file that is empty or is not a database", () => {
   it("answers for the empty file a store makes before its first migration", async () => {
     const env = envFor()
@@ -272,6 +296,22 @@ describe("the word index", () => {
     expect(answer.searchIndexes.attachment_words).toBe("ok")
     expect(answer.wordIndex).toMatchObject({ watermark: 10, filledThrough: 1, ready: false })
     expect(stderr.join("\n")).toContain("the word index reaches message 1 of 10 — `chat store migrate` finishes it")
+  })
+
+  it("**`store check` says the typo vocabulary is behind the messages**, and `store migrate` finishes it", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    await call(["store", "migrate", "--json"], env)
+    const database = await openCache(String(env.MESSAGING_STORE))
+    database.exec("UPDATE search_index_state SET terms_through = 1 WHERE name = 'message_words'")
+    database.close()
+
+    const { answer, stderr } = await call(["store", "check", "--json"], env)
+    expect(answer.wordIndex).toMatchObject({ ready: true, termsThrough: 1, termsReady: false })
+    expect(stderr.join("\n")).toContain("the typo vocabulary reaches message 1 of 2 — `chat store migrate` finishes it")
+
+    await call(["store", "migrate", "--json"], env)
+    expect((await call(["store", "check", "--json"], env)).answer.wordIndex).toMatchObject({ termsReady: true })
   })
 
   it("`store reindex` refuses a file requiring a newer build", async () => {

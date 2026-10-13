@@ -2,10 +2,11 @@ import { CliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
+import { INTERNAL_NOTES, kindOf } from "../domain/providers.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
 import { MAX_SEARCH_OFFSET, type SearchFound, type SearchQuery, searchStore } from "./messages.js"
-import { RRF_K, searchNotes } from "./notes-search.js"
+import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
 export const RESOURCES_SEARCHED = ["messages", "mail", "notes"] as const
@@ -31,6 +32,18 @@ export interface SearchAllItem {
   foundBy: ("words" | "meaning")[]
 }
 
+/** One account a search read, by the kind it was read for: the shape memo's `search all` answers too. */
+export interface SearchedAccount {
+  resource: string
+  provider: string
+  account: string
+}
+
+/** A resource not read, or a `--source` entry naming no account the search reads. */
+export type Skipped<R extends string> =
+  | { resource: R; reason: string; source?: undefined }
+  | { source: string; reason: string; resource?: undefined }
+
 export interface SearchAllFound {
   query: string
   items: SearchAllItem[]
@@ -38,8 +51,10 @@ export interface SearchAllFound {
   /** Where the next page starts, as `offset`; absent on the last page. */
   nextOffset?: number
   searched: SearchedResource[]
+  /** Every account read, kind by kind. */
+  accounts: SearchedAccount[]
   /** A resource the query could not be asked of, and why: a field it lacks, or nothing stored yet. */
-  skipped: { resource: SearchedResource; reason: string }[]
+  skipped: Skipped<SearchedResource>[]
   /** How the notes were searched, when they were. */
   notes?: { by: "words" | "words and meaning"; meaningSkipped?: string }
   /** The messenger's server step for messages, as `search messages` reports it. */
@@ -59,6 +74,8 @@ export interface SearchAllRequest {
   server?: ServerOptions
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  /** The accounts `--source` chose, per kind; a kind left out reads every account of its own. */
+  scope?: Partial<Record<SearchedResource, AccountKey[]>>
 }
 
 /** A query a resource cannot answer is skipped with its reason, never a failure of the whole search. */
@@ -88,20 +105,23 @@ export const searchAll = async (
   const command = messenger.app?.command ?? "tg"
   const lists: SearchAllItem[][] = []
   const searched: SearchedResource[] = []
+  const accounts: SearchedAccount[] = []
   const skipped: SearchAllFound["skipped"] = []
   let hasMore = false
   let notes: SearchAllFound["notes"]
   let server: ServerSearched | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
+    const given = request.scope?.[kind]
     const query: SearchQuery = {
       text: request.text,
       language: "lucene",
       kind,
+      ...(given ? { accounts: given } : {}),
       ...(kind === "messages"
         ? {
             // Server hits are matched by chat and message id, which another account can share.
-            ...(request.backend === "server" ? {} : { source: "all" }),
+            ...(request.backend === "server" || given ? {} : { source: "all" }),
             ...(request.backend === undefined ? {} : { backend: request.backend }),
             ...(request.server === undefined ? {} : { server: request.server }),
           }
@@ -116,6 +136,9 @@ export const searchAll = async (
       kind === "messages" ? await searchMessages(query) : await searchStore(store, account, query, messenger)
     if (found.server) server = found.server
     hasMore ||= found.hasMore
+    const read =
+      found.coverage?.accounts ?? given ?? (await store.accounts()).filter(({ provider }) => kindOf(provider) === kind)
+    accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
     return found.items.map((hit): SearchAllItem => {
       const at = parseLocator(hit.locator)
       return {
@@ -138,9 +161,11 @@ export const searchAll = async (
   for (const resource of only) {
     try {
       if (resource === "notes") {
+        const chosen = request.scope?.notes
         const found = await searchNotes(store, request.text, {
           limit: window,
           command,
+          ...(chosen === undefined ? {} : notesScopeOf(chosen)),
           ...(request.exact ? { exact: true } : {}),
           ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
           ...(request.env === undefined ? {} : { env: request.env }),
@@ -155,13 +180,18 @@ export const searchAll = async (
             kind: "note",
             ref: hit.ref,
             provider: "notes",
-            account: hit.folderId ?? "internal",
+            account: hit.folderId ?? INTERNAL_NOTES,
             title: hit.title,
             timestamp: hit.modifiedAt,
             text: hit.line,
             foundBy: hit.foundBy,
           })),
         )
+        const read = chosen?.map(({ account }) => account) ?? [
+          INTERNAL_NOTES,
+          ...(await store.notes.folders()).map(({ id }) => id),
+        ]
+        accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
       } else lists.push(await messagesOf(resource))
       searched.push(resource)
     } catch (error) {
@@ -185,6 +215,7 @@ export const searchAll = async (
     hasMore: more,
     ...(more && window <= MAX_SEARCH_OFFSET ? { nextOffset: window } : {}),
     searched,
+    accounts,
     skipped,
     ...(notes === undefined ? {} : { notes }),
     ...(server === undefined ? {} : { server }),

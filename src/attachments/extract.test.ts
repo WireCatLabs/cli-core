@@ -2,7 +2,7 @@ import ExcelJS from "exceljs"
 import { zipSync } from "fflate"
 import { describe, expect, it, vi } from "vitest"
 import { docx, pdf, zip } from "../testing/files.js"
-import { type Engine, engineHint, extractText, importEngine, type LoadEngine } from "./extract.js"
+import { type Engine, engineHint, engineStates, extractText, importEngine, type LoadEngine } from "./extract.js"
 
 const hint = (name: string, extra: { kind?: string; mime?: string } = {}) => ({
   kind: extra.kind ?? "file",
@@ -81,21 +81,37 @@ describe("reading the text layer of a file", () => {
     expect(destroy).toHaveBeenCalledOnce()
     expect(read).not.toHaveBeenCalled()
   })
-  it("preserves spreadsheet cell addresses and PDF page spans", async () => {
+  it("**reads a workbook row by row under its header, values as displayed**, and PDF page spans", async () => {
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet("Synthetic Budget")
-    sheet.getCell("A1").value = "Synthetic invoice"
-    sheet.getCell("B2").value = 42
+    sheet.addRow(["Item", "Amount", "Paid", "Share"])
+    sheet.addRow(["Rent", 1200, new Date(Date.UTC(2026, 2, 1)), 0.25])
+    sheet.addRow(["Heron food", 0.1 + 0.2, undefined, undefined])
+    sheet.getCell("D2").numFmt = "0%"
+    sheet.getCell("B4").value = { formula: "B2+B3", result: 1200.3 }
     const bytes = new Uint8Array(await workbook.xlsx.writeBuffer())
     const found = await extractText(bytes, hint("budget.xlsx"), importEngine)
     expect(found).toMatchObject({
       status: "extracted",
-      text: expect.stringContaining("A1: Synthetic invoice"),
+      text:
+        "# Synthetic Budget\nRow 2: Item: Rent; Amount: 1200; Paid: 2026-03-01; Share: 25%\n" +
+        "Row 3: Item: Heron food; Amount: 0.3\nRow 4: Amount: 1200.3",
     })
     const pages = await extractText(pdf("Synthetic invoice"), hint("invoice.pdf"), importEngine)
     expect(pages.status === "extracted" && pages.spans).toEqual([
       { page: 1, start: 0, end: "Synthetic invoice".length },
     ])
+  })
+  it("**reads CSV and TSV row by row under their header**", async () => {
+    const csv = text('Name,Note\nAnn,"says ""hi"", twice"\n\nBob,\n')
+    expect(await extractText(csv, hint("people.csv"), importEngine)).toEqual({
+      status: "extracted",
+      text: '# people\nRow 2: Name: Ann; Note: says "hi", twice\nRow 4: Name: Bob',
+      extractor: "sheet:v1:csv",
+    })
+    expect(await extractText(text("a\tb\n1\t2"), hint("t.tsv"), importEngine)).toMatchObject({
+      text: "# t\nRow 2: a: 1; b: 2",
+    })
   })
   it("**reads plain text in UTF-8, with or without a BOM, Cyrillic and Latin alike**", async () => {
     expect(await extractText(text("счёт invoice 42"), hint("notes.txt"), importEngine)).toEqual({
@@ -104,7 +120,9 @@ describe("reading the text layer of a file", () => {
       extractor: "plain",
     })
     const bom = new Uint8Array([0xef, 0xbb, 0xbf, ...text("a,b\nдоговор,1")])
-    expect(await extractText(bom, hint("table.csv"), importEngine)).toMatchObject({ text: "a,b\nдоговор,1" })
+    expect(await extractText(bom, hint("table.csv"), importEngine)).toMatchObject({
+      text: "# table\nRow 2: a: договор; b: 1",
+    })
     expect(
       await extractText(text('{"k":"v"}'), hint("data", { mime: "application/json" }), importEngine),
     ).toMatchObject({
@@ -152,7 +170,7 @@ describe("reading the text layer of a file", () => {
     })
   })
 
-  it("**says which optional package is missing, instead of failing**", async () => {
+  it("**says which package is missing, instead of failing**", async () => {
     expect(await extractText(pdf("x"), hint("a.pdf"), without("unpdf"))).toEqual({
       status: "engine-missing",
       engine: "unpdf",
@@ -161,7 +179,8 @@ describe("reading the text layer of a file", () => {
       status: "engine-missing",
       engine: "mammoth",
     })
-    expect(engineHint("unpdf", "tg")).toContain("npm install -g unpdf")
+    expect(engineHint("unpdf", "tg")).toContain("ships with tg, could not be loaded — reinstall the tool")
+    expect(engineHint("@napi-rs/canvas", "tg")).toContain("npm install -g @napi-rs/canvas")
   })
 
   it("lets any other loading failure through", async () => {
@@ -182,4 +201,19 @@ it("honors a configured file budget for local text extraction", async () => {
     (await extractText(bytes, hint("synthetic.txt"), importEngine, undefined, { MESSAGING_ATTACHMENT_MAX_MIB: "2" }))
       .status,
   ).toBe("extracted")
+})
+
+describe("engineStates", () => {
+  it("says which reader is built in, which optional one is installed, and which would not load", () => {
+    const resolve = (name: string) => {
+      if (name === "mammoth") throw Object.assign(new Error("not found"), { code: "ERR_MODULE_NOT_FOUND" })
+      return `file:///node_modules/${name}/index.js`
+    }
+    expect(engineStates(resolve)).toEqual({
+      unpdf: "built in",
+      mammoth: "missing",
+      "word-extractor": "built in",
+      "@napi-rs/canvas": "installed",
+    })
+  })
 })

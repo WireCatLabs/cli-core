@@ -20,6 +20,8 @@ for (const prefix of ["APP", "CHAT", "TG", "MAX"]) {
   process.env[`${prefix}_CACHE_DIR`] = join(sandbox, prefix, "cache")
   // Every test shares one profile's pace file: paced, a file of tests would wait on each other's calls.
   process.env[`${prefix}_REQUESTS_PER_MINUTE`] = "0"
+  // No profile is ever assumed; a test that means "no profile named" passes its own env without this.
+  process.env[`${prefix}_PROFILE`] = "default"
 }
 process.env.TMPDIR = sandbox
 // The default folders when a test passes its own env without the *_DIR overrides: env-paths reads these from

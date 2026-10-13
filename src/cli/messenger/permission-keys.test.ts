@@ -101,6 +101,7 @@ describe("the permission key of a command", () => {
     expect(keyForCommand(["attachments", "extract"])).toBe("attachments.extract")
     expect(keyForCommand(["attachments", "text", "set"])).toBe("attachments.text.set")
     expect(keyForCommand(["attachments", "list"])).toBe("messages")
+    expect(keyForCommand(["chats", "documents", "list"])).toBe("messages")
     expect(keyForCommand(["searches", "history"])).toBe("searches.history")
   })
 })

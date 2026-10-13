@@ -56,6 +56,7 @@ import * as completeness from "./sqlite/completeness.js"
 import { type ConversationEligibility, conversationEligibility } from "./sqlite/conversation-eligibility.js"
 import * as conversationQueries from "./sqlite/conversations.js"
 import { applyCounterObservations, type CounterTarget, counterStates, counterTargets } from "./sqlite/counters.js"
+import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
 import { drainEmailIndex, type MailStore, mailStoreOver, threadConversation } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import * as identities from "./sqlite/identities.js"
@@ -387,14 +388,16 @@ export interface MessageStore {
     chatId: Id,
   ): Promise<{ enabledAt: string; builtAt: string | null; algorithmVersion: number | null } | undefined>
   /** Oldest to newest, like a provider's history page. */
-  /** `threadId` keeps one forum topic's. */
+  /** `threadId` keeps one forum topic's; `outgoing` only the owner's (true) or only the others' (false). */
   messages(
     key: AccountKey,
     chatId: Id,
-    window: { limit: number; before?: Id; since?: string; threadId?: Id },
+    window: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean },
   ): Promise<Page<Message>>
   /** How many stored messages the chat has, sent at `since` or later when it is given. */
   countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
+  /** The chat's messages that may hold a Google document link, newest first, with the documents linked from each. */
+  documentLinkMessages(key: AccountKey, chatId: Id): Promise<DocumentLinkMessage[]>
   /** Saved or edited after `at` (ISO, this machine's clock), oldest first, and the ids deleted after it. */
   changes(key: AccountKey, chatId: Id, at: string): Promise<{ messages: Message[]; deleted: Id[] }>
   /**
@@ -1348,6 +1351,11 @@ const storeOver = (context: StoreContext): MessageStore => {
       return chatKey === undefined ? 0 : reads.countMessages(context, chatKey, since)
     },
 
+    documentLinkMessages: async (key, chatId) => {
+      const chatKey = chatKeyOf(key, chatId)
+      return chatKey === undefined ? [] : documentLinkMessages(context, chatKey)
+    },
+
     changes: async (key, chatId, at) => {
       const chatKey = chatKeyOf(key, chatId)
       return chatKey === undefined
@@ -1779,5 +1787,5 @@ export {
 } from "./sqlite/stems.js"
 export type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
 export { inboxKey } from "./sqlite/tasks.js"
-export type { ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"
+export type { MatchPlace, ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"

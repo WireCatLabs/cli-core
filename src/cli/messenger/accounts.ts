@@ -34,3 +34,7 @@ export const profilesWithAccounts = (app: AppIdentity, env: NodeJS.ProcessEnv): 
     .filter((name) => name.endsWith(".json"))
     .map((name) => name.slice(0, -".json".length))
 }
+
+/** The profiles on this computer, as `account list` shows them: named in the configuration file, or logged in to. */
+export const profilesHere = (app: AppIdentity, configured: readonly string[], env: NodeJS.ProcessEnv): string[] =>
+  [...new Set([...configured, ...profilesWithAccounts(app, env)])].sort()

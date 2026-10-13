@@ -59,7 +59,7 @@ const messenger: Messenger = {
 describe("a messenger's override", () => {
   it("replaces one method for commands and MCP tools alike, with the shared one inside", async () => {
     const root = mkdtempSync(join(tmpdir(), "override-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     const streams = captureStreams()
     const code = await run(
       ["messages", "list", "7", "--json"],

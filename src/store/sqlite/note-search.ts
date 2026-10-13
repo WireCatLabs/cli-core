@@ -26,6 +26,8 @@ export interface NoteQuery {
   limit: number
   offset?: number
   folderIds?: string[]
+  /** With `folderIds`, the notes written in memo too, in the same ranked list. */
+  withInternal?: boolean
   source?: Note["source"]
   /** Newest first instead of best first. */
   newest?: boolean
@@ -117,7 +119,7 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
   const chosen = CORPORA.filter(
     ({ type }) =>
       (query.source === undefined || (query.source === "file") === (type === "document")) &&
-      (!query.folderIds?.length || type === "document"),
+      (!query.folderIds?.length || query.withInternal === true || type === "document"),
   )
   const rows = chosen.flatMap((corpus) => searchCorpus(context, query, corpus))
   const exactFirst = rows.some((row) => row.exact !== undefined)
@@ -279,7 +281,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
     const scope = combine(
       [
         bound("n.deleted_at IS NULL"),
-        ...(query.folderIds?.length
+        ...(query.folderIds?.length && corpus.type === "document"
           ? [bound("n.folder_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))", JSON.stringify(query.folderIds))]
           : []),
       ],
@@ -383,7 +385,7 @@ export interface NoteSearch {
   nearest(
     model: string,
     query: Float32Array,
-    options: { limit: number; folderIds?: string[]; source?: Note["source"] },
+    options: { limit: number; folderIds?: string[]; withInternal?: boolean; source?: Note["source"] },
   ): Promise<NearestNote[]>
 }
 
@@ -403,12 +405,12 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
     const row = database.prepare(`SELECT * FROM ${type === "document" ? "documents" : "notes"} WHERE id = ?`).get(id)
     return row ? (type === "document" ? documentOf(row) : noteOf(row)) : undefined
   }
-  const live = (folderIds: string[] | undefined, source: Note["source"] | undefined) => {
+  const live = (folderIds: string[] | undefined, source: Note["source"] | undefined, withInternal = false) => {
     const folders = folderIds?.length ? JSON.stringify(folderIds) : null
     const types = source === undefined ? ["document", "note"] : source === "file" ? ["document"] : ["note"]
     return {
       sql: ` AND k.chunkable_type IN (${types.map(() => "?").join(", ")}) AND ${LIVE}`,
-      params: [...types, folders, folders, folders] as SqlValue[],
+      params: [...types, folders, folders, withInternal ? null : folders] as SqlValue[],
     }
   }
   return {
@@ -420,6 +422,16 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
     chunksToEmbed: async (model, { after, limit }) => {
       drain()
       const scope = live(undefined, undefined)
+      // One long note fills a whole batch; build its text once, not once per chunk.
+      const texts = new Map<string, string | undefined>()
+      const textOf = (owner: string) => {
+        if (!texts.has(owner)) {
+          const [type, id] = owner.split(":")
+          const note = read(String(type), Number(id))
+          texts.set(owner, note ? noteIndexText(note.title, note.text) : undefined)
+        }
+        return texts.get(owner)
+      }
       return database
         .prepare(
           `SELECT k.content_hash AS hash, min(k.chunkable_type || ':' || k.chunkable_id) AS owner, k.start_offset AS start, k.end_offset AS end
@@ -430,16 +442,15 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
         )
         .all(after ?? "", ...scope.params, model, limit)
         .flatMap((row) => {
-          const [type, id] = String(row.owner).split(":")
-          const note = read(String(type), Number(id))
-          if (!note) return []
-          const text = noteIndexText(note.title, note.text)
-          return [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
+          const text = textOf(String(row.owner))
+          return text === undefined
+            ? []
+            : [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]
         })
     },
-    nearest: async (model, query, { limit, folderIds, source }) => {
+    nearest: async (model, query, { limit, folderIds, withInternal, source }) => {
       drain()
-      const scope = live(folderIds, source)
+      const scope = live(folderIds, source, withInternal)
       const page = database.prepare(
         `SELECT k.id, k.chunkable_type AS type, k.chunkable_id AS owner, k.start_offset AS start, k.end_offset AS end, v.vector
            FROM chunks k JOIN embeddings v ON v.model = ? AND v.content_hash = k.content_hash

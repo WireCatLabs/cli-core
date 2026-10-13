@@ -35,7 +35,7 @@ const summary = (run: ExtractRun) =>
 const extractCommand = (messenger: Messenger): Command =>
   new Command("extract")
     .description(
-      "read the text of downloaded files — text, PDF/DOCX text layers, ODT/ODS/XLSX/PPTX/EPUB — into the local store, for content: in a search",
+      "read the text of downloaded files — text, PDF/DOCX text layers, ODT/ODS/XLSX/PPTX/EPUB — into the local store, where search finds them",
     )
     .option("--chat <chat>", `only this chat's files; ${messenger.chatArgument}`)
     .option("--from-dir <dir>", "match files in this nonrecursive directory; needs --chat")
@@ -201,7 +201,7 @@ const textCommand = (messenger: Messenger): Command => {
   const text = new Command("text").description("the text of one file, as an agent read it")
   text
     .command("set")
-    .description("keep the text an agent read from a file — a scan, a photo — so content: finds it; nothing is sent")
+    .description("keep the text an agent read from a file — a scan, a photo — so search finds it; nothing is sent")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")
     .option("--attachment <n>", "which file of the message, from 1; needed when it has more than one", count)
@@ -230,7 +230,7 @@ const textCommand = (messenger: Messenger): Command => {
 /** Files of stored messages: what is in them, for `content:` in a search. Nothing here is sent. */
 export const attachmentsCommand = (messenger: Messenger): Command =>
   new Command("attachments")
-    .description("the files of stored messages: their text in the local store, for content: in a search")
+    .description("the files of stored messages: their text in the local store, where search finds it")
     .addCommand(extractCommand(messenger))
     .addCommand(listCommand(messenger))
     .addCommand(showCommand(messenger))

@@ -20,7 +20,7 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
 describe("config", () => {
   it("**saves a setting, shows where it came from, and removes it again** — a messenger's own included", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
-    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
     const setting = async (name: string) =>
       (await call(["work", "config", "show", "--json"], env)).answer.settings.find(
         (one: { setting: string }) => one.setting === name,
@@ -46,7 +46,7 @@ describe("config", () => {
 
   it("**shows the permissions in force**, from every section, not only the profile's own", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
-    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
     await call(["work", "config", "set", "permissions.messages", "readonly"], env)
     await call(["config", "set", "permissions.contacts", "deny", "--defaults"], env)
 
@@ -61,7 +61,7 @@ describe("config", () => {
 
   it("**refuses a permission key that names no command**, and still removes one", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
-    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
     const streams = captureStreams()
     const refused = await run(
       ["config", "set", "permissions.messages.dlete", "allow"],
