@@ -152,7 +152,7 @@ describe("reading the text layer of a file", () => {
     })
   })
 
-  it("**says which optional package is missing, instead of failing**", async () => {
+  it("**says which package is missing, instead of failing**", async () => {
     expect(await extractText(pdf("x"), hint("a.pdf"), without("unpdf"))).toEqual({
       status: "engine-missing",
       engine: "unpdf",
@@ -161,7 +161,8 @@ describe("reading the text layer of a file", () => {
       status: "engine-missing",
       engine: "mammoth",
     })
-    expect(engineHint("unpdf", "tg")).toContain("npm install -g unpdf")
+    expect(engineHint("unpdf", "tg")).toContain("ships with tg, could not be loaded — reinstall the tool")
+    expect(engineHint("@napi-rs/canvas", "tg")).toContain("npm install -g @napi-rs/canvas")
   })
 
   it("lets any other loading failure through", async () => {
@@ -185,11 +186,16 @@ it("honors a configured file budget for local text extraction", async () => {
 })
 
 describe("engineStates", () => {
-  it("says which optional reader would not load", () => {
+  it("says which reader is built in, which optional one is installed, and which would not load", () => {
     const resolve = (name: string) => {
       if (name === "mammoth") throw Object.assign(new Error("not found"), { code: "ERR_MODULE_NOT_FOUND" })
       return `file:///node_modules/${name}/index.js`
     }
-    expect(engineStates(resolve)).toEqual({ unpdf: "installed", mammoth: "missing", "@napi-rs/canvas": "installed" })
+    expect(engineStates(resolve)).toEqual({
+      unpdf: "built in",
+      mammoth: "missing",
+      "word-extractor": "built in",
+      "@napi-rs/canvas": "installed",
+    })
   })
 })

@@ -88,11 +88,16 @@ describe("doctor", () => {
     })
   })
 
-  it("**says which optional file readers are installed**", async () => {
+  it("**says the file readers are built in, and whether the optional OCR renderer is installed**", async () => {
     const { env } = setup()
     const { answer } = await call(["doctor", "--json"], env, refused)
 
-    expect(answer.readers).toEqual({ unpdf: "installed", mammoth: "installed", "@napi-rs/canvas": "installed" })
+    expect(answer.readers).toEqual({
+      unpdf: "built in",
+      mammoth: "built in",
+      "word-extractor": "built in",
+      "@napi-rs/canvas": "installed",
+    })
   })
 
   it("**never calls the login ok without --online**", async () => {
