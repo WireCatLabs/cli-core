@@ -211,3 +211,30 @@ it("compiles shared metadata queries in SQL with boolean logic, literal values a
   await expect(get("unknown:value")).rejects.toThrow()
   await expect(get("kind:invalid")).rejects.toThrow()
 })
+
+it("keeps retired catalog records out of note listings, word search and embedding preparation without deleting annotations", async () => {
+  const { store, account } = await setup()
+  const { note } = await store.notes.saveFileNote({
+    folderId: account,
+    path: "item.md",
+    title: "Budget",
+    text: "budget evidence",
+  })
+  await store.catalog.upsert(account, [file()])
+  await store.knowledge.addTags(null, { type: "document", id: note.id }, ["keep"])
+  expect(
+    (await searchNotesQuery(store, { text: "budget", limit: 10, timezone: "UTC", folderIds: [account] })).items,
+  ).toHaveLength(1)
+  await store.catalog.reconcile(account, [])
+  expect((await store.notes.notes({ folderId: account })).items).toHaveLength(0)
+  expect(
+    (await searchNotesQuery(store, { text: "budget", limit: 10, timezone: "UTC", folderIds: [account] })).items,
+  ).toHaveLength(0)
+  expect(await store.notes.chunksToEmbed("synthetic-model", { limit: 10 })).toHaveLength(0)
+  expect((await store.notes.note(note.ref)).text).toBe("budget evidence")
+  expect((await store.notes.noteTags(note.ref)).map((tag) => tag.tag)).toContain("keep")
+  await store.catalog.upsert(account, [file()])
+  expect(
+    (await searchNotesQuery(store, { text: "budget", limit: 10, timezone: "UTC", folderIds: [account] })).items,
+  ).toHaveLength(1)
+})

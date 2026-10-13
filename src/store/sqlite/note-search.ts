@@ -320,6 +320,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
     const scope = combine(
       [
         bound("n.deleted_at IS NULL"),
+        ...(corpus.type === "document" ? [bound("coalesce(json_extract(n.metadata, '$.catalog.active'), 1)=1")] : []),
         ...(query.folderIds?.length && corpus.type === "document"
           ? [bound("n.folder_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))", JSON.stringify(query.folderIds))]
           : []),
@@ -437,7 +438,7 @@ const SCAN_PAGE = 5_000
 
 /** The live documents and notes of a chunk scan, narrowed by folder and source. */
 const LIVE =
-  "((k.chunkable_type = 'document' AND EXISTS (SELECT 1 FROM documents d WHERE d.id = k.chunkable_id AND d.deleted_at IS NULL " +
+  "((k.chunkable_type = 'document' AND EXISTS (SELECT 1 FROM documents d WHERE d.id = k.chunkable_id AND d.deleted_at IS NULL AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
   "AND (? IS NULL OR d.account_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))))) " +
   "OR (k.chunkable_type = 'note' AND ? IS NULL AND EXISTS (SELECT 1 FROM notes n WHERE n.id = k.chunkable_id AND n.deleted_at IS NULL)))"
 

@@ -555,7 +555,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           ? []
           : database
               .prepare(
-                "SELECT d.* FROM documents d WHERE d.deleted_at IS NULL AND (? IS NULL OR d.account_id = ?) " +
+                "SELECT d.* FROM documents d WHERE d.deleted_at IS NULL AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 AND (? IS NULL OR d.account_id = ?) " +
                   `AND (? IS NULL OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'document' AND l.from_id = d.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id = ?)) ` +
                   "AND (? IS NULL OR instr(lower(coalesce(d.body, '')), lower(?)) > 0) ORDER BY d.created_at DESC, d.id DESC LIMIT ?",
               )
