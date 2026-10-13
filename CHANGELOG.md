@@ -85,6 +85,8 @@ shape of this file.
   `config show` lists it.
 ||||||| parent of c12171f6 (feat!: snake_case entity schemas and an app hook for error reasons and details)
 
+- `store.catalog` stores file/folder metadata and parent relationships in existing document records. Account-scoped metadata filters, paging and reconciliation preserve indexed content, stable references and owner annotations; no store migration is required.
+
 ## 0.261.0 — 13.10.2026
 
 ### Changed — may break callers

@@ -8,6 +8,8 @@ export type { AgentAction, AgentActionInput, AgentActionsStore } from "./sqlite/
 export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
 export type { BotUpdate, BotUpdateStore } from "./sqlite/bot-updates.js"
+export type { CatalogActor, CatalogEntry, CatalogInput, CatalogQuery, CatalogStore } from "./sqlite/catalog.js"
+export { CATALOG_QUERY } from "./sqlite/catalog.js"
 export type { ChatMetadata } from "./sqlite/chats.js"
 export type {
   Email,

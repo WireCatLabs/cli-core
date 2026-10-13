@@ -634,3 +634,14 @@ A thin wrapper preserves empty direct selections as metadata-only output. Parsed
 existing limits of 128 paths and 256 characters each; direct invalid paths now reject before traversal.
 The runtime peer and development pin require cli-base 0.19.2 so every consumer has these exports.
 The messenger runner retains its own write and resource lifetime policy; no store schema is involved.
+
+## File and folder catalog
+
+`MessageStore.catalog` stores provider-neutral file/folder metadata and parent keys in the existing
+`documents.metadata.catalog` namespace. Providers supply account-scoped external IDs and optional
+observed actors; metadata-only entries have no text. Upsert preserves live text, content hashes,
+revisions and other extracted metadata. Content readers preserve the catalog namespace when updating
+metadata. Stable `document:<id>` references reuse tags, notes and relationships; Google folder
+hierarchies remain distinct from notes collections. Reconciliation marks absent entries inactive
+without deleting annotations. Reads use explicit account IDs with bounded pages and metadata;
+provider adapters own hierarchy navigation. No migration or provider dependency is added.

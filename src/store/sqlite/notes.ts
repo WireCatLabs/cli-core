@@ -411,7 +411,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         const path = textOf(input.path, "a note's path", 4096)
         const text = textOf(input.text, "a note's text", MAX_TEXT_CHARS, true)
         const frontMatter = input.frontMatter == null ? null : JSON.stringify(input.frontMatter)
-        const metadata = encodeDocumentMetadata(input.metadata, input.sections)
+        let metadata = encodeDocumentMetadata(input.metadata, input.sections)
         const language = languageOf(input.metadata)
         const title =
           typeof input.metadata?.title === "string" && input.metadata.title ? input.metadata.title : input.title
@@ -419,6 +419,11 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         const found = database
           .prepare("SELECT * FROM documents WHERE account_id = ? AND external_id = ?")
           .get(folder, path)
+        if (found?.metadata != null) {
+          const stored = JSON.parse(String(found.metadata)) as { catalog?: unknown }
+          if (stored.catalog !== undefined)
+            metadata = JSON.stringify({ ...(metadata == null ? {} : JSON.parse(metadata)), catalog: stored.catalog })
+        }
         if (!found) {
           const { location, fileName, extension } = pathParts(path)
           const row = database
