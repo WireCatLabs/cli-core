@@ -6,6 +6,7 @@ set -euo pipefail
 app=$1
 dir=$2
 tarball=$(realpath "$3")
+ref=$4
 shared=$(cd "$(dirname "$0")/../.." && pwd)
 
 # The packed library's @wirecat peers (cli-base) must be the versions it was built against, or it loads
@@ -19,6 +20,7 @@ peers=$(node -e '
 ' "$shared/package.json")
 
 cd "$dir"
+echo "::notice title=$app-cli::Parity builds $app-cli at $ref ($(git rev-parse --short HEAD))"
 pnpm install --frozen-lockfile
 # shellcheck disable=SC2086
 pnpm add "@wirecat/cli-messaging@file:$tarball" $peers
@@ -31,7 +33,7 @@ if [ -n "$pinned" ]; then
 fi
 
 if ! pnpm build; then
-  echo "::error title=$app-cli does not build against this cli-messaging::$app-cli main fails to compile with" \
+  echo "::error title=$app-cli does not build against this cli-messaging::$app-cli $ref fails to compile with" \
     "this checkout of @wirecat/cli-messaging ($peers). The compiler errors are above;" \
     "$app-cli needs adoption work before this change can merge."
   exit 1
