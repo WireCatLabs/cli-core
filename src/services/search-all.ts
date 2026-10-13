@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
+import { INTERNAL_NOTES, kindOf } from "../domain/providers.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
 import { MAX_SEARCH_OFFSET, type SearchFound, type SearchQuery, searchStore } from "./messages.js"
@@ -31,6 +32,18 @@ export interface SearchAllItem {
   foundBy: ("words" | "meaning")[]
 }
 
+/** One account a search read, by the kind it was read for: the shape memo's `search all` answers too. */
+export interface SearchedAccount {
+  resource: string
+  provider: string
+  account: string
+}
+
+/** A resource not read, or a `--source` entry naming no account the search reads. */
+export type Skipped<R extends string> =
+  | { resource: R; reason: string; source?: undefined }
+  | { source: string; reason: string; resource?: undefined }
+
 export interface SearchAllFound {
   query: string
   items: SearchAllItem[]
@@ -38,8 +51,10 @@ export interface SearchAllFound {
   /** Where the next page starts, as `offset`; absent on the last page. */
   nextOffset?: number
   searched: SearchedResource[]
+  /** Every account read, kind by kind. */
+  accounts: SearchedAccount[]
   /** A resource the query could not be asked of, and why: a field it lacks, or nothing stored yet. */
-  skipped: { resource: SearchedResource; reason: string }[]
+  skipped: Skipped<SearchedResource>[]
   /** How the notes were searched, when they were. */
   notes?: { by: "words" | "words and meaning"; meaningSkipped?: string }
   /** The messenger's server step for messages, as `search messages` reports it. */
@@ -59,6 +74,8 @@ export interface SearchAllRequest {
   server?: ServerOptions
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  /** The accounts `--source` chose, per kind; a kind left out reads every account of its own. */
+  scope?: Partial<Record<SearchedResource, AccountKey[]>>
 }
 
 /** A query a resource cannot answer is skipped with its reason, never a failure of the whole search. */
@@ -88,20 +105,23 @@ export const searchAll = async (
   const command = messenger.app?.command ?? "tg"
   const lists: SearchAllItem[][] = []
   const searched: SearchedResource[] = []
+  const accounts: SearchedAccount[] = []
   const skipped: SearchAllFound["skipped"] = []
   let hasMore = false
   let notes: SearchAllFound["notes"]
   let server: ServerSearched | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
+    const given = request.scope?.[kind]
     const query: SearchQuery = {
       text: request.text,
       language: "lucene",
       kind,
+      ...(given ? { accounts: given } : {}),
       ...(kind === "messages"
         ? {
             // Server hits are matched by chat and message id, which another account can share.
-            ...(request.backend === "server" ? {} : { source: "all" }),
+            ...(request.backend === "server" || given ? {} : { source: "all" }),
             ...(request.backend === undefined ? {} : { backend: request.backend }),
             ...(request.server === undefined ? {} : { server: request.server }),
           }
@@ -116,6 +136,9 @@ export const searchAll = async (
       kind === "messages" ? await searchMessages(query) : await searchStore(store, account, query, messenger)
     if (found.server) server = found.server
     hasMore ||= found.hasMore
+    const read =
+      found.coverage?.accounts ?? given ?? (await store.accounts()).filter(({ provider }) => kindOf(provider) === kind)
+    accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
     return found.items.map((hit): SearchAllItem => {
       const at = parseLocator(hit.locator)
       return {
@@ -138,28 +161,47 @@ export const searchAll = async (
   for (const resource of only) {
     try {
       if (resource === "notes") {
-        const found = await searchNotes(store, request.text, {
-          limit: window,
-          command,
-          ...(request.exact ? { exact: true } : {}),
-          ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
-          ...(request.env === undefined ? {} : { env: request.env }),
-        })
-        hasMore ||= found.hasMore
-        notes = {
-          by: found.by,
-          ...(found.meaningSkipped === undefined ? {} : { meaningSkipped: found.meaningSkipped }),
+        const folders = (await store.notes.folders()).map(({ id }) => id)
+        const chosen = request.scope?.notes?.map(({ account }) => account)
+        const internal = chosen === undefined || chosen.includes(INTERNAL_NOTES)
+        const folderIds = chosen === undefined ? folders : folders.filter((id) => chosen.includes(id))
+        // The store reads memo's notes beside every folder or alone, never beside some folders: two searches then.
+        const whole = internal && folderIds.length === folders.length
+        const runs = whole
+          ? [{}]
+          : [...(internal ? [{ source: "internal" as const }] : []), ...(folderIds.length ? [{ folderIds }] : [])]
+        for (const run of runs) {
+          const found = await searchNotes(store, request.text, {
+            limit: window,
+            command,
+            ...run,
+            ...(request.exact ? { exact: true } : {}),
+            ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
+            ...(request.env === undefined ? {} : { env: request.env }),
+          })
+          hasMore ||= found.hasMore
+          notes ??= {
+            by: found.by,
+            ...(found.meaningSkipped === undefined ? {} : { meaningSkipped: found.meaningSkipped }),
+          }
+          lists.push(
+            found.hits.map((hit) => ({
+              kind: "note",
+              ref: hit.ref,
+              provider: "notes",
+              account: hit.folderId ?? INTERNAL_NOTES,
+              title: hit.title,
+              timestamp: hit.modifiedAt,
+              text: hit.line,
+              foundBy: hit.foundBy,
+            })),
+          )
         }
-        lists.push(
-          found.hits.map((hit) => ({
-            kind: "note",
-            ref: hit.ref,
+        accounts.push(
+          ...[...(internal ? [INTERNAL_NOTES] : []), ...folderIds].map((account) => ({
+            resource,
             provider: "notes",
-            account: hit.folderId ?? "internal",
-            title: hit.title,
-            timestamp: hit.modifiedAt,
-            text: hit.line,
-            foundBy: hit.foundBy,
+            account,
           })),
         )
       } else lists.push(await messagesOf(resource))
@@ -185,6 +227,7 @@ export const searchAll = async (
     hasMore: more,
     ...(more && window <= MAX_SEARCH_OFFSET ? { nextOffset: window } : {}),
     searched,
+    accounts,
     skipped,
     ...(notes === undefined ? {} : { notes }),
     ...(server === undefined ? {} : { server }),

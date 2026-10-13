@@ -1088,7 +1088,7 @@ export const scopeOf = async (
     wanted,
     messenger.app?.command,
     undefined,
-    listed !== undefined,
+    listed !== undefined || given !== undefined,
   )
   const named = parsed.chat ?? chat
   const scope: SearchScope = { accounts }

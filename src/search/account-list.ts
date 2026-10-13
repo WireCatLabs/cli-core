@@ -214,6 +214,7 @@ export const fitting = (
   entries: readonly ListedEntry[],
   kinds: readonly Kind[],
   what: string,
+  reasonOf: (kind: Kind) => string = (kind) => READS[kind],
 ): { accounts: AccountKey[]; skipped: SkippedSource[] } => {
   const chosen = new Map<string, AccountKey>()
   const skipped: SkippedSource[] = []
@@ -223,7 +224,7 @@ export const fitting = (
       if (!chosen.has(keyOf({ provider, account }))) chosen.set(keyOf({ provider, account }), { provider, account })
     if (fits.length) continue
     const other = accounts[0]
-    skipped.push({ source: entry, reason: other ? READS[other.kind] : "no account in the store" })
+    skipped.push({ source: entry, reason: other ? reasonOf(other.kind) : "no account in the store" })
   }
   if (chosen.size === 0)
     fail(

@@ -8,6 +8,16 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **`search all --source <accounts>`** (MCP `search_all` `source`): the same list `search messages` takes —
+  `provider:account` as a hit shows it, a provider, a kind or `group:<name>`. Each resource reads the accounts of
+  its kind, a resource the list names none of is in `skipped` (`--source names no notes account`), an entry
+  `--only` leaves out is in `skipped` as `{ source, reason }`, and meetings are read when the list names one
+  meeting account (`--only meetings` and `--max-meetings` then work without `--meetings`; `--meetings` beside
+  `--source` is an error).
+- **`search all` answers `accounts: [{ resource, provider, account }]`**, every account it read, with or without
+  `--source` — memo's shape. Pretty mode prints `searched: provider:account, …` on stderr. `skipped` entries may
+  now carry `source` instead of `resource`.
+
 - A fact's and a memory's `author`, and a proposed action's `proposedBy`, carry `name`: the bot's handle for an agent, `null` for a person — the shape the agent log's `actor` already had.
 - **`chats documents list <chat>`** (and the MCP tool `chats_documents_list`) lists every Google Docs, Sheets,
   Slides, Forms or Drive link in a chat's stored messages, newest first: `{ url, documentId, title, inStore, locator,

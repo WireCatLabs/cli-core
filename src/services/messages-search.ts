@@ -161,7 +161,7 @@ export const prepareLucene = async (
     source ?? (sources.includes("email") ? "email" : sources[0]),
     messenger.app?.command,
     request.mailAccount,
-    listed !== undefined,
+    listed !== undefined || request.accounts !== undefined,
   )
   const scopeAccounts = accounts.map(({ provider, account }) => ({ provider, account }))
   const chatLookup = scopeAccounts.some(({ provider }) => provider === MAIL) ? withMailThreads(store) : store

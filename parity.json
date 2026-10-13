@@ -732,7 +732,7 @@
     },
     "--only": {
       "value": "<resources>",
-      "meaning": "only these resources, separated by commas: messages, mail, notes; meetings with --meetings"
+      "meaning": "only these resources, separated by commas: messages, mail, notes; meetings with --meetings or --source"
     },
     "--only-admins-add": {
       "value": "<on|off>",
@@ -996,7 +996,7 @@
     "--source": {
       "value": "<messenger>",
       "meaning": "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; or a list: group:work,telegram:Alice,email:me@example.com",
-      "note": "planned for search all, search mail and search notes: provider:account, a bare provider, a bare kind (messages, mail, notes, documents, meetings) or group:<name> — source-everywhere-plan.md"
+      "note": "search all takes provider:account, a bare provider, a bare kind (messages, mail, notes, documents, meetings) or group:<name> as <accounts>; search mail and search notes are planned — source-everywhere-plan.md"
     },
     "--spoiler": {
       "meaning": "hide the --photo or video behind a spoiler until tapped"
@@ -3200,8 +3200,8 @@
         "--source": {
           "in": [],
           "planned": {
-            "max": "source-everywhere-plan.md",
-            "tg": "source-everywhere-plan.md"
+            "max": "each CLI’s next cli-messaging bump",
+            "tg": "each CLI’s next cli-messaging bump"
           }
         },
         "--timezone": "all"

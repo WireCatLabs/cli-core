@@ -501,7 +501,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--older-than` | `<duration>` | minimum age of a question without an observed qualifying answer |  | `stats messages unanswered` |
 | `--once` | `<when>` | one run: a duration from now or an ISO 8601 time |  | `schedule agent`, `schedule command` |
 | `--online` |  | also log in once, read one chat and start the MCP server; sends nothing. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `doctor` |
-| `--only` | `<resources>` | only these resources, separated by commas: messages, mail, notes; meetings with --meetings |  | `search all` |
+| `--only` | `<resources>` | only these resources, separated by commas: messages, mail, notes; meetings with --meetings or --source |  | `search all` |
 | `--only-admins-add` | `<on\|off>` | only admins may add members |  | `chats update` |
 | `--only-admins-call` | `<on\|off>` | only admins may start a call |  | `chats update` (max-only) |
 | `--only-missing` |  | only chats with no metadata yet; without --chat, every stored group/channel |  | `metadata refresh` |
@@ -569,7 +569,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--skip` | `<which>` | a folder leaves out chats that are muted, read or archived |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--sms` |  | phone login: ask Telegram to send the code by SMS, not to the app; Telegram may still refuse |  | `session start` (tg-only) |
 | `--solution` | `<text>` | with --quiz: what people see once they answered |  | `polls create` (tg-only) |
-| `--source` | `<messenger>` | every account of this messenger held in the store; personal, bots or all — the same as in: in the query; or a list: group:work,telegram:Alice,email:me@example.com. **planned for search all, search mail and search notes: provider:account, a bare provider, a bare kind (messages, mail, notes, documents, meetings) or group:<name> — source-everywhere-plan.md** |  | `search all` (planned), `search conversations`, `search mail` (planned), `search messages`, `search notes` (planned), `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `tags list`, `tags remove` |
+| `--source` | `<messenger>` | every account of this messenger held in the store; personal, bots or all — the same as in: in the query; or a list: group:work,telegram:Alice,email:me@example.com. **search all takes provider:account, a bare provider, a bare kind (messages, mail, notes, documents, meetings) or group:<name> as <accounts>; search mail and search notes are planned — source-everywhere-plan.md** |  | `search all` (planned), `search conversations`, `search mail` (planned), `search messages`, `search notes` (planned), `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `tags list`, `tags remove` |
 | `--spoiler` |  | hide the --photo or video behind a spoiler until tapped |  | `messages send` (tg-only) |
 | `--start` | `<param>` | the start parameter the app reads |  | `chats app` (planned) |
 | `--state` | `<state>` | only those in this state: tasks open, done or dismissed; jobs running, done, failed, cancelled or died |  | `store jobs list`, `tasks list` |
@@ -702,7 +702,8 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
      partial matches. MCP `language=legacy` adds the same sentence to `next_steps`. Then
      `--language` leaves `search messages`, `searches create` and MCP together, with its parity
      entry. `--exact` stays: it turns forgiveness off.
-8. **A search says which accounts it read** (planned, [source-everywhere-plan.md](source-everywhere-plan.md)).
+8. **A search says which accounts it read** ([source-everywhere-plan.md](source-everywhere-plan.md); `search mail`
+   and `search notes` are planned).
    Every stored thing has a kind (`messages`, `mail`, `notes`, `documents`, `meetings`), a provider
    and an account; `--source` takes `provider:account`, a bare provider, a bare kind or
    `group:<name>`. `search all`, `search mail` and `search notes` answer
