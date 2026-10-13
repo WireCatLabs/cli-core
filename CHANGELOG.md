@@ -15,7 +15,7 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   inside a list hold messenger accounts only, no mailbox; when nothing in a list fits the search, the error reads
   `--source names nothing <search> reads: …`, in place of "mailboxes only" and "no mailbox".
 - **`search notes --folder`, `search mail --account` and `search all --meetings` are removed** (MCP `search_notes`
-  `folders`, `search_mail` `account`, `search_all` `meetings`). Each fails with an error naming its replacement:
+  `folders`, `search_mail` `account`, `search_all` `meetings`). Use
   `--source notes:<folder id>` (and `notes:internal` for notes written in memo), `--source email:<address>`,
   `--source zoom:<account>`, `zoom`, `meetings`, or `all` for every account and the meetings; of several meeting
   accounts the one holding meetings is read and the rest are in `skipped`. `search all` without such an entry answers

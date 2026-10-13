@@ -4,11 +4,6 @@
     "--accept-terms": {
       "meaning": "accept the model's licence terms, for a model that has its own"
     },
-    "--account": {
-      "value": "<address>",
-      "meaning": "only this mail account, by its address; every mail account when unset",
-      "note": "removed: --source email:<address> replaces it; tg and max drop it with their next cli-messaging bump"
-    },
     "--add": {
       "value": "<chat>",
       "meaning": "put a chat into a folder; repeat it for more"
@@ -398,11 +393,6 @@
       "value": "<name>",
       "meaning": "your first name"
     },
-    "--folder": {
-      "value": "<id>",
-      "meaning": "only this notes folder, by its id; repeat it for more",
-      "note": "removed: --source notes:<id> replaces it; tg and max drop it with their next cli-messaging bump"
-    },
     "--for": {
       "value": "<agents>",
       "meaning": "which agents a skill is installed for: claude, agents or all",
@@ -586,11 +576,6 @@
     "--measure": {
       "value": "<name>",
       "meaning": "the metric used to order a ranking; not with --score or --weights"
-    },
-    "--meetings": {
-      "value": "[provider:account]",
-      "meaning": "also search one meeting account; with no value, the one stored account that holds meetings (put it after the query)",
-      "note": "removed: --source zoom:<account>, zoom, meetings or all replaces it; tg and max drop it with their next cli-messaging bump"
     },
     "--members-see-link": {
       "value": "<on|off>",
@@ -3175,13 +3160,6 @@
             "tg": "each CLI’s next cli-messaging bump"
           }
         },
-        "--meetings": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
-          }
-        },
         "--offset": {
           "in": [],
           "planned": {
@@ -3249,13 +3227,6 @@
     "search mail": {
       "in": "all",
       "options": {
-        "--account": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
-          }
-        },
         "--chat": "all",
         "--context": "all",
         "--exact": "all",
@@ -3342,13 +3313,6 @@
       "options": {
         "--exact": "all",
         "--filter": "all",
-        "--folder": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
-          }
-        },
         "--limit": "all",
         "--offset": "all",
         "--source": {

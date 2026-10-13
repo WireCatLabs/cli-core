@@ -58,9 +58,7 @@ Explicit choices and gaps:
 - [Command names](#command-names) currently require immediate removal of renamed paths and no
   aliases. This differs from CLIG's deprecation guidance. The owner explicitly chose immediate
   relocation without a compatibility window. Old paths stop working at adoption; the release
-  notes and user docs give the new paths. One owner-approved exception (2026-10-13):
-  `--language legacy` keeps working for one or two releases with a stderr line, then goes
-  ([Output](#output), rule 7).
+  notes and user docs give the new paths.
 
 New commands are reviewed against this profile and the audit. Existing gaps require explicit
 implementation work with tests; citing a reference alone does not close them.
@@ -313,7 +311,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | Option | Value | Meaning | Default | Commands |
 |---|---|---|---|---|
 | `--accept-terms` |  | accept the model's licence terms, for a model that has its own |  | `models text download` |
-| `--account` | `<address>` | only this mail account, by its address; every mail account when unset. **removed: --source email:<address> replaces it; tg and max drop it with their next cli-messaging bump** |  | `search mail` (planned) |
 | `--add` | `<chat>` | put a chat into a folder; repeat it for more |  | `bot webhooks set` (max-only), `chats folders update` |
 | `--after-id` | `<id>` | read what came after this message id; not with --after-time or the --before pair |  | `messages list` |
 | `--after-n` | `<n>` | how many messages after it |  | `messages context` |
@@ -415,7 +412,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--find-by-phone` | `<who>` | who finds the account by its number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--fingerprint` | `<hash>` | refuse if the inspected coverage plan changed |  | `store gaps repair` |
 | `--first-name` | `<name>` | your first name |  | `account update` |
-| `--folder` | `<id>` | only this notes folder, by its id; repeat it for more. **removed: --source notes:<id> replaces it; tg and max drop it with their next cli-messaging bump** |  | `search notes` (planned) |
 | `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all | `all` | `skill install` |
 | `--for-everyone` |  | delete for everyone in the chat, not only for you — they cannot get it back |  | `messages delete` |
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
@@ -461,7 +457,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-uses` | `<n>` | at most this many people join by it, 1 to 99999 |  | `chats link create` (tg-only), `chats link update` (tg-only) |
 | `--md` |  | read this messenger's Markdown; see its formatting guide for supported syntax |  | `bot messages edit`, `bot messages send`, `messages edit`, `messages send` |
 | `--measure` | `<name>` | the metric used to order a ranking; not with --score or --weights |  | `stats contacts top`, `stats messages top` |
-| `--meetings` | `[provider:account]` | also search one meeting account; with no value, the one stored account that holds meetings (put it after the query). **removed: --source zoom:<account>, zoom, meetings or all replaces it; tg and max drop it with their next cli-messaging bump** |  | `search all` (planned) |
 | `--members-see-link` | `<on\|off>` | members may see the invite link |  | `chats update` (max-only) |
 | `--mentions-me` |  | require a mention of you or a reply to you |  | `replies edit` |
 | `--message` | `<message>` | the message to tag or untag: its id in --chat, or a msg: locator alone |  | `tags add`, `tags remove` |
@@ -697,11 +692,9 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
      existing `next_steps` string, and the CLI writes one line to stderr naming `--discover`. No new
      key; stdout stays data. `search all` names `search messages --discover`, the one command that
      has it.
-   - **`--language legacy` is deprecated.** For one or two releases it runs the old matching
-     unchanged and writes one stderr line: plain search now forgives typos, and `--discover` finds
-     partial matches. MCP `language=legacy` adds the same sentence to `next_steps`. Then
-     `--language` leaves `search messages`, `searches create` and MCP together, with its parity
-     entry. `--exact` stays: it turns forgiveness off.
+   - **`--language` is removed when the forgiving default lands**: from `search messages`,
+     `searches create` and MCP together, with its parity entry. `--exact` stays: it turns
+     forgiveness off.
 8. **A search says which accounts it read** ([source-everywhere-plan.md](source-everywhere-plan.md)).
    Every stored thing has a kind (`messages`, `mail`, `notes`, `documents`, `meetings`), a provider
    and an account; `--source` takes `provider:account`, a bare provider, a bare kind or
@@ -758,8 +751,7 @@ whose values are levels. It holds for a command the owner types and for an agent
    as loose as the profile's level for `chats.moderate`.
 6. **The settings it replaces** — `readOnly`, `allow`, max's `mcpTools`, and the moderation words
    `forbid`, `flag`, `confirm` — are translated once by `config migrate`, then refused with a
-   message naming the new key. The MCP flags it replaces are accepted with a warning naming the
-   setting for one release, so a configured agent still starts, then go.
+   message naming the new key.
 
 7. **A bot's keys are the personal ones under `bot`**: `bot.messages.send`,
    `bot.chats.members.remove`, `bot.webhooks`. A profile can allow its bot what it does not allow

@@ -208,7 +208,7 @@ So B lands after the plain-search-coverage change, or in the same release with t
 ## Work items, in order
 
 1. **STANDARD first.** Add the new response labels (`match: corrected | beginnings`, `corrections`)
-   and the deprecation of `--language` to [STANDARD.md](STANDARD.md) in its own PR. Owner approves.
+   and the removal of `--language` to [STANDARD.md](STANDARD.md) in its own PR. Owner approves.
 2. **Vocabulary union.** Whole-word check and correction candidates over every field plain search
    covers. Reuse the existing trigram tables; no migration unless the file words lack trigrams
    (then reserve a number in [COORDINATION.md](COORDINATION.md#store-migrations) first).
@@ -223,13 +223,10 @@ So B lands after the plain-search-coverage change, or in the same release with t
 4. **CLI and MCP default.** `search messages`, `search all` (messages part) and the MCP tool use it.
    `--exact` and MCP `exact=true` turn it off. Parser and registry hints stop pointing at legacy
    (`parser.ts:256`, `registry.ts:424`).
-5. **Deprecate `--language legacy` for one or two releases.** It still runs the old chain unchanged
-   and prints one stderr line: plain search now forgives typos; use `--discover` for partial
-   matches. stdout stays data only. MCP `language=legacy` gets the same hint in `next_steps`.
-   An empty B answer gets the `--discover` pointer the same way: `next_steps` in MCP, one stderr
-   line in the CLI.
-   Then remove the option (`messages-search-command.ts:74`, `searches-command.ts:46`), the MCP
-   field (`src/mcp/tools/search.ts:74`) and the parity catalogue entry together.
+5. **Remove `--language`** in the same release as the default: the option
+   (`messages-search-command.ts:74`, `searches-command.ts:46`), the MCP field
+   (`src/mcp/tools/search.ts:74`) and the parity catalogue entry together. An empty B answer gets
+   the `--discover` pointer: `next_steps` in MCP, one stderr line in the CLI.
 6. **SDK transition**, per [combined-search.md](combined-search.md#compatibility-and-release-order)
    steps 3-5: an additive SDK switch first (name chosen in STANDARD), then one breaking release where
    `searchStore` without a language runs strict + narrow instead of legacy. Explicit SDK `legacy`
@@ -248,7 +245,7 @@ So B lands after the plain-search-coverage change, or in the same release with t
   plus typo returns labelled corrected hits; known beginning returns labelled prefix hits; phrase,
   AND/OR/NOT, fields, exclusions, AST, regex, `--exact`, `--newest` unchanged; excluded words
   never corrected; a file-only word is not "corrected" once plain search covers files.
-- CLI/MCP contract: stdout JSON carries `match` and `corrections`; the legacy hint goes to stderr only.
+- CLI/MCP contract: stdout JSON carries `match` and `corrections`; the `--discover` hint goes to stderr only.
 - Saved replay: legacy records convert with forgiveness; Lucene records replay; nothing rewritten.
 - Benchmark: rerun `typo` on dev and report the B gates; fresh held-out families before any
   qualifying held-out claim; 100k-message latency.
@@ -266,7 +263,5 @@ So B lands after the plain-search-coverage change, or in the same release with t
 
 1. "Single words" per word inside a multi-word query (as measured), or literally one-word queries
    only (no measurable gain)?
-2. During deprecation, should `--language legacy` keep the old chain (proposed), or route to
-   `--discover`?
-3. Should a strict saved search that returned nothing start returning labelled forgiven hits on
+2. Should a strict saved search that returned nothing start returning labelled forgiven hits on
    replay (proposed: yes)?

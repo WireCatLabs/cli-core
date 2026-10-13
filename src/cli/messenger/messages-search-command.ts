@@ -8,7 +8,6 @@ import type { SearchFound } from "../../services/messages.js"
 import { NO_MAIL, type SearchKind } from "../../services/search-kind.js"
 import { environmentOf } from "../context.js"
 import { positiveCount } from "../paging.js"
-import { removedOptions } from "../removed-options.js"
 import { archiveSummary } from "./archive-summary.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
@@ -49,7 +48,7 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
         : `only this chat — the same as chat: in the query; ${messenger.chatArgument}`,
     )
   if (mail)
-    removedOptions(command, { "--account": "--source email:<address> names the mail account" }).option(
+    command.option(
       "--source <accounts>",
       "only these mail accounts, separated by commas: email:<address> as a hit shows it, email, mail or " +
         "group:<name>; every mail account when unset",

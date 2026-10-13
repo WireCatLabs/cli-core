@@ -1859,11 +1859,6 @@ describe("the shared read commands", () => {
     )
     expect(unheld.code).not.toBe(0)
     expect(unheld.stderr.join("\n")).toContain("owner@example.test")
-    const removed = await call(["search", "mail", "chapter", "--account=owner@example.test", "--json"], never, env)
-    expect(removed.code).toBe(2)
-    expect(removed.stderr.join("\n")).toContain(
-      "--account was removed — --source email:<address> names the mail account",
-    )
   })
 
   it("**messages show** and **messages context** open an email by its locator, whole, with its thread", async () => {
@@ -2081,9 +2076,6 @@ describe("the shared read commands", () => {
     expect(written.hits).toHaveLength(1)
     expect(written.accounts).toEqual([{ resource: "notes", provider: "notes", account: "internal" }])
     expect(written.skipped).toEqual([{ source: "email", reason: "a mailbox — search mail reads it" }])
-    const folder = await call(["search", "notes", "chapter", "--folder", "4", "--json"], never, env)
-    expect(folder.code).toBe(2)
-    expect(folder.stderr.join("\n")).toContain("--folder was removed — --source notes:<folder id> names the folder")
     expect(never).not.toHaveBeenCalled()
   })
 
@@ -2216,14 +2208,6 @@ describe("the shared read commands", () => {
     const unasked = await call(["search", "all", "chapter", "--only", "meetings", "--json"], never, env)
     expect(unasked.code).toBe(2)
     expect(unasked.stderr.join("\n")).toContain(`--only meetings: ${MEETINGS_UNNAMED}`)
-    for (const removed of [
-      ["chapter", "--meetings"],
-      ["--meetings", "zoom:zm-profile:alice", "chapter"],
-    ]) {
-      const gone = await call(["search", "all", ...removed, "--json"], never, env)
-      expect(gone.code).toBe(2)
-      expect(gone.stderr.join("\n")).toContain("--meetings was removed — --source names the meeting account")
-    }
 
     await meetingIn("zm-profile:bob")
     const several = await call(["search", "all", "chapter", "--source", "meetings", "--json"], never, env)
