@@ -23,6 +23,7 @@ export const upgradeCommand = (
         { current: app.version, command: app.command, packageName, check: check === true },
         { ...context, onInstall: (argv) => renderer.note(`running: ${argv.join(" ")}`) },
       )
+      if (reason === "held_back" && result.heldBack) renderer.warn(heldBackAdvice(result, result.heldBack))
       if (reason === "unavailable") renderer.warn("npm did not answer, so nothing was run")
       else if (reason === "up_to_date") renderer.note(`${app.command} ${app.version} is the newest`)
       else if (reason === "manual") {
@@ -43,14 +44,27 @@ export const upgradeCommand = (
       renderer.result(format === "pretty" ? summary(app.command, result) : result)
     })
 
+const heldBackAdvice = (
+  { installed, latest, installer }: PackageUpgradeResult,
+  { until, command }: NonNullable<PackageUpgradeResult["heldBack"]>,
+): string => {
+  const why =
+    installer === "pnpm"
+      ? `: pnpm installs a version only once it is older than its minimum release age (1 day by default${until ? `, so after ${until}` : ""})`
+      : ""
+  return `installed ${installed}, not ${latest}${why} — \`${command}\` installs it now`
+}
+
 const summary = (command: string, result: PackageUpgradeResult): string => {
+  const held = result.heldBack ? `; ${result.latest} is held back` : ""
   if (result.updated) {
     const servers =
       result.restarted.length > 0
         ? `; restarted the server for ${result.restarted.map((profile) => `profile ${profile}`).join(", ")}`
         : ""
-    return `${command} ${result.current} → ${result.latest}${servers}`
+    return `${command} ${result.current} → ${result.installed ?? result.latest}${held}${servers}`
   }
+  if (held) return `${command} ${result.current}${held}`
   return result.latest === null
     ? `${command} ${result.current}; npm did not answer`
     : result.newer

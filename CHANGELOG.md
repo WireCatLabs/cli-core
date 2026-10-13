@@ -52,6 +52,12 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **`upgrade` reads back the version it installed** when the host passes `installed` (and, for the time,
+  `publishedAt`). The result gains `installed`; `updated` is false when the version did not change; when the package
+  manager installed an older version than `latest` — pnpm 11 holds a version for 1 day by default
+  (`minimumReleaseAge`) — the result carries `heldBack: { until, command }`, the reason is `held_back`, and a warning
+  names the exact-version command that installs it now. Before, it reported the npm `latest` as installed.
+
 - **`store export`'s help says what reaches stdout**: `--jsonl` one message per line, `--json` one list object
   object. It said "as JSON lines" and called `jsonl` the default, which holds only with `--output`.
 
