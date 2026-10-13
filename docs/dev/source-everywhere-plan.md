@@ -1,7 +1,7 @@
 # Plan — one `--source` for every search
 
-Status: **model approved by the owner, 2026-10-13** (NEED-10 A, NEED-11 A). Built: the registry, `notes:<id>` and
-`notes:internal` in a list, and BUG-2 (work item 2). Next: work item 3.
+Status: **model approved by the owner, 2026-10-13** (NEED-10 A, NEED-11 A). Built: work items 2 and 3 (the
+registry, `notes:<id>` and `notes:internal`, BUG-2, `search all --source` and `accounts`). Next: work item 4.
 
 ## Goal
 
@@ -70,9 +70,8 @@ Anchors are on `origin/main`, 2026-10-13.
    (`fitting` in `src/search/account-list.ts`). A bare `all`, `personal`, `bots` or a provider the store holds
    by that very name keeps the old path; it now drops meeting and notes accounts too. The `--language legacy`
    path filters the same way but does not answer `skipped`. `in:` still takes the old words only.
-5. **`search all` does not say which accounts it read.** It answers `searched` and `skipped`, by
-   resource (`search-all.ts:40-42`). `search messages` answers `coverage.accounts`
-   (`messages-search.ts:61`), and `search all` drops it (`search-all.ts:115-117`).
+5. **`search all` says which accounts it read** as `accounts: [{ resource, provider, account }]`, with or
+   without `--source`; `search messages` answers `coverage.accounts`.
 6. **Groups exist.** `accountGroups` in `store_settings`, saved by `config set accountGroups.<name>`
    (`src/store/store.ts:1496-1505`), listed by `config show` (`src/cli/store-settings.ts:95`). A group
    lists entries, never another group (`account-list.ts:30-37`).
@@ -129,8 +128,10 @@ the list fits it.
 - **`search all` with a list** gives each kind its entries. A kind with none is not read and appears
   in `skipped` as `{ resource, reason: "--source names no <kind> account" }`.
 - **Meetings** have no search index, so `search all` reads them only when `--source` names a meeting
-  account, provider or the `meetings` kind; otherwise `skipped` says "meetings: name a meeting account
-  in --source". `--max-meetings` stays and bounds each account.
+  account, provider or the `meetings` kind; otherwise `skipped` says "--source names no meetings account".
+  `--max-meetings` stays. **One meeting account per search**: the meeting cursor binds to one account, so a list
+  naming two is an error that names both, as a bare `--meetings` is today; reading several waits for a cursor
+  that spans accounts. `--source` and `--meetings` together are an error.
 - **`--only` stays**: it picks kinds; `--source` picks accounts; the two intersect. `--only` gains
   `documents` and `meetings` without `--meetings`.
 - `--backend server` in `search all` still asks the server for the active account only; `accounts`
@@ -196,12 +197,14 @@ Releases of this package, in order; each is one PR.
    any entry. Each search filters by kind from the registry (BUG-2). Built, except `drive:<profile>`, which
    waits for the drive switch (item 6), and a positive `in:` taking kinds and aliases.
 3. **`search all --source`**, `skipped` for unused entries and unnamed kinds, `accounts`, meetings by
-   `--source`, `--only documents|meetings`.
-4. **`search notes --source`, `search mail --source`**, `accounts`; the three removals; `parity.json`
+   `--source`, `--only meetings` (built; MCP `search_all` takes `source`). `--only documents` waits for item 1.
+4. **`search notes --source`, `search mail --source`**, `accounts` (`search notes` pages with `--offset`, so memo's
+   notes beside some folders need one store query, not the two ranked searches `search all` runs); the three removals; `parity.json`
    rows; MCP schemas (`search_all`, `search_notes`, `search_mail`) take `source` and lose the removed
    fields. The user documents are rewritten in the same PRs: [query-language.md](../search/query-language.md),
    the generated `docs/commands.md`, the MCP descriptions.
-5. **cli-memo**: `memo search all` takes `--source` and passes it through.
+5. **cli-memo**: `memo search all` takes `--source` and passes it through, and prints a `skipped` entry by its
+   `source` when it has no `resource`.
 6. **drive-cli**, in the drive switch PR: record the profile (above).
 7. **Each CLI**: the login and profile-create offer to join a group.
 

@@ -2262,6 +2262,26 @@ describe("the shared read commands", () => {
     expect(alone).toMatchObject({ items: [], searched: [] })
   })
 
+  it("**search all --source** reads the accounts it names and says which, pretty on stderr", async () => {
+    const root = mkdtempSync(join(tmpdir(), "search-all-source-"))
+    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
+    const never = vi.fn(async (): Promise<MessengerAdapter> => {
+      throw new Error("search must never connect")
+    })
+    const answer = JSON.parse(
+      (await call(["search", "all", "chapter", "--source", "chat:500", "--json"], never, env)).stdout[0] ?? "",
+    )
+    expect(answer.searched).toEqual(["messages"])
+    expect(answer.accounts).toEqual([{ resource: "messages", provider: "chat", account: "500" }])
+    expect(answer.skipped).toContainEqual({ resource: "notes", reason: "--source names no notes account" })
+    const pretty = await call(["search", "all", "chapter", "--source", "chat:500"], never, env, { tty: true })
+    expect(pretty.stderr.join("\n")).toContain("searched: chat:500")
+    expect(pretty.stdout.join("\n")).not.toContain("searched:")
+    const both = await call(["search", "all", "chapter", "--source", "chat:500", "--meetings", "zoom:z1"], never, env)
+    expect(both.code).toBe(2)
+  })
+
   it("**the old search paths are gone**, with no alias, and --type narrows search messages", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-paths-"))
     const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }

@@ -410,10 +410,14 @@ accounts провайдера/класса, включая `all`. Отрицат
 ящики; остальные элементы названы в ответе в `skipped: [{ source, reason }]`. Если подходящих не осталось — ошибка. Список и положительный `in:` вместе
 отвергаются. Неизвестная группа или аккаунт — ошибка со списком того, что есть.
 
-Запланировано ([план](../dev/source-everywhere-plan.md)): у всего в хранилище есть вид (`messages`, `mail`,
-`notes`, `documents`, `meetings`), провайдер и аккаунт, и `--source` принимают все поиски — `search all`,
-`search mail`, `search notes`. `search notes --folder`,
-`search mail --account` и `search all --meetings` заменит `--source`.
+`search all --source` (MCP `source`) берёт тот же список: каждый вид читает свои аккаунты из него, вид, которого
+список не называет, не читается и есть в `skipped` (`--source names no notes account`), а элемент, чей вид `--only`
+оставил за бортом, — тоже в `skipped`. Встречи читаются, только если список называет аккаунт встреч (`zoom:<id>`,
+`zoom`, `meetings`), и только один. Ответ `search all` называет каждый прочитанный аккаунт:
+`accounts: [{ resource, provider, account }]`; в обычном режиме — строка `searched: …` в stderr.
+
+Запланировано ([план](../dev/source-everywhere-plan.md)): `--source` у `search mail` и `search notes`;
+`search notes --folder`, `search mail --account` и `search all --meetings` заменит `--source`.
 
 ## Regex: term и body
 

@@ -42,7 +42,10 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "field one kind lacks skips that kind and `skipped` says why; `only` narrows the kinds. With `meetings`, one " +
       "meeting account's transcripts, chat and summaries join in as kind meeting, with meetingId, scope, id and " +
       "startMs instead of a ref, and a null timestamp when the start is unknown; true picks the one stored account " +
-      "that holds meetings and refuses when several do. Returns { query, items, hasMore, searched, skipped, notes?, meetings?, server? }; " +
+      "that holds meetings and refuses when several do. `source` names the accounts instead: provider:account as an item " +
+      "shows it, a provider, a kind or group:<name>; each kind reads its own of them, meetings only when it names one, " +
+      "and `skipped` names an entry no kind reads. Returns { query, items, hasMore, searched, accounts, skipped, notes?, " +
+      "meetings?, server? }; accounts lists every account read as { resource, provider, account }; " +
       "hasMore is null when a bounded meeting scan could not tell.",
     input: v.object({
       // Typed as present so the answer code reads them; offered only where the server can search.
@@ -53,7 +56,16 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
         v.pipe(
           v.array(v.picklist(RESOURCES_SEARCHED_WITH_MEETINGS)),
           v.minLength(1),
-          v.description("only these kinds: messages, mail, notes; meetings together with `meetings`"),
+          v.description("only these kinds: messages, mail, notes; meetings together with `meetings` or `source`"),
+        ),
+      ),
+      source: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description(
+            "only these accounts, comma-separated: provider:account as an item shows it, a provider, a kind or group:<name>",
+          ),
         ),
       ),
       meetings: v.optional(
@@ -77,10 +89,13 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
     annotations: { ...READ, openWorldHint: Boolean(messenger.serverSearch) },
     stored: (store, account, args, defaults, connect) => {
       const meetings = args.meetings === false ? undefined : args.meetings
-      if (meetings === undefined && args.only?.includes("meetings"))
-        throw new CliError("validation_error", "only: meetings needs meetings")
-      if (meetings === undefined && args.max_meetings !== undefined)
-        throw new CliError("validation_error", "max_meetings needs meetings")
+      const source = args.source
+      if (meetings !== undefined && source !== undefined)
+        throw new CliError("validation_error", "source names the meeting account — leave meetings out")
+      if (meetings === undefined && source === undefined && args.only?.includes("meetings"))
+        throw new CliError("validation_error", "only: meetings needs meetings or source")
+      if (meetings === undefined && source === undefined && args.max_meetings !== undefined)
+        throw new CliError("validation_error", "max_meetings needs meetings or source")
       if (meetings !== undefined && args.offset !== undefined)
         throw new CliError("validation_error", "offset pages messages, mail and notes; not with meetings yet")
       const meetingAccount = typeof meetings === "string" ? meetingAccountOf(meetings) : undefined
@@ -96,7 +111,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
         env: defaults.env,
         ...(defaults.signal === undefined ? {} : { signal: defaults.signal }),
       }
-      return meetings === undefined
+      return meetings === undefined && source === undefined
         ? services.messages.searchAll({
             ...request,
             ...(args.only === undefined
@@ -107,6 +122,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
             ...request,
             ...(args.only === undefined ? {} : { only: args.only }),
             ...(meetingAccount === undefined ? {} : { meetingAccount }),
+            ...(source === undefined ? {} : { source }),
             ...(args.max_meetings === undefined ? {} : { maxMeetings: args.max_meetings }),
           })
     },

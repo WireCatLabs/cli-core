@@ -23,7 +23,7 @@ const onlyOf = (value: string): ResourceWithMeetings[] => {
   if (unknown !== undefined || chosen.length === 0)
     throw new CliError(
       "validation_error",
-      `--only takes ${RESOURCES_SEARCHED_WITH_MEETINGS.join(", ")}, separated by commas; meetings with --meetings`,
+      `--only takes ${RESOURCES_SEARCHED_WITH_MEETINGS.join(", ")}, separated by commas; meetings with --meetings or --source`,
     )
   return [...new Set(chosen)] as ResourceWithMeetings[]
 }
@@ -71,8 +71,13 @@ const allCommand = (messenger: Messenger): Command => {
     .addHelpText("after", SAVE_HELP)
     .option(
       "--only <resources>",
-      "only these resources, separated by commas: messages, mail, notes; meetings with --meetings",
+      "only these resources, separated by commas: messages, mail, notes; meetings with --meetings or --source",
       onlyOf,
+    )
+    .option(
+      "--source <accounts>",
+      "only these accounts, separated by commas: provider:account as a hit shows it, a provider, a kind or " +
+        "group:<name>; each resource reads the ones of its kind, and meetings only when it names one",
     )
     .option(
       "--meetings [provider:account]",
@@ -89,19 +94,22 @@ const allCommand = (messenger: Messenger): Command => {
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
   return backendOptions(command, messenger).action(async function (this: Command, words: string[]) {
     const context = messengerContext(this, messenger)
-    const { only, meetings, maxMeetings, limit, offset, exact, timezone } = this.opts<{
+    const { only, meetings, source, maxMeetings, limit, offset, exact, timezone } = this.opts<{
       only?: ResourceWithMeetings[]
       meetings?: string | true
+      source?: string
       maxMeetings?: number | "all"
       limit?: number
       offset?: number
       exact?: boolean
       timezone?: string
     }>()
-    if (meetings === undefined && only?.includes("meetings"))
-      throw new CliError("validation_error", "--only meetings needs --meetings")
-    if (meetings === undefined && maxMeetings !== undefined)
-      throw new CliError("validation_error", "--max-meetings needs --meetings")
+    if (meetings !== undefined && source !== undefined)
+      throw new CliError("validation_error", "--source names the meeting account — leave --meetings out")
+    if (meetings === undefined && source === undefined && only?.includes("meetings"))
+      throw new CliError("validation_error", "--only meetings needs --meetings or --source")
+    if (meetings === undefined && source === undefined && maxMeetings !== undefined)
+      throw new CliError("validation_error", "--max-meetings needs --meetings or --source")
     if (meetings !== undefined && offset !== undefined)
       throw new CliError("validation_error", "--offset pages messages, mail and notes; not with --meetings yet")
     const meetingAccount = typeof meetings === "string" ? accountAfterQuery(meetings) : undefined
@@ -115,7 +123,7 @@ const allCommand = (messenger: Messenger): Command => {
       env: context.env,
     }
     const found = await context.withServices<SearchAllIncludingMeetingsFound>((services) =>
-      meetings === undefined
+      meetings === undefined && source === undefined
         ? services.messages.searchAll({
             ...request,
             ...(only === undefined ? {} : { only: only.filter((one): one is SearchedResource => one !== "meetings") }),
@@ -124,11 +132,17 @@ const allCommand = (messenger: Messenger): Command => {
             ...request,
             ...(only === undefined ? {} : { only }),
             ...(meetingAccount === undefined ? {} : { meetingAccount }),
+            ...(source === undefined ? {} : { source }),
             ...(maxMeetings === undefined ? {} : { maxMeetings }),
           }),
     )
     noteServer(context, found.server)
-    for (const { resource, reason } of found.skipped) context.renderer.note(`${resource} not searched: ${reason}`)
+    if (context.format === "pretty")
+      context.renderer.note(
+        `searched: ${found.accounts.map(({ provider, account }) => `${provider}:${account}`).join(", ") || "nothing"}`,
+      )
+    for (const { resource, source, reason } of found.skipped)
+      context.renderer.note(`${resource ?? source} not searched: ${reason}`)
     if (found.notes?.meaningSkipped) context.renderer.note(`notes by words only: ${found.notes.meaningSkipped}`)
     if (found.meetings?.complete === false)
       context.renderer.note(

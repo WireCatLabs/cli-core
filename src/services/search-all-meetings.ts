@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import { formatMeetingReference } from "../domain/meeting-reference.js"
 import type { SearchHit } from "../meetings/index.js"
+import { entriesOfList, fitting } from "../search/account-list.js"
 import { parseLucene } from "../search/lucene/parser.js"
 import type { QueryNode } from "../search/lucene/types.js"
 import { codeOf } from "../sends/guarded.js"
@@ -14,8 +15,10 @@ import {
   type SearchAllItem,
   type SearchAllRequest,
   type SearchedResource,
+  type Skipped,
   searchAll,
 } from "./search-all.js"
+import { listContextOf } from "./search-kind.js"
 
 export const RESOURCES_SEARCHED_WITH_MEETINGS = [...RESOURCES_SEARCHED, "meetings"] as const
 export type ResourceWithMeetings = (typeof RESOURCES_SEARCHED_WITH_MEETINGS)[number]
@@ -66,7 +69,7 @@ export interface SearchAllIncludingMeetingsFound
   /** null means a bounded meeting scan did not prove whether another match exists. */
   hasMore: boolean | null
   searched: ResourceWithMeetings[]
-  skipped: { resource: ResourceWithMeetings; reason: string }[]
+  skipped: Skipped<ResourceWithMeetings>[]
   meetings?: MeetingSearchCoverage
 }
 
@@ -226,8 +229,9 @@ export const searchAllIncludingMeetings = async (
   if ("reason" in compiled)
     return { ...legacy, skipped: [...legacy.skipped, { resource: "meetings", reason: compiled.reason }] }
   let meetings: CollectedMeetings
+  const meetingAccount = request.meetingAccount ?? account
   try {
-    meetings = await collectMeetings(store, request.meetingAccount ?? account, request, compiled.query)
+    meetings = await collectMeetings(store, meetingAccount, request, compiled.query)
   } catch (error) {
     if (codeOf(error) !== "not_found") throw error
     return {
@@ -256,6 +260,10 @@ export const searchAllIncludingMeetings = async (
     items,
     hasMore: legacy.hasMore || ordered.length > request.limit ? true : meetings.coverage.complete ? false : null,
     searched: [...legacy.searched, "meetings"],
+    accounts: [
+      ...legacy.accounts,
+      { resource: "meetings", provider: meetingAccount.provider, account: meetingAccount.account },
+    ],
     meetings: { ...meetings.coverage, ...(nextCursor ? { nextCursor } : {}) },
   }
 }
@@ -263,6 +271,11 @@ export const searchAllIncludingMeetings = async (
 export interface SearchAllWithMeetingsRequest extends Omit<SearchAllIncludingMeetingsRequest, "meetingAccount"> {
   /** Omitted: the one stored account that holds meetings; several is a validation error, none skips meetings. */
   meetingAccount?: AccountKey
+  /**
+   * `--source`: each kind reads the accounts the list names of it and a kind it names none of is skipped.
+   * Meetings are read only when it names a meeting account.
+   */
+  source?: string
 }
 
 /** `provider:account`, split on the first colon: a meeting account's own id may hold colons. */
@@ -294,6 +307,8 @@ export const searchAllWithMeetings = async (
   messenger: Partial<Pick<Messenger, "savedChatId" | "app">> = {},
   searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
 ): Promise<SearchAllIncludingMeetingsFound> => {
+  if (request.source !== undefined)
+    return searchAllOfSource(store, account, request.source, request, messenger, searchMessages)
   const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
   if (request.meetingAccount || !only.includes("meetings"))
     return searchAllIncludingMeetings(store, account, request, messenger, searchMessages)
@@ -321,4 +336,52 @@ export const searchAllWithMeetings = async (
     searchMessages,
   )
   return { ...found, skipped: [...found.skipped, { resource: "meetings", reason: "no stored account holds meetings" }] }
+}
+
+const searchAllOfSource = async (
+  store: MessageStore,
+  account: AccountKey,
+  source: string,
+  request: SearchAllWithMeetingsRequest,
+  messenger: Partial<Pick<Messenger, "savedChatId" | "app">>,
+  searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
+): Promise<SearchAllIncludingMeetingsFound> => {
+  if (request.meetingAccount)
+    throw new CliError("validation_error", "--source names the meeting account — leave --meetings out")
+  const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
+  const entries = entriesOfList(source, await listContextOf(store, account, messenger.app))
+  const { skipped } = fitting(entries, only, "search all", (kind) => `--only leaves ${kind} out`)
+  const named = (resource: ResourceWithMeetings): AccountKey[] => [
+    ...new Map(
+      entries
+        .flatMap(({ accounts }) => accounts)
+        .filter(({ kind }) => kind === resource)
+        .map(({ provider, account }) => [`${provider}\u0000${account}`, { provider, account }] as const),
+    ).values(),
+  ]
+  const meetings = named("meetings")
+  if (only.includes("meetings") && meetings.length > 1)
+    throw new CliError(
+      "validation_error",
+      `--source names several meeting accounts; search all reads one: ${meetings.map(({ provider, account }) => `${provider}:${account}`).join(", ")}`,
+    )
+  const read = only.filter((resource) => named(resource).length > 0)
+  if (read.includes("meetings") && request.offset !== undefined)
+    throw new CliError("validation_error", "--offset pages messages, mail and notes; not with a meeting account yet")
+  const found = await searchAllIncludingMeetings(
+    store,
+    account,
+    {
+      ...request,
+      only: read,
+      scope: { messages: named("messages"), mail: named("mail"), notes: named("notes") },
+      ...(meetings[0] ? { meetingAccount: meetings[0] } : {}),
+    },
+    messenger,
+    searchMessages,
+  )
+  const unnamed = only
+    .filter((resource) => !read.includes(resource))
+    .map((resource) => ({ resource, reason: `--source names no ${resource} account` }))
+  return { ...found, skipped: [...skipped, ...unnamed, ...found.skipped] }
 }
