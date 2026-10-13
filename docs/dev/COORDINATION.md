@@ -4,7 +4,8 @@ Several sessions work on cli-core, tg-cli and max-cli at once. This page is what
 
 ## Store migrations
 
-**The next free migration version is 7.** Version 6 is taken by snake_case keys in stored query trees
+**The next free migration version is 8.** Version 7 is taken by `mentions` (phones, e-mail, links and documents
+found in text, plan in pull request #1036, 2026-10-13). Version 6 is taken by snake_case keys in stored query trees
 (`lower_inclusive`, `upper_inclusive`, `must_not` in `searches.params`; stream D-2a, 2026-10-13). Version 5 is taken by
 file-name words (`attachment_name_words`); durable task worker claims, which had reserved 5, need a new number.
 Version 4 is taken by `tasks.next_check_at` (task follow-ups, 2026-10-11). Version 3 is taken by canonical project/tag/topic aliases
