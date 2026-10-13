@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.262.0 — 13.10.2026
+
 ### Changed — may break callers
 
 - **The package is now `@wirecat/cli-core`, and the repository `WireCatLabs/cli-core`.** Import
