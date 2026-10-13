@@ -106,6 +106,12 @@ const moveAll = (names: string[], from: string, to: string, move: (from: string,
   }
 }
 
+const pidsOf = (listed: string): string[] =>
+  listed
+    .split("\n")
+    .filter((pid) => pid && pid !== String(process.pid))
+    .map((pid) => `pid ${pid}`)
+
 /** Processes with a store file open: another tool's serve, mcp or job is not in any lock this one checks. */
 const storeHolders = (oldState: string, platform: NodeJS.Platform): string[] => {
   if (platform === "darwin") {
@@ -114,12 +120,11 @@ const storeHolders = (oldState: string, platform: NodeJS.Platform): string[] => 
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
       })
-      return out
-        .split("\n")
-        .filter(Boolean)
-        .map((pid) => `pid ${pid}`)
-    } catch {
-      return []
+      return pidsOf(out)
+    } catch (error) {
+      // lsof exits 1 when nothing is open; any other failure means it could not look, so nothing moves.
+      const failure = error as { status?: number; stdout?: string }
+      return failure.status === 1 ? pidsOf(failure.stdout ?? "") : ["lsof could not check"]
     }
   }
   if (platform !== "linux") return []
@@ -128,7 +133,7 @@ const storeHolders = (oldState: string, platform: NodeJS.Platform): string[] => 
   try {
     pids = readdirSync("/proc").filter((name) => /^\d+$/.test(name) && Number(name) !== process.pid)
   } catch {
-    return []
+    return ["/proc could not be read"]
   }
   for (const pid of pids) {
     try {
