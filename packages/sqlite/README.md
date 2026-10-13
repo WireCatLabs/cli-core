@@ -1,6 +1,6 @@
-# @wirecat/cli-messaging-sqlite
+# @wirecat/cli-core-sqlite
 
-SQLite 3.53.4, built from the official amalgamation for the places `@wirecat/cli-messaging` loads it
+SQLite 3.53.4, built from the official amalgamation for the places `@wirecat/cli-core` loads it
 when the runtime's own SQLite cannot hold its message store: Bun on macOS (13.0 and later, arm64 and
 x86_64), and a Linux distribution's Node (x64 and arm64, glibc 2.28+ or musl).
 

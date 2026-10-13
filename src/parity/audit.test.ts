@@ -18,7 +18,7 @@ const program = (cli: string): CommandsJson => ({ cli, global_options: [], comma
 
 const side = (cli: string, overrides: Partial<CliSide> = {}): CliSide => ({
   commit: "abc1234",
-  pins: { "@wirecat/cli-messaging": "0.9.0" },
+  pins: { "@wirecat/cli-core": "0.9.0" },
   program: program(cli),
   tools: [`${cli}_messages_send`],
   pages: {
@@ -28,7 +28,7 @@ const side = (cli: string, overrides: Partial<CliSide> = {}): CliSide => ({
   },
   scripts: ["test"],
   skills: ["release"],
-  ci: "run: pnpm parity:check node dist/bin/x.js commands --json | cli-messaging-parity x --pages README.md",
+  ci: "run: pnpm parity:check node dist/bin/x.js commands --json | cli-core-parity x --pages README.md",
   ...overrides,
 })
 
@@ -81,7 +81,7 @@ describe("the parity audit", () => {
 
   it("sees the page check behind a pnpm script and its absence", () => {
     expect(ciRuns(side("tg"))).toEqual({ parity: true, pages: true })
-    expect(ciRuns(side("max", { ci: "run: pnpm parity:check node x | cli-messaging-parity max" }))).toEqual({
+    expect(ciRuns(side("max", { ci: "run: pnpm parity:check node x | cli-core-parity max" }))).toEqual({
       parity: true,
       pages: false,
     })

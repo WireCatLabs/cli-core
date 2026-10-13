@@ -16,7 +16,7 @@ nothing is migrated.
 ```sh
 { M=/home/leemour/Projects/AI/cli-messaging; E=/home/leemour/Projects/AI/cli-memo
   git -C $M fetch -q; git -C $E fetch -q
-  echo "== versions"; npm view @wirecat/cli-messaging version; git -C $E show origin/main:package.json | grep -E '"version"|cli-messaging"'
+  echo "== versions"; npm view @wirecat/cli-core version; git -C $E show origin/main:package.json | grep -E '"version"|cli-core"'
   echo "== store.mail: input, filter, API"; git -C $M show origin/main:src/store/sqlite/emails.ts | sed -n '20,50p;120,145p'
   echo "== mail tables"; git -C $M show origin/main:docs/storage/schema.md | sed -n '536,666p' | grep -E '^### |^\| `'
   echo "== what a link and a tag can point at"; git -C $M show origin/main:src/store/sqlite/things.ts | sed -n '12,28p'
@@ -28,7 +28,7 @@ nothing is migrated.
 } > ~/.cache/memo-mail-orient.txt 2>&1
 ```
 
-Then read `~/.cache/memo-mail-orient.txt`. It shows: the published cli-messaging version and memo's pin; what
+Then read `~/.cache/memo-mail-orient.txt`. It shows: the published cli-core version and memo's pin; what
 `store.mail` takes and returns (`EmailInput`, a `MailFilter` with only account, limit and offset, the six
 methods); the mail tables and their columns; that `TABLES`, `TagTarget` and `KnowledgeTarget` have no `email`
 type; how `searchAll` finds mail today (messages of email accounts); memo's import (members, attachment fake messages, folder scope and
@@ -39,19 +39,19 @@ merging and releasing this package.
 
 1. `cli-memo/src/mail/import.ts` (244 lines) — the whole write path you replace, including folder scope and the
    deletion proof (`dropMissing`, near line 210).
-2. `cli-messaging/src/store/sqlite/emails.ts:133-460` — how `saveThread` resolves recipients to identities, adds
+2. `cli-core/src/store/sqlite/emails.ts:133-460` — how `saveThread` resolves recipients to identities, adds
    mailboxes and indexes words; where a new filter or method goes.
 3. `cli-memo/src/search/command.ts:55-135, 280-310` — the unified and `search mail` paths that must find mail in
    the new tables.
-4. `cli-messaging/src/store/sqlite/attachments.ts:1-60` — attachments are written for `message` only; the
+4. `cli-core/src/store/sqlite/attachments.ts:1-60` — attachments are written for `message` only; the
    schema already allows `attachable_type = 'email'`.
-5. `cli-messaging/docs/dev/KNOWLEDGE.md` — which reference resolves to what, for links and tags to an email.
+5. `cli-core/docs/dev/KNOWLEDGE.md` — which reference resolves to what, for links and tags to an email.
 
 ## 4. Do
 
 Two repositories, in this order; one branch and pull request per step, off `origin/main`, in a worktree.
 
-1. **cli-messaging: fill what memo needs from `store.mail`.**
+1. **cli-core: fill what memo needs from `store.mail`.**
    - Lookup: `MailFilter` gains what memo filters by — participant identity or address, thread external id,
      date range, mailbox — plus a list of an account's mailboxes.
    - Mailboxes: membership only grows today (`emails.ts:47`). Add a way to set an email's mailboxes for the
@@ -66,7 +66,7 @@ Two repositories, in this order; one branch and pull request per step, off `orig
    first (memo can then write), search second (memo can then read). A new column or table is migration 2 —
    "What bites" 1. Check: `pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm docs:check && pnpm schema:check`.
    Release with `bin/release` after announcing in issue #849 — "What bites" 2.
-2. **cli-memo: write mail through `store.mail`.** Pin the new cli-messaging. `importMail` builds an `EmailInput`
+2. **cli-memo: write mail through `store.mail`.** Pin the new cli-core. `importMail` builds an `EmailInput`
    per email and calls `saveThread` per thread; cc is included (the members list leaves it out today); folders
    become mailboxes; attachments become email attachments; the `mail_message_folders:*` and
    `mail_attachments:*` sync-state keys go. Keep `mail_folder_scope` and `mail_coverage` unless the store now
@@ -84,7 +84,7 @@ Two repositories, in this order; one branch and pull request per step, off `orig
    then `pnpm schema:render` and `schema.ts`, until `pnpm schema:check` passes; `src/store/upgrade.test.ts` must
    keep passing. Never run `bin/regen-initial-migration`.
 2. **Two sessions write to this package.** Before merging into `main` or releasing, read the latest comments
-   on <https://github.com/WireCatLabs/cli-messaging/issues/849> and post one line there. Release only through
+   on <https://github.com/WireCatLabs/cli-core/issues/849> and post one line there. Release only through
    `bin/release`, which holds a machine-wide lock; a hand-started `release.yml` skips it.
 3. **One scan sees one folder.** That is why mailbox membership only grows; a removal must be limited to the
    folders the scan covered, or a mail in two folders drops out of one it is still in.
@@ -104,7 +104,7 @@ Two repositories, in this order; one branch and pull request per step, off `orig
 ## 7. Check
 
 ```sh
-# cli-messaging worktree
+# cli-core worktree
 pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm docs:check && pnpm schema:check
 # cli-memo worktree
 pnpm install --frozen-lockfile && <the full check from cli-memo's CLAUDE.md>

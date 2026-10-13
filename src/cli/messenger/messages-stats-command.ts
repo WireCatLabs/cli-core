@@ -34,7 +34,7 @@ export const messagesStatsCommand = (messenger: Messenger): Command =>
     )
     .addHelpText(
       "after",
-      "Search guide: https://github.com/WireCatLabs/cli-messaging/blob/main/docs/search/query-language.md",
+      "Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md",
     )
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)

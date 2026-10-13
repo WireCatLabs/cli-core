@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds a CLI's checkout against this checkout of cli-messaging, packed into <tarball>, instead of the
+# Builds a CLI's checkout against this checkout of cli-core, packed into <tarball>, instead of the
 # release it pins: parity must judge what this change does to the apps, not what the last release did.
 set -euo pipefail
 
@@ -22,19 +22,21 @@ peers=$(node -e '
 cd "$dir"
 echo "::notice title=$app-cli::Parity builds $app-cli at $ref ($(git rev-parse --short HEAD))"
 pnpm install --frozen-lockfile
+# Under the name the app imports: until each app switches, that is still the old @wirecat/cli-messaging.
+name=@wirecat/cli-core
+grep -q '"@wirecat/cli-core"' package.json || name=@wirecat/cli-messaging
 # shellcheck disable=SC2086
-pnpm add "@wirecat/cli-messaging@file:$tarball" $peers
+pnpm add "$name@file:$tarball" $peers
 
-pinned=$(pnpm list @wirecat/cli-messaging --depth Infinity --parseable | grep '/@wirecat/cli-messaging$' |
-  grep -v '@wirecat+cli-messaging@file+' || true)
+pinned=$(pnpm list "$name" --depth Infinity --parseable | grep "/$name\$" | grep -v '@file+' || true)
 if [ -n "$pinned" ]; then
-  echo "::error title=$app-cli::$app-cli still resolves a released @wirecat/cli-messaging besides this checkout: $pinned"
+  echo "::error title=$app-cli::$app-cli still resolves a released $name besides this checkout: $pinned"
   exit 1
 fi
 
 if ! pnpm build; then
-  echo "::error title=$app-cli does not build against this cli-messaging::$app-cli $ref fails to compile with" \
-    "this checkout of @wirecat/cli-messaging ($peers). The compiler errors are above;" \
+  echo "::error title=$app-cli does not build against this cli-core::$app-cli $ref fails to compile with" \
+    "this checkout of @wirecat/cli-core ($peers). The compiler errors are above;" \
     "$app-cli needs adoption work before this change can merge."
   exit 1
 fi

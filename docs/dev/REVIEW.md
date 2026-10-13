@@ -1,6 +1,6 @@
 # Reviewing a pull request in tg, max or here
 
-The checklist a reviewer runs on every pull request in cli-messaging, tg-cli and max-cli — a person
+The checklist a reviewer runs on every pull request in cli-core, tg-cli and max-cli — a person
 or a reviewer agent given this page. Its rules are in [STANDARD.md](STANDARD.md); this page is how
 to check them. Paste the verdict into the pull request: each line passed, failed with the reason,
 or not applicable.
@@ -37,10 +37,10 @@ design guidance or our policy; record justified deviations instead of claiming b
 1. **Layers.** The command and the MCP tool call one service method; the service calls a port group;
    no command calls an adapter method for a use case a service owns, and no messenger type crosses
    the adapter ([Layers and sharing](STANDARD.md#layers-and-sharing)).
-2. **Shared by default.** Code that names no messenger is here, in cli-messaging, not in a CLI. A
+2. **Shared by default.** Code that names no messenger is here, in cli-core, not in a CLI. A
    CLI-local feature is one the other messenger cannot have, and the manifest row says why.
 3. **Parity.** The manifest row moves the CLI from `planned` into `in` (or gives the reason it lacks
-   it) in the next cli-messaging release; `pnpm parity:check` is green in the CLI.
+   it) in the next cli-core release; `pnpm parity:check` is green in the CLI.
 4. **Tests.** A test drives the new behaviour through the command, and a failure path is tested;
    max-cli's test matrix lists every new command and option.
 5. **Changelog.** An entry under `## Unreleased` with the fixed headings, saying what changed for a

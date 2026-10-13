@@ -109,7 +109,7 @@ const late = await apart.embed(["fish"], "query").then(
 if (!late.startsWith("the embedding process stopped")) throw new Error(`a closed embedding process ${late}`)
 console.log("dist: the embedding process answers, and refuses once closed")
 
-const speech = await import("@wirecat/cli-messaging/speech")
+const speech = await import("@wirecat/cli-core/speech")
 const speechCache = join(mkdtempSync(join(tmpdir(), "speech-export-dist-")), "common")
 const speechDirectory = speech.modelsDirectory({ WIRECAT_STATE_DIR: speechCache })
 if (speechDirectory !== join(speechCache, "models", "audio"))
@@ -121,7 +121,7 @@ if (
   throw new Error("./speech lost consumer model ordering or claims absent files are installed")
 console.log("dist: ./speech reuses the pinned catalogue and shared model directory")
 
-const { chartRenderer, chartPng, CHART_SIZE } = await import("@wirecat/cli-messaging/charts")
+const { chartRenderer, chartPng, CHART_SIZE } = await import("@wirecat/cli-core/charts")
 const chart = {
   version: 1 as const,
   kind: "bar" as const,
@@ -146,8 +146,8 @@ if (!readFileSync(join(root, "charts/fonts/OFL.txt"), "utf8").includes("SIL OPEN
   throw new Error("the chart font license is absent from dist")
 console.log("dist: ./charts renders dark PNG with the bundled Cyrillic font")
 
-const { openOrdinaryFile, syncDirectory } = await import("@wirecat/cli-messaging/files")
-const { preflightWavAudio, openWavAudio } = await import("@wirecat/cli-messaging/speech/wav")
+const { openOrdinaryFile, syncDirectory } = await import("@wirecat/cli-core/files")
+const { preflightWavAudio, openWavAudio } = await import("@wirecat/cli-core/speech/wav")
 const mediaFolder = mkdtempSync(join(tmpdir(), "cli-messaging-dist-media-"))
 const mediaPath = join(mediaFolder, "AliceExample.wav")
 const pcm = Buffer.alloc(44 + 32000)

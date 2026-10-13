@@ -26,13 +26,13 @@ Implementation safeguards:
 - Retrieval and final scoring retain at most 300 candidates, with at most 100 proposed direct
   replies, bounded text and the existing execution deadlines. Truncation remains visible.
 - Migration 29 adds a live direct-reply index after
-  [reservation PR 817](https://github.com/WireCatLabs/cli-messaging/pull/817).
+  [reservation PR 817](https://github.com/WireCatLabs/cli-core/pull/817).
   The `only` predicate looks up named message keys rather than scanning every archive row.
 - Discovery searches the archive. It does not call a messenger server, install a model or rebuild
   conversations as a query side effect. Surrounding context and requested thread packets remain
   available through their existing paths.
 
-Delivery is complete: `@wirecat/cli-messaging` 0.216.0, `@wirecat/tg-cli` 0.44.0 and
+Delivery is complete: `@wirecat/cli-core` 0.216.0, `@wirecat/tg-cli` 0.44.0 and
 `@wirecat/max-cli` 0.43.0 are published. Both consumers pin the exact shared release; their npm
 binaries retrieve eligible synthetic replies with network/keyring access blocked. The installed
 commands report these versions. Shared and consumer checks, coverage, documentation and

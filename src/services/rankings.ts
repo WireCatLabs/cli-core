@@ -171,7 +171,7 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
     if (request.syncFirst)
       prepared = await prepareLucene(store, account, { ...request, language: "lucene" }, deps.messenger)
     if (!store.rankQuery)
-      throw new CliError("validation_error", "this store does not support rankings — upgrade cli-messaging")
+      throw new CliError("validation_error", "this store does not support rankings — upgrade cli-core")
     const contextChat = prepared.selectedChat
     let expandedDiscussionChats: string[] = []
     if (options.messageKind === "comments" && contextChat && store.rankingDiscussionChats) {
@@ -368,7 +368,7 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
     } else if (reference !== selection.entity.id)
       throw new CliError("validation_error", "person does not match this ranking selection")
     if (!store.rankingEvidence)
-      throw new CliError("validation_error", "this store does not support ranking evidence — upgrade cli-messaging")
+      throw new CliError("validation_error", "this store does not support ranking evidence — upgrade cli-core")
     const execution: QueryExecution = {
       ...selection.execution,
       limit: 1,

@@ -101,11 +101,11 @@ describe("isolated parity evidence capture", () => {
     mkdirSync(join(root, "src/commands"), { recursive: true })
     writeFileSync(
       join(root, "src/program.ts"),
-      'import { messagesCommand } from "./commands/messages.js"\nimport { chatsCommand } from "@wirecat/cli-messaging/cli"\n',
+      'import { messagesCommand } from "./commands/messages.js"\nimport { chatsCommand } from "@wirecat/cli-core/cli"\n',
     )
     writeFileSync(
       join(root, "src/commands/messages.ts"),
-      'import { sendCommand } from "@wirecat/cli-messaging/cli"\nexport const messagesCommand = () => group.command("download")\n',
+      'import { sendCommand } from "@wirecat/cli-core/cli"\nexport const messagesCommand = () => group.command("download")\n',
     )
     const result = mountingEvidence(root, ["messages", "chats", "aliased"], sourceEvidence(root))
     expect(result[0]).toMatchObject({ group: "messages", file: "src/commands/messages.ts" })

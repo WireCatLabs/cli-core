@@ -151,8 +151,8 @@ names, unknown names and explicitly selected unseen IDs without supplying the co
 
 ```sh
 node scripts/evals/prepare-stats-evals.mjs /tmp/new-stats-eval \
-  /path/to/max/node_modules/@wirecat/cli-messaging \
-  /path/to/tg/node_modules/@wirecat/cli-messaging \
+  /path/to/max/node_modules/@wirecat/cli-core \
+  /path/to/tg/node_modules/@wirecat/cli-core \
   /path/to/max/skills/max-cli/SKILL.md /path/to/tg/skills/tg-cli/SKILL.md \
   --clock 2026-10-08T12:00:00Z --seed stats-v2 --repeats 2 \
   --interfaces cli,native-mcp

@@ -13,7 +13,7 @@ import { answered } from "../tool.js"
 import { botInstructions } from "./instructions.js"
 import { BOT_TOOLS, type BotTool, type BotToolKit, type Invocation, withAcross } from "./tools.js"
 
-/** The CLI's own `run`, which cli-messaging cannot import: each tool is one run of a bot command. */
+/** The CLI's own `run`, which cli-core cannot import: each tool is one run of a bot command. */
 export type RunBotCommand = (
   argv: string[],
   environment: {

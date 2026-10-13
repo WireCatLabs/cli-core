@@ -7,7 +7,7 @@
 [How search works](https://wirecat.dev/en/docs/search-architecture).
 
 Lucene profile v1 доступен через shared services, CLI и MCP; потребителям нужна
-версия cli-messaging с этим профилем. Синтаксис основан на Apache Lucene 9.12.3
+версия cli-core с этим профилем. Синтаксис основан на Apache Lucene 9.12.3
 StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text` (слова в любой форме,
 см. «Формы слов»; `--exact` делает полем по умолчанию `exact`).
 Это ограниченный профиль языка, а не полный Lucene search engine.

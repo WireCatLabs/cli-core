@@ -1,5 +1,5 @@
 name: SQLite
-# Builds @wirecat/cli-messaging-sqlite (packages/sqlite), checks every library on the systems it is
+# Builds @wirecat/cli-core-sqlite (packages/sqlite), checks every library on the systems it is
 # for, and publishes it when started by hand with `publish` — npm trusts this file by name.
 on:
   schedule:
@@ -101,7 +101,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: package
-          path: packages/sqlite/wirecat-cli-messaging-sqlite-*.tgz
+          path: packages/sqlite/wirecat-cli-core-sqlite-*.tgz
           if-no-files-found: error
 
   # The library as installed — unpacked from the tarball — under Bun, which loads it itself.
@@ -122,7 +122,7 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: package
-      - run: tar -xzf wirecat-cli-messaging-sqlite-*.tgz
+      - run: tar -xzf wirecat-cli-core-sqlite-*.tgz
       - run: sw_vers -productVersion && uname -m
       - run: bun packages/sqlite/probe.mjs "$PWD/package/lib/darwin/libsqlite3.dylib" "$SQLITE_VERSION"
 
@@ -148,7 +148,7 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: package
-      - run: tar -xzf wirecat-cli-messaging-sqlite-*.tgz
+      - run: tar -xzf wirecat-cli-core-sqlite-*.tgz
       - run: |
           docker run --rm -v "$PWD:/w" -w /w ${{ matrix.image }} sh -c '
             if command -v apk >/dev/null; then apk add --no-cache nodejs >/dev/null
@@ -172,4 +172,4 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: package
-      - run: npm publish wirecat-cli-messaging-sqlite-*.tgz --access public --provenance
+      - run: npm publish wirecat-cli-core-sqlite-*.tgz --access public --provenance

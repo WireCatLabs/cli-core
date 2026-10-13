@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-messaging/main/docs/images/cli-core-banner.png" alt="Built on cli-base: the foundation for agent-ready CLIs" width="100%">
+  <img src="https://raw.githubusercontent.com/WireCatLabs/cli-core/main/docs/images/cli-core-banner.png" alt="Built on cli-base: the foundation for agent-ready CLIs" width="100%">
 </p>
 
-# @wirecat/cli-messaging
+# @wirecat/cli-core
 
 The messenger-neutral half of a messaging command line tool, shared by
 [`tg-cli`](https://github.com/WireCatLabs/tg-cli) and [`max-cli`](https://github.com/WireCatLabs/max-cli).
@@ -217,11 +217,11 @@ Give one command path per call; inspect other groups in separate calls.
 
 ## Evidence packets for agents
 
-`prepareEvidencePacket` from `@wirecat/cli-messaging/services` packages a message page that the
+`prepareEvidencePacket` from `@wirecat/cli-core/services` packages a message page that the
 caller has already read and authorised. It works with any messenger's domain messages:
 
 ```ts
-import { prepareEvidencePacket } from "@wirecat/cli-messaging/services"
+import { prepareEvidencePacket } from "@wirecat/cli-core/services"
 
 const packet = prepareEvidencePacket({
   kind: "chats", // or "news" or "person"
@@ -298,7 +298,7 @@ rejected before reading the meeting. Meeting-only references select current revi
 An explicit revision or cue keeps its historical text and reports `current` or `superseded`.
 
 ```ts
-import { readMeetingEvidence, resolveMeetingReference, proposeMeetingTask } from "@wirecat/cli-messaging/services"
+import { readMeetingEvidence, resolveMeetingReference, proposeMeetingTask } from "@wirecat/cli-core/services"
 
 // Invented local records; the caller must authorize account 1 first.
 const evidence = await readMeetingEvidence(store.meetings, 1, "meeting:1/2", { cues: 100, bytes: 65536 })
@@ -412,7 +412,7 @@ shows it. The token is never printed and never
 written to a file.
 
 The GitHub form publishes from the job in the `npm` environment, which is what
-npm's trusted publisher names: `WireCatLabs` / `cli-messaging` / `release.yml` / environment `npm`.
+npm's trusted publisher names: `WireCatLabs` / `cli-core` / `release.yml` / environment `npm`.
 
 ### How often, and what may break
 

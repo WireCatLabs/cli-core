@@ -24,12 +24,12 @@ production adapter; the providers below are invented fixtures, not available Mee
 No capability requires the others. A read-only assistant can expose `get` without recordings or
 writes. A recording service can implement a catalog and transfers without managing meetings.
 The SDK contains no filesystem, database, vendor client, credentials or automatic provider setup.
-cli-messaging implements the durable meeting store and its evidence/context/semantic services.
+cli-core implements the durable meeting store and its evidence/context/semantic services.
 
 ## Remote management
 
 ```ts
-import { createMeetingManagement, type ManagedMeeting } from "@wirecat/cli-messaging/meetings"
+import { createMeetingManagement, type ManagedMeeting } from "@wirecat/cli-core/meetings"
 
 const example: ManagedMeeting = {
   id: "opaque/meeting:a", title: "Alice Example planning", kind: "scheduled",
@@ -104,7 +104,7 @@ tokens, transcript content or a claim of global archive completeness.
 import {
   installRecordingArchiveSchedule, planRecordingArchiveSchedule,
   recordingArchiveScheduleWindow,
-} from "@wirecat/cli-messaging/meetings"
+} from "@wirecat/cli-core/meetings"
 
 const schedule = planRecordingArchiveSchedule({
   name: "Alice Example backup", scope: { provider: "example-video", account: "Alice Example" },
@@ -147,8 +147,8 @@ append receipts do not imply bounded legacy meeting-history hydration in a produ
 ## Native file and WAV helpers
 
 Native connectors can import `openOrdinaryFile` and `syncDirectory` from
-`@wirecat/cli-messaging/files`, and `preflightWavAudio` and `openWavAudio` from
-`@wirecat/cli-messaging/speech/wav`. These host helpers sit outside the pure meeting module and
+`@wirecat/cli-core/files`, and `preflightWavAudio` and `openWavAudio` from
+`@wirecat/cli-core/speech/wav`. These host helpers sit outside the pure meeting module and
 import no store, provider or speech engine.
 
 WAV preflight takes explicit byte and duration budgets (at most 4 GiB and 24 hours), validates PCM16

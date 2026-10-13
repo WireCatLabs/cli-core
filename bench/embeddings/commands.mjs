@@ -20,7 +20,7 @@ const [{ run }, { conversationsCommand }, { settingsFor }, { rememberAccount }, 
 // The same folder as bench/search/common.ts, which Bun and Node cannot both import as TypeScript.
 const DATA_DIR =
   process.env.SEARCHBENCH_DATA ??
-  join(process.env.XDG_CACHE_HOME ?? join(process.env.HOME, ".cache"), "cli-messaging", "searchbench")
+  join(process.env.XDG_CACHE_HOME ?? join(process.env.HOME, ".cache"), "cli-core", "searchbench")
 
 const app = { command: "bench", appName: "bench-cli", envPrefix: "BENCH", description: "bench", version: "0.0.0" }
 const messenger = {

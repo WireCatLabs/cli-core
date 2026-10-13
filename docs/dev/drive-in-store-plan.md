@@ -63,7 +63,7 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 
 ## Work
 
-1. **cli-messaging (Q2):** Drive document hits in `search all` and `search notes` gain `url` from
+1. **cli-core (Q2):** Drive document hits in `search all` and `search notes` gain `url` from
    front matter `sourceUrl` and take their time from front matter `modifiedAt`. The fields are
    [source-everywhere-plan.md](source-everywhere-plan.md), "Fields of a document hit" (its work
    item 1). No schema change. Release it together with cm#1017.
@@ -80,7 +80,7 @@ number is needed in [COORDINATION.md](COORDINATION.md).
       account: <folder external id> })`, so `--source drive:<profile>` and the hit's `account` can
       name it ([source-everywhere-plan.md](source-everywhere-plan.md), "What the drive switch writes").
    4. Move existing data, below.
-   5. Pin the cli-messaging release from item 1.
+   5. Pin the cli-core release from item 1.
 
 ## Existing `drive.db` data
 
@@ -107,19 +107,19 @@ number is needed in [COORDINATION.md](COORDINATION.md).
 - `drive embed` embeds every note in the store, memo's too, because `embedNotes` takes no folder
   (`src/services/notes-search.ts:163`, `drive-cli/src/store.ts:122-125`). In one store that is the
   point; `maxChunks` still bounds a run.
-- drive must keep its cli-messaging pin current like memo. An old drive still writes to a newer store
+- drive must keep its cli-core pin current like memo. An old drive still writes to a newer store
   (point 7); only a major version of this package would stop it.
 
 ## Release order
 
-1. cli-messaging: release with cm#1017 and item 1.
+1. cli-core: release with cm#1017 and item 1.
 2. cli-memo: a release with item 2, pinned to that release. tg and max bump their pins for item 1's `url`.
 3. drive-cli: drive#19 bumps to that release (it needs cm#1017), then the item 3 PR, rebased on it.
 
 ## Check
 
 - drive test: sync a fixture Google Doc with `MESSAGING_STORE` in the sandbox, then call `searchAll`
-  from cli-messaging. Expect one `document` item with a `document:` reference, the doc's title, its `url`,
+  from cli-core. Expect one `document` item with a `document:` reference, the doc's title, its `url`,
   provider `drive` and the profile as `account`.
 - drive test: a profile whose `state.json` names another store file is rebuilt offline from
   snapshots; references point at the new rows; a rebuild cut off halfway completes on the next run.

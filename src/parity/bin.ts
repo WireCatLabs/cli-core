@@ -10,8 +10,8 @@ const read = (file: string) => JSON.parse(readFileSync(file, "utf8"))
 const names = manifest.clis.join("|")
 const usage = () => {
   console.error(
-    `usage: <tool> commands --json | cli-messaging-parity <${names}> [--pages <file...>]\n` +
-      "       cli-messaging-parity wording <commands.json> <commands.json...>",
+    `usage: <tool> commands --json | cli-core-parity <${names}> [--pages <file...>]\n` +
+      "       cli-core-parity wording <commands.json> <commands.json...>",
   )
   process.exit(2)
 }
@@ -47,7 +47,7 @@ if (flag === "--pages") {
   const problems = parityProblems(manifest, cli, program)
   for (const problem of problems) console.error(problem)
   if (problems.length > 0) {
-    console.error(`${problems.length} difference(s) from @wirecat/cli-messaging parity.json — see docs/dev/STANDARD.md`)
+    console.error(`${problems.length} difference(s) from @wirecat/cli-core parity.json — see docs/dev/STANDARD.md`)
     process.exit(1)
   }
 }

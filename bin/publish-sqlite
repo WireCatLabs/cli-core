@@ -1,13 +1,13 @@
 #!/usr/bin/env sh
-# Publishes an empty @wirecat/cli-messaging-sqlite@0.0.0 once, so the package exists and npm lets its
+# Publishes an empty @wirecat/cli-core-sqlite@0.0.0 once, so the package exists and npm lets its
 # trusted publisher be set (npmjs.com → the package → Settings → Trusted Publisher: GitHub Actions,
-# WireCatLabs/cli-messaging, workflow sqlite.yml, environment npm). Every version with libraries is
+# WireCatLabs/cli-core, workflow sqlite.yml, environment npm). Every version with libraries is
 # published by that workflow, never from this machine.
 #
 #   bin/publish-sqlite
 set -eu
 
-package=@wirecat/cli-messaging-sqlite
+package=@wirecat/cli-core-sqlite
 if npm view "$package" version >/dev/null 2>&1; then
   echo "$package is already on npm — set its trusted publisher, then run the SQLite workflow with publish"
   exit 0
@@ -30,9 +30,9 @@ cat > "$work/package.json" <<JSON
 {
   "name": "$package",
   "version": "0.0.0",
-  "description": "Placeholder: the SQLite builds for @wirecat/cli-messaging are published from CI",
+  "description": "Placeholder: the SQLite builds for @wirecat/cli-core are published from CI",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/WireCatLabs/cli-messaging.git", "directory": "packages/sqlite" }
+  "repository": { "type": "git", "url": "git+https://github.com/WireCatLabs/cli-core.git", "directory": "packages/sqlite" }
 }
 JSON
 (cd "$work" && npm publish --access public --userconfig "$work/.npmrc")

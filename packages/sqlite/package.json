@@ -1,12 +1,12 @@
 {
-  "name": "@wirecat/cli-messaging-sqlite",
+  "name": "@wirecat/cli-core-sqlite",
   "version": "1.0.1",
-  "description": "SQLite 3.53.4 builds for @wirecat/cli-messaging where the runtime's own SQLite falls short",
+  "description": "SQLite 3.53.4 builds for @wirecat/cli-core where the runtime's own SQLite falls short",
   "license": "Apache-2.0",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/WireCatLabs/cli-messaging.git",
+    "url": "git+https://github.com/WireCatLabs/cli-core.git",
     "directory": "packages/sqlite"
   },
   "exports": {

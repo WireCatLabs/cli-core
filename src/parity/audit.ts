@@ -91,8 +91,8 @@ export const allowFlags = (program: CommandsJson): string[] => {
 }
 
 export const ciRuns = (side: CliSide) => ({
-  parity: side.ci.includes("cli-messaging-parity"),
-  pages: /cli-messaging-parity \S+ --pages/.test(side.ci),
+  parity: /cli-(?:core|messaging)-parity/.test(side.ci),
+  pages: /cli-(?:core|messaging)-parity \S+ --pages/.test(side.ci),
 })
 
 const mark = (ok: boolean) => (ok ? "✅" : "🔴")
@@ -122,7 +122,7 @@ export const renderAudit = (input: AuditInput): string => {
   out.push(
     `## Measured from the ${clis.length} CLIs`,
     "",
-    `cli-messaging \`${input.shared.commit}\` (${input.shared.version}) · ` +
+    `cli-core \`${input.shared.commit}\` (${input.shared.version}) · ` +
       each((side, cli) => `${cli}-cli \`${side.commit}\``).join(" · ") +
       ". Statuses: ✅ agrees · 🔴 differs · ⚪ one-sided with a stated reason.",
   )
@@ -157,8 +157,8 @@ export const renderAudit = (input: AuditInput): string => {
   }
 
   section("Shared package pinned")
-  for (const name of ["@wirecat/cli-messaging", "@wirecat/cli-base"]) {
-    const latest = name === "@wirecat/cli-messaging" ? input.shared.version : undefined
+  for (const name of ["@wirecat/cli-core", "@wirecat/cli-base"]) {
+    const latest = name === "@wirecat/cli-core" ? input.shared.version : undefined
     const pins = each((side) => side.pins[name])
     const same = pins.every((pin) => pin === pins[0]) && (latest === undefined || pins[0] === latest)
     out.push(

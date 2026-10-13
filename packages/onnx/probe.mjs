@@ -1,6 +1,6 @@
 // Runs a one-node model through the package as published: `node probe.mjs` and `bun probe.mjs`.
 import { readFileSync } from "node:fs"
-import { env, InferenceSession, Tensor } from "@wirecat/cli-messaging-onnx"
+import { env, InferenceSession, Tensor } from "@wirecat/cli-core-onnx"
 
 env.wasm.numThreads = Number(process.env.THREADS ?? 2)
 const session = await InferenceSession.create(readFileSync(new URL("./test/multiply.onnx", import.meta.url)))

@@ -8,7 +8,7 @@ Proposed, not claimed. Slices 1, 2 and mute are owned by other plans (see Owners
 The docs site's Features page (wirecat.dev `/docs/features`) names the gaps a user looks for. This
 plan closes the ones worth closing, in value-for-effort order, shared where both CLIs can do it.
 
-Evidence, read at tg-cli `5168117`, max-cli `8888844`, cli-messaging `99c8793`, mtcute 0.32.3
+Evidence, read at tg-cli `5168117`, max-cli `8888844`, cli-core `99c8793`, mtcute 0.32.3
 (layer 229):
 
 - Both `messages search` commands read only the local store:
@@ -59,7 +59,7 @@ from this plan. Slices 3, 4 (archive), 5, 6, 7 and 8 have no other owner.
 - MAX: each new opcode gets a row in max-cli `docs/dev/protocol.md` saying what it rests on
   (claim, source or capture). A MAX write is measured in Saved Messages first and needs the
   owner's yes (max-cli `docs/dev/BACKLOG.md`, "From the PyMax comparison").
-- Releases: at most one cli-messaging release every 2 hours (`CLAUDE.md`).
+- Releases: at most one cli-core release every 2 hours (`CLAUDE.md`).
 
 Shared examples to copy: `src/cli/messenger/polls-command.ts` (`annotate(..., {mutates: true})`,
 `capability(...)`), `messages-send-command.ts`, `admin-folders-command.ts`; MCP tools in

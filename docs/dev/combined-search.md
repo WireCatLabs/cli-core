@@ -260,7 +260,7 @@ This proposal includes the separately agreed breaking window required by the
    Store regex records as regex. No destructive rewrite of saved searches or history. A changed
    replay keeps `migratedFrom: legacy` metadata; newly saved records use Lucene. Any conversion that
    cannot preserve hard eligibility fails with the saved id and an actionable preview.
-3. In one cli-messaging breaking release, switch no-language SDK requests to combined Lucene,
+3. In one cli-core breaking release, switch no-language SDK requests to combined Lucene,
    remove CLI/MCP language selection, and retain the deprecated SDK language field for one documented
    transition release. Explicit SDK `language: lucene` keeps strict semantics during that transition;
    `language: legacy` continues the old chain. A later breaking release can remove that field.
@@ -274,7 +274,7 @@ This proposal includes the separately agreed breaking window required by the
    Run `pnpm lint`, `pnpm typecheck`, `pnpm test:coverage`, `pnpm docs:check`, the benchmark's own
    TypeScript check, dev ablations and the frozen held-out evaluation. Record the quality/latency
    report and exact production hashes. Never touch the real store or `src/replies/**`.
-5. Release cli-messaging first, then create draft PRs in tg-cli and max-cli pinning its exact published
+5. Release cli-core first, then create draft PRs in tg-cli and max-cli pinning its exact published
    version, updating generated `docs/commands.md`, skills and breaking changelog entries. Avoid other
    consumer `docs/*.md` prose owned by `docs/reader-standards`. Verify unreleased builds with
    `bin/try-messaging` in consumer worktrees; no committed `file:` dependency. Arrange same-day

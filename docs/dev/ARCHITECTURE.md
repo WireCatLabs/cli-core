@@ -43,7 +43,7 @@ conformance or imply that planned command paths are already implemented.
 | `./background` | `src/background/` | what any background process needs and no messenger: the lock per app and profile, whether a PID is alive and ours, the machine seam tests replace, systemd and launchd units — `serve` and `server` are built on it, each CLI's server stays its own (NEED-492 C) |
 | `./cli` | `src/cli/`, `src/mcp/` | the command skeleton, the shared commands and the MCP server |
 | `./sqlite-runtime` | `src/sqlite-runtime.ts` | `ensureSqlite`, the first thing `tg` and `max` run: restarts the command with the bundled SQLite when the system's lacks FTS5 — see [The store](#the-store) |
-| `./parity` | `src/parity/` | the command manifest, page and wording checks behind `cli-messaging-parity`, which compares `tg` and `max` |
+| `./parity` | `src/parity/` | the command manifest, page and wording checks behind `cli-core-parity`, which compares `tg` and `max` |
 | `./testing` | `src/kit/` | the adapter kit: a fake adapter, the contract cases and their seed — see [the adapter guide](ADAPTERS.md). `src/testing/` is this repository's own test setup and is not published |
 | `./tasks`, `./tasks/testing` | `src/tasks/` | open tasks: model, `TaskStore` port and service — see [Open tasks](#open-tasks) |
 | `./meetings`, `/meetings/cli`, `/meetings/mcp`, `/meetings/testing` | `src/meetings/` | events and meetings, the provider and store ports, pull, import, commands and MCP reads — see [Meetings](MEETINGS.md) and [provider integration](MEETING-PROVIDERS.md) |
@@ -61,14 +61,14 @@ full-text search the migrations need (`assertStoreCapable`), and refuses with wh
 version number does not tell: official Node 22.0–22.15 has SQLite 3.46–3.49 without FTS5. CI runs the
 built package on Node 22.15.0 to see the refusal (`scripts/check-old-node.mjs`).
 
-Where the runtime's SQLite can be swapped, ours from `@wirecat/cli-messaging-sqlite` (built in
+Where the runtime's SQLite can be swapped, ours from `@wirecat/cli-core-sqlite` (built in
 `packages/sqlite`, published by `.github/workflows/sqlite.yml`) takes its place
 (plan):
 
 - **Bun on macOS** always loads ours (`bunDatabase`, `src/store/drivers/bun-sqlite.ts`), once, before
   the first database: Bun uses the system's library there, which can be too old.
 - **A Linux distribution's Node** links the system's `libsqlite3`. `ensureSqlite`
-  (`src/sqlite-runtime.ts`, exported as `@wirecat/cli-messaging/sqlite-runtime`) is the first thing
+  (`src/sqlite-runtime.ts`, exported as `@wirecat/cli-core/sqlite-runtime`) is the first thing
   `tg` and `max` run: when the system's SQLite fails the check above, it starts the command again
   with ours first on `LD_LIBRARY_PATH`, before anything is read or sent. CI runs it on Ubuntu's Node
   with SQLite 3.42 (`scripts/check-sqlite-restart.mjs`).

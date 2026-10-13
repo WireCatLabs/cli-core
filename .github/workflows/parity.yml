@@ -62,10 +62,10 @@ jobs:
           cache-dependency-path: |
             shared/pnpm-lock.yaml
             cli/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-messaging.tgz
+      - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-core.tgz
         working-directory: shared
-      - name: Build ${{ matrix.cli }}-cli ${{ steps.app.outputs.ref }} against this cli-messaging
-        run: shared/scripts/parity/build-app.sh ${{ matrix.cli }} cli cli-messaging.tgz "$APP_REF"
+      - name: Build ${{ matrix.cli }}-cli ${{ steps.app.outputs.ref }} against this cli-core
+        run: shared/scripts/parity/build-app.sh ${{ matrix.cli }} cli cli-core.tgz "$APP_REF"
         env:
           APP_REF: ${{ steps.app.outputs.ref }}
       - name: Check ${{ matrix.cli }}-cli against this manifest
@@ -110,14 +110,14 @@ jobs:
             shared/pnpm-lock.yaml
             max/pnpm-lock.yaml
             tg/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-messaging.tgz
+      - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-core.tgz
         working-directory: shared
-      - name: Build max-cli ${{ steps.max.outputs.ref }} against this cli-messaging
-        run: shared/scripts/parity/build-app.sh max max cli-messaging.tgz "$APP_REF"
+      - name: Build max-cli ${{ steps.max.outputs.ref }} against this cli-core
+        run: shared/scripts/parity/build-app.sh max max cli-core.tgz "$APP_REF"
         env:
           APP_REF: ${{ steps.max.outputs.ref }}
-      - name: Build tg-cli ${{ steps.tg.outputs.ref }} against this cli-messaging
-        run: shared/scripts/parity/build-app.sh tg tg cli-messaging.tgz "$APP_REF"
+      - name: Build tg-cli ${{ steps.tg.outputs.ref }} against this cli-core
+        run: shared/scripts/parity/build-app.sh tg tg cli-core.tgz "$APP_REF"
         env:
           APP_REF: ${{ steps.tg.outputs.ref }}
       - run: |
