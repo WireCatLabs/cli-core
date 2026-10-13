@@ -77,7 +77,7 @@ describe("serve's daily member fetch", () => {
         fetched.push(chatId)
         if (chatId === "7") throw new CliError("rate_limited", "flood wait")
       },
-      warn: (text) => warned.push(text),
+      warn: ({ text }) => warned.push(text),
       firstMs: 1,
       everyMs: 60_000,
     })

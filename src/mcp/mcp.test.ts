@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -2387,6 +2387,28 @@ describe("sending over MCP", () => {
     const [entry] = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entry).toMatchObject({ outcome: "sent", chatId: "7", replyTo: "1", messageId: "99" })
     expect(JSON.stringify(entry)).not.toContain("see you")
+  })
+
+  it("writes the caller's trace from _meta.traceparent on the send journal's line", async () => {
+    const { telegram } = sending()
+    const { raw, env } = await connect(telegram, {})
+    const traceId = "4bf92f3577b34da6a3ce929d0e0e4736"
+
+    const result = await raw.callTool({
+      name: "chat_write",
+      arguments: { command: "messages send", arguments: { chat: "Book club", text: "see you" } },
+      _meta: { traceparent: `00-${traceId}-00f067aa0ba902b7-01` },
+    })
+
+    expect(result.isError).not.toBe(true)
+    const line = JSON.parse(
+      readFileSync(sendsPathFor(app, "default", env), "utf8")
+        .trimEnd()
+        .split("\n")
+        .at(-1) ?? "{}",
+    )
+    expect(line).toMatchObject({ trace_id: traceId, command: "mcp messages send" })
+    expect(JSON.stringify(line)).not.toContain("[not allowed]")
   })
 
   it.each(["legacy", "modern"] as const)(

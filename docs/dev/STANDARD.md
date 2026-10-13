@@ -514,6 +514,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `option-role` | high | option | every option has a role in the vocabulary; a filter has none, it is a query field |
 | `list-without-query` | medium | command | a list that answers with an entity takes a query over that entity's fields |
 | `query-example` | high | command | every query field's example, and every default term, parses and validates |
+| `log-attribute-key` | high | key | no log attribute key on the allow-list names message text, a token or a phone number |
 
 <!-- lint rules: end -->
 

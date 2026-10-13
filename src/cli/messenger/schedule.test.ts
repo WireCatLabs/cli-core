@@ -1,7 +1,9 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-base"
+import { captureStreams, NOT_ALLOWED } from "@wirecat/cli-base"
+import { logRecordSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
@@ -207,6 +209,54 @@ describe("a run", () => {
     expect(last.exitCode).toBe(0)
     expect(readFileSync(join(file, "..", "latest.md"), "utf8")).toBe("read-only 1 work\n")
     expect(ran.at(-1)?.argv.slice(0, 4)).toEqual(["notify-send", "--app-name", "chat review", "chat review"])
+  })
+
+  it("logs its start and exit as records, never its output, and hands its trace to the child", async () => {
+    const { env } = setup()
+    const { system } = machine("linux", [process.execPath])
+    const file = scheduled(env.CHAT_STATE_DIR, {
+      name: "review",
+      kind: "agent",
+      argv: [process.execPath, "-e", 'console.log("secret words", process.env.TRACEPARENT)'],
+      when: { daily: "08:30" },
+    })
+    const last = await runSchedule(app, system, env, file)
+    const runs = join(file, "..", "runs")
+    const recordFile = readdirSync(runs).find((name) => name.endsWith(".jsonl")) ?? ""
+    const text = readFileSync(join(runs, recordFile), "utf8")
+    const records = text
+      .trimEnd()
+      .split("\n")
+      .map((line) => v.parse(logRecordSchema, JSON.parse(line)))
+
+    expect(records.map((record) => record.attributes)).toEqual([
+      { event: "schedule.start", schedule: "review", kind: "agent" },
+      { event: "schedule.exit", schedule: "review", kind: "agent", exitCode: 0, durationMs: expect.any(Number) },
+    ])
+    expect(records.every((record) => record.trace_id === last.traceId)).toBe(true)
+    expect(text).not.toContain("secret words")
+    expect(text).not.toContain(NOT_ALLOWED)
+    expect(readFileSync(last.output, "utf8")).toContain(`-${last.traceId}-`)
+  })
+
+  it("keeps the newest thirty runs, however many files each has", async () => {
+    const { env } = setup()
+    const { system } = machine("linux", [process.execPath])
+    const file = scheduled(env.CHAT_STATE_DIR, {
+      name: "review",
+      kind: "agent",
+      argv: [process.execPath, "-e", ""],
+      when: { daily: "08:30" },
+    })
+    let at = Date.parse("2026-10-01T00:00:00Z")
+    for (let i = 0; i < 32; i += 1) {
+      at += 60_000
+      const moment = at
+      await runSchedule(app, system, env, file, { now: () => new Date(moment) })
+    }
+    const runs = readdirSync(join(file, "..", "runs"))
+    expect(new Set(runs.map((name) => name.split(".")[0])).size).toBe(30)
+    expect(runs).toHaveLength(90)
   })
 
   it("runs the CLI's own command without the lock, and a one-off removes itself", async () => {

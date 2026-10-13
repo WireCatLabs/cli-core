@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { FETCHING } from "../../services/archive.js"
 import { GAP_BOUNDS } from "../../services/archive-gaps.js"
-import { jobsDir, startArchiveJob, updateJob } from "../../services/backfill-jobs.js"
+import { finishJob, jobsDir, startArchiveJob, updateJob } from "../../services/backfill-jobs.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
@@ -150,11 +150,11 @@ export const gapsCommand = (messenger: Messenger) => {
             },
           }),
         )
-        if (job) updateJob(dir, job, { finishedAt: new Date().toISOString(), result: { ...result } })
+        if (job) finishJob(messenger.app, dir, job, { finishedAt: new Date().toISOString(), result: { ...result } })
         context.renderer.result(result)
       } catch (error) {
         if (job)
-          updateJob(dir, job, {
+          finishJob(messenger.app, dir, job, {
             finishedAt: new Date().toISOString(),
             error: {
               code: error instanceof CliError ? error.code : "generic_failure",

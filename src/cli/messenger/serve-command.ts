@@ -1,4 +1,4 @@
-import { CliError, createRecordLog, type Renderer } from "@wirecat/cli-base"
+import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { holdLock, lockPath, releaseLock, takeLock } from "../../background/lock.js"
 import type { ChatKind, Message, MessageEvent } from "../../domain/models.js"
@@ -13,11 +13,11 @@ import { onlineDeps } from "../../services/deps.js"
 import { servicesFor } from "../../services/index.js"
 import { applyTaskRulesOnArrival, openRequestTask } from "../../services/task-rules.js"
 import { failureKey } from "../failures.js"
-import { currentRun } from "../runs/scope.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 import type { MessengerAdapter } from "./port.js"
 import { memberFetches } from "./serve-members.js"
+import { noticeFor, recordDiagnostics, type ServeNotice } from "./serve-notice.js"
 import { stemFills } from "./serve-stems.js"
 import { listenUntilStopped } from "./watch-command.js"
 
@@ -34,7 +34,9 @@ export const serveCommand = (messenger: Messenger): Command => {
   )
 
   command.action(async function (this: Command) {
-    const context = withRecordedDiagnostics(messengerContext(this, messenger), messenger)
+    const context = recordDiagnostics(messengerContext(this, messenger), messenger.app)
+    const warn = noticeFor(context, messenger.app)
+    const note = noticeFor(context, messenger.app, "info")
     if (context.settings.offline) throw new CliError("validation_error", "serve listens live; --offline cannot")
     const path = lockPath(messenger.app, context.profile, context.env)
     const startedAt = new Date().toISOString()
@@ -49,12 +51,15 @@ export const serveCommand = (messenger: Messenger): Command => {
     // `server start` answers on this, not on the lock alone: a lock is written before the connection opens.
     const onReady = () => {
       holdLock(path, { pid: process.pid, startedAt, version, listeningAt: new Date().toISOString() })
-      context.renderer.note(`listening for profile ${context.profile}, catching up on what arrived while it was down`)
+      note({
+        code: "listening",
+        text: `listening for profile ${context.profile}, catching up on what arrived while it was down`,
+      })
     }
 
     const counts: Record<string, number> = {}
     const rules = replying(context, messenger, Date.parse(startedAt))
-    const tasks = tasking(context)
+    const tasks = tasking(context, warn)
     const count = (event: MessageEvent) => {
       counts[event.event] = (counts[event.event] ?? 0) + 1
       if (event.event !== "message") return
@@ -73,11 +78,11 @@ export const serveCommand = (messenger: Messenger): Command => {
           store: async () => store,
           account: async () => account,
         }).chats.fetchMembers(chatId, {}),
-      warn: (text) => context.renderer.warn(text),
+      warn,
     })
     const stems = stemFills({
       withStore: (work) => context.withStore((store) => work(store), { name: "serve stems" }),
-      warn: (text) => context.renderer.warn(text),
+      warn,
     })
     try {
       await listenUntilStopped(this, context, messenger, count, {
@@ -112,33 +117,6 @@ export const serveCommand = (messenger: Messenger): Command => {
   })
 
   return command
-}
-
-/**
- * A serve left running writes its diagnostics to a log file, so off a terminal each one is a log
- * record with its time and run rather than a bare sentence.
- */
-const withRecordedDiagnostics = (context: MessengerContext, messenger: Messenger): MessengerContext => {
-  if (context.format === "pretty") return context
-  const resource = { service: messenger.app.command, version: messenger.app.version }
-  const say =
-    (severity: "info" | "warn" | "error", event: string, always = false) =>
-    (message: string) => {
-      if (context.settings.quiet && !always) return
-      const { runId, command } = currentRun()
-      createRecordLog({ to: context.streams.diagnostic, runId, command: command || "serve", resource })[severity](
-        { event },
-        message,
-      )
-    }
-  const renderer: Renderer = {
-    ...context.renderer,
-    note: say("info", "note"),
-    success: say("info", "success"),
-    warn: say("warn", "warning"),
-    failure: say("error", "failure", true),
-  }
-  return { ...context, renderer }
 }
 
 /**
@@ -220,7 +198,10 @@ const replying = (context: MessengerContext, messenger: Messenger, since: number
     arrived: (message: Message) => {
       if (message.outgoing !== false) return
       queue = queue.then(() =>
-        handle(message).catch((error) => renderer.warn(`a reply rule failed: ${failureKey(error)}`)),
+        handle(message).catch((error) => {
+          const errorCode = failureKey(error)
+          noticeFor(context, app)({ code: "reply_rule_failed", errorCode, text: `a reply rule failed: ${errorCode}` })
+        }),
       )
     },
     settled: () => queue,
@@ -233,7 +214,7 @@ const replying = (context: MessengerContext, messenger: Messenger, since: number
 }
 
 /** The task rules over each message as it arrives, the owner's too — an answer closes a task. In order, one at a time. */
-const tasking = (context: MessengerContext) => {
+const tasking = (context: MessengerContext, warn: (notice: ServeNotice) => void) => {
   let queue = Promise.resolve()
   const total = { added: 0, closed: 0 }
   return {
@@ -245,7 +226,10 @@ const tasking = (context: MessengerContext) => {
             total.added += added
             total.closed += closed
           })
-          .catch((error) => context.renderer.warn(`a task rule failed: ${failureKey(error)}`)),
+          .catch((error) => {
+            const errorCode = failureKey(error)
+            warn({ code: "task_rule_failed", errorCode, text: `a task rule failed: ${errorCode}` })
+          }),
       )
     },
     settled: () => queue,

@@ -7,6 +7,27 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Every log writer passes only allow-listed attribute keys** (`LOG_ATTRIBUTES`, from `src/cli/runs/log-attributes.ts`),
+  through cli-base's `createRecordLog({ allow })` or `logRecordOf`. A key off the list is written as `[not allowed]`; an
+  app that logs its own keys adds them there. A crash event's `errorName` is now `errorClass`.
+- **`serve`'s log off a terminal keeps no sentences.** Its own reports are records with a `code` (`listening`,
+  `reply_rule_failed`, `task_rule_failed`, `members_not_fetched`, `member_fetch_failed`, `stems_not_filled`) and ids;
+  any other warning, the send guard's included, is a `warning` record without its text. At a terminal nothing changes.
+- **The send guard's "not in the send journal" warning names the file system's code** (`EACCES`), not its message.
+
+### Added
+
+- **`trace_id` from an MCP caller's `_meta.traceparent`** on every record the call writes: its kept run, its send
+  journal lines. A run's `run.json` carries `traceId`. A process started with `TRACEPARENT` (the W3C propagator's key)
+  takes its trace from there.
+- **Schedules and background jobs log their start and exit as records**: `runs/<stamp>.jsonl` beside a schedule's
+  output, `<job>.jsonl` beside a job's log. The child's output is still kept as it came. Each hands its child a fresh
+  `TRACEPARENT`, so the runs it makes share one trace id (`last.json` and the job record name it).
+- **`agentActionRecord`** maps an agent audit row to a log record, for an export of the agent log.
+- Every schedule keeps its newest 30 runs, counted by run, not by file; a command schedule kept 60 before.
+
 ### Fixed
 
 - The parity manifest includes the shared `models image`, `models image download` and `models image list` commands already mounted by Telegram and MAX, so release checks accept their command discovery.
