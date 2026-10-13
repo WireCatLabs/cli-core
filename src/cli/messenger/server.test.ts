@@ -393,6 +393,29 @@ describe("server with a systemd unit", () => {
   })
 })
 
+describe("server logs for a person", () => {
+  it("reads a log record as its time, severity and body, and any other line as it is", async () => {
+    const { env } = setup()
+    const record = JSON.stringify({
+      time: "2026-10-13T08:00:00.000Z",
+      severity: "warn",
+      body: "a reply rule failed: rate_limited",
+      runId: "r",
+      command: "serve",
+      attributes: { event: "warning" },
+      resource: { service: "chat", version: "1.0.0" },
+    })
+    const { system } = machine("linux", {
+      answers: { journalctl: { stdout: `Oct 13 tg[1]: ${record}\n{"profile":"default"}\n` } },
+    })
+    await call(["install"], env, system)
+
+    expect((await call(["logs", "-n", "2"], env, system, true)).text).toBe(
+      'Oct 13 tg[1]: 2026-10-13T08:00:00.000Z warn  a reply rule failed: rate_limited\n{"profile":"default"}',
+    )
+  })
+})
+
 describe("server with a launchd agent", () => {
   it("install writes an agent that is disabled until start enables it; stop disables it again", async () => {
     const { env } = setup()

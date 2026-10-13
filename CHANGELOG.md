@@ -29,6 +29,9 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
   the command writes to the send journal names it. Outside a run the lines of one process share one id.
 - **`serve` off a terminal writes each diagnostic as a log record** with its time and run, and a failed reply
   rule, task rule, member fetch or stem fill names the error code, never the error's text.
+  `server logs` and `server start` show a record line as `time severity body`.
+- **`inRun` and `currentRun` are exported**, so a caller that opens a run with `startRecording` can run its work
+  in that run — `inRun({ runId: recording.runId, command }, body)` — and its send-journal lines name it.
 - **`runs show` prints only what went wrong.** The answer keeps the run's metadata and adds `eventCount`;
   `events` holds the failed responses, warnings and the crash. `-v` shows every event, as before.
 - **The meeting commands use the shared command words** (zm adopts them with this release). The old names stop

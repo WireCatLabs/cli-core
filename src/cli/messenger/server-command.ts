@@ -5,7 +5,7 @@ import { Command } from "commander"
 import { lockPath, readLock } from "../../background/lock.js"
 import { alive, carries } from "../../background/processes.js"
 import { type ServerSystem, thisMachine } from "../../background/system.js"
-import { locationVariables, platformFor, tail, type Unit } from "../../background/units.js"
+import { locationVariables, platformFor, readableLog, tail, type Unit } from "../../background/units.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import type { AppIdentity } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
@@ -208,7 +208,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       }
       const gone = spawned !== undefined ? !alive(spawned) : look > 8 && !(await platform.state(unit)).active
       if (gone) {
-        const last = (by === "unit" ? await platform.logs(unit, 5) : tail(unit.logPath, 5)).trim()
+        const last = readableLog(by === "unit" ? await platform.logs(unit, 5) : tail(unit.logPath, 5)).trim()
         throw new CliError("provider_unavailable", `serve stopped before it was connected${last ? `:\n${last}` : ""}`)
       }
       await system.pause()
@@ -365,7 +365,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       const text = existsSync(unit.path) ? await platform.logs(unit, lines) : tail(unit.logPath, lines)
       if (!text) context.renderer.note(`no log yet for profile ${unit.profile}`)
       if (context.format === "pretty") {
-        if (text) context.streams.data(text.replace(/\n$/, ""))
+        if (text) context.streams.data(readableLog(text.replace(/\n$/, "")))
       } else
         context.renderer.result({ ...listed(text.split("\n").filter(Boolean)), profile: unit.profile, unit: unit.name })
     })
