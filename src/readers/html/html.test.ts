@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { extractText, importEngine, type LoadEngine } from "../../attachments/extract.js"
 
 const hint = (name: string) => ({ kind: "file", name, mime: "text/html", path: `/saved/${name}` })
@@ -73,6 +73,18 @@ describe("the HTML reader", () => {
     expect(result.text).not.toContain("Все права защищены")
     expect(result.metadata).toMatchObject({ language: "ru", author: "Иван Петров" })
     expect(result.sections?.map(({ heading }) => heading)).toContain("Расходы")
+  })
+
+  it("never goes online, even for an empty single-page app shell", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network in a reader"))
+    try {
+      await read(
+        `<html><head><title>App</title></head><body><div id="root"></div><script src="app.js"></script></body></html>`,
+      )
+      expect(fetch).not.toHaveBeenCalled()
+    } finally {
+      fetch.mockRestore()
+    }
   })
 
   it("falls back to the plain reader, html:v1, when the engine will not load", async () => {
