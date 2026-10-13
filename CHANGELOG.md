@@ -52,6 +52,9 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **`store export`'s help says what reaches stdout**: `--jsonl` one message per line, `--json` one list object
+  object. It said "as JSON lines" and called `jsonl` the default, which holds only with `--output`.
+
 - **A person's context names their last message and yours whatever the message limit.** `last.fromThem` and
   `last.fromMe` were looked for only in the messages returned, so `memo context … --limit 1` gave `fromMe: null`
   while `--limit 2` gave the message. They now come from the whole stored dialog; mail is still read within
