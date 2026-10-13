@@ -265,7 +265,7 @@ describe("consumer lifecycle in the shared shell", () => {
 
   it("awaits consumer settlement and does not create a second fallback run", async () => {
     const state = mkdtempSync(join(tmpdir(), "shell-settlement-"))
-    const env = { ...process.env, APP_STATE_DIR: state }
+    const env = { ...process.env, APP_PROFILE: "default", APP_STATE_DIR: state }
     const streams = captureStreams()
     const error = new CliError("validation_error", "synthetic command failure")
     let finished = false
@@ -359,7 +359,7 @@ describe("the runner's configuration seam", () => {
     "keeps early %s failures with the matching scope and configured profile",
     async (resource) => {
       const state = mkdtempSync(join(tmpdir(), "shell-scope-"))
-      const env = { ...process.env, APP_STATE_DIR: state }
+      const env = { ...process.env, APP_PROFILE: "default", APP_STATE_DIR: state }
       const streams = captureStreams()
       const scopes: unknown[] = []
       const provider: ProgramDefinition = {

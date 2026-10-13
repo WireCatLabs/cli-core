@@ -61,7 +61,7 @@ export const createProgram = (
       `${app.description}\n\n` +
         `The first word is the profile whenever it is not a command — \`${app.command} personal chats list\`.\n` +
         `\`${app.envPrefix}_PROFILE\` says the same thing for a whole shell session, and \`defaultProfile\` in the config file for good.\n` +
-        "With none of them, the one profile on this computer is used; with several, the command stops and lists them.",
+        "No profile is assumed: without one, a command that uses an account stops and lists the profiles here.",
     )
     .version(app.version, "-V, --version")
     .option(

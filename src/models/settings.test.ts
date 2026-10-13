@@ -64,7 +64,9 @@ describe("purpose model settings", () => {
       ["baseUrl", "https://example.test/v1"],
     ])
       change(`models.replies.${field}`, value)
-    expect(modelTarget(config.resolveSettings({}, { configDir: root, env: {} }), "replies")).toEqual({
+    expect(
+      modelTarget(config.resolveSettings({}, { configDir: root, env: { APP_PROFILE: "default" } }), "replies"),
+    ).toEqual({
       provider: "openai",
       model: "test",
       baseUrl: "https://example.test/v1",
@@ -72,6 +74,8 @@ describe("purpose model settings", () => {
     expect(() => change("models.replies.provider", "bad")).toThrow()
     expect(() => change("models.replies.token", "secret")).toThrow("no setting")
     for (const field of ["provider", "model", "baseUrl"]) change(`models.replies.${field}`)
-    expect(modelTarget(config.resolveSettings({}, { configDir: root, env: {} }), "replies")).toBeUndefined()
+    expect(
+      modelTarget(config.resolveSettings({}, { configDir: root, env: { APP_PROFILE: "default" } }), "replies"),
+    ).toBeUndefined()
   })
 })

@@ -27,7 +27,12 @@ const doctorOf = async (script: string) => {
   const code = await run(["mcp", "doctor", "--json"], { app, commands: () => [mcpCommand(messenger)] }, {
     streams,
     tty: false,
-    env: { HOME: root, CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") },
+    env: {
+      HOME: root,
+      CHAT_PROFILE: "default",
+      CHAT_STATE_DIR: join(root, "state"),
+      CHAT_CONFIG_DIR: join(root, "config"),
+    },
     mcp: { execPath: process.execPath, scriptPath },
   } as Parameters<typeof run>[2])
   return { code, root, stderr: streams.stderr.join("\n") }

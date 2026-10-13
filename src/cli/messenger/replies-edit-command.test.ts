@@ -24,6 +24,7 @@ const setup = () => {
   const root = mkdtempSync(join(tmpdir(), "replies-edit-"))
   const env = {
     CHAT_CONFIG_DIR: join(root, "config"),
+    CHAT_PROFILE: "default",
     CHAT_STATE_DIR: join(root, "state"),
     MESSAGING_STORE: join(root, "store.db"),
   }

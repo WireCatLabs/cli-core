@@ -164,6 +164,7 @@ describe("forum setup commands", () => {
   it("upgrades explicitly, enables on the new chat and creates a topic through guarded CLI", async () => {
     const root = mkdtempSync(join(tmpdir(), "forum-cli-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -229,6 +230,7 @@ describe("explicit topic addressing", () => {
   it("passes message and poll topics through the CLI and journal", async () => {
     const root = mkdtempSync(join(tmpdir(), "topic-cli-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -288,6 +290,7 @@ describe("the shared read commands", () => {
   it("**answer offline exactly what the messenger answered**, without connecting", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -313,7 +316,7 @@ describe("the shared read commands", () => {
 
   it("mark the message asked for, and name one by its locator", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     const context = await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const shown = await call(["messages", "show", "msg:chat/500/7/3", "--json"], async () => fake, env)
     const foreign = await call(["messages", "show", "msg:max/1/7/3"], async () => fake, env)
@@ -329,7 +332,7 @@ describe("the shared read commands", () => {
 
   it("refuse a --limit that is not a whole number, quoting what was typed", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
 
     for (const typed of ["abc", "12abc", "0"]) {
       const { code, stderr } = await call(["chats", "list", "--limit", typed, "--json"], async () => fake, env)
@@ -340,7 +343,7 @@ describe("the shared read commands", () => {
 
   it("show a chat with who is in it, and explain differing member counts", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     const { code, stdout, stderr } = await call(["chats", "show", "Book", "--json"], async () => fake, env)
 
     expect(code).toBe(0)
@@ -365,7 +368,7 @@ describe("the shared read commands", () => {
     "explain %s listed members and %s reported participants without inventing membership",
     async (count, total, note) => {
       const root = mkdtempSync(join(tmpdir(), "messenger-"))
-      const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+      const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
       const members = Array.from({ length: count }, (_, index) => ({
         id: String(9 + index),
         name: "Member",
@@ -386,7 +389,7 @@ describe("the shared read commands", () => {
 
   it("list as contacts only the one-to-one chats, in the order and with the filter asked for", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     const names = async (...argv: string[]) =>
       JSON.parse(
         (await call(["contacts", "list", "--json", ...argv], async () => fake, env)).stdout[0] ?? "",
@@ -401,7 +404,7 @@ describe("the shared read commands", () => {
 
   it("**list a dialog under its person's id where the messenger names one**, and leave out the dialogs it cannot", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     const partnerOf = (one: Chat) => (one.id === "20" ? "320" : undefined)
 
     const listed = await call(["contacts", "list", "--json"], async () => fake, env, {}, { partnerOf })
@@ -412,6 +415,7 @@ describe("the shared read commands", () => {
   it("**send --reply-to answers the message named, with every send option, recorded without the text**", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -448,7 +452,7 @@ describe("the shared read commands", () => {
 
   it("**send silently, without a preview, as Markdown** — and journal neither the text nor the marks", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const sent: SendOptions[] = []
     const texts: string[] = []
     const recording: MessengerAdapter = {
@@ -476,7 +480,7 @@ describe("the shared read commands", () => {
 
   it("**schedule a send with --at-time**, answer scheduledFor, journal it for that hour, and never repeat one", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const sent: SendOptions[] = []
     const later: MessengerAdapter = {
       ...fake,
@@ -513,7 +517,7 @@ describe("the shared read commands", () => {
 
   it("**send nothing when --at-time is not a time**, and point at the queue when a scheduled send is lost", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     let opened = false
     const lost: MessengerAdapter = {
       ...fake,
@@ -542,7 +546,7 @@ describe("the shared read commands", () => {
 
   it("**send a photo with a caption**, journal its kind and size — never its name — and refuse a hidden file", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     writeFileSync(join(root, "holiday.png"), "12345")
     mkdirSync(join(root, ".secrets"))
     writeFileSync(join(root, ".secrets", "token"), "t")
@@ -580,7 +584,7 @@ describe("the shared read commands", () => {
 
   it("**send a voice message alone, and a video as a file only with --as-file**", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     writeFileSync(join(root, "note.ogg"), "ogg")
     writeFileSync(join(root, "note.mp3"), "mp3")
     writeFileSync(join(root, "trip.mp4"), "mp4")
@@ -614,7 +618,7 @@ describe("the shared read commands", () => {
 
   it("**edit the owner's message through the guard**, record it without the text, and answer the edited message", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const edits: string[][] = []
     const editing: MessengerAdapter = {
       ...fake,
@@ -640,7 +644,7 @@ describe("the shared read commands", () => {
 
   it("**edit with --md takes the marks out and sends them as markup**, as a send does", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const edits: unknown[] = []
     const editing: MessengerAdapter = {
       ...fake,
@@ -667,7 +671,7 @@ describe("the shared read commands", () => {
 
   it("**forward into the chat named by --to**, guarded against that chat, and answer the copy there", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const forwards: unknown[] = []
     const forwarding: MessengerAdapter = {
       ...fake,
@@ -693,7 +697,7 @@ describe("the shared read commands", () => {
 
   it("**forward into a forum topic of the --to chat**, checked there before the write; no --topic without topics", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const steps: unknown[] = []
     const forwarding: MessengerAdapter = {
       ...fake,
@@ -725,7 +729,7 @@ describe("the shared read commands", () => {
 
   it("**a forward repeated with its --send-id after an unknown outcome leaves one copy**", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const copies = new Map<string, Message>()
     let answered = false
     const deduplicating: MessengerAdapter = {
@@ -758,7 +762,7 @@ describe("the shared read commands", () => {
 
   it("**pin quietly without counting toward the hourly limit**; a pin that notifies counts", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
@@ -802,7 +806,7 @@ describe("the shared read commands", () => {
 
   it("**react with one emoji and take it off**, journaled as reactions that do not count toward the limit", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
@@ -840,7 +844,7 @@ describe("the shared read commands", () => {
 
   it("**messages list marks the chat read only with --mark-read**, up to the newest message shown", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const marks: unknown[] = []
     const reading: MessengerAdapter = {
       ...fake,
@@ -867,7 +871,7 @@ describe("the shared read commands", () => {
 
   it("**mark a chat read, to its newest message or --until one**, journaled as a read", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const marks: unknown[] = []
     const reading: MessengerAdapter = {
       ...fake,
@@ -895,7 +899,7 @@ describe("the shared read commands", () => {
 
   it("guards with the messenger's own guard when it has one", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const asked: unknown[] = []
     const refusing = {
       guard: () => ({
@@ -922,7 +926,7 @@ describe("the shared read commands", () => {
 
   it("hands the run's diagnostics to connect, so a messenger can report its own wire", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const traced = await call(
       ["reactions", "add", "Book", "3", "👍", "--json", "--trace"],
       async (_command, _context, options) => {
@@ -937,7 +941,7 @@ describe("the shared read commands", () => {
 
   it("**delete only with --allow-dangerous**, each message counted toward the hourly limit", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
@@ -980,7 +984,7 @@ describe("the shared read commands", () => {
 
   it("**asks before a write whose level is ask**, refuses one that is readonly, and never asks at allow", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const config = (permissions: Record<string, string>) => {
       mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
       writeFileSync(
@@ -1041,7 +1045,7 @@ describe("the shared read commands", () => {
 
   it("**refuses a denied read before connecting**, and leaves the rest readable", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
@@ -1066,7 +1070,7 @@ describe("the shared read commands", () => {
 
   it("**show a poll with its answer ids, vote by id and take it back**, close it as an edit, create one as a message", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const poll = {
       chatId: "7",
       messageId: "3",
@@ -1135,7 +1139,7 @@ describe("the shared read commands", () => {
 
   it("**presses a bot's callback button by number or text**, refuses the ones that hand over data, and journals it", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const pressed: unknown[] = []
     const keyboard: MessengerAdapter = {
       ...fake,
@@ -1187,7 +1191,7 @@ describe("the shared read commands", () => {
 
   it("**starts a bot like a message, and prints its mini app's address** only where the messenger has bots", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const calls: unknown[] = []
     const bot: MessengerAdapter = {
       ...fake,
@@ -1225,7 +1229,7 @@ describe("the shared read commands", () => {
 
   it("**starts a bot by its link**, taking the link's start parameter unless --payload is given", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const starts: unknown[] = []
     const bot: MessengerAdapter = {
       ...fake,
@@ -1250,7 +1254,7 @@ describe("the shared read commands", () => {
 
   it("**lists who voted for what**, after reading the poll, and refuses an anonymous one or an unknown answer", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const poll = {
       chatId: "7",
       messageId: "3",
@@ -1297,7 +1301,7 @@ describe("the shared read commands", () => {
 
   it("**closes a poll by itself after a delay** inside the messenger's range, refused outside it or where it cannot", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const created: unknown[] = []
     const polling: MessengerAdapter = {
       ...fake,
@@ -1337,7 +1341,7 @@ describe("the shared read commands", () => {
 
   it("**creates a quiz where the messenger makes them**, and refuses quiz options that do not go together", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const created: unknown[] = []
     const quizzing: MessengerAdapter = {
       ...fake,
@@ -1381,7 +1385,10 @@ describe("the shared read commands", () => {
 
   it("describe themselves for an agent, with the contract version and which ones write", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const { stdout } = await call(["commands", "--json"], async () => fake, { CHAT_STATE_DIR: root })
+    const { stdout } = await call(["commands", "--json"], async () => fake, {
+      CHAT_PROFILE: "default",
+      CHAT_STATE_DIR: root,
+    })
     const described = JSON.parse(stdout[0] ?? "")
     const flat = (list: CommandInfo[]): CommandInfo[] => list.flatMap((one) => [one, ...flat([...one.commands])])
     const find = (path: string[]) => flat(described.commands).find((one) => one.path.join(" ") === path.join(" "))
@@ -1402,7 +1409,7 @@ describe("the shared read commands", () => {
 
   it("**complete a chat from the store** — its id as the word, its title as the description", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["chats", "list"], async () => fake, env)
 
     const { stdout } = await call(["complete", "--", "chats", "show", ""], async () => fake, env)
@@ -1412,7 +1419,7 @@ describe("the shared read commands", () => {
 
   it("never creates the store on a Tab", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
 
     const { code } = await call(["complete", "--", "chats", "show", ""], async () => fake, env)
 
@@ -1424,6 +1431,7 @@ describe("the shared read commands", () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       ...process.env,
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -1466,6 +1474,7 @@ describe("the shared read commands", () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       ...process.env,
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -1486,6 +1495,7 @@ describe("the shared read commands", () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       ...process.env,
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -1517,6 +1527,7 @@ describe("the shared read commands", () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       ...process.env,
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -1537,6 +1548,7 @@ describe("the shared read commands", () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       ...process.env,
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -1573,6 +1585,7 @@ describe("the shared read commands", () => {
     const root = mkdtempSync(join(tmpdir(), "thread-cli-"))
     const env = {
       ...process.env,
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -1616,6 +1629,7 @@ describe("the shared read commands", () => {
     const root = mkdtempSync(join(tmpdir(), "thread-cli-"))
     const env = {
       ...process.env,
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -1662,7 +1676,7 @@ describe("the shared read commands", () => {
 
   it("**search the store without connecting**, and name each hit by its locator", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -1684,7 +1698,7 @@ describe("the shared read commands", () => {
 
   it("**searches with explicit legacy language**: corrections, filters, completeness and context, said where they belong", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -1729,7 +1743,7 @@ describe("the shared read commands", () => {
 
   it("**search mail reads the mailboxes only** and search messages never returns mail", async () => {
     const root = mkdtempSync(join(tmpdir(), "mail-search-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const email = { provider: "email", account: "owner@example.test" }
@@ -1772,7 +1786,7 @@ describe("the shared read commands", () => {
 
   it("**search all** finds messages in a store of two accounts with no notes or mail, and **search mail** answers empty", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-only-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const other = { provider: "chat", account: "999" }
@@ -1800,7 +1814,7 @@ describe("the shared read commands", () => {
 
   it("**search all** and **search mail** find mail saved in the mail tables, with context", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-mail-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
@@ -1863,7 +1877,7 @@ describe("the shared read commands", () => {
 
   it("**messages show** and **messages context** open an email by its locator, whole, with its thread", async () => {
     const root = mkdtempSync(join(tmpdir(), "mail-show-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
@@ -1908,7 +1922,7 @@ describe("the shared read commands", () => {
 
   it("**search mail** answers each email with its people, labels and thread, at the detail asked", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-mail-detail-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
@@ -1975,7 +1989,7 @@ describe("the shared read commands", () => {
 
   it("**search mail** and **search all** page with --offset and say where the next page starts", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-offset-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
@@ -2019,7 +2033,7 @@ describe("the shared read commands", () => {
 
   it("**search all** finds a message, a mail and a note with one query, each typed, and says what it skipped", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const email = { provider: "email", account: "owner@example.test" }
@@ -2081,7 +2095,7 @@ describe("the shared read commands", () => {
 
   it("**search all --backend** asks the server for messages only: archive never connects, server keeps its hits", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-backend-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     await store.notes.addNote({ title: "Reading list", text: "the chapter to read next" })
@@ -2151,7 +2165,7 @@ describe("the shared read commands", () => {
 
   it("**search all** reads meetings only when --source names a meeting account, and refuses to guess between several", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-meetings-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const meetingIn = async (account: string) => {
       const store = await openStore({ path: env.MESSAGING_STORE })
@@ -2218,7 +2232,7 @@ describe("the shared read commands", () => {
 
   it("**search all --max-meetings** bounds the meetings looked through; all looks through every one", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-max-meetings-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     try {
@@ -2259,7 +2273,7 @@ describe("the shared read commands", () => {
 
   it("**search all** skips meetings with a reason when --source names no meeting account", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-no-meetings-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -2276,7 +2290,7 @@ describe("the shared read commands", () => {
 
   it("**search all --source** reads the accounts it names and says which, pretty on stderr", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-source-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -2296,7 +2310,7 @@ describe("the shared read commands", () => {
 
   it("**the old search paths are gone**, with no alias, and --type narrows search messages", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-paths-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -2323,7 +2337,7 @@ describe("the shared read commands", () => {
 
   it("**search messages keeps the messenger accounts of a --source list** and names the rest in skipped", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-skipped-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const held = await openStore({ path: join(root, "m.db") })
     await held.saveAccount({ provider: "zoom", account: "z1" }, { name: null })
@@ -2348,7 +2362,7 @@ describe("the shared read commands", () => {
 
   it("**searches other accounts and messengers** held in the file only when asked, naming each hit's messenger", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const other = await openStore({ path: join(root, "m.db") })
     const elsewhere = { provider: "other", account: "600" }
@@ -2420,6 +2434,7 @@ describe("the shared read commands", () => {
     async (provider) => {
       const root = mkdtempSync(join(tmpdir(), "search-recipes-"))
       const env = {
+        CHAT_PROFILE: "default",
         CHAT_STATE_DIR: join(root, "state"),
         CHAT_CONFIG_DIR: join(root, "config"),
         MESSAGING_STORE: join(root, "m.db"),
@@ -2574,6 +2589,7 @@ describe("the shared read commands", () => {
   it("contacts context answers from the store alone, and link joins a MAX identity to it", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-context-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -2667,6 +2683,7 @@ describe("the shared read commands", () => {
   it("contacts timeline lists what a person took part in, newest first, within a time range and scope", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-timeline-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -2738,6 +2755,7 @@ describe("the shared read commands", () => {
   it("contacts profile adds their stored activity per shared chat, and shows a phone's last four digits", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-profile-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -2830,7 +2848,7 @@ describe("the shared read commands", () => {
 
   it("contacts profile --offline describes them from the store and never connects", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-profile-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     rememberAccount(app, "default", "500", env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const tg = { provider: "telegram", account: "500" }
@@ -2858,6 +2876,7 @@ describe("the shared read commands", () => {
   it("contacts check scores a person, asks the ban lists only when it may, and --deep checks the audit's top", async () => {
     const root = mkdtempSync(join(tmpdir(), "bot-check-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -2967,6 +2986,7 @@ describe("the shared read commands", () => {
   it("**builds a chat's conversations** and explains a message's place in one, without connecting", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       MESSAGING_STORE: join(root, "m.db"),
       CLI_COMMON_CACHE_DIR: join(root, "cache"),
@@ -3029,6 +3049,7 @@ describe("the shared read commands", () => {
   it("**catches up every changed chat** with build, embed and search --refresh, on this machine only", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -3106,6 +3127,7 @@ describe("the shared read commands", () => {
   it("**hands the agent a batch**, keeps its text out of the run record, and refuses it to a profile denying messages", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -3149,6 +3171,7 @@ describe("the shared read commands", () => {
   it("**asks before chat text leaves the machine**: --yes in machine mode, --max-tokens, none for a local server", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -3212,6 +3235,7 @@ describe("the shared read commands", () => {
   it("**stores the agent's answer from stdin** with messages read-only, and not with conversations.links read-only", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -3257,7 +3281,7 @@ describe("the shared read commands", () => {
 
   it("**report and export what the store holds**, without connecting", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("the archive commands must never connect")
@@ -3286,7 +3310,7 @@ describe("the shared read commands", () => {
 
   it("**store clear --left deletes the chats the account left**, only with --allow-dangerous, never the rest", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     await call(["chats", "list", "--json"], async () => fake, env)
     const left: MessengerAdapter = { ...fake, chats: async () => ({ items: people, hasMore: false }) }
@@ -3308,7 +3332,7 @@ describe("the shared read commands", () => {
 
   it("**export to a new file only the owner can read**, from --since on, and never over a file", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("the archive commands must never connect")
@@ -3338,7 +3362,7 @@ describe("the shared read commands", () => {
 
   it("**export chats into a folder, and run again for only what changed** — a deletion without its text", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("the archive commands must never connect")
@@ -3373,7 +3397,7 @@ describe("the shared read commands", () => {
 
   it("refuses an export folder it cannot add to safely, and --to with what it does not keep", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("the archive commands must never connect")
@@ -3395,6 +3419,7 @@ describe("the shared read commands", () => {
   const encryptedArchive = async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -3500,7 +3525,9 @@ describe("the shared read commands", () => {
 
   it("keep the account file where tg-cli 0.x kept it", () => {
     const tg = { command: "tg", appName: "tg-cli", envPrefix: "TG", description: "", version: "0" }
-    expect(accountFileFor(tg, "work", { TG_STATE_DIR: "/state" })).toBe("/state/accounts/work.json")
+    expect(accountFileFor(tg, "work", { TG_PROFILE: "default", TG_STATE_DIR: "/state" })).toBe(
+      "/state/accounts/work.json",
+    )
   })
 })
 
@@ -3521,7 +3548,10 @@ describe("messages download", () => {
   }
   const setup = () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    return { root, env: { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") } }
+    return {
+      root,
+      env: { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") },
+    }
   }
 
   it("**saves every file into the folder under a safe name**, and answers paths and sizes", async () => {
@@ -3919,6 +3949,7 @@ describe("messages transcribe", () => {
   const env = () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     return {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       MESSAGING_STORE: join(root, "m.db"),
       CLI_COMMON_CACHE_DIR: join(root, "cache"),
@@ -3997,6 +4028,7 @@ describe("the guard, account and mcp config commands", () => {
   const sandbox = () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     return {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -4497,6 +4529,7 @@ describe("every list in --json", () => {
   it("**answers { items, page, limit, hasMore }**, never a bare array or a shape of its own", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       CHAT_CACHE_DIR: join(root, "cache"),
@@ -4545,6 +4578,7 @@ describe("message link command", () => {
   it("prints one account-scoped result in JSON and JSONL, and closes on a provider error", async () => {
     const root = mkdtempSync(join(tmpdir(), "link-cli-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -4584,6 +4618,7 @@ describe("sender identity commands", () => {
   it("lists identities as one envelope and sends text as one of them", async () => {
     const root = mkdtempSync(join(tmpdir(), "send-as-cli-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -4616,6 +4651,7 @@ describe("topics delete", () => {
   it("asks first: refused with nobody to answer, done with --allow-dangerous, journaled by topic id", async () => {
     const root = mkdtempSync(join(tmpdir(), "topic-delete-cli-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -4642,6 +4678,7 @@ describe("topics edit", () => {
   it("passes a title and on/off as closed, and refuses another word", async () => {
     const root = mkdtempSync(join(tmpdir(), "topic-edit-cli-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),
@@ -4683,6 +4720,7 @@ describe("messages comments", () => {
   it("prints the discussion and the comments in each format, with a note for more", async () => {
     const root = mkdtempSync(join(tmpdir(), "comments-cli-"))
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),

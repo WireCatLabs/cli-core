@@ -109,7 +109,7 @@ const call = async (
 ) => {
   const streams = captureStreams()
   const code = await run(
-    ["server", ...argv],
+    [...(env.CHAT_PROFILE ? [] : ["default"]), "server", ...argv],
     { app, commands: () => [serverCommand(messenger, options)] },
     { streams, tty, env, system },
   )

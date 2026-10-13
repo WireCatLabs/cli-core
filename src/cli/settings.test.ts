@@ -20,7 +20,10 @@ const withConfig = (contents: string): void => {
   writeFileSync(join(configDir, "config.json"), contents)
 }
 
-const settings = (flags = {}, env: NodeJS.ProcessEnv = {}) => resolveSettings(flags, { env, configDir })
+// Most of these are about the values, not the profile rule: "no profile named" resolves as `default` here.
+const settings = (flags = {}, env: NodeJS.ProcessEnv = {}) =>
+  resolveSettings(flags, { env, configDir, needsProfile: false })
+const strict = (flags = {}, env: NodeJS.ProcessEnv = {}) => resolveSettings(flags, { env, configDir })
 
 beforeEach(() => {
   configDir = mkdtempSync(join(tmpdir(), "app-config-"))
@@ -28,7 +31,7 @@ beforeEach(() => {
 
 describe("where a setting came from", () => {
   it("names the layer that decided the profile, so nobody has to re-derive the order", () => {
-    expect(settings().sources.profile).toBe("default")
+    expect(settings().sources.profile).toBe("none named")
     expect(settings({}, { APP_PROFILE: "work" }).sources.profile).toBe("APP_PROFILE")
     expect(settings({ profile: "work" }, { APP_PROFILE: "other" }).sources.profile).toBe("first word")
   })
@@ -149,26 +152,27 @@ describe("the order a setting is decided in", () => {
     expect(settings().profile).toBe("default")
   })
 
-  it("**uses the one profile on this computer** when nothing names one, and `default` when there is none", () => {
+  it("**assumes no profile**: none named is an error that lists the profiles here, even a single one", () => {
     const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
-    expect(settings({}, env)).toMatchObject({ profile: "default", sources: { profile: "default" } })
+    expect(() => strict({}, env)).toThrow("there is none on this computer yet — create one with `app personal setup`")
 
     withConfig(JSON.stringify({ profiles: { work: {} } }))
-    expect(settings({}, env)).toMatchObject({ profile: "work", sources: { profile: "the only profile" } })
-  })
+    expect(() => strict({}, env)).toThrow("profiles here: work (or set APP_PROFILE)")
 
-  it("**refuses to pick among several**, counting logged-in profiles the file does not name", () => {
-    const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
-    withConfig(JSON.stringify({ profiles: { work: {} } }))
     mkdirSync(join(env.APP_STATE_DIR, "accounts"))
     writeFileSync(join(env.APP_STATE_DIR, "accounts", "personal.json"), '{"account":"1"}')
+    expect(() => strict({}, env)).toThrow("profiles here: personal, work (or set APP_PROFILE)")
+  })
 
-    expect(() => settings({}, env)).toThrow("profiles here: personal, work (or set APP_PROFILE)")
-    expect(settings({ profile: "work" }, env).profile).toBe("work")
-    expect(settings({}, { ...env, APP_PROFILE: "personal" }).profile).toBe("personal")
-    expect(resolveSettings({}, { env, configDir, needsProfile: false }).sources.profile).toBe("none named")
-    withConfig(JSON.stringify({ defaultProfile: "work", profiles: { work: {} } }))
-    expect(settings({}, env).profile).toBe("work")
+  it("takes a profile from the first word, APP_PROFILE or `defaultProfile`, and runs a no-account command without", () => {
+    const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
+    withConfig(JSON.stringify({ profiles: { work: {}, personal: {} } }))
+    expect(strict({ profile: "work" }, env).profile).toBe("work")
+    expect(strict({}, { ...env, APP_PROFILE: "personal" }).profile).toBe("personal")
+    expect(settings({}, env)).toMatchObject({ profile: "default", sources: { profile: "none named" } })
+
+    withConfig(JSON.stringify({ defaultProfile: "work", profiles: { work: {}, personal: {} } }))
+    expect(strict({}, env).profile).toBe("work")
   })
 
   it("reads `APP_PROFILE` as unset when the shell set it to nothing", () => {
@@ -331,7 +335,7 @@ describe("where each setting came from", () => {
   it("creates the starter file and identifies its values as configuration defaults", () => {
     const resolved = settings()
     expect(resolved.configFound).toBe(true)
-    expect(resolved.sources).toMatchObject({ limit: "config defaults", record: "default", profile: "default" })
+    expect(resolved.sources).toMatchObject({ limit: "config defaults", record: "default", profile: "none named" })
   })
 
   it("tells a flag from the file from the built-in value", () => {
@@ -422,7 +426,7 @@ describe("changing a setting", () => {
 })
 
 describe("a bot's settings", () => {
-  const bot = (flags = {}) => resolveSettings(flags, { env: {}, configDir, kind: "bot" })
+  const bot = (flags = {}) => resolveSettings(flags, { env: {}, configDir, kind: "bot", needsProfile: false })
 
   it("**takes the most specific entry**: the bot's profile, the profile, every bot, everyone", () => {
     withConfig(
@@ -480,6 +484,8 @@ describe("a bot's settings", () => {
   })
 })
 
+const NAMED = { APP_PROFILE: "default" }
+
 describe("settings extensions", () => {
   const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" }
   const adapted = settingsFor(app, {
@@ -518,12 +524,12 @@ describe("settings extensions", () => {
       "config file: profiles.work",
     )
     withConfig(JSON.stringify({ defaults: { autoStart: false } }))
-    expect(adapted.resolveSettings({}, { env: {}, configDir })).toMatchObject({
+    expect(adapted.resolveSettings({}, { env: NAMED, configDir })).toMatchObject({
       autoStart: false,
       sources: { autoStart: "config file: defaults" },
     })
     withConfig("{}")
-    expect(adapted.resolveSettings({}, { env: {}, configDir })).toMatchObject({
+    expect(adapted.resolveSettings({}, { env: NAMED, configDir })).toMatchObject({
       autoStart: true,
       sources: { autoStart: "default" },
     })
@@ -536,7 +542,7 @@ describe("settings extensions", () => {
         profiles: { work: { allow: ["send"], embeddingModel: "test-model" } },
       }),
     )
-    const result = adapted.resolveSettings({ profile: "work" }, { env: {}, configDir })
+    const result = adapted.resolveSettings({ profile: "work" }, { env: NAMED, configDir })
     expect(result.sources).toMatchObject({
       limit: "config file: defaults",
       updateCheck: "config file: defaults",
@@ -560,9 +566,9 @@ describe("settings extensions", () => {
       },
     }).resolveSettings
     withConfig('{"marker":"valid"}')
-    expect(resolve({}, { env: { APP_TIMEOUT: "one-tick" }, configDir }).commandTimeoutMs).toBe(1)
+    expect(resolve({}, { env: { ...NAMED, APP_TIMEOUT: "one-tick" }, configDir }).commandTimeoutMs).toBe(1)
     withConfig('{"marker":"invalid"}')
-    expect(() => resolve({}, { env: {}, configDir })).toThrowError(
+    expect(() => resolve({}, { env: NAMED, configDir })).toThrowError(
       expect.objectContaining({ code: "configuration_error" }),
     )
   })
@@ -589,6 +595,6 @@ describe("settings extensions", () => {
         value: "true",
       }),
     ).toBe(true)
-    expect(adapter.resolveSettings({}, { env: {}, configDir }).shared.autoStart).toBe(true)
+    expect(adapter.resolveSettings({}, { env: NAMED, configDir }).shared.autoStart).toBe(true)
   })
 })

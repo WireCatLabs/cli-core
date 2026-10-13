@@ -244,12 +244,12 @@ export interface ResolveOptions {
   kind?: ProfileKind
   /**
    * `false` for a command that touches no account — `account list`, `config show` — so it still runs
-   * when several profiles exist and none is named. Its `profile` is then `default`, from `none named`.
+   * when no profile is named. Its `profile` is then `default`, from `none named`.
    */
   needsProfile?: boolean
 }
 
-/** Where `profile` came from when several profiles exist, none was named, and the command needs none. */
+/** Where `profile` came from when none was named and the command needs none. */
 export const NONE_NAMED = "none named"
 
 /** The first candidate that is set, and which layer it came from. */
@@ -344,17 +344,18 @@ export const settingsFor = <T extends object = Record<never, never>>(
   }
 
   /**
-   * **Nothing named a profile, so none is picked** among several: which account a command speaks
-   * for is the owner's choice. One profile is no choice, and none keeps `default` for the first setup.
+   * **Nothing named a profile, so none is picked** — not among several, not the only one, not
+   * `default`: which account a command speaks for is the owner's choice, said every time.
    */
   const unnamed = (config: Config, env: NodeJS.ProcessEnv, needed: boolean): { value: string; from: Source } => {
-    const here = profilesHere(app, namedProfiles(config), env)
-    if (here.length === 0) return { value: DEFAULT_PROFILE, from: "default" }
-    if (here.length === 1) return { value: here[0] as string, from: "the only profile" }
     if (!needed) return { value: DEFAULT_PROFILE, from: NONE_NAMED }
+    const here = profilesHere(app, namedProfiles(config), env)
     throw new CliError(
       "validation_error",
-      `name a profile: \`${app.command} <profile> …\` — profiles here: ${here.join(", ")} (or set ${PROFILE})`,
+      here.length === 0
+        ? `name a profile: there is none on this computer yet — create one with \`${app.command} personal setup\` ` +
+            "(any name in place of personal)"
+        : `name a profile: \`${app.command} <profile> …\` — profiles here: ${here.join(", ")} (or set ${PROFILE})`,
       { profiles: here },
     )
   }

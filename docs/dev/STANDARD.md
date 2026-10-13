@@ -75,9 +75,9 @@ guessable from the others.
    **The profile is chosen, never assumed.** A command that acts for one of several accounts or
    profiles takes it explicitly (the first word, the tool's profile variable, or `defaultProfile` in
    its config file); none given is an error that lists the profiles — never the first in the config,
-   never an implicit `default`. One profile on the computer is no choice and is used; with none, the
-   name `default` stays for the first setup. A command that touches no account (`account list`,
-   `config show`) runs without one. A read across accounts covers all of them and says so.
+   never an implicit `default`, not even the only profile; with none the error says how to create one
+   by name (`tg personal setup`). A command that touches no account (`account list`, `config show`)
+   runs without one. A read across accounts covers all of them and says so.
    The resource is a noun: **plural** for a
    collection (`chats`, `contacts`, `messages`, `polls`, `reactions`, `recipients`, `replies`, `sends`,
    `runs`, `topics`, `models`, `tags`, `searches`, `copies`, `attachments`, `tasks`), **singular** for what a profile has exactly
