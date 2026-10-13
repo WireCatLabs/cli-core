@@ -39,7 +39,7 @@ export const isVoice = (message: Message): boolean =>
   message.attachments.some(({ kind, mime }) => kind === "voice" || mime === "audio/ogg")
 
 export interface Kept {
-  get(voice: Voice): Promise<string | undefined>
+  get(voice: Voice): Promise<{ text: string; source: string } | undefined>
   keep(voice: Voice, text: string, source: string): Promise<void>
   close(): Promise<void>
 }
@@ -54,7 +54,7 @@ export const openKept = async (messenger: Messenger, profile: string, env: NodeJ
   if (!account) return { get: async () => undefined, keep: async () => {}, close: async () => {} }
   const store = await openStore({ env })
   return {
-    get: async ({ chatId, messageId }) => (await store.transcript(account, chatId, messageId))?.text,
+    get: ({ chatId, messageId }) => store.transcript(account, chatId, messageId),
     keep: ({ chatId, messageId }, text, source) => store.keepTranscript(account, chatId, messageId, text, source),
     close: () => store.close(),
   }
@@ -79,7 +79,7 @@ export const hearVoices = async (
   const missing: Voice[] = []
   for (const message of messages.filter(isVoice)) {
     const voice = { chatId: message.chatId, messageId: message.id }
-    const text = await kept.get(voice)
+    const text = (await kept.get(voice))?.text
     if (text === undefined) missing.push(voice)
     else transcripts.set(keyOf(voice), text)
   }

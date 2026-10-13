@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
+import type { SkippedSource } from "../search/account-list.js"
 import { dateRange, timezoneOf } from "../search/lucene/dates.js"
 import { parseLucene } from "../search/lucene/parser.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
@@ -89,6 +90,7 @@ export interface Prepared {
   execution: QueryExecution
   timezone: string
   scopeAccounts: AccountKey[]
+  skipped?: SkippedSource[]
   selectedChat?: { account: AccountKey; chatId: string }
 }
 export const prepareLucene = async (
@@ -137,7 +139,7 @@ export const prepareLucene = async (
   const leaves = walkQuery(ast.root)
   const sources = positiveSources(ast.root).map((value) => sourceOf("in:", value, providers))
   for (const leaf of leaves.filter(({ field }) => field === "in")) sourceOf("in:", leaf.value, providers)
-  const listed = await listedAccounts(store, account, request.source, messenger.app)
+  const listed = await listedAccounts(store, account, request.source, messenger.app, request.kind)
   const source = request.source === undefined || listed ? undefined : sourceOf("--source", request.source, providers)
   if (request.accounts !== undefined && (request.source !== undefined || sources.length > 0))
     throw new CliError("validation_error", "this search reads the accounts it was given — not with in: or --source")
@@ -149,7 +151,7 @@ export const prepareLucene = async (
   const accounts = accountsOfKind(
     request.kind,
     request.accounts ??
-      listed ??
+      listed?.accounts ??
       (source !== undefined
         ? held.filter(({ provider }) => inSource(source, provider))
         : sources.length
@@ -159,7 +161,7 @@ export const prepareLucene = async (
     source ?? (sources.includes("email") ? "email" : sources[0]),
     messenger.app?.command,
     request.mailAccount,
-    listed !== undefined,
+    listed !== undefined || request.accounts !== undefined,
   )
   const scopeAccounts = accounts.map(({ provider, account }) => ({ provider, account }))
   const chatLookup = scopeAccounts.some(({ provider }) => provider === MAIL) ? withMailThreads(store) : store
@@ -233,6 +235,7 @@ export const prepareLucene = async (
     stemsReady,
     ...(stemmer ? { stemming: stemmingOf(ast.root, stemmer) } : unstemmed ? { stemming: unstemmed } : {}),
     scopeAccounts,
+    ...(listed?.skipped.length ? { skipped: listed.skipped } : {}),
     ...(selectedChat ? { selectedChat } : {}),
   }
 }
@@ -474,6 +477,10 @@ export const searchLucene = async (
     completeness,
     query: queryOf(prepared.timezone, request.newest, prepared.stemming),
     ...(coverage ? { coverage } : {}),
+    ...(prepared.skipped ? { skipped: prepared.skipped } : {}),
+    ...(request.kind === "mail"
+      ? { accounts: mailAccounts.map(({ provider, account }) => ({ resource: "mail" as const, provider, account })) }
+      : {}),
   }
 }
 const QUERY_PAGE_LIMIT = 1000

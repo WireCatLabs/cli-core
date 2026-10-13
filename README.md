@@ -120,9 +120,9 @@ within the 0.19 series is required.
 
 `searchAllIncludingMeetings` from `./services` adds one selected meeting account to the existing
 message, mail and notes search. It leaves `searchAll` and its item references unchanged. The CLI
-reaches it with `search all <query> --meetings [provider:account]` and MCP with `search_all`'s
-`meetings` input; with no account named they take the one stored account that holds meetings and
-refuse when several do. Choose another meeting account explicitly:
+reaches it with `search all <query> --source zoom:<account>` (or `zoom`, `meetings`, `all`) and MCP with
+`search_all`'s `source`; a bare word takes the one account that holds meetings and refuses when several do.
+Choose another meeting account explicitly:
 
 ```ts
 const found = await searchAllIncludingMeetings(store, account, {

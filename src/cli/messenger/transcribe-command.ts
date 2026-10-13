@@ -1,5 +1,5 @@
 import type { Command } from "commander"
-import { openKept } from "../../speech/hearing.js"
+import { type Kept, openKept } from "../../speech/hearing.js"
 import { isInstalled } from "../../speech/install.js"
 import { choose, type Heard, hearLocally, hearOnline, notDownloaded } from "../../speech/transcribe.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -26,19 +26,37 @@ export const transcribeSubcommand = (messages: Command, messenger: Messenger): C
         throw notDownloaded(messenger, choice.model)
       }
       const id = messageId.trim()
-      const [chatId, online] = await context.withMessenger(async (connection) => {
-        const { id: resolved } = await connection.resolve(chat)
-        return [resolved, await hearOnline(messenger, connection, resolved, id, choice)] as const
-      })
-      const heard: Heard = online instanceof Uint8Array ? await hearLocally(online, id, choice) : online
-      if (heard.pending) context.renderer.note("the transcription was not finished yet — ask again later")
-      else {
+      // Opened once connected: a profile's first connection is what names the account its transcripts belong to.
+      const withKept = async <T>(work: (kept: Kept) => Promise<T>) => {
         const kept = await openKept(messenger, context.profile, context.env)
         try {
-          await kept.keep({ chatId, messageId: id }, heard.text, heard.model ?? heard.via)
+          return await work(kept)
         } finally {
           await kept.close()
         }
+      }
+      const [chatId, before, online] = await context.withMessenger(async (connection) => {
+        const { id: resolved } = await connection.resolve(chat)
+        const before = await withKept((kept) => kept.get({ chatId: resolved, messageId: id }))
+        // Asking for a local model other than the one that heard it is asking to hear it again.
+        if (before && !(choice.with === "local" && before.source !== choice.model.id)) {
+          return [resolved, before, undefined] as const
+        }
+        return [resolved, undefined, await hearOnline(messenger, connection, resolved, id, choice)] as const
+      })
+      const heard: Heard = before
+        ? {
+            messageId: id,
+            text: before.text,
+            pending: false,
+            ...(before.source === messenger.provider ? { via: before.source } : { via: "local", model: before.source }),
+          }
+        : online instanceof Uint8Array
+          ? await hearLocally(online, id, choice)
+          : (online as Heard)
+      if (heard.pending) context.renderer.note("the transcription was not finished yet — ask again later")
+      else if (!before) {
+        await withKept((kept) => kept.keep({ chatId, messageId: id }, heard.text, heard.model ?? heard.via))
       }
       if (context.format === "pretty") context.streams.data(`${heard.text}\n`)
       else context.renderer.result(heard)

@@ -1,6 +1,9 @@
 /** Attachments that are never a file, so their messages cost no download request. */
 export const NOT_FILES: ReadonlySet<string> = new Set(["webpage", "share", "poll", "location", "contact"])
 
+/** The stored kinds `has:<kind>` matches: MAX stores a file as `file`, Telegram as `document`. */
+export const storedKinds = (kind: string): string[] => (kind === "file" ? ["file", "document"] : [kind])
+
 /** One file `messages download` saved, as the messenger described it. */
 export interface DownloadedFile {
   kind: string

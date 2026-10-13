@@ -132,7 +132,8 @@ export const messagesCommand = (messenger: Messenger): Command => {
         window,
       ),
     )
-    printWindow(context, found, window)
+    const hearing = await hearForCommand(context, messenger, found, false)
+    printWindow(context, context.format === "pretty" ? spokenItems(found, hearing) : heardItems(found, hearing), window)
   }
 
   const readMailWindow = async (command: Command, locator: string, window: Window) => {

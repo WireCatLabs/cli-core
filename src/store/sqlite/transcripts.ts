@@ -1,4 +1,5 @@
 import type { Id } from "../../domain/models.js"
+import { keepText } from "./attachment-texts.js"
 import { and, eq, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
 import { messageTranscripts } from "./schema.js"
@@ -11,12 +12,13 @@ export const transcript = ({ orm }: StoreContext, chatKey: number, messageId: Id
     .get()
 
 export const keepTranscript = (
-  { orm, database, now }: StoreContext,
+  context: StoreContext,
   chatKey: number,
   messageId: Id,
   text: string,
   source: string,
 ): void => {
+  const { orm, database, now } = context
   const message = database
     .prepare("SELECT id, deleted_at FROM messages WHERE chat_id=? AND external_id=?")
     .get(chatKey, messageId)
@@ -44,4 +46,21 @@ export const keepTranscript = (
       },
     })
     .run()
+  if (message) intoVoiceAttachment(context, Number(message.id))
+}
+
+/**
+ * The transcript is also the voice attachment's text, so `content:` and the file word index find it.
+ * Text an agent wrote stays.
+ */
+export const intoVoiceAttachment = (context: StoreContext, messagePk: number): void => {
+  const row = context.database
+    .prepare(
+      `SELECT a.id, t.text, t.source FROM message_transcripts t
+       JOIN attachments a ON a.attachable_type = 'message' AND a.attachable_id = t.message_id
+       WHERE t.message_id = ? AND (a.kind = 'voice' OR a.mime = 'audio/ogg') ORDER BY a.position LIMIT 1`,
+    )
+    .get(messagePk)
+  if (!row) return
+  keepText(context, Number(row.id), { text: String(row.text), origin: "extracted", extractor: `speech:${row.source}` })
 }

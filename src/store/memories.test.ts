@@ -51,7 +51,8 @@ describe("memories", () => {
       confidence: 0.8,
     })
     expect(first).toMatchObject({ status: "proposed", scope: "work", model: "synthetic-model-1", evidence: [note.ref] })
-    expect((await store.memories.search("friday")).map(({ id }) => id)).toEqual([first.id])
+    expect(first.author).toMatchObject({ type: "bot", name: "digest-writer" })
+    expect((await store.memories.search("friday")).map(({ author }) => author.name)).toEqual(["digest-writer"])
     expect(await store.memories.search("friday", { scope: "personal" })).toEqual([])
 
     const newer = await store.memories.add({
@@ -65,6 +66,8 @@ describe("memories", () => {
     })
     expect(await store.memories.get(first.ref)).toMatchObject({ status: "superseded" })
     expect(newer).toMatchObject({ status: "confirmed", supersedes: first.ref, lastVerifiedAt: expect.any(String) })
+    expect(newer.author).toMatchObject({ type: "person", name: null })
+    expect((await store.memories.list()).map(({ author }) => author.name)).toEqual([null, "digest-writer"])
     expect((await store.memories.search("review")).map(({ id }) => id)).toEqual([newer.id])
     expect(await store.memories.indexState()).toMatchObject({ pending: 0 })
   })
@@ -94,7 +97,7 @@ describe("facts", () => {
       type: "decision",
       status: "proposed",
       confirmedBy: null,
-      author: { type: "bot" },
+      author: { type: "bot", name: "digest-writer" },
       model: "synthetic-model-1",
       evidence: [note.ref],
       project: project.ref,
@@ -110,9 +113,11 @@ describe("facts", () => {
       by: "owner",
       supersedes: proposed.ref,
     })
-    expect(replacement.status).toBe("accepted")
+    expect(replacement).toMatchObject({ status: "accepted", author: { type: "person", name: null } })
     expect(await store.facts.get(proposed.ref)).toMatchObject({ status: "superseded" })
-    expect((await store.facts.list({ project: project.ref })).map(({ ref }) => ref)).toEqual([proposed.ref])
+    expect((await store.facts.list({ project: project.ref })).map(({ ref, author }) => [ref, author.name])).toEqual([
+      [proposed.ref, "digest-writer"],
+    ])
     expect(await store.facts.reverse(replacement.ref)).toMatchObject({ status: "reversed" })
   })
 

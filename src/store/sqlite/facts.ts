@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Actor } from "./actors.js"
 import { atomic } from "./atomic.js"
 import { linkKind } from "./link-kinds.js"
-import { type Author, authorActor, evidenceOf, linkEvidence, MEMORY_SCOPES } from "./memories.js"
+import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, MEMORY_SCOPES } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { referenceOfThing, storedThing } from "./things.js"
@@ -22,7 +22,8 @@ export interface Fact {
   subject: string | null
   occurredAt: string | null
   supersedes: string | null
-  author: { type: Actor["type"]; id: string }
+  /** `name` is a bot's handle; `null` for a person. */
+  author: { type: Actor["type"]; id: string; name: string | null }
   model: string | null
   confirmedBy: { type: Actor["type"]; id: string } | null
   scope: (typeof MEMORY_SCOPES)[number] | null
@@ -66,6 +67,8 @@ export interface FactsStore {
 }
 
 type Row = Record<string, unknown>
+const NAMED =
+  "SELECT f.*, b.name AS author_name FROM facts f LEFT JOIN bots b ON f.author_type = 'bot' AND b.id = f.author_id"
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
@@ -89,7 +92,7 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
         : (referenceOfThing(database, storedThing(row.subject_type, row.subject_id)) ?? null),
     occurredAt: row.occurred_at == null ? null : iso(row.occurred_at),
     supersedes: row.supersedes_id == null ? null : `fact:${row.supersedes_id}`,
-    author: { type: row.author_type as Actor["type"], id: String(row.author_id) },
+    author: authorOf(row),
     model: row.model == null ? null : String(row.model),
     confirmedBy:
       row.confirmed_by_type == null
@@ -104,7 +107,7 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
   const rowOf = (reference: string): Row => {
     const thing = requiredThing(database, reference.includes(":") ? reference : `fact:${reference}`, "the fact")
     if (thing.type !== "fact") throw new CliError("validation_error", `${reference} is not a fact`)
-    return database.prepare("SELECT * FROM facts WHERE id = ?").get(thing.id) as Row
+    return database.prepare(`${NAMED} WHERE f.id = ?`).get(thing.id) as Row
   }
   const accept = (id: number) => {
     const row = database.prepare("SELECT * FROM facts WHERE id = ?").get(id) as Row
@@ -192,9 +195,9 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
       return database
         .prepare(
-          "SELECT * FROM facts WHERE deleted_at IS NULL AND (? IS NULL OR type = ?) AND (? IS NULL OR project_id = ?) " +
-            "AND (? IS NULL OR (subject_type = ? AND subject_id = ?)) AND (? IS NULL OR status = ?) " +
-            "ORDER BY coalesce(occurred_at, created_at) DESC, id DESC LIMIT ?",
+          `${NAMED} WHERE f.deleted_at IS NULL AND (? IS NULL OR f.type = ?) AND (? IS NULL OR f.project_id = ?) ` +
+            "AND (? IS NULL OR (f.subject_type = ? AND f.subject_id = ?)) AND (? IS NULL OR f.status = ?) " +
+            "ORDER BY coalesce(f.occurred_at, f.created_at) DESC, f.id DESC LIMIT ?",
         )
         .all(
           options.type ?? null,

@@ -16,7 +16,7 @@ export const countersCommand = (messenger: Messenger) => {
       )
       .argument("[query...]", "strict Lucene query over stored messages")
       .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
-      .option("--source <messenger>", "held accounts of this messenger; refresh uses the active account")
+      .option("--source <accounts>", "held accounts of this messenger; refresh uses the active account")
       .option("--exact", "bare words match exact forms")
       .option("--timezone <zone>", "IANA timezone for query dates")
       .option(
