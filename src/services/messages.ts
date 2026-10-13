@@ -16,10 +16,10 @@ import { sendAsCheck } from "../sends/send-as.js"
 import { newOperationId, newSendId } from "../sends/send-id.js"
 import type { Upload } from "../sends/upload.js"
 import type { AccountStore } from "../store/account-store.js"
-import type { MatchPlace } from "../store/sqlite/words.js"
 import type {
   AccountKey,
   ChatCompleteness,
+  MatchPlace,
   MessageStore,
   SearchCommand,
   SearchScope,
