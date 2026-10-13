@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { migrateFolders } from "./folders.js"
+import { migrateFolders, migrateToWirecatFolder } from "./folders.js"
 
 const app = { command: "tg", appName: "tg-cli", envPrefix: "TG" }
 const GONE = 2 ** 22 + 12345
@@ -100,7 +100,8 @@ describe("the move into the WireCat folder", () => {
     }
     const warnings: string[] = []
     const env: NodeJS.ProcessEnv = { HOME }
-    const run = () => migrateFolders(app, { env, platform: "linux", warn: (line) => warnings.push(line) })
+    const run = () =>
+      migrateFolders(app, { env, platform: "linux", holders: () => [], warn: (line) => warnings.push(line) })
     return { HOME, old, next, seed, warnings, env, run }
   }
   const SIBLINGS = ["wirecat.db-wal", "wirecat.db-shm", "wirecat.db.backup-1", "wirecat.db.before-restore-2"]
@@ -155,6 +156,40 @@ describe("the move into the WireCat folder", () => {
 
     expect(env.MESSAGING_STORE).toBe(join(old, "wirecat.db"))
     expect(existsSync(join(old, "wirecat.db"))).toBe(true)
-    expect(warnings).toEqual([expect.stringMatching(/serve is running/)])
+    expect(warnings).toEqual([expect.stringMatching(/has the store open/)])
+  })
+
+  it("leaves the store where it is while another process has it open", () => {
+    const { old, seed, warnings, env } = linux()
+    seed(old, "wirecat.db", "rows")
+
+    migrateToWirecatFolder(app, {
+      env,
+      platform: "linux",
+      holders: () => ["pid 42 (max serve)"],
+      warn: (l) => warnings.push(l),
+    })
+
+    expect(env.MESSAGING_STORE).toBe(join(old, "wirecat.db"))
+    expect(existsSync(join(old, "wirecat.db"))).toBe(true)
+    expect(warnings).toEqual([expect.stringMatching(/pid 42/)])
+  })
+
+  it("puts the store back when a later file cannot move", () => {
+    const { old, next, seed, warnings, env } = linux()
+    seed(old, "wirecat.db", "rows")
+    seed(old, "wirecat.db-wal", "wal")
+    const move = (from: string, to: string) => {
+      if (from.endsWith("-wal") && from.startsWith(old)) throw new Error("disk says no")
+      mkdirSync(dirname(to), { recursive: true })
+      renameSync(from, to)
+    }
+
+    migrateToWirecatFolder(app, { env, platform: "linux", holders: () => [], move, warn: (l) => warnings.push(l) })
+
+    expect(readFileSync(join(old, "wirecat.db"), "utf8")).toBe("rows")
+    expect(readFileSync(join(old, "wirecat.db-wal"), "utf8")).toBe("wal")
+    expect(existsSync(join(next, "wirecat.db"))).toBe(false)
+    expect(warnings).toEqual([expect.stringMatching(/disk says no/)])
   })
 })

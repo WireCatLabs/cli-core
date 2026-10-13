@@ -1,9 +1,11 @@
+import { execFileSync } from "node:child_process"
 import {
   cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   renameSync,
   rmSync,
   statSync,
@@ -20,6 +22,7 @@ export interface FolderOptions {
   env?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
   lsof?: (dirs: string[]) => string[]
+  holders?: (oldState: string) => string[]
   warn?: (line: string) => void
 }
 
@@ -77,6 +80,75 @@ const storeFiles = (directory: string): string[] =>
       name.startsWith(`${STORE}.before-restore-`),
   )
 
+/** A db without its wal loses writes, so a failure part-way puts back what already moved. */
+const moveAll = (names: string[], from: string, to: string, move: (from: string, to: string) => void) => {
+  const done: string[] = []
+  try {
+    for (const name of names) {
+      move(join(from, name), join(to, name))
+      done.push(name)
+    }
+  } catch (error) {
+    const stuck: string[] = []
+    for (const name of done.reverse()) {
+      try {
+        move(join(to, name), join(from, name))
+      } catch {
+        stuck.push(join(to, name))
+      }
+    }
+    if (stuck.length > 0)
+      throw new CliError(
+        "configuration_error",
+        `${(error as Error).message}; and could not put back ${stuck.join(", ")} — they are in ${to}, the rest is in ${from}`,
+      )
+    throw error
+  }
+}
+
+/** Processes with a store file open: another tool's serve, mcp or job is not in any lock this one checks. */
+const storeHolders = (oldState: string, platform: NodeJS.Platform): string[] => {
+  if (platform === "darwin") {
+    try {
+      const out = execFileSync("/usr/sbin/lsof", ["-t", "+D", oldState], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+      return out
+        .split("\n")
+        .filter(Boolean)
+        .map((pid) => `pid ${pid}`)
+    } catch {
+      return []
+    }
+  }
+  if (platform !== "linux") return []
+  const holders: string[] = []
+  let pids: string[] = []
+  try {
+    pids = readdirSync("/proc").filter((name) => /^\d+$/.test(name) && Number(name) !== process.pid)
+  } catch {
+    return []
+  }
+  for (const pid of pids) {
+    try {
+      for (const fd of readdirSync(`/proc/${pid}/fd`)) {
+        let target: string
+        try {
+          target = readlinkSync(`/proc/${pid}/fd/${fd}`)
+        } catch {
+          continue
+        }
+        if (target.startsWith(join(oldState, STORE))) {
+          holders.push(`pid ${pid} (${target})`)
+          break
+        }
+      }
+    } catch {}
+  }
+  return holders
+}
+
 /**
  * Brings the store and the models, which lived in `cli-messaging`'s and `cli-common`'s folders, into the
  * WireCat folder. Never when an override says where they are, never over a store that is already there,
@@ -84,9 +156,13 @@ const storeFiles = (directory: string): string[] =>
  */
 export const migrateToWirecatFolder = (
   app: Pick<AppIdentity, "command" | "appName" | "envPrefix">,
-  options: Pick<FolderOptions, "env" | "warn"> = {},
+  options: Pick<FolderOptions, "env" | "warn" | "platform"> & {
+    holders?: (oldState: string) => string[]
+    move?: (from: string, to: string) => void
+  } = {},
 ) => {
-  const { env = process.env } = options
+  const { env = process.env, platform = process.platform, move = moveEntry } = options
+  const holdersOf = options.holders ?? ((dir: string) => storeHolders(dir, platform))
   const warn = options.warn ?? ((line: string) => process.stderr.write(`${line}\n`))
   if (env.MESSAGING_STORE || env.WIRECAT_STATE_DIR) return
   const target = wirecatDirectory(env)
@@ -94,9 +170,10 @@ export const migrateToWirecatFolder = (
   const oldModels = join(resolvePaths({ appName: "cli-common", prefix: "CLI_COMMON", env }).cache, "models")
   try {
     if (existsSync(join(oldState, STORE))) {
-      const serving = [oldState, resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state].flatMap(
-        liveServes,
-      )
+      const serving = [
+        ...[oldState, resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state].flatMap(liveServes),
+        ...holdersOf(oldState),
+      ]
       if (existsSync(join(target, STORE))) {
         warn(
           `${app.command}: two stores, ${join(oldState, STORE)} and ${join(target, STORE)} — using the second, merge by hand`,
@@ -104,10 +181,10 @@ export const migrateToWirecatFolder = (
       } else if (serving.length > 0) {
         env.MESSAGING_STORE = join(oldState, STORE)
         warn(
-          `${app.command}: a serve is running (${serving.join(", ")}) — the store moves to ${target} on a run after it stops`,
+          `${app.command}: something has the store open (${serving.join(", ")}) — the store moves to ${target} on a run after it stops`,
         )
       } else {
-        for (const name of storeFiles(oldState)) moveEntry(join(oldState, name), join(target, name))
+        moveAll(storeFiles(oldState), oldState, target, move)
       }
     }
     if (existsSync(oldModels) && !existsSync(join(target, "models"))) moveEntry(oldModels, join(target, "models"))
@@ -148,5 +225,6 @@ export const migrateFolders = (
       warn(`${app.command}: kept ${appName}'s files in ~/Library for now — ${(error as Error).message}`)
     }
   }
-  migrateToWirecatFolder(app, { env, warn })
+  const holders = options.holders ?? (lsof ? (dir: string) => lsof([dir]) : undefined)
+  migrateToWirecatFolder(app, { env, platform, warn, ...(holders ? { holders } : {}) })
 }
