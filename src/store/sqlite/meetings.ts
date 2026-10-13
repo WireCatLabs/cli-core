@@ -28,7 +28,12 @@ import { meetingIdentityPk } from "./identities.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
-import { type MeetingReadCapabilities, meetingReadSnapshot, meetingReadsOver } from "./meeting-reads.js"
+import {
+  type MeetingContextReadCapabilities,
+  type MeetingReadCapabilities,
+  meetingReadSnapshot,
+  meetingReadsOver,
+} from "./meeting-reads.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
@@ -675,6 +680,7 @@ export const meetingStoreOver = (
 ): MeetingStore &
   MeetingTranscriptStore &
   MeetingReadCapabilities &
+  MeetingContextReadCapabilities &
   MeetingSearchStore &
   MeetingTranscriptReceiptStore &
   MeetingContextStore &

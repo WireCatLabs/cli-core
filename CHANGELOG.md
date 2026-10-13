@@ -21,6 +21,8 @@ shape of this file.
 
 - **`AppIdentity.errors`: a CLI's own error reasons and detail keys** (`max_code`, `migrated_chat_id`), merged
   with this package's by `failureContext` and kept by the CLI, MCP and meeting-tool error handlers alike.
+- Bounded transcript search hits carry reusable cue references. The shared context reader selects preceding and following cues in one read snapshot, preserves historical revisions and optional anchor fingerprints, and exposes explicit boundaries and byte clipping.
+- Shared passage formatting provides cited text or Markdown with timestamps, speaker labels, revision and coverage. Hosts can opt into the account-bound `meetings passage` CLI adapter and `meeting_passage` MCP tool; existing installed apps need a producer release and consumer integration.
 
 ## 0.262.0 — 13.10.2026
 

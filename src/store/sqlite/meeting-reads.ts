@@ -25,6 +25,21 @@ export interface TranscriptRowPage extends TranscriptReadScope {
   afterPosition?: number
   limit: number
 }
+export interface TranscriptContextInput extends TranscriptReadScope {
+  position: number
+  before: number
+  after: number
+}
+export interface TranscriptContextPage {
+  meeting: Meeting
+  transcript: Transcript
+  rows: TranscriptRow[]
+  hasBefore: boolean
+  hasAfter: boolean
+}
+export interface MeetingContextReadCapabilities {
+  transcriptContext(input: TranscriptContextInput): Promise<TranscriptContextPage>
+}
 export interface MeetingReadCapabilities {
   meetingMetadata(input: MeetingReadScope): Promise<Meeting>
   transcriptMetadata(input: TranscriptReadScope): Promise<Transcript>
@@ -123,7 +138,62 @@ const revision = (database: CacheDatabase, input: TranscriptReadScope, budget: n
       : undefined,
   }
 }
-export const meetingReadsOver = ({ database }: Pick<StoreContext, "database">): MeetingReadCapabilities => ({
+export const meetingReadsOver = ({
+  database,
+}: Pick<StoreContext, "database">): MeetingReadCapabilities & MeetingContextReadCapabilities => ({
+  async transcriptContext(input) {
+    const budget = check(input)
+    positiveReadInteger(input.transcriptId, "transcriptId")
+    if (
+      !Number.isSafeInteger(input.position) ||
+      input.position < 0 ||
+      !Number.isSafeInteger(input.before) ||
+      input.before < 0 ||
+      !Number.isSafeInteger(input.after) ||
+      input.after < 0 ||
+      input.before + input.after > 999
+    )
+      throw new CliError("validation_error", "context requires a cue position and 0–999 surrounding cues in total")
+    return meetingReadSnapshot(database, () => {
+      const m = parent(database, input, budget, true)
+      const t = revision(database, input, budget - m.bytes, true)
+      const columns = `id,position,${bytesOf(ROW_TEXT)} AS read_bytes`
+      const selection = `WITH before_rows AS (SELECT ${columns} FROM meeting_transcript_rows WHERE meeting_transcript_id=? AND position<? ORDER BY position DESC LIMIT ?),
+        after_rows AS (SELECT ${columns} FROM meeting_transcript_rows WHERE meeting_transcript_id=? AND position>? ORDER BY position LIMIT ?),
+        selected AS (SELECT * FROM before_rows UNION ALL SELECT ${columns} FROM meeting_transcript_rows WHERE meeting_transcript_id=? AND position=? UNION ALL SELECT * FROM after_rows)`
+      const params = [
+        input.transcriptId,
+        input.position,
+        input.before + 1,
+        input.transcriptId,
+        input.position,
+        input.after + 1,
+        input.transcriptId,
+        input.position,
+      ]
+      const probes = database.prepare(`${selection} SELECT * FROM selected ORDER BY position`).all(...params)
+      const target = probes.find((row) => Number(row.position) === input.position)
+      if (!target) return missing()
+      const left = probes.filter((row) => Number(row.position) < input.position)
+      const right = probes.filter((row) => Number(row.position) > input.position)
+      const selected = [...left.slice(Math.max(0, left.length - input.before)), target, ...right.slice(0, input.after)]
+      const total = selected.reduce((sum, row) => sum + ensureBytes(row.read_bytes, budget), 0)
+      ensureBytes(total, budget - m.bytes - t.bytes)
+      input.signal?.throwIfAborted()
+      const found = database
+        .prepare("SELECT * FROM meeting_transcript_rows WHERE id IN (SELECT value FROM json_each(?)) ORDER BY position")
+        .all(JSON.stringify(selected.map((row) => Number(row.id))))
+        .map(transcriptRowOf)
+      input.signal?.throwIfAborted()
+      return {
+        meeting: m.meeting as Meeting,
+        transcript: t.transcript as Transcript,
+        rows: found,
+        hasBefore: left.length > input.before,
+        hasAfter: right.length > input.after,
+      }
+    })
+  },
   async meetingMetadata(input) {
     const budget = check(input)
     return meetingReadSnapshot(database, () => {

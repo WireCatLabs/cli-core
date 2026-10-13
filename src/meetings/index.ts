@@ -60,6 +60,17 @@ export type {
   TranscriptLine,
   TranscriptRow,
 } from "./model.js"
+export {
+  type MeetingContextCue,
+  type MeetingHitContextOptions,
+  type MeetingHitContextPacket,
+  type MeetingPassageOutputFormat,
+  type MeetingPassageReader,
+  type MeetingPassageRequest,
+  type MeetingPassageResult,
+  meetingHitContextLimits,
+  validateMeetingPassage,
+} from "./passage.js"
 export { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
 export { type PullOptions, pull, type RunReport } from "./pull.js"
 export { listed, MeetingError, meetingSummary, type TranscriptReadOptions } from "./reads.js"
