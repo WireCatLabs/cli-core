@@ -774,7 +774,7 @@ describe("post-fetch catch-up controls", () => {
     const config = join(root, "config")
     mkdirSync(config)
     writeFileSync(join(config, "config.json"), JSON.stringify({ profiles: { default: { searchCatchUp: true } } }))
-    const env = { ...base, CHAT_CONFIG_DIR: config, CLI_COMMON_CACHE_DIR: join(root, "empty-models") }
+    const env = { ...base, CHAT_CONFIG_DIR: config, WIRECAT_STATE_DIR: join(root, "empty-models") }
     const state = { newest: 2, asked: [] as (string | undefined)[] }
     const enabled = await call(["messages", "sync", "7", "--json", "--pause", "1ms"], chatOf(state), env)
     expect(enabled.code).toBe(0)

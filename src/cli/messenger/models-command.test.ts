@@ -46,7 +46,7 @@ const call = async (argv: string[], speechModels?: string[], tty = false, stdin?
     CHAT_PROFILE: "default",
     CHAT_STATE_DIR: join(root, "state"),
     CHAT_CONFIG_DIR: join(root, "config"),
-    CLI_COMMON_CACHE_DIR: join(root, "cache"),
+    WIRECAT_STATE_DIR: join(root, "cache"),
   }
   const messenger: Messenger = {
     app,

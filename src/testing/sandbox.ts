@@ -11,7 +11,7 @@ const sandbox = mkdtempSync(join(tmpdir(), "cli-messaging-test-"))
 process.env.MESSAGING_STORE = join(sandbox, "messages.db")
 process.env.MESSAGING_STATE_DIR = join(sandbox, "state")
 process.env.MESSAGING_CONFIG_DIR = join(sandbox, "config")
-process.env.CLI_COMMON_CACHE_DIR = join(sandbox, "cache")
+process.env.WIRECAT_STATE_DIR = join(sandbox, "cache")
 // The apps the tests define: a failure is kept as a run, and a test without its own directories would keep it at home.
 for (const prefix of ["APP", "CHAT", "TG", "MAX"]) {
   process.env[`${prefix}_STATE_DIR`] = join(sandbox, prefix, "state")

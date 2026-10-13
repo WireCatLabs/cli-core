@@ -19,7 +19,7 @@ describe("the old messages.db beside the store", () => {
     const directory = stateDir()
     const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true)
 
-    const store = await openStore({ env: { MESSAGING_STATE_DIR: directory } })
+    const store = await openStore({ env: { WIRECAT_STATE_DIR: directory } })
     await store.close()
 
     for (const suffix of ["", "-wal", "-shm"]) expect(existsSync(join(directory, `messages.db${suffix}`))).toBe(false)
@@ -42,7 +42,7 @@ describe("the old messages.db beside the store", () => {
     writeFileSync(old, "")
     const holder = await openCache(old)
     holder.exec("CREATE TABLE t (a)")
-    const env = { MESSAGING_STATE_DIR: directory }
+    const env = { WIRECAT_STATE_DIR: directory }
     vi.spyOn(process.stderr, "write").mockReturnValue(true)
 
     await (await openStore({ env })).close()

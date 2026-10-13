@@ -82,7 +82,7 @@ beforeEach(() => {
       join(cache, "models", "text", id),
     )
   }
-  vi.stubEnv("CLI_COMMON_CACHE_DIR", cache)
+  vi.stubEnv("WIRECAT_STATE_DIR", cache)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -621,7 +621,7 @@ describe("related conversations", () => {
   it("**finds the conversations like a message's own**, never that one, with no model downloaded", async () => {
     const { store, embeddings } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
-    vi.stubEnv("CLI_COMMON_CACHE_DIR", mkdtempSync(join(tmpdir(), "no-models-")))
+    vi.stubEnv("WIRECAT_STATE_DIR", mkdtempSync(join(tmpdir(), "no-models-")))
 
     const found = await embeddings.related("9", "80", { model: "tiny", limit: 5 })
     expect(found.source.firstMessageId).toBe("80")

@@ -15,7 +15,7 @@ CI runs all of them except `test:slow`, plus `pnpm build` and a secret scan — 
 ## No test touches the owner's store
 
 ⚠ `src/testing/sandbox.ts` runs before every test file (vitest `setupFiles`) and points
-`MESSAGING_STORE`, the `MESSAGING_*` directories and the test apps' `APP_`, `CHAT_` and `TG_`
+`MESSAGING_STORE`, `WIRECAT_STATE_DIR` (the store's folder and the models), the `MESSAGING_*` directories and the test apps' `APP_`, `CHAT_` and `TG_`
 directories at a temporary directory. The store is the owner's system of record and migrations are
 forward-only: a test that fell back to the default path would migrate the real file, and nothing
 undoes that. A test that defines a new app prefix adds it to the sandbox.

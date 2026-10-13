@@ -413,7 +413,7 @@ describe("mail by meaning", () => {
   it("finds an email by words in search conversations, as its thread", async () => {
     const { store } = await seeded()
     const cache = mkdtempSync(join(tmpdir(), "no-models-"))
-    const env = { CLI_COMMON_CACHE_DIR: cache, XDG_CACHE_HOME: cache }
+    const env = { WIRECAT_STATE_DIR: cache, XDG_CACHE_HOME: cache }
     const embeddings = embeddingsService(storeOnlyDeps(store, MAIL, { app: { command: "memo" } as never, env }))
     const { hits, meaning } = await embeddings.search("kitchen", { limit: 5 })
     expect(meaning).toBe("unavailable")

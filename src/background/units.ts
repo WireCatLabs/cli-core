@@ -33,6 +33,7 @@ export const locationVariables = (app: AppIdentity, env: NodeJS.ProcessEnv): Rec
     ...["CONFIG_DIR", "STATE_DIR", "CACHE_DIR"].map((name) => `${app.envPrefix}_${name}`),
     "MESSAGING_STORE",
     "MESSAGING_STATE_DIR",
+    "WIRECAT_STATE_DIR",
   ]
   return Object.fromEntries(names.flatMap((name) => (env[name] === undefined ? [] : [[name, env[name]]])))
 }

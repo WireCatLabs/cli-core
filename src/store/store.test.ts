@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import type { Chat, Message } from "../domain/models.js"
 import { MIGRATIONS, migrate } from "./migrations.js"
 import { openCache } from "./open.js"
-import { storePath } from "./path.js"
+import { storePath, wirecatDirectory } from "./path.js"
 import { type AccountKey, openStore } from "./store.js"
 
 const fresh = () => join(mkdtempSync(join(tmpdir(), "store-")), "messages.db")
@@ -308,7 +308,18 @@ describe("the message store", () => {
 
   it("defaults to the test sandbox, never the owner's file", () => {
     expect(storePath()).toBe(process.env.MESSAGING_STORE)
-    expect(storePath({})).toContain("cli-messaging")
+    expect(storePath({})).toContain("WireCat")
+  })
+
+  it("lives in the WireCat folder, whatever the OS", () => {
+    const posix = { HOME: "/home/a" }
+    expect(wirecatDirectory(posix, "linux")).toBe("/home/a/.local/share/WireCat")
+    expect(wirecatDirectory(posix, "darwin")).toBe("/home/a/.local/share/WireCat")
+    expect(wirecatDirectory({ LOCALAPPDATA: "C:\\Users\\a\\AppData\\Local" }, "win32")).toBe(
+      "C:\\Users\\a\\AppData\\Local\\WireCat\\Data",
+    )
+    expect(storePath({ ...posix, WIRECAT_STATE_DIR: "/x" })).toBe("/x/wirecat.db")
+    expect(storePath({ ...posix, WIRECAT_STATE_DIR: "/x", MESSAGING_STORE: "/y/m.db" })).toBe("/y/m.db")
   })
 })
 

@@ -29,7 +29,7 @@ const message = (id: string): Message => ({
 })
 const fixture = async () => {
   const root = mkdtempSync(join(tmpdir(), "catchup-"))
-  const env = { ...process.env, CLI_COMMON_CACHE_DIR: join(root, "empty-model-cache") }
+  const env = { ...process.env, WIRECAT_STATE_DIR: join(root, "empty-model-cache") }
   const store = await openStore({ path: join(root, "fixture.db") })
   const check = vi.fn()
   const guard = { check, record: () => {} }
