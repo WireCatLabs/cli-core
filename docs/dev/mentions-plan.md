@@ -92,6 +92,10 @@ in two chats can mean two people. Each name mention gets its own target (`person
 offers the people with that name met in the same chat first, and `mentions confirm --chat` links every «Ольга» of
 one chat to one person in one step — still one target per row, so one wrong chat is fixed alone.
 
+**An organization may own an identity** (a shop's number, `info@`; owner, NEED-1032 A): `identity_links` and
+`identity_link_events` get a nullable `organization_id` beside `person_id`, exactly one of the two set (a CHECK),
+each a foreign key. SQLite changes a NOT NULL column only by rebuilding the table, so this is its own migration.
+
 **Edits and rebuilds.** An edited text rebuilds its mentions; a decision survives: a `linked` or `dismissed` status
 is carried to the new row with the same `kind`, `value` and source. A rule `version` bump rebuilds only its kind.
 
@@ -112,12 +116,31 @@ records, which is what `links` holds.
 
 | kind | how | precision expected |
 | --- | --- | --- |
-| `phone` | [`libphonenumber-js`](https://github.com/catamphetamine/libphonenumber-js) `findPhoneNumbersInText`, default country from the account, `min` metadata (~80 kB); stored as E.164 | high |
-| `email` | one tested pattern; lower-cased; domain through `tldts` | high |
-| `url` | a URL pattern plus bare domains with a known suffix; normalized (scheme, host lower-cased, `utm_*`, `fbclid`, fragment dropped); [`tldts`](https://github.com/remusao/tldts) gives `domain` from the public suffix list | high |
+| `phone` | our own rules, no library (owner, NEED-1033): see [Phones by rule](#phones-by-rule) | medium; a number-like order id is a cheap mistake, `dismissed` once |
+| `email` | one tested pattern; lower-cased; domain through `psl` | high |
+| `url` | a URL pattern plus bare domains with a known suffix; normalized (scheme, host lower-cased, `utm_*`, `fbclid`, fragment dropped); [`psl`](https://github.com/lupomontero/psl) gives `domain` from the public suffix list (0.7 MB; owner, NEED-1034) | high |
 | `document` | known URL shapes: Google Docs/Sheets/Drive ids today (the chat-documents parser), later Notion, GitHub | high |
 | `person-name` | (a) names and aliases of known people and contacts, matched on stems, so `Валерию` finds Валерий; (b) unknown names: a first-name list plus patronymic endings (`-ович`, `-овна`, …) and capitalization | (a) high, (b) medium |
 | `place` | address grammar: markers (`ул.`, `улица`, `пр-т`, `д.`, `кв.`, `г.`, a six-digit postcode) around a capitalized name and a number | medium |
+
+### Phones by rule
+
+The aim is "looks like a phone", not a perfect list: a wrong candidate costs one `dismissed`, a missed one costs
+a search that finds nothing. No library: `libphonenumber-js` installs 10 MB for checks this does not need.
+
+1. **Candidate:** an optional `+`, then 7–15 digits split only by spaces, `-`, `.` or brackets, not glued to a
+   letter, a digit, `/` or `@` (so not inside a URL, an e-mail or a longer number).
+2. **Kept when** it is written like a phone (a `+`, brackets, or groups split the way phones are), or is a bare
+   Russian mobile (`89…`/`79…` with 11 digits, `9…` with 10), or a phone word stands just before it (`тел`,
+   `телефон`, `моб`, `phone`, `tel`, `whatsapp`, `звони`).
+3. **Dropped when** it is a date or a time (`12.10.2026`, `2026-10-12`), a sum (a currency sign or word next to
+   it), a card number (13–19 digits that pass the Luhn check), an IP address, or an order, invoice or tax number
+   (`№`, `заказ`, `счет`, `order`, `ИНН`, `ОГРН`, `БИК`, `р/с` just before it).
+4. **Value:** with `+` → `+` and the digits; 11 digits from `8` or `7` → `+7` and the last 10; 10 digits from `9` →
+   `+7` and the digits; anything else → the digits alone, no `+`, and `confidence` lower. The account has no
+   country, so no other country is guessed.
+5. **Confidence:** written like a phone or after a phone word — 0.9; a bare Russian mobile — 0.7; digits alone —
+   0.5.
 
 Unknown names and places are the weak kinds. They start as `found` with a lower confidence and are never
 shown as facts until linked. A language model may later re-check them — optional, per run, never by default.
@@ -161,7 +184,8 @@ mentions list [--kind <k>] [--status found|linked|dismissed] [--domain <d>] [--s
 mentions show <id>               the mention, its source text around it, candidate targets
 mentions confirm <id> <ref>      link it to a person, organization, document or place
 mentions reject <id>             not a real mention, or not worth keeping
-mentions rebuild [--kind <k>]    find mentions in what is already stored
+mentions rebuild [--kind <k>]    find mentions in what is already stored; `rebuild` is a new verb in cli-base's
+                                 registry: compute again from what the store holds (owner, NEED-1035 B)
 links domains list               sites by number of links
 places list | show | add         addresses as their own records
 ```
@@ -181,8 +205,12 @@ an index lookup.
 
 ## Phases
 
-1. `phone`, `email`, `url` with `domain`, `document` — the high-precision kinds; fields `phone:`, `email:`,
-   `url:`, `domain:`; `links domains list`; `mentions list|show|confirm|reject|rebuild`.
+1. **1a** — `mentions` (migration 7); `email`, `url` with `domain`, `document`, `phone` in message text;
+   `mentions list|show`; filled as messages are written and by `mentions rebuild`.
+   **1b** — `mentions confirm|reject`; `phone` identities, made when a number gets an owner.
+   **1c** — organizations own identities (its own migration).
+   **1d** — fields `phone:`, `email:`, `url:`, `domain:` (the query parser lives in cli-base); `links domains list`.
+   **1e** — the other texts: transcripts, file texts, notes, documents, mail.
 2. `person-name` for known people (stems against names and aliases); `mentions:<reference>`.
 3. Unknown names and `place`, with `places`; precision measured on a labelled sample of the owner's chats
    (results private, totals to cli-testing).
@@ -198,12 +226,4 @@ an index lookup.
 
 ## Open questions for the owner
 
-1. ~~The entity's name~~ — `mentions` (owner, 2026-10-13, NEED-1027 A).
-2. ~~Phones stored as HMAC only or also in the clear~~ — in the clear (owner, 2026-10-13, NEED-1016 B).
-3. ~~Rows in `links` or a table of its own~~ — its own table (owner, 2026-10-13, NEED-1023 B).
-4. ~~Linking by value~~ — one owner per identity, found from mentions by value; an identity only once it has an
-   owner (ASK-231, ASK-232; owner, 2026-10-13, NEED-1031 A).
-6. ~~An identity owned by an organization~~ — yes: `identity_links` gets a nullable `organization_id` beside
-   `person_id`, exactly one of the two set (a CHECK), each a foreign key; `identity_link_events` the same
-   (owner, 2026-10-13, NEED-1032 A). Phase 1.
-5. ~~An agent's confirm of exact kinds~~ — final on an exact match; names and places wait (owner, NEED-1026 A).
+None.

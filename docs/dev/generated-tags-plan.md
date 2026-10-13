@@ -127,6 +127,5 @@ Each layer reports why it flagged a pair. None merges or refuses on its own: pre
 
 ## Open questions for the owner
 
-1. ~~`tags.folded` unique or a warning only~~ — unique (owner, 2026-10-13, NEED-1017 A).
-2. Do claims count in `tag:` filters of `search messages` too, or only in `search all` and notes search.
-3. Tag descriptions: written by the owner only, or proposed by an agent and confirmed.
+1. Do claims count in `tag:` filters of `search messages` too, or only in `search all` and notes search.
+2. Tag descriptions: written by the owner only, or proposed by an agent and confirmed.
