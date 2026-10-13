@@ -87,7 +87,7 @@ describe("search permission relocation", () => {
 })
 const fresh = () => {
   const configDirectory = join(mkdtempSync(join(tmpdir(), "permission-migrate-")), "config")
-  return { path: configFilePath(configDirectory), env: { CHAT_CONFIG_DIR: configDirectory } }
+  return { path: configFilePath(configDirectory), env: { CHAT_PROFILE: "default", CHAT_CONFIG_DIR: configDirectory } }
 }
 const call = async (args: string[], env: NodeJS.ProcessEnv) => {
   const streams = captureStreams()
@@ -223,7 +223,7 @@ describe("permission configuration migration", () => {
     expect(existsSync(path)).toBe(true)
     saveConfigFile(path, { profiles: {}, defaults: { readOnly: true } })
     const original = readFileSync(path, "utf8")
-    const locked = { ...env, CHAT_PROFILE_LOCK: "alice" }
+    const locked = { ...env, CHAT_PROFILE: undefined, CHAT_PROFILE_LOCK: "alice" }
     const refused = await call(["config", "migrate", "--json"], locked)
     expect(refused.code).toBe(5)
     expect(readFileSync(path, "utf8")).toBe(original)

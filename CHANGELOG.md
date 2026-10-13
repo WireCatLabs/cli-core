@@ -8,12 +8,15 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
-- **Spreadsheets read as rows under their header.** XLSX, ODS, CSV and TSV text is now `# <sheet>` followed by
-  `Row 12: <Header>: <value>; …` lines, with the first all-text row as the header (column letters when there is
-  none), empty cells left out, and dates, percentages and numbers as the sheet shows them. It replaces
-  `A1: value` / `R1C1: value` lines and raw CSV text; the `cells` spans of a CSV extraction are gone. Stored
-  XLSX/ODS text is read again (extractor `document:v2:…`). `sheetText` and `columnName` are exported from
-  `./documents` for callers with their own sheet data.
+- **No profile is assumed.** When neither the first word, `<PREFIX>_PROFILE`, `defaultProfile` in the config
+  file nor `<PREFIX>_PROFILE_LOCK` names a profile, a command that uses an account fails with `validation_error`
+  (exit 2) instead of running as `default` — also with a single profile, and also `setup` on a new computer.
+  The message lists the profiles here (those `account list` shows), or with none says
+  `create one with \`tg personal setup\``; `details.profiles` carries the list. `account list`, `config show`,
+  `config migrate` and `config set --defaults` still run, showing no current profile (`profile: null`,
+  `profileFrom: "none named"`). `asFirstWord` always returns the profile, so every hint names it, and the bot
+  MCP server always passes it. `ResolveOptions.needsProfile: false` and the third argument of
+  `messengerContext` let a tool's own no-account command run unnamed. `Settings.profilesHere` lists the profiles; a messenger with profile files of its own adds them through `SettingsExtension.profiles`.
 - **`search all` answers a required `accounts` field, and a `skipped` entry may carry `source` in place of
   `resource`** (`SearchAllFound`, `SearchAllIncludingMeetingsFound`): a fake that builds the answer adds
   `accounts`, and code reading `skipped[].resource` handles `undefined`.

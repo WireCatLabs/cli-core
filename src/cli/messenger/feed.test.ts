@@ -21,6 +21,7 @@ const sandbox = () => {
   return {
     root,
     env: {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "state"),
       CHAT_CONFIG_DIR: join(root, "config"),
       MESSAGING_STORE: join(root, "m.db"),

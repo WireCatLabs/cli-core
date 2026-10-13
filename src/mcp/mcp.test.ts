@@ -336,6 +336,7 @@ interface Harness {
 const connect = async (telegram: Scripted = scripted(), options: Partial<ServerOptions> & Harness = {}) => {
   const root = options.root ?? mkdtempSync(join(tmpdir(), "mcp-"))
   const env = {
+    CHAT_PROFILE: "default",
     CHAT_STATE_DIR: join(root, "state"),
     CHAT_CONFIG_DIR: join(root, "config"),
     MESSAGING_STORE: join(root, "m.db"),

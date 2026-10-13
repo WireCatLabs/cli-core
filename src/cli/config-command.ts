@@ -11,10 +11,9 @@ import { Command } from "commander"
 import * as v from "valibot"
 import { type AppIdentity, envName } from "./app.js"
 import { baseContext } from "./context.js"
-import { profilesWithAccounts } from "./messenger/accounts.js"
 import { knownBeside, knownPermissionKeys, type PermissionKeyOf } from "./permission-keys.js"
 import { hasPermissionConfig, migratePermissionConfig } from "./permission-migration.js"
-import { type Configuration, fromFile, type Settings } from "./settings.js"
+import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
 import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
 
 /**
@@ -33,7 +32,9 @@ export const configCommand = (
       .description("replace legacy access settings with permissions, preserving this file's effective levels")
       .option("--dry-run", "show the migration without writing the file")
       .action(function () {
-        const { renderer, env } = baseContext(this, config.resolveSettings)
+        const { renderer, env } = baseContext(this, (flags, options) =>
+          config.resolveSettings(flags, { ...options, needsProfile: false }),
+        )
         const dryRun = this.opts<{ dryRun?: boolean }>().dryRun === true
         if (!dryRun && env[envName(app, "PROFILE_LOCK")])
           throw new CliError("permission_error", "config migrate changes every profile — run outside the profile lock")
@@ -59,14 +60,14 @@ export const configCommand = (
     .action(async function (this: Command) {
       const bot = this.opts<{ bot?: boolean }>().bot === true
       const { settings, renderer, env } = baseContext(this, (flags, options) =>
-        config.resolveSettings(flags, { ...options, ...(bot ? { kind: "bot" } : {}) }),
+        config.resolveSettings(flags, { ...options, needsProfile: false, ...(bot ? { kind: "bot" } : {}) }),
       )
       const overridden = pathsAreOverridden({ appName: app.appName, prefix: app.envPrefix, env })
 
       renderer.result({
-        profile: settings.profile,
+        profile: settings.sources.profile === NONE_NAMED ? null : settings.profile,
         profileFrom: settings.sources.profile,
-        profiles: [...new Set([...settings.configuredProfiles, ...profilesWithAccounts(app, env)])].sort(),
+        profiles: settings.profilesHere,
         configFile: settings.configPath,
         configFound: settings.configFound,
         pathsOverridden: overridden,
@@ -100,12 +101,14 @@ export const configCommand = (
     else sub.description("remove a setting from the configuration file")
 
     sub.action(async function (this: Command, setting: string, given: unknown) {
-      const { settings, renderer, env } = baseContext(this, config.resolveSettings)
       const {
         defaults: everyone,
         personal,
         bot,
       } = this.opts<{ defaults?: boolean; personal?: boolean; bot?: boolean }>()
+      const { settings, renderer, env } = baseContext(this, (flags, options) =>
+        config.resolveSettings(flags, { ...options, needsProfile: !everyone && !isStoreSetting(setting) }),
+      )
       if (isStoreSetting(setting)) {
         if (everyone || personal || bot)
           throw new CliError(

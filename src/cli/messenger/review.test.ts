@@ -193,6 +193,7 @@ describe("review, the command", () => {
     const root = mkdtempSync(join(tmpdir(), "review-"))
     const streams = captureStreams()
     const env = {
+      CHAT_PROFILE: "default",
       CHAT_STATE_DIR: join(root, "s"),
       CHAT_CONFIG_DIR: join(root, "c"),
       MESSAGING_STORE: join(root, "m.db"),

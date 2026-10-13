@@ -9,7 +9,7 @@ import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
 import { envName } from "../app.js"
 import { environmentOf, outputFor } from "../context.js"
-import { commandWords, DEFAULT_PROFILE, liftProfile, rootOf, usableProfileName } from "../profile.js"
+import { commandWords, liftProfile, rootOf, usableProfileName } from "../profile.js"
 import type { Configuration } from "../settings.js"
 import { recalledAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
@@ -60,9 +60,10 @@ export const completeCommand = (
       const { profile, rest } =
         words.length > 1 ? liftProfile(words, commandWords(root)) : { profile: undefined, rest: words }
       const lock = env[envName(app, "PROFILE_LOCK")]
-      const wanted = profile ?? lock ?? env[envName(app, "PROFILE")] ?? DEFAULT_PROFILE
-      const custom = readable(wanted, lock) ? options.sources?.(wanted, rest, env) : undefined
-      const account = !custom && readable(wanted, lock) ? accountOf(messenger, wanted, env, options) : undefined
+      const wanted = profile ?? lock ?? env[envName(app, "PROFILE")]
+      const custom = wanted && readable(wanted, lock) ? options.sources?.(wanted, rest, env) : undefined
+      const account =
+        wanted && !custom && readable(wanted, lock) ? accountOf(messenger, wanted, env, options) : undefined
       const store = account && existsSync(storePath(env)) ? await openStore({ env }).catch(() => undefined) : undefined
       try {
         // Read up front: `suggest` asks its sources synchronously, and the store answers asynchronously.

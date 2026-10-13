@@ -43,6 +43,7 @@ const app = {
 const call = async (argv: string[], speechModels?: string[], tty = false, stdin?: string) => {
   const root = mkdtempSync(join(tmpdir(), "models-"))
   const env = {
+    CHAT_PROFILE: "default",
     CHAT_STATE_DIR: join(root, "state"),
     CHAT_CONFIG_DIR: join(root, "config"),
     CLI_COMMON_CACHE_DIR: join(root, "cache"),

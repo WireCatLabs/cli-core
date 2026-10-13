@@ -33,7 +33,10 @@ const hit: MessageHit = {
 
 const setup = () => {
   const root = mkdtempSync(join(tmpdir(), "serve-"))
-  return { root, env: { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") } }
+  return {
+    root,
+    env: { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") },
+  }
 }
 
 const seen: { lock?: { pid: number; version?: string; listeningAt?: string } } = {}

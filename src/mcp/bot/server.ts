@@ -6,7 +6,6 @@ import * as v from "valibot"
 import type { BotMessenger } from "../../cli/bot/port.js"
 import { skipFlagFor } from "../../cli/messenger/ask.js"
 import { listed } from "../../cli/paging.js"
-import { DEFAULT_PROFILE } from "../../cli/profile.js"
 import type { Settings } from "../../cli/settings.js"
 import { keyForCommand, type Level, levelFor, type PermissionKey } from "../../sends/permissions.js"
 import { type McpCommand, registerCommands } from "../surface.js"
@@ -65,7 +64,7 @@ const body = (value: unknown): object =>
  */
 const runner = ({ settings, run, env }: BotServerOptions) => {
   let queue: Promise<unknown> = Promise.resolve()
-  const profile = settings.profile === DEFAULT_PROFILE ? [] : [settings.profile]
+  const profile = [settings.profile]
   const once = async (
     words: readonly string[],
     { options = [], positionals = [] }: Invocation,
