@@ -2289,6 +2289,31 @@ describe("the shared read commands", () => {
     expect((await call(["search", "messages", "chapter", "--type", "video"], never, env)).code).toBe(2)
   })
 
+  it("**search messages keeps the messenger accounts of a --source list** and names the rest in skipped", async () => {
+    const root = mkdtempSync(join(tmpdir(), "search-skipped-"))
+    const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
+    await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
+    const held = await openStore({ path: join(root, "m.db") })
+    await held.saveAccount({ provider: "zoom", account: "z1" }, { name: null })
+    await held.close()
+    const never = vi.fn(async (): Promise<MessengerAdapter> => {
+      throw new Error("search must never connect")
+    })
+    const answer = JSON.parse(
+      (await call(["search", "messages", "chapter", "--source", "chat:500,zoom:z1", "--json"], never, env)).stdout[0] ??
+        "",
+    )
+    expect(answer.items.length).toBeGreaterThan(0)
+    expect(answer.coverage.accounts).toEqual([{ provider: "chat", account: "500" }])
+    expect(answer.skipped).toEqual([{ source: "zoom:z1", reason: "meetings — search all reads them" }])
+    const pretty = await call(["search", "messages", "chapter", "--source", "chat:500,zoom:z1"], never, env, {
+      tty: true,
+    })
+    expect(pretty.stderr.join("\n")).toContain("zoom:z1 not searched: meetings — search all reads them")
+    const refused = await call(["search", "messages", "chapter", "--source", "zoom:z1", "--json"], never, env)
+    expect(refused.code).toBe(2)
+  })
+
   it("**searches other accounts and messengers** held in the file only when asked, naming each hit's messenger", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }

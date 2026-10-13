@@ -202,6 +202,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     noteServer(context, found.server)
     const { command } = messenger.app
     for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
+    for (const { source, reason } of found.skipped ?? []) context.renderer.note(`${source} not searched: ${reason}`)
     const stemming = found.query?.stemming
     const forms = (stemming?.applied ? stemming.terms : []).filter(({ stemmer }) => stemmer !== "none")
     if (forms.length > 0)

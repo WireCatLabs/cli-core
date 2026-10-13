@@ -240,6 +240,7 @@ export const searchCombined = async (
       corrections: listed,
       completeness,
       ...(coverage ? { coverage } : {}),
+      ...(prepared.skipped ? { skipped: prepared.skipped } : {}),
       wordsReady: prepared.wordsReady,
       stemsReady: prepared.stemsReady,
       query: {

@@ -1,6 +1,7 @@
 # Plan — one `--source` for every search
 
-Status: **model approved by the owner, 2026-10-13** (NEED-10 A, NEED-11 A). No code yet.
+Status: **model approved by the owner, 2026-10-13** (NEED-10 A, NEED-11 A). Built: the registry, `notes:<id>` and
+`notes:internal` in a list, and BUG-2 (work item 2). Next: work item 3.
 
 ## Goal
 
@@ -40,15 +41,16 @@ Anchors are on `origin/main`, 2026-10-13.
 1. **What is already keyed by provider and account.** `accounts(provider, external_id)` rows hold
    messenger accounts, mailboxes and meeting accounts (`src/store/sqlite/accounts.ts:82-94`); hits
    print them as `provider:account` (`src/services/search-all.ts:120-125`). Providers are free strings
-   (`src/domain/models.ts:17`); there is no registry. `tg` means `telegram` only when tg is the app
-   running or a tg profile is recorded (`src/search/account-list.ts:53-62`).
+   (`src/domain/models.ts:17`); `src/domain/providers.ts` gives each known one a kind and its aliases, and a
+   provider it does not list is a messenger. The list parser (`src/search/account-list.ts`) resolves `tg` to
+   `telegram` whatever app runs, unless the store holds a provider named `tg`.
 2. **Kinds that lack a provider and account today.**
    - **notes, written in memo:** no account row. `search all` invents `notes` + `internal`
      (`search-all.ts:157-158`).
    - **notes, disk folders:** an `accounts` row of provider `folder` whose `external_id` is a ulid
-     (`src/store/sqlite/notes.ts:371-379`). Hits and `--folder` use the row id (`notes.ts:319`,
-     `search-all.ts:158`); the list parser matches `external_id` (`account-list.ts:70`), so a folder
-     from a hit cannot be named back.
+     (`src/store/sqlite/notes.ts:371-379`). Hits, `--folder` and the list parser all use the row id: a list
+     names a folder `notes:<row id>` or by its name, memo's own notes `notes:internal`, and `folder:` is not a
+     provider.
    - **documents:** the same `folder` rows, named `google-drive:<principal>`, where the principal is
      Google's `permissionId` (`drive-cli/src/store.ts:17`, `drive-cli/src/google.ts:62-66`). No `drive`
      provider, and the profile name lives only in drive's config (`drive-cli/src/config.ts:14-19`). A
@@ -63,9 +65,11 @@ Anchors are on `origin/main`, 2026-10-13.
      `--backend server`, which reads the active account only (`:103`); mail every mailbox (`:116`);
      notes every folder (`:141-147`). Meetings need `--meetings provider:account`, or a bare
      `--meetings` when one stored account holds meetings (`src/services/search-all-meetings.ts:150-204`).
-4. **BUG-2 · `search messages` keeps accounts that are not messengers.** It drops only `email` and the
-   legacy `notes` provider from a list (`search-kind.ts:53`); a folder or a meeting account named in
-   `--source` reaches the message search and finds nothing, silently.
+4. **BUG-2, fixed.** `search messages` and `search mail` keep the accounts of their kind from a list, a bare
+   kind or a provider alias, answer the rest as `skipped: [{ source, reason }]`, and fail only when nothing fits
+   (`fitting` in `src/search/account-list.ts`). A bare `all`, `personal`, `bots` or a provider the store holds
+   by that very name keeps the old path; it now drops meeting and notes accounts too. The `--language legacy`
+   path filters the same way but does not answer `skipped`. `in:` still takes the old words only.
 5. **`search all` does not say which accounts it read.** It answers `searched` and `skipped`, by
    resource (`search-all.ts:40-42`). `search messages` answers `coverage.accounts`
    (`messages-search.ts:61`), and `search all` drops it (`search-all.ts:115-117`).
@@ -87,7 +91,7 @@ A comma list. Each entry is exactly one of:
 
 `all`, `personal` and `bots`, which `--source` takes today, stay as built-in groups that need no
 `group:` prefix: `all` every account, `personal` and `bots` the messenger accounts with and without
-the `-bot` provider (`src/search/query.ts:6-17`). The words `drive:` as a special case,
+the `-bot` provider (`src/search/query.ts:6-17`; inside a list they hold messenger accounts only). The words `drive:` as a special case,
 `notes:<folder>` as a special prefix and `zoom:` as a special entry from the reviewed draft are gone:
 each is shape 1 or 2.
 
@@ -189,7 +193,8 @@ Releases of this package, in order; each is one PR.
    switch (drive plan item 1).
 2. **Registry and grammar**: `src/domain/providers.ts`; the parser resolves the four shapes through
    it; `notes:<row id>`, `notes:internal`; `drive:<profile>` through `profiles.drive`; groups may hold
-   any entry. Each search filters by kind from the registry (BUG-2).
+   any entry. Each search filters by kind from the registry (BUG-2). Built, except `drive:<profile>`, which
+   waits for the drive switch (item 6), and a positive `in:` taking kinds and aliases.
 3. **`search all --source`**, `skipped` for unused entries and unnamed kinds, `accounts`, meetings by
    `--source`, `--only documents|meetings`.
 4. **`search notes --source`, `search mail --source`**, `accounts`; the three removals; `parity.json`

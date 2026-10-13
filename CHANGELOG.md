@@ -17,6 +17,14 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Fixed
 
+- **`search messages` and `search mail` keep only the accounts of their kind from `--source`** and name the rest in
+  a new answer field, `skipped: [{ source, reason }]`; they fail only when nothing in the list fits. A meeting
+  account or a notes folder named in `--source`, or reached by `--source all`, no longer counts among the accounts
+  `search messages` read. `--source` also takes a bare kind (`messages`, `mail`, `notes`, `meetings`) and a
+  provider's alias (`tg` for `telegram`, whatever app runs), resolved through one registry,
+  `src/domain/providers.ts`. A notes folder is `notes:<id>`, the id its hits show, and memo's own notes
+  `notes:internal`; `folder:<ulid>` is no longer accepted.
+
 - **`store export --json` answers the list envelope** `{ items, page, limit, hasMore }` — `page: 1`, `limit` the
   count, `hasMore: false` — like every other list. It answered `{ items }` alone. `--output` and `--to` still answer
   what they wrote.
