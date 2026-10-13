@@ -48,10 +48,10 @@ check("an empty feed renders", renderMessages([]) === "(nothing)")
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0" }
 const settings = settingsFor(app).resolveSettings(
-  { timeout: "2s" },
+  { timeout: "2s", profile: "personal" },
   { env: {}, configDir: mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")) },
 )
-check("settings resolve with no file", settings.profile === "default" && settings.commandTimeoutMs === 2000)
+check("settings resolve with no file", settings.profile === "personal" && settings.commandTimeoutMs === 2000)
 
 const runsDir = join(mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")), "runs")
 const recording = { app, command: "chats list", profile: "default", keepFailed: false, trace: false } as const
