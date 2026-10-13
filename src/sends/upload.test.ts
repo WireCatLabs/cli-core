@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -54,6 +54,15 @@ describe("readUpload", () => {
 
     await expect(readUpload("file", join(root, "missing.pdf"), { app, env })).rejects.toThrow(/no such file/)
     await expect(readUpload("file", root, { app, env })).rejects.toThrow(/a folder/)
+  })
+
+  // Windows would write the 2 GiB out; elsewhere the file is sparse.
+  it.skipIf(process.platform === "win32")("says a file of 2 GiB or more is too large to send", async () => {
+    const { env, put } = setUp()
+    const huge = put("huge.bin")
+    truncateSync(huge, 2 ** 31)
+
+    await expect(readUpload("file", huge, { app, env })).rejects.toThrow(/2 GiB or more/)
   })
 })
 

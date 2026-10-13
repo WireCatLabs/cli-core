@@ -82,7 +82,14 @@ export const readUpload = async (
     return { kind, name: basename(path), bytes: await readFile(path) }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
-    const reason = code === "ENOENT" ? "no such file" : code === "EISDIR" ? "it is a folder" : "it cannot be read"
+    const reason =
+      code === "ENOENT"
+        ? "no such file"
+        : code === "EISDIR"
+          ? "it is a folder"
+          : code === "ERR_FS_FILE_TOO_LARGE"
+            ? "it is 2 GiB or more, and files are sent only under 2 GiB"
+            : "it cannot be read"
     throw new CliError("validation_error", `cannot send ${path}: ${reason}`)
   }
 }
