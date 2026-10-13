@@ -8,6 +8,14 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Changed — may break callers
 
+- **A bare search word looks everywhere a message holds words:** its text, a voice note's transcript, a word of
+  a file's name and a file's text (owner, 2026-10-13). Each hit says where (`matchedIn`: `text`, `transcript`,
+  `filename`, `file`) and its `excerpt` comes from there. Hits with the word in the text rank first, then
+  transcripts, file names and file text, so a long spreadsheet does not crowd out messages. `text:` keeps
+  the old meaning. `content:` now means file text only; transcripts moved to the new `transcript:` field.
+  The legacy language and `--backend` server search still read message text only.
+- **Store version 5:** a word index of file names (`attachment_name_words`), filled once on upgrade from the
+  names already stored. Older builds still open it; its triggers keep the index current.
 - **`search all` answers a required `accounts` field, and a `skipped` entry may carry `source` in place of
   `resource`** (`SearchAllFound`, `SearchAllIncludingMeetingsFound`): a fake that builds the answer adds
   `accounts`, and code reading `skipped[].resource` handles `undefined`.
