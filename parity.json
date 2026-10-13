@@ -285,6 +285,9 @@
       "meaning": "days of the working window, such as mon-fri or sat,sun",
       "value": "<days>"
     },
+    "--debug": {
+      "meaning": "on a failure, its whole record — cause and stack — in place of the short line"
+    },
     "--deep": {
       "value": "<n>",
       "meaning": "also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second",
@@ -1187,6 +1190,7 @@
         "tg": "each CLI’s next cli-messaging bump"
       }
     },
+    "--debug": "all",
     "--dry-run": "all",
     "--fields": "all",
     "--full": {
