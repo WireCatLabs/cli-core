@@ -195,6 +195,9 @@ it("does not trust a malformed provider's scope, ordering or bounds", async () =
     { rows: [] },
     { rows: [...page.rows, ...page.rows] },
     { hasBefore: undefined },
+    { meeting: null },
+    { transcript: null },
+    { rows: [null] },
   ]) {
     const port = { transcriptContext: vi.fn(async () => ({ ...page, ...changed })) }
     await expect(
@@ -202,10 +205,16 @@ it("does not trust a malformed provider's scope, ordering or bounds", async () =
         before: 1,
         after: 1,
       }),
-    ).rejects.toThrow()
+    ).rejects.toMatchObject({
+      code: "rows" in changed && changed.rows?.length === 0 ? "not_found" : "invalid_response",
+    })
   }
   const actual = await readMeetingHitContext(f.store.meetings, f.accountId, f.ref, { before: 1, after: 1 })
   expect(actual.items.map((cue) => cue.position)).toEqual([9, 20, 24])
+  const absent = { transcriptContext: vi.fn(async () => null) }
+  await expect(
+    readMeetingHitContext(absent as unknown as Parameters<typeof readMeetingHitContext>[0], f.accountId, f.ref),
+  ).rejects.toMatchObject({ code: "invalid_response" })
 })
 it("renders plain and Markdown passages without executable HTML, terminal escapes or missing coverage", async () => {
   const f = await fixture()
