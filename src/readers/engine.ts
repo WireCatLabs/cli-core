@@ -11,7 +11,7 @@ import type { Extraction, FileHint, LoadEngine } from "./types.js"
  * The packages that read formats. Reading documents is core, so the readers ship with this package (owner,
  * 2026-10-12, replacing NEED-629 A); only the page renderer for OCR stays optional, a native binary.
  */
-export const BUILT_IN = ["unpdf", "mammoth", "word-extractor"] as const
+export const BUILT_IN = ["unpdf", "mammoth", "word-extractor", "linkedom", "defuddle/node"] as const
 export const ENGINES = [...BUILT_IN, "@napi-rs/canvas"] as const
 export type Engine = (typeof ENGINES)[number]
 

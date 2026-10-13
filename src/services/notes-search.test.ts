@@ -123,6 +123,37 @@ describe("the notes' indexes", () => {
     await expect(noteIds(store, "has:photo")).rejects.toMatchObject({ details: { reason: "query.unknown-value" } })
   })
 
+  it("**title: and site: find a page by what it says about itself**", async () => {
+    const store = await open()
+    const folder = await store.notes.addFolder({ name: "pages" })
+    const page = await store.notes.saveFileNote({
+      folderId: folder.id,
+      path: "q3.html",
+      title: "q3.html",
+      text: "## Costs\nHosting stayed flat.",
+      metadata: {
+        title: "Отчёт за квартал",
+        site: "Acme News",
+        language: "ru-RU",
+        author: "Dana Reyes",
+        keywords: ["Finance"],
+      },
+      sections: [{ heading: "Costs", level: 2, start: 0, end: 29 }],
+    })
+    const other = await store.notes.saveFileNote({
+      folderId: folder.id,
+      path: "b.md",
+      title: "Hosting",
+      text: "Hosting notes",
+    })
+    expect(page.note.title).toBe("Отчёт за квартал")
+    expect(await noteIds(store, "title:квартал")).toEqual([page.note.id])
+    expect(await noteIds(store, 'site:"acme news"')).toEqual([page.note.id])
+    expect(await noteIds(store, "lang:ru author:reyes keyword:finance")).toEqual([page.note.id])
+    expect(await noteIds(store, "lang:en")).toEqual([])
+    expect(await noteIds(store, "hosting -site:acme")).toEqual([other.note.id])
+  })
+
   it("refuses a message-only field, naming the note fields", async () => {
     const store = await open()
     await expect(searchNotesQuery(store, { text: "from:alice", limit: 10 })).rejects.toThrow(
@@ -156,5 +187,25 @@ describe("the notes' indexes", () => {
     expect((await store.notes.nearest("test:model:2", unit(1, 0), { limit: 2 })).map(({ note }) => note.id)).toEqual([
       far.id,
     ])
+  })
+
+  it("cuts a page's meaning chunks at its sections, never across two", async () => {
+    const store = await open()
+    const folder = await store.notes.addFolder({ name: "pages" })
+    const costs = `## Costs\n${"Hosting stayed flat. ".repeat(80)}`
+    const text = `## Revenue\nRevenue grew.\n\n${costs}`
+    await store.notes.saveFileNote({
+      folderId: folder.id,
+      path: "q3.html",
+      title: "Report",
+      text,
+      sections: [
+        { heading: "Revenue", level: 2, start: 0, end: text.indexOf("## Costs") },
+        { heading: "Costs", level: 2, start: text.indexOf("## Costs"), end: text.length },
+      ],
+    })
+    const chunks = (await store.notes.chunksToEmbed("test:model:2", { limit: 20 })).map(({ text }) => text)
+    expect(chunks.length).toBeGreaterThan(2)
+    expect(chunks.filter((chunk) => chunk.includes("Revenue grew") && chunk.includes("Hosting"))).toEqual([])
   })
 })

@@ -1,4 +1,4 @@
-import { CHUNK_CHARS, chunkHash, splitText } from "../../conversations/chunks.js"
+import { CHUNK_CHARS, chunkHash, splitSections, splitText } from "../../conversations/chunks.js"
 import { analyzerIdentity, DEFAULT_STEMMERS, type Stemmer, type Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { normalize } from "../normalize.js"
@@ -38,7 +38,7 @@ export const CORPORA = {
     index: "document_index",
     table: "documents",
     read:
-      "SELECT d.title, coalesce(d.body, '') AS body, d.deleted_at IS NULL AS live, a.scope, d.account_id FROM documents d " +
+      "SELECT d.title, coalesce(d.body, '') AS body, d.metadata, d.deleted_at IS NULL AS live, a.scope, d.account_id FROM documents d " +
       "JOIN accounts a ON a.id = d.account_id WHERE d.id = ?",
   },
   note: {
@@ -91,6 +91,15 @@ export const noteIndexState = (database: CacheDatabase): NoteIndexState => {
   }
 }
 
+const storedSections = (metadata: string): { start: number }[] => {
+  try {
+    const { sections } = JSON.parse(metadata) as { sections?: { start?: unknown }[] }
+    return (sections ?? []).filter((section): section is { start: number } => Number.isInteger(section.start))
+  } catch {
+    return []
+  }
+}
+
 const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
   const read = database.prepare(corpus.read)
   const oldHashes = database.prepare(
@@ -128,7 +137,11 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
     const after = new Set<string>()
     if (text.trim() && corpus.pieces !== false) {
       const at = Date.now()
-      splitText(text, CHUNK_CHARS).forEach(({ start, end }, position) => {
+      const sections = row?.metadata == null ? [] : storedSections(String(row.metadata))
+      const ranges = sections.length
+        ? splitSections(text, sections, CHUNK_CHARS, text.length - String(row?.body ?? "").length)
+        : splitText(text, CHUNK_CHARS)
+      ranges.forEach(({ start, end }, position) => {
         const hash = chunkHash(text.slice(start, end))
         after.add(hash)
         statements.chunk.run(corpus.type, id, position, start, end, hash, scope, int(row?.account_id), at, at)

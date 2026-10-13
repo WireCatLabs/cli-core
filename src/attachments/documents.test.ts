@@ -244,10 +244,19 @@ describe("legacy and markup text", () => {
       "<p>htmlneedle &amp; more&nbsp;text &#1046; &#x416;</p><!-- secret --><script>alert(1)</script>" +
       "<table><tr><td>a</td><td>b</td></tr></table></body></html>"
     const result = await textFrom(bytes(html), "html")
-    expect(result?.text).toContain("Report\n")
-    expect(result?.text).toContain("htmlneedle & more\u00A0text Ж Ж")
-    expect(result?.text).toContain("a\tb")
+    expect(result?.extractor).toBe("html:v2")
+    expect(result?.text).toContain("## Report")
+    expect(result?.text).toContain("htmlneedle & more text Ж Ж")
+    expect(result?.text).toContain("| a | b |")
     expect(result?.text).not.toMatch(/hidden|secret|alert|p\{\}/)
+    const plain = await extractText(bytes(html), hint("html"), async () => {
+      throw new Error("no engines")
+    })
+    expect(plain).toMatchObject({ extractor: "html:v1" })
+    if (plain.status === "extracted") {
+      expect(plain.text).toContain("htmlneedle & more\u00A0text Ж Ж")
+      expect(plain.text).toContain("a\tb")
+    }
   })
 
   it("leaves .xls and .ppt, and a .doc that is not one, unsupported", async () => {

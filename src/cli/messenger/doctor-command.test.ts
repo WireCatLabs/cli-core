@@ -97,6 +97,8 @@ describe("doctor", () => {
       unpdf: "built in",
       mammoth: "built in",
       "word-extractor": "built in",
+      linkedom: "built in",
+      "defuddle/node": "built in",
       "@napi-rs/canvas": "installed",
     })
   })

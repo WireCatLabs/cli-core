@@ -308,6 +308,55 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     support: "A2",
     validate: filled,
   },
+  ...(
+    [
+      [
+        "title",
+        'title:"quarterly report"',
+        "documents.metadata, then the title column",
+        "every word, folded as text is; notes and files only",
+        "txt",
+      ],
+      [
+        "site",
+        "site:wikipedia",
+        "documents.metadata (og:site_name)",
+        "contained, folded as text is; notes and files only",
+        "kw",
+      ],
+      [
+        "lang",
+        "lang:ru",
+        "documents.metadata (html lang)",
+        "language tag or its prefix, lowercase; notes and files only",
+        "kw",
+      ],
+      [
+        "author",
+        "author:ivanov",
+        "documents.metadata (meta author, JSON-LD)",
+        "contained, folded as text is; notes and files only",
+        "kw",
+      ],
+      [
+        "keyword",
+        "keyword:invoices",
+        "documents.metadata (meta keywords)",
+        "whole keyword, folded as text is; notes and files only",
+        "kw",
+      ],
+    ] as const
+  ).map(([name, example, index, normalization, type]) => ({
+    name,
+    example,
+    index,
+    aliases: [],
+    type,
+    operators: terms,
+    normalization,
+    support: "A2" as const,
+    validate: filled,
+  })),
   {
     name: "tag",
     example: "tag:work",

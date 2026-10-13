@@ -48,6 +48,15 @@ export const classify = (hint: FileHint): "image" | "unsupported" | undefined =>
   return undefined
 }
 
+const ENGINE_FILES: Record<Engine, string> = {
+  unpdf: "PDF",
+  mammoth: "Word",
+  "word-extractor": "Word 97–2003",
+  linkedom: "HTML",
+  "defuddle/node": "HTML",
+  "@napi-rs/canvas": "Scanned PDF OCR",
+}
+
 const isBuiltIn = (engine: Engine) => (BUILT_IN as readonly string[]).includes(engine)
 
 /** Why a file was not read for want of a package, and what fixes it. */
@@ -58,7 +67,7 @@ export const engineMissing = (engine: Engine): string =>
 
 /** The one note a run gives for a format it skipped, naming what to install. */
 export const engineHint = (engine: Engine, command: string): string =>
-  `${engine === "unpdf" ? "PDF" : engine === "mammoth" ? "Word" : engine === "word-extractor" ? "Word 97–2003" : "Scanned PDF OCR"} files: ${engineMissing(engine).replace("this tool", command)}; they are read on the next run`
+  `${ENGINE_FILES[engine]} files: ${engineMissing(engine).replace("this tool", command)}; they are read on the next run`
 
 /** For `doctor`: each reader resolved from here exactly as `importEngine` would load it. */
 export const engineStates = (

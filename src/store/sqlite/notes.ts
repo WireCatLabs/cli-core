@@ -3,11 +3,13 @@ import { MAX_TEXT_CHARS } from "../../attachments/limits.js"
 import { googleDocumentLinks } from "../../domain/google-documents.js"
 import { parseReference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
+import type { Section } from "../../readers/types.js"
 import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { atomic } from "./atomic.js"
+import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
 import { LINK_KINDS, linkKind } from "./link-kinds.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
@@ -82,6 +84,10 @@ export interface FileNoteInput {
   text: string
   frontMatter?: unknown
   contentHash?: string | null
+  /** What a reader found in the file: title, site, author, language, keywords; searched as `site:`, `lang:`, … */
+  metadata?: DocumentMetadata
+  /** Headings of the text, as readers give them; meaning search cuts its chunks at their starts. */
+  sections?: Section[]
 }
 
 export type NoteTag = Label
@@ -405,6 +411,10 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         const path = textOf(input.path, "a note's path", 4096)
         const text = textOf(input.text, "a note's text", MAX_TEXT_CHARS, true)
         const frontMatter = input.frontMatter == null ? null : JSON.stringify(input.frontMatter)
+        const metadata = encodeDocumentMetadata(input.metadata, input.sections)
+        const language = languageOf(input.metadata)
+        const title =
+          typeof input.metadata?.title === "string" && input.metadata.title ? input.metadata.title : input.title
         const at = now()
         const found = database
           .prepare("SELECT * FROM documents WHERE account_id = ? AND external_id = ?")
@@ -414,19 +424,21 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           const row = database
             .prepare(
               "INSERT INTO documents (account_id, external_id, kind, title, location, file_name, extension, storage, content_hash, " +
-                "front_matter, body, extraction, revision, created_at, updated_at) " +
-                "VALUES (?, ?, 'file', ?, ?, ?, ?, 'local', ?, ?, ?, 'text', 1, ?, ?) RETURNING id",
+                "front_matter, body, extraction, metadata, language, revision, created_at, updated_at) " +
+                "VALUES (?, ?, 'file', ?, ?, ?, ?, 'local', ?, ?, ?, 'text', ?, ?, 1, ?, ?) RETURNING id",
             )
             .get(
               folder,
               path,
-              input.title,
+              title,
               location,
               fileName,
               extension,
               input.contentHash ?? null,
               frontMatter,
               text,
+              metadata,
+              language,
               at,
               at,
             )
@@ -434,8 +446,9 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         }
         const same =
           (found.body ?? "") === text &&
-          (found.title ?? null) === input.title &&
+          (found.title ?? null) === title &&
           (found.front_matter ?? null) === frontMatter &&
+          (found.metadata ?? null) === metadata &&
           (found.content_hash ?? null) === (input.contentHash ?? null) &&
           found.deleted_at == null
         if (same) return { note: documentOf(found), changed: false }
@@ -445,14 +458,16 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
             .run(Number(found.id), String(found.body ?? ""), Number(found.revision), at)
         database
           .prepare(
-            "UPDATE documents SET title = ?, body = ?, front_matter = ?, content_hash = ?, revision = revision + ?, updated_at = ?, " +
-              "deleted_at = NULL WHERE id = ?",
+            "UPDATE documents SET title = ?, body = ?, front_matter = ?, content_hash = ?, metadata = ?, language = ?, " +
+              "revision = revision + ?, updated_at = ?, deleted_at = NULL WHERE id = ?",
           )
           .run(
-            input.title,
+            title,
             text,
             frontMatter,
             input.contentHash ?? null,
+            metadata,
+            language,
             (found.body ?? "") === text ? 0 : 1,
             at,
             Number(found.id),

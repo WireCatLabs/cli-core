@@ -6,6 +6,22 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **HTML text is read again once.** The HTML reader is `html:v2`: the main text as Markdown (menus, footers and
+  cookie banners dropped, headings, lists, tables, link text and image `alt` kept) instead of every tag stripped.
+  Stored HTML text, with extractor `html:v1`, is read again on the next `attachments extract`, and its text changes.
+  Without the engines, or when a page has no main text, the old reader runs and the extractor stays `html:v1`.
+
+### Added
+
+- **HTML reader with metadata and sections.** Built on linkedom and defuddle (both pinned, both built in). A page's
+  title, description, author, published date, language, site, canonical link, keywords, `og:*` tags and JSON-LD
+  type come with the text as `metadata`, and each Markdown heading as a `sections` range. `saveFileNote` stores both
+  (`documents.metadata`, no migration), takes the page title as the note's title, and meaning search cuts the
+  note's chunks at section starts. `title:`, `site:`, `lang:`, `author:` and `keyword:` search notes and files;
+  on messages and mail they match nothing. Attachments keep only the text for now. `doctor` lists the two engines.
+
 ## 0.261.0 — 13.10.2026
 
 ### Changed — may break callers
@@ -44,6 +60,12 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ### Added
 
+- **HTML reader with metadata and sections.** Built on linkedom and defuddle (both pinned, both built in). A page's
+  title, description, author, published date, language, site, canonical link, keywords, `og:*` tags and JSON-LD
+  type come with the text as `metadata`, and each Markdown heading as a `sections` range. `saveFileNote` stores both
+  (`documents.metadata`, no migration), takes the page title as the note's title, and meaning search cuts the
+  note's chunks at section starts. `title:`, `site:`, `lang:`, `author:` and `keyword:` search notes and files;
+  on messages and mail they match nothing. Attachments keep only the text for now. `doctor` lists the two engines.
 - **`has:text` in search.** Messages: the message has text. Notes and documents: the entry has text; `-has:text`
   lists the files drive kept by name only because it could not read them. Other `has:` values stay message-only.
 
