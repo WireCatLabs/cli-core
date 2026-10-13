@@ -6,6 +6,7 @@ import { type AgendaService, agendaService } from "./agenda.js"
 import { type ArchiveService, archiveService } from "./archive.js"
 import { gapsService } from "./archive-gaps.js"
 import { type AttachmentsService, attachmentsService } from "./attachments.js"
+import { type ChatDocumentsService, chatDocumentsService } from "./chat-documents.js"
 import { type ChatsService, chatsService } from "./chats.js"
 import { type ConversationsService, conversationsService } from "./conversations.js"
 import { type CountersService, countersService } from "./counters.js"
@@ -106,6 +107,7 @@ export interface Services {
   topics: TopicsService
   messages: MessagesService
   chats: ChatsService
+  chatDocuments: ChatDocumentsService
   people: PeopleService
   inbox: InboxService
   archive: ArchiveService
@@ -142,6 +144,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
     topics: topicsService(deps),
     messages: messagesService(deps),
     chats: chatsService(deps),
+    chatDocuments: chatDocumentsService(deps),
     people: peopleService(deps),
     inbox: inboxService(deps),
     archive: archiveService(deps),

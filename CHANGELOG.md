@@ -9,6 +9,11 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 ### Added
 
 - A fact's and a memory's `author`, and a proposed action's `proposedBy`, carry `name`: the bot's handle for an agent, `null` for a person — the shape the agent log's `actor` already had.
+- **`chats documents list <chat>`** (and the MCP tool `chats_documents_list`) lists every Google Docs, Sheets,
+  Slides, Forms or Drive link in a chat's stored messages, newest first: `{ url, documentId, title, inStore, locator,
+  sentAt, sender }` in the list envelope. It reads the local store only, under the `messages` permission.
+  `store.notes.linkMessages({ documents, since? })` writes the message → document link drive's `sync` will call;
+  until it does, every item reads `inStore: false`. No migration.
 
 ### Fixed
 

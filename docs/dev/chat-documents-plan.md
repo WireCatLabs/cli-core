@@ -1,7 +1,8 @@
 # Plan — documents linked in a chat
 
 Status: **name and design approved by the owner, 2026-10-13** (option B: the message → document link
-is stored). Not built yet. The naming is in [STANDARD](STANDARD.md#command-names), rule 1.
+is stored). The cli-messaging side (release order step 2) is built; tg-cli, max-cli and drive-cli have not
+adopted it yet. The naming is in [STANDARD](STANDARD.md#command-names), rule 1.
 
 ## Goal
 
@@ -17,7 +18,8 @@ chats documents list <chat> [--limit <n>] [--page <n>]
 
 - **Reads the local store only.** No messenger request, so it works offline and marks nothing read.
   A chat with no stored messages answers an empty list, with a hint on stderr to run
-  `<cli> messages sync <chat>` (the name cm#1023 gives `store fetch`).
+  `<cli> store fetch <chat>` (`messages sync` once cm#1023 renames it; that pull request renames the hint
+  with the others).
 - **Options:** `--limit` and `--page` from the catalogue, with their catalogue meanings. Plus the
   global ones (`--json`, `--jsonl`, `--fields`). No new option.
 - **One item per link in a message**, newest message first. A message with two links gives two items;
@@ -72,7 +74,7 @@ The list envelope from [Output](STANDARD.md#output), rule 1:
     }
   ],
   "page": 1,
-  "limit": 50,
+  "limit": 20,
   "hasMore": false
 }
 ```
@@ -81,12 +83,15 @@ The list envelope from [Output](STANDARD.md#output), rule 1:
 - `documentId` — the Google file id taken from the URL. `null` when the URL carries none
   (`drive.google.com/drive/my-drive`, a shortened link). It is never a store row number.
 - `title` — the stored document's title when `inStore`; otherwise `null`. Never fetched from Google.
-- `inStore` — a stored link joins this message to a `documents` row that still exists.
+- `inStore` — a stored link joins this message to a `documents` row that is not deleted and whose front
+  matter `fileId` is this item's `documentId`; that is how a message with two links gets each its own answer.
 - `locator` — the message, `msg:<provider>/<account>/<chat>/<message>` (glossary, cm#1018).
 - `sentAt` — when the message was sent, ISO 8601 UTC.
 - `sender` — `{ id, name }` of whoever sent the message, as stored; `id` may be `null`.
 
 The text output is one line per item: time, sender, title or URL, and `in store` or `not in store`.
+
+Over MCP the tool is `<cli>_chats_documents_list` (`chat`, `limit`, `page`), with the same envelope.
 
 ## Where the link is stored — no migration
 
@@ -107,7 +112,9 @@ The existing `links` table holds it ([schema](../storage/schema.md#links)):
   note or message", and `source` gains `message`.
 - `links` has no unique index. The writer checks for the row before inserting, in one transaction, so
   a rerun adds nothing. A unique index would need a migration; it is avoided on purpose.
-- The reader builds items from the message text, not from the link rows. An edited message that lost
+- The reader builds items from the message text, not from the link rows. It reads the chat's messages whose
+  text holds `google.com` or `forms.gle`; a link the messenger keeps only in the text's formatting (a word
+  made a hyperlink) is not in the text and is not found. An edited message that lost
   its link shows nothing, whatever rows remain. A link whose document row is gone reads as
   `inStore: false`; `store check` already reports such pointers (`orphanPointers`,
   `src/store/sqlite/entity-types.ts`).
