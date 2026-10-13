@@ -925,13 +925,20 @@ describe("the MCP server", () => {
       }),
     )
 
-    expect((await call("chat_search_topics", { chat: "7", text: "pis", limit: 5 })).body).toEqual({
-      items: [topic],
-      page: 1,
-      limit: 5,
-      hasMore: false,
+    const shown = {
+      id: "4",
+      title: "Pisos",
+      closed: false,
+      pinned: false,
+      unread_count: 0,
+      last_message_at: null,
+      created_at: null,
+    }
+    expect((await call("chat_search_topics", { chat: "7", text: "pis", limit: 5 })).body).toMatchObject({
+      items: [shown],
+      page: { limit: 5, has_more: false },
     })
-    expect((await call("chat_topics_list", { chat: "7", limit: 5 })).body).toMatchObject({ items: [topic] })
+    expect((await call("chat_topics_list", { chat: "7", limit: 5 })).body).toMatchObject({ items: [shown] })
     expect((await call("chat_topics_list", { chat: "7", search: "pis" })).isError).toBe(true)
     expect(seen).toEqual([
       { limit: 5, offset: 0, search: "pis" },
@@ -996,9 +1003,9 @@ describe("the MCP server", () => {
     const { call } = await connect(scripted({ chats: async () => ({ items: [chat, ...dialogs], hasMore: false }) }))
 
     const listed = await call("chat_contacts_list", { order: "name", limit: 1 })
-    expect(listed.body).toMatchObject({ items: [{ name: "Adam" }], page: 1, limit: 1, hasMore: true })
-    expect((await call("chat_contacts_list", { search: "zo" })).body.items).toMatchObject([{ name: "Zoe" }])
-    expect((await call("chat_contacts_show", { person: "Olga" })).body).toMatchObject({ id: "9", name: "Olga" })
+    expect(listed.body).toMatchObject({ items: [{ name: "Adam" }], page: { limit: 1, has_more: true } })
+    expect((await call("chat_contacts_list", { query: "name:zo" })).body.items).toMatchObject([{ name: "Zoe" }])
+    expect((await call("chat_contacts_show", { person: "Olga" })).body.item).toMatchObject({ id: "9", name: "Olga" })
   })
 
   it("profiles a person with the phone always masked", async () => {
@@ -1019,8 +1026,8 @@ describe("the MCP server", () => {
 
     const { body } = await call("chat_contacts_profile", { person: "Olga" })
 
-    expect(body).toMatchObject({ id: "9", phone: "***0123", seen: "week" })
-    expect(body.chats).toMatchObject([{ id: "7", kind: "group" }])
+    expect(body.item).toMatchObject({ id: "9", phone: "***0123", seen: "week" })
+    expect(body.item.chats).toMatchObject([{ id: "7", kind: "group" }])
   })
 
   it("runs calls that arrive together one after another, over the one connection", async () => {
@@ -2006,10 +2013,10 @@ describe("the MCP server", () => {
     const asked = await call("chat_contacts_check", { person: "Olga", registries: true })
 
     expect(quiet.isError).toBe(false)
-    expect(quiet.body.registries).toEqual([])
-    expect(implicit.body.registries.map((one: { answer: string }) => one.answer)).toEqual(["unknown", "unknown"])
-    expect(quiet.body.notes).toContain("the ban lists were not asked")
-    expect(asked.body.registries.map((one: { answer: string }) => one.answer)).toEqual(["unknown", "unknown"])
+    expect(quiet.body.item.registries).toEqual([])
+    expect(implicit.body.item.registries.map((one: { answer: string }) => one.answer)).toEqual(["unknown", "unknown"])
+    expect(quiet.body.item.notes).toContain("the ban lists were not asked")
+    expect(asked.body.item.registries.map((one: { answer: string }) => one.answer)).toEqual(["unknown", "unknown"])
   })
 
   it("honours permission tightening on an already-open MCP session, including local writes", async () => {
@@ -2509,7 +2516,7 @@ describe("sending over MCP", () => {
     expect((await call("chat_topics_enable", { chat: "7" })).isError).toBe(false)
     const result = await call("chat_topics_create", { chat: "7", title: "synthetic", send_id: "42" })
     expect(result.isError).toBe(false)
-    expect(result.body).toMatchObject({ sendId: "42", topic: { id: "12" } })
+    expect(result.body.item).toMatchObject({ send_id: "42", topic: { id: "12" } })
     const entries = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entries).toMatchObject([
       { action: "forum-enable", outcome: "sent" },
@@ -2770,7 +2777,7 @@ describe("sending over MCP", () => {
     const shown = await reading.call("chat_topics_show", { chat: "Book club", topic: "5" })
     const plainTools = (await plain.client.listTools()).tools.map((one) => one.name)
 
-    expect(shown.body).toEqual(topic)
+    expect(shown.body.item).toMatchObject({ id: topic.id, title: topic.title, unread_count: 0, created_at: null })
     expect(asked).toEqual([["Book club", "5"]])
     expect(plainTools).not.toContain("chat_topics_show")
   })
@@ -2814,7 +2821,7 @@ describe("sending over MCP", () => {
     const added = await call("chat_reactions_add", { chat: "Book", message: "1", emoji: "🔥" })
     await call("chat_reactions_remove", { chat: "Book", message: "1" })
 
-    expect(added.body).toEqual({ operationId: expect.any(String), chatId: "7", messageId: "1", reaction: "🔥" })
+    expect(added.body.item).toEqual({ operation_id: expect.any(String), chat_id: "7", message_id: "1", reaction: "🔥" })
     expect(reactions).toEqual([
       ["7", "1", "🔥"],
       ["7", "1", null],
@@ -3175,10 +3182,13 @@ describe("sending over MCP", () => {
     const reading = await connect(telegram, { config: READ_ONLY, pollVoters: true })
     const plain = await connect(telegram, {})
 
-    const listed = await reading.call("chat_polls_voters", { chat: "7", message: "1", answer: "MA" })
+    const listed = await reading.call("chat_polls_voters", { chat: "7", message: "1", query: "answers:MA" })
     const plainTools = (await plain.client.listTools()).tools.map((one) => one.name)
 
-    expect(listed.body).toMatchObject({ chatId: "7", total: 1, items: [vote] })
+    expect(listed.body).toMatchObject({
+      items: [{ person_id: "91", name: "Ana", username: null, answers: ["MA"], voted_at: vote.votedAt }],
+      page: { has_more: false },
+    })
     expect(plainTools).not.toContain("chat_polls_voters")
   })
 
@@ -3208,7 +3218,7 @@ describe("sending over MCP", () => {
     const readingTools = (await reading.client.listTools()).tools.map((one) => one.name)
     await writing.call("chat_polls_vote", { chat: "7", message: "1", answers: ["MA"] })
 
-    expect(shown.body.answers[0].id).toBe("MA")
+    expect(shown.body.item.answers[0].id).toBe("MA")
     expect(readingTools).not.toContain("chat_polls_vote")
     expect(votes).toEqual([["7", "1", ["MA"]]])
   })

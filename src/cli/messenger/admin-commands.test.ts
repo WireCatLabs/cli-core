@@ -783,8 +783,8 @@ describe("chats create, join and leave", () => {
     for (const verb of ["remove", "block", "unblock"]) await call(["contacts", verb, "Ivan"], adapter, env)
     const renamed = await call(["contacts", "rename", "Ivan", "Vanya", "P.", "--json"], adapter, env)
 
-    expect(JSON.parse(added.stdout[0] ?? "")).toEqual({ operationId: expect.any(String), person: ivan })
-    expect(JSON.parse(renamed.stdout[0] ?? "")).toMatchObject({ person: { name: "Vanya P." } })
+    expect(JSON.parse(added.stdout[0] ?? "").item).toEqual({ operation_id: expect.any(String), person: ivan })
+    expect(JSON.parse(renamed.stdout[0] ?? "").item).toMatchObject({ person: { name: "Vanya P." } })
     expect(done).toEqual([
       ["add", "91"],
       ["remove", "91"],
@@ -820,8 +820,8 @@ describe("chats create, join and leave", () => {
     const imported = await call(["contacts", "import", good, "--json"], adapter, env)
     const refused = await call(["contacts", "import", bad], adapter, env)
 
-    expect(JSON.parse(imported.stdout[0] ?? "")).toEqual({
-      operationId: expect.any(String),
+    expect(JSON.parse(imported.stdout[0] ?? "").item).toEqual({
+      operation_id: expect.any(String),
       sent: 2,
       recognised: [{ id: "91", name: "Ivan", username: null }],
     })
@@ -860,7 +860,7 @@ describe("chats create, join and leave", () => {
 
     const env = sandbox()
     const imported = await call(["contacts", "import", phones(25), "--json"], adapter, env)
-    expect(JSON.parse(imported.stdout[0] ?? "")).toMatchObject({ sent: 25 })
+    expect(JSON.parse(imported.stdout[0] ?? "").item).toMatchObject({ sent: 25 })
     expect(sizes).toEqual([10, 10, 5])
 
     const busy = sandbox()

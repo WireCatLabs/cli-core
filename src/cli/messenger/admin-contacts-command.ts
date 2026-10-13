@@ -4,6 +4,8 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { PhoneBookEntry } from "../../domain/models.js"
 import { phoneOf } from "../../services/index.js"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 const PERSON = "person id — `contacts lookup` finds one — or part of a known name"
@@ -23,9 +25,8 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
       .argument("<person>", PERSON)
       .action(async function (this: Command, person: string) {
         const context = messengerContext(this, messenger)
-        context.renderer.result(
-          await context.withServices((services): Promise<object> => services.people[name](person)),
-        )
+        const done = await context.withServices((services): Promise<object> => services.people[name](person))
+        renderAnswer(this, context, itemOf(snakeKeys(done)))
       }),
   )
 
@@ -36,9 +37,8 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
     .argument("[last-name]")
     .action(async function (this: Command, person: string, firstName: string, lastName?: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withServices((services) => services.people.rename(person, firstName, lastName)),
-      )
+      const renamed = await context.withServices((services) => services.people.rename(person, firstName, lastName))
+      renderAnswer(this, context, itemOf(snakeKeys(renamed)))
     })
 
   /** A file rather than argv: these are phone numbers, and argv is read by `ps` and kept by the shell. */
@@ -53,7 +53,7 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
         }),
       )
       const imported = await context.withServices((services) => services.people.import(entries))
-      context.renderer.result(imported)
+      renderAnswer(this, context, itemOf(snakeKeys(imported)))
       context.renderer.success(`${imported.sent} sent, ${imported.recognised.length} recognised`)
     })
 

@@ -1,4 +1,6 @@
 import * as v from "valibot"
+import { itemOf } from "../../cli/envelope.js"
+import { snakeKeys } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
 import type { SendGuard } from "../../sends/guard.js"
@@ -18,7 +20,7 @@ export const contactWriteTools = (messenger: Messenger): Record<string, AnyTool>
       input: v.object({ person }),
       annotations: WRITE,
       permission: "contacts",
-      online: (adapter, args, { guard }) => people(adapter, guard)[name](args.person),
+      online: async (adapter, args, { guard }) => itemOf(snakeKeys(await people(adapter, guard)[name](args.person))),
     })
   return {
     contacts_add: simple("add", "Add a contact", "Add a person to the owner's contacts."),
@@ -54,7 +56,8 @@ export const contactWriteTools = (messenger: Messenger): Record<string, AnyTool>
       }),
       annotations: WRITE,
       permission: "contacts",
-      online: (adapter, args, { guard }) => people(adapter, guard).rename(args.person, args.first_name, args.last_name),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await people(adapter, guard).rename(args.person, args.first_name, args.last_name))),
     }),
   }
 }

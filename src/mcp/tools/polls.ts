@@ -1,9 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { itemOf, listOf } from "../../cli/envelope.js"
+import { listQuery, nativeTerms, queryInput as query } from "../../cli/list-query.js"
+import { pollVoteAnswer, snakeKeys } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { VOTERS_QUERY } from "../../cli/messenger/people-queries.js"
 import { capability } from "../../cli/messenger/port.js"
 import { closeAfterOf, guardedClose, guardedCreatePoll, guardedVote, pollVoters, quizOf } from "../../sends/polls.js"
-import { type AnyTool, chatOf, limit, message, READ, tool, WRITE } from "../tool.js"
+import { type AnyTool, chatOf, limit, message, page, READ, tool, WRITE } from "../tool.js"
 
 const answerId = v.pipe(v.string(), v.minLength(1), v.description("an answer id, as polls_show gives it"))
 
@@ -13,17 +17,31 @@ export const pollReadTools = (messenger: Messenger): Record<string, AnyTool> => 
         polls_voters: tool({
           title: "Who voted in a poll",
           description:
-            "Who voted for what in a poll that is not anonymous, newest first: { chatId, messageId, total, items: " +
-            "[{ person, answers, votedAt }], hasMore }. answer keeps those who chose it. Reading changes nothing.",
-          input: v.object({ chat: chatOf(messenger), message, answer: v.optional(answerId), limit }),
+            "Who voted for what in a poll that is not anonymous, newest first: items [{ person_id, name, username, " +
+            "answers, voted_at }]. query answers:<id> keeps those who chose that answer. Reading changes nothing.",
+          input: v.object({ chat: chatOf(messenger), message, query, limit, page }),
           annotations: { ...READ, idempotentHint: true },
-          online: (adapter, args, defaults) =>
-            pollVoters(adapter, {
+          output: { entity: "poll_vote", list: true },
+          online: async (adapter, args, defaults) => {
+            const answer = nativeTerms(listQuery("polls voters", VOTERS_QUERY, args.query), "polls voters").get(
+              "answers",
+            )?.value
+            const size = args.limit ?? defaults.limit
+            const number = args.page ?? 1
+            const found = await pollVoters(adapter, {
               chat: args.chat,
               message: args.message,
-              limit: args.limit ?? defaults.limit,
-              ...(args.answer === undefined ? {} : { answer: args.answer }),
-            }),
+              limit: size * number,
+              ...(answer === undefined ? {} : { answer }),
+            })
+            return listOf("polls voters", {
+              items: found.items.slice((number - 1) * size).map(pollVoteAnswer),
+              limit: size,
+              has_more: found.hasMore,
+              page: number,
+              args: { chat: args.chat, message: args.message, ...(args.query ? { query: args.query } : {}) },
+            })
+          },
         }),
       }
     : {}),
@@ -34,7 +52,7 @@ export const pollReadTools = (messenger: Messenger): Record<string, AnyTool> => 
     annotations: { ...READ, idempotentHint: true },
     online: async (adapter, args) => {
       const poll = capability(adapter, "poll", "read a poll")
-      return poll((await adapter.resolve(args.chat)).id, args.message)
+      return itemOf(snakeKeys(await poll((await adapter.resolve(args.chat)).id, args.message)))
     },
   }),
 })
@@ -51,8 +69,12 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
       input: v.object({ chat, message, answers: v.array(answerId) }),
       annotations: WRITE,
       permission: "reaction",
-      online: (adapter, args, { guard }) =>
-        guardedVote(guard, adapter, { chat: args.chat, message: args.message, answers: args.answers }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await guardedVote(guard, adapter, { chat: args.chat, message: args.message, answers: args.answers }),
+          ),
+        ),
     }),
     polls_close: tool({
       title: "Close a poll",
@@ -60,7 +82,8 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
       input: v.object({ chat, message }),
       annotations: WRITE,
       permission: "edit",
-      online: (adapter, args, { guard }) => guardedClose(guard, adapter, { chat: args.chat, message: args.message }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await guardedClose(guard, adapter, { chat: args.chat, message: args.message }))),
     }),
     polls_create: tool({
       title: "Create a poll",
@@ -139,7 +162,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
           ...(args.topic === undefined ? {} : { threadId: args.topic }),
           ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
         })
-        return { sendId: sent.sendId, operationId: sent.operationId, message: sent.message }
+        return itemOf(snakeKeys({ sendId: sent.sendId, operationId: sent.operationId, message: sent.message }))
       },
     }),
   }

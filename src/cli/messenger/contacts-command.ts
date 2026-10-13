@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
 import { levelFor } from "../../sends/permissions.js"
@@ -8,10 +9,15 @@ import { maskedAccount } from "../../services/people.js"
 import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/person-context.js"
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
 import { readSecret } from "../../terminal/prompt.js"
-import { positiveCount, renderPage, window, withPaging } from "../paging.js"
+import { itemOf, listOf, renderAnswer } from "../envelope.js"
+import { listQuery, nativeTerms, searchText, withQuery } from "../list-query.js"
+import { positiveCount, window, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
+import { nextStep } from "../steps.js"
 import { contactWriteCommands } from "./admin-contacts-command.js"
+import { contactAnswer, lines, pageOf, snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { CONTACTS_QUERY } from "./people-queries.js"
 import { privatePeopleCommands } from "./private-people-command.js"
 
 /** People this account has a one-to-one chat with, as the people service counts them. */
@@ -21,42 +27,65 @@ export const contactsCommand = (messenger: Messenger): Command => {
   const contacts = new Command("contacts").description("people this account has a one-to-one chat with")
 
   contacts.addCommand(
-    withPaging(new Command("list").description("people you have a one-to-one chat with"))
-      .option("--order <recent|name>", "newest conversation first, or alphabetical", "recent")
-      .option("--search <text>", "only people whose name, local alias or @username contains this")
-      .option("--search-notes <text>", "only people whose private notes contain this text")
-      .action(async function (this: Command) {
-        const { order, search, searchNotes } = this.opts<{ order: string; search?: string; searchNotes?: string }>()
-        if (order !== "recent" && order !== "name") {
-          throw new CliError("validation_error", `--order is recent or name, not "${order}"`)
-        }
-        const context = messengerContext(this, messenger)
-        const found = await context.withServices((services) =>
-          services.people.list({
-            order,
-            ...(search ? { search } : {}),
-            ...(searchNotes === undefined ? {} : { notesSearch: searchNotes }),
-            ...window(context.settings),
-          }),
-        )
-        renderPage(context, found)
-      }),
+    withQuery(
+      annotate(
+        withPaging(
+          new Command("list").description(
+            "people you have a one-to-one chat with; name: matches the name, your local alias or the @username",
+          ),
+        ).option("--order <recent|name>", "newest conversation first, or alphabetical", "recent"),
+        { output: { entity: "contact" } },
+      ),
+      CONTACTS_QUERY,
+    ).action(async function (this: Command, words: string[]) {
+      const { order } = this.opts<{ order: string }>()
+      if (order !== "recent" && order !== "name") {
+        throw new CliError("validation_error", `--order is recent or name, not "${order}"`)
+      }
+      const search = searchText(nativeTerms(listQuery(this, CONTACTS_QUERY, words), "contacts list").get("name"))
+      const context = messengerContext(this, messenger)
+      const { found, account } = await context.withServices(async (services) => ({
+        found: await services.people.list({
+          order,
+          ...(search ? { search } : {}),
+          ...window(context.settings),
+        }),
+        account: await services.chats.account(),
+      }))
+      renderAnswer(
+        this,
+        context,
+        listOf("contacts list", {
+          items: found.items.map((one) => contactAnswer(account, one)),
+          ...pageOf(context.settings, found),
+          args: { order, ...(words.length > 0 ? { query: words.join(" ") } : {}) },
+        }),
+        lines(({ id, name, username, last_messaged_at }) =>
+          [id, name ?? "", username ? `@${username}` : "", last_messaged_at ?? ""].join("  "),
+        ),
+      )
+    }),
   )
 
-  contacts
-    .command("show")
-    .description("one person and the chats you share with them")
-    .argument("<person>", "their id, @username, or part of their name")
-    .option("--with-notes", "include your private notes, subject to contacts.notes.list permission")
-    .action(async function (this: Command, person: string) {
+  contacts.addCommand(
+    annotate(
+      new Command("show")
+        .description("one person and the chats you share with them")
+        .argument("<person>", "their id, @username, or part of their name")
+        .option("--with-notes", "include your private notes, subject to contacts.notes.list permission"),
+      { output: { entity: "contact" } },
+    ).action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)
       const { withNotes } = this.opts<{ withNotes?: boolean }>()
       if (withNotes && levelFor(context.settings.permissions, "contacts.notes.list").level === "deny")
         throw new CliError("permission_error", "profile denies contacts.notes.list")
-      context.renderer.result(
-        await context.withServices((services) => services.people.show(person, { notes: withNotes })),
-      )
-    })
+      const { card, account } = await context.withServices(async (services) => ({
+        card: await services.people.show(person, { notes: withNotes }),
+        account: await services.chats.account(),
+      }))
+      renderAnswer(this, context, itemOf(contactAnswer(account, card)))
+    }),
+  )
 
   contacts
     .command("profile")
@@ -71,10 +100,14 @@ export const contactsCommand = (messenger: Messenger): Command => {
       const whole = this.opts<{ showPhone?: boolean }>().showPhone === true
       const context = messengerContext(this, messenger)
       const found = await context.withServices((services) => services.people.profile(person))
-      if (found.chats.some(({ complete }) => !complete)) {
-        context.renderer.note("a count is a floor where the chat is not stored whole (`complete: false`)")
-      }
-      context.renderer.result(whole ? found : maskedAccount(found))
+      const partial = found.chats.filter(({ complete }) => !complete)
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(whole ? found : maskedAccount(found)), {
+          next: partial.map((one) => nextStep("messages.sync", { args: { chat: one.id } })),
+        }),
+      )
     })
 
   contacts
@@ -116,14 +149,15 @@ export const contactsCommand = (messenger: Messenger): Command => {
             fetch: refresh === true,
           }),
         )
-        for (const one of found.chats) {
-          if (!one.complete)
-            context.renderer.note(
-              `${one.chat.title ?? one.chat.id}: not stored whole, so older messages of theirs may be missing — ` +
-                `\`${messenger.app.command} messages sync ${one.chat.id}\``,
-            )
-        }
-        context.renderer.result(found)
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys(found), {
+            next: found.chats
+              .filter((one) => !one.complete)
+              .map((one) => nextStep("messages.sync", { args: { chat: one.chat.id } })),
+          }),
+        )
         return
       }
       const found = await context.withServices((services) =>
@@ -133,14 +167,18 @@ export const contactsCommand = (messenger: Messenger): Command => {
           ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
         }),
       )
-      for (const chat of found.notRead) {
-        context.renderer.note(
-          `${chat.title ?? chat.chatId}: ${chat.reason === "not_fetched" ? "nothing" : "only part"} of it is stored — ` +
-            `\`${messenger.app.command} messages sync ${chat.chatId}\``,
-        )
-      }
-      if (found.hasMore) context.renderer.note("cut at --limit; a larger one shows more")
-      context.renderer.result(found)
+      const { hasMore, ...rest } = found
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(rest), {
+          next: found.notRead
+            .filter((chat) => chat.provider === messenger.provider)
+            .map((chat) => nextStep("messages.sync", { args: { chat: chat.chatId } })),
+          ...(hasMore ? { meta: { truncated: true } } : {}),
+        }),
+      )
+      if (hasMore) context.renderer.note("cut at --limit; a larger one shows more")
     })
 
   contacts
@@ -172,8 +210,21 @@ export const contactsCommand = (messenger: Messenger): Command => {
           ...(limit === undefined ? {} : { limit }),
         }),
       )
-      if (found.hasMore) context.renderer.note("cut at --limit; a larger one or a narrower time range shows more")
-      context.renderer.result(found)
+      const { items, hasMore, limits, person: who, pending } = found
+      renderAnswer(
+        this,
+        context,
+        listOf("contacts timeline", {
+          items: items.map(snakeKeys),
+          limit: limits.items,
+          has_more: false,
+          ...(hasMore || pending > 0 ? { meta: { truncated: true } } : {}),
+        }),
+      )
+      if (hasMore)
+        context.renderer.note(
+          `${who.name ?? who.uid}: cut at --limit; a larger one or a narrower time range shows more`,
+        )
     })
 
   contacts
@@ -203,7 +254,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       if (checked.unknown.length > 0)
         context.renderer.note(`not judged, nothing to judge by: ${checked.unknown.join(", ")}`)
       const { notes: _, ...answer } = checked
-      context.renderer.result(answer)
+      renderAnswer(this, context, itemOf(snakeKeys(answer)))
     })
 
   contacts
@@ -214,7 +265,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, person: string, other: string) {
       const context = messengerContext(this, messenger)
       const linked = await context.withServices((services) => services.people.link(person, other))
-      context.renderer.result(linked)
+      renderAnswer(this, context, itemOf(snakeKeys(linked)))
       context.renderer.success(`${linked.identities.length} identities are now one person`)
     })
 
@@ -224,7 +275,11 @@ export const contactsCommand = (messenger: Messenger): Command => {
     .argument("<person>", "their id, @username, or part of their name; <messenger>:<person> for another messenger")
     .action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.people.unlink(person)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.people.unlink(person)))),
+      )
     })
 
   /**
@@ -245,7 +300,11 @@ export const contactsCommand = (messenger: Messenger): Command => {
       }
       const context = messengerContext(this, messenger)
       const phone = phoneOf(await readSecret("phone number: ", { input: context.stdin, echo: true }))
-      context.renderer.result(await context.withServices((services) => services.people.lookup(phone)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.people.lookup(phone)))),
+      )
     })
 
   contacts
@@ -254,7 +313,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const summary = await context.withServices((services) => services.people.sync())
-      context.renderer.result(summary)
+      renderAnswer(this, context, itemOf(summary))
       context.renderer.success(`${summary.added} new, ${summary.changed} changed, ${summary.known} people known`)
     })
 

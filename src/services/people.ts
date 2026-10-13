@@ -35,9 +35,8 @@ export interface ContactSync {
  * chat, it answers; otherwise the dialogs themselves do, offline from the stored chats.
  */
 export interface PeopleService {
-  list(
-    options: { order: "recent" | "name"; search?: string; notesSearch?: string } & PageWindow,
-  ): Promise<Page<Contact>>
+  /** `search` matches the name, the local alias or the @username, as the store searches them. */
+  list(options: { order: "recent" | "name"; search?: string } & PageWindow): Promise<Page<Contact>>
   show(person: string, options?: { notes?: boolean }): Promise<PersonCard>
   /** What the messenger says about them, and their stored activity in each shared chat. */
   profile(person: string): Promise<PersonProfile>
@@ -122,22 +121,6 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
         ? undefined
         : (await capability(await deps.connection(), "chats", "list chats")({ offset: 0 })).items
       const held = stored ? { store: await deps.store(), account: await deps.account() } : await storeIfOpen(deps)
-      if (held && options.notesSearch !== undefined) {
-        const query = options.notesSearch.trim().toLowerCase()
-        if (!query) throw new CliError("validation_error", "--search-notes takes nonempty text")
-        const all = await held.store.contacts(held.account, {
-          order: options.order,
-          ...(options.search ? { query: options.search } : {}),
-          limit: await held.store.countContacts(held.account),
-        })
-        const matches: Contact[] = []
-        for (const person of all.items) {
-          const local = await held.store.privateContact(held.account, person.id)
-          if (local.notes.some((note) => note.text.toLowerCase().includes(query))) matches.push(person)
-        }
-        const end = options.limit === undefined ? matches.length : options.offset + options.limit
-        return { items: matches.slice(options.offset, end), hasMore: matches.length > end }
-      }
       if (held && (await held.store.countContacts(held.account)) > 0)
         return storedContacts(held.store, held.account, options)
       return contactsIn(

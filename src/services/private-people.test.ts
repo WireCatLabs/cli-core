@@ -110,17 +110,12 @@ describe("private people metadata", () => {
     await expect(f.services.privatePeople.alias("11", " ")).rejects.toMatchObject({ code: "validation_error" })
   })
 
-  it("guards stale edits and removes note text, with explicit notes search", async () => {
+  it("guards stale edits and removes note text", async () => {
     const f = await setup()
     const note = await f.services.privatePeople.add("10", "Initial assessment")
     const changed = await f.services.privatePeople.edit("10", note.id, "New assessment", 1)
     expect(changed.revision).toBe(2)
     await expect(f.services.privatePeople.edit("10", note.id, "Stale edit", 1)).rejects.toThrow("note changed")
-    expect(
-      (await f.services.people.list({ order: "name", notesSearch: "new assessment", offset: 0 })).items.map(
-        (one) => one.id,
-      ),
-    ).toEqual(["10"])
     await expect(f.services.privatePeople.note("11", note.id)).rejects.toMatchObject({ code: "not_found" })
     await f.services.privatePeople.remove("10", note.id)
     await expect(f.services.privatePeople.note("10", note.id)).rejects.toMatchObject({ code: "not_found" })

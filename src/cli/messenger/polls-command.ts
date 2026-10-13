@@ -11,8 +11,12 @@ import {
   quizOf,
 } from "../../sends/polls.js"
 import { typedSendAs } from "../../sends/send-as.js"
+import { itemOf, listOf, renderAnswer } from "../envelope.js"
+import { listQuery, nativeTerms, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
+import { lines, pollVoteAnswer, snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { VOTERS_QUERY } from "./people-queries.js"
 import { capability } from "./port.js"
 import { threadIdOf } from "./thread.js"
 
@@ -30,38 +34,54 @@ export const pollsCommand = (messenger: Messenger): Command => {
     .argument("<message>", "the id of the message that carries the poll")
     .action(async function (this: Command, chat: string, message: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withMessenger(async (connection) => {
-          const poll = capability(connection, "poll", "read a poll")
-          return poll((await connection.resolve(chat)).id, message.trim())
-        }),
-      )
+      const poll = await context.withMessenger(async (connection) => {
+        const read = capability(connection, "poll", "read a poll")
+        return read((await connection.resolve(chat)).id, message.trim())
+      })
+      renderAnswer(this, context, itemOf(snakeKeys(poll)))
     })
 
   if (messenger.pollVoters)
-    polls
-      .command("voters")
-      .description("who voted for what, newest first; not in an anonymous poll")
-      .argument("<chat>", messenger.chatArgument)
-      .argument("<message>", "the id of the message that carries the poll")
-      .option("--answer <id>", "only those who chose this answer, as `polls show` prints it")
-      .option("--limit <n>", "how many", positiveCount("--limit"))
-      .action(async function (this: Command, chat: string, message: string) {
+    polls.addCommand(
+      withQuery(
+        annotate(
+          new Command("voters")
+            .description("who voted for what, newest first; not in an anonymous poll")
+            .argument("<chat>", messenger.chatArgument)
+            .argument("<message>", "the id of the message that carries the poll")
+            .option("--limit <n>", "how many to show", positiveCount("--limit"))
+            .option("--page <n>", "which page, starting at 1", positiveCount("--page")),
+          { output: { entity: "poll_vote" } },
+        ),
+        VOTERS_QUERY,
+      ).action(async function (this: Command, chat: string, message: string, words: string[]) {
+        const answer = nativeTerms(listQuery(this, VOTERS_QUERY, words), "polls voters").get("answers")?.value
         const context = messengerContext(this, messenger)
-        const { answer } = this.opts<{ answer?: string }>()
-        const { limit } = context.settings
+        const { limit, page } = context.settings
         const found = await context.withMessenger((connection) =>
           pollVoters(connection, {
             chat,
             message: message.trim(),
-            limit,
+            limit: limit * page,
             ...(answer === undefined ? {} : { answer: answer.trim() }),
           }),
         )
-        if (context.format === "json") context.renderer.result(found)
-        else context.renderer.stream(found.items)
-        if (found.hasMore) context.renderer.note(`more voters: raise --limit above ${limit}`)
-      })
+        renderAnswer(
+          this,
+          context,
+          listOf("polls voters", {
+            items: found.items.slice((page - 1) * limit).map(pollVoteAnswer),
+            limit,
+            has_more: found.hasMore,
+            page,
+            args: { chat, message, ...(words.length > 0 ? { query: words.join(" ") } : {}) },
+          }),
+          lines(({ voted_at, person_id, name, answers }) =>
+            [voted_at, name ?? person_id, answers.join(",")].join("  "),
+          ),
+        )
+      }),
+    )
 
   annotate(polls.command("vote"), { mutates: true })
     .description("vote in a poll, or take your vote back; the others see it unless the poll is anonymous")
@@ -81,15 +101,14 @@ export const pollsCommand = (messenger: Messenger): Command => {
           "name at least one answer id (`polls show` prints them), or pass --retract",
         )
       }
-      context.renderer.result(
-        await context.withMessenger((connection) =>
-          guardedVote(context.guard, connection, {
-            chat,
-            message: message.trim(),
-            answers: answers.map((a) => a.trim()),
-          }),
-        ),
+      const voted = await context.withMessenger((connection) =>
+        guardedVote(context.guard, connection, {
+          chat,
+          message: message.trim(),
+          answers: answers.map((a) => a.trim()),
+        }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(voted)))
     })
 
   annotate(polls.command("close"), { mutates: true })
@@ -98,11 +117,10 @@ export const pollsCommand = (messenger: Messenger): Command => {
     .argument("<message>", "the id of your own message that carries the poll")
     .action(async function (this: Command, chat: string, message: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withMessenger((connection) =>
-          guardedClose(context.guard, connection, { chat, message: message.trim() }),
-        ),
+      const closed = await context.withMessenger((connection) =>
+        guardedClose(context.guard, connection, { chat, message: message.trim() }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(closed)))
     })
 
   const create = annotate(polls.command("create"), { mutates: true })
@@ -179,7 +197,11 @@ export const pollsCommand = (messenger: Messenger): Command => {
         ...(sendAs === undefined ? {} : { sendAs }),
       }),
     )
-    context.renderer.result({ sendId: sent.sendId, operationId: sent.operationId, message: sent.message })
+    renderAnswer(
+      this,
+      context,
+      itemOf(snakeKeys({ sendId: sent.sendId, operationId: sent.operationId, message: sent.message })),
+    )
   })
 
   return polls
