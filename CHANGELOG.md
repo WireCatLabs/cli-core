@@ -24,6 +24,10 @@ shape of this file.
   `@wirecat/cli-messaging-sqlite`/`-onnx` 1.0.1, which are deprecated later. Only a caller that imports an add-on
   directly needs the new name.
 
+### Fixed
+
+- Retired catalog records leave shared note listings, word/meaning search and embedding preparation without deleting their indexed content or owner annotations. Re-entry restores their visibility with the same reference.
+
 ## 0.263.0 — 14.10.2026
 
 ### Changed — may break callers
