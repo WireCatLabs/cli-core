@@ -18,8 +18,8 @@ import { type MessagesService, storedChatId } from "./messages.js"
 
 /** A bigger file is no photo a chat sends: skipping it costs a vector, reading it costs memory. */
 export const PICTURE_MAX_BYTES = 25 * 1024 * 1024
-/** Cosine between a CLIP text and image vector: a match sits near .25–.32, a stranger near .2 (two generated images; not measured on real photos). */
-export const PICTURE_FLOOR = 0.22
+/** On 150 real photos (cli-testing performance/search/images) every match scored ≥ .25; strangers .19 median, .27 at p99. */
+export const PICTURE_FLOOR = 0.25
 const PAGE = 50
 const SAVE_EVERY = 8
 
