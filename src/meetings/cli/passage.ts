@@ -30,15 +30,15 @@ export const addMeetingPassageCommand = (
       .command("passage")
       .description("read a cited cue with bounded context before and after it")
       .argument("<reference>", "retained transcript cue reference from a search hit")
-      .option("--before <count>", "preceding cues (default 3)", count)
-      .option("--after <count>", "following cues (default 3); at most 999 surrounding cues in total", count)
-      .option("--bytes <count>", "cue JSON byte budget (default 65536); the anchor must fit", count)
+      .option("--before-n <n>", "preceding cues (default 3)", count)
+      .option("--after-n <n>", "following cues (default 3); at most 999 surrounding cues in total", count)
+      .option("--bytes <n>", "cue JSON byte budget (default 65536); the anchor must fit", count)
       .option(
-        "--max-read-bytes <count>",
+        "--max-read-bytes <bytes>",
         "stored text byte budget (default 4194304); boundary probes read metadata only",
         count,
       )
-      .option("--expected-fingerprint <sha256>", "reject a changed anchor using its previously read cue fingerprint")
+      .option("--expected-fingerprint <hash>", "reject a changed anchor using its previously read cue fingerprint")
       .addOption(
         new Option("--format <format>", "compact text, Markdown or structured JSON")
           .choices(["text", "markdown", "json"])
@@ -47,7 +47,9 @@ export const addMeetingPassageCommand = (
       .action(
         async (
           reference: string,
-          options: Omit<MeetingPassageRequest, "max_read_bytes" | "expected_fingerprint"> & {
+          options: Omit<MeetingPassageRequest, "before" | "after" | "max_read_bytes" | "expected_fingerprint"> & {
+            beforeN?: number
+            afterN?: number
             maxReadBytes?: number
             expectedFingerprint?: string
           },
@@ -56,8 +58,8 @@ export const addMeetingPassageCommand = (
           const globals = command.optsWithGlobals()
           const format = globals.json || globals.jsonl ? "json" : (options.format ?? "text")
           const input = {
-            before: options.before,
-            after: options.after,
+            before: options.beforeN,
+            after: options.afterN,
             bytes: options.bytes,
             max_read_bytes: options.maxReadBytes,
             expected_fingerprint: options.expectedFingerprint,

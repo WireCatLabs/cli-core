@@ -200,8 +200,8 @@ An adopting host can expose this workflow with fictional references:
 
 ```sh
 example search meetings "launch" --json
-example meetings passage meeting:1/2/3/9 --before 3 --after 4 --format markdown
-example meetings passage meeting:1/2/3/9 --before 0 --after 0 --json
+example meetings passage meeting:1/2/3/9 --before-n 3 --after-n 4 --format markdown
+example meetings passage meeting:1/2/3/9 --before-n 0 --after-n 0 --json
 ```
 
 The selected account is passed separately from the reference; a foreign reference fails before a read. CLI and MCP use one reader and formatter. A second synthetic provider needs no provider-specific branch.

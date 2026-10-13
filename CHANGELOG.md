@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- The opt-in meeting passage CLI uses the shared `--before-n` and `--after-n` count flags; context JSON/MCP retain `before` and `after`.
+
 ## 0.263.0 — 14.10.2026
 
 ### Changed — may break callers
