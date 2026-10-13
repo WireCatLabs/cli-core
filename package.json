@@ -121,7 +121,8 @@
     "lint:fix": "biome check --write .",
     "db:generate": "drizzle-kit generate",
     "db:bundle": "node scripts/bundle-migrations.ts",
-    "docs:check": "pnpm build && node --experimental-strip-types scripts/docs-check.ts && node scripts/search-docs.ts --check",
+    "docs:check": "pnpm build && node --experimental-strip-types scripts/docs-check.ts && node scripts/search-docs.ts --check && node scripts/standard-docs.ts --check",
+    "standard:docs": "node scripts/standard-docs.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -180,7 +181,7 @@
     "@types/node": "^22.20.4",
     "@types/pngjs": "6.0.5",
     "@vitest/coverage-v8": "^5.0.2",
-    "@wirecat/cli-base": "0.21.0",
+    "@wirecat/cli-base": "0.22.0",
     "commander": "15.0.0",
     "cspell": "10.3.6",
     "drizzle-kit": "1.0.0-rc.4",
@@ -199,7 +200,7 @@
   },
   "peerDependencies": {
     "@napi-rs/canvas": ">=0.1.69 <2",
-    "@wirecat/cli-base": ">=0.21.0 <0.22.0",
+    "@wirecat/cli-base": ">=0.22.0 <0.23.0",
     "commander": ">=15"
   },
   "bin": {
