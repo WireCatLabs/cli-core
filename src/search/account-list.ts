@@ -1,7 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Provider } from "../domain/models.js"
+import {
+  FOLDER_PROVIDER,
+  INTERNAL_NOTES,
+  isKind,
+  type Kind,
+  kindOf,
+  PROVIDERS,
+  providerNamed,
+} from "../domain/providers.js"
 import type { AccountKey, StoredAccount } from "../store/store.js"
-import { inSource, type Source } from "./query.js"
+import { isBotProvider } from "./query.js"
 
 /** Store-wide: every profile, tg, MAX and memo reads the same groups. */
 export const ACCOUNT_GROUPS = "accountGroups"
@@ -36,7 +45,7 @@ export const groupMembers = (value: string): string[] =>
         : item,
   )
 
-const describe = (accounts: readonly StoredAccount[]) =>
+const describe = (accounts: readonly Held[]) =>
   accounts.map(({ provider, account, name }) => `${provider}:${account}${name ? ` (${name})` : ""}`).join(", ")
 
 /** Per app command (`tg`, `max`), each profile's account, as the app recorded it on its first save. */
@@ -50,27 +59,56 @@ export interface ListContext {
   running: { provider: Provider; command?: string }
 }
 
-const providerOf = (prefix: string, { held, running, profiles }: ListContext): Provider => {
+/** An account as `--source` and a hit name it: a notes folder is `notes:<its id>`, never the store's ulid. */
+export interface ListedAccount extends AccountKey {
+  kind: Kind
+}
+
+/** One entry of the list as written, a group's member included, and the accounts it named. */
+export interface ListedEntry {
+  entry: string
+  accounts: ListedAccount[]
+}
+
+type Held = ListedAccount & { name: string | null }
+
+const heldOf = (stored: readonly StoredAccount[]): Held[] => [
+  ...stored
+    .filter(({ provider }) => kindOf(provider) !== "notes")
+    .map(({ provider, account, name }) => ({ provider, account, name, kind: kindOf(provider) })),
+  { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes" },
+  ...stored
+    .filter(({ provider }) => provider === FOLDER_PROVIDER)
+    .map(({ id, name }) => ({ provider: "notes", account: String(id), name, kind: "notes" as const })),
+]
+
+const registry = () =>
+  PROVIDERS.map(({ name, aliases }) => (aliases.length ? `${name} (${aliases.join(", ")})` : name)).join(", ")
+
+const providerOf = (prefix: string, held: readonly Held[], { running, profiles }: ListContext): Provider => {
   const wanted = prefix.toLowerCase()
   if (wanted === running.command?.toLowerCase()) return running.provider
+  const providers = [...new Set(held.map(({ provider }) => provider))]
+  if (providers.includes(wanted)) return wanted
+  const named = providerNamed(wanted)
+  if (named) return named.name
   const recorded = Object.values(profiles[wanted] ?? {})[0]
   if (recorded) return recorded.provider
-  const providers = [...new Set(held.map(({ provider }) => provider))]
-  return providers.includes(wanted)
-    ? wanted
-    : fail(`${prefix} is not a messenger in the store — it holds ${providers.join(", ") || "no accounts yet"}`)
+  return fail(`${prefix} is not a provider — they are ${registry()}; the store holds ${providers.join(", ")}`)
 }
 
 const profilesOf = (provider: Provider, profiles: Profiles): [string, AccountKey][] =>
   Object.values(profiles).flatMap((named) => Object.entries(named).filter(([, key]) => key.provider === provider))
 
-const accountOf = (prefix: string, ref: string, context: ListContext): AccountKey => {
-  const provider = providerOf(prefix, context)
-  const ofProvider = context.held.filter((one) => one.provider === provider)
+const accountOf = (prefix: string, ref: string, held: readonly Held[], context: ListContext): Held => {
+  const provider = providerOf(prefix, held, context)
+  const ofProvider = held.filter((one) => one.provider === provider)
   const byId = ofProvider.find(({ account }) => account === ref || account === ref.toLowerCase())
-  if (byId) return { provider, account: byId.account }
+  if (byId) return byId
+  const keyed = (key: AccountKey): Held =>
+    ofProvider.find(({ account }) => account === key.account) ?? { ...key, name: null, kind: kindOf(key.provider) }
   const recorded = context.profiles[prefix.toLowerCase()]?.[ref]
-  if (recorded) return recorded
+  if (recorded) return keyed(recorded)
   const byProfile = [
     ...new Map(
       profilesOf(provider, context.profiles)
@@ -78,9 +116,9 @@ const accountOf = (prefix: string, ref: string, context: ListContext): AccountKe
         .map(([, key]) => [key.account, key]),
     ).values(),
   ]
-  if (byProfile.length === 1) return byProfile[0] as AccountKey
+  if (byProfile.length === 1) return keyed(byProfile[0] as AccountKey)
   const byName = ofProvider.filter(({ name }) => name?.toLowerCase() === ref.toLowerCase())
-  if (byName.length === 1) return { provider, account: (byName[0] as StoredAccount).account }
+  if (byName.length === 1) return byName[0] as Held
   if (byName.length > 1 || byProfile.length > 1)
     fail(`${provider}:${ref} names more than one account — use the id: ${describe(ofProvider)}`)
   const names = profilesOf(provider, context.profiles).map(([name]) => name)
@@ -90,28 +128,36 @@ const accountOf = (prefix: string, ref: string, context: ListContext): AccountKe
   )
 }
 
+/** `all`, `personal` and `bots` are groups no one saves; a kind or a provider names all its accounts. */
+const accountsOfWord = (word: string, held: readonly Held[], context: ListContext): Held[] => {
+  const wanted = word.toLowerCase()
+  if (wanted === "all") return [...held]
+  if (wanted === "personal" || wanted === "bots")
+    return held.filter(({ provider, kind }) => kind === "messages" && isBotProvider(provider) === (wanted === "bots"))
+  if (isKind(wanted)) return held.filter(({ kind }) => kind === wanted)
+  const provider = providerOf(word, held, context)
+  return held.filter((one) => one.provider === provider)
+}
+
+const keyOf = ({ provider, account }: AccountKey) => `${provider}\u0000${account}`
+
 /**
- * The accounts `--source group:work,tg:tg3,max:Alice,email` names, in order and once each. An entry is a
- * group, `messenger:account` — the account's id, a profile of any app that recorded it, or the account's name —
- * or a bare `--source` word for every account it covers.
+ * What `--source group:work,tg:tg3,max:Alice,email,notes:4` names, entry by entry, a group's members in its
+ * place. An entry is a group, `provider:account` — the account's id, a profile of any app that recorded it, or
+ * the account's name — a bare provider for all its accounts, or a bare kind for every provider of it.
  */
-export const accountsOfList = (value: string, context: ListContext): AccountKey[] => {
-  const chosen = new Map<string, AccountKey>()
-  const add = (key: AccountKey) => chosen.set(`${key.provider}\u0000${key.account}`, key)
-  const sources: Source[] = [...new Set(context.held.map(({ provider }) => provider)), "personal", "bots", "all"]
+export const entriesOfList = (value: string, context: ListContext): ListedEntry[] => {
+  const held = heldOf(context.held)
+  const entries: ListedEntry[] = []
   const entry = (item: string, group?: string) => {
     const colon = item.indexOf(":")
     if (colon === -1) {
-      const app = item.toLowerCase()
-      const source =
-        app === context.running.command?.toLowerCase()
-          ? context.running.provider
-          : (Object.values(context.profiles[app] ?? {})[0]?.provider ?? item)
-      if (!sources.includes(source.toLowerCase()))
-        fail(
-          `"${item}"${group ? ` in group ${group}` : ""} is none of ${sources.join(", ")}, group:<name> or messenger:account`,
-        )
-      for (const one of context.held) if (inSource(source.toLowerCase(), one.provider)) add(one)
+      try {
+        entries.push({ entry: item, accounts: accountsOfWord(item, held, context) })
+      } catch (error) {
+        if (!group || !(error instanceof CliError)) throw error
+        fail(`"${item}" in group ${group}: ${error.message}`)
+      }
       return
     }
     const prefix = item.slice(0, colon)
@@ -130,8 +176,59 @@ export const accountsOfList = (value: string, context: ListContext): AccountKey[
       for (const member of members as string[]) entry(member, ref)
       return
     }
-    add(accountOf(prefix, ref, context))
+    entries.push({ entry: item, accounts: [accountOf(prefix, ref, held, context)] })
   }
   for (const item of itemsOf(value)) entry(item)
+  return entries.map(({ entry, accounts }) => ({
+    entry,
+    accounts: accounts.map(({ provider, account, kind }) => ({ provider, account, kind })),
+  }))
+}
+
+/** Every account the list names, in order and once each. */
+export const accountsOfList = (value: string, context: ListContext): ListedAccount[] => {
+  const chosen = new Map<string, ListedAccount>()
+  for (const { accounts } of entriesOfList(value, context))
+    for (const one of accounts) if (!chosen.has(keyOf(one))) chosen.set(keyOf(one), one)
   return [...chosen.values()]
+}
+
+export interface SkippedSource {
+  source: string
+  reason: string
+}
+
+const READS: Record<Kind, string> = {
+  messages: "messenger messages — search messages reads them",
+  mail: "a mailbox — search mail reads it",
+  notes: "notes — search notes reads them",
+  documents: "documents — search notes reads them",
+  meetings: "meetings — search all reads them",
+}
+
+/**
+ * The accounts of `kinds` the entries name, and each entry that names none of them with the reason. A search
+ * fails only when nothing fits: `what` names the search in that error.
+ */
+export const fitting = (
+  entries: readonly ListedEntry[],
+  kinds: readonly Kind[],
+  what: string,
+  reasonOf: (kind: Kind) => string = (kind) => READS[kind],
+): { accounts: AccountKey[]; skipped: SkippedSource[] } => {
+  const chosen = new Map<string, AccountKey>()
+  const skipped: SkippedSource[] = []
+  for (const { entry, accounts } of entries) {
+    const fits = accounts.filter(({ kind }) => kinds.includes(kind))
+    for (const { provider, account } of fits)
+      if (!chosen.has(keyOf({ provider, account }))) chosen.set(keyOf({ provider, account }), { provider, account })
+    if (fits.length) continue
+    const other = accounts[0]
+    skipped.push({ source: entry, reason: other ? reasonOf(other.kind) : "no account in the store" })
+  }
+  if (chosen.size === 0)
+    fail(
+      `--source names nothing ${what} reads: ${skipped.map(({ source, reason }) => `${source} (${reason})`).join(", ")}`,
+    )
+  return { accounts: [...chosen.values()], skipped }
 }

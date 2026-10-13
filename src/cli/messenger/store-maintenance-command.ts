@@ -246,6 +246,15 @@ const checkCommand = (messenger: Messenger): Command =>
         renderer.note(
           `the file is behind this build — a copy first, \`${command} store backup <file>\`, then \`${command} store migrate\``,
         )
+      } else if (!answer.schema.writable) {
+        renderer.note(
+          `the file is at schema ${answer.schema.version} and needs at least ${answer.schema.minCompatible}; ` +
+            `this build speaks ${SPEAKS} — \`${command} upgrade\``,
+        )
+      } else if (answer.schema.version > SPEAKS) {
+        renderer.note(
+          `the file is at schema ${answer.schema.version}, newer than this build's ${SPEAKS}, and this build may still write it`,
+        )
       }
       if (answer.pendingNormalization) {
         renderer.note(`${answer.pendingNormalization} messages wait for normalization — \`${command} store migrate\``)
@@ -254,6 +263,11 @@ const checkCommand = (messenger: Messenger): Command =>
       if (words && words.filledThrough < words.watermark) {
         renderer.note(
           `the word index reaches message ${words.filledThrough} of ${words.watermark} — \`${command} store migrate\` finishes it`,
+        )
+      }
+      if (words?.ready && !words.termsReady) {
+        renderer.note(
+          `the typo vocabulary reaches message ${words.termsThrough} of ${words.newest} — \`${command} store migrate\` finishes it`,
         )
       }
       const stems = answer.stemIndex
@@ -303,7 +317,7 @@ const inspect = (path: string) =>
     const free = Number(bavail) * Number(bsize)
     const behind = schema.version > 0 ? chatsBehind(database) : []
     const checks = {
-      schema: schema.version === SPEAKS,
+      schema: schema.version >= SPEAKS && schema.writable,
       integrity: integrity.length === 1 && integrity[0] === "ok",
       foreignKeys: foreignKeys === 0,
       searchIndexes: Object.values(searchIndexes).every((state) => state === "ok"),

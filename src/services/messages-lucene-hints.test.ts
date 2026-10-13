@@ -122,7 +122,15 @@ describe("strict search hints", () => {
         fillSearchIndex: async () => ({ normalized: 0, indexed: 0, terms: 0 }),
         searchIndexState: async () => state,
       })
-    const partial = { watermark: 200, filledThrough: 50, pendingNormalization: 0, ready: false, termsThrough: 0 }
+    const partial = {
+      watermark: 200,
+      filledThrough: 50,
+      pendingNormalization: 0,
+      ready: false,
+      termsThrough: 0,
+      newest: 200,
+      termsReady: false,
+    }
     const filling = await failure(run(stuck({ ...partial, builtAt: null }), "alpha", { app }))
     expect(filling.details).toMatchObject({ reason: "index_not_ready" })
     expect(filling.message).toContain("index is not ready")

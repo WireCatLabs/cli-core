@@ -1,7 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
+import type { AppIdentity } from "../cli/app.js"
+import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
 import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel } from "../embeddings/models.js"
+import { entriesOfList, fitting, type SkippedSource } from "../search/account-list.js"
 import { dateRange, timezoneOf } from "../search/lucene/dates.js"
 import { parseLucene } from "../search/lucene/parser.js"
 import { validateFields } from "../search/lucene/registry.js"
@@ -9,8 +12,9 @@ import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
 import type { QueryNode } from "../search/lucene/types.js"
 import { createStemmer, DEFAULT_STEMMERS } from "../search/stem.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
-import type { MessageStore } from "../store/store.js"
+import type { AccountKey, MessageStore } from "../store/store.js"
 import { vectorModelKey } from "./embeddings.js"
+import { listContextOf } from "./search-kind.js"
 
 export interface NotesSearchRequest {
   text: string
@@ -21,6 +25,7 @@ export interface NotesSearchRequest {
   newest?: boolean
   /** Every folder when unset: a notes folder is a place the owner keeps notes, not someone else's account. */
   folderIds?: string[]
+  withInternal?: boolean
   source?: Note["source"]
   /** For `date:` — the zone a bare day is read in. */
   timezone?: string
@@ -66,6 +71,7 @@ export const searchNotesQuery = async (
     ...(request.offset === undefined ? {} : { offset: request.offset }),
     ...(request.newest ? { newest: true } : {}),
     ...(request.folderIds ? { folderIds: request.folderIds } : {}),
+    ...(request.withInternal ? { withInternal: true } : {}),
     ...(request.source ? { source: request.source } : {}),
     ...(request.signal ? { signal: request.signal } : {}),
     ...(hasStems(ast.root) ? { stemmer: createStemmer(stemmers ?? DEFAULT_STEMMERS) } : {}),
@@ -175,6 +181,7 @@ export const nearestNotes = async (
     model: choice,
     limit,
     folderIds,
+    withInternal,
     source,
     env,
     threads,
@@ -182,6 +189,7 @@ export const nearestNotes = async (
   }: Omit<NotesEmbedOptions, "maxChunks"> & {
     limit: number
     folderIds?: string[]
+    withInternal?: boolean
     source?: Note["source"]
     command?: string
   },
@@ -193,6 +201,7 @@ export const nearestNotes = async (
   const nearest = await store.notes.nearest(key, vector as Float32Array, {
     limit,
     ...(folderIds ? { folderIds } : {}),
+    ...(withInternal ? { withInternal: true } : {}),
     ...(source ? { source } : {}),
   })
   return nearest.filter(({ score }) => score > floor)
@@ -243,6 +252,8 @@ export interface NotesQuery {
   /** A query in the same language that every hit must also match; it does not change the meaning half. */
   filter?: string
   folderIds?: string[]
+  /** With `folderIds`, the notes written in memo too: one ranked list, so `offset` pages it. */
+  withInternal?: boolean
   source?: Note["source"]
   exact?: boolean
   timezone?: string
@@ -284,6 +295,7 @@ export const searchNotes = async (
     tag,
     filter: expression,
     folderIds,
+    withInternal,
     source,
     exact = false,
     timezone,
@@ -299,6 +311,7 @@ export const searchNotes = async (
   const window = offset + limit
   const scope = {
     ...(folderIds === undefined ? {} : { folderIds }),
+    ...(withInternal ? { withInternal: true } : {}),
     ...(source === undefined ? {} : { source }),
     ...(timezone === undefined ? {} : { timezone }),
   }
@@ -312,6 +325,7 @@ export const searchNotes = async (
         command,
         ...(env === undefined ? {} : { env }),
         ...(folderIds === undefined ? {} : { folderIds }),
+        ...(withInternal ? { withInternal: true } : {}),
         ...(source === undefined ? {} : { source }),
       })
       if (filter === undefined) meaning = nearest
@@ -397,5 +411,67 @@ export const searchNotes = async (
     linked: [...counts.values()].sort(
       (a, b) => b.notes - a.notes || (a.name ?? a.ref ?? "").localeCompare(b.name ?? b.ref ?? ""),
     ),
+  }
+}
+
+/** What `notes:internal` and `notes:<folder id>` ask of the store: one query, so a page of it is one page. */
+export const notesScopeOf = (
+  accounts: readonly AccountKey[],
+): Pick<NotesQuery, "folderIds" | "withInternal" | "source"> => {
+  const folderIds = accounts.map(({ account }) => account).filter((account) => account !== INTERNAL_NOTES)
+  if (!folderIds.length) return { source: "internal" }
+  return { folderIds, ...(accounts.length > folderIds.length ? { withInternal: true } : {}) }
+}
+
+export interface NotesFoundOf extends NotesFound {
+  /** Every notes account read: `internal` and each folder's id. */
+  accounts: { resource: "notes"; provider: "notes"; account: string }[]
+  /** A `--source` entry naming nothing `search notes` reads. */
+  skipped: SkippedSource[]
+}
+
+/**
+ * `search notes` with `--source`: the notes accounts the list names — `notes:internal`, `notes:<folder id>`, `notes`
+ * — and every entry naming none of them in `skipped`. Without a list, every notes account `type` leaves in.
+ */
+export const searchNotesOf = async (
+  store: MessageStore,
+  account: AccountKey,
+  text: string,
+  {
+    accounts: list,
+    app,
+    ...query
+  }: Omit<NotesQuery, "folderIds" | "withInternal"> & { accounts?: string; app?: AppIdentity },
+): Promise<NotesFoundOf> => {
+  const what = `${app?.command ?? query.command ?? "tg"} search notes`
+  const held = [
+    { provider: "notes", account: INTERNAL_NOTES },
+    ...(await store.notes.folders()).map(({ id }) => ({ provider: "notes", account: id })),
+  ]
+  const named =
+    list === undefined
+      ? { accounts: held, skipped: [] }
+      : fitting(entriesOfList(list, await listContextOf(store, account, app)), ["notes", "documents"], what)
+  const typed = named.accounts.filter(
+    ({ account }) => query.source === undefined || (account === INTERNAL_NOTES) === (query.source === "internal"),
+  )
+  if (!typed.length && list !== undefined)
+    throw new CliError(
+      "validation_error",
+      query.source === "internal"
+        ? "--type internal reads the notes written in memo, and --source names none: add notes:internal"
+        : "--type file reads notes folders, and --source names none: add notes:<folder id>",
+    )
+  const scope = list === undefined ? {} : notesScopeOf(typed)
+  const found = await searchNotes(store, text, {
+    ...query,
+    ...scope,
+    ...(query.source ? { source: query.source } : {}),
+  })
+  return {
+    ...found,
+    accounts: typed.map(({ account }) => ({ resource: "notes", provider: "notes", account })),
+    skipped: named.skipped,
   }
 }
