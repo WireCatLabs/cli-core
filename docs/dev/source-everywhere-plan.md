@@ -83,12 +83,12 @@ A comma list. An entry is one of:
 | `telegram`, `tg`, `max`, any stored messenger | every account of that messenger | — |
 | `personal`, `bots` | every personal or bot messenger account | — |
 | `email` | every mailbox | — |
-| `notes` | every notes folder, and the notes written in memo — not drive's folders | — |
-| `drive` | every folder drive recorded (below) | — |
+| `notes` | the whole notes resource: every notes folder, drive's included, and the notes written in memo | — |
+| `drive` | only the folders drive recorded (below) | — |
 | `meetings`, or a meeting provider (`zoom`) | every meeting account, or that provider's | — |
 | `<messenger>:<account>` | one messenger account: store id, a recorded profile, or the account's name | `telegram:123` |
 | `email:<address>` | one mailbox | `email:me@work.example` |
-| `notes:<folder>` | one notes folder: its id as `memo folders list` shows it, or its name | `notes:4` |
+| `notes:<folder>` | one notes folder, drive's too: its id as `memo folders list` shows it, or its name | `notes:4` |
 | `notes:internal` | the notes written in memo | `notes:internal` |
 | `drive:<profile>` | the folder of one drive profile | `drive:work` |
 | `<provider>:<account>` for meetings | one meeting account | `zoom:<account>` |
@@ -157,8 +157,7 @@ Existing keys keep their names; `ref` versus `reference` is cm#1018's open NEED-
 | Key | Drive document | Other notes |
 |---|---|---|
 | `kind` | `note` (unchanged) | `note` |
-| `provider` | `drive` | `notes` |
-| `account` | the drive profile from `profiles.drive`; the folder id when none is recorded | folder id, or `internal` |
+| `provider`, `account` | `drive` and the profile from `profiles.drive`; `notes` and the folder id when no profile is recorded, so the pair stays a valid entry | `notes`, and the folder id or `internal` |
 | `timestamp` (`search all`), `modifiedAt` (`search notes`) | front matter `modifiedAt`: the last edit in Google; the row's `updatedAt` when it is missing | the row's `updatedAt` |
 | `url` (new) | front matter `sourceUrl` | absent |
 
@@ -187,12 +186,18 @@ Releases of this package, in order; each is one PR.
    cm#1017, before the drive switch.
 2. **Grammar**: reserved `notes`, `drive`, `group` prefixes; `notes:<row id|name>`,
    `notes:internal`; `drive` and `drive:<profile>` through `profiles.drive`; meeting entries; groups
-   may hold them. `config set accountGroups.*` accepts the new entries. Parser tests.
+   may hold them. `config set accountGroups.*` accepts the new entries. `search messages` keeps only
+   messenger accounts from a list: today it drops only `email` and the legacy `notes` provider
+   (`search-kind.ts:53`), so `--source zoom:<account>`, a folder, or — once drive records profiles —
+   `drive:<profile>` reaches the message search and quietly finds nothing. Parser tests.
 3. **`search all --source`** per resource, `skipped` for a resource with no entry, `accounts` in the
    answer, the stderr line. `in:` bare words resolved once before the resources are asked.
 4. **`search notes --source`, `search mail --source`**, `accounts` in their answers; the removals the
    owner approves. `parity.json` rows; MCP schemas (`search_all`, `search_notes`, `search_mail`) take
-   `source` and lose the removed fields.
+   `source` and lose the removed fields. The user documents are rewritten in the same PRs: the
+   "Default scope" and `--source` list paragraphs of [query-language.md](../search/query-language.md),
+   the generated `docs/commands.md`, and the MCP tool descriptions. cm#1025 also edits
+   query-language.md; whichever lands second rebases.
 5. **cli-memo**: `memo search all` takes `--source` and passes it through; it stops picking
    `accounts.find(…)` as the running account (point 9) and passes no account it did not get from
    the owner.
