@@ -78,10 +78,10 @@ by meaning; where `bot watch` takes deliveries; and the rule for merging and rel
    then `pnpm schema:render` and `schema.ts`, until `pnpm schema:check` passes; `src/store/upgrade.test.ts` must
    keep passing. Never run `bin/regen-initial-migration`. None of the jobs above should need one.
 2. **Two sessions write to this package.** Before merging into `main` or releasing, read the latest comments on
-   <https://github.com/WireCatLabs/cli-messaging/issues/849> and post one line there. Release only through
+   <https://github.com/WireCatLabs/cli-core/issues/849> and post one line there. Release only through
    `bin/release`.
 3. **A new command or option is a parity row.** Mark it `planned` for tg and max ("each CLI's next
-   cli-messaging bump") with a catalogue meaning, run `pnpm parity:render`; the Parity workflow runs on the pull
+   cli-core bump") with a catalogue meaning, run `pnpm parity:render`; the Parity workflow runs on the pull
    request.
 4. **Pull requests run only a fast standards check.** Run the full check yourself first.
 5. **In zsh, never name a shell variable `path`** — it is `PATH`. Push a worktree branch with

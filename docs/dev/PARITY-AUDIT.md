@@ -6,7 +6,7 @@ checks. It does not claim semantic equivalence from matching names or high cover
 
 ## One run
 
-Use an isolated cli-messaging worktree on the desired shared commit:
+Use an isolated cli-core worktree on the desired shared commit:
 
 ```sh
 pnpm install --frozen-lockfile --prefer-offline

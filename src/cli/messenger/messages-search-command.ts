@@ -99,7 +99,7 @@ everything at once is \`${messenger.app.command} search all\`.
 A bare word looks in message text, voice transcripts, file names and file text. text:, transcript:,
 content: (the text of files) and filename: (their names) narrow it to one —
 \`${messenger.app.command} search messages 'content:invoice'\`. --json: the list is items; each hit's reference is locator.
-Search guide: https://github.com/WireCatLabs/cli-messaging/blob/main/docs/search/query-language.md`,
+Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md`,
     )
     .option("--regex", "the words are one regular expression, case-insensitive, tested against every stored text")
     .option("--saved <name|id>", "run a saved search or an earlier run; options typed here replace its own")

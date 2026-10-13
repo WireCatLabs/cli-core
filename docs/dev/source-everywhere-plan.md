@@ -209,7 +209,7 @@ Releases of this package, in order; each is one PR.
 6. **drive-cli**, in the drive switch PR: record the profile (above).
 7. **Each CLI**: the login and profile-create offer to join a group.
 
-tg and max take items 2–4 with their next cli-messaging bump.
+tg and max take items 2–4 with their next cli-core bump.
 
 ## Tests
 

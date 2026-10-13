@@ -37,7 +37,7 @@
                 "patterns": [
                   {
                     "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
-                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
                   },
                   {
                     "group": ["drizzle-orm", "drizzle-orm/*"],
@@ -78,7 +78,7 @@
                 "patterns": [
                   {
                     "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
-                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
                   },
                   {
                     "group": ["drizzle-orm", "drizzle-orm/*"],
@@ -132,7 +132,7 @@
                 "patterns": [
                   {
                     "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
-                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
                   },
                   {
                     "group": ["drizzle-orm", "drizzle-orm/*"],
@@ -177,7 +177,7 @@
                 "patterns": [
                   {
                     "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
-                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
                   },
                   {
                     "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
@@ -220,7 +220,7 @@
                 "patterns": [
                   {
                     "group": ["../**"],
-                    "message": "src/tasks/ depends on nothing else in cli-messaging: the rest of the package calls it, never the other way round"
+                    "message": "src/tasks/ depends on nothing else in cli-core: the rest of the package calls it, never the other way round"
                   },
                   {
                     "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],
@@ -228,7 +228,7 @@
                   },
                   {
                     "group": ["@mtcute/*", "ws"],
-                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
                   }
                 ]
               }
@@ -254,7 +254,7 @@
                 "patterns": [
                   {
                     "group": ["../../**"],
-                    "message": "src/tasks/ depends on nothing else in cli-messaging: the rest of the package calls it, never the other way round"
+                    "message": "src/tasks/ depends on nothing else in cli-core: the rest of the package calls it, never the other way round"
                   },
                   {
                     "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],
@@ -262,7 +262,7 @@
                   },
                   {
                     "group": ["@mtcute/*", "ws"],
-                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
                   }
                 ]
               }
@@ -288,7 +288,7 @@
                 "patterns": [
                   {
                     "group": ["../**"],
-                    "message": "src/meetings/ depends on nothing else in cli-messaging: the rest of the package calls it, never the other way round"
+                    "message": "src/meetings/ depends on nothing else in cli-core: the rest of the package calls it, never the other way round"
                   },
                   {
                     "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],
@@ -330,7 +330,7 @@
                 "patterns": [
                   {
                     "group": ["../../**"],
-                    "message": "src/meetings/ depends on nothing else in cli-messaging: the rest of the package calls it, never the other way round"
+                    "message": "src/meetings/ depends on nothing else in cli-core: the rest of the package calls it, never the other way round"
                   },
                   {
                     "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],
@@ -366,7 +366,7 @@
                 "patterns": [
                   {
                     "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
-                    "message": "cli-messaging speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
                   },
                   {
                     "group": ["drizzle-orm", "drizzle-orm/*"],

@@ -14,7 +14,7 @@ export const QUERY_LIMITS = {
 } as const
 export const SEARCH_QUERY: QueryContext = {
   command: "search",
-  guide: "https://github.com/WireCatLabs/cli-messaging/blob/main/docs/search/query-language.md",
+  guide: "https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md",
 }
 export function searchError(reason: string, span: Span, alternative?: string): never {
   queryError(reason, span, alternative, SEARCH_QUERY)

@@ -10,7 +10,7 @@
 set -eu
 
 cd "$(dirname "$0")/.."
-package=@wirecat/cli-messaging
+package=@wirecat/cli-core
 
 mode=ci
 app_ref=main

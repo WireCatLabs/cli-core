@@ -527,10 +527,7 @@ export const embeddingsService = (deps: ServiceDeps): EmbeddingsService => {
         deps.messenger,
       )
       if (filter !== undefined && !store.conversationEligibility)
-        throw new CliError(
-          "validation_error",
-          "the store does not support conversation filters — upgrade cli-messaging",
-        )
+        throw new CliError("validation_error", "the store does not support conversation filters — upgrade cli-core")
       const eligibility = filter === undefined ? undefined : await store.conversationEligibility?.(prepared.execution)
       const selected = prepared.selectedChat
       const scopeOf = (one: AccountKey) =>

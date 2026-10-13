@@ -1,6 +1,6 @@
 # Search discovery integration
 
-The implementation is released in `@wirecat/cli-messaging` 0.216.0, adopted by Telegram 0.44.0
+The implementation is released in `@wirecat/cli-core` 0.216.0, adopted by Telegram 0.44.0
 and MAX 0.43.0. CLI `--discover`, MCP `discover: true` and SDK `SearchQuery.discover` share the
 archive service. Saved searches preserve the option. Strict Lucene and existing SDK compatibility
 remain the defaults; the original default-switch gates are still unmet.

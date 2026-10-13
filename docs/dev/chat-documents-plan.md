@@ -1,7 +1,7 @@
 # Plan — documents linked in a chat
 
 Status: **name and design approved by the owner, 2026-10-13** (option B: the message → document link
-is stored). The cli-messaging side (release order step 2) is built; tg-cli, max-cli and drive-cli have not
+is stored). The cli-core side (release order step 2) is built; tg-cli, max-cli and drive-cli have not
 adopted it yet. The naming is in [STANDARD](STANDARD.md#command-names), rule 1.
 
 ## Goal
@@ -121,7 +121,7 @@ The existing `links` table holds it ([schema](../storage/schema.md#links)):
 
 ## Who writes the link
 
-**drive's `sync`, through a cli-messaging store API.** Drive is the one that knows a document is in
+**drive's `sync`, through a cli-core store API.** Drive is the one that knows a document is in
 the store and its Google file id (front matter `fileId`).
 
 - **One extractor, both sides.** `googleDocumentLinks(text)` in `src/domain/` returns
@@ -146,10 +146,10 @@ the store and its Google file id (front matter `fileId`).
 
 1. This pull request: STANDARD wording and the planned parity rows (`chats documents`,
    `chats documents list`, its `--limit` and `--page`). No code.
-2. cli-messaging: the extractor, the store API, the reader service, the command (shared, so both CLIs
+2. cli-core: the extractor, the store API, the reader service, the command (shared, so both CLIs
    get it), its permission mapping and help. Then a release.
 3. tg-cli and max-cli pin that release; their `commands --json` gains the command. The parity rows move
-   to `in` in the next cli-messaging release after both have it on `main`.
+   to `in` in the next cli-core release after both have it on `main`.
 4. drive-cli, after its switch to the shared store
    ([drive-in-store-plan.md](drive-in-store-plan.md), work item 3): pin the release from step 2 and add the
    two link passes to `sync`.

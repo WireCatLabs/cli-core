@@ -196,7 +196,7 @@ should take. A chunk whose messages changed after the build waits for the next b
 | EmbeddingGemma | 768 | ~220 MB | 100+, better on chat | about 7× slower |
 | an API: OpenAI `text-embedding-3-small`, or any server with OpenAI's `/v1/embeddings` (`--base-url`) | the model's | — | the model's | the API's |
 
-They run in our own WebAssembly build of ONNX Runtime (`@wirecat/cli-messaging-onnx`) — no native
+They run in our own WebAssembly build of ONNX Runtime (`@wirecat/cli-core-onnx`) — no native
 code, the same on Node and Bun. An API model needs the user's key (`models text key set`), says
 how many chunks, tokens and dollars at most before chat text leaves the machine, and waits for a yes.
 

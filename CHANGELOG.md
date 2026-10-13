@@ -1,13 +1,19 @@
 # Changelog
 
-Notable changes to `@wirecat/cli-messaging` (`@wirecat/cli-messaging` up to 0.214.0), one section per
-version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a minor version may
-break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the shape of this file.
+Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, `@leemour/cli-messaging` up to
+0.214.0), one section per version, newest first. Versions follow [semver](https://semver.org/); before `1.0.0` a
+minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
+shape of this file.
 
 ## Unreleased
 
 ### Changed — may break callers
 
+- **The package is now `@wirecat/cli-core`, and the repository `WireCatLabs/cli-core`.** Import
+  `@wirecat/cli-core/<subpath>`; every subpath and export is unchanged. The parity command is now `cli-core-parity`.
+  The native add-ons are published as `@wirecat/cli-core-sqlite` and `@wirecat/cli-core-onnx`. Data folders,
+  environment variables (`MESSAGING_*`) and the export format keep their old names, so nothing moves on disk.
+  `@wirecat/cli-messaging` gets one last version that re-exports this package, then is deprecated.
 - **HTML text is read again once.** The HTML reader is `html:v2`: the main text as Markdown (menus, footers and
   cookie banners dropped, headings, lists, tables, link text and image `alt` kept) instead of every tag stripped.
   Stored HTML text, with extractor `html:v1`, is read again on the next `attachments extract`, and its text changes.

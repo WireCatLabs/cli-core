@@ -1164,15 +1164,15 @@
     "--agent-json": {
       "in": [],
       "planned": {
-        "max": "each CLI’s next cli-messaging bump",
-        "tg": "each CLI’s next cli-messaging bump"
+        "max": "each CLI’s next cli-core bump",
+        "tg": "each CLI’s next cli-core bump"
       }
     },
     "--brief": {
       "in": [],
       "planned": {
-        "max": "each CLI’s next cli-messaging bump",
-        "tg": "each CLI’s next cli-messaging bump"
+        "max": "each CLI’s next cli-core bump",
+        "tg": "each CLI’s next cli-core bump"
       }
     },
     "--debug": "all",
@@ -1181,8 +1181,8 @@
     "--full": {
       "in": [],
       "planned": {
-        "max": "each CLI’s next cli-messaging bump",
-        "tg": "each CLI’s next cli-messaging bump"
+        "max": "each CLI’s next cli-core bump",
+        "tg": "each CLI’s next cli-core bump"
       }
     },
     "--json": "all",
@@ -2832,8 +2832,8 @@
     "messages sync": {
       "in": [],
       "planned": {
-        "max": "each CLI’s next cli-messaging bump",
-        "tg": "each CLI’s next cli-messaging bump"
+        "max": "each CLI’s next cli-core bump",
+        "tg": "each CLI’s next cli-core bump"
       },
       "options": {
         "--all": {
@@ -3175,8 +3175,8 @@
         "--backend": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--exact": "all",
@@ -3184,30 +3184,30 @@
         "--max-meetings": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--offset": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--only": "all",
         "--server-time": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--source": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--timezone": "all"
@@ -3263,15 +3263,15 @@
         "--offset": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--source": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--timezone": "all"
@@ -3299,8 +3299,8 @@
         "--offset": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--regex": "all",
@@ -3346,8 +3346,8 @@
         "--source": {
           "in": [],
           "planned": {
-            "max": "each CLI’s next cli-messaging bump",
-            "tg": "each CLI’s next cli-messaging bump"
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
           }
         },
         "--tag": "all",
@@ -3842,8 +3842,8 @@
     "store fetch": {
       "in": [],
       "planned": {
-        "max": "each CLI’s next cli-messaging bump, which hides it",
-        "tg": "each CLI’s next cli-messaging bump, which hides it"
+        "max": "each CLI’s next cli-core bump, which hides it",
+        "tg": "each CLI’s next cli-core bump, which hides it"
       }
     },
     "store gaps": {

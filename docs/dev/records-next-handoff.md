@@ -7,7 +7,7 @@ Supersedes [schema-gaps-handoff.md](schema-gaps-handoff.md) for everything still
 The shared store (`wirecat.db`, [docs/storage/schema.md](../storage/schema.md)) has tables nobody used.
 Memories, proposed actions and the agent log now have commands in `memo` (cli-memo) and tools in `memo mcp`.
 What belongs to no messenger lives in memo, never in tg or max (owner's rule). Three jobs remain, each one
-pull request in cli-messaging (store side, if needed) and one in cli-memo (commands and MCP tools).
+pull request in cli-core (store side, if needed) and one in cli-memo (commands and MCP tools).
 
 ## 2. Orient in one call
 
@@ -33,9 +33,9 @@ its subject.
 
 1. `cli-memo/src/memories/command.ts` — the command layout `memo decisions` copies, option by option.
 2. `cli-memo/src/records/command.test.ts` — how a memo command is tested against a temporary store.
-3. `cli-messaging/src/store/sqlite/tasks.ts:121-180` — how a port task becomes a `tasks` row; where a new
+3. `cli-core/src/store/sqlite/tasks.ts:121-180` — how a port task becomes a `tasks` row; where a new
    field would be written.
-4. `cli-messaging/src/services/proposal-tasks.ts` — the one caller that makes a task from something that is not
+4. `cli-core/src/services/proposal-tasks.ts` — the one caller that makes a task from something that is not
    a message; the pattern a source-less owner task follows.
 5. `cli-memo/src/tags/command.ts`, `targetOptions` and `mutate` — how `--meeting <id> --provider --account`
    selects a meeting, for the notes job.
@@ -47,14 +47,14 @@ its subject.
    `decisions_show` in `memo mcp`. The store already does the rule: the owner's decision is accepted at once,
    an agent's (`{ bot: "memo-mcp" }`) waits as proposed; only the owner accepts or reverses, so those stay
    command-only. Store side: export `DECISION_STATUSES` from `./store` (memo offers it as `--status` choices),
-   a one-line cli-messaging pull request and release first. Check: a memo test that an MCP `decisions_add` is
+   a one-line cli-core pull request and release first. Check: a memo test that an MCP `decisions_add` is
    `proposed` and authored by the bot, `memo decisions accept` makes it `accepted`, and a superseding decision
    ends the older one.
 2. **Task fields beyond the four message kinds** (owner's call: types, assignees, priority, parent and the
    rest, now). Columns that exist and nothing writes: `tasks.type` values `bug|feature|chore`, `priority`
    (0 urgent … 4 low), `parent_id`, `description`, `task_assignments` (assignee, reviewer, watcher),
    `task_events` (created, status, assigned, due, priority, moved), `verdict` read back. Order: the cli-tasks
-   port (`Task`, `NewTask`, `TaskStore`) gains the fields — a cli-tasks minor release; then cli-messaging's
+   port (`Task`, `NewTask`, `TaskStore`) gains the fields — a cli-tasks minor release; then cli-core's
    `StoreTaskStore` writes and reads them and records a `task_events` row per change; then
    `memo tasks add|update|assign` takes them. Decisions yours: (a) a bug or feature has no message source —
    lean to a task with a title and `source: "owner"` in the owner's project, not an account inbox, because a
@@ -72,14 +72,14 @@ its subject.
 
 ## 5. What bites
 
-1. **memo pins the exact cli-messaging version tg and max pin** (cli-memo `CLAUDE.md`, rule 4). A store change
+1. **memo pins the exact cli-core version tg and max pin** (cli-memo `CLAUDE.md`, rule 4). A store change
    ships only after tg-cli and max-cli move to that release. Batch every store change a job needs into one
-   cli-messaging release, then post in [issue #849](https://github.com/WireCatLabs/cli-messaging/issues/849).
-2. **Two or more sessions merge and release cli-messaging.** Before merging or releasing, read the latest
+   cli-core release, then post in [issue #849](https://github.com/WireCatLabs/cli-core/issues/849).
+2. **Two or more sessions merge and release cli-core.** Before merging or releasing, read the latest
    #849 comments and post one line. Release only with `bin/release`. A rebase can drop your CHANGELOG entry into a
    section already released: check that it sits under `## Unreleased` after every rebase. `pnpm docs:check`
    allows only Added, "Changed — may break callers", Fixed, Security and Removed as headings.
-3. **cli-messaging code reaches the store only through `src/store/store.ts`** (a lint fence since #917).
+3. **cli-core code reaches the store only through `src/store/store.ts`** (a lint fence since #917).
 4. **No unknown reference may break a listing.** A new reference type (a decision on a meeting, a task made
    from a proposal) once made every annotation listing throw; when a list maps a stored pointer back to a
    reference, test it with the new type present.
@@ -90,7 +90,7 @@ its subject.
 ## 6. Do not touch
 
 - **Meeting word search (`meeting_stems`) and meeting search** — Codex root owns them
-  ([#849](https://github.com/WireCatLabs/cli-messaging/issues/849), 03:13 UTC).
+  ([#849](https://github.com/WireCatLabs/cli-core/issues/849), 03:13 UTC).
 - **Mail tables and memo's mail import** — the memo-mail session's
   ([memo-mail-handoff.md](memo-mail-handoff.md)).
 - **tg-cli and max-cli releases** — the release sessions do them; ask in #849 for a dependency bump.
@@ -99,7 +99,7 @@ its subject.
 ## 7. Check
 
 ```sh
-# cli-messaging
+# cli-core
 pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm docs:check && pnpm schema:check
 # cli-memo
 pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm docs:lint && pnpm docs:spell

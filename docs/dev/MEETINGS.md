@@ -1,6 +1,6 @@
 # Meetings
 
-`src/meetings/`, exported as `@wirecat/cli-messaging/meetings` (and `/meetings/cli`, `/meetings/mcp`,
+`src/meetings/`, exported as `@wirecat/cli-core/meetings` (and `/meetings/cli`, `/meetings/mcp`,
 `/meetings/testing`); up to 0.4.2 it was the separate package `@wirecat/cli-meetings`. Each meeting provider
 is its own package that implements `MeetingSource`; the shared store implements `MeetingStore`; this module
 owns everything between them.
@@ -23,18 +23,18 @@ event_series ◄── events ◄── meetings ── transcripts → utteranc
 ## Who depends on whom
 
 ```text
-cli-base ← cli-messaging (src/meetings/ ← the rest of src/) ← zoom-cli (zm)
+cli-base ← cli-core (src/meetings/ ← the rest of src/) ← zoom-cli (zm)
 ```
 
 - **`src/meetings/`** — the model, the WebVTT parser, source and store ports, and what runs on them: pull,
   import, event linking, commands and MCP reads. Optional provider ports add meeting management,
   recording transfer, archive synchronization and schedule planning. No SQLite, no filesystem and no import
   from the rest of the package: the lint rules in [`biome.json`](../../biome.json) refuse them under `src/meetings/`.
-- **the rest of cli-messaging** — the tables, in its single list of store migrations, and `MeetingStore` over
+- **the rest of cli-core** — the tables, in its single list of store migrations, and `MeetingStore` over
   SQLite, as it does for the `TaskStore` of `src/tasks/`. It also owns bounded durable evidence, person context,
   embedding bindings and semantic services that depend on the shared knowledge store.
 - **A provider** (`zoom-cli` first) — login, the API client, and one `MeetingSource` per way in: `api`,
-  `files`, `browser`. It opens the shared store through cli-messaging and hands both ports to the
+  `files`, `browser`. It opens the shared store through cli-core and hands both ports to the
   meetings commands.
 
 ## The modules
@@ -70,7 +70,7 @@ uses separate types until the store assigns ids.
 
 ## The tables
 
-In the shared store, created by cli-messaging. Times are epoch milliseconds. Every table that holds a
+In the shared store, created by cli-core. Times are epoch milliseconds. Every table that holds a
 provider's record has `metadata`, JSON, for whatever has no column yet.
 
 | Table | One row is |

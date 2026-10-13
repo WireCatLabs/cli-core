@@ -1,6 +1,6 @@
-# cli-messaging — working rules
+# cli-core — working rules
 
-The messenger-neutral half of tg-cli and max-cli, published as `@wirecat/cli-messaging`. Start with
+The messenger-neutral half of tg-cli and max-cli, published as `@wirecat/cli-core`. Start with
 the one page that covers what you are about to touch:
 
 - [`docs/dev/ARCHITECTURE.md`](docs/dev/ARCHITECTURE.md) — the modules, the store and its migrations,

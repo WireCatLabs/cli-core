@@ -598,7 +598,7 @@ The naming pull request answers these questions before implementation:
 The owner approves new wording in this naming pull request. The review checklist applies these
 questions to every subsequent command addition; they are not specific to rankings.
 
-Generated `bot api` commands use cli-base's generators and one command assembler in cli-messaging.
+Generated `bot api` commands use cli-base's generators and one command assembler in cli-core.
 Only the source-specification adapter, transport and provider capabilities stay in the consumer.
 Common inputs are `--body <json>` and `--body-file <path>`; `-` reads stdin. A native `timeout`
 parameter is `--poll-timeout`, so it cannot replace the command's `--timeout` deadline.
@@ -1188,7 +1188,7 @@ remains available through `<cli> commands --json`, with no scoped fields.
 3. **An option's description says what it changes and its unit**: `--pause <duration>` "wait this
    long between pages".
 4. **A shared option has one sentence in both tools**, checked by the parity workflow
-   (`cli-messaging-parity wording <max.json> <tg.json>`; each file is known by its `cli`, so it takes
+   (`cli-core-parity wording <max.json> <tg.json>`; each file is known by its `cli`, so it takes
    any number, in any order). A difference is allowed only where the sentence names something the messenger's own way — how to name a chat, which rights or events it
    has — and the option's catalogue `note` says so; a note also marks a difference still open, and
    names who closes it.
@@ -1224,7 +1224,7 @@ remains available through `<cli> commands --json`, with no scoped fields.
    documentation, development, roadmap, licence, contributing.
 3. **A change to a command changes its page in both tools** in the same docs pull request.
 4. **A page names only options that exist or are planned.** Each CLI's CI runs
-   `<cli> commands --json | cli-messaging-parity <cli> --pages README.md docs/*.md`: an option a user
+   `<cli> commands --json | cli-core-parity <cli> --pages README.md docs/*.md`: an option a user
    page puts on a command must be on that command, or be in this manifest for it and not only for the
    other tool. A change that drops an option fails until its pages stop naming it.
 

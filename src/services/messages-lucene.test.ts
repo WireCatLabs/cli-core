@@ -388,7 +388,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
         text: "alpha",
         limit: 1,
       }),
-    ).rejects.toThrow("upgrade cli-messaging")
+    ).rejects.toThrow("upgrade cli-core")
     const controller = new AbortController()
     controller.abort()
     await expect(run(store, account, "body:/@/", { limit: 10, signal: controller.signal })).rejects.toThrow("aborted")

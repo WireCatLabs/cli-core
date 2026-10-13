@@ -143,8 +143,7 @@ const answerers = async (
   return [...new Map(found.map((one) => [JSON.stringify(one), one])).values()]
 }
 const requireStore = (store: MessageStore) => {
-  if (!store.adminStatisticsQuery)
-    invalid("this store does not support administrator statistics — upgrade cli-messaging")
+  if (!store.adminStatisticsQuery) invalid("this store does not support administrator statistics — upgrade cli-core")
   return store.adminStatisticsQuery.bind(store)
 }
 export const isAdminSelection = (selection: unknown): boolean => {

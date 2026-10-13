@@ -11,13 +11,13 @@ contract. This page is the order to read them in, and the rules that are not in 
 
 | Entry point | What a connector takes from it |
 |---|---|
-| `@wirecat/cli-messaging/cli` | `Messenger`, `MessengerAdapter`, `MessengerCore` and the optional groups |
-| `@wirecat/cli-messaging/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter` |
-| `@wirecat/cli-messaging/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
-| `@wirecat/cli-messaging/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
-| `@wirecat/cli-messaging/files` | native ordinary-file identity checks and directory syncing |
-| `@wirecat/cli-messaging/speech/wav` | bounded PCM16 WAV preflight and 16 kHz streaming, without loading a speech model |
-| `@wirecat/cli-messaging/tasks` | `TaskStore`, when a host keeps tasks itself |
+| `@wirecat/cli-core/cli` | `Messenger`, `MessengerAdapter`, `MessengerCore` and the optional groups |
+| `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter` |
+| `@wirecat/cli-core/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
+| `@wirecat/cli-core/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
+| `@wirecat/cli-core/files` | native ordinary-file identity checks and directory syncing |
+| `@wirecat/cli-core/speech/wav` | bounded PCM16 WAV preflight and 16 kHz streaming, without loading a speech model |
+| `@wirecat/cli-core/tasks` | `TaskStore`, when a host keeps tasks itself |
 
 There is no `/sdk` entry point that gathers these; import each name from its own.
 
@@ -172,7 +172,7 @@ Each case checks with `node:assert/strict`, so the kit does not depend on a test
 vitest:
 
 ```ts
-import { contractCases, digitIds } from "@wirecat/cli-messaging/testing"
+import { contractCases, digitIds } from "@wirecat/cli-core/testing"
 import { describe, it } from "vitest"
 
 describe("the adapter keeps the port's promises", () => {

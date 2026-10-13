@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 // On disk and shared by every worktree: /tmp is RAM here, and the 1M corpus takes 21 s to regenerate.
 export const DATA_DIR =
   process.env.SEARCHBENCH_DATA ??
-  join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "cli-messaging", "searchbench")
+  join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "cli-core", "searchbench")
 export const BENCH_DIR = dirname(fileURLToPath(import.meta.url))
 export const RESULTS = join(BENCH_DIR, "results.md")
 export const RUNTIME = (globalThis as any).Bun ? `bun ${(globalThis as any).Bun.version}` : `node ${process.version}`

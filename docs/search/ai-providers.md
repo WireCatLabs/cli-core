@@ -2,7 +2,7 @@
 
 Search defaults to local `e5-small` embeddings. Conversation analysis defaults to your own agent using the linking skill; ordinary `conversations build` uses stored messages and local rules. Configuration alone never starts analysis.
 
-These shared SDK settings/options reach MAX and Telegram at their next cli-messaging dependency bump.
+These shared SDK settings/options reach MAX and Telegram at their next cli-core dependency bump.
 
 All text generation uses the `./models` gateway. Set `models.<purpose>.provider`, `.model`, and
 `.baseUrl` for `analysis`, `replies`, or another caller's purpose. Each field falls back to

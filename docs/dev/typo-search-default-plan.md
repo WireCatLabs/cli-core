@@ -40,10 +40,10 @@ The [message benchmark](https://github.com/WireCatLabs/cli-testing/blob/06e23a1/
 2,616 synthetic messages, 48 queries per split, a temporary store. No real store.
 
 - cli-testing `origin/main` (contains 63de1d78, package scope `@wirecat`) runs against today's
-  cli-messaging. Branch `test/search-experiments` still uses the old `@leemour` scope and does not.
+  cli-core. Branch `test/search-experiments` still uses the old `@leemour` scope and does not.
 - The new runner is on cli-testing branch `test/typo-search-narrow`, commit `a82bf93`
   ([cli-testing#37](https://github.com/WireCatLabs/cli-testing/pull/37)).
-- Measured build: cli-messaging `0cc88b1f` (origin/main). Runner sha256 `a7ab3a2b…`, corpus
+- Measured build: cli-core `0cc88b1f` (origin/main). Runner sha256 `a7ab3a2b…`, corpus
   `31ffb868…`, `messages-combined.js` `cb8f4c25…`; all hashes are in the result files.
 
 Variants:
@@ -236,7 +236,7 @@ So B lands after the plain-search-coverage change, or in the same release with t
    term. Stored records are not rewritten. A saved Lucene search replays with the new default.
 8. **Docs.** `docs/search/query-language.md:1-60` and the CLI guides: what is forgiven, how it is
    labelled, `--exact`. Changelog under `Changed — may break callers` for the SDK step.
-9. **Release.** cli-messaging first, then tg-cli and max-cli pin the exact version and regenerate
+9. **Release.** cli-core first, then tg-cli and max-cli pin the exact version and regenerate
    `docs/commands.md`, per the release order.
 
 ## Test plan

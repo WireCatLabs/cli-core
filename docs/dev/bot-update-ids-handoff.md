@@ -2,11 +2,11 @@
 
 ## 1. What this is
 
-`bot watch` in cli-messaging records each update in the store's `bot_updates` and skips one it handled
+`bot watch` in cli-core records each update in the store's `bot_updates` and skips one it handled
 before — but only when the event carries `update: { id, kind }` (`BotEvent` in
 [`src/cli/bot/port.ts`](../../src/cli/bot/port.ts)). The adapters live in tg-cli and max-cli, so until one
 fills the field, the table stays empty in real use. This job is tg-cli only: run it from a session started
-in tg-cli, after the cli-messaging release that carries `BotEvent.update`.
+in tg-cli, after the cli-core release that carries `BotEvent.update`.
 
 ## 2. Orient in one call
 
@@ -14,13 +14,13 @@ in tg-cli, after the cli-messaging release that carries `BotEvent.update`.
 { T=/home/leemour/Projects/AI/tg-cli
   echo "== toEvent"; grep -n "export const toEvent" -A40 $T/src/bot/map.ts
   echo "== callers"; grep -rn "toEvent(" $T/src | grep -v test
-  echo "== messaging version"; grep -n "cli-messaging" $T/package.json
+  echo "== messaging version"; grep -n "cli-core" $T/package.json
 } > ~/.cache/bot-update-ids-orient.txt 2>&1
 ```
 
 ## 3. Do
 
-1. Bump `@wirecat/cli-messaging` to the release that has `BotEvent.update`.
+1. Bump `@wirecat/cli-core` to the release that has `BotEvent.update`.
 2. In `toEvent` (`src/bot/map.ts`), return every event with
    `update: { id: String(update.update_id), kind }`, where `kind` is the update's own key (`message`,
    `callback_query`, …) — the same key the `other` branch already computes. One Telegram update is one event.
