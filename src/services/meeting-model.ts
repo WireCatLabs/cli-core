@@ -8,7 +8,8 @@ import {
 } from "../embeddings/embed.js"
 import { textModel } from "../embeddings/models.js"
 import { type Fetch, OPENAI_URL, openRemote, type RemoteModel, remoteKey, remoteModel } from "../embeddings/remote.js"
-import { type ModelChoice, vectorModelKey } from "./embeddings.js"
+import type { ModelChoice } from "./embedding-contracts.js"
+import { vectorModelKey } from "./embedding-runtime.js"
 
 export interface MeetingEmbeddingModel {
   key: string

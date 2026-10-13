@@ -1,3 +1,7 @@
+import type { StoreTaskStore } from "../contracts/tasks-types.js"
+
+export type { StoreTaskStore } from "../contracts/tasks-types.js"
+
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import {
@@ -8,7 +12,6 @@ import {
   TASK_VERDICTS,
   type Task,
   type TaskFilter,
-  type TaskStore,
 } from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { actorOfOrigin, originOfActor } from "./actors.js"
@@ -16,15 +19,9 @@ import { atomic } from "./atomic.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import { taskRowOf, thingOf } from "./things.js"
-import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
+import { recordTaskEvent, workTasksOver } from "./work-tasks.js"
 
 export { taskIdOf, taskRowOf } from "./things.js"
-
-/** `TaskStore` for `src/tasks/`, plus a way from its task ids to the store's rows. */
-export interface StoreTaskStore extends TaskStore, WorkTasks {
-  /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
-  rowOf(id: string): number | undefined
-}
 
 const COLUMNS =
   "t.id AS row_id, t.package_id, t.source_locator, t.source_kind, t.source_group, t.type, t.status, t.close_reason, t.source, t.created_at, t.due_at, t.closed_at, " +

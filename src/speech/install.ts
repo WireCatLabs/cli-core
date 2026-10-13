@@ -10,7 +10,7 @@ import { type ModelFile, type SpeechModel, VAD } from "./models.js"
 
 /** Shared by every CLI of the family, whatever it talks to: a model is hundreds of MB and is downloaded once. */
 export const sharedModelsDirectory = (kind: "audio" | "text", env: NodeJS.ProcessEnv = process.env): string =>
-  join(wirecatDirectory(env), "models", kind)
+  join(env.CLI_COMMON_CACHE_DIR?.trim() || wirecatDirectory(env), "models", kind)
 
 export const modelsDirectory = (env: NodeJS.ProcessEnv = process.env): string => sharedModelsDirectory("audio", env)
 

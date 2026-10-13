@@ -1,35 +1,14 @@
+import { languageOf, type SearchParams, searchRecordOf } from "./search-record.js"
+
+export { type SearchParams, searchRecordOf } from "./search-record.js"
+
 import { CliError, singleLine } from "@wirecat/cli-base"
 import { parseLucene, type QueryAst } from "@wirecat/cli-base/query"
-import type { AdminReport } from "../domain/admin-statistics.js"
-import type { RankingInput, RankingTarget } from "../domain/rankings-options.js"
-import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
-import { QUERY_VERSION, SEARCH_QUERY } from "../search/lucene/types.js"
-import type { MessageStore, SearchCommand, SearchRecord, StoredSearch } from "../store/store.js"
+import { validateAst, validateFields } from "../search/lucene/registry.js"
+import { SEARCH_QUERY } from "../search/lucene/types.js"
+import type { MessageStore, StoredSearch } from "../store/store.js"
 import { isAdminSelection, readAdminSelection } from "./admin-statistics.js"
 import type { ServiceDeps } from "./deps.js"
-import type { StatsGrouping } from "./messages-search.js"
-
-/** What a run or a saved search keeps: the query and options as given, never a message or a result. */
-export interface SearchParams extends RankingInput {
-  discover?: boolean
-  adminReport?: AdminReport
-  selection?: unknown
-  target?: RankingTarget
-  text?: string
-  ast?: unknown
-  language?: "lucene" | "legacy"
-  /** `text` is one JavaScript regular expression (legacy `--regex`). */
-  regex?: boolean
-  chat?: string
-  source?: string
-  timezone?: string
-  limit?: number
-  newest?: boolean
-  /** Bare words and quotes match their exact form only (`--exact`). */
-  exact?: boolean
-  context?: number
-  by?: StatsGrouping
-}
 
 /** A saved search made ready to run, with the options the caller typed laid over the stored ones. */
 export interface ResolvedSearch {
@@ -66,30 +45,6 @@ const nameOf = (value: string): string => {
     )
   return name
 }
-
-const canonical = (value: unknown, nested = false): unknown =>
-  Array.isArray(value)
-    ? value.map((one) => canonical(one, true))
-    : value !== null && typeof value === "object"
-      ? Object.fromEntries(
-          Object.entries(value)
-            .filter(([, one]) => one !== undefined && (nested || one !== false))
-            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-            .map(([key, one]) => [key, canonical(one, true)]),
-        )
-      : value
-
-/** One run or one saved search as the store keeps it; the same parameters always give the same text. */
-export const searchRecordOf = (command: SearchCommand, params: SearchParams): SearchRecord => ({
-  command,
-  params: JSON.stringify(canonical({ ...params, language: languageOf(params) })),
-  language: languageOf(params) === "lucene" ? "lucene-v1" : "legacy",
-  version: QUERY_VERSION,
-  fieldsVersion: FIELD_VERSION,
-})
-
-const languageOf = ({ language, regex, ast }: SearchParams): "lucene" | "legacy" =>
-  language ?? (regex ? "legacy" : ast !== undefined ? "lucene" : "lucene")
 
 const patternOf = (source: string): RegExp => {
   try {

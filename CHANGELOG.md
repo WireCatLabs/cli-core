@@ -6,6 +6,23 @@ break callers, and says how under "Changed — may break callers". `pnpm docs:ch
 
 ## Unreleased
 
+### Added
+
+- **Neutral provider ports** at `@wirecat/cli-messaging/ports`, plus independent message read, write and
+  search service factories. Existing CLI adapter exports and the composed message/store APIs remain available.
+- **Embedding services separate local maintenance from online search.** Archive catch-up reaches local
+  build/embed directly, preserving model ownership and budgets while removing the archive/search import cycle.
+- **Run event views:** `runsCommand` accepts an `eventView` option so consumers can retain all recorded
+  events or use the shared notable-event view. The shared default remains unchanged.
+- **Optional store diagnostics:** a failed enrichment store reports `optional_store_unavailable` once
+  through an injected diagnostic callback, while online results remain available.
+- **Parser compatibility export:** `/services` re-exports `parseLucene` from cli-base/query. It builds the
+  current snake_case query tree; the other query types remain owned by cli-base.
+
+- **Store resources own their contracts and implementation factories.** Account, chat, message, sync,
+  attachment, conversation, search, people and optional source resources compose the existing `MessageStore`.
+  Transaction boundaries, lazy source opening, account binding and the database schema are unchanged.
+
 ## 0.261.0 — 13.10.2026
 
 ### Changed — may break callers

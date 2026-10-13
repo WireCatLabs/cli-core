@@ -1,5 +1,4 @@
 import { CliError } from "@wirecat/cli-base"
-import { capability } from "../cli/messenger/port.js"
 import type {
   AdminRight,
   GroupCard,
@@ -11,6 +10,7 @@ import type {
   Page,
 } from "../domain/models.js"
 import { sendTime } from "../domain/send-time.js"
+import { capability } from "../ports/messenger.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { ServiceDeps } from "./deps.js"

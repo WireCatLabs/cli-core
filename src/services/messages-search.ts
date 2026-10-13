@@ -1,23 +1,22 @@
+import { calendarKey } from "../domain/calendar.js"
+import { CHAT_LIST_KEY } from "../store/sync-keys.js"
+
+export { calendarKey } from "../domain/calendar.js"
+
 import { CliError } from "@wirecat/cli-base"
-import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
+import type { ProviderDescription as Messenger } from "../ports/provider.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
 import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
 import { hasStems, hasText, isStemmed, type QueryExecution, type ResolvedNode } from "../search/lucene/resolved.js"
 import { inSource, sourceOf } from "../search/query.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
-import type { StemsState } from "../store/store.js"
-import {
-  type AccountKey,
-  CHAT_LIST_KEY,
-  type ChatCompleteness,
-  type ChatStats,
-  type MessageStore,
-} from "../store/store.js"
+import type { AccountKey, ChatCompleteness, ChatStats, MessageStore, StemsState } from "../store/store.js"
 import { withExcerpt } from "./excerpt.js"
 import { mailAround, mergeMail, withMailThreads } from "./mail-search.js"
-import { chatAmong, type SearchFound, type SearchQuery, senderAmong } from "./messages.js"
+import type { SearchFound, SearchQuery } from "./message-contracts.js"
+import { chatAmong, senderAmong } from "./message-resolution.js"
 import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
 
 const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is"])
@@ -507,19 +506,6 @@ export interface MessageStats {
   query: QueryMetadata
   coverage: SearchCoverage
   completeness: (ChatCompleteness & AccountKey)[]
-}
-export const calendarKey = (zone: string, by: "day" | "hour") => {
-  const format = new Intl.DateTimeFormat("en-CA", {
-    timeZone: zone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    ...(by === "hour" ? { hour: "2-digit", hourCycle: "h23" } : {}),
-  } as Intl.DateTimeFormatOptions)
-  return (time: number) => {
-    const part = Object.fromEntries(format.formatToParts(time).map(({ type, value }) => [type, value]))
-    return `${part.year}-${part.month}-${part.day}${by === "hour" ? `T${part.hour}` : ""}`
-  }
 }
 /** Distinct matching messages counted by chat, sender, or calendar day/hour in the query's timezone. */
 export const statsLucene = async (

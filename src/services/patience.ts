@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises"
-import { isCliFailure } from "../cli/failures.js"
+import { isCliFailure } from "../domain/errors.js"
 
 /** Waits longer than this are not sat out: the run stops, and the next one resumes. */
 const LONGEST_WAIT_MS = 5 * 60 * 1000

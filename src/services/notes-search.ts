@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
-import type { AppIdentity } from "../cli/app.js"
+import type { AppIdentity } from "../domain/application.js"
 import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
 import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
@@ -12,7 +12,7 @@ import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { createStemmer, DEFAULT_STEMMERS } from "../search/stem.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
-import { vectorModelKey } from "./embeddings.js"
+import { vectorModelKey } from "./embedding-runtime.js"
 import { listContextOf } from "./search-kind.js"
 
 export interface NotesSearchRequest {

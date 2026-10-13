@@ -1,11 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import { implicitTextTerms, walkQuery } from "@wirecat/cli-base/query"
-import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
+import type { ProviderDescription as Messenger } from "../ports/provider.js"
 import { exhausted, QUERY_LIMITS } from "../search/lucene/types.js"
 import { planQuestion, words } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
-import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
+import type { FoundMessage, SearchFound, SearchQuery } from "./message-contracts.js"
 import { searchCombined } from "./messages-combined.js"
 import { prepareLucene, searchLucene } from "./messages-search.js"
 

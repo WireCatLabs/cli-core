@@ -8,7 +8,7 @@ import {
 import { formatLocator, parseLocator } from "../domain/locator.js"
 import type { CounterTarget } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
-import type { SearchQuery } from "./messages.js"
+import type { SearchQuery } from "./message-contracts.js"
 import { prepareLucene } from "./messages-search.js"
 import { observationDuration } from "./retention.js"
 

@@ -34,6 +34,7 @@ const refusing = tool({
 
 const runner = (store: MessageStore) =>
   entryRunner({
+    messenger: { app: { command: "chat" } },
     log: async (call: ToolCall) => {
       await store.agentActions.record({ actor: { bot: "test-mcp" }, ...call })
     },

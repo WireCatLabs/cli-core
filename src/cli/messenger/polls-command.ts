@@ -12,6 +12,7 @@ import {
 } from "../../sends/polls.js"
 import { typedSendAs } from "../../sends/send-as.js"
 import { positiveCount } from "../paging.js"
+import { commandCapabilities, topicOption } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { capability } from "./port.js"
 import { threadIdOf } from "./thread.js"
@@ -38,7 +39,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  if (messenger.pollVoters)
+  if (commandCapabilities(messenger).pollVoters)
     polls
       .command("voters")
       .description("who voted for what, newest first; not in an anonymous poll")
@@ -105,12 +106,16 @@ export const pollsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  const create = annotate(polls.command("create"), { mutates: true })
-    .description("send a poll to a chat, as a message of its own; public unless --anonymous")
-    .argument("<chat>", messenger.chatArgument)
-    .argument("<question>", "the question")
-    .argument("<answers...>", "two answers or more")
-    .option("--topic <id>", "send to this forum topic; unsupported by messengers without topics")
+  const create = topicOption(
+    annotate(polls.command("create"), { mutates: true })
+      .description("send a poll to a chat, as a message of its own; public unless --anonymous")
+      .argument("<chat>", messenger.chatArgument)
+      .argument("<question>", "the question")
+      .argument("<answers...>", "two answers or more"),
+    messenger,
+    "send to this forum topic",
+    "pollCreate",
+  )
     .option("--multiple", "people may pick several answers")
     .option("--anonymous", "nobody sees who voted for what")
     .option("--revote", "people may change their vote")
@@ -120,7 +125,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       "post as one of the identities `chats send-as` lists; required where the chat posts as someone else by default",
     )
     .option("--send-id <id>", "repeat a create whose outcome was unknown, without risking a second poll")
-  if (messenger.pollQuiz)
+  if (commandCapabilities(messenger).pollQuiz)
     create
       .option("--quiz", "a quiz: one answer is right, and a vote is final")
       .option("--correct <n>", "with --quiz: the right answer's position, from 1", positiveCount("--correct"))

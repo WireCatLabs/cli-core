@@ -7,7 +7,7 @@ import { findRun, listRuns, readEvents, runsDirFor } from "./run.js"
 import { searchRuns } from "./search.js"
 
 /** Reading the log is not itself worth recording, so **nothing here starts a run**. */
-export const runsCommand = (app: AppIdentity): Command => {
+export const runsCommand = (app: AppIdentity, options: { eventView?: "all" | "notable" } = {}): Command => {
   const command = new Command("runs").description("recorded runs — what this tool did, and when")
   const dir = (from: Command) => runsDirFor(app, environmentOf(from).env ?? process.env)
   const runOrRefuse = (from: Command, id: string) => {
@@ -43,7 +43,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       const found = runOrRefuse(this, id)
       const events = readEvents(found.dir).map(readable)
       const all = (this.optsWithGlobals<{ verbose?: number }>().verbose ?? 0) > 0
-      const shown = all ? events : events.filter(notable)
+      const shown = all || options.eventView === "all" ? events : events.filter(notable)
       renderer.result({ ...found.metadata, directory: found.dir, eventCount: events.length, events: shown })
       if (shown.length < events.length)
         renderer.note(

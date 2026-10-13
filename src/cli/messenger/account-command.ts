@@ -9,6 +9,7 @@ import { renderList } from "../paging.js"
 import { NONE_NAMED } from "../settings.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
 import { recalledAccount } from "./accounts.js"
+import { commandCapabilities } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { privacyCommand } from "./records-command.js"
 
@@ -86,6 +87,6 @@ export const accountCommand = (messenger: Messenger): Command => {
         }),
     )
     .addCommand(accountSessionsCommand(messenger))
-  if (messenger.privacy === true) account.addCommand(privacyCommand(messenger))
+  if (commandCapabilities(messenger).privacy) account.addCommand(privacyCommand(messenger))
   return account
 }

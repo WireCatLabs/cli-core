@@ -295,3 +295,9 @@ it("the public speech directory respects an explicit WireCat folder without crea
   expect(modelsDirectory({ WIRECAT_STATE_DIR: cache })).toBe(join(cache, "models", "audio"))
   expect(isInstalled(speechModel("gigaam-v3"), modelsDirectory({ WIRECAT_STATE_DIR: cache }))).toBe(false)
 })
+
+it("keeps the released shared-cache override for model isolation", () => {
+  const cache = join(mkdtempSync(join(tmpdir(), "speech-legacy-")), "absent")
+  expect(modelsDirectory({ CLI_COMMON_CACHE_DIR: cache })).toBe(join(cache, "models", "audio"))
+  expect(isInstalled(speechModel("gigaam-v3"), modelsDirectory({ CLI_COMMON_CACHE_DIR: cache }))).toBe(false)
+})

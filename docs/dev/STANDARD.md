@@ -636,7 +636,7 @@ The shared shell adds these conventions; the manifest tracks adoption:
   Help/version and intended watch/serve/MCP lifetimes are exempt. Signals cancel tracked resources;
   SIGINT/SIGTERM follow shell exit conventions. Broken pipes end quietly without a stack trace.
 - `--fields` projects machine result fields; list pagination/coverage metadata stays present.
-  `--max-output-bytes` bounds serialized machine data (4 MiB; zero explicitly disables the bound).
+  `--max-output-bytes` bounds serialized machine data (64 MiB; zero explicitly disables the bound).
   Exceeding a bound fails visibly with retryable:false, never a malformed or silently cropped JSON
   response. File exports retain their streaming contract.
 - A global `--dry-run` validates parsed arguments and permission policy, then reports a preview
@@ -803,7 +803,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-input-bytes` | `<bytes>` | at most this many bytes of buffered stdin | `16777216` | every command |
 | `--max-meetings` | `<n\|all>` | how many of the meeting account's meetings to look through, newest first; all looks through every one (default 100) |  | `search all` (planned) |
 | `--max-messages` | `<n>` | fetch at most this many messages total (default: 500) |  | `search conversations`, `search messages`, `stats contacts top`, `stats messages counters refresh`, `stats messages show`, `stats messages top` |
-| `--max-output-bytes` | `<bytes>` | at most this many serialized bytes of machine data; 0 disables the bound | `4194304` | every command |
+| `--max-output-bytes` | `<bytes>` | at most this many serialized bytes of machine data; 0 disables the bound | `67108864` | every command |
 | `--max-replies` | `<n>` | maximum observed discussion replies |  | `stats messages discussion` |
 | `--max-tokens` | `<n>` | remote embeddings: bound input tokens; analysis: reserve input and output tokens across this run |  | `conversations build`, `conversations embed` |
 | `--max-uses` | `<n>` | at most this many people join by it, 1 to 99999 |  | `chats link create` (tg-only), `chats link update` (tg-only) |

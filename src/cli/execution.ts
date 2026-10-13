@@ -4,7 +4,7 @@ import type { Closeable } from "./deadline.js"
 import { fieldsOf, projectFields } from "./result-fields.js"
 
 export const DEFAULT_COMMAND_MS = 30_000
-export const DEFAULT_OUTPUT_BYTES = 4 * 1024 * 1024
+export const DEFAULT_OUTPUT_BYTES = 64 * 1024 * 1024
 
 export const byteCount = (value: string, option: string, zero = false): number => {
   const result = Number(value)
@@ -15,7 +15,10 @@ export const byteCount = (value: string, option: string, zero = false): number =
 
 export interface Execution {
   signal: AbortSignal
-  streams: Streams
+  streams: Streams & {
+    dataAsync?: (text: string, signal?: AbortSignal) => Promise<void>
+    drain?: (signal?: AbortSignal) => Promise<void>
+  }
   trackCloseable: (closeable: Closeable) => void
   configure: (options: { fields?: string; maxOutputBytes: number }) => void
   start: (timeoutMs?: number) => void
@@ -26,7 +29,7 @@ export interface Execution {
 }
 
 export const execution = (
-  streams: Streams,
+  streams: Streams & { drain?: (signal?: AbortSignal) => Promise<void> },
   {
     timeoutMs,
     fields,
@@ -82,7 +85,8 @@ export const execution = (
     )
   }
   start(timeoutMs)
-  return {
+  const drainable = streams as Streams & { drain?: (signal?: AbortSignal) => Promise<void> }
+  const controller: Execution = {
     configure: (options) => {
       paths = options.fields === undefined ? undefined : fieldsOf(options.fields)
       maxOutputBytes = options.maxOutputBytes
@@ -136,6 +140,11 @@ export const execution = (
         bytes += size
         streams.data(result)
       },
+      dataAsync: async (text: string, signal?: AbortSignal) => {
+        controller.streams.data(text)
+        await drainable.drain?.(signal ?? stop.signal)
+      },
+      drain: (signal?: AbortSignal) => drainable.drain?.(signal) ?? Promise.resolve(),
       diagnostic: (text: string) => {
         if (active) streams.diagnostic(text)
       },
@@ -169,6 +178,7 @@ export const execution = (
     abort,
     failure: () => interrupted,
     finish: async () => {
+      if (!stop.signal.aborted) await drainable.drain?.(stop.signal)
       active = false
       if (timer) clearTimeout(timer)
       {
@@ -184,6 +194,7 @@ export const execution = (
       for (const [closeable, close] of originals) closeable.close = close
     },
   }
+  return controller
 }
 
 export const withAbort = async <T>(signal: AbortSignal | undefined, body: () => Promise<T>): Promise<T> => {

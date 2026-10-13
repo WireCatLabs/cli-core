@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { readAttachments, readUpload } from "./upload.js"
+import { readAttachments, readFileUpload, readUpload, uploadSource } from "./upload.js"
+import { uploadBlob, uploadBytes, validateUploadSources } from "./upload-source.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 
@@ -71,5 +72,43 @@ describe("readAttachments", () => {
     for (const filename of ["../x.pdf", "a\\b.pdf", " "]) {
       await expect(readAttachments({ file, filename }, { app, env })).rejects.toThrow("not a path")
     }
+  })
+})
+
+describe("file-backed uploads", () => {
+  it("keeps preparation on disk and permits files larger than the buffered budget", async () => {
+    const { env, put } = setUp()
+    const file = await readFileUpload("file", put("docs/report.pdf"), {
+      app,
+      env,
+      limits: { maxBufferedUploadBytes: 1 },
+    })
+    expect(file).not.toHaveProperty("bytes")
+    expect(await (await uploadBlob(uploadSource(file))).text()).toBe("bytes")
+    await expect(uploadBytes(uploadSource(file), { maxBufferedUploadBytes: 1 })).rejects.toThrow(/buffered/i)
+  })
+
+  it("refuses a total budget before buffering or sending any attachment", async () => {
+    const { env, put } = setUp()
+    await expect(
+      readAttachments(
+        { photo: put("image.jpg"), file: put("doc.pdf") },
+        {
+          app,
+          env,
+          fileBacked: true,
+          limits: { maxUploadTotalBytes: 9 },
+        },
+      ),
+    ).rejects.toThrow(/maxUploadTotalBytes/)
+    expect(() =>
+      validateUploadSources(
+        [
+          { kind: "bytes", bytes: new Uint8Array(6) },
+          { kind: "bytes", bytes: new Uint8Array(6) },
+        ],
+        { maxBufferedUploadBytes: 10 },
+      ),
+    ).toThrow(/maxBufferedUploadBytes/)
   })
 })

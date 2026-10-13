@@ -4,7 +4,7 @@ import { type LinkInput, linkMessages, RULES_VERSION } from "../conversations/li
 import type { Id, Message, Page } from "../domain/models.js"
 import type { AgentAnswer, ConversationSummary, LinkBatch, StoredLink } from "../store/store.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
-import { chatIdIn } from "./messages.js"
+import { chatIdIn } from "./message-resolution.js"
 
 /** A page of messages handed to the rules at a time; reading is quick, the rules hold a 50-message window. */
 const READ_PAGE = 5_000
@@ -66,7 +66,11 @@ export interface BatchStatus {
 /** Messages to answer per batch, by default and at most: the agent's turn stays small (A1). */
 export const BATCH_SIZE = { default: 50, min: 10, max: 200 }
 
-export const conversationsService = (deps: ServiceDeps): ConversationsService => {
+export type ConversationsDeps = Pick<ServiceDeps, "store" | "account"> & {
+  messenger: Pick<ServiceDeps["messenger"], "app" | "savedChatId">
+}
+
+export const conversationsService = (deps: ConversationsDeps): ConversationsService => {
   const found = async (chat: string) => {
     const store = await accountStore(deps)
     return { store, chatId: await chatIdIn(deps.messenger, chat, store) }

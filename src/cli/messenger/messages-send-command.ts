@@ -4,6 +4,7 @@ import { Command } from "commander"
 import { sendTime } from "../../domain/send-time.js"
 import { typedSendAs } from "../../sends/send-as.js"
 import { readAttachments } from "../../sends/upload.js"
+import { commandCapabilities, topicOption } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { readAll } from "./stdin.js"
 import { threadIdOf } from "./thread.js"
@@ -15,13 +16,17 @@ import { threadIdOf } from "./thread.js"
 export const HTML_HELP = "the text is HTML: <b>, <i>, <a href>, <code>"
 
 export const sendCommand = (messenger: Messenger): Command => {
-  const send = annotate(new Command("send"), { mutates: true })
-    .description("send a text message; without [text], the text is read from stdin")
-    .argument("<chat>", messenger.chatArgument)
-    .argument("[text]", "the message")
-    .option("--topic <id>", "send to this forum topic; unsupported by messengers without topics")
+  const capabilities = commandCapabilities(messenger)
+  const send = topicOption(
+    annotate(new Command("send"), { mutates: true })
+      .description("send a text message; without [text], the text is read from stdin")
+      .argument("<chat>", messenger.chatArgument)
+      .argument("[text]", "the message"),
+    messenger,
+    "send to this forum topic",
+    "send",
+  )
     .option("--reply-to <message>", "answer this message, by its id in the same chat")
-    .option("--comment-to <post>", "comment on this post of the channel; it goes to the post's discussion group")
     .option(
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists; required where the chat posts as someone else by default",
@@ -42,16 +47,16 @@ export const sendCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, chat: string, text: string | undefined) {
       await sendText(this, messenger, chat, text)
     })
+  if (capabilities.comments)
+    send.option("--comment-to <post>", "comment on this post of the channel; it goes to the post's discussion group")
   // Offered only where the messenger lists them, so a CLI never shows a flag it would refuse.
-  if (messenger.mediaOptions?.includes("spoiler"))
-    send.option("--spoiler", "hide the --photo or video behind a spoiler until tapped")
-  if (messenger.mediaOptions?.includes("captionAbove"))
+  if (capabilities.spoiler) send.option("--spoiler", "hide the --photo or video behind a spoiler until tapped")
+  if (capabilities.captionAbove)
     send.option("--caption-above", "show the text above the --photo or --file, not below it")
-  if (messenger.mediaOptions?.includes("fileName"))
+  if (capabilities.fileName)
     send.option("--filename <name>", "the name others see for the --file, instead of its name on disk")
-  if (messenger.html) send.option("--html", HTML_HELP)
-  if (messenger.stickers === true)
-    send.option("--sticker <id>", "send this sticker, alone; `stickers list` finds its id")
+  if (capabilities.html) send.option("--html", HTML_HELP)
+  if (capabilities.stickers) send.option("--sticker <id>", "send this sticker, alone; `stickers list` finds its id")
   return send
 }
 
@@ -105,18 +110,18 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
   const sendAs = typedSendAs(givenSendAs)
   const commentTo = typedCommentTo?.trim()
   if (commentTo === "") throw new CliError("validation_error", "--comment-to needs the post's message id")
-  const read = { app: messenger.app, env: context.env, anyFile: allowAnyFile === true }
-  const attachments = await readAttachments(
-    {
-      ...(photo === undefined ? {} : { photo }),
-      ...(file === undefined ? {} : { file }),
-      ...(voice === undefined ? {} : { voice }),
-      ...(text === undefined ? {} : { text }),
-      asFile: asFile === true,
-      ...(filename === undefined ? {} : { filename }),
-    },
-    read,
-  )
+  const read = { app: messenger.app, env: context.env, anyFile: allowAnyFile === true, limits: context.settings }
+  const flags = {
+    ...(photo === undefined ? {} : { photo }),
+    ...(file === undefined ? {} : { file }),
+    ...(voice === undefined ? {} : { voice }),
+    ...(text === undefined ? {} : { text }),
+    asFile: asFile === true,
+    ...(filename === undefined ? {} : { filename }),
+  }
+  const attachments = commandCapabilities(messenger).fileBackedUploads
+    ? await readAttachments(flags, { ...read, fileBacked: true })
+    : await readAttachments(flags, read)
   const body = text ?? (attachments.length > 0 || sticker !== undefined ? "" : await readAll(context.stdin))
   if (body.trim() === "" && attachments.length === 0 && sticker === undefined) {
     throw new CliError("validation_error", "nothing to send — give the text or pipe it in")

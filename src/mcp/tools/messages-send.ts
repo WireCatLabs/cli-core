@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { sendTime } from "../../domain/send-time.js"
-import { readAttachments } from "../../sends/upload.js"
+import { readAttachments, type UploadInput } from "../../sends/upload.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
 import { type AnyTool, chatOf, message, nameOf, tool, WRITE } from "../tool.js"
 
@@ -77,27 +77,30 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
       }),
       annotations: WRITE,
       permission: "send",
-      online: async (adapter, args, { guard, env }) => {
+      online: async (adapter, args, { guard, env, settings }) => {
         const at = args.at_time === undefined ? undefined : sendTime(args.at_time)
         // Never anyFile here: a path an agent was talked into is how a key would leave the machine.
-        const read = { app: messenger.app, env }
+        const read = { app: messenger.app, env, limits: settings }
         if (args.filename !== undefined && !messenger.mediaOptions?.includes("fileName"))
           throw new CliError("validation_error", "this messenger has no --filename")
-        const attachments = await readAttachments(
-          {
-            ...(args.photo === undefined ? {} : { photo: args.photo }),
-            ...(args.file === undefined ? {} : { file: args.file }),
-            ...(args.voice === undefined ? {} : { voice: args.voice }),
-            ...(args.text === undefined ? {} : { text: args.text }),
-            asFile: args.as_file === true,
-            ...(args.filename === undefined ? {} : { filename: args.filename }),
-          },
-          read,
-        )
+        const attachmentFlags = {
+          ...(args.photo === undefined ? {} : { photo: args.photo }),
+          ...(args.file === undefined ? {} : { file: args.file }),
+          ...(args.voice === undefined ? {} : { voice: args.voice }),
+          ...(args.text === undefined ? {} : { text: args.text }),
+          asFile: args.as_file === true,
+          ...(args.filename === undefined ? {} : { filename: args.filename }),
+        }
+        const attachments: UploadInput[] = messenger.fileBackedUploads
+          ? await readAttachments(attachmentFlags, { ...read, fileBacked: true })
+          : await readAttachments(attachmentFlags, read)
         if ((args.text ?? "").trim() === "" && attachments.length === 0) {
           throw new CliError("validation_error", "nothing to send — give text, a file or a photo")
         }
-        const sent = await servicesFor({ ...onlineDeps(messenger, adapter, guard) }).messages.send({
+        const sent = await servicesFor({
+          ...onlineDeps(messenger, adapter, guard),
+          resourceLimits: settings,
+        }).messages.send({
           chat: args.chat,
           text: args.text ?? "",
           ...(attachments.length === 0 ? {} : { attachments }),

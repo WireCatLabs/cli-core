@@ -1,3 +1,11 @@
+import type { Scope, TextBudget } from "../contracts/meeting-vectors-types.js"
+
+export type { Scope, TextBudget } from "../contracts/meeting-vectors-types.js"
+
+import type { MeetingVectors } from "../contracts/meeting-vectors-types.js"
+
+export type { MeetingVectorHit, MeetingVectors } from "../contracts/meeting-vectors-types.js"
+
 import { CliError } from "@wirecat/cli-base"
 import { chunkHash, cutChunks } from "../../conversations/chunks.js"
 import { atomic } from "./atomic.js"
@@ -5,50 +13,6 @@ import { meetingReadSnapshot, positiveReadInteger } from "./meeting-reads.js"
 import type { StoreContext } from "./open.js"
 import { dot, saveVectors } from "./vectors.js"
 
-interface Scope {
-  accountId: number
-  signal?: AbortSignal
-}
-interface TextBudget {
-  maxRows?: number
-  maxTextBytes?: number
-}
-export interface MeetingVectorHit {
-  meetingId: number
-  transcriptId: number
-  firstPosition: number
-  lastPosition: number
-  hash: string
-  score: number
-}
-export interface MeetingVectors {
-  saveCurrent(
-    model: string,
-    dims: number,
-    rows: { hash: string; vector: Float32Array }[],
-    input: Scope,
-  ): Promise<{ saved: number; skipped: number }>
-  rebuild(
-    input: Scope & TextBudget & { afterTranscriptId?: number; limit?: number },
-  ): Promise<{ transcripts: number; chunks: number; hasMore: boolean; nextTranscriptId?: number }>
-  chunksToEmbed(
-    model: string,
-    input: Scope & TextBudget & { afterHash?: string; limit: number },
-  ): Promise<{ items: { hash: string; text: string }[]; hasMore: boolean; nextHash?: string }>
-  nearest(
-    model: string,
-    query: Float32Array,
-    input: Scope & TextBudget & { limit: number; maxChunks?: number; afterChunkId?: number },
-  ): Promise<{
-    items: MeetingVectorHit[]
-    ranking: "scanned-candidates"
-    scanned: number
-    complete: boolean
-    hasMore: boolean
-    nextChunkId?: number
-  }>
-  status(input: Scope & { model: string }): Promise<{ chunks: number; embedded: number }>
-}
 const LIVE =
   "FROM chunks k JOIN meeting_transcripts t ON k.chunkable_type = 'meeting_transcript' AND t.id = k.chunkable_id JOIN meetings m ON m.id = t.meeting_id WHERE m.account_id = ? AND m.deleted_at IS NULL AND t.deleted_at IS NULL AND t.superseded_at IS NULL"
 const limitOf = (value: number, name: string, max = 1000) => {

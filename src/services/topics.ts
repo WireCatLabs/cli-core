@@ -1,6 +1,6 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import { capability, type ForumState } from "../cli/messenger/port.js"
 import type { Chat, Topic, TopicChange } from "../domain/models.js"
+import { capability, type ForumState } from "../ports/messenger.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import type { ChatAction, SendEntry } from "../sends/journal.js"
 import { newOperationId, newSendId } from "../sends/send-id.js"

@@ -1,17 +1,9 @@
-import type { Id } from "../../domain/models.js"
+import type { DocumentLinkMessage } from "../contracts/document-links-types.js"
+
+export type { DocumentLinkMessage } from "../contracts/document-links-types.js"
+
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
-
-/** A stored message whose text may hold a Google document link, with the documents a link joins it to. */
-export interface DocumentLinkMessage {
-  messageId: Id
-  text: string
-  sentAt: string
-  senderId: Id | null
-  senderName: string | null
-  /** The live stored documents linked from it, by the Google file id in their front matter. */
-  documents: { fileId: string; title: string | null }[]
-}
 
 /** Newest first. Read from the text, so an edit that removed a link drops it whatever link rows remain. */
 export const documentLinkMessages = ({ database }: StoreContext, chatKey: number): DocumentLinkMessage[] => {

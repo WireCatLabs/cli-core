@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
-import { isCliFailure } from "../cli/failures.js"
-import { capability } from "../cli/messenger/port.js"
+import { isCliFailure } from "../domain/errors.js"
 import type { Chat, Contact, Id, Member, Page, PersonCard, PersonProfile, PhoneBookEntry } from "../domain/models.js"
+import { capability } from "../ports/messenger.js"
 import { pickPerson } from "../resolve.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
@@ -9,7 +9,7 @@ import type { AccountKey, MessageStore, PersonRecord } from "../store/store.js"
 import type { PageWindow } from "./chats.js"
 import { fromStore, type ServiceDeps, storeIfOpen } from "./deps.js"
 
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 import {
   CHAT_MESSAGES,
   type ContextOptions,

@@ -1,33 +1,13 @@
+import type { SearchCommand, SearchRecord, StoredSearch } from "../contracts/searches-types.js"
+
+export type { SearchCommand, SearchRecord, StoredSearch } from "../contracts/searches-types.js"
+
 import { CliError, singleLine } from "@wirecat/cli-base"
 import type { StoreContext } from "./open.js"
 import { toIso } from "./values.js"
 
 /** Unnamed runs kept, newest first; a saved search is never pruned. */
 export const HISTORY_KEPT = 1000
-
-export type SearchCommand = "search" | "stats" | "message-top" | "author-top" | "admin-statistics"
-
-/** What one run or one saved search is: `params` as canonical JSON, so the same run is the same text. */
-export interface SearchRecord {
-  command: SearchCommand
-  params: string
-  language: string
-  version: number
-  fieldsVersion: number
-}
-
-export interface StoredSearch {
-  id: string
-  name: string | null
-  command: SearchCommand
-  params: Record<string, unknown>
-  language: string
-  version: number
-  fieldsVersion: number
-  createdAt: string
-  lastRunAt: string | null
-  runs: number
-}
 
 const COLUMNS =
   "id, name, command, params, language, version, fields_version, created_at, updated_at, last_run_at, runs"

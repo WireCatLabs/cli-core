@@ -1,12 +1,10 @@
+import type { ChunkToEmbed, NearestChunk } from "../contracts/vectors-types.js"
+
+export type { ChunkToEmbed, NearestChunk } from "../contracts/vectors-types.js"
+
 import { chunkHash, chunkTextOf, type TextRange } from "../../conversations/chunks.js"
 import { type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
-
-/** A chunk of the chat's current build: its hash, and the messages its text is cut from. */
-export interface ChunkToEmbed {
-  hash: string
-  lines: { id: string; sender: string | null; text: string }[]
-}
 
 const currentChunks = (
   chatKey: number,
@@ -218,16 +216,6 @@ export const clearVectors = ({ orm }: StoreContext, chatKey: number, model: stri
           WHERE c.id IS NULL OR c.chat_id <> ${chatKey})
       RETURNING 1 AS n`,
   ).length
-
-export interface NearestChunk {
-  conversationPk: number
-  firstMessagePk: number
-  lastMessagePk: number
-  /** The stretch of one long message, when the chunk is a piece of it. */
-  range?: TextRange
-  hash: string
-  score: number
-}
 
 /** Rows read per step of a search, so a chat of any size is scanned in bounded memory. */
 const SCAN_PAGE = 5_000

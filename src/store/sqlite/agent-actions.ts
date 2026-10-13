@@ -1,46 +1,16 @@
+import { ACTION_OUTCOMES, ACTION_TIERS } from "../contracts/agent-actions-types.js"
+
+export { ACTION_OUTCOMES, ACTION_TIERS } from "../contracts/agent-actions-types.js"
+
+import type { AgentAction, AgentActionsStore } from "../contracts/agent-actions-types.js"
+
+export type { AgentAction, AgentActionInput, AgentActionsStore } from "../contracts/agent-actions-types.js"
+
 import { CliError } from "@wirecat/cli-base"
 import type { Actor } from "./actors.js"
-import { type Author, authorActor } from "./memories.js"
+import { authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import { thingOf } from "./things.js"
-
-export const ACTION_TIERS = ["read", "draft", "write-private", "write-public", "destructive", "admin"] as const
-export const ACTION_OUTCOMES = ["ok", "refused", "failed"] as const
-
-/**
- * One tool call as the audit trail keeps it: who, which tool, at what tier, on what, how it ended. Never the
- * arguments or the answer: `error` is a short code, not a message that could quote them.
- */
-export interface AgentActionInput {
-  actor: Author
-  tool: string
-  tier: (typeof ACTION_TIERS)[number]
-  /** A reference to what it acted on, when the caller knows one. */
-  target?: string
-  status: (typeof ACTION_OUTCOMES)[number]
-  error?: string
-  startedAt: number
-  finishedAt: number
-}
-
-export interface AgentAction {
-  id: string
-  /** `name` is a bot's handle; `null` for a person. */
-  actor: { type: Actor["type"]; id: string; name: string | null }
-  tool: string
-  tier: AgentActionInput["tier"]
-  target: { type: string; id: string } | null
-  status: AgentActionInput["status"]
-  error: string | null
-  startedAt: string
-  finishedAt: string | null
-}
-
-export interface AgentActionsStore {
-  record(input: AgentActionInput): Promise<AgentAction>
-  /** Newest first; `agent` is a bot's name, such as `tg-mcp`. */
-  list(options?: { tool?: string; agent?: string; limit?: number }): Promise<AgentAction[]>
-}
 
 const CODE = /^[a-z][a-z0-9_]{0,63}$/
 const NAMED =

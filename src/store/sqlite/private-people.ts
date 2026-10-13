@@ -1,24 +1,13 @@
+import type { PrivateContact, PrivateContactNote } from "../contracts/private-people-types.js"
+
+export type { PrivateContact, PrivateContactNote } from "../contracts/private-people-types.js"
+
 import { CliError } from "@wirecat/cli-base"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../store.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { toIso } from "./values.js"
-
-export interface PrivateContactNote {
-  id: string
-  personId: string
-  text: string
-  revision: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface PrivateContact {
-  personId: string
-  alias: string | null
-  notes: PrivateContactNote[]
-}
 
 const required = ({ database }: StoreContext, key: AccountKey, personId: string) => {
   const row = database

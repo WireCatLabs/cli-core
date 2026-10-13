@@ -1,12 +1,10 @@
+import type { ConversationEligibility } from "../contracts/conversation-eligibility-types.js"
+
+export type { ConversationEligibility } from "../contracts/conversation-eligibility-types.js"
+
 import type { QueryExecution } from "../../search/lucene/resolved.js"
-import type { AccountKey } from "../store.js"
 import { queryMessagePks } from "./lucene.js"
 import type { StoreContext } from "./open.js"
-
-export interface ConversationEligibility {
-  conversations: string[]
-  chats: { account: AccountKey; chat: string }[]
-}
 
 export const conversationEligibility = async (
   context: StoreContext,

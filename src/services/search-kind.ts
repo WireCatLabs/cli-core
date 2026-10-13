@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
+import type { AppIdentity } from "../domain/application.js"
 import { isKind, kindOf, providerNamed } from "../domain/providers.js"
 import { entriesOfList, fitting, isAccountList, type ListContext, type SkippedSource } from "../search/account-list.js"
 import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"

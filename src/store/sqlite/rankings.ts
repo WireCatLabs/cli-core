@@ -1,6 +1,9 @@
+import type { RankedStoreFound, RankedStoreRow, RankingRequest, RankingSnapshot } from "../contracts/rankings-types.js"
+
+export type { RankedStoreFound, RankedStoreRow, RankingRequest, RankingSnapshot } from "../contracts/rankings-types.js"
+
 import { CliError } from "@wirecat/cli-base"
 import type { DateRange } from "@wirecat/cli-base/query"
-import type { CounterState } from "../../domain/counters.js"
 import {
   RANKING_GRAPH_LIMITS,
   type RankingGraphNode,
@@ -10,10 +13,8 @@ import {
 import {
   needsRankingContext,
   type RankingComponent,
-  type RankingOptions,
   rankingScore,
   rankingWords,
-  type ScoreComponents,
 } from "../../domain/rankings-options.js"
 import { rankingContextRange } from "../../domain/rankings-range.js"
 import type { QueryExecution } from "../../search/lucene/resolved.js"
@@ -22,42 +23,6 @@ import { counterStates } from "./counters.js"
 import { withQuerySelection } from "./lucene.js"
 import type { StoreContext } from "./open.js"
 
-export interface RankingRequest {
-  options: RankingOptions
-  timezone: string
-  contextChat?: QueryExecution["chat"]
-}
-export interface RankedStoreRow {
-  provider: string
-  account: string
-  id: string
-  chatId: string | null
-  name: string | null
-  pk: number | null
-  kind: string | null
-  rank: number
-  value: number
-  components: Record<string, number | null>
-  messages: number
-  knownReactions: number
-  unknownReactions: number
-  score: ScoreComponents | null
-  counterObservations?: CounterState[]
-  graphComplete?: boolean
-}
-export interface RankedStoreFound {
-  total: number
-  population: number
-  eligible: number
-  excludedMinimum: number
-  excludedMissing: number
-  excludedUnknownSender: number
-  excludedUnknownKind: number
-  items: RankedStoreRow[]
-  maxima: Partial<Record<RankingComponent, number>>
-  hasMore: boolean
-  graphQuality?: ReturnType<typeof rankReplyGraph>["quality"]
-}
 const column = (name: string) => `"${name.replaceAll('"', '""')}"`
 const finite = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null
@@ -214,15 +179,6 @@ const graphIn = (context: StoreContext, execution: QueryExecution, request: Rank
     update.run(row.kind, row.replies, row.otherReplies, row.descendants, row.thread, row.answerFor, row.answerDelay, pk)
   }
   return found.quality
-}
-
-/** Aggregate and normalize the whole population, returning only a bounded page. */
-export interface RankingSnapshot {
-  prefix: string
-  params: SqlValue[]
-  filtered: string
-  found: RankedStoreFound
-  check: () => void
 }
 export const rankQuery = (
   context: StoreContext,

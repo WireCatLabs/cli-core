@@ -4,8 +4,8 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { carries } from "../background/processes.js"
-import type { AppIdentity } from "../cli/app.js"
-import { envName } from "../cli/app.js"
+import type { AppIdentity } from "../domain/application.js"
+import { envName } from "../domain/application.js"
 
 export interface Job {
   id: string

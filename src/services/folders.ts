@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { capability, type MessengerAdapter } from "../cli/messenger/port.js"
 import type { Chat, Folder, FolderKind, FolderRules, FolderSkip, Id } from "../domain/models.js"
+import { capability, type MessengerAdapter } from "../ports/messenger.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import { type ServiceDeps, storeIfOpen } from "./deps.js"

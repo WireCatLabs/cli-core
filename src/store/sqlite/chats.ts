@@ -1,3 +1,7 @@
+import type { ChatMetadata } from "../contracts/chats-types.js"
+
+export type { ChatMetadata } from "../contracts/chats-types.js"
+
 import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../../domain/channel-tags.js"
 import type { Chat, Id, Member, Page } from "../../domain/models.js"
@@ -292,14 +296,6 @@ const toChat = (row: typeof chats.$inferSelect, parentId?: Id): Chat => ({
     providerMetadata: parsed(row.metadata),
   }),
 })
-
-export interface ChatMetadata {
-  chatId: string
-  title: string | null
-  username: string | null
-  description: string | null
-  fetchedAt: string
-}
 
 const metadataChatPk = ({ database }: StoreContext, key: AccountKey, chatId: string) => {
   const row = database

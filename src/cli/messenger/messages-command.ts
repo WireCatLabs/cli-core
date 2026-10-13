@@ -10,6 +10,7 @@ import { modelWith } from "../../speech/hearing.js"
 import { listed, positiveCount } from "../paging.js"
 import { listStart } from "./after.js"
 import { syncCommand } from "./backfill-command.js"
+import { commandCapabilities, topicOption } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { linksCommand } from "./conversations-command.js"
 import { downloadSubcommand } from "./download-command.js"
@@ -39,17 +40,21 @@ export const messagesCommand = (messenger: Messenger): Command => {
   const messages = new Command("messages").description("read and send messages")
   messages.addCommand(evidenceCommand(messenger))
 
-  messages
-    .command("list")
-    .description("a chat's messages, oldest to newest")
-    .addHelpText("after", SAVE_HELP)
-    .argument("<chat>", messenger.chatArgument)
-    .option("--limit <n>", "how many", positiveCount("--limit"))
-    .option("--before-id <id>", "only messages older than this message id")
-    .option("--before-time <time>", "only messages older than this ISO 8601 time, or 2h / 1d ago")
-    .option("--after-id <id>", "only messages newer than this message id")
-    .option("--after-time <time>", "only messages newer than this ISO 8601 time, or 2h / 1d ago")
-    .option("--topic <id>", "only this forum topic; read back from its newest message or --before-id")
+  topicOption(
+    messages
+      .command("list")
+      .description("a chat's messages, oldest to newest")
+      .addHelpText("after", SAVE_HELP)
+      .argument("<chat>", messenger.chatArgument)
+      .option("--limit <n>", "how many", positiveCount("--limit"))
+      .option("--before-id <id>", "only messages older than this message id")
+      .option("--before-time <time>", "only messages older than this ISO 8601 time, or 2h / 1d ago")
+      .option("--after-id <id>", "only messages newer than this message id")
+      .option("--after-time <time>", "only messages newer than this ISO 8601 time, or 2h / 1d ago"),
+    messenger,
+    "only this forum topic; read back from its newest message or --before-id",
+    "list",
+  )
     .option(...TRANSCRIBE_OPTION)
     .option(...MODEL_OPTION)
     .option("--mark-read", "also mark the chat read up to the newest message shown; the other person sees it")
@@ -222,10 +227,10 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages.addCommand(forwardCommand(messenger))
   messages.addCommand(pinCommand(messenger))
   messages.addCommand(unpinCommand(messenger))
-  if (messenger.personalBots === true) messages.addCommand(pressCommand(messenger))
+  if (commandCapabilities(messenger).personalBots) messages.addCommand(pressCommand(messenger))
   messages.addCommand(scheduledCommand(messenger))
   messages.addCommand(messageLinkCommand(messenger))
-  messages.addCommand(commentsCommand(messenger))
+  if (commandCapabilities(messenger).comments) messages.addCommand(commentsCommand(messenger))
   messages.addCommand(linksCommand(messenger))
   messages.addCommand(syncCommand(messenger))
   return messages

@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { renderPage, window, withPaging } from "../paging.js"
+import { commandCapabilities } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { capability } from "./port.js"
 
@@ -40,7 +41,7 @@ export const topicsCommand = (messenger: Messenger): Command => {
     ).action(listed(messenger)),
   )
 
-  if (messenger.topicShow)
+  if (commandCapabilities(messenger).topicShow)
     topics
       .command("show")
       .description("one forum topic: its title, state and last activity")

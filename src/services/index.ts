@@ -165,6 +165,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
   return deps.messenger.services ? { ...base, ...deps.messenger.services(base, deps) } : base
 }
 
+export { parseLucene } from "@wirecat/cli-base/query"
 export { migrateLegacyQuery, type QueryMigration, type SavedQuery } from "../search/lucene/migration.js"
 export { FIELD_VERSION, QUERY_FIELDS, QUERY_OPERATORS, validateAst } from "../search/lucene/registry.js"
 export { QUERY_LIMITS, QUERY_VERSION } from "../search/lucene/types.js"
@@ -174,7 +175,11 @@ export { adminStatisticsService } from "./admin-statistics.js"
 export { GAP_BOUNDS, type GapPlan, type GapRepair, gapsService, type RepairOptions } from "./archive-gaps.js"
 export type { CounterQuery, CountersService } from "./counters.js"
 export { countersService } from "./counters.js"
+export type { OptionalStoreDiagnostic, ServiceProvider } from "./deps.js"
+export type { EmbeddingRuntimeDeps } from "./embedding-runtime.js"
 export type { ModelChoice } from "./embeddings.js"
+export type { EmbeddingsMaintenanceService } from "./embeddings-maintenance.js"
+export { embeddingsMaintenanceService } from "./embeddings-maintenance.js"
 export {
   createMeetingContextService,
   type MeetingContextService,
@@ -216,7 +221,13 @@ export {
   type MeetingTaskView,
   readMeetingTask,
 } from "./meeting-tasks.js"
+export type { MessageReadStore, MessagesReadDeps, MessagesReadService } from "./messages-read.js"
+export { messagesReadService } from "./messages-read.js"
 export type { QueryMetadata, SearchCoverage } from "./messages-search.js"
+export type { MessagesSearchDeps, MessagesSearchService } from "./messages-search-service.js"
+export { messagesSearchService } from "./messages-search-service.js"
+export type { MessagesWriteDeps, MessagesWriteService } from "./messages-write.js"
+export { messagesWriteService } from "./messages-write.js"
 export { metadataService } from "./metadata.js"
 export {
   embedMail,

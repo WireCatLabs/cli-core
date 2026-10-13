@@ -1,5 +1,8 @@
+export type { RetentionResult } from "../contracts/retention-types.js"
+
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
+import { calendarKey } from "../../domain/calendar.js"
 import {
   RETENTION_TOLERANCE,
   type RetentionOptions,
@@ -7,7 +10,6 @@ import {
   retentionCohorts,
   validateRetentionOptions,
 } from "../../domain/retention.js"
-import { calendarKey } from "../../services/messages-search.js"
 import { chatCompleteness } from "./completeness.js"
 import type { StoreContext } from "./open.js"
 
@@ -216,4 +218,3 @@ export const retentionQuery = (
     },
   }
 }
-export type RetentionResult = ReturnType<typeof retentionQuery>

@@ -1,43 +1,26 @@
+import type {
+  RankedEvidence,
+  RankingEvidenceItem,
+  RankingEvidenceRequest,
+} from "../contracts/ranking-evidence-types.js"
+
+export type {
+  EvidenceTarget,
+  RankedEvidence,
+  RankingEvidenceItem,
+  RankingEvidenceRequest,
+} from "../contracts/ranking-evidence-types.js"
+
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import type { CounterState } from "../../domain/counters.js"
 import { formatLocator } from "../../domain/locator.js"
 import type { QueryExecution } from "../../search/lucene/resolved.js"
 import type { SqlValue } from "../driver.js"
-import type { AccountKey, StoredHit } from "../store.js"
 import { counterStates } from "./counters.js"
 import type { StoreContext } from "./open.js"
-import { type RankingRequest, rankingCounter, rankQuery } from "./rankings.js"
+import { rankingCounter, rankQuery } from "./rankings.js"
 import { hitsByPk } from "./search.js"
 
-export interface EvidenceTarget {
-  account: AccountKey
-  id: string
-  chatId?: string
-}
-export interface RankingEvidenceRequest extends RankingRequest {
-  target: EvidenceTarget
-  component: string
-  limit: number
-  cursor?: string
-}
-export interface RankingEvidenceItem {
-  message: StoredHit
-  related?: StoredHit
-  contribution: number | null
-  counters?: CounterState[]
-}
-export interface RankedEvidence {
-  items: RankingEvidenceItem[]
-  total: number
-  included: number
-  hasMore: boolean
-  nextCursor: string | null
-  fingerprint: string
-  component: string
-  componentValue: number | null
-  byteLimit: number
-}
 const EVIDENCE_BYTES = 64 * 1024
 const FINGERPRINT_BYTES = 8 * 1024 * 1024
 function fail(message: string, reason: string): never {

@@ -39,6 +39,8 @@ import type {
   Poll,
 } from "../domain/models.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
+import { uploadSource } from "../sends/upload.js"
+import { uploadSize } from "../sends/upload-source.js"
 import { contractSeed, type Seed } from "./seed.js"
 
 /** Every group of the port, over memory. */
@@ -241,10 +243,10 @@ export const fakeAdapter = (seed: Seed = contractSeed(), options: { feed?: boole
     send: async (chatId, text, options) =>
       once(options.sendId, () => {
         const chat = chatOf(chatId)
-        const attachments = (options.attachments ?? []).map(({ kind, name, bytes }) => ({
-          kind,
-          name,
-          size: bytes.length,
+        const attachments = (options.attachments ?? []).map((upload) => ({
+          kind: upload.kind,
+          name: upload.name,
+          size: uploadSize(uploadSource(upload)),
         }))
         const extra = { attachments, ...(options.replyTo === undefined ? {} : { replyToId: options.replyTo }) }
         if (options.at === undefined) return { message: post(chat, text, extra), sendId: options.sendId }

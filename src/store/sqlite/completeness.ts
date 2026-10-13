@@ -1,26 +1,11 @@
+import type { ChatCompleteness } from "../contracts/completeness-types.js"
+
+export type { ChatCompleteness } from "../contracts/completeness-types.js"
+export { CHAT_LIST_KEY, fetchedKey, historyStartKey } from "../sync-keys.js"
+
 import type { Id } from "../../domain/models.js"
 import type { StoreContext } from "./open.js"
 import { toIso } from "./values.js"
-
-/** The sync state that marks a chat fetched back to its first message (phase 2 plan S10). */
-export const historyStartKey = (chatId: Id): string => `history_start:${chatId}`
-/** Set when a `messages sync` run holds the chat's newest page; its `at` is when. */
-export const fetchedKey = (chatId: Id): string => `fetched:${chatId}`
-/** Set when the store was handed the account's whole chat list (`markChatsLeft`); its `at` is when. */
-export const CHAT_LIST_KEY = "chat_list_complete"
-
-export interface ChatCompleteness {
-  chatId: Id
-  /** `unknown` when nothing ever fetched the chat's history: an empty answer then proves nothing. */
-  state: "complete" | "partial" | "unknown"
-  /** Holds the newest message the chat list knows of; `null` when the list gave no time. */
-  upToDate: boolean | null
-  /** More than one stretch held, with history missing between them. */
-  gaps: boolean
-  reachesStart: boolean
-  /** When a `messages sync` last read the chat's newest page; `null` when none has. */
-  fetchedAt: string | null
-}
 
 /**
  * Three facts per chat (NEED-455 A): the newest held against the chat list's, the stretches, and the start reached.

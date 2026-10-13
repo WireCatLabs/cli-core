@@ -1,6 +1,6 @@
 import type { CallToolResult, McpServer, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
 import { toStandardJsonSchema } from "@valibot/to-json-schema"
-import { CliError, errorCodes, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
+import { CliError, errorCodes, mcpErrorResult } from "@wirecat/cli-base"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { AISettings } from "../analysis/settings.js"
@@ -11,6 +11,7 @@ import type { MessengerAdapter } from "../cli/messenger/port.js"
 import { DETAILS, REASONS } from "../cli/reasons.js"
 import { partialOutcome, startRecording } from "../cli/runs/recording.js"
 import type { Settings } from "../cli/settings.js"
+import { type ErrorContract, failureObjectOf } from "../domain/failure-format.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
 import type { SendGuard } from "../sends/guard.js"
 import {
@@ -21,6 +22,7 @@ import {
   type PermissionKey,
   readKeysForCommand,
 } from "../sends/permissions.js"
+import type { ResourceLimits } from "../sends/resource-limits.js"
 import { onlineDeps, storeModeDeps } from "../services/deps.js"
 import { type Services, servicesFor } from "../services/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -68,6 +70,7 @@ export interface Defaults {
   /** The profile's own entries, for a tool reading a setting of its own — `transcribeWith`. */
   settings: Pick<Settings, "configured" | "shared" | "profile"> &
     Partial<Pick<Settings, "permissions" | "searchCatchUp" | "offline">> &
+    Partial<ResourceLimits> &
     AISettings
   env: NodeJS.ProcessEnv
   /** The server's open models, kept between `search_conversations` calls. */
@@ -311,12 +314,15 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
           throw new CliError("permission_error", "messages.sync-first is not allowed by this profile")
         if (definition.custom) {
           const result = await definition.custom(args, { ...defaults, signal: ctx.mcpReq.signal }, ctx)
-          return answered(withNextSteps(definition, result), definition.outputLimit?.(args, defaults))
+          return answered(
+            withNextSteps(definition, result),
+            definition.outputLimit?.(args, defaults) ?? defaults.settings.maxOutputBytes,
+          )
         }
         if (definition.local)
           return answered(
             withNextSteps(definition, await definition.local(args, defaults)),
-            definition.outputLimit?.(args, defaults),
+            definition.outputLimit?.(args, defaults) ?? defaults.settings.maxOutputBytes,
           )
         const { online, stored: local, served } = definition
         const stored = local && (!definition.storedWhen || definition.storedWhen(args)) ? local : undefined
@@ -369,11 +375,14 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
                 : await session.use(run, (adapter, release) =>
                     (online as NonNullable<typeof online>)(adapter, args, { ...defaults, release }),
                   )
-        return answered(withNextSteps(definition, result), definition.outputLimit?.(args, defaults))
+        return answered(
+          withNextSteps(definition, result),
+          definition.outputLimit?.(args, defaults) ?? defaults.settings.maxOutputBytes,
+        )
       }
       return around ? await around(key, definition, execute) : await execute()
     } catch (error) {
-      return failed(error)
+      return failed(error, messenger.app.errorContract)
     }
   }
 }
@@ -462,9 +471,9 @@ export const answered = (value: object, maxBytes = DEFAULT_OUTPUT_BYTES): CallTo
 }
 
 /** The same object the CLI prints on stderr, so an agent reads one error shape from both. */
-export const failed = (error: unknown): CallToolResult =>
+export const failed = (error: unknown, contract?: ErrorContract): CallToolResult =>
   mcpErrorResult(
-    JSON.parse(agentJson(errorObjectOf(error, { reasons: REASONS, details: DETAILS }))) as ErrorObject,
+    JSON.parse(agentJson(failureObjectOf(error, { reasons: REASONS, details: DETAILS }, contract))) as ErrorObject,
   ) as CallToolResult
 
 /** An option's name as an MCP argument: `beforeId` is `before_id`. */

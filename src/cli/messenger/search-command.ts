@@ -9,6 +9,7 @@ import {
 } from "../../services/search-all-meetings.js"
 import type { Note } from "../../store/index.js"
 import { positiveCount } from "../paging.js"
+import { commandCapabilities } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { conversationsSearchCommand } from "./conversations-command.js"
 import { messagesSearchCommand, wholeCount } from "./messages-search-command.js"
@@ -208,6 +209,6 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
     .addCommand(messagesSearchCommand(messenger, "mail"))
     .addCommand(notesCommand(messenger))
     .addCommand(conversationsSearchCommand(messenger))
-  if (topics) search.addCommand(topicsSearchCommand(messenger))
+  if (topics && commandCapabilities(messenger).topics) search.addCommand(topicsSearchCommand(messenger))
   return search
 }

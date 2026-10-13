@@ -1,10 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
-import { capability, type MessengerAdapter, type ServerReads } from "../cli/messenger/port.js"
 import type { Chat, ChatKind, Id, Inbox, InboxChat, Message, Review, ReviewChat } from "../domain/models.js"
+import { capability, type MessengerAdapter, type ServerReads } from "../ports/messenger.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { CHAT_KINDS } from "./chats.js"
 import { type ServiceDeps, storeIfOpen } from "./deps.js"
-import { readChatId } from "./messages.js"
+import { readChatId } from "./message-resolution.js"
 import { unanswered } from "./questions.js"
 import { applyTaskRules, type RuleResult } from "./task-rules.js"
 

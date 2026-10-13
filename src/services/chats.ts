@@ -2,8 +2,6 @@ import { CliError } from "@wirecat/cli-base"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import type { RegistryOptions } from "../botcheck/registries.js"
 import { botCheckService } from "../botcheck/service.js"
-import { capability, type MessengerAdapter } from "../cli/messenger/port.js"
-import { threadIdOf } from "../cli/messenger/thread.js"
 import type {
   Chat,
   ChatCard,
@@ -17,6 +15,8 @@ import type {
   Page,
   SenderIdentity,
 } from "../domain/models.js"
+import { threadIdOf } from "../domain/thread.js"
+import { capability, type MessengerAdapter } from "../ports/messenger.js"
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { AccountStore } from "../store/account-store.js"
@@ -33,7 +33,7 @@ import {
   auditMembers,
   type MembersAudit,
 } from "./members-audit.js"
-import { chatIdIn } from "./messages.js"
+import { chatIdIn } from "./message-resolution.js"
 
 /** How far back `events` looks without `since`, as in max-cli. */
 export const EVENTS_DAYS = 7

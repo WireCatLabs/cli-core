@@ -1,9 +1,11 @@
 import { realpathSync } from "node:fs"
-import { readFile } from "node:fs/promises"
+import { stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
 import { storePath } from "../store/path.js"
+import type { ResourceLimits } from "./resource-limits.js"
+import { type UploadSource, uploadBytes, validateUploadSizes, validateUploadSources } from "./upload-source.js"
 
 export type UploadKind = "photo" | "file" | "voice"
 
@@ -15,6 +17,18 @@ export interface Upload {
   /** A `file` that goes as a file to download even where the messenger would play it — a video. */
   asFile?: true
 }
+
+export interface FileUpload {
+  kind: UploadKind
+  name: string
+  source: UploadSource
+  asFile?: true
+}
+export type UploadInput = Upload | FileUpload
+export const uploadSource = (upload: UploadInput): UploadSource =>
+  "source" in upload ? upload.source : { kind: "bytes", bytes: upload.bytes }
+export const validateUploads = (uploads: readonly UploadInput[], limits?: Partial<ResourceLimits>): void =>
+  validateUploadSources(uploads.map(uploadSource), limits)
 
 const PHOTO = new Set([".jpg", ".jpeg", ".png", ".webp"])
 const VOICE = new Set([".ogg", ".oga", ".opus"])
@@ -63,24 +77,22 @@ const inside = (path: string, dir: string): boolean => {
 export const readUpload = async (
   kind: UploadKind,
   path: string,
-  { app, env = process.env, anyFile = false }: { app: AppIdentity; env?: NodeJS.ProcessEnv; anyFile?: boolean },
+  { app, env = process.env, anyFile = false, limits }: UploadReadOptions,
 ): Promise<Upload> => {
-  if (kind === "photo" && !PHOTO.has(extname(path).toLowerCase())) {
-    throw new CliError("validation_error", `a photo is a .jpg, .png or .webp — send ${path} as a file instead`)
-  }
-  if (kind === "voice" && !VOICE.has(extname(path).toLowerCase())) {
-    throw new CliError("validation_error", `a voice message is Ogg Opus: .ogg, .oga or .opus — send ${path} as a file`)
-  }
-  if (!anyFile && refusedPlace(path, app, env)) {
-    throw new CliError(
-      "validation_error",
-      `cannot send ${path}: known credential files, ${app.command}'s own folders and the message store ` +
-        `are not sent — the owner adds --allow-any-file to \`${app.command} messages send\` if this file is meant to go`,
-    )
-  }
+  validateUploadPath(kind, path, app, env, anyFile)
   try {
-    return { kind, name: basename(path), bytes: await readFile(path) }
+    const info = await stat(path)
+    if (!info.isFile()) throw Object.assign(new Error("folder"), { code: "EISDIR" })
+    validateUploadSizes([{ size: info.size, buffered: true }], limits)
+    const upload = {
+      kind,
+      name: basename(path),
+      bytes: await uploadBytes({ kind: "file", path, size: info.size }, limits),
+    }
+    validateUploads([upload], limits)
+    return upload
   } catch (error) {
+    if (error instanceof CliError) throw error
     const code = (error as NodeJS.ErrnoException).code
     const reason = code === "ENOENT" ? "no such file" : code === "EISDIR" ? "it is a folder" : "it cannot be read"
     throw new CliError("validation_error", `cannot send ${path}: ${reason}`)
@@ -97,33 +109,108 @@ const checkFilename = (filename: string, file: string | undefined): void => {
     throw new CliError("validation_error", "--filename is a name, not a path: no / or \\, at most 255 characters")
 }
 
-export const readAttachments = async (
-  {
-    photo,
-    file,
-    voice,
-    asFile,
-    filename,
-    text,
-  }: { photo?: string; file?: string; voice?: string; asFile?: boolean; filename?: string; text?: string },
-  read: { app: AppIdentity; env?: NodeJS.ProcessEnv; anyFile?: boolean },
-): Promise<Upload[]> => {
+type AttachmentFlags = {
+  photo?: string
+  file?: string
+  voice?: string
+  asFile?: boolean
+  filename?: string
+  text?: string
+}
+type UploadReadOptions = {
+  app: AppIdentity
+  env?: NodeJS.ProcessEnv
+  anyFile?: boolean
+  limits?: Partial<ResourceLimits>
+}
+
+export function readAttachments(
+  flags: AttachmentFlags,
+  read: UploadReadOptions & { fileBacked: true },
+): Promise<UploadInput[]>
+export function readAttachments(flags: AttachmentFlags, read: UploadReadOptions): Promise<Upload[]>
+export async function readAttachments(
+  { photo, file, voice, asFile, filename, text }: AttachmentFlags,
+  read: UploadReadOptions & { fileBacked?: boolean },
+): Promise<UploadInput[]> {
   if (voice !== undefined && (photo !== undefined || file !== undefined || (text ?? "").trim() !== "")) {
     throw new CliError("validation_error", "a voice message goes alone — no text, no file, no photo beside it")
   }
   if (asFile && file === undefined) throw new CliError("validation_error", "--as-file is about a --file; give one")
   if (filename !== undefined) checkFilename(filename, file)
-  return [
-    ...(photo === undefined ? [] : [await readUpload("photo", photo, read)]),
+  const prepare = readFileUpload
+  const uploads = [
+    ...(photo === undefined ? [] : [await prepare("photo", photo, read)]),
     ...(file === undefined
       ? []
       : [
           {
-            ...(await readUpload("file", file, read)),
+            ...(await prepare("file", file, read)),
             ...(filename === undefined ? {} : { name: filename }),
             ...(asFile ? { asFile: true as const } : {}),
           },
         ]),
-    ...(voice === undefined ? [] : [await readUpload("voice", voice, read)]),
+    ...(voice === undefined ? [] : [await prepare("voice", voice, read)]),
   ]
+  validateUploads(uploads, read.limits)
+  if (read.fileBacked) return uploads
+  validateUploadSizes(
+    uploads.map((upload) => ({
+      size: upload.source.kind === "file" ? upload.source.size : upload.source.bytes.byteLength,
+      buffered: true,
+    })),
+    read.limits,
+  )
+  const buffered: Upload[] = []
+  for (const { source, ...upload } of uploads)
+    buffered.push({ ...upload, bytes: await uploadBytes(source, read.limits) })
+  return buffered
+}
+
+export const readFileUpload = async (
+  kind: UploadKind,
+  path: string,
+  { app, env = process.env, anyFile = false, limits }: UploadReadOptions,
+): Promise<FileUpload> => {
+  validateUploadPath(kind, path, app, env, anyFile)
+  try {
+    const info = await stat(path)
+    if (!info.isFile()) throw Object.assign(new Error("folder"), { code: "EISDIR" })
+    const upload: FileUpload = {
+      kind,
+      name: basename(path),
+      source: { kind: "file", path: resolve(path), size: info.size },
+    }
+    validateUploads([upload], limits)
+    return upload
+  } catch (error) {
+    if (error instanceof CliError) throw error
+    const code = (error as NodeJS.ErrnoException).code
+    throw new CliError(
+      "validation_error",
+      `cannot send ${path}: ${code === "ENOENT" ? "no such file" : code === "EISDIR" ? "it is a folder" : "it cannot be read"}`,
+    )
+  }
+}
+
+const validateUploadPath = (
+  kind: UploadKind,
+  path: string,
+  app: AppIdentity,
+  env: NodeJS.ProcessEnv,
+  anyFile: boolean,
+): void => {
+  if (kind === "photo" && !PHOTO.has(extname(path).toLowerCase())) {
+    throw new CliError("validation_error", `a photo is a .jpg, .png or .webp — send ${path} as a file instead`)
+  }
+  if (kind === "voice" && !VOICE.has(extname(path).toLowerCase())) {
+    throw new CliError("validation_error", `a voice message is Ogg Opus: .ogg, .oga or .opus — send ${path} as a file`)
+  }
+  if (!anyFile && refusedPlace(path, app, env)) {
+    throw new CliError(
+      "validation_error",
+      `cannot send ${path}: known credential files, ${app.command}'s own folders and the message store ` +
+        `are not sent — the owner adds --allow-any-file to \`${app.command} messages send\` if this file is meant to go`,
+    )
+  }
 }

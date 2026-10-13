@@ -10,6 +10,7 @@ import { chartRenderer } from "../../charts/render.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { momentOf } from "../../services/moment.js"
 import { adminStatisticsCommand } from "./admin-statistics-command.js"
+import { commandCapabilities } from "./capabilities.js"
 import { statsCommand as chatStatsCommand } from "./chats-stats-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { countersCommand } from "./counters-command.js"
@@ -41,7 +42,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
   const chats = new Command("chats").description("statistics about one chat").addCommand(chatStatsCommand(messenger))
   chats.addCommand(adminStatisticsCommand(messenger, "newcomers"))
   chats.addCommand(retentionCommand(messenger))
-  if (messenger.officialStats === true) chats.addCommand(officialStatsCommand(messenger))
+  if (commandCapabilities(messenger).officialStats) chats.addCommand(officialStatsCommand(messenger))
   stats.addCommand(chats)
   stats.addCommand(new Command("tasks").description("task statistics").addCommand(tasksStatsCommand(messenger)))
   stats

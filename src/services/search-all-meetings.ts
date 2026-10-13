@@ -1,13 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
-import type { Messenger } from "../cli/messenger/context.js"
 import { formatMeetingReference } from "../domain/meeting-reference.js"
 import type { SearchHit } from "../meetings/index.js"
+import type { ProviderDescription as Messenger } from "../ports/provider.js"
 import { entriesOfList, fitting } from "../search/account-list.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
-import type { SearchFound, SearchQuery } from "./messages.js"
+import type { SearchFound, SearchQuery } from "./message-contracts.js"
 import { RRF_K } from "./notes-search.js"
 import {
   RESOURCES_SEARCHED,

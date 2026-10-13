@@ -559,7 +559,7 @@
     "--max-output-bytes": {
       "value": "<bytes>",
       "meaning": "at most this many serialized bytes of machine data; 0 disables the bound",
-      "default": "4194304"
+      "default": "67108864"
     },
     "--max-replies": {
       "value": "<n>",

@@ -4,6 +4,7 @@ import { Command } from "commander"
 import { FOLDER_KINDS, FOLDER_SKIPS } from "../../domain/models.js"
 import type { FolderRulesEdit } from "../../services/folders.js"
 import { renderList } from "../paging.js"
+import { commandCapabilities } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 const collect = (value: string, previous: string[] = []) => [...previous, value]
@@ -124,7 +125,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
         context.renderer.result(await context.withServices((services) => services.folders.delete(folder)))
       }),
   )
-  if (messenger.folderOrder !== false)
+  if (commandCapabilities(messenger).folderOrder)
     folders.addCommand(
       annotate(new Command("order"), { mutates: true })
         .description("put folders in this order; the ones not named keep theirs after them")
@@ -134,7 +135,7 @@ export const foldersCommand = (messenger: Messenger): Command => {
           context.renderer.result(await context.withServices((services) => services.folders.order(typed)))
         }),
     )
-  if (messenger.folderJoin !== false)
+  if (commandCapabilities(messenger).folderJoin)
     folders.addCommand(
       annotate(new Command("join"), { mutates: true })
         .description(

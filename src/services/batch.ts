@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { isCliFailure } from "../cli/failures.js"
-import { type ActionableError, withRecovery } from "../cli/recovery.js"
+import { isCliFailure } from "../domain/errors.js"
+import { type ActionableError, withRecovery } from "../domain/recovery.js"
 
 export interface BatchFailure {
   id: string

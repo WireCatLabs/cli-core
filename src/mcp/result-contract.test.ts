@@ -68,15 +68,15 @@ it("validates the serialized root and picture metadata, preserving nested ISO da
   })
 })
 
-it("returns large previews within their configured budget without lifting other tool limits", async () => {
+it("returns large previews within their configured budget while honoring an explicit ordinary tool budget", async () => {
   const messenger = { app: { command: "chat" } } as Messenger
   const definition = attachmentsTools(messenger).attachments_show
   if (!definition) throw new Error("attachment tool missing")
   const image = new Picture(new Uint8Array(4 * 1024 * 1024), "image/png", { page: 1 })
   const fixture = { ...definition, local: async () => image }
   const ctx = { mcpReq: { signal: new AbortController().signal } } as unknown as ServerContext
-  const run = (env: NodeJS.ProcessEnv) =>
-    entryRunner({ messenger, defaults: { settings: {}, env } } as unknown as Registration)
+  const run = (env: NodeJS.ProcessEnv, maxOutputBytes = 64 * 1024 * 1024) =>
+    entryRunner({ messenger, defaults: { settings: { maxOutputBytes }, env } } as unknown as Registration)
   const result = await run({})("attachments_show", fixture, { page: 1 }, ctx)
   expect(result.isError).not.toBe(true)
   expect(result.content[0]?.type).toBe("image")
@@ -84,7 +84,9 @@ it("returns large previews within their configured budget without lifting other 
   const smaller = await run({ MESSAGING_PDF_PREVIEW_MAX_MIB: "1" })("attachments_show", fixture, { page: 1 }, ctx)
   expect(smaller.isError).toBe(true)
   const ordinary = await run({})("attachments_show", fixture, {}, ctx)
-  expect(ordinary.isError).toBe(true)
+  expect(ordinary.isError).not.toBe(true)
+  const bounded = await run({}, 4 * 1024 * 1024)("attachments_show", fixture, {}, ctx)
+  expect(bounded.isError).toBe(true)
 })
 
 it("keeps partial MCP identifiers without payloads and honors explicitly disabled recording", async () => {

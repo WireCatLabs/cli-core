@@ -1,3 +1,7 @@
+import type { CounterTarget } from "../contracts/counters-types.js"
+
+export type { CounterTarget } from "../contracts/counters-types.js"
+
 import { CliError } from "@wirecat/cli-base"
 import {
   COUNTER_FIELDS,
@@ -121,14 +125,6 @@ export const applyCounterObservations = (
         messagePk,
       )
   return updated
-}
-
-export interface CounterTarget {
-  locator: string
-  account: { provider: string; account: string }
-  chatId: string
-  messageId: string
-  counters: CounterState[]
 }
 export const counterTargets = (
   context: StoreContext,

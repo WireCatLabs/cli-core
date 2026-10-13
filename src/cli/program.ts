@@ -1,7 +1,7 @@
 import { join } from "node:path"
 import {
   CliError,
-  errorObjectOf,
+  type errorObjectOf,
   errorRecordOf,
   exitCodeFor,
   exitCodeOfError,
@@ -12,12 +12,14 @@ import {
 } from "@wirecat/cli-base"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
+import { failureObjectOf } from "../domain/failure-format.js"
 import { type AppIdentity, envName } from "./app.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
-import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
+import { byteCount, DEFAULT_COMMAND_MS, execution } from "./execution.js"
 import { isCliFailure, isCommanderFailure } from "./failures.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
+import { outputBudget } from "./output-budget.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile } from "./profile.js"
 import { DETAILS, REASONS } from "./reasons.js"
@@ -33,7 +35,8 @@ export interface ProgramDefinition {
     resolveSettings: (
       flags?: GlobalFlags,
       options?: ResolveOptions,
-    ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint">
+    ) => Pick<Settings, "profile" | "keepFailedRuns" | "keepRunsForDays" | "skillHint"> &
+      Partial<Pick<Settings, "maxOutputBytes">>
   }
   configure?: (program: Command) => void
   prepare?: (program: Command, environment: RunOptions) => void | Promise<void>
@@ -82,7 +85,7 @@ export const createProgram = (
     .option("--offline", "answer from what was recorded and never connect; fails if nothing was")
     .option("--no-input", "never prompt or open interactive login; piped input remains available")
     .option("--max-input-bytes <bytes>", "maximum buffered input bytes (default: 16777216)")
-    .option("--max-output-bytes <bytes>", "maximum machine output bytes (default: 4194304; 0 disables)")
+    .option("--max-output-bytes <bytes>", "maximum machine output bytes (default: 67108864; 0 disables)")
     .option("--fields <paths>", "comma-separated item or object fields: id,text; preserve pagination and operation ids")
     .option("--brief", "found messages and mail as reference, title, time, sender and excerpt only")
     .option("--full", "found messages and mail with their whole text and every provider field")
@@ -174,12 +177,18 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       machine || flags.input === false || Boolean(commandEnv.CI) || (options.tty ?? process.stdout.isTTY) !== true
     if (flags.fields !== undefined && !machine && (options.tty ?? process.stdout.isTTY) === true)
       throw new CliError("validation_error", "--fields requires machine output — add --json or --jsonl")
+    const path = commandPathOf(action)
+    const configuredOutputBudget = outputBudget(definition.app, flags, {
+      configuration: !["commands", "config", "doctor"].includes(path[0] ?? ""),
+      env: commandEnv,
+      kind: path[0] === "bot" ? "bot" : "personal",
+    })
     control.configure({
       ...(flags.fields === undefined ? {} : { fields: flags.fields }),
       maxOutputBytes:
         flags.maxOutputBytes === undefined
           ? machine || (options.tty ?? process.stdout.isTTY) !== true
-            ? DEFAULT_OUTPUT_BYTES
+            ? configuredOutputBudget
             : 0
           : byteCount(flags.maxOutputBytes, "--max-output-bytes", true),
     })
@@ -192,7 +201,6 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     if (flags.input === false || (headless && !options.answer)) environment.answer = () => null
     const localPreview = action.options.some((option) => option.long === "--dry-run")
     if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
-    const path = commandPathOf(action)
     const persistent =
       ["watch", "serve", "mcp"].includes(path[0] ?? "") ||
       path.includes("mcp") ||
@@ -421,7 +429,11 @@ const failed = (
     settled.settlementFailed && isCliFailure(error)
       ? new CliError(error.code, error.message, { ...error.details, settlement_failed: true })
       : error
-  const object = errorObjectOf(failure, { reasons: REASONS, details: [...DETAILS, "settlement_failed"] })
+  const object = failureObjectOf(
+    failure,
+    { reasons: REASONS, details: [...DETAILS, "settlement_failed"] },
+    app.errorContract,
+  )
   const command = commandPath(program, program.args.length > 0 ? program.args : rest) || app.command
   return {
     object,

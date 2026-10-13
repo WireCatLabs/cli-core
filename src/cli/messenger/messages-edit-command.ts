@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { commandCapabilities } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { HTML_HELP } from "./messages-send-command.js"
 import { readAll } from "./stdin.js"
@@ -29,6 +30,6 @@ export const editCommand = (messenger: Messenger): Command => {
         ),
       )
     })
-  if (messenger.html) edit.option("--html", HTML_HELP)
+  if (commandCapabilities(messenger).html) edit.option("--html", HTML_HELP)
   return edit
 }

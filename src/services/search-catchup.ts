@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import type { ServiceDeps } from "./deps.js"
-import { embeddingsService, type Refreshed } from "./embeddings.js"
+import type { Refreshed } from "./embedding-contracts.js"
+import { embeddingsMaintenanceService } from "./embeddings-maintenance.js"
 
 export const CATCH_UP_BOUNDS = { maxChunks: 500, maxMessages: 10_000, timeMs: 30_000 }
 export interface CatchUpOptions {
@@ -48,7 +49,7 @@ export const catchUpSearch = async (
     check()
     if ((await (await deps.store()).countMessages(await deps.account(), chat)) > maxMessages)
       return { complete: false, reason: "message_bound" }
-    const prepared = await embeddingsService(deps).refresh({
+    const prepared = await embeddingsMaintenanceService(deps).refresh({
       chat,
       model: "e5-small",
       maxChats: 1,

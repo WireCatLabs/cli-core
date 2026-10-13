@@ -1,9 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
-import { isCliFailure } from "../cli/failures.js"
 import { RULES_VERSION } from "../conversations/link.js"
+import { isCliFailure } from "../domain/errors.js"
 import { formatLocator } from "../domain/locator.js"
 import type { Id, WindowedMessage } from "../domain/models.js"
 import type { AccountKey, MessageStore, StoredLink } from "../store/store.js"
+
+export type ThreadReadStore = Pick<
+  MessageStore,
+  "around" | "conversationState" | "conversationOf" | "replies" | "links"
+>
 
 export const THREAD_BOUNDS = { maxHops: 8, maxMessages: 50, maxBytes: 65_536, withinMs: 86_400_000 }
 export interface ThreadOptions {
@@ -58,7 +63,7 @@ export const threadBounds = (options: ThreadOptions = {}): typeof THREAD_BOUNDS 
 }
 
 export const readThreadContext = async (
-  store: MessageStore,
+  store: ThreadReadStore,
   account: AccountKey,
   chat: Id,
   message: Id,

@@ -1,3 +1,7 @@
+import { INDEX_CODES, type Indexable, indexedText, meetingRowid, summaryOf } from "./meeting-index-values.js"
+
+export { INDEX_CODES, indexedText, meetingRowid } from "./meeting-index-values.js"
+
 import { CliError } from "@wirecat/cli-base"
 import type {
   Attachment,
@@ -15,7 +19,6 @@ import type {
   NewRecord,
   Participant,
   SearchHit,
-  Summary,
   TranscriptAppend,
   TranscriptAppendReceipt,
 } from "../../meetings/index.js"
@@ -37,14 +40,6 @@ import { inBatch } from "./search-index.js"
 type Row = Record<string, unknown>
 
 const CURSOR_KEY = "meetings"
-
-/**
- * Transcript rows, chat messages and summaries share `meeting_words` and their ids overlap, so each rowid is
- * the source id times 4 plus a type code: `rowid % 4` names the table, `rowid / 4` the id. Code 0 is unused.
- */
-export const INDEX_CODES = { meeting_transcript_row: 1, meeting_chat_message: 2, meeting_summary: 3 } as const
-type Indexable = keyof typeof INDEX_CODES
-export const meetingRowid = (type: Indexable, id: number): number => id * 4 + INDEX_CODES[type]
 
 const seriesOf = (row: Row): MeetingSeries => ({
   id: Number(row.id),
@@ -95,23 +90,6 @@ const chatOf = (row: Row): ChatLine => ({
   updatedAt: Number(row.updated_at),
 })
 
-const summaryOf = (row: Row): Summary => ({
-  id: Number(row.id),
-  meetingId: Number(row.meeting_id),
-  source: String(row.source),
-  title: str(row.title),
-  overview: str(row.overview),
-  sections: fromJson(row.sections) ?? [],
-  nextSteps: fromJson(row.next_steps) ?? [],
-  content: str(row.content),
-  docUrl: str(row.doc_url),
-  externalCreatedAt: int(row.external_created_at),
-  externalUpdatedAt: int(row.external_updated_at),
-  metadata: fromJson(row.metadata),
-  createdAt: Number(row.created_at),
-  updatedAt: Number(row.updated_at),
-})
-
 export const attachmentOf = (row: Row): Attachment => ({
   id: Number(row.id),
   attachableType: "meeting",
@@ -138,11 +116,6 @@ export const attachmentOf = (row: Row): Attachment => ({
   createdAt: Number(row.created_at),
   updatedAt: Number(row.updated_at),
 })
-
-const summaryText = (s: Pick<Summary, "title" | "overview" | "sections" | "nextSteps" | "content">): string =>
-  [s.title, s.overview, ...s.sections.map((section) => section.text), ...s.nextSteps, s.content]
-    .filter(Boolean)
-    .join("\n")
 
 const details = (database: CacheDatabase, id: number): MeetingDetails | null => {
   const row = database.prepare("SELECT * FROM meetings WHERE id = ?").get(id)
@@ -526,17 +499,6 @@ const filtered = (filter: MeetingFilter = {}) => {
       ORDER BY coalesce(started_at, 0) DESC, id LIMIT ? OFFSET ?`,
     params: [...params, limit, offset],
   }
-}
-
-export const indexedText = (database: CacheDatabase, type: string, id: number): string | null => {
-  if (type === "meeting_transcript_row")
-    return str(database.prepare("SELECT text FROM meeting_transcript_rows WHERE id = ?").get(id)?.text)
-  if (type === "meeting_chat_message")
-    return str(database.prepare("SELECT text FROM meeting_chat_messages WHERE id = ?").get(id)?.text)
-  const row = database
-    .prepare("SELECT title,overview,sections,next_steps,content FROM meeting_summaries WHERE id = ?")
-    .get(id)
-  return row ? summaryText(summaryOf(row)) : null
 }
 
 /**

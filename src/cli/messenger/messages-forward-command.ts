@@ -1,6 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { typedSendAs } from "../../sends/send-as.js"
+import { commandCapabilities } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const forwardCommand = (messenger: Messenger): Command => {
@@ -15,7 +16,8 @@ export const forwardCommand = (messenger: Messenger): Command => {
       "post as one of the identities `chats send-as` lists for the --to chat; required where the chat posts as someone else by default",
     )
     .option("--send-id <id>", "repeat a forward whose outcome was unknown, without risking a second copy")
-  if (messenger.forwardTopic) forward.option("--topic <id>", "forward into this forum topic of the --to chat")
+  if (commandCapabilities(messenger).forwardTopic)
+    forward.option("--topic <id>", "forward into this forum topic of the --to chat")
   return forward.action(async function (this: Command, chat: string, message: string) {
     const context = messengerContext(this, messenger)
     const {

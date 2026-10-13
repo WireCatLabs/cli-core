@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Messenger } from "../cli/messenger/context.js"
+import type { ProviderDescription as Messenger } from "../ports/provider.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { type EvidencePacket, prepareEvidencePacket } from "./evidence.js"
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 
 export interface EvidenceReadQuery {
   chat: string

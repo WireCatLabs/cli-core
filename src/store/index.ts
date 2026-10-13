@@ -1,4 +1,15 @@
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
+export type {
+  AccountsStore,
+  AttachmentsStore,
+  ChatsStore,
+  ConversationsStore,
+  MessagesStore,
+  PeopleStore,
+  SearchStore,
+  SourcesStore,
+  SyncStore,
+} from "./contracts/index.js"
 export type { CacheDatabase, CacheStatement, OpenDatabase, SqlValue } from "./driver.js"
 export { PRAGMAS } from "./driver.js"
 export { MIGRATIONS, type Migration, migrate } from "./migrations.js"

@@ -5,6 +5,7 @@ import { AUDIT_BUDGET, AUDIT_MIN_SCORE, AUDIT_PAGE } from "../../services/member
 import { momentOf } from "../../services/moment.js"
 import { listed, positiveCount, renderPage, window, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
+import { commandCapabilities } from "./capabilities.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `chats members …`; a subcommand that changes membership belongs here too. */
@@ -138,7 +139,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     )
     .argument("<chat>", messenger.chatArgument)
 
-  if (messenger.tracksMembers !== false) {
+  if (commandCapabilities(messenger).tracksMembers) {
     fetch.option("--track", "also fetch it daily while serve runs; chats tracking lists and edits those chats")
   }
   members.addCommand(
@@ -179,7 +180,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     .description("add people; they are told")
     .argument("<chat>", messenger.chatArgument)
     .argument("<person...>", "an id, or part of a name")
-  if (messenger.addsWithHistory !== false) {
+  if (commandCapabilities(messenger).addsWithHistory) {
     add.option("--history", "the people added also see the messages from before they came")
   }
   members.addCommand(

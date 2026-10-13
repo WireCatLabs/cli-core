@@ -1,9 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
-import type { Messenger } from "../cli/messenger/context.js"
-import type { MessengerAdapter } from "../cli/messenger/port.js"
+import type { AppIdentity } from "../domain/application.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
+import type { MessengerAdapter } from "../ports/messenger.js"
+import type { ProviderDescription as Messenger } from "../ports/provider.js"
 import type { SendGuard } from "../sends/guard.js"
+import type { ResourceLimits } from "../sends/resource-limits.js"
 import type { AccountStore } from "../store/account-store.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 
@@ -12,8 +13,10 @@ import type { AccountKey, MessageStore } from "../store/store.js"
  * connects and a command that never touches the store never opens it. Whoever built the deps closes
  * what they opened.
  */
+export type ServiceProvider = Messenger & { services?: import("./index.js").Override }
+
 export interface ServiceDeps {
-  messenger: Messenger
+  messenger: ServiceProvider
   offline: boolean
   /** `store`: the messenger's history is read from the local store (`Messenger.history`); `server` when unset. */
   reads?: "server" | "store"
@@ -37,6 +40,25 @@ export interface ServiceDeps {
   history?: boolean
   searchCatchUp?: boolean
   agentText?: true
+  resourceLimits?: Partial<ResourceLimits>
+  diagnostic?: (diagnostic: OptionalStoreDiagnostic) => void
+}
+
+export interface OptionalStoreDiagnostic {
+  code: "optional_store_unavailable"
+  message: string
+  error: unknown
+}
+
+const reportedStoreFailures = new WeakSet<ServiceDeps>()
+const reportOptionalStore = (deps: ServiceDeps, error: unknown): void => {
+  if (reportedStoreFailures.has(deps)) return
+  reportedStoreFailures.add(deps)
+  deps.diagnostic?.({
+    code: "optional_store_unavailable",
+    message: `local store enrichment unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    error,
+  })
 }
 
 /** The store with the running account bound: the default for a service's reads and writes. */
@@ -53,7 +75,8 @@ export const crossAccount = (deps: Pick<ServiceDeps, "store">, _reason: string):
 export const accountStoreIfOpen = async (deps: ServiceDeps): Promise<AccountStore | undefined> => {
   try {
     return await accountStore(deps)
-  } catch {
+  } catch (error) {
+    reportOptionalStore(deps, error)
     return undefined
   }
 }
@@ -67,7 +90,8 @@ export const storeIfOpen = async (
 ): Promise<{ store: MessageStore; account: AccountKey } | undefined> => {
   try {
     return { store: await deps.store(), account: await deps.account() }
-  } catch {
+  } catch (error) {
+    reportOptionalStore(deps, error)
     return undefined
   }
 }
@@ -77,7 +101,7 @@ export const fromStore = (deps: Pick<ServiceDeps, "offline" | "reads">): boolean
   deps.offline || deps.reads === "store"
 
 /** What a store-mode read answers for a chat the store holds nothing of. */
-export const nothingStored = (messenger: Messenger): string =>
+export const nothingStored = (messenger: Pick<Messenger, "app">): string =>
   `nothing stored for this chat yet — keep \`${messenger.app.command} serve\` running`
 
 /** Where a store-mode messenger's history comes from, for what it cannot do. */
@@ -155,9 +179,6 @@ export const storeOnlyDeps = (
   const messenger: Messenger = {
     app,
     provider: account.provider,
-    chatArgument: "a stored chat, by its id or title",
-    resolveSettings: refuse,
-    connect: async () => refuse(),
   }
   const guard: SendGuard = { check: refuse, record: () => {} }
   return { ...storedDeps(messenger, store, account, guard), ...(env === undefined ? {} : { env }) }

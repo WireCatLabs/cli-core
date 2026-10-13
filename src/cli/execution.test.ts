@@ -117,3 +117,32 @@ it("sees writes inside an inner deadline and stops later writes across the whole
   ).rejects.toMatchObject({ code: "outcome_unknown", details: { operation_ids: ["op-nested"] } })
   await control.finish()
 })
+
+it("waits for accepted output in async producers and when finishing", async () => {
+  const output: string[] = []
+  let release: (() => void) | undefined
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const control = execution(
+    {
+      data: (text) => {
+        output.push(text)
+      },
+      diagnostic: () => {},
+      drain: () => pending,
+    },
+    {},
+  )
+  let written = false
+  const writing = control.streams.dataAsync?.("first").then(() => {
+    written = true
+  })
+  await Promise.resolve()
+  expect(written).toBe(false)
+  expect(output).toEqual(["first"])
+  release?.()
+  await writing
+  await control.finish()
+  expect(written).toBe(true)
+})

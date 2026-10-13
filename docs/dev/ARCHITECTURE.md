@@ -1,7 +1,8 @@
 # Architecture
 
-What the package is made of and where the seams are: the map of what exists. Open work is in
-[the backlog](BACKLOG.md).
+Use this guide when changing a shared command, service or store resource. It shows where the
+behavior belongs and which dependencies a module may use. It describes the source tree; open
+work is in [the backlog](BACKLOG.md).
 
 ## The one rule
 
@@ -39,6 +40,7 @@ conformance or imply that planned command paths are already implemented.
 | `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer and installed-only bounded PCM recognizer; import alone loads no engine |
 | `./charts` | `src/charts/` | neutral chart data and a replaceable renderer interface; SVG rendering loads ECharts only on demand; a separate lazy PNG encoder uses resvg and bundled fonts |
 | `./models` | `src/models/` | purpose-specific text generation with typed image inputs, OpenAI-compatible and Anthropic adapters, strict options, injected key/consent resolvers; no configured provider means no call |
+| `./ports` | `src/ports/` | the messenger adapter contracts, capability checks and provider description, independent of the command framework |
 | `./services` | `src/services/` | the use cases, once each, that commands and MCP tools call — see [Services](#services) |
 | `./background` | `src/background/` | what any background process needs and no messenger: the lock per app and profile, whether a PID is alive and ours, the machine seam tests replace, systemd and launchd units — `serve` and `server` are built on it, each CLI's server stays its own (NEED-492 C) |
 | `./cli` | `src/cli/`, `src/mcp/` | the command skeleton, the shared commands and the MCP server |
@@ -184,8 +186,13 @@ rows past the newest 1,000 are dropped. A named row is a saved search, which `--
 run. `--no-record` (`ServiceDeps.history: false`) records nothing; a bot's search calls `searchStore` and is
 not recorded.
 
-**Where the queries live.** `src/store/store.ts` holds the `MessageStore` interface and `storeOver`, a
-facade that opens the transaction and delegates. The SQL is in `src/store/sqlite/`, one module per kind
+**Where the queries live.** `src/store/contracts/` holds the resource interfaces and their request/result
+models. `MessageStore` in `src/store/store.ts` composes those interfaces and preserves the existing API.
+`storeOver` assembles account, chat, message, sync, attachment, conversation, search, people and source
+factories from `src/store/resources/`. Each factory declares the subset of storage dependencies it uses.
+The shared `resources/runtime.ts` owns transactions, account/chat keys, the stemmer cache and lazy mail
+access. Composition preserves property descriptors so optional source stores still open on first use.
+The SQL is in `src/store/sqlite/`, one module per kind
 of record — `accounts`, `identities`, `chats`, `messages` (writes), `reads`, `search`, `ranges`,
 `sync` (state and fetch leases), `transcripts`, `conversations`, `tags`, `searches` — as plain functions taking a `StoreContext`: the
 connection as the `CacheDatabase` seam and as Drizzle (`orm`), and the clock. Queries are Drizzle's
@@ -407,8 +414,10 @@ provide legacy command context and settle its own recording before the shared fa
 Help/version exits skip failure settlement. The lifecycle contract
 describes the order and failure behavior.
 
-A CLI describes its messenger once — a `Messenger` (`src/cli/messenger/context.ts`) with a
-`connect` that returns a `MessengerAdapter` (`src/cli/messenger/port.ts`) — and gets the shared
+A CLI describes its messenger once — a `Messenger` (`src/cli/messenger/context.ts`) extending the neutral
+`ProviderDescription` (`src/ports/provider.ts`) with CLI setup callbacks. Its `connect` returns a
+`MessengerAdapter` (`src/ports/messenger.ts`); the former CLI port path remains a compatibility re-export.
+The CLI gets the shared
 commands, one file per resource in `src/cli/messenger/`. Two wrappers sit between a command and the
 adapter: `observed.ts` times each call into the run record, `stored.ts` saves what was read. A new
 adapter method is optional and reached with `capability()`; the wrappers pass through any method
@@ -428,15 +437,16 @@ profile's permissions exactly as over stdio; no form is forced (NEED-774, which 
 ## Services
 
 Five layers, each calling only the ones below it: the **domain** (`src/domain/`), the **adapters**
-(each CLI's own, behind `MessengerAdapter`), the **ports** (`port.ts`, the store), the **services**
+(each CLI's own, behind `MessengerAdapter`), the **ports** (`src/ports/`, store contracts), the **services**
 (`src/services/`) and the **interface** (the commands and the MCP tools). `biome.json` refuses an import of `commander` or
 of a command file from `src/services/`, `src/sends/` and `src/mcp/`: what a service or an MCP tool
 shares with a command lives in the service, and the command imports it. It also refuses a table module under
 `src/store/sqlite/` from `src/services/`, `src/sends/`, `src/mcp/` and `src/cli/`: they reach the store
 through `src/store/store.ts`, which re-exports what they need.
 
-A service is a plain object made by a factory over `ServiceDeps` (`src/services/deps.ts`): the
-messenger, `offline`, and a connection, a store and an account that are each opened on first use —
+A service is a plain object made by a factory over application-owned dependencies. `ServiceDeps`
+(`src/services/deps.ts`) accepts provider data without Commander or CLI setup callbacks, plus
+`offline` and a connection, a store and an account that are each opened on first use —
 so a read from the store never connects. A service reads and writes through `accountStore(deps)`: the store
 with the running account bound (`store.forAccount(key)`), where no call takes an account and a row id of
 another account — an attachment, a mail thread, a meeting — is not found. A read across accounts on
@@ -452,6 +462,26 @@ can supply a voice question without changing the archived message text. MCP reta
 connections. Either way a command and its tool run the same method, and so answer the same
 error for the same input. Each caller still parses its own input, so an error names `--since` in a
 command and `since` in a tool.
+
+**Message use cases have separate factories.** `messagesReadService` owns history, context, links and
+download records; its store port contains only the reads and writes it needs. `messagesWriteService`
+owns sends and mutations with a guard, connection and the relevant provider options.
+`messagesSearchService` orchestrates archive/server search and history recording. `messagesService`
+only composes those factories. Request/result types live in `message-contracts.ts`; chat/person
+resolution in `message-resolution.ts`; archive search execution in `messages-archive-search.ts`.
+Pure calendar, duration, error and recovery helpers live below services in `src/domain/`.
+
+**Embedding maintenance does not depend on network refresh.** `embedding-runtime.ts` resolves models
+and uses the injected warm cache; `embeddings-maintenance.ts` owns local build/embed/readiness work;
+`embeddings-search.ts` owns lexical/meaning search and optional history refresh. Search receives local
+maintenance as an explicit dependency. Archive catch-up imports maintenance directly, so preparing
+newly fetched messages does not import the search orchestration module. `embeddingsService` composes
+the same public methods, with the existing model lifecycle and budgets.
+
+**Optional store enrichment reports failure without changing the online answer.** The
+`ServiceDeps.diagnostic` callback receives `optional_store_unavailable` once per dependency scope.
+`accountStoreIfOpen` and `storeIfOpen` still return no enrichment after a store failure; required
+store reads continue to propagate their errors. The CLI wires the callback to its warning renderer.
 
 **A messenger that pushes its history reads it from the store.** `Messenger.history: "store"` sets
 `ServiceDeps.reads`, and every read that `--offline` answers from the store — `chats list|show`,

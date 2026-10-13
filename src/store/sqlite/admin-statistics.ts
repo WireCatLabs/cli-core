@@ -1,18 +1,19 @@
+import type { AdminEvidenceItem, AdminStoreRequest, AdminStoreResult } from "../contracts/admin-statistics-types.js"
+
+export type { AdminEvidenceItem, AdminStoreRequest, AdminStoreResult } from "../contracts/admin-statistics-types.js"
+
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import {
   type AdminNode,
-  type AdminOptions,
-  type AdminRow,
   type AdminStay,
   adminEntityKey,
   calculateAdminStatistics,
 } from "../../domain/admin-statistics.js"
-import { type CounterState, counterFreshness } from "../../domain/counters.js"
+import { counterFreshness } from "../../domain/counters.js"
 import { RANKING_GRAPH_LIMITS, rankingGraphEvidence } from "../../domain/rankings-graph.js"
 import type { QueryExecution } from "../../search/lucene/resolved.js"
 import type { SqlValue } from "../driver.js"
-import type { StoredHit } from "../store.js"
 import { chatCompleteness } from "./completeness.js"
 import { counterStates } from "./counters.js"
 import { withQuerySelection } from "./lucene.js"
@@ -20,41 +21,6 @@ import type { StoreContext } from "./open.js"
 import { rankingCounter } from "./rankings.js"
 import { hitsByPk } from "./search.js"
 
-export interface AdminStoreRequest {
-  options: AdminOptions
-  evidence?: { entity: { account: { provider: string; account: string }; id: string }; cursor?: string }
-}
-export interface AdminEvidenceItem {
-  message: StoredHit
-  related?: StoredHit
-  contribution: number | null
-  counters?: CounterState[]
-}
-export interface AdminStoreResult {
-  items: AdminRow[]
-  total: number
-  included: number
-  hasMore: boolean
-  cutoff: string
-  summary: ReturnType<typeof calculateAdminStatistics>["summary"]
-  quality: {
-    graph: ReturnType<typeof calculateAdminStatistics>["graph"]
-    archives: {
-      account: { provider: string; account: string }
-      chatId: string
-      state: string
-      fetchedAt: string | null
-    }[]
-    membership: "observed_stays_only" | "not_used"
-    archivesTotal: number
-    counterFreshness: "fresh" | "stale" | "partial" | "unknown"
-    answererRoles: "user_selected_identities"
-  }
-  evidence?: AdminEvidenceItem[]
-  nextCursor?: string | null
-  fingerprint: string
-  byteLimit: number
-}
 function fail(message: string, reason = "query.too-large"): never {
   throw new CliError("validation_error", message, { reason, complete: false })
 }

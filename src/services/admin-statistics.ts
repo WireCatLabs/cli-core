@@ -5,11 +5,11 @@ import { isId, pickPerson } from "../resolve.js"
 import type { QueryExecution } from "../search/lucene/resolved.js"
 import type { AdminStoreResult, MessageStore } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
-import type { SearchQuery } from "./messages.js"
+import type { SearchQuery } from "./message-contracts.js"
 import { prepareLucene, stemExecution } from "./messages-search.js"
 import { momentOf } from "./moment.js"
 import { type RankingSelection, rankingSelection, readRankingSelection } from "./rankings-selection.js"
-import { searchRecordOf } from "./searches.js"
+import { searchRecordOf } from "./search-record.js"
 
 export type AdminQuery = SearchQuery & {
   answerers?: string[]

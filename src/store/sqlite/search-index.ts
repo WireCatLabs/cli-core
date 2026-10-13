@@ -1,31 +1,13 @@
+import type { SearchIndexFill, SearchIndexState } from "../contracts/search-index-types.js"
+
+export type { SearchIndexFill, SearchIndexState } from "../contracts/search-index-types.js"
+
 import { trigrams } from "../../search/trigrams.js"
 import type { CacheDatabase } from "../driver.js"
 import { backfillNormalized, pendingNormalization } from "./backfill.js"
 import { drainInvolvementQueue } from "./involvement-queue.js"
 
 const INDEX = "message_words"
-
-export interface SearchIndexState {
-  /** The highest message the batches must reach; newer ones are indexed by triggers. */
-  watermark: number
-  filledThrough: number
-  pendingNormalization: number
-  /** Every live message is in the word index: search may rank by words. */
-  ready: boolean
-  /** The typo vocabulary covers the messages up to this one; 0 while it is not built. */
-  termsThrough: number
-  /** The newest stored message. */
-  newest: number
-  /** The typo vocabulary covers every stored message; `ready` does not wait for it. */
-  termsReady: boolean
-  builtAt: string | null
-}
-
-export interface SearchIndexFill {
-  normalized: number
-  indexed: number
-  terms: number
-}
 
 /** One index's row of `search_index_state`; `undefined` on a file before that index existed. */
 export const indexRow = (database: CacheDatabase, name: string) => {

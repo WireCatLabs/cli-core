@@ -1,3 +1,7 @@
+import { parseDuration } from "../domain/duration.js"
+
+export { parseDuration } from "../domain/duration.js"
+
 import { existsSync } from "node:fs"
 import { CliError, configFilePath, loadConfigFile, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import * as v from "valibot"
@@ -13,6 +17,12 @@ import {
   permissionOverrides,
   RESOURCES,
 } from "../sends/permissions.js"
+import {
+  DEFAULT_RESOURCE_LIMITS,
+  type ResourceLimitFlags,
+  type ResourceLimits,
+  resolveResourceLimits,
+} from "../sends/resource-limits.js"
 import { type AppIdentity, envName } from "./app.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
@@ -89,6 +99,12 @@ const SHARED_PROFILE_ENTRIES = {
   catchUpMarksRead: v.optional(flag),
   searchCatchUp: v.optional(flag),
   ...AI_ENTRIES,
+  ...Object.fromEntries(
+    Object.keys(DEFAULT_RESOURCE_LIMITS).map((key) => [
+      key,
+      v.optional(key === "uploadConcurrency" ? count : countOrZero),
+    ]),
+  ),
 }
 
 /**
@@ -153,7 +169,7 @@ export interface Config {
 }
 
 /** Whatever the command line carried. Everything is optional: absent means "not given here". */
-export interface GlobalFlags {
+export interface GlobalFlags extends ResourceLimitFlags {
   permission?: string[]
   profile?: string
   json?: boolean
@@ -174,7 +190,7 @@ export interface GlobalFlags {
 /** `first word`, `flag`, `TG_PROFILE`, `config file`, `config defaults`, `default`… */
 export type Source = string
 
-export interface Settings extends AISettings {
+export interface Settings extends AISettings, ResourceLimits {
   profile: string
   json: boolean
   jsonl: boolean
@@ -476,8 +492,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
       undefined,
     )
 
+    const resources = resolveResourceLimits(flags, env, app.envPrefix, fromLayers)
     const ai = resolveAISettings(app.envPrefix, layers, env)
     const settings: Settings = {
+      ...resources.values,
       ...ai.values,
       profile: usableProfileName(profile.value),
       json: flags.json === true,
@@ -518,6 +536,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       configuredProfiles: namedProfiles(config),
       profilesHere: profilesOf(config, env),
       sources: {
+        ...resources.sources,
         ...ai.sources,
         profile: profile.from,
         limit: limit.from,
@@ -669,23 +688,6 @@ const namedProfiles = (config: Config): string[] =>
       ...Object.keys(config.bot?.profiles ?? {}),
     ]),
   ].sort()
-
-const DURATION = /^(\d+)(ms|s|m|h|d)$/
-const UNIT_MS: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }
-
-/** Named by where it came from, so somebody who set the variable weeks ago is told which thing is wrong. */
-export const parseDuration = (value: string, source: string): number => {
-  const match = DURATION.exec(value.trim())
-  if (!match?.[1] || !match[2]) {
-    throw new CliError(
-      "validation_error",
-      `${source} takes a duration with a unit — 500ms, 30s, 2m, 4h or 1d — not "${value}"`,
-    )
-  }
-  const ms = Number(match[1]) * (UNIT_MS[match[2]] ?? 0)
-  if (ms <= 0) throw new CliError("validation_error", `${source} has to be more than zero, and "${value}" is not`)
-  return ms
-}
 
 /** A list is written `a,b` on the command line and kept as an array; everything else is JSON or a string. */
 const parseValue = (value: string): unknown => {
