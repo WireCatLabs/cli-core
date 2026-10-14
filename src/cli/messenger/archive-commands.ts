@@ -164,9 +164,9 @@ const exportCommand = (messenger: Messenger): Command =>
             const empty = changes.messages.length === 0 && changes.deleted.length === 0
             let file: string | null = null
             if (password !== undefined) {
-              yield* linesOf(id, changes)
+              yield* linesOf(id, changes, account)
               if (!empty) file = run
-            } else if (before === undefined || !empty) file = writeChanges(dir, id, changes.mark, changes)
+            } else if (before === undefined || !empty) file = writeChanges(dir, id, changes.mark, changes, account)
             manifest.chats[id] = {
               title,
               mark: changes.mark,
@@ -205,7 +205,9 @@ const exportCommand = (messenger: Messenger): Command =>
         const body =
           format === "markdown"
             ? toMarkdown(title, messages)
-            : messages.map((message) => `${JSON.stringify(message)}\n`).join("")
+            : messageItems(messages, account)
+                .map((item) => `${JSON.stringify(item)}\n`)
+                .join("")
         try {
           if (password !== undefined) await seal(() => Readable.from([body]), path, password)
           else writeFileSync(path, body, { flag: "wx", mode: 0o600 })
