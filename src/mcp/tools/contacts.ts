@@ -5,7 +5,7 @@ import { itemOf, listOf } from "../../cli/envelope.js"
 import { listQuery, nativeTerms, queryArgument, searchText } from "../../cli/list-query.js"
 import { contactAnswer, snakeKeys } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { CONTACTS_QUERY } from "../../cli/messenger/people-queries.js"
+import { CONTACTS_QUERY, notesAllowed } from "../../cli/messenger/people-queries.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
 import { casKey } from "../../cli/registry-keys.js"
 import type { SendGuard } from "../../sends/guard.js"
@@ -25,7 +25,8 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
       title: "List contacts",
       description:
         "People the owner has a one-to-one chat with. query name:<text> matches the name, the local alias or the " +
-        "@username; nothing else is filtered.",
+        "@username; notes:<text> the owner's private notes about them (needs contacts.notes.list); nothing else is " +
+        "filtered.",
       input: v.object({
         query: queryArgument(CONTACTS_QUERY),
         order: v.optional(v.picklist(["recent", "name"])),
@@ -35,11 +36,17 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
       annotations: READ,
       output: { entity: "contact", list: true },
       served: async (services, { query: words, order, ...rest }, defaults) => {
-        const search = searchText(
-          nativeTerms(listQuery(words ?? "", CONTACTS_QUERY, "contacts list"), "contacts list").get("name"),
-        )
+        const terms = nativeTerms(listQuery(words ?? "", CONTACTS_QUERY, "contacts list"), "contacts list")
+        const search = searchText(terms.get("name"))
+        const notes = terms.get("notes")
+        notesAllowed(defaults.settings.permissions ?? {}, notes)
         const { size, number, window } = paging(rest, defaults)
-        const found = await services.people.list({ order: order ?? "recent", ...(search ? { search } : {}), ...window })
+        const found = await services.people.list({
+          order: order ?? "recent",
+          ...(search ? { search } : {}),
+          ...(notes ? { notes } : {}),
+          ...window,
+        })
         const account = await services.chats.account()
         return listOf("contacts list", {
           items: found.items.map((one) => contactAnswer(account, one)),

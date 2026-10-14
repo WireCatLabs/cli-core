@@ -38,13 +38,14 @@ export interface Paging {
 const typed = (query: QueryWords) => typedQuery(query).trim() || undefined
 
 export const chatsList = async (services: Services, query: QueryWords, paging: Paging) => {
-  listQuery(typedQuery(query), CHATS_QUERY, "chats list")
+  const ast = listQuery(typedQuery(query), CHATS_QUERY, "chats list")
   const { limit, page, all } = paging
-  const found = await services.chats.list(all ? { offset: 0 } : { limit, offset: (page - 1) * limit })
+  const found = await services.chats.list(all ? { offset: 0 } : { limit, offset: (page - 1) * limit }, ast)
   const account = await services.chats.account()
   return listOf("chats list", {
     items: found.items.map((one) => chatAnswer(account, one)),
     ...pageOf(paging, found),
+    args: { query: typed(query) },
   })
 }
 

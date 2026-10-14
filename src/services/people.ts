@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { type Predicate, queryError } from "@wirecat/cli-base/query"
 import { isCliFailure } from "../cli/failures.js"
 import { capability } from "../cli/messenger/port.js"
 import type { Chat, Contact, Id, Member, Page, PersonCard, PersonProfile, PhoneBookEntry } from "../domain/models.js"
@@ -35,8 +36,11 @@ export interface ContactSync {
  * chat, it answers; otherwise the dialogs themselves do, offline from the stored chats.
  */
 export interface PeopleService {
-  /** `search` matches the name, the local alias or the @username, as the store searches them. */
-  list(options: { order: "recent" | "name"; search?: string } & PageWindow): Promise<Page<Contact>>
+  /**
+   * `search` matches the name, the local alias or the @username, as the store searches them. `notes` is a
+   * `notes:` term, answered only from the contacts the store keeps.
+   */
+  list(options: { order: "recent" | "name"; search?: string; notes?: Predicate } & PageWindow): Promise<Page<Contact>>
   show(person: string, options?: { notes?: boolean }): Promise<PersonCard>
   /** What the messenger says about them, and their stored activity in each shared chat. */
   profile(person: string): Promise<PersonProfile>
@@ -123,6 +127,14 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       const held = stored ? { store: await deps.store(), account: await deps.account() } : await storeIfOpen(deps)
       if (held && (await held.store.countContacts(held.account)) > 0)
         return storedContacts(held.store, held.account, options)
+      if (options.notes)
+        queryError(
+          "query.unsupported-field",
+          options.notes.span,
+          "notes: reads the contacts kept in the local store, and it keeps none yet; `contacts sync` fills it",
+          { command: "contacts list" },
+          { supported: ["name"] },
+        )
       return contactsIn(
         chats ?? (await (await deps.store()).chats(await deps.account(), {})).items,
         options,
@@ -303,15 +315,25 @@ export const phoneOf = (typed: string): string => {
 const storedContacts = async (
   store: MessageStore,
   account: AccountKey,
-  { order, search, limit, offset }: { order: "recent" | "name"; search?: string } & PageWindow,
+  {
+    order,
+    search,
+    notes,
+    limit,
+    offset,
+  }: { order: "recent" | "name"; search?: string; notes?: Predicate } & PageWindow,
 ): Promise<Page<Contact>> => {
   // Chats saved since the last refresh may have moved someone up; the order is worked out again here.
   if (order === "recent") await store.refreshRecency(account)
   const query = search?.trim() || undefined
+  const filter = {
+    ...(query === undefined ? {} : { query }),
+    ...(notes ? { notes: notes.value.replace(/^\*+|\*+$/g, "") } : {}),
+  }
   return store.contacts(account, {
     order,
-    ...(query === undefined ? {} : { query }),
-    limit: limit ?? (await store.countContacts(account, query === undefined ? {} : { query })),
+    ...filter,
+    limit: limit ?? (await store.countContacts(account, filter)),
     offset,
   })
 }

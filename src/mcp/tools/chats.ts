@@ -24,7 +24,8 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "List chats",
       description:
         "Chats the owner is in, most recent first. Use it to find a chat's id before reading or sending. " +
-        "The list takes no filter yet: neither the messenger nor the store filters chats, so a query is refused.",
+        "query (kind:group unread_count>0, title:book) is answered from the local store: when the chats are read " +
+        "from the messenger it filters nothing, and a query is refused.",
       input: v.object({ query: queryArgument(CHATS_QUERY), limit, page }),
       annotations: READ,
       output: { entity: "chat", list: true },

@@ -8,6 +8,7 @@ import {
   queryError,
 } from "@wirecat/cli-base/query"
 import type { SqlValue } from "../driver.js"
+import { type SQL, sql } from "./drizzle/core.js"
 
 export interface Where {
   sql: string
@@ -112,3 +113,10 @@ const compile = (node: QueryNode, columns: ColumnMap, options: FilterOptions): W
  */
 export const queryFilter = (ast: QueryAst, columns: ColumnMap, options: FilterOptions = {}): Where =>
   compile(ast.root, columns, options)
+
+/** The SQL a list query compiled to, with its values bound, for a Drizzle `where`. */
+export const bound = ({ sql: text, params }: Where): SQL =>
+  sql.join(
+    text.split("?").map((part, at) => (at < params.length ? sql`${sql.raw(part)}${params[at]}` : sql.raw(part))),
+    sql``,
+  )

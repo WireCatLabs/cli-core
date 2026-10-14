@@ -62,6 +62,7 @@ import { applyCounterObservations, type CounterTarget, counterStates, counterTar
 import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
 import { drainEmailIndex, type MailStore, mailStoreOver, threadConversation } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
+import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import * as imageChunks from "./sqlite/image-chunks.js"
 
@@ -231,10 +232,9 @@ export interface Delta {
   state?: Record<string, string>
 }
 
+/** A chat list's query, compiled over `CHAT_COLUMNS`. */
 export interface StoredChatFilter {
-  query?: string
-  kind?: Chat["kind"]
-  unread?: boolean
+  where?: Where
 }
 
 export interface MessageStore {
@@ -578,14 +578,13 @@ export interface MessageStore {
   savePeople(key: AccountKey, people: PersonFacts[]): Promise<void>
   /**
    * The people this account has a one-to-one chat with — as far as the saved member lists go —
-   * newest conversation first or by name. `query` matches three letters or more of a name or
-   * username.
+   * newest conversation first or by name.
    */
   contacts(
     key: AccountKey,
-    options: { order: "recent" | "name"; query?: string; limit: number; offset?: number },
+    options: { order: "recent" | "name"; limit: number; offset?: number } & ContactFilter,
   ): Promise<Page<Contact>>
-  countContacts(key: AccountKey, options?: { query?: string }): Promise<number>
+  countContacts(key: AccountKey, options?: ContactFilter): Promise<number>
   /** Works out again when each contact was last written to, from their one-to-one chats. */
   refreshRecency(key: AccountKey): Promise<void>
   /** Every account of every messenger the file holds, by messenger then id. */
@@ -1689,9 +1688,9 @@ const storeOver = (context: StoreContext): MessageStore => {
       return identities.contacts(context, accountKey, key, options)
     },
 
-    countContacts: async (key, { query } = {}) => {
+    countContacts: async (key, filter = {}) => {
       const accountKey = findAccountPk(key)
-      return accountKey === undefined ? 0 : identities.countContacts(context, accountKey, key, query)
+      return accountKey === undefined ? 0 : identities.countContacts(context, accountKey, key, filter)
     },
 
     refreshRecency: async (key) => {
@@ -1929,6 +1928,7 @@ export {
   type TextOrigin,
 } from "./sqlite/attachment-texts.js"
 export { pendingNormalization } from "./sqlite/backfill.js"
+export { CHAT_COLUMNS, titlePart } from "./sqlite/chats.js"
 export { CHAT_LIST_KEY, type ChatCompleteness, fetchedKey, historyStartKey } from "./sqlite/completeness.js"
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export type { CounterTarget } from "./sqlite/counters.js"
