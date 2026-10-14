@@ -9,6 +9,28 @@ What the package is made of and where the seams are: the map of what exists. Ope
 domain types, and `biome.json` refuses any import of `@mtcute/*`, `ws` or an adapter directory
 under `src/`. What only one provider has travels in `providerMetadata`.
 
+## Responsibility and dependency boundaries
+
+Follow the shared
+[modularity standard](https://github.com/WireCatLabs/cli-base/blob/main/docs/dev/MODULARITY.md).
+cli-base owns framework primitives; cli-core owns provider-neutral domain behavior and use cases;
+provider applications own vendor translation and account/resource binding.
+
+| Module | Responsibility |
+|---|---|
+| Domain modules such as `src/meetings/` and `src/tasks/` | Models, references, validation and capability ports; no transport runtime or SQL implementation |
+| `src/services/` | Use-case orchestration over injected narrow ports; no provider SDK or concrete store imports |
+| `src/store/sqlite/` and store drivers | Persistence adapters, SQL and transaction boundaries |
+| `src/cli/`, `src/mcp/`, domain `/cli` and `/mcp` entries | Transport parsing and result presentation; call shared policy rather than copying it |
+| Provider application's composition root | Choose account, bind store and provider ports, enforce lifetime and close-before-output |
+
+Persistence adapters are part of Core; vendor adapters are not. Keep this distinction when adding
+meeting providers. A service may depend on an exported store contract without importing its SQLite
+implementation. New CLI/MCP capabilities share validation, account-bound reader contracts and answer
+mapping. Split substantive orchestration, transport parsing and formatting into coherent modules;
+do not grow an existing handler into a second service layer. These boundaries are review rules;
+existing import restrictions and type checks enforce only the subset configured in the repository.
+
 ## CLI design references
 
 The command interface follows a shared [adoption profile](STANDARD.md#external-references-and-our-adoption-profile):

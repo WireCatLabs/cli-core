@@ -1200,7 +1200,17 @@ remains available through `<cli> commands --json`, with no scoped fields.
 
 ## Layers and sharing
 
-1. **Shared by default.** Code goes here unless it names a messenger. A feature one messenger has
+Code structure follows the shared
+[modularity standard](https://github.com/WireCatLabs/cli-base/blob/main/docs/dev/MODULARITY.md):
+provider-neutral capabilities in cli-core, general CLI infrastructure in cli-base, narrow ports,
+thin CLI/MCP handlers and explicit resource ownership. The local
+[architecture map](ARCHITECTURE.md#responsibility-and-dependency-boundaries) names their modules.
+The guidelines apply to changed responsibilities; they do not claim that all existing code has
+already been refactored or that file-size guidance is enforced by lint.
+
+1. **Shared by default.** Provider-neutral behavior goes here. Meeting discovery and preparation
+   belong here even when Zoom is the first consumer; provider bindings stay in their applications.
+   A feature one messenger has
    and the other could have (topics, polls) is still a port group and a shared command; it is
    CLI-local only when the other messenger cannot have it — MAX's socket server, Telegram's app
    registration.

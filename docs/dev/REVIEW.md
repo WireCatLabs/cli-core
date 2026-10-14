@@ -38,6 +38,11 @@ design guidance or our policy; record justified deviations instead of claiming b
 1. **Layers.** The command and the MCP tool call one service method; the service calls a port group;
    no command calls an adapter method for a use case a service owns, and no messenger type crosses
    the adapter ([Layers and sharing](STANDARD.md#layers-and-sharing)).
+   Check coherent responsibilities, narrow injected ports and explicit resource ownership against
+   the [modularity standard](https://github.com/WireCatLabs/cli-base/blob/main/docs/dev/MODULARITY.md).
+   Review production modules around 300 lines for separable responsibilities; above 500, split
+   them or explain why cohesion warrants their size. Do not apply these guidelines mechanically
+   to generated registries or cohesive test cases.
 2. **Shared by default.** Code that names no messenger is here, in cli-core, not in a CLI. A
    CLI-local feature is one the other messenger cannot have, and the manifest row says why.
 3. **Parity.** The manifest row moves the CLI from `planned` into `in` (or gives the reason it lacks
