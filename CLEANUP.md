@@ -39,3 +39,5 @@
 - 2026-10-14: `../cli-messaging-wt-a2-s5a-r` — second worktree of S5a for rebasing its PRs while the first is busy; remove once merged.
 
 - 2026-10-14: retain `feat/meeting-occurrence-foundation`, its worktree and isolated `/var/tmp/core-occurrence-*` states and `/tmp/core-occurrence-*` logs until owner-approved cleanup; normalized synthetic providers only.
+
+- 2026-10-14: retain `feat/public-answer-policy` and its worktree plus isolated validation artifacts until owner-approved cleanup; public exports for standalone CLI/MCP consumers.

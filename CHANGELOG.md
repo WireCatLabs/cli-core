@@ -14,6 +14,10 @@ shape of this file.
   write (sync, download) stays incidental and its steps stay safe. Retries are unchanged: judged on the remote side
   only (#1194).
 
+### Added
+
+- Public standalone-host answer policy helpers from `./cli`: `judgedEffects`, `judgedTargets`, `judgedAnswer`, `runnable` and `withSafety`. Provider apps can reuse shared remote-effect retry and next-step safety without mounting the messenger program.
+
 ## 0.272.0 — 14.10.2026
 
 ### Changed — may break callers
