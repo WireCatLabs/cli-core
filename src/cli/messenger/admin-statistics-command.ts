@@ -6,7 +6,7 @@ import { environmentOf } from "../context.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { adminAnswer } from "./stats-answers.js"
+import { adminAnswer, refuseJsonl } from "./stats-answers.js"
 
 const collect = (value: string, previous: string[] = []) => [...previous, value]
 export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport): Command => {
@@ -49,6 +49,7 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
       .option("--max-replies <n>", "maximum observed discussion replies", Number)
   command.action(async function (this: Command, argument: string | string[]) {
     const context = messengerContext(this, messenger)
+    refuseJsonl(context.format)
     const { answerer, ...options } = this.opts<Omit<AdminQuery, "answerers"> & { answerer?: string[] }>()
     const found = await context.withServices((services) =>
       services.adminStatistics.report(report, {

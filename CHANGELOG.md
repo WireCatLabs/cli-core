@@ -9,6 +9,16 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`stats` reports refuse `--jsonl`** (`reason: "output.one-object"`), as charts and official statistics did:
+  `stats messages show|unanswered|discussion|top|counters show|counters refresh`, `stats contacts responses|top`,
+  `stats chats show|newcomers|retention|official`, `stats tasks show`, `stats charts`. The `* evidence` lists still
+  stream.
+- **`stats chats show` answers the new `chat_stats` entity** (CLI and MCP `stats_chats_show`): `chat` is a `chat:`
+  reference (was `chat_id`), `top_posts[].ref` a message locator (was `message_id`), `fetch` is gone (the
+  `messages.sync` step and a `missing` entry say it).
+- **`stats tasks show` answers `{item}` with the new `task_stats` entity**: `open` across chats and `rows` of `chat`
+  (a `chat:` reference, was `group`), `open`, `oldest_open_at`, `median_close_ms` — CLI and MCP alike (was a
+  `{items, page, limit, hasMore}` list).
 - **`searchNotes` answers in snake_case**, as an app prints it: `NotesFound` has `has_more`, `next_offset`,
   `meaning_skipped`, `pictures_skipped`; each `FoundNote` has `folder_id`, `updated_at` (was `modifiedAt`), `excerpt`
   (was `line`), `found_by` and `links[].target_text` — the `note` entity's names.

@@ -118,11 +118,17 @@ describe("administrator statistics command views", () => {
     expect(JSON.parse(discussion.stdout).item).toMatchObject({ report: "discussion", rows: [] })
     expect(connect).not.toHaveBeenCalled()
   })
-  it("keeps quality in JSONL and enforces message-read permission", async () => {
+  it("refuses JSONL for a report, keeps its quality in JSON, and enforces message-read permission", async () => {
     const { call } = await setup()
-    const result = await call(["stats", "messages", "unanswered", "--jsonl", "--older-than", "1h"])
+    const lines = await call(["stats", "messages", "unanswered", "--jsonl", "--older-than", "1h"])
+    expect(lines.code).not.toBe(0)
+    expect(JSON.parse(lines.stderr).error).toMatchObject({ code: "validation_error", reason: "output.one-object" })
+    const result = await call(["stats", "messages", "unanswered", "--json", "--older-than", "1h"])
     expect(result.code, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout)).toMatchObject({ report: "unanswered", quality: { counter_freshness: "unknown" } })
+    expect(JSON.parse(result.stdout).item).toMatchObject({
+      report: "unanswered",
+      quality: { counter_freshness: "unknown" },
+    })
     const denied = await setup({ messages: "deny" })
     const rejected = await denied.call(["stats", "contacts", "responses", "--answerer", "12", "--json"])
     expect(rejected.code).not.toBe(0)

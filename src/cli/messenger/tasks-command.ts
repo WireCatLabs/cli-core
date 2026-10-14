@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { AGENDA_QUERY, type Agenda, agendaItem } from "../../services/agenda.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
@@ -14,8 +15,9 @@ import {
 } from "../../services/tasks.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
-import { listed, positiveCount } from "../paging.js"
+import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
+import { refuseJsonl, taskStatsAnswer } from "./stats-answers.js"
 
 const line = ({ id, state, kind, group, createdAt, message, note }: TaskView) =>
   [
@@ -261,35 +263,37 @@ export const tasksCommand = (messenger: Messenger): Command => {
 }
 
 export const tasksStatsCommand = (messenger: Messenger): Command => {
-  return new Command("show")
+  return annotate(new Command("show"), { output: { entity: "task_stats" } })
     .description("per chat: how many tasks are open, the oldest open one, the median time to close")
     .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
     .option("--type <name>", "only this type: question, request, mention or promise", taskTypeOf)
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const { chat, type } = this.opts<{ chat?: string; type?: TaskView["kind"] }>()
-      const rows = await context.withServices((services) =>
-        services.tasks.stats({
+      refuseJsonl(context.format)
+      const { rows, account } = await context.withServices(async (services) => ({
+        rows: await services.tasks.stats({
           ...(chat === undefined ? {} : { chat }),
           ...(type === undefined ? {} : { type }),
         }),
+        account: await services.messages.reader(),
+      }))
+      if (rows.length === 0) context.renderer.note("no tasks yet")
+      renderAnswer(this, context, taskStatsAnswer(rows, account), () =>
+        rows.length === 0
+          ? ""
+          : `${rows
+              .map(({ group, open, oldestOpenAt, medianCloseMs }) =>
+                [
+                  group,
+                  `${open} open`,
+                  oldestOpenAt ? `oldest ${oldestOpenAt.toISOString().slice(0, 16).replace("T", " ")}` : "",
+                  medianCloseMs === undefined ? "" : `median ${Math.round(medianCloseMs / 60_000)} min to close`,
+                ]
+                  .filter(Boolean)
+                  .join("  "),
+              )
+              .join("\n")}\n`,
       )
-      if (context.format !== "pretty") context.renderer.result(listed(rows))
-      else if (rows.length === 0) context.renderer.note("no tasks yet")
-      else
-        context.streams.data(
-          `${rows
-            .map(({ group, open, oldestOpenAt, medianCloseMs }) =>
-              [
-                group,
-                `${open} open`,
-                oldestOpenAt ? `oldest ${oldestOpenAt.toISOString().slice(0, 16).replace("T", " ")}` : "",
-                medianCloseMs === undefined ? "" : `median ${Math.round(medianCloseMs / 60_000)} min to close`,
-              ]
-                .filter(Boolean)
-                .join("  "),
-            )
-            .join("\n")}\n`,
-        )
     })
 }

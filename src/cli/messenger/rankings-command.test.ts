@@ -125,13 +125,8 @@ describe("ranking command views", () => {
     expect(authors.code, authors.stderr).toBe(0)
     expect(JSON.parse(authors.stdout).item.rows[0]).toMatchObject({ id: "11", value: 100 })
     const lines = await call(["stats", "contacts", "top", "--measure", "words", "--jsonl"])
-    expect(lines.code, lines.stderr).toBe(0)
-    expect(
-      lines.stdout
-        .trim()
-        .split("\n")
-        .map((line) => JSON.parse(line).rows),
-    ).toEqual([expect.any(Array)])
+    expect(lines.code).not.toBe(0)
+    expect(lines.stderr).toContain("--json, not --jsonl")
     expect(connect).not.toHaveBeenCalled()
   })
   it("follows exact evidence selections and cursor continuation", async () => {

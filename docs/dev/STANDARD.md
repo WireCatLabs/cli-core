@@ -572,6 +572,9 @@ The canonical paths for the statistics migration and rankings are:
 | `stats messages top [query...]` | Rank matching messages by a measure or score | Planned |
 | `stats contacts top [query...]` | Rank the authors of matching messages by a measure or score | Planned |
 
+A report or chart under `stats` is one JSON object, so `--jsonl` is refused there (`output.one-object`); the
+`* evidence` lists stream their items.
+
 These paths specify the command hierarchy, not implemented availability. Existing commands stay
 registered until the coordinated migration; no additional statistics commands may be added
 outside `stats`. The existing `stats charts` noun view remains under that namespace; review the

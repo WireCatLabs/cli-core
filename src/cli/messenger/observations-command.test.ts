@@ -185,11 +185,12 @@ describe("observation CLI", () => {
     expect(denied.connect).not.toHaveBeenCalled()
   })
 
-  it("emits JSONL and refuses unscoped refresh before any connection", async () => {
+  it("refuses JSONL and an unscoped refresh before any connection", async () => {
     const { call, connect } = await setup()
-    const shown = await call("stats", "messages", "counters", "show", "--chat", "7", "--jsonl")
+    expect((await call("stats", "messages", "counters", "show", "--chat", "7", "--jsonl")).code).not.toBe(0)
+    const shown = await call("stats", "messages", "counters", "show", "--chat", "7", "--json")
     expect(shown.code, shown.stderr).toBe(0)
-    expect(JSON.parse(shown.stdout)).toMatchObject({ rows: [{ ref: "msg:chat/500/7/1" }] })
+    expect(JSON.parse(shown.stdout).item).toMatchObject({ rows: [{ ref: "msg:chat/500/7/1" }] })
     const refused = await call("stats", "messages", "counters", "refresh", "--json")
     expect(refused.code).not.toBe(0)
     expect(refused.stderr).toContain("explicit")

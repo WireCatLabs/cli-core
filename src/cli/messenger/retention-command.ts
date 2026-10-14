@@ -3,7 +3,7 @@ import { Command, Option } from "commander"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { retentionAnswer } from "./stats-answers.js"
+import { refuseJsonl, retentionAnswer } from "./stats-answers.js"
 
 export const retentionCommand = (messenger: Messenger) =>
   annotate(new Command("retention"), { output: { entity: "retention" } })
@@ -20,6 +20,7 @@ export const retentionCommand = (messenger: Messenger) =>
     .option("--limit <n>", "cohorts and member evidence, 1–100", positiveCount("--limit"))
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
+      refuseJsonl(context.format)
       const found = await context.withServices((services) => services.retention.report(chat, this.opts()))
       renderAnswer(this, context, retentionAnswer(found), () =>
         found.items

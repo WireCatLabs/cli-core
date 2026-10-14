@@ -150,10 +150,14 @@ describe("tasks", () => {
     await call("tasks", "add", PROMISE, "--type", "promise", "--json")
     await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--json")
 
-    expect(json(await call("stats", "tasks", "show", "--json")).items).toMatchObject([{ group: "7", open: 2 }])
-    expect(json(await call("stats", "tasks", "show", "--type", "question", "--json")).items).toMatchObject([
-      { group: "7", open: 1 },
+    expect(json(await call("stats", "tasks", "show", "--json")).item).toEqual({
+      open: 2,
+      rows: [{ chat: "chat:chat/500/7", open: 2, oldest_open_at: expect.any(String), median_close_ms: null }],
+    })
+    expect(json(await call("stats", "tasks", "show", "--type", "question", "--json")).item.rows).toMatchObject([
+      { chat: "chat:chat/500/7", open: 1 },
     ])
+    expect((await call("stats", "tasks", "show", "--jsonl")).code).not.toBe(0)
   })
 
   it("refuses what is not this account's locator, an unknown type, and writes on a read-only profile", async () => {

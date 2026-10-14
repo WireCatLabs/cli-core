@@ -32,6 +32,7 @@ const OTHERS: Entry[] = [
   ["model.not-downloaded", "not_found", "the model is not downloaded on this machine"],
   validation("name.invalid", "the name is not valid"),
   validation("output.choose-fields", "at a terminal, --json names the fields it prints"),
+  validation("output.one-object", "a report is one JSON object; --jsonl streams lists only"),
   validation("output.unknown-field", "the answer has no field by that name"),
   validation("name.taken", "the name is already used"),
   validation("period.ambiguous", "the period can be read more than one way"),

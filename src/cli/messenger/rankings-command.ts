@@ -19,7 +19,7 @@ import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
-import { evidenceAnswer, rankingAnswer } from "./stats-answers.js"
+import { evidenceAnswer, rankingAnswer, refuseJsonl } from "./stats-answers.js"
 
 const selectionOf = (value: string): unknown => {
   if (Buffer.byteLength(value) > RANKING_SELECTION_BYTES)
@@ -70,6 +70,7 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
     )
   command.action(async function (this: Command, words: string[]) {
     const context = messengerContext(this, messenger)
+    refuseJsonl(context.format)
     const options = this.opts<
       RankingInput & {
         weights?: string

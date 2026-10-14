@@ -5,7 +5,7 @@ import { environmentOf } from "../context.js"
 import { type Body, renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
-import { countersAnswer, refreshAnswer } from "./stats-answers.js"
+import { countersAnswer, refreshAnswer, refuseJsonl } from "./stats-answers.js"
 
 export const countersCommand = (messenger: Messenger) => {
   const parent = new Command("counters").description("per-counter observations and bounded remote refresh")
@@ -42,6 +42,7 @@ export const countersCommand = (messenger: Messenger) => {
     command.action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger),
         options = this.opts<CounterQuery>()
+      refuseJsonl(context.format)
       if (operation === "refresh" && !options.dryRun)
         refuseLocalWrite(context, messenger.app.command, "stats.messages.counters.refresh")
       const query = {
