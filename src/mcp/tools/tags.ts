@@ -8,8 +8,8 @@ import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.j
 
 const LOCAL = { readOnlyHint: false, idempotentHint: true, openWorldHint: false }
 const TARGET =
-  "One target: `chat` alone, `contact` (id, @username or name), or `message` with `chat` — or `message` as a " +
-  "msg: locator alone. Writes only to the local store; nothing is sent."
+  "One target: `chat` alone, `contact` (id, @username or name), `task` (its id or key), or `message` with `chat` " +
+  "— or `message` as a msg: locator alone. Writes only to the local store; nothing is sent."
 
 export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
   const input = v.object({
@@ -24,17 +24,19 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
     message: v.optional(
       v.pipe(v.string(), v.minLength(1), v.description("a message id in `chat`, or a msg: locator alone")),
     ),
+    task: v.optional(v.pipe(v.string(), v.minLength(1), v.description("a task's id or key, from tasks_list"))),
   })
   const targetOf = (args: v.InferOutput<typeof input>) => ({
     ...(args.chat === undefined ? {} : { chat: args.chat }),
     ...(args.contact === undefined ? {} : { contact: args.contact }),
     ...(args.message === undefined ? {} : { message: args.message }),
+    ...(args.task === undefined ? {} : { task: args.task }),
   })
   return {
     tags_list: tool({
       title: "List tags",
       description:
-        "The owner's own tags in the local store: this account's tagged chats and messages, and the people of its " +
+        "The owner's own tags in the local store: this account's tagged chats, messages and tasks, and the people of its " +
         "messenger. `tag:<tag>` in search_messages finds the messages they label.",
       input: v.object({ query: queryArgument(TAGGING_QUERY), limit, page }),
       annotations: { ...READ, openWorldHint: false },
@@ -51,8 +53,8 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tags_add: tool({
-      title: "Tag a chat, person or message",
-      description: `Puts tags on one chat, person or message. ${TARGET} Returns { item: { target, added, unchanged } }.`,
+      title: "Tag a chat, person, message or task",
+      description: `Puts tags on one chat, person, message or task. ${TARGET} Returns { item: { target, added, unchanged } }.`,
       input,
       annotations: { ...LOCAL, destructiveHint: false },
       stored: async (store, account, args, defaults) => {
@@ -68,8 +70,8 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
     }),
 
     tags_remove: tool({
-      title: "Untag a chat, person or message",
-      description: `Takes tags off one chat, person or message. ${TARGET} Returns { item: { target, removed, unchanged } }.`,
+      title: "Untag a chat, person, message or task",
+      description: `Takes tags off one chat, person, message or task. ${TARGET} Returns { item: { target, removed, unchanged } }.`,
       input: v.object({ ...input.entries, source: v.optional(v.picklist(["manual", "auto"])) }),
       annotations: { ...LOCAL, destructiveHint: true },
       stored: async (store, account, args, defaults) => {

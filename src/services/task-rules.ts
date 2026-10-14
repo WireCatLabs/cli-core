@@ -3,6 +3,7 @@ import type { Id, Message, ReviewChat } from "../domain/models.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { createTaskService, type TaskKind, type TaskStore } from "../tasks/index.js"
 import { questions } from "./questions.js"
+import { categorize } from "./task-categories.js"
 
 export interface RuleResult {
   added: number
@@ -36,6 +37,7 @@ export const applyTaskRules = async (
       group,
       kind,
       origin: "rule",
+      category: categorize(message.text),
     })
     if (created) result.added += 1
   }
@@ -130,6 +132,7 @@ export const openRequestTask = async (store: MessageStore, account: AccountKey, 
     group: message.chatId,
     kind: "request",
     origin: "rule",
+    category: categorize(message.text),
   })
   return created
 }

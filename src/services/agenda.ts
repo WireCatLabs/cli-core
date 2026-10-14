@@ -21,6 +21,10 @@ export interface AgendaOptions {
   within?: number
   /** A `tasks agenda` query over `AGENDA_QUERY`; `listQuery` adds the default kinds. */
   query?: QueryAst
+  /** Who asks: a task this holder claimed stays listed. */
+  holder?: string
+  /** Also list tasks someone else claimed; left out, they are hidden. */
+  claimed?: boolean
 }
 
 export const AGENDA_QUERY = {
@@ -44,7 +48,20 @@ export const AGENDA_QUERY = {
 export type AgendaReason = "overdue" | "due" | "check" | "unplanned"
 
 export interface AgendaTask
-  extends Pick<TaskDetails, "id" | "key" | "title" | "type" | "source" | "dueAt" | "nextCheckAt" | "createdAt"> {
+  extends Pick<
+    TaskDetails,
+    | "id"
+    | "key"
+    | "title"
+    | "type"
+    | "category"
+    | "source"
+    | "dueAt"
+    | "nextCheckAt"
+    | "claimedBy"
+    | "claimedUntil"
+    | "createdAt"
+  > {
   reasons: AgendaReason[]
 }
 
@@ -82,7 +99,15 @@ export interface AgendaService {
 }
 
 export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): AgendaService => ({
-  show: async ({ dueWithin = DAY, waiting = 7 * DAY, unanswered = DAY, within = 30 * DAY, query } = {}) => {
+  show: async ({
+    dueWithin = DAY,
+    waiting = 7 * DAY,
+    unanswered = DAY,
+    within = 30 * DAY,
+    query,
+    holder,
+    claimed = false,
+  } = {}) => {
     const [store, account] = [await deps.store(), await deps.account()]
     const at = now()
     const open = await store.tasks
@@ -93,6 +118,7 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
         throw error
       })
     const tasks = open
+      .filter((task) => claimed || task.claimedBy === null || task.claimedBy === holder)
       .map((task) => ({ task, reasons: reasonsOf(task, at, dueWithin) }))
       .filter(({ reasons }) => reasons.length > 0)
       .sort((a, b) => urgency(a.task) - urgency(b.task))
@@ -101,9 +127,12 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
         key: task.key,
         title: task.title,
         type: task.type,
+        category: task.category,
         source: task.source,
         dueAt: task.dueAt,
         nextCheckAt: task.nextCheckAt,
+        claimedBy: task.claimedBy,
+        claimedUntil: task.claimedUntil,
         createdAt: task.createdAt,
         reasons,
       }))
@@ -183,9 +212,12 @@ export const agendaItem = (shown: Agenda): AgendaItem => {
       key: task.key,
       title: task.title,
       kind: task.type,
+      category: task.category,
       source: task.source,
       due_at: task.dueAt,
       next_check_at: task.nextCheckAt,
+      claimed_by: task.claimedBy,
+      claimed_until: task.claimedUntil,
       created_at: task.createdAt,
       reasons: task.reasons,
     })),

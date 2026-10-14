@@ -52,10 +52,12 @@ For a chat in `owed` or `waiting`: read around its `lastMessage` the same way.
 
 | What you see | Do |
 |---|---|
-| A promise, a request, a question someone waits on | `tasks add <msg> --type promise\|request\|question` with a plan |
+| A promise, a request, a question someone waits on | `tasks add <msg> --type promise\|request\|question --category <name>` with a plan; `tasks categories` lists the names |
 | `tasks add` answers `created: false` | the message already has that task (a rule made it): `tasks plan` that one |
 | A task that is done (the reply came, the file was sent) | `tasks close <key> --as done --reason "<one line>"` |
 | A task still open, nothing new | `tasks plan <key> --check <when>` — 1d if hot, 3d–7d if not |
+| A task with the wrong category | `tasks plan <key> --category <name>` |
+| A task you are about to work on with other agents around | `tasks claim <key>`, and `tasks release <key>` when you stop |
 | An `owed` chat that needs no answer (thanks, a sticker) | nothing; it leaves the agenda on the next message |
 | A `waiting` chat with an open question of the owner's | a task for it, and a follow-up draft |
 

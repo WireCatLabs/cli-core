@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-83 tables, 17 full-text indexes.
+84 tables, 17 full-text indexes.
 
 ## Conventions
 
@@ -1280,8 +1280,20 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `next_check_at` | integer |  |  | when an agent should look at the open task again; the agenda lists it from then. Not a reminder: nothing reaches the owner |
 | `title_folded` | text |  |  | `fold(title)`, which `tasks list title:` compares |
 | `close_reason_folded` | text |  |  | `fold(close_reason)`, for `reason:` |
+| `category` | text |  |  | a name from the `tasks.categories` list; null on a project task |
+| `claimed_by` | text |  |  | who works on it now: `owner` or an agent's name |
+| `claimed_until` | integer |  |  | when the claim lapses; a lapsed claim holds nothing |
 
 *Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`
+
+### `task_key_counters`
+
+The last number given out per key prefix of a task found in a message (`Q`, `REQ`, `M`, `PR`).
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `prefix` | text | PK |  |  |
+| `tasks_count` | integer | not null |  |  |
 
 ### `task_assignments`
 

@@ -7,6 +7,7 @@ import type { SendGuard } from "../../sends/guard.js"
 import { AGENDA_QUERY, agendaItem } from "../../services/agenda.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
+import { DEFAULT_TASK_CATEGORIES } from "../../services/task-categories.js"
 import { TASK_LINK_KINDS, TASK_QUERY, type TaskPlan } from "../../services/tasks.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { TASK_KINDS } from "../../tasks/index.js"
@@ -14,12 +15,12 @@ import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.j
 
 const LOCAL = { readOnlyHint: false, openWorldHint: false }
 const ROW =
-  "{ item: { id, source, source_kind, account, group, kind, state, reason?, origin, created_at, due_at?, closed_at?, " +
-  "closed_by?, message: { sender_name, text, timestamp } | null, note?: { id, title, text, updated_at } | null } }"
+  "{ item: { id, key, source, source_kind, account, group, kind, category, state, reason?, origin, created_at, due_at?, " +
+  "closed_at?, closed_by?, message: { sender_name, text, timestamp } | null, note?: { id, title, text, updated_at } | null } }"
 const type = v.picklist(TASK_KINDS)
 const CARD =
   "{ item: { id, ref, key, project, title, description, type, status, priority, parent, source, due_at, " +
-  "next_check_at, closed_at, reason, verdict, assignments, created_at, updated_at, " +
+  "next_check_at, closed_at, reason, verdict, category, claimed_by, claimed_until, assignments, created_at, updated_at, " +
   "links: [{ id, from, to, kind, target_text, origin, … }] } }"
 const text = (max: number, what: string) => v.pipe(v.string(), v.minLength(1), v.maxLength(max), v.description(what))
 const ahead = (what: string) =>
@@ -28,6 +29,12 @@ const ahead = (what: string) =>
       v.pipe(v.string(), v.minLength(1), v.description(`${what}: an ISO 8601 time or 2h, 3d from now; null clears it`)),
     ),
   )
+const category = v.pipe(
+  v.picklist(DEFAULT_TASK_CATEGORIES.map(({ name }) => name)),
+  v.description(
+    `what it is about: ${DEFAULT_TASK_CATEGORIES.map(({ name, meaning }) => `${name} (${meaning})`).join("; ")}`,
+  ),
+)
 const PLAN = {
   title: v.optional(text(300, "one line: the action and its object — send Alex the API token")),
   description: v.optional(
@@ -46,7 +53,9 @@ const planOf = (args: {
   description?: string | null
   due?: string | null
   next_check?: string | null
+  category?: string
 }): TaskPlan => ({
+  ...(args.category === undefined ? {} : { category: args.category }),
   ...(args.title === undefined ? {} : { title: args.title }),
   ...(args.description === undefined ? {} : { description: args.description }),
   ...(args.due === undefined ? {} : { dueAt: args.due === null ? null : new Date(aheadOf(args.due, "due")) }),
@@ -87,6 +96,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({
         message: v.pipe(v.string(), v.minLength(1), v.description("a msg: locator or note:<id>")),
         type,
+        category,
         ...PLAN,
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
@@ -128,10 +138,14 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     tasks_plan: tool({
       title: "Plan a task",
       description:
-        "Sets a task's title, description, due date and next check — when you should look at it again. The next " +
+        "Sets a task's title, description, due date, category and next check — when you should look at it again. The next " +
         "check is yours, not a reminder: nothing reaches the owner. Writes only to the local store; nothing is sent. " +
         `Returns ${CARD}.`,
-      input: v.object({ task: text(200, "the task's id or key, from tasks_list or tasks_agenda"), ...PLAN }),
+      input: v.object({
+        task: text(200, "the task's id or key, from tasks_list or tasks_agenda"),
+        ...PLAN,
+        category: v.optional(category),
+      }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
       stored: async (store, account, args, defaults) =>
         itemOf(snakeKeys(await tasks(store, account, defaults.guard).plan(args.task, planOf(args), "agent"))),
@@ -179,13 +193,15 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "chats where the owner wrote last and nobody answered (`waiting`); chats that moved and whose newest " +
         "message is not stored (`unsynced`: read them first). Read only what it names. `stale` means the store " +
         "saved nothing for a day, so a chat may look quiet only because nothing was synced. `query` picks the " +
-        "chats' kinds: chat_kind:channel (default chat_kind:(dialog OR group)).",
+        "chats' kinds: chat_kind:channel (default chat_kind:(dialog OR group)). A task someone claimed is hidden " +
+        "unless `claimed` is true.",
       input: v.object({
         due: span("list tasks due within this (default 1d)"),
         unanswered: span("list chats someone else wrote last in this long ago (default 1d)"),
         waiting: span("list chats the owner wrote last in this long ago (default 7d)"),
         within: span("leave out chats silent longer than this (default 30d)"),
         query: queryArgument(AGENDA_QUERY),
+        claimed: v.optional(v.pipe(v.boolean(), v.description("also list tasks someone claimed"))),
       }),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "agenda", list: false },
@@ -200,6 +216,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           ...(waiting === undefined ? {} : { waiting }),
           ...(within === undefined ? {} : { within }),
           ...(query ? { query } : {}),
+          claimed: args.claimed === true,
         })
         return itemOf(agendaItem(shown))
       },

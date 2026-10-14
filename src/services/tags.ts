@@ -17,6 +17,8 @@ export interface TagTargetInput {
   chat?: string
   contact?: string
   message?: string
+  /** A task's id or key, as tasks list shows it. */
+  task?: string
 }
 
 export interface TagTargetView {
@@ -25,6 +27,7 @@ export interface TagTargetView {
   personId?: Id
   messageId?: Id
   locator?: string
+  taskId?: string
 }
 
 export interface TagsAdded {
@@ -84,16 +87,19 @@ const taggingOf = (key: AccountKey, one: StoredTag): TaggingItem => ({
   target:
     one.type === "contact"
       ? formatReference({ type: "contact", provider: key.provider, id: one.personId ?? "" })
-      : one.type === "message" && one.locator
-        ? one.locator
-        : formatReference({ type: "chat", provider: key.provider, account: key.account, chat: one.chatId ?? "" }),
+      : one.type === "task"
+        ? `task:${one.taskId ?? ""}`
+        : one.type === "message" && one.locator
+          ? one.locator
+          : formatReference({ type: "chat", provider: key.provider, account: key.account, chat: one.chatId ?? "" }),
   name: (one.type === "contact" ? one.name : one.chatTitle) ?? null,
   sources: one.sources ?? ["manual"],
   created_at: one.createdAt,
 })
 
 const ONE_TARGET =
-  "name one thing: --chat <chat>, --contact <person>, or --message <message> with --chat (or a msg: locator alone)"
+  "name one thing: --chat <chat>, --contact <person>, --task <task>, or --message <message> with --chat " +
+  "(or a msg: locator alone)"
 
 const tagsOf = (given: string[]): string[] => {
   if (given.length === 0) throw new CliError("validation_error", "name at least one tag")
@@ -104,8 +110,13 @@ const targetOf = async (
   deps: ServiceDeps,
   store: MessageStore,
   account: AccountKey,
-  { chat, contact, message }: TagTargetInput,
+  { chat, contact, message, task }: TagTargetInput,
 ): Promise<TagTarget> => {
+  if (task !== undefined) {
+    if (chat !== undefined || contact !== undefined || message !== undefined)
+      throw new CliError("validation_error", ONE_TARGET)
+    return { type: "task", taskId: task.trim().replace(/^task:/, "") }
+  }
   if (contact !== undefined) {
     if (chat !== undefined || message !== undefined) throw new CliError("validation_error", ONE_TARGET)
     const person = pickPerson(contact, await store.people(account.provider, { account: account.account }))

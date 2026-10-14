@@ -1632,15 +1632,34 @@ describe("the MCP server", () => {
     await seedSearchRecipes(store, { provider: "chat", account: "500" })
     await store.close()
 
-    const added = await call("chat_tasks_add", { message: "msg:chat/500/7/101", type: "promise" })
-    expect(added.body.item).toMatchObject({ kind: "promise", state: "open", origin: "agent", created: true })
+    const uncategorized = await call("chat_tasks_add", { message: "msg:chat/500/7/101", type: "promise" })
+    expect([uncategorized.isError, uncategorized.body.error.code]).toEqual([true, "validation_error"])
+    const added = await call("chat_tasks_add", { message: "msg:chat/500/7/101", type: "promise", category: "money" })
+    expect(added.body.item).toMatchObject({
+      kind: "promise",
+      category: "money",
+      key: "PR-1",
+      state: "open",
+      origin: "agent",
+      created: true,
+    })
     const taskId = added.body.item.id
     expect((await call("chat_tasks_list", { query: "state:open kind:promise" })).body).toMatchObject({
       items: [{ id: taskId, source_message: "msg:chat/500/7/101" }],
       page: { has_more: false },
     })
-    const planned = await call("chat_tasks_plan", { task: taskId, title: "Send the plan", due: "2h" })
-    expect(planned.body.item).toMatchObject({ title: "Send the plan", due_at: expect.any(String), next_check_at: null })
+    const planned = await call("chat_tasks_plan", {
+      task: taskId,
+      title: "Send the plan",
+      due: "2h",
+      category: "documents",
+    })
+    expect(planned.body.item).toMatchObject({
+      title: "Send the plan",
+      category: "documents",
+      due_at: expect.any(String),
+      next_check_at: null,
+    })
     const linked = await call("chat_tasks_link", { task: taskId, targets: ["https://example.com/plan"] })
     expect(linked.body.item.links).toMatchObject([{ target_text: "https://example.com/plan", kind: "related-to" }])
     expect((await call("chat_tasks_agenda", { due: "1d", query: "chat_kind:dialog" })).body.item.tasks).toMatchObject([
@@ -1651,7 +1670,7 @@ describe("the MCP server", () => {
     expect((await call("chat_stats_tasks_show")).body).toMatchObject({
       item: { open: 0, rows: [{ chat: "chat:chat/500/7", open: 0 }] },
     })
-    const foreign = await call("chat_tasks_add", { message: "msg:chat/999/7/101", type: "promise" })
+    const foreign = await call("chat_tasks_add", { message: "msg:chat/999/7/101", type: "promise", category: "money" })
     expect([foreign.isError, foreign.body.error.code]).toEqual([true, "validation_error"])
 
     const readOnly = await connect(scripted(), { config: levels({ tasks: "readonly" }) })

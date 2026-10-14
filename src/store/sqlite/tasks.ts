@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import {
   matches,
@@ -16,10 +15,12 @@ import { folded } from "./folded.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
+import { inboxKey, typedKey } from "./task-keys.js"
 import { taskRowOf, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
 
+export { inboxKey, linkInbox, taskAccountOf } from "./task-keys.js"
 export { taskIdOf, taskRowOf } from "./things.js"
 
 /** `TaskStore` for `src/tasks/`, plus a way from its task ids to the store's rows. */
@@ -36,27 +37,7 @@ export interface StoreTaskStore extends TaskStore, WorkTasks {
 
 const COLUMNS =
   "t.id AS row_id, t.package_id, t.source_locator, t.source_kind, t.source_group, t.type, t.status, t.close_reason, t.source, t.created_at, t.due_at, t.closed_at, " +
-  "t.closed_by_type, t.closed_by_id, p.name AS account"
-
-/** One inbox project per task account (`telegram:100`): derived from the account text alone, no `-` in it. */
-export const inboxKey = (account: string): string =>
-  `IN${createHash("sha256").update(account).digest("hex").slice(0, 8).toUpperCase()}`
-
-/** An inbox made before its messenger saved the account learns it here, not only on its next task. */
-export const linkInbox = (database: CacheDatabase, account: string, accountId: number): void => {
-  database
-    .prepare("UPDATE projects SET account_id = ? WHERE key = ? AND account_id IS NULL")
-    .run(accountId, inboxKey(account))
-}
-
-/** The task account (`provider:account`) a task row belongs to: its inbox project's name. */
-export const taskAccountOf = (database: CacheDatabase, rowId: number): string | undefined => {
-  const row = database
-    .prepare("SELECT p.key, p.name FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ?")
-    .get(rowId)
-  // Only an inbox project speaks for an account: a project the owner named `telegram:500` does not.
-  return row && String(row.key) === inboxKey(String(row.name)) ? String(row.name) : undefined
-}
+  "t.closed_by_type, t.closed_by_id, t.key, t.category, t.claimed_by, t.claimed_until, p.name AS account"
 
 export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
   const { database, now } = context
@@ -109,6 +90,10 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     if (row.closed_at !== null) task.closedAt = new Date(Number(row.closed_at))
     const closedBy = originOfActor(database, row.closed_by_type, row.closed_by_id)
     if (closedBy) task.closedBy = closedBy
+    task.key = String(row.key)
+    if (row.category !== null) task.category = String(row.category)
+    if (row.claimed_by !== null) task.claimedBy = String(row.claimed_by)
+    if (row.claimed_until !== null) task.claimedUntil = new Date(Number(row.claimed_until))
     return task
   }
   const required = (id: string) => {
@@ -150,23 +135,24 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         const project = inbox(task.account, true) as number
         const counted = database
           .prepare(
-            "UPDATE projects SET tasks_count = tasks_count + 1, updated_at = ? WHERE id = ? RETURNING key, tasks_count",
+            "UPDATE projects SET tasks_count = tasks_count + 1, updated_at = ? WHERE id = ? RETURNING tasks_count",
           )
           .get(now(), project)
         const number = Number(counted?.tasks_count)
+        const key = typedKey(database, task.kind)
         const author = actorOfOrigin(database, task.origin)
         const closedBy = task.closedBy ? actorOfOrigin(database, task.closedBy) : undefined
         const made = database
           .prepare(
             "INSERT INTO tasks (project_id, number, key, title, type, status, due_at, closed_at, closed_by_type, closed_by_id, " +
               "close_reason, author_type, author_id, source, package_id, source_locator, source_kind, source_group, created_at, updated_at, " +
-              "title_folded, close_reason_folded) " +
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+              "title_folded, close_reason_folded, category) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
           )
           .get(
             project,
             number,
-            `${String(counted?.key)}-${number}`,
+            key,
             `${task.kind} — ${task.source}`,
             task.kind,
             task.state,
@@ -186,6 +172,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             now(),
             folded(`${task.kind} — ${task.source}`),
             folded(task.reason),
+            task.category ?? null,
           )
         recordTaskEvent(database, Number(made?.id), author, "created", null, task.createdAt.getTime())
       })
@@ -203,7 +190,9 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         database
           .prepare(
             "UPDATE tasks SET status = ?, close_reason = ?, close_reason_folded = ?, due_at = ?, closed_at = ?, " +
-              "closed_by_type = ?, closed_by_id = ?, updated_at = ? WHERE id = ?",
+              "closed_by_type = ?, closed_by_id = ?, updated_at = ?, " +
+              "claimed_by = CASE WHEN ? = 'open' THEN claimed_by END, claimed_until = CASE WHEN ? = 'open' THEN claimed_until END " +
+              "WHERE id = ?",
           )
           .run(
             task.state,
@@ -214,6 +203,8 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             closedBy?.type ?? null,
             closedBy?.id ?? null,
             at,
+            task.state,
+            task.state,
             row,
           )
         if (before.status !== task.state)

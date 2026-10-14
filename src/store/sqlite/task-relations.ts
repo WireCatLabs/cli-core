@@ -6,7 +6,13 @@ import type { StoreContext } from "./open.js"
 import { taskIdOf, taskRowOf } from "./things.js"
 import { read, write } from "./transaction.js"
 
-export const TASK_RELATION_KINDS = ["blocked-by", "follow-up-of", "related-to"] as const
+export const TASK_RELATION_KINDS = [
+  "blocked-by",
+  "follow-up-of",
+  "related-to",
+  "duplicate-of",
+  "discovered-from",
+] as const
 export type TaskRelationKind = (typeof TASK_RELATION_KINDS)[number]
 export interface TaskRelation {
   id: string
@@ -34,7 +40,7 @@ export interface TaskRelationsStore {
 
 const kindOf = (kind: TaskRelationKind) => {
   if (!TASK_RELATION_KINDS.includes(kind))
-    throw new CliError("validation_error", "choose blocked-by, follow-up-of or related-to")
+    throw new CliError("validation_error", `choose ${TASK_RELATION_KINDS.join(", ")}`)
 }
 const liveTask = (database: CacheDatabase, rowId: number) => {
   const row = database

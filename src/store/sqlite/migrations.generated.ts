@@ -419,5 +419,14 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `emails` ADD `mail_rule_id` integer;",
       "CREATE INDEX `emails_by_mail_rule_id` ON `emails` (`mail_rule_id`) WHERE mail_rule_id IS NOT NULL;"
     ]
+  },
+  {
+    "name": "20261014204055_version-13-task-fields",
+    "statements": [
+      "CREATE TABLE `task_key_counters` (\n\t`prefix` text PRIMARY KEY,\n\t`tasks_count` integer NOT NULL\n);",
+      "ALTER TABLE `tasks` ADD `category` text;",
+      "ALTER TABLE `tasks` ADD `claimed_by` text;",
+      "ALTER TABLE `tasks` ADD `claimed_until` integer;"
+    ]
   }
 ]

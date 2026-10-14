@@ -41,6 +41,7 @@ describe("tasks in the store", () => {
     expect(await second.get("t1")).toEqual({
       ...question,
       id: "t1",
+      key: "Q-1",
       state: "dismissed",
       reason: "no-reply-needed",
       createdAt: at("2026-10-05T10:00:00Z"),
@@ -99,7 +100,7 @@ describe("tasks in the store", () => {
       type: "question",
       status: "open",
       source: "rule",
-      key: expect.stringMatching(/^IN[0-9A-F]{8}-1$/),
+      key: "Q-1",
       source_locator: question.source,
       source_kind: "message",
       source_group: "-1001",
@@ -162,6 +163,87 @@ describe("tasks in the store", () => {
     await expect(
       store.update({ ...question, id: "nope", state: "done", createdAt: at("2026-10-05T10:00:00Z") }),
     ).rejects.toMatchObject({ code: "not_found" })
+    await store.close()
+  })
+
+  it("keys a new task by its type with a counter per type, and still resolves an inbox key made before", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    const service = createTaskService({ store: store.tasks })
+    const before = await service.add(question)
+    const database = await openCache(path)
+    database.prepare("UPDATE tasks SET key = 'IN1A2B3C4D-1'").run()
+    database.prepare("DELETE FROM task_key_counters").run()
+    await expect(store.knowledge.addProject({ name: "Requests", key: "REQ" })).rejects.toThrow("kept for the keys")
+    expect((await store.knowledge.addProject({ name: "Requests" })).key).not.toBe("REQ")
+    database
+      .prepare(
+        "INSERT INTO projects (key, name, type, scope, tasks_count, status, created_at, updated_at) " +
+          "VALUES ('REQ', 'Made before', 'other', 'personal', 1, 'active', 0, 0)",
+      )
+      .run()
+    database
+      .prepare(
+        "INSERT INTO tasks (project_id, number, key, title, type, status, author_type, author_id, source, created_at, updated_at) " +
+          "SELECT id, 1, 'REQ-1', 'old', 'chore', 'open', 'person', 1, 'owner', 0, 0 FROM projects WHERE key = 'REQ'",
+      )
+      .run()
+    database.close()
+
+    const keys = []
+    for (const [n, kind] of (["question", "question", "request", "mention", "promise"] as const).entries())
+      keys.push((await service.add({ ...question, kind, source: `msg:telegram:100:-1001:${n + 100}` })).task.id)
+    expect(await Promise.all(keys.map(async (id) => (await store.tasks.get(id))?.key))).toEqual([
+      "Q-1",
+      "Q-2",
+      "REQ-2",
+      "M-1",
+      "PR-1",
+    ])
+    expect((await store.tasks.get("IN1A2B3C4D-1"))?.id).toBe(before.task.id)
+    expect((await store.tasks.get("Q-2"))?.id).toBe(keys[1])
+    await store.close()
+  })
+
+  it("keeps a category, and records each change of it in the history", async () => {
+    const store = await openStore({ path: fresh() })
+    const { task } = await createTaskService({ store: store.tasks }).add({ ...question, category: "money" })
+    expect((await store.tasks.get(task.id))?.category).toBe("money")
+
+    await store.tasks.edit(task.id, { category: "documents" }, "owner")
+    expect((await store.tasks.details(task.id)).category).toBe("documents")
+    expect((await store.tasks.events(task.id)).filter((event) => event.kind === "category")).toMatchObject([
+      { changes: { category: ["money", "documents"] } },
+    ])
+    await store.close()
+  })
+
+  it("lets one holder claim an open task at a time, until the claim lapses, it is released or the task closes", async () => {
+    let now = Date.parse("2026-10-05T10:00:00Z")
+    const store = await openStore({ path: fresh(), now: () => now })
+    const service = createTaskService({ store: store.tasks, now: () => new Date(now) })
+    const { task } = await service.add(question)
+    const until = (minutes: number) => new Date(now + minutes * 60_000)
+
+    expect(await store.tasks.claim(task.id, "codex", until(30))).toMatchObject({
+      claimedBy: "codex",
+      claimedUntil: "2026-10-05T10:30:00.000Z",
+    })
+    await expect(store.tasks.claim(task.id, "claude-code", until(30))).rejects.toThrow(
+      "codex holds task Q-1 until 2026-10-05T10:30:00.000Z",
+    )
+    await expect(store.tasks.claim("Q-1", "codex", until(30))).rejects.toThrow("codex holds task")
+    await expect(store.tasks.release(task.id, "claude-code")).rejects.toThrow("only they or the owner release it")
+
+    now += 31 * 60_000
+    expect((await store.tasks.details(task.id)).claimedBy).toBeNull()
+    expect((await store.tasks.claim(task.id, "claude-code", until(30))).claimedBy).toBe("claude-code")
+    expect((await store.tasks.release(task.id, "owner")).claimedBy).toBeNull()
+
+    await store.tasks.claim(task.id, "codex", until(30))
+    await service.close(task.id, { as: "done", by: "agent" })
+    expect(await store.tasks.details(task.id)).toMatchObject({ status: "done", claimedBy: null })
+    await expect(store.tasks.claim(task.id, "codex", until(30))).rejects.toThrow("only an open task is claimed")
     await store.close()
   })
 })

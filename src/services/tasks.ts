@@ -19,6 +19,7 @@ import {
 } from "../tasks/index.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
+import { categorize, DEFAULT_TASK_CATEGORIES, type TaskCategory, taskCategoryOf } from "./task-categories.js"
 import { taskAccount } from "./task-rules.js"
 
 export { TASK_KINDS, TASK_STATES }
@@ -33,8 +34,13 @@ export const TASK_QUERY = {
   entity: "task",
   backend: "sql",
   fields: queryFieldsOf(taskEntity, {
-    exclude: ["ref", "description", "project", "account", "priority", "parent"],
+    exclude: ["ref", "description", "project", "account", "priority", "parent", "claimed_by", "claimed_until"],
+    relations: {
+      tag: { type: "kw", example: "tag:urgent", relation: "a tag put on the task with tags add --task" },
+    },
     examples: {
+      key: "key:Q-15",
+      category: "category:money",
       kind: "kind:question",
       chat: "chat:12345",
       title: "title:*invoice*",
@@ -48,6 +54,16 @@ const TIME = (sql: string) => ({ type: "time", sql }) as const
 /** `chat:` names the chat as the messenger does; `groups` holds each name already resolved to its stored id. */
 const taskColumns = (groups: ReadonlyMap<string, string>): ColumnMap => ({
   id: { type: "kw", sql: "t.package_id" },
+  key: { type: "kw", sql: "t.key" },
+  category: { type: "kw", sql: "t.category" },
+  tag: {
+    where: (node) => ({
+      sql:
+        "EXISTS (SELECT 1 FROM taggings g JOIN tags n ON n.id = g.tag_id " +
+        "WHERE g.taggable_type = 'task' AND g.taggable_id = t.id AND n.name = ?)",
+      params: [node.value.trim().toLowerCase()],
+    }),
+  },
   title: { type: "kw", sql: "t.title_folded", folded: true },
   kind: { type: "enum", sql: "t.type" },
   state: { type: "enum", sql: "t.status" },
@@ -91,13 +107,21 @@ export interface TaskPlan {
   description?: string | null
   dueAt?: Date | null
   nextCheckAt?: Date | null
+  /** A name from the category list; anything else is refused with the list. */
+  category?: string
 }
 
 /** What a task may be linked to: what it is about, what shows it, what it came from. */
 export const TASK_LINK_KINDS = ["related-to", "evidence", "created-from"] as const
 export type TaskLinkKind = (typeof TASK_LINK_KINDS)[number]
 /** `tasks link --kind`: a link's kinds, and a `task:` target's relation kinds; `related-to` is both. */
-export const TASK_LINK_OPTION_KINDS = [...TASK_LINK_KINDS, "blocked-by", "follow-up-of"] as const
+export const TASK_LINK_OPTION_KINDS = [
+  ...TASK_LINK_KINDS,
+  "blocked-by",
+  "follow-up-of",
+  "duplicate-of",
+  "discovered-from",
+] as const
 export type TaskLinkOptionKind = (typeof TASK_LINK_OPTION_KINDS)[number]
 /** An owner-project task's id, `task:<id>` written without its prefix, or a project key such as `HRB-12`. */
 const BARE_TASK = /^(\d+|[A-Z][A-Z0-9]*-\d+)$/
@@ -129,7 +153,16 @@ export interface TasksService {
     options: { kind: TaskLinkOptionKind; by: TaskOrigin },
   ): Promise<TaskCard | { relations: TaskRelation[] }>
   show(id: string): Promise<TaskCard>
+  /** The list a task's category comes from, with what each one means. */
+  categories(): readonly TaskCategory[]
+  /** Takes an open task for `holder` for `forMs`; refused, naming the holder, while someone else holds it. */
+  claim(id: string, holder: string, forMs: number): Promise<TaskCard>
+  /** Gives a task back; only its holder or the owner may. */
+  release(id: string, holder: string): Promise<TaskCard>
 }
+
+/** How long a claim lasts when the caller names no time: a crashed agent never holds a task for long. */
+export const CLAIM_LEASE_MS = 30 * 60_000
 
 export const PREVIEW = 200
 
@@ -157,7 +190,11 @@ export const taskTypesOf = (typed: string): TaskKind[] => [
   ),
 ]
 
-export const tasksService = (deps: ServiceDeps): TasksService => {
+export const tasksService = (
+  deps: ServiceDeps,
+  categories: readonly TaskCategory[] = DEFAULT_TASK_CATEGORIES,
+): TasksService => {
+  const categoryOf = taskCategoryOf(categories)
   const inStore = async <T>(work: (store: MessageStore, account: AccountKey) => Promise<T>): Promise<T> =>
     work(await deps.store(), await deps.account())
   const service = (store: MessageStore) => createTaskService({ store: store.tasks })
@@ -182,6 +219,7 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
     return { ...details, links: await store.notes.links({ from: details.ref }) }
   }
   const planOf = async (store: MessageStore, id: string, plan: TaskPlan, by: TaskOrigin) => {
+    if (plan.category !== undefined) plan = { ...plan, category: categoryOf(plan.category) }
     const open = (await store.tasks.get(id))?.state === "open"
     if (!open && (plan.dueAt != null || plan.nextCheckAt != null))
       throw new CliError("validation_error", "a closed task takes no due date or next check; it stays closed")
@@ -206,8 +244,9 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
         }
       }),
 
-    add: (message, type, origin, plan = {}) =>
+    add: (message, type, origin, { category: named, ...plan } = {}) =>
       inStore(async (store, account) => {
+        const chosen = named === undefined ? undefined : categoryOf(named)
         const source = message.trim()
         const native = isNoteReference(source)
         if (!native && !isLocator(source)) {
@@ -232,7 +271,13 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
             if (existing) return { task: await taskView(store, account, existing), created: false }
           }
         }
-        const { task, created } = await service(store).add({
+        const sourceText = async () =>
+          note
+            ? note.text
+            : locator
+              ? ((await store.message(account, locator.message, { chatId: locator.chat }))?.text ?? "")
+              : ""
+        const { task: added, created } = await service(store).add({
           source: note ? note.ref : source,
           sourceKind:
             note || account.provider === "notes" ? "note" : account.provider === "email" ? "email" : "message",
@@ -241,11 +286,29 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
           kind: type,
           origin,
           ...(plan.dueAt ? { dueAt: plan.dueAt } : {}),
+          category: chosen ?? categorize(await sourceText(), categories),
         })
+        const task = (await store.tasks.get(added.id)) ?? added
         // A source that already has a task keeps its plan: adding again is not editing.
         if (!created || Object.keys(plan).length === 0) return { task: await taskView(store, account, task), created }
         const card = await planOf(store, task.id, plan, origin)
         return { task: await taskView(store, account, task), created, card }
+      }),
+
+    categories: () => categories,
+
+    claim: (id, holder, forMs) =>
+      inStore(async (store, account) => {
+        await owned(store, account, id)
+        await store.tasks.claim(id, holder, new Date(Date.now() + forMs))
+        return cardOf(store, id)
+      }),
+
+    release: (id, holder) =>
+      inStore(async (store, account) => {
+        await owned(store, account, id)
+        await store.tasks.release(id, holder)
+        return cardOf(store, id)
       }),
 
     close: (id, { as, reason, by }) =>
@@ -296,7 +359,7 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
             "a task: target links two tasks; link messages, chats, people and URLs in a call of their own",
           )
         if (!relationKind)
-          throw new CliError("validation_error", "a task: target takes --kind blocked-by, follow-up-of or related-to")
+          throw new CliError("validation_error", `a task: target takes --kind ${TASK_RELATION_KINDS.join(", ")}`)
         if (by !== "owner")
           throw new CliError("permission_error", "an agent proposes task relationships; only the owner applies them")
         for (const target of tasks) await store.tasks.linkTask(id, target, kind as TaskRelationKind, "owner")
@@ -362,6 +425,7 @@ export const taskItem = (
 ): TaskItem => ({
   ref: `task:${task.id}`,
   id: task.id,
+  key: task.key ?? null,
   title,
   kind: task.kind,
   state: task.state,
@@ -375,9 +439,17 @@ export const taskItem = (
   due_at: iso(task.dueAt),
   closed_at: iso(task.closedAt),
   ...(task.reason === undefined ? {} : { reason: task.reason }),
+  category: task.category ?? null,
+  ...claimItem(task),
   created_at: task.createdAt.toISOString(),
   updated_at: updatedAt.toISOString(),
 })
+
+/** A lapsed claim reads as none. */
+const claimItem = ({ claimedBy, claimedUntil }: Task) =>
+  claimedBy !== undefined && claimedUntil !== undefined && claimedUntil.getTime() >= Date.now()
+    ? { claimed_by: claimedBy, claimed_until: claimedUntil.toISOString() }
+    : { claimed_by: null, claimed_until: null }
 
 /** A file in a notes folder is a `document:`, a written note a `note:`. */
 const isNoteReference = (source: string) => source.startsWith("note:") || source.startsWith("document:")

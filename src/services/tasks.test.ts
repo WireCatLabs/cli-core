@@ -98,7 +98,9 @@ it("**links two project tasks as a relation when a target is task:**, a bare id 
       "related-to",
     ])
     await expect(link(["999"], "related-to")).rejects.toThrow("write task:999")
-    await expect(link([`task:${b.id}`], "evidence")).rejects.toThrow("blocked-by, follow-up-of or related-to")
+    await expect(link([`task:${b.id}`], "evidence")).rejects.toThrow(
+      "blocked-by, follow-up-of, related-to, duplicate-of, discovered-from",
+    )
     await expect(link([`task:${b.id}`, "https://example.com/plan"], "related-to")).rejects.toThrow("call of their own")
     await expect(link(["https://example.com/plan"], "blocked-by")).rejects.toThrow("is for a task: target")
     await expect(

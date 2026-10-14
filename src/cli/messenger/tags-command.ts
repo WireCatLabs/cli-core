@@ -14,13 +14,16 @@ const targetOptions = (command: Command, messenger: Messenger, verb: string): Co
     .option("--chat <chat>", `the chat to ${verb}, or the chat of --message; ${messenger.chatArgument}`)
     .option("--contact <person>", `the person to ${verb}: their id, @username or name, as the local store knows them`)
     .option("--message <message>", `the message to ${verb}: its id in --chat, or a msg: locator alone`)
+    .option("--task <task>", `the task to ${verb}: its id or key, as tasks list shows it`)
 
-const describe = ({ type, chatId, personId, messageId }: TagTargetView) =>
+const describe = ({ type, chatId, personId, messageId, taskId }: TagTargetView) =>
   type === "chat"
     ? `chat ${chatId}`
     : type === "contact"
       ? `person ${personId}`
-      : `message ${messageId} in chat ${chatId}`
+      : type === "task"
+        ? `task ${taskId}`
+        : `message ${messageId} in chat ${chatId}`
 
 const line = (one: TaggingItem) => `${one.tag}  ${one.type}  ${one.name ?? ""} (${one.target})`
 
@@ -32,7 +35,7 @@ const sourceOf = (value: string): "manual" | "auto" => {
 /** The owner's labels, in the local store only: `tag:` in a search finds what they label. */
 export const tagsCommand = (messenger: Messenger): Command => {
   const tags = new Command("tags").description(
-    "your own labels on chats, people and messages, kept in the local store and never sent; tag: in a search finds them",
+    "your own labels on chats, people, messages and tasks, kept in the local store and never sent; tag: in a search finds them",
   )
 
   annotate(tags.command("auto"), { effects: LOCAL_WRITE })
@@ -62,7 +65,9 @@ export const tagsCommand = (messenger: Messenger): Command => {
     })
 
   targetOptions(
-    annotate(tags.command("add"), { effects: LOCAL_WRITE }).description("put tags on one chat, person or message"),
+    annotate(tags.command("add"), { effects: LOCAL_WRITE }).description(
+      "put tags on one chat, person, message or task",
+    ),
     messenger,
     "tag",
   ).action(async function (this: Command, given: string[]) {
@@ -78,7 +83,9 @@ export const tagsCommand = (messenger: Messenger): Command => {
   })
 
   targetOptions(
-    annotate(tags.command("remove"), { effects: LOCAL_WRITE }).description("take tags off one chat, person or message"),
+    annotate(tags.command("remove"), { effects: LOCAL_WRITE }).description(
+      "take tags off one chat, person, message or task",
+    ),
     messenger,
     "untag",
   )
@@ -99,7 +106,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
 
   withQuery(
     annotate(tags.command("list"), { effects: LOCAL_READ }).description(
-      "what is tagged: this account's chats and messages, and the people of its messenger",
+      "what is tagged: this account's chats, messages and tasks, and the people of its messenger",
     ),
     TAGGING_QUERY,
   ).action(async function (this: Command, words: string[]) {

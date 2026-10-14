@@ -28,10 +28,14 @@ export const agenda = v.strictObject({
       key: text,
       title: v.nullable(text),
       kind: v.picklist(TASK_TYPES),
+      category: v.nullable(text),
       /** The message or note it came from. */
       source: v.nullable(reference),
       due_at: v.nullable(time),
       next_check_at: v.nullable(time),
+      /** Who works on it now; only the asker's own claims are listed unless --claimed asks for all. */
+      claimed_by: v.nullable(text),
+      claimed_until: v.nullable(time),
       created_at: time,
       reasons: v.array(v.picklist(["overdue", "due", "check", "unplanned"])),
     }),

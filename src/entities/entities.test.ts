@@ -327,12 +327,15 @@ const samples: Record<EntityName, unknown> = {
     tasks: [
       {
         id: "t1",
-        key: "INBOX-1",
+        key: "Q-1",
         title: "reply to Ana",
         kind: "question",
+        category: "other",
         source: "msg:chat/500/7/1",
         due_at: null,
         next_check_at: null,
+        claimed_by: null,
+        claimed_until: null,
         created_at: at,
         reasons: ["unplanned"],
       },

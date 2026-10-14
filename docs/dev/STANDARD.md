@@ -729,6 +729,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--catch-up-chunks` | `<n>` | at most this many local vector chunks |  | `messages sync`, `store gaps repair` |
 | `--catch-up-messages` | `<n>` | skip a graph rebuild above this message budget |  | `messages sync`, `store gaps repair` |
 | `--catch-up-time` | `<duration>` | time budget for local preparation |  | `messages sync`, `store gaps repair` |
+| `--category` | `<name>` | what a task is about, from the list tasks categories prints |  | `tasks add`, `tasks plan` |
 | `--channel` |  | a private channel instead of a group; people join it by its link |  | `chats create` |
 | `--chart-kind` | `<messages\|active\|membership>` | what to draw: messages, active authors, or joins and leaves | `messages` | `stats charts` |
 | `--chat` | `<chat>` | a chat, by id or name; repeat it for more. **chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4)** |  | `attachments extract`, `chats folders create`, `contacts context`, `conversations batches next`, `conversations batches status`, `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations status`, `images embed`, `metadata get`, `metadata refresh`, `search conversations`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `stats tasks show`, `tags add`, `tags auto`, `tags remove`, `tasks link` |
@@ -737,6 +738,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--check` |  | say whether a newer version exists, and install nothing. **tasks add and tasks plan instead take a time or duration for the next review; none clears it** |  | `bot list`, `tasks add`, `tasks plan`, `upgrade` |
 | `--checkpoints` | `<durations>` | elapsed joining ages to inspect, such as 1d,7d,30d |  | `stats chats retention` |
 | `--chunk-bytes` | `<n>` | maximum source bytes returned from a retained attachment; 1–1048576 | `524288` | `attachments show` |
+| `--claimed` |  | also list tasks someone else holds |  | `tasks agenda` |
 | `--close-time` | `<delay>` | it closes by itself this long after sending, like 90s or 5m |  | `polls create` (tg-only) |
 | `--closed` | `<on\|off>` | on closes a forum topic to new messages, off reopens it |  | `topics edit` (tg-only) |
 | `--comment-to` | `<post>` | comment on this channel post; the comment goes to the post's discussion group |  | `messages send` (tg-only) |
@@ -779,7 +781,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--find-by-phone` | `<who>` | who finds the account by its number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--fingerprint` | `<hash>` | refuse if the inspected coverage plan changed |  | `store gaps repair` |
 | `--first-name` | `<name>` | your first name |  | `account update` |
-| `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all | `all` | `skill install` |
+| `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all. **tasks claim instead takes how long the claim lasts, such as 30m or 2h** | `all` | `skill install`, `tasks claim` |
 | `--for-everyone` |  | delete for everyone in the chat, not only for you — they cannot get it back |  | `messages delete` |
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
 | `--from` | `<who\|link>` | sender to match in `bot search messages`; starting message link in tg bot store fetch |  | `bot search messages`, `bot store fetch` (tg-only) |
@@ -934,6 +936,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--store-token` | `<profile>` | keep a returned authentication token only in this bot profile's OS keyring; never print it |  | `bot api` |
 | `--sync-first` |  | first fetch new messages within the chat, time and message bounds |  | `search conversations`, `search messages`, `stats contacts top`, `stats messages show`, `stats messages top` |
 | `--sync-time` | `<duration>` | stop fetching after this long (default: 30s) |  | `search conversations`, `search messages`, `stats contacts top`, `stats messages counters refresh`, `stats messages show`, `stats messages top` |
+| `--task` | `<task>` | a task, by its id or key as tasks list shows it |  | `tags add`, `tags remove` |
 | `--template` | `<text>` | the reply template |  | `replies edit` |
 | `--text` | `<text>` | the message's new text; - reads stdin |  | `bot callbacks answer` |
 | `--text-file` | `<path>` | read the text from this file; - or none reads stdin |  | `attachments text set` |

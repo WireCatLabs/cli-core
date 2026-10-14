@@ -175,6 +175,10 @@
       "meaning": "time budget for local preparation",
       "value": "<duration>"
     },
+    "--category": {
+      "value": "<name>",
+      "meaning": "what a task is about, from the list tasks categories prints"
+    },
     "--channel": {
       "meaning": "a private channel instead of a group; people join it by its link"
     },
@@ -208,6 +212,9 @@
       "value": "<n>",
       "meaning": "maximum source bytes returned from a retained attachment; 1–1048576",
       "default": "524288"
+    },
+    "--claimed": {
+      "meaning": "also list tasks someone else holds"
     },
     "--close-time": {
       "value": "<delay>",
@@ -375,7 +382,8 @@
     "--for": {
       "value": "<agents>",
       "meaning": "which agents a skill is installed for: claude, agents or all",
-      "default": "all"
+      "default": "all",
+      "note": "tasks claim instead takes how long the claim lasts, such as 30m or 2h"
     },
     "--for-everyone": {
       "meaning": "delete for everyone in the chat, not only for you — they cannot get it back"
@@ -968,6 +976,10 @@
     "--sync-time": {
       "value": "<duration>",
       "meaning": "stop fetching after this long (default: 30s)"
+    },
+    "--task": {
+      "value": "<task>",
+      "meaning": "a task, by its id or key as tasks list shows it"
     },
     "--template": {
       "meaning": "the reply template",
@@ -3907,6 +3919,9 @@
         },
         "--message": {
           "in": "all"
+        },
+        "--task": {
+          "in": "all"
         }
       }
     },
@@ -3936,6 +3951,9 @@
         },
         "--source": {
           "in": "all"
+        },
+        "--task": {
+          "in": "all"
         }
       }
     },
@@ -3945,6 +3963,7 @@
     "tasks add": {
       "in": "all",
       "options": {
+        "--category": "all",
         "--check": "all",
         "--description": "all",
         "--due": "all",
@@ -3957,10 +3976,20 @@
     "tasks agenda": {
       "in": "all",
       "options": {
+        "--claimed": "all",
         "--due": "all",
         "--unanswered": "all",
         "--waiting": "all",
         "--within": "all"
+      }
+    },
+    "tasks categories": {
+      "in": "all"
+    },
+    "tasks claim": {
+      "in": "all",
+      "options": {
+        "--for": "all"
       }
     },
     "tasks close": {
@@ -3992,11 +4021,15 @@
     "tasks plan": {
       "in": "all",
       "options": {
+        "--category": "all",
         "--check": "all",
         "--description": "all",
         "--due": "all",
         "--title": "all"
       }
+    },
+    "tasks release": {
+      "in": "all"
     },
     "tasks show": {
       "in": "all"

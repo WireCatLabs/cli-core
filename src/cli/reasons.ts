@@ -49,6 +49,8 @@ const OTHERS: Entry[] = [
   validation("tag-review.required", "the tag needs the owner's review first"),
   ["tag-review.stale", "configuration_error", "the tag review changed meanwhile"],
   validation("tag.invalid", "the tag is not valid"),
+  validation("task.category-unknown", "the category is not in the task category list"),
+  validation("task.claimed", "someone else holds the task"),
   validation("task.closed", "the task is already closed"),
   validation("task.dependency-cycle", "the task would depend on itself"),
   ["upgrade.install-failed", "provider_error", "the installer failed; the old version stays"],

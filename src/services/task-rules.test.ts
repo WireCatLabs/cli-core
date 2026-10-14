@@ -54,6 +54,18 @@ describe("applyTaskRules", () => {
     expect(await states(store)).toEqual(["msg:telegram/500/-1001/1 question open"])
   })
 
+  it("picks a category by the trigger words of the message, in any form or language, else other", async () => {
+    const store = memoryTaskStore()
+    const review = reviewOf([
+      said("1", 1, "когда оплатишь счета?"),
+      said("2", 2, "can you sign the contract?"),
+      said("3", 3, "¿quedamos para la reunión?"),
+      said("4", 4, "how was the weekend?"),
+    ])
+    await applyTaskRules(review, { store, account })
+    expect((await store.list({})).map((task) => task.category)).toEqual(["money", "documents", "meeting", "other"])
+  })
+
   it("closes the question once the owner answers it, and leaves another's answer open", async () => {
     const store = memoryTaskStore()
     await applyTaskRules(reviewOf([said("1", 1, "who has the keys?"), said("3", 3, "is it Monday?")]), {

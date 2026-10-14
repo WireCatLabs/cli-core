@@ -8,12 +8,14 @@ import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { task } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
+import { authorOf } from "../author.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import { storeCommand } from "./archive-commands.js"
 import type { Messenger } from "./context.js"
 import { statsCommand } from "./stats-command.js"
+import { tagsCommand } from "./tags-command.js"
 import { tasksCommand } from "./tasks-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
@@ -74,7 +76,15 @@ const setup = async (config?: object) => {
       const streams = captureStreams()
       const code = await run(
         argv,
-        { app, commands: () => [statsCommand(messenger), tasksCommand(messenger), storeCommand(messenger)] },
+        {
+          app,
+          commands: () => [
+            statsCommand(messenger),
+            tasksCommand(messenger),
+            tagsCommand(messenger),
+            storeCommand(messenger),
+          ],
+        },
         { streams, tty, env },
       )
       return { code, stdout: streams.stdout, stderr: streams.stderr.join("\n") }
@@ -89,10 +99,12 @@ const PROMISE = "msg:chat/500/7/1"
 describe("tasks", () => {
   it("**adds a task by locator and lists it with the message it points at**, once however often it is added", async () => {
     const call = await setup()
-    const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
+    const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
     expect(added).toMatchObject({ source: PROMISE, kind: "promise", state: "open", origin: "owner", created: true })
 
-    expect(item(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))).toMatchObject({
+    expect(
+      item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")),
+    ).toMatchObject({
       id: added.id,
       created: false,
     })
@@ -104,7 +116,7 @@ describe("tasks", () => {
 
   it("**closes a task, keeps the reason, and refuses to close it twice**", async () => {
     const call = await setup()
-    const { id } = item(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
+    const { id } = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
 
     const closed = item(await call("tasks", "close", id, "--as", "dismissed", "--reason", "no-reply-needed", "--json"))
     expect(closed).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closed_by: "owner" })
@@ -115,8 +127,8 @@ describe("tasks", () => {
 
   it("**narrows by a query** over kind, chat and age, and names the fields it has", async () => {
     const call = await setup()
-    await call("tasks", "add", PROMISE, "--type", "promise", "--json")
-    await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--json")
+    await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+    await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--category", "money", "--json")
 
     const types = (result: { stdout: string[] }) => json(result).items.map((task: { kind: string }) => task.kind)
     expect(types(await call("tasks", "list", "kind:question", "--json"))).toEqual(["question"])
@@ -136,7 +148,7 @@ describe("tasks", () => {
 
   it("**a backup keeps the tasks**: restored, a closed one is open again", async () => {
     const call = await setup()
-    const { id } = item(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
+    const { id } = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
     const file = join(call.root, "backup.db")
     expect((await call("store", "backup", file, "--json")).code).toBe(0)
     await call("tasks", "close", id, "--as", "done", "--json")
@@ -147,8 +159,8 @@ describe("tasks", () => {
 
   it("counts open tasks per chat", async () => {
     const call = await setup()
-    await call("tasks", "add", PROMISE, "--type", "promise", "--json")
-    await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--json")
+    await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+    await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--category", "money", "--json")
 
     expect(json(await call("stats", "tasks", "show", "--json")).item).toEqual({
       open: 2,
@@ -162,19 +174,22 @@ describe("tasks", () => {
 
   it("refuses what is not this account's locator, an unknown type, and writes on a read-only profile", async () => {
     const call = await setup()
-    expect((await call("tasks", "add", "101", "--type", "promise", "--json")).stderr).toContain(
+    expect((await call("tasks", "add", "101", "--type", "promise", "--category", "money", "--json")).stderr).toContain(
       "is not a message locator",
     )
-    expect((await call("tasks", "add", "msg:chat/999/7/1", "--type", "promise", "--json")).stderr).toContain(
-      "another account",
-    )
-    expect((await call("tasks", "add", PROMISE, "--type", "gossip", "--json")).stderr).toContain(
+    expect(
+      (await call("tasks", "add", "msg:chat/999/7/1", "--type", "promise", "--category", "money", "--json")).stderr,
+    ).toContain("another account")
+    expect((await call("tasks", "add", PROMISE, "--type", "gossip", "--category", "money", "--json")).stderr).toContain(
       "--type takes question, request, mention, promise",
     )
+    expect(
+      (await call("tasks", "add", PROMISE, "--type", "promise", "--category", "finance", "--json")).stderr,
+    ).toContain("--category takes money, documents, meeting, delivery, access, personal, other")
     expect((await call("tasks", "close", "nope", "--as", "done", "--json")).code).toBe(6)
 
     const readOnly = await setup({ profiles: { default: { readOnly: true } } })
-    const refused = await readOnly("tasks", "add", PROMISE, "--type", "promise", "--json")
+    const refused = await readOnly("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
     expect([refused.code === 0, refused.stderr]).toEqual([false, expect.stringContaining("tasks.add")])
   })
 
@@ -187,6 +202,8 @@ describe("tasks", () => {
         PROMISE,
         "--type",
         "promise",
+        "--category",
+        "money",
         "--title",
         "Send the invoice",
         "--due",
@@ -236,10 +253,55 @@ describe("tasks", () => {
     expect(printed).toContain("unsynced — moved, newest message not stored")
   })
 
+  it("**keys, categorizes, tags and claims a task**: one holder at a time, hidden from others on the agenda", async () => {
+    const call = await setup()
+    const listed = item(await call("tasks", "categories", "--json")).categories
+    expect(listed.map(({ name }: { name: string }) => name)).toEqual([
+      "money",
+      "documents",
+      "meeting",
+      "delivery",
+      "access",
+      "personal",
+      "other",
+    ])
+    const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
+    expect(added).toMatchObject({ key: "PR-1", category: "money" })
+    expect(item(await call("tasks", "plan", "PR-1", "--category", "Documents", "--json")).category).toBe("documents")
+    expect((await call("tasks", "plan", "PR-1", "--category", "finance")).stderr).toContain("--category takes money")
+
+    expect((await call("tags", "add", "urgent", "--task", "PR-1", "--json")).code).toBe(0)
+    expect(json(await call("tasks", "list", "tag:urgent", "--json")).items).toMatchObject([{ key: "PR-1" }])
+    expect(json(await call("tasks", "list", "tag:later", "--json")).items).toEqual([])
+    expect(json(await call("tags", "list", "--json")).items).toMatchObject([
+      { tag: "urgent", type: "task", target: `task:${added.id}` },
+    ])
+    expect((await call("tags", "remove", "urgent", "--task", "PR-1", "--json")).code).toBe(0)
+    expect(json(await call("tasks", "list", "tag:urgent", "--json")).items).toEqual([])
+
+    const me = authorOf(process.env)
+    expect(item(await call("tasks", "claim", "PR-1", "--for", "2h", "--json"))).toMatchObject({ claimed_by: me })
+    expect((await call("tasks", "claim", "PR-1", "--json")).stderr).toContain(`${me} holds task PR-1 until`)
+    expect(json(await call("tasks", "agenda", "--within", "3650d", "--json")).item.tasks).toMatchObject([
+      { key: "PR-1", claimed_by: me },
+    ])
+    expect(item(await call("tasks", "release", "PR-1", "--json")).claimed_by).toBeNull()
+
+    const store = await openStore({ path: join(call.root, "m.db") })
+    await store.tasks.claim("PR-1", "someone-else", new Date(Date.now() + 60_000))
+    await store.close()
+    expect(json(await call("tasks", "agenda", "--within", "3650d", "--json")).item.tasks).toEqual([])
+    expect(json(await call("tasks", "agenda", "--within", "3650d", "--claimed", "--json")).item.tasks).toMatchObject([
+      { key: "PR-1", claimed_by: "someone-else" },
+    ])
+    expect(item(await call("tasks", "close", "PR-1", "--as", "done", "--json"))).toMatchObject({ state: "done" })
+    expect(item(await call("tasks", "show", "PR-1", "--json")).claimed_by).toBeNull()
+  })
+
   it("prints for a person, and says so when there is nothing", async () => {
     const call = (await setup()).pretty
     expect((await call("tasks", "list")).stderr).toContain("no tasks")
-    await call("tasks", "add", PROMISE, "--type", "promise")
+    await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money")
     const shown = await call("tasks", "list")
     expect(shown.stdout.join("")).toContain("Ana: I'll send the invoice tomorrow")
     expect((await call("stats", "tasks", "show")).stdout.join("")).toContain("1 open")
@@ -294,6 +356,8 @@ it("**takes the account from the command** where the program has no messenger pr
     PROMISE,
     "--type",
     "promise",
+    "--category",
+    "money",
     "--provider",
     "chat",
     "--account",
