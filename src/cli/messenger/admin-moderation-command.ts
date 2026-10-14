@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { describe, MAX_ACTIONS } from "../../moderation/check.js"
 import { RULE_KEYS } from "../../moderation/rules.js"
 import { momentOf } from "../../services/moment.js"
-import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "./ask.js"
 import { renderItem } from "./chat-answers.js"
@@ -23,7 +23,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
       renderItem(this, context, await context.withServices((services) => services.moderation.rules(chat)))
     })
   rules.addCommand(
-    annotate(new Command("set"), { effects: LOCAL_WRITE })
+    grantsAuthority(annotate(new Command("set"), { effects: LOCAL_WRITE }))
       .description("change one rule; the group's first change writes every rule with its default")
       .argument("<chat>", messenger.chatArgument)
       .argument("<key>", `one of: ${RULE_KEYS.join(", ")}`)
@@ -34,7 +34,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
       }),
   )
   rules.addCommand(
-    annotate(new Command("unset"), { effects: LOCAL_WRITE })
+    grantsAuthority(annotate(new Command("unset"), { effects: LOCAL_WRITE }))
       .description("put one rule back to its default")
       .argument("<chat>", messenger.chatArgument)
       .argument("<key>", `one of: ${RULE_KEYS.join(", ")}`)

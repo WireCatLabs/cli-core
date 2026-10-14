@@ -4,7 +4,7 @@ import { Argument, Command } from "commander"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { envName } from "../app.js"
-import { LOCAL_READ, LOCAL_WRITE, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { renderItem, wholeList } from "../messenger/chat-answers.js"
 import { botAdminsCommand, botMembersCommand } from "./admins.js"
@@ -23,7 +23,7 @@ import { botWatchCommand } from "./watch.js"
 const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
   const auth = new Command("auth").description("the bot token this profile uses")
 
-  annotate(auth.command("set"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(auth.command("set"), { effects: LOCAL_WRITE }))
     .description(
       `check a bot token with ${bot.name ?? "the messenger"}, then keep it — typed at a hidden prompt or piped on stdin`,
     )
@@ -65,7 +65,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
       })
     })
 
-  annotate(auth.command("remove"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(auth.command("remove"), { effects: LOCAL_WRITE }))
     .description("forget this profile's bot token")
     .action(async function (this: Command) {
       const context = botContext(this, bot)
@@ -146,7 +146,7 @@ const recipientsCommand = (bot: BotMessenger): Command => {
         ),
       )
     })
-  annotate(command.command("add <chat>"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("add <chat>"), { effects: LOCAL_WRITE }))
     .description("allow a chat: its id, `user:<id>`, or the title of a chat this bot has seen")
     .action(async function (this: Command, chat: string) {
       const context = botContext(this, bot)
@@ -161,13 +161,13 @@ const recipientsCommand = (bot: BotMessenger): Command => {
         )
       })
     })
-  annotate(command.command("remove <chat>"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("remove <chat>"), { effects: LOCAL_WRITE }))
     .description("take a chat off the list")
     .action(async function (this: Command, chat: string) {
       const context = botContext(this, bot)
       await context.run(async () => renderItem(this, context, { removed: context.recipients().remove(chat) ?? null }))
     })
-  annotate(command.command("clear"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("clear"), { effects: LOCAL_WRITE }))
     .description("remove the list: the bot may write to any chat again")
     .action(async function (this: Command) {
       const context = botContext(this, bot)

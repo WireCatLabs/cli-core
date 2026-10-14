@@ -19,8 +19,9 @@ import { type ServerSystem, thisMachine } from "../../background/system.js"
 import { locationVariables } from "../../background/units.js"
 import { aheadOf } from "../../services/moment.js"
 import { storePath } from "../../store/path.js"
+import { readOnlyLockOf } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -97,11 +98,14 @@ export const scheduleCommand = (messenger: Messenger): Command => {
     const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env: context.env }).state
     const say = (value: object, lines: string[]) => renderAnswer(self, context, itemOf(value), () => lines.join("\n"))
     const timer = () => timerFor(app, system, context.env)
+    // The command line refuses a schedule under the lock; a caller that gets here still passes the lock on.
+    const readOnly = readOnlyLockOf(app, context.env)
     const environment = (): Record<string, string> => ({
       [`${app.envPrefix}_PROFILE`]: context.profile,
       ...locationVariables(app, context.env),
       // The timer starts with almost no PATH; an agent runs `max` and its own tools by name.
       ...(context.env.PATH ? { PATH: context.env.PATH } : {}),
+      ...(readOnly ? { [readOnly]: "1" } : {}),
     })
     const save = async (schedule: Schedule) => {
       const file = scheduleFile(state, schedule.name)
@@ -118,7 +122,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
   }
 
   withWhen(
-    annotate(command.command("command"), { effects: LOCAL_WRITE })
+    grantsAuthority(annotate(command.command("command"), { effects: LOCAL_WRITE }))
       .description(
         `run ${app.command} <args…> on a timer — reads save what they read, so this is how a chat's history fills the store`,
       )
@@ -138,7 +142,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
   })
 
   withWhen(
-    annotate(command.command("agent"), { effects: LOCAL_WRITE })
+    grantsAuthority(annotate(command.command("agent"), { effects: LOCAL_WRITE }))
       .description(
         `start an agent (claude or codex) with a prompt on a timer; it runs with ${app.envPrefix}_READ_ONLY=1, so it reads and drafts and cannot send — its answer is kept and you are notified`,
       )
@@ -247,7 +251,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       if (last.exitCode !== 0) process.exitCode = 1
     })
 
-  annotate(command.command("remove"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("remove"), { effects: LOCAL_WRITE }))
     .description("stop a schedule and remove its timer; its past output stays")
     .argument("<name>")
     .action(async function (this: Command, name: string) {

@@ -84,7 +84,7 @@ stop. The owner sends what they choose.
 
 `{{command}} schedule agent follow-ups claude "<prompt>" --at 08:30` runs this every morning. Then you run
 with the CLI's read-only variable set (`MAX_READ_ONLY=1` for max): every send, reaction and edit is
-refused, so do not try. What you print is the report the owner opens; its first line shows in the desktop notification, so make it the count that
+refused, and so is every change to schedules, settings, the recipient list or auto-replies, so do not try. What you print is the report the owner opens; its first line shows in the desktop notification, so make it the count that
 matters ("3 overdue, 2 owe a reply, 1 waiting since 24.09").
 
 ## Recipes

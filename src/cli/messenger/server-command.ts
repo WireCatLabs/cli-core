@@ -11,7 +11,7 @@ import { locationVariables, platformFor, readableLog, tail, type Unit } from "..
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import type { AppIdentity } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
 import { nextStep } from "../steps.js"
@@ -365,7 +365,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       )
     })
 
-  annotate(command.command("install"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("install"), { effects: LOCAL_WRITE }))
     .description("write a systemd user unit or a launchd agent for this profile; starts nothing")
     .action(function (this: Command) {
       const { context, platform, unit, say } = prepare(this)
@@ -381,7 +381,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       ])
     })
 
-  annotate(command.command("uninstall"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("uninstall"), { effects: LOCAL_WRITE }))
     .description("remove this profile's unit; stop it first")
     .action(async function (this: Command) {
       const { context, platform, unit, say } = prepare(this)

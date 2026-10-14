@@ -28,6 +28,14 @@ shape of this file.
   for the next message write. Fills, backfills, rebuilds and the conversation build write tables that queue nothing
   and drain nothing (`writeBatch`), so what they report is what they did. The nesting depth of a write is kept per
   connection, not shared by every open store in the process.
+- **`<PREFIX>_READ_ONLY` now also refuses the local writes that change what a later run may do**:
+  `schedule command|agent|remove`, `config set|unset|migrate`, `recipients add|remove|clear`, `flood clear`,
+  `server install|uninstall`, `mcp setup`, `skill install`, `replies` changes and consents, moderation rules,
+  model keys, `bot auth` and `bot recipients`, and `upgrade` answer `permission_error`. A scheduled agent could
+  otherwise schedule an unlocked `messages send`. Reads, syncs, tags, tasks and notes still work under the lock.
+  A schedule run started under the lock stays locked, and a schedule saved under it carries the variable.
+  To make one of these changes, run the command without the variable. A CLI marks commands of its own with
+  `grantsAuthority` from `./cli`.
 
 ### Added
 

@@ -14,10 +14,10 @@ import { metaOf } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
 import { failingNotice, scheduledRuns } from "../background/schedules.js"
-import { type AppIdentity, envName } from "./app.js"
+import { type AppIdentity, envName, readOnlyLockOf } from "./app.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
-import { judgedEffects, judgedTargets } from "./effects.js"
+import { changesAuthority, judgedEffects, judgedTargets } from "./effects.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { isCliFailure, isCommanderFailure } from "./failures.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
@@ -195,6 +195,13 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     const localPreview = action.options.some((option) => option.long === "--dry-run")
     if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
     const path = commandPathOf(action)
+    const lock = readOnlyLockOf(definition.app, commandEnv)
+    if (lock && changesAuthority(action) && !flags.dryRun)
+      throw new CliError(
+        "permission_error",
+        `this process is read-only (${lock}) — \`${command} ${path.join(" ")}\` changes what a later run may do; ` +
+          `run it without ${lock}`,
+      )
     const persistent =
       ["watch", "serve", "mcp"].includes(path[0] ?? "") ||
       path.includes("mcp") ||

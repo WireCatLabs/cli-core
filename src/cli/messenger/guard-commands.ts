@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList } from "../list-query.js"
 import { withPaging } from "../paging.js"
@@ -31,7 +31,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       else if (chats.length === 0) renderer.note("the recipient list is on and empty — this profile may send nowhere")
     })
 
-  annotate(command.command("add"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("add"), { effects: LOCAL_WRITE }))
     .argument("<chat>", messenger.chatArgument)
     .description("allow sending to this chat; the first add turns the list on")
     .action(async function (this: Command, chat: string) {
@@ -47,7 +47,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ id: found.id, title: found.title, added }))
     })
 
-  annotate(command.command("remove"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("remove"), { effects: LOCAL_WRITE }))
     .argument("<chat>", "chat id, or the title as the list shows it")
     .description("stop allowing this chat; the list stays on")
     .action(async function (this: Command, chat: string) {
@@ -58,7 +58,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ id: gone.id, title: gone.title, removed: true }))
     })
 
-  annotate(command.command("clear"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("clear"), { effects: LOCAL_WRITE }))
     .description("delete the list, which turns it off: this profile may send to any chat again")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)

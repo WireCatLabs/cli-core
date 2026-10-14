@@ -12,6 +12,20 @@ export const LOCAL_READ: Effects = { remote: "none", local: "read" }
 export const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
 export const NO_EFFECTS: Effects = { remote: "none", local: "none" }
 
+const AUTHORITY = new WeakSet<Command>()
+
+/**
+ * Marks a local write that changes what a later run may do: a schedule, a setting, the recipient list, an
+ * auto-reply, an agent's setup. `<PREFIX>_READ_ONLY` refuses it, or an agent under the lock could hand an
+ * unlocked run the send it may not make itself (SEC-47).
+ */
+export const grantsAuthority = <T extends Command>(command: T): T => {
+  AUTHORITY.add(command)
+  return command
+}
+
+export const changesAuthority = (command: Command): boolean => AUTHORITY.has(command)
+
 /**
  * The effects a retry or an unasked step is judged on (NEED-1073): only what the service sees. Running a sync or a
  * cached read twice rewrites the same local rows, so a local write alone never makes either unsafe. Unknown stays

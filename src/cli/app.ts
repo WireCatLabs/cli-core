@@ -19,3 +19,10 @@ export interface AppIdentity {
 }
 
 export const envName = (app: AppIdentity, name: string): string => `${app.envPrefix}_${name}`
+
+/** The variable that locks this process read-only, when it is set to anything but "0". */
+export const readOnlyLockOf = (app: AppIdentity, env: NodeJS.ProcessEnv): string | undefined => {
+  const name = envName(app, "READ_ONLY")
+  const value = env[name]
+  return value === undefined || value.trim() === "" || value === "0" ? undefined : name
+}
