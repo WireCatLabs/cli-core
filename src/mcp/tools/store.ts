@@ -7,7 +7,7 @@ import { parseDuration } from "../../cli/settings.js"
 import { levelFor } from "../../sends/permissions.js"
 import { FETCHING } from "../../services/archive.js"
 import { GAP_BOUNDS, gapsService, validateRepair } from "../../services/archive-gaps.js"
-import { jobsDir, readJob, startArchiveJob, stateOf } from "../../services/backfill-jobs.js"
+import { jobDetails, jobsDir, readJob, startArchiveJob } from "../../services/backfill-jobs.js"
 import { storedDeps } from "../../services/deps.js"
 import { JOBS_QUERY, jobItems } from "../../services/job-query.js"
 import { validateCatchUp } from "../../services/search-catchup.js"
@@ -154,7 +154,7 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
       const job = readJob(jobsDir(messenger.app, defaults.env), args.job)
       if (!job || job.profile !== defaults.settings.profile)
         throw new CliError("not_found", "no such job in this profile")
-      return itemOf(snakeKeys({ ...job, state: stateOf(job) }))
+      return itemOf(snakeKeys({ ...jobDetails(job), log: job.log }))
     },
   }),
   store_jobs_list: tool({

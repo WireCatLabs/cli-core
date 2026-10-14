@@ -9,6 +9,12 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Follow-ups to the S3 envelope moves:** `store export --jsonl` on stdout streams `message` items (files keep
+  their format); `conversations status` names group chats never built as a `missing` entry with the
+  `conversations.build` step, whose `chat` is now optional; MCP `store_jobs_show` answers what `store jobs show`
+  does (`job`, `profile`, `state`, … and `log`); `search meetings` pairs its `missing` entry with the
+  `meetings.search-again` step in `next`; `attachments_show` resource metadata is snake_case; the conversation and
+  attachment MCP tool descriptions name the new shapes.
 - **`conversations *`, `search conversations` and `messages links` answer in the envelope**, snake_case, CLI and
   MCP alike. `conversations build|embed|batches status|batches next|links add|links clear|embed status|embed
   clear|consents revoke` and `messages links` answer `{item}` (`batches next` with nothing left is

@@ -20,6 +20,7 @@ import { nextStep } from "../steps.js"
 import {
   finishJob,
   type Job,
+  jobDetails,
   type jobItem,
   jobStarted,
   jobsDir,
@@ -272,7 +273,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
         chatId === undefined
           ? undefined
           : await context.withServices((services) => services.archive.held(chatId)).catch(() => undefined)
-      renderAnswer(this, context, itemOf(snakeKeys({ ...brief(job), ...(held ? { held } : {}), log: job.log })))
+      renderAnswer(this, context, itemOf(snakeKeys({ ...jobDetails(job), ...(held ? { held } : {}), log: job.log })))
     })
 
   command
@@ -348,28 +349,6 @@ export const jobsCommand = (messenger: Messenger): Command => {
 const jobLine = (one: ReturnType<typeof jobItem>) =>
   `${one.id}  ${one.state.padEnd(9)}  ${one.started_at.slice(0, 16).replace("T", " ")}  ${one.chat}  ` +
   `${one.fetched} fetched${one.issue ? `  ${one.issue.message}` : ""}${one.error ? `  ${one.error.message}` : ""}`
-
-const brief = (job: Job) => ({
-  job: job.id,
-  chat: job.chat,
-  state: stateOf(job),
-  pid: job.pid,
-  startedAt: job.startedAt,
-  ...(job.finishedAt ? { finishedAt: job.finishedAt } : {}),
-  fetched: Number(job.result?.fetched ?? job.progress?.fetched ?? 0),
-  ...(job.limit === undefined ? {} : { limit: job.limit }),
-  ...(job.pageSize === undefined ? {} : { pageSize: job.pageSize }),
-  ...(job.last === undefined ? {} : { last: job.last }),
-  ...(job.result
-    ? {
-        complete: job.result.complete === true,
-        ...(job.result.issue ? { issue: job.result.issue } : {}),
-        ...(job.result.batch ? { batch: job.result.batch } : {}),
-        ...(job.result.resume ? { resume: job.result.resume } : {}),
-      }
-    : {}),
-  ...(job.error ? { error: job.error } : {}),
-})
 
 const findJob = (messenger: Messenger, context: MessengerContext, id: string | undefined): Job => {
   const dir = jobsDir(messenger.app, context.env)

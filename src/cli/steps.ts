@@ -130,8 +130,8 @@ export const STEPS = defineSteps([
   {
     id: "conversations.build",
     command: "conversations build",
-    args: [{ name: "chat", required: true }],
-    why: "the chat's conversations are missing or older than the messages; this builds them",
+    args: [{ name: "chat", required: false }],
+    why: "conversations are missing or older than the messages; this builds them",
   },
   {
     id: "conversations.embed",

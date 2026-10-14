@@ -1,7 +1,7 @@
 import type { Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { Message } from "../../domain/models.js"
 import { conversationItem } from "../../services/conversations.js"
-import type { FoundConversations, Refreshed } from "../../services/embeddings.js"
+import type { ChatReadiness, FoundConversations, Refreshed } from "../../services/embeddings.js"
 import type { AccountKey, ConversationSummary } from "../../store/store.js"
 import { itemOf, listOf, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
@@ -68,6 +68,34 @@ export const foundConversations = (
     has_more: false,
     ...readinessGaps(found, chat),
     ...(found.accounts ? { meta: { accounts: found.accounts.map((one) => `${one.provider}:${one.account}`) } } : {}),
+  })
+
+/** `conversations status`: each built chat with the model it was measured by; group chats never built are missing. */
+export const readinessList = ({
+  model,
+  chats,
+  unbuiltGroups,
+}: {
+  model: string
+  chats: ChatReadiness[]
+  unbuiltGroups?: number
+}) =>
+  listOf("conversations status", {
+    items: chats.map((one) => snakeKeys({ ...one, model })),
+    limit: Math.max(1, chats.length),
+    has_more: false,
+    ...(unbuiltGroups
+      ? {
+          next: [nextStep("conversations.build", { args: {} })],
+          missing: [
+            {
+              field: "items",
+              why: `${unbuiltGroups} group chat${unbuiltGroups === 1 ? " was" : "s were"} never built`,
+              step: "conversations.build",
+            },
+          ],
+        }
+      : {}),
   })
 
 /** A run over many chats: what it built and embedded, and the download it needs when the model is missing. */

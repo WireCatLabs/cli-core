@@ -226,7 +226,7 @@ const exportCommand = (messenger: Messenger): Command =>
       }
       if (format === "markdown") context.streams.data(toMarkdown(title, messages).replace(/\n$/, ""))
       else if (format === "jsonl" || context.format === "jsonl")
-        for (const message of messages) context.streams.data(JSON.stringify(message))
+        for (const item of messageItems(messages, account)) context.streams.data(JSON.stringify(item))
       else if (context.format === "json")
         renderAnswer(
           this,

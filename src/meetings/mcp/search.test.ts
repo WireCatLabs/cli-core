@@ -29,6 +29,7 @@ it("offers the same bounded search without letting a tool caller choose an accou
   expect(result.structuredContent).toEqual({
     items: [{ ref: "meeting:1/2", meeting: "meeting:1/2", scope: "chat", id: "4", excerpt: "budget", offset_ms: null }],
     page: { limit: 10, has_more: false },
+    next: [expect.objectContaining({ step: "meetings.search-again", command: "search meetings" })],
     missing: [expect.objectContaining({ field: "excerpt", step: "meetings.search-again" })],
   })
   expect(search).toHaveBeenCalledWith(
