@@ -333,7 +333,7 @@ describe("attachments extract", () => {
     try {
       const result = await call("attachments", "extract", "--ocr", "--concurrency", "2", "--limit", "1", "--json")
       expect(result.code).toBe(0)
-      expect(json(result)).toMatchObject({ extracted: 1, files: [{ locator: "msg:chat/500/7/8", ocr_pages: 1 }] })
+      expect(json(result)).toMatchObject({ extracted: 1, files: [{ ref: "msg:chat/500/7/8", ocr_pages: 1 }] })
       expect(result.stdout + result.stderr).not.toContain("bulkocrinvoice")
       expect(await hits(call, "content:bulkocrinvoice")).toEqual(["8"])
       expect(fetcher).toHaveBeenCalledTimes(1)
@@ -359,7 +359,7 @@ describe("attachments extract", () => {
     })
     expect(answer.files).toEqual([
       {
-        locator: "msg:chat/500/7/5",
+        ref: "msg:chat/500/7/5",
         attachment: 1,
         kind: "photo",
         name: "5-1.jpg",
@@ -368,18 +368,18 @@ describe("attachments extract", () => {
         local_path: expect.stringMatching(/files[/\\]5-1\.jpg$/),
       },
       expect.objectContaining({
-        locator: "msg:chat/500/7/4",
+        ref: "msg:chat/500/7/4",
         status: "needs-agent",
         extractor: expect.stringMatching(/^pdf:unpdf@/),
       }),
-      expect.objectContaining({ locator: "msg:chat/500/7/3", status: "extracted", chars: expect.any(Number) }),
+      expect.objectContaining({ ref: "msg:chat/500/7/3", status: "extracted", chars: expect.any(Number) }),
       expect.objectContaining({
-        locator: "msg:chat/500/7/2",
+        ref: "msg:chat/500/7/2",
         status: "extracted",
         extractor: expect.stringMatching(/^docx:mammoth@/),
       }),
       {
-        locator: "msg:chat/500/7/1",
+        ref: "msg:chat/500/7/1",
         attachment: 1,
         kind: "file",
         name: "notes.txt",
@@ -438,7 +438,7 @@ describe("attachments extract", () => {
     const seen: string[] = []
     for (let run = 0; run < 3; run += 1) {
       const { files: items } = json(await call("attachments", "extract", "--limit", "1", "--json"))
-      seen.push(...items.map(({ locator }: { locator: string }) => locator))
+      seen.push(...items.map(({ ref }: { ref: string }) => ref))
     }
     expect(seen).toEqual(["msg:chat/500/7/9", "msg:chat/500/7/8", "msg:chat/500/7/5"])
     const needs = json(await call("attachments", "list", "is:needs_text", "--json")).items
@@ -456,7 +456,7 @@ describe("attachments extract", () => {
     const { rmSync } = await import("node:fs")
     rmSync(join(files, "notes.txt"))
     const answer = json(await call("attachments", "extract", "--chat", "Work fixture", "--json"))
-    expect(answer.files.find(({ locator }: { locator: string }) => locator === "msg:chat/500/7/1")).toMatchObject({
+    expect(answer.files.find(({ ref }: { ref: string }) => ref === "msg:chat/500/7/1")).toMatchObject({
       status: "missing",
     })
     expect(json(await call("attachments", "extract", "--chat", "7", "--json")).extracted).toBe(0)
@@ -630,14 +630,14 @@ describe("an agent's text for a file", () => {
     writeFileSync(textFile, "Акт сверки за март")
     const kept = json(await call("attachments", "text", "set", "Work fixture", "4", "--text-file", textFile, "--json"))
     expect(kept).toEqual({
-      locator: "msg:chat/500/7/4",
+      ref: "msg:chat/500/7/4",
       attachment: 1,
       origin: "agent",
       chars: 18,
       replaced: "extracted",
     })
     const fromStdin = await piped("Фото доски: план релиза")("attachments", "text", "set", "msg:chat/500/7/5", "--json")
-    expect(json(fromStdin)).toMatchObject({ locator: "msg:chat/500/7/5", replaced: "extracted" })
+    expect(json(fromStdin)).toMatchObject({ ref: "msg:chat/500/7/5", replaced: "extracted" })
     expect(fromStdin.stderr).not.toContain("релиза")
 
     expect(await hits(call, "content:сверки")).toEqual(["4"])

@@ -43,7 +43,7 @@ export type ExtractStatus = "extracted" | "needs-agent" | "unreadable" | "engine
 
 /** One file looked at. Never its text: the text stays in the local store. */
 export interface ExtractItem {
-  locator: string
+  ref: string
   /** The attachment's place in the message, from 1. */
   attachment: number
   kind: string
@@ -117,7 +117,7 @@ export const ATTACHMENT_QUERY = {
 } as const satisfies QueryRegistry
 
 export interface AttachmentTextSet {
-  locator: string
+  ref: string
   attachment: number
   origin: "agent"
   chars: number
@@ -126,7 +126,7 @@ export interface AttachmentTextSet {
 }
 
 export interface AttachmentBytes {
-  locator: string
+  ref: string
   attachment: number
   name: string | null
   mimeType: string
@@ -401,7 +401,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
         )
       } else batch.ok()
       const item: ExtractItem = {
-        locator: formatLocator({ ...account, chat: file.chatId, message: file.messageId }),
+        ref: formatLocator({ ...account, chat: file.chatId, message: file.messageId }),
         attachment: file.position + 1,
         kind: file.kind,
         name: file.name,
@@ -429,7 +429,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
       )
       run.failed += 1
       const item: ExtractItem = {
-        locator: formatLocator({ ...account, chat: file.chatId, message: file.messageId }),
+        ref: formatLocator({ ...account, chat: file.chatId, message: file.messageId }),
         attachment: file.position + 1,
         kind: file.kind,
         name: file.name,
@@ -570,7 +570,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
       }
     }
     return {
-      locator: formatLocator({ ...account, chat: chatId, message: messageId }),
+      ref: formatLocator({ ...account, chat: chatId, message: messageId }),
       attachment: chosen.position + 1,
       name: chosen.name,
       mimeType,
@@ -610,7 +610,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
     }
     await store.keepAttachmentText(chosen.pk, { text, origin: "agent", extractor: "agent" })
     return {
-      locator: formatLocator({ ...account, chat: chatId, message: messageId }),
+      ref: formatLocator({ ...account, chat: chatId, message: messageId }),
       attachment: chosen.position + 1,
       origin: "agent",
       chars: text.length,

@@ -20,8 +20,8 @@ const count = (value: string): number => {
   return parsed
 }
 
-const line = ({ status, locator, attachment, name, chars }: ExtractItem) =>
-  `${status}  ${locator} #${attachment}${name ? `  ${name}` : ""}${chars === undefined ? "" : `  (${chars} characters)`}`
+const line = ({ status, ref, attachment, name, chars }: ExtractItem) =>
+  `${status}  ${ref} #${attachment}${name ? `  ${name}` : ""}${chars === undefined ? "" : `  (${chars} characters)`}`
 
 const summary = (run: ExtractRun) =>
   [
@@ -191,8 +191,7 @@ const showCommand = (messenger: Messenger): Command =>
           this,
           context,
           itemOf(snakeKeys(done)),
-          () =>
-            `${done.locator} #${done.attachment}  ${done.readBytes}/${done.totalBytes} bytes  SHA-256 ${done.sha256}\n`,
+          () => `${done.ref} #${done.attachment}  ${done.readBytes}/${done.totalBytes} bytes  SHA-256 ${done.sha256}\n`,
         )
       } finally {
         stop.release()
@@ -226,7 +225,7 @@ const textCommand = (messenger: Messenger): Command => {
         this,
         context,
         itemOf(snakeKeys(done)),
-        () => `${done.locator} #${done.attachment}  ${done.chars} characters kept\n`,
+        () => `${done.ref} #${done.attachment}  ${done.chars} characters kept\n`,
       )
     })
   return text

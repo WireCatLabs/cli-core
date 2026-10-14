@@ -18,7 +18,7 @@ only the hit. Account, chat and native-topic boundaries are never crossed. The b
 data; the bounded metadata envelope is additional. An oversized hit returns no message data and
 `stopped: ["bytes"]` rather than clipping its text.
 
-The result has `locator`, `chat`, `message`, `mode`, `items`, `links`, `chain`, `stale`, `stopped` and
+The result has `ref`, `chat`, `message`, `mode`, `items`, `links`, `chain`, `stale`, `stopped` and
 `bounds`, and the graph snapshot's `builtAt` (null without a build). Every returned link has `messageId`, `parentId`, `source`, `kind`, `confidence`, `method`,
 `version`, `createdAt`, `chosen` and `stale`. Confidence is the provider/rule/agent's weight, not a calibrated
 probability. A null parent is an agent's explicit conversation start. Pretty output prints link evidence

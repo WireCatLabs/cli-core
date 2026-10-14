@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams, configFilePath, saveConfigFile } from "@wirecat/cli-base"
@@ -213,6 +213,18 @@ describe("permission configuration migration", () => {
     expect(JSON.parse(written).defaults.region).toBe("eu")
     expect((await call(["config", "migrate", "--json"], env)).data).toMatchObject({ changed: false, changes: [] })
     expect(readFileSync(path, "utf8")).toBe(written)
+  })
+
+  it("previews a file with camelCase setting names without moving them", async () => {
+    const { path, env } = fresh()
+    saveConfigFile(path, { profiles: {} })
+    writeFileSync(path, `${JSON.stringify({ profiles: { alice: { readOnly: true } } }, null, 2)}\n`)
+    const original = readFileSync(path, "utf8")
+    const dry = await call(["config", "migrate", "--dry-run", "--json"], env)
+    expect(dry.code, dry.error).toBe(0)
+    expect(readFileSync(path, "utf8")).toBe(original)
+    expect((await call(["config", "migrate", "--json"], env)).code).toBe(0)
+    expect(readFileSync(path, "utf8")).not.toContain('"readOnly"')
   })
 
   it("initializes a missing file and refuses locked writes while allowing a preview", async () => {

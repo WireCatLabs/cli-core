@@ -226,6 +226,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       const resolved = (definition.configuration ?? settingsFor(definition.app)).resolveSettings(flags, {
         kind: path[0] === "bot" ? "bot" : "personal",
         env: options.env ?? process.env,
+        readOnly: true,
       })
       const permissions = "permissions" in resolved ? (resolved.permissions as Settings["permissions"]) : {}
       outputFor(action).renderer.result(preview(action, permissions))
@@ -323,7 +324,10 @@ const hintFor = ({ app, configuration }: ProgramDefinition, argv: string[], opti
   const env = options.env ?? process.env
   let enabled: boolean
   try {
-    enabled = (configuration ?? settingsFor(app)).resolveSettings({}, { env, needsProfile: false }).skillHint
+    enabled = (configuration ?? settingsFor(app)).resolveSettings(
+      {},
+      { env, needsProfile: false, readOnly: true },
+    ).skillHint
   } catch {
     return undefined
   }
@@ -382,7 +386,7 @@ const keepFailure = async (
   try {
     settings = resolveSettings(
       { ...program.opts(), ...(profile === undefined ? {} : { profile }) },
-      { env, kind: path.split(" ")[0] === "bot" ? "bot" : "personal", needsProfile: false },
+      { env, kind: path.split(" ")[0] === "bot" ? "bot" : "personal", needsProfile: false, readOnly: true },
     )
   } catch {
     // A configuration that will not load is a failure worth keeping too; the flags are all there is to go on.

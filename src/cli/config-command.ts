@@ -28,15 +28,17 @@ export const configCommand = (
       .description("replace legacy access settings with permissions, preserving this file's effective levels")
       .option("--dry-run", "show the migration without writing the file")
       .action(function () {
+        const dryRun = this.opts<{ dryRun?: boolean }>().dryRun === true
         const context = baseContext(this, (flags, options) =>
-          config.resolveSettings(flags, { ...options, needsProfile: false }),
+          config.resolveSettings(flags, { ...options, needsProfile: false, readOnly: dryRun }),
         )
         const { env } = context
-        const dryRun = this.opts<{ dryRun?: boolean }>().dryRun === true
         if (!dryRun && env[envName(app, "PROFILE_LOCK")])
           throw new CliError("permission_error", "config migrate changes every profile — run outside the profile lock")
         const path = configFilePath(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).config)
-        const migrated = migratePermissionConfig(loadSnakeCaseConfig(path, config.schema, () => ({ profiles: {} })))
+        const migrated = migratePermissionConfig(
+          loadSnakeCaseConfig(path, config.schema, () => ({ profiles: {} }), { rewrite: !dryRun }),
+        )
         if (migrated.changed) {
           const checked = v.safeParse(config.schema, migrated.config)
           if (!checked.success)

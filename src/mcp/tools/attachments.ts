@@ -74,7 +74,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
         }
         const uri =
           "attachment://cached/" +
-          encodeURIComponent(done.locator) +
+          encodeURIComponent(done.ref) +
           "/" +
           done.attachment +
           "?offset=" +
