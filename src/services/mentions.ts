@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import { parseLucene, validateQuery } from "@wirecat/cli-base/query"
 import { formatLocator } from "../domain/locator.js"
-import type { MentionKind } from "../domain/mentions.js"
 import type { Page } from "../domain/models.js"
-import type { MentionFilter, MentionsRebuild, MentionsState, StoredMention } from "../store/store.js"
+import { MENTION_QUERY, type MentionsRebuild, type MentionsState, type StoredMention } from "../store/store.js"
 import { accountStore, crossAccount, type ServiceDeps } from "./deps.js"
 
 /** One mention as `mentions list` and `show` answer it: the message it is in, by locator. */
@@ -23,12 +23,10 @@ export interface Mentions extends Page<Mention> {
 }
 
 export interface MentionsService {
-  list(filter: MentionFilter, window: { limit?: number; offset: number }): Promise<Mentions>
+  /** `query` empty lists every mention; a bare word is a value. */
+  list(query: string, window: { limit?: number; offset: number }): Promise<Mentions>
   show(id: number): Promise<MentionDetails>
-  rebuild(options: {
-    kinds?: readonly MentionKind[]
-    onBatch?: (done: number, total: number) => void
-  }): Promise<MentionsRebuild>
+  rebuild(options?: { onBatch?: (done: number, total: number) => void }): Promise<MentionsRebuild>
 }
 
 export const mentionsService = (deps: ServiceDeps): MentionsService => {
@@ -43,9 +41,12 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
     }
   }
   return {
-    list: async (filter, window) => {
+    list: async (query, window) => {
+      const ast = query.trim()
+        ? validateQuery(parseLucene(query, { ...MENTION_QUERY, defaultField: "value" }), MENTION_QUERY)
+        : undefined
       const { store, mention } = await located()
-      const page = await store.mentions(filter, window)
+      const page = await store.mentions(ast, window)
       const state = await (await deps.store()).mentionsState()
       return { items: page.items.map(mention), hasMore: page.hasMore, state }
     },
@@ -56,7 +57,7 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
       const { before, after, sameValue, ...rest } = found
       return { ...mention(rest), before, after, sameValue }
     },
-    rebuild: async (options) =>
+    rebuild: async (options = {}) =>
       (await crossAccount(deps, "mentions are derived from every account's stored text")).rebuildMentions(options),
   }
 }

@@ -1,7 +1,14 @@
-import { findMentions, MENTION_VERSIONS, type MentionKind } from "../../domain/mentions.js"
-import type { CacheDatabase } from "../driver.js"
-
-export type MentionStatus = "found" | "linked" | "dismissed"
+import { defineQuery, type QueryAst } from "@wirecat/cli-base/query"
+import {
+  findMentions,
+  MENTION_KINDS,
+  MENTION_VERSIONS,
+  type MentionKind,
+  normalizedValue,
+  siteOf,
+} from "../../domain/mentions.js"
+import type { CacheDatabase, SqlValue } from "../driver.js"
+import { type ColumnMap, queryFilter } from "./query-filter.js"
 
 /** A stored mention of a message's text, with what `mentions list` and `show` need to point at it. */
 export interface StoredMention {
@@ -19,11 +26,38 @@ export interface StoredMention {
   written: string
 }
 
-export interface MentionFilter {
-  kind?: MentionKind
-  status?: MentionStatus
-  domain?: string
-  value?: string
+export const MENTION_STATUSES = ["found", "linked", "dismissed"] as const
+export type MentionStatus = (typeof MENTION_STATUSES)[number]
+
+/** The fields of `mentions list`; a bare word is a `value`. */
+export const MENTION_QUERY = defineQuery({
+  entity: "mention",
+  backend: "sql",
+  fields: [
+    { name: "kind", type: "enum", values: [...MENTION_KINDS], operators: ["term"], example: "kind:phone" },
+    { name: "status", type: "enum", values: [...MENTION_STATUSES], operators: ["term"], example: "status:found" },
+    {
+      name: "domain",
+      type: "kw",
+      operators: ["term", "phrase"],
+      example: "domain:google.com",
+      relation: "the site of a link or an address; docs.google.com means google.com",
+    },
+    {
+      name: "value",
+      type: "kw",
+      operators: ["term", "phrase"],
+      example: 'value:"8 900 000-00-01"',
+      relation: "the value in the form it is stored: a phone as +7…, a lower-case address, a link without tracking",
+    },
+  ],
+})
+
+const COLUMNS: ColumnMap = {
+  kind: { type: "enum", sql: "mn.kind" },
+  status: { type: "enum", sql: "mn.status" },
+  domain: { where: (node) => ({ sql: "mn.domain = ?", params: [siteOf(node.value.toLowerCase())] }) },
+  value: { where: (node) => ({ sql: "mn.value = ?", params: [normalizedValue(node.value)] }) },
 }
 
 export interface MentionsState {
@@ -189,24 +223,21 @@ const stored = (row: Record<string, unknown>): StoredMention => ({
   written: String(row.text).slice(Number(row.start_offset), Number(row.end_offset)),
 })
 
-/** One account's mentions, newest message first. `limit` absent is every row. */
+/** One account's mentions that match the query, newest message first. `limit` absent is every row. */
 export const listMentions = (
   database: CacheDatabase,
   accountPk: number,
-  filter: MentionFilter,
+  query: QueryAst | undefined,
   { limit, offset }: { limit?: number; offset: number },
 ): { items: StoredMention[]; hasMore: boolean } => {
   const where = ["m.account_id = ?"]
-  const params: (string | number)[] = [accountPk]
-  for (const [column, value] of [
-    ["mn.kind", filter.kind],
-    ["mn.status", filter.status],
-    ["mn.domain", filter.domain],
-    ["mn.value", filter.value],
-  ] as const) {
-    if (value === undefined) continue
-    where.push(`${column} = ?`)
-    params.push(value)
+  const params: SqlValue[] = [accountPk]
+  if (query) {
+    const compiled = queryFilter(query, COLUMNS)
+    if (compiled.sql) {
+      where.push(`(${compiled.sql})`)
+      params.push(...compiled.params)
+    }
   }
   const rows = database
     .prepare(

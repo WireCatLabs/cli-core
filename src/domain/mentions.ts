@@ -145,3 +145,9 @@ export const findMentions = (text: string): FoundMention[] => {
   const links = urls(text).filter((url) => !mail.some((one) => url.start < one.end && url.end > one.start))
   return [...mail, ...links, ...phones(text, [...links, ...mail])].sort((a, b) => a.start - b.start || a.end - b.end)
 }
+
+/** A value as a person types it, in the form mentions store: `8 900 000-00-01` → `+79000000001`. */
+export const normalizedValue = (typed: string): string => {
+  const [one] = findMentions(typed.trim())
+  return one && one.start === 0 && one.end === typed.trim().length ? one.value : typed.trim().toLowerCase()
+}

@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { CliError } from "@wirecat/cli-base"
+import type { QueryAst } from "@wirecat/cli-base/query"
 import type { TextRange } from "../conversations/chunks.js"
 import type { Link, LinkInput } from "../conversations/link.js"
 import type { DownloadedFile } from "../domain/attachments.js"
@@ -78,7 +79,6 @@ import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
 import {
   drainMentions,
   listMentions,
-  type MentionFilter,
   type MentionsRebuild,
   type MentionsState,
   mentionsState,
@@ -443,10 +443,10 @@ export interface MessageStore {
   countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
   /** The chat's messages that may hold a Google document link, newest first, with the documents linked from each. */
   documentLinkMessages(key: AccountKey, chatId: Id): Promise<DocumentLinkMessage[]>
-  /** The account's phones, e-mail addresses, links and documents found in message text, newest message first. */
+  /** The account's phones, e-mail addresses, links and documents that match the query, newest message first. */
   mentions(
     key: AccountKey,
-    filter: MentionFilter,
+    query: QueryAst | undefined,
     window: { limit?: number; offset: number },
   ): Promise<{ items: StoredMention[]; hasMore: boolean }>
   /** One mention of the account, with the text around it; `undefined` for another account's or a missing id. */
@@ -1512,11 +1512,11 @@ const storeOver = (context: StoreContext): MessageStore => {
       return chatKey === undefined ? [] : documentLinkMessages(context, chatKey)
     },
 
-    mentions: async (key, filter, window) => {
+    mentions: async (key, query, window) => {
       const accountKey = findAccountPk(key)
       return accountKey === undefined
         ? { items: [], hasMore: false }
-        : listMentions(database, accountKey, filter, window)
+        : listMentions(database, accountKey, query, window)
     },
 
     mention: async (key, id) => {
@@ -1941,12 +1941,13 @@ export type {
   TranscriptContextPage,
 } from "./sqlite/meeting-reads.js"
 export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
-export type {
-  MentionFilter,
-  MentionStatus,
-  MentionsRebuild,
-  MentionsState,
-  StoredMention,
+export {
+  MENTION_QUERY,
+  MENTION_STATUSES,
+  type MentionStatus,
+  type MentionsRebuild,
+  type MentionsState,
+  type StoredMention,
 } from "./sqlite/mentions.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
