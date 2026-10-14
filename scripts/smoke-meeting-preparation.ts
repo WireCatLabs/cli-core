@@ -1,3 +1,4 @@
+import { callMeetingPreparationTool, readMeetingPreparation } from "../src/cli/index.js"
 import { createMeetingPreparationService } from "../src/services/index.js"
 import { preparationFixture } from "../src/testing/meeting-preparation.js"
 
@@ -20,6 +21,14 @@ export const smokeMeetingPreparation = async (check: (what: string, condition: b
     check(
       "meeting preparation retains account-owned meeting tasks",
       entry?.context.tasks.items[0]?.ref === `task:${fixture.task.task.id}`,
+    )
+    const input = { series_id: "example-series" }
+    const answer = await readMeetingPreparation(service.prepare.bind(service), input, undefined, 10000)
+    check("meeting preparation public answer retains string IDs", answer.item.account_id === String(fixture.accountId))
+    const tool = await callMeetingPreparationTool(service.prepare.bind(service), input, undefined, {}, 10000)
+    check(
+      "meeting preparation MCP returns a standard item envelope",
+      !("isError" in tool) && "item" in tool.structuredContent,
     )
   } finally {
     await fixture.close()

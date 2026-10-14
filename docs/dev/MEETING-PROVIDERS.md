@@ -267,5 +267,6 @@ refuses the result. Importing this SDK never opens a provider, database or model
 
 The SDK has normalized synthetic provider proofs. The
 [preparation SDK](MEETING-PREPARATION.md) composes a selected upcoming series with bounded stored
-context. A cited public answer entity, shared CLI/MCP adapters, broad calendar discovery and
-reviewed findings intake remain separate work; these SDKs add no preparation command.
+context. Hosts can opt in to the registered answer entity and shared CLI/MCP preparation adapters
+from `./cli`; see that guide for mounting and resource ownership. Broad calendar discovery and
+reviewed findings intake remain separate work. Core does not mount provider commands automatically.

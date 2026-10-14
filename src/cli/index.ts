@@ -17,6 +17,7 @@ export {
 } from "../mcp/bot/tools.js"
 export { revokeAll } from "../mcp/http/oauth.js"
 export { type HttpOptions, MCP_PATH, serveOverHttp } from "../mcp/http/serve.js"
+export { callMeetingPreparationTool, meetingPreparationTool } from "../mcp/meeting-preparation.js"
 export {
   answerMcpTool,
   failMcpTool,
@@ -203,6 +204,13 @@ export {
 } from "./input-policy.js"
 export { answerFields, checkJson, type JsonFieldsResolver, type JsonRequest, liftJson } from "./json-fields.js"
 export { pagedList } from "./list-query.js"
+export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
+export { addMeetingPreparationCommand } from "./meeting-preparation-command.js"
+export {
+  type MeetingPreparationReader,
+  meetingPreparationInput,
+  readMeetingPreparation,
+} from "./meeting-preparation-read.js"
 export { accountCommand } from "./messenger/account-command.js"
 export { accountFileFor, profilesHere, rememberAccount } from "./messenger/accounts.js"
 export { storeCommand } from "./messenger/archive-commands.js"

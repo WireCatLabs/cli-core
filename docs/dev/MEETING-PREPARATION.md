@@ -29,7 +29,11 @@ the provider read. Labels themselves are not authentication; the host binds cred
 The SDK never substitutes an occurrence ID or title for the exact provider series key.
 
 The host owns resource lifetime and response framing. These are SDK domain objects, not CLI
-envelopes. There is no preparation command, MCP tool or automatic findings intake in this slice.
+envelopes. Hosts can mount `addMeetingPreparationCommand` and `meetingPreparationTool` from `./cli`
+with an account-bound `MeetingPreparationReader`. CLI and MCP call the same `readMeetingPreparation`
+validator and mapper, producing the registered `meeting_preparation` entity in an item envelope.
+These adapters are opt-in; importing Core does not mount them in a provider application.
+Automatic findings intake remains separate.
 
 ## Context and limits
 
@@ -68,3 +72,31 @@ The overall output budget stops further history entries and reports `outputLimit
 cannot fit is refused with an instruction to increase the budget. Archive completeness remains
 unknown even when every selected stored row fits. No source is read from another account merely
 because a participant, project alias or meeting title looks similar.
+
+## Shared CLI and MCP adapters
+
+`addMeetingPreparationCommand(program, { read, output, signal, now? })` mounts `meetings prepare
+<series-id>` under an existing meetings group. Options are `--after`, `--until`, `--history-after`,
+`--meetings`, `--cues`, `--context-limit`, `--max-read-bytes` and `--bytes`. Time options take valid ISO
+instants with an explicit zone. The default window starts at the injected clock, ends seven days
+later and reads thirty days of history before its start. The answer retains absolute normalized
+windows for replay. Limits use the SDK's shared bounds and defaults.
+
+`callMeetingPreparationTool(read, args, signal?, failure?, now?)` implements `meeting_prepare`.
+Arguments use `series_id`, `after`, `until`, `history_after`, `meetings`, `cues`, `context_limit`,
+`max_read_bytes` and `bytes`. The handler refuses unknown fields by name before calling `read`;
+caller-controlled accounts, providers and credentials are never arguments. JSON Schema advertises
+integer ranges and disallows additional properties. All failures retain the shared error envelope.
+
+The transport declares remote/local reads and never mounts automatically. The host owns credentials,
+resource lifetime, final run metadata, error context and any consent policy for remote reads.
+Close owned connections before rendering the returned answer.
+
+The public item uses snake_case keys, string IDs, ISO timestamps and `ref` for cue/meeting citations.
+Cue `offset_ms` is relative to its meeting. Its strict entity schema includes every coverage field;
+no source packet is replaced with an unchecked record. Evidence `content_bytes` counts its public
+cue array. The item's `limits.bytes` bounds its JSON representation, excluding the outer envelope;
+normalization can remove trailing meetings to keep that bound, reporting `output_limited`.
+Unfit metadata is refused. Skipped unavailable meetings set `meta.complete=false` with source issues;
+output byte truncation sets `meta.truncated`. Unknown archive coverage remains a domain coverage
+fact rather than a claim that failed sources succeeded.
