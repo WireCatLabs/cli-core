@@ -2,9 +2,9 @@ import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName, vocabularySimilarity } from "../../domain/vocabulary.js"
-import { atomic } from "./atomic.js"
 import type { StoreContext } from "./open.js"
 import { tagCreationReview } from "./tag-creation.js"
+import { read, write } from "./transaction.js"
 
 export type VocabularyKind = "project" | "tag" | "topic"
 export interface VocabularyTarget {
@@ -106,19 +106,8 @@ const kindOf = (kind: VocabularyKind): void => {
 /** Metadata and aliases only: no transcript, model or person-name lookup. */
 export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
   const { database, now } = context
-  const snapshot = <T>(body: () => T): T => {
-    database.exec("SAVEPOINT vocabulary_snapshot")
-    try {
-      const result = body()
-      database.exec("RELEASE vocabulary_snapshot")
-      return result
-    } catch (error) {
-      database.exec("ROLLBACK TO vocabulary_snapshot; RELEASE vocabulary_snapshot")
-      throw error
-    }
-  }
   const catalog = (options: VocabularyOptions = {}): VocabularyCatalog =>
-    snapshot(() => {
+    read(database, () => {
       cancelled(options.signal)
       if (options.kind !== undefined) kindOf(options.kind)
       if (options.scope !== undefined && options.scope !== "personal" && options.scope !== "work")
@@ -277,7 +266,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
   return {
     vocabulary: async (options) => catalog(options),
     auditVocabulary: async (options = {}) =>
-      snapshot(() => {
+      read(database, () => {
         const minSimilarity = options.minSimilarity ?? 0.65
         const maxComparisons = options.maxComparisons ?? 10000
         const limit = options.limit ?? 20
@@ -341,7 +330,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
     },
     addVocabularyAlias: async (target, name, options = {}) => {
       const normalized = normalizeVocabularyName(name)
-      return atomic(database, () => {
+      return write(database, () => {
         const current = writable(options)
         const entry = targetEntry(current, target)
         const peers = current.entries.filter((value) => (value.kind === "project") === (target.kind === "project"))
@@ -369,7 +358,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
       })
     },
     removeVocabularyAlias: async (target, aliasId, options = {}) =>
-      atomic(database, () => {
+      write(database, () => {
         const current = writable(options)
         const entry = targetEntry(current, target)
         idOf(aliasId)
@@ -382,7 +371,7 @@ export const vocabularyStoreOver = (context: StoreContext): VocabularyStore => {
         return { target: { kind: entry.kind, id: entry.id }, alias: held, changed: true }
       }),
     tagPreflight: async (name, options = {}) =>
-      snapshot(() => {
+      read(database, () => {
         const kind = options.kind ?? "tag"
         if (kind !== "tag" && kind !== "topic") throw new CliError("validation_error", "choose tag or topic")
         const current = catalog({ ...options, kind: undefined, scope: undefined })

@@ -1,9 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import type { MeetingContextStore, ParticipantPersonInput } from "../../meetings/index.js"
-import { checkMeetingCancelled, meetingWriteSnapshot } from "./meeting-operation.js"
-import { meetingReadSnapshot, positiveReadInteger } from "./meeting-reads.js"
+import { checkMeetingCancelled } from "./meeting-operation.js"
+import { positiveReadInteger } from "./meeting-reads.js"
 import type { StoreContext } from "./open.js"
 import { linkIdentityToPerson } from "./person-links.js"
+import { read, write } from "./transaction.js"
 
 const missing = (): never => {
   throw new CliError("not_found", "Meeting, participant or selected target not found")
@@ -44,7 +45,7 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
       if (input.eventId !== null) positiveReadInteger(input.eventId, "eventId")
       if (input.expectedEventId !== undefined && input.expectedEventId !== null)
         positiveReadInteger(input.expectedEventId, "expectedEventId")
-      return meetingWriteSnapshot(
+      return write(
         database,
         () => {
           checkMeetingCancelled(input.signal)
@@ -67,7 +68,7 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
           checkMeetingCancelled(input.signal)
           return { meetingId: input.meetingId, eventId: input.eventId, previousEventId, changed }
         },
-        input.signal,
+        { beforeCommit: () => checkMeetingCancelled(input.signal) },
       )
     },
     async participantPerson(original) {
@@ -75,7 +76,7 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
       scope(input)
       positiveReadInteger(input.participantId, "participantId")
       if (input.maxReadBytes !== undefined) positiveReadInteger(input.maxReadBytes, "maxReadBytes")
-      return meetingReadSnapshot(database, () => {
+      return read(database, () => {
         const found = participant(input)
         checkMeetingCancelled(input.signal)
         if (input.maxReadBytes !== undefined && Buffer.byteLength(found.personUid ?? "") > input.maxReadBytes)
@@ -105,7 +106,7 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
       )
         throw new CliError("validation_error", "Target account selection must contain 1 through 1000 accounts")
       for (const id of input.targetAccountIds) positiveReadInteger(id, "targetAccountId")
-      return meetingWriteSnapshot(
+      return write(
         database,
         () => {
           checkMeetingCancelled(input.signal)
@@ -142,7 +143,7 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
             changed,
           }
         },
-        input.signal,
+        { beforeCommit: () => checkMeetingCancelled(input.signal) },
       )
     },
   }

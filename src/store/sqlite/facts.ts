@@ -1,11 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Actor } from "./actors.js"
-import { atomic } from "./atomic.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, MEMORY_SCOPES } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { referenceOfThing, storedThing } from "./things.js"
+import { write } from "./transaction.js"
 
 export const FACT_TYPES = ["fact", "statement", "question", "decision", "promise"] as const
 export const FACT_STATUSES = ["proposed", "accepted", "superseded", "reversed"] as const
@@ -138,7 +138,7 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
         throw new CliError("validation_error", "occurredAt takes an ISO timestamp")
       if (input.supersedes !== undefined && type !== "decision")
         throw new CliError("validation_error", "only a decision supersedes another")
-      const id = atomic(database, () => {
+      const id = write(database, () => {
         const project = input.project === undefined ? undefined : requiredThing(database, input.project, "the project")
         if (project && project.type !== "project")
           throw new CliError("validation_error", `${input.project} is not a project`)
@@ -215,7 +215,7 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
     },
     accept: async (reference) => {
       const id = Number(rowOf(reference).id)
-      atomic(database, () => accept(id))
+      write(database, () => accept(id))
       return factOf(rowOf(reference))
     },
     reverse: async (reference) => {

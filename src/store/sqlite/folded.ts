@@ -1,5 +1,6 @@
 import type { CacheDatabase } from "../driver.js"
 import { fold } from "../normalize.js"
+import { writeBatch } from "./transaction.js"
 
 /** Every name a list filter compares, beside its `fold()`ed copy: SQLite's `lower()` folds ASCII only. */
 export const FOLDED = [
@@ -27,18 +28,13 @@ export const fillFolded = (database: CacheDatabase, { batch = 2_000 }: { batch?:
     if (pending.get(1) === undefined) continue
     const fill = database.prepare(`UPDATE ${table} SET ${column}_folded = ? WHERE id = ?`)
     for (;;) {
-      database.exec("BEGIN IMMEDIATE")
-      let rows: Record<string, unknown>[]
-      try {
-        rows = pending.all(batch)
+      const count = writeBatch(database, () => {
+        const rows = pending.all(batch)
         for (const row of rows) fill.run(fold(String(row.value)), Number(row.id))
-        database.exec("COMMIT")
-      } catch (error) {
-        database.exec("ROLLBACK")
-        throw error
-      }
-      filled += rows.length
-      if (rows.length < batch) break
+        return rows.length
+      })
+      filled += count
+      if (count < batch) break
     }
   }
   return filled

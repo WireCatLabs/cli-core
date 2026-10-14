@@ -20,6 +20,7 @@ import { drainNoteIndex, type NoteIndexState, noteIndexState, noteIndexText } fr
 import { documentOf, type Note, noteOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
+import { read } from "./transaction.js"
 import { dot } from "./vectors.js"
 
 export interface NoteQuery {
@@ -313,8 +314,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       : undefined
   }
 
-  database.exec("BEGIN")
-  try {
+  return read(database, () => {
     check()
     const expression = compile(query.root)
     const stemmed = [...fragments.keys()].some(isStemmed)
@@ -397,9 +397,7 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       relevance: row.relevance === null || row.relevance === undefined ? null : Number(row.relevance),
       ...(exactTier ? { exact: Number(row.exact) === 1 } : {}),
     }))
-  } finally {
-    database.exec("COMMIT")
-  }
+  })
 }
 
 export interface NoteChunkToEmbed {

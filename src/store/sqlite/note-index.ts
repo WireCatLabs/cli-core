@@ -4,8 +4,9 @@ import type { CacheDatabase } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { dropDocumentPicture } from "./document-pictures.js"
 import { int } from "./events.js"
-import { inBatch, indexRow } from "./search-index.js"
+import { indexRow } from "./index-state.js"
 import { savedStemmers } from "./stems.js"
+import { write } from "./transaction.js"
 
 export interface NoteIndexState {
   /** Rows written since they were indexed. */
@@ -183,7 +184,7 @@ export const drainCorpus = (
   const stemmer = stemmerFor(savedStemmers(database) ?? DEFAULT_STEMMERS)
   const queue = `${corpus.type}_index_pending`
   if (state.built !== stemmer.identity) {
-    inBatch(database, () => {
+    write(database, () => {
       if (state.built !== null)
         database
           .prepare(`INSERT OR IGNORE INTO ${queue} (indexable_type, id) SELECT ?, id FROM ${corpus.table}`)
@@ -197,7 +198,7 @@ export const drainCorpus = (
   let done = 0
   for (;;) {
     if (until()) break
-    const count = inBatch(database, () => {
+    const count = write(database, () => {
       const ids = next.all(corpus.type, batch).map((row) => Number(row.id))
       for (const id of ids) index(id)
       return ids.length
@@ -219,7 +220,7 @@ export const drainNoteIndex = (
 
 /** Queues every document, note and memory again — for `store reindex`. */
 export const resetNoteIndex = (database: CacheDatabase): boolean => {
-  inBatch(database, () => {
+  write(database, () => {
     for (const corpus of Object.values(CORPORA))
       database
         .prepare(

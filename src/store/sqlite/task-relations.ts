@@ -1,11 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 import type { Actor } from "./actors.js"
-import { atomic } from "./atomic.js"
 import { type Author, authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
-import { readSnapshot } from "./read-snapshot.js"
 import { taskIdOf, taskRowOf } from "./things.js"
+import { read, write } from "./transaction.js"
 
 export const TASK_RELATION_KINDS = ["blocked-by", "follow-up-of", "related-to"] as const
 export type TaskRelationKind = (typeof TASK_RELATION_KINDS)[number]
@@ -110,7 +109,7 @@ export const taskRelationsStoreOver = (
       .get(kind, from, to, kind, to, from)
   return {
     linkTask: async (from, to, kind, by) =>
-      atomic(database, () => {
+      write(database, () => {
         if (by !== "owner")
           throw new CliError("permission_error", "an agent proposes task relationships; only the owner applies them")
         const [a, b] = pair(from, to, kind)
@@ -127,7 +126,7 @@ export const taskRelationsStoreOver = (
         return { relation: relationOf(lookup(a, b, kind) as Record<string, unknown>), changed: true }
       }),
     unlinkTask: async (from, to, kind, by) =>
-      atomic(database, () => {
+      write(database, () => {
         if (by !== "owner")
           throw new CliError("permission_error", "an agent proposes task relationships; only the owner applies them")
         const [a, b] = pair(from, to, kind)
@@ -142,7 +141,7 @@ export const taskRelationsStoreOver = (
         return { changed }
       }),
     taskRelations: async (task) =>
-      readSnapshot(database, () => {
+      read(database, () => {
         const rowId = required(task)
         const rows = database
           .prepare(
@@ -154,7 +153,7 @@ export const taskRelationsStoreOver = (
         return rows.map(relationOf)
       }),
     taskReadiness: async (task) =>
-      readSnapshot(database, () => {
+      read(database, () => {
         const rowId = required(task)
         const rows = database
           .prepare(
@@ -174,7 +173,7 @@ export const taskRelationsStoreOver = (
         return { ready: liveTask(database, rowId).status === "open" && blockers.length === 0, blockers }
       }),
     readyTasks: async (project, options = {}) =>
-      readSnapshot(database, () => {
+      read(database, () => {
         const limit = options.limit ?? 50
         if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
           throw new CliError("validation_error", "ready tasks take 1–500 rows")

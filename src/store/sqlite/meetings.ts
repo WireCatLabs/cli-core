@@ -34,18 +34,13 @@ import { meetingHitSearchOver } from "./meeting-hit-search.js"
 import { INDEX_CODES, type Indexable, indexedText, meetingRowid, summaryOf } from "./meeting-index-values.js"
 import { meetingParticipantSearchOver } from "./meeting-participant-search.js"
 import { meetingPreparationContextOver } from "./meeting-preparation-context.js"
-import {
-  type MeetingContextReadCapabilities,
-  type MeetingReadCapabilities,
-  meetingReadSnapshot,
-  meetingReadsOver,
-} from "./meeting-reads.js"
+import { type MeetingContextReadCapabilities, type MeetingReadCapabilities, meetingReadsOver } from "./meeting-reads.js"
 import { meetingSeriesHistoryOver } from "./meeting-series-history.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
-import { inBatch } from "./search-index.js"
+import { read, write } from "./transaction.js"
 
 type Row = Record<string, unknown>
 
@@ -452,7 +447,7 @@ const append = (context: StoreContext, input: TranscriptAppend): TranscriptAppen
         invalid("Appended transcript rows must be unlinked")
   }
   const { database } = context
-  return inBatch(database, () => {
+  return write(database, () => {
     const existing = database
       .prepare("SELECT id, deleted_at FROM meetings WHERE account_id = ? AND external_id = ?")
       .get(input.accountId, input.externalId)
@@ -560,7 +555,7 @@ export const drainMeetingIndex = (database: CacheDatabase, batch = 500): number 
   const dequeue = database.prepare("DELETE FROM meeting_index_pending WHERE indexable_type = ? AND id = ?")
   let done = 0
   for (;;) {
-    const count = inBatch(database, () => {
+    const count = write(database, () => {
       const queued = next.all(batch)
       for (const { indexable_type: type, id } of queued) {
         const kind = String(type)
@@ -594,7 +589,7 @@ const search = (database: CacheDatabase, query: string, filter?: MeetingFilter):
   const match = wordsQuery(query)
   if (match === null) return []
   drainMeetingIndex(database)
-  return meetingReadSnapshot(database, () => {
+  return read(database, () => {
     const picked = filtered(filter)
     const rows = database
       .prepare(
@@ -695,7 +690,7 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
       return append(context, input).meeting
     },
     async saveMeeting(input) {
-      const id = inBatch(database, () => save(context, input))
+      const id = write(database, () => save(context, input))
       return details(database, id) as MeetingDetails
     },
     async meetings(filter) {

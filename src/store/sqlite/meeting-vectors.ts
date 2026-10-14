@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { chunkHash, cutChunks } from "../../conversations/chunks.js"
-import { atomic } from "./atomic.js"
-import { meetingReadSnapshot, positiveReadInteger } from "./meeting-reads.js"
+import { positiveReadInteger } from "./meeting-reads.js"
 import type { StoreContext } from "./open.js"
+import { read, write } from "./transaction.js"
 import { dot, saveVectors } from "./vectors.js"
 
 interface Scope {
@@ -161,7 +161,7 @@ export const meetingVectorsOver = (context: StoreContext): MeetingVectors => ({
         throw new CliError("validation_error", "Vectors require content hashes, matching dimensions and finite values")
     if (rows.reduce((bytes, row) => bytes + row.vector.byteLength, 0) > 16 * 1024 * 1024)
       throw new CliError("validation_error", "Vector save exceeds its batch or 16 MiB payload budget")
-    return atomic(context.database, () => {
+    return write(context.database, () => {
       const unique = new Map(rows.map((row) => [row.hash, row]))
       const current = context.database
         .prepare(`SELECT DISTINCT k.content_hash ${LIVE} AND k.content_hash IN (SELECT value FROM json_each(?))`)
@@ -182,7 +182,7 @@ export const meetingVectorsOver = (context: StoreContext): MeetingVectors => ({
     scope(input)
     const limit = limitOf(input.limit ?? 100, "limit")
     if (input.afterTranscriptId !== undefined) positiveReadInteger(input.afterTranscriptId, "afterTranscriptId")
-    return atomic(context.database, () => {
+    return write(context.database, () => {
       const found = context.database
         .prepare(
           "SELECT t.id,a.scope,NULL AS project_id,m.started_at FROM meeting_transcripts t JOIN meetings m ON m.id=t.meeting_id JOIN accounts a ON a.id=m.account_id WHERE m.account_id=? AND m.deleted_at IS NULL AND t.deleted_at IS NULL AND t.superseded_at IS NULL AND t.id>? ORDER BY t.id LIMIT ?",
@@ -252,7 +252,7 @@ export const meetingVectorsOver = (context: StoreContext): MeetingVectors => ({
     const limit = limitOf(input.limit, "limit")
     if (input.afterHash !== undefined && !/^[a-f0-9]{64}$/.test(input.afterHash))
       throw new CliError("validation_error", "afterHash must be a content hash")
-    return meetingReadSnapshot(context.database, () => {
+    return read(context.database, () => {
       const rows = context.database
         .prepare(
           `SELECT k.* ${LIVE} AND k.content_hash > ? AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.model=? AND e.content_hash=k.content_hash) GROUP BY k.content_hash ORDER BY k.content_hash LIMIT ?`,
@@ -276,7 +276,7 @@ export const meetingVectorsOver = (context: StoreContext): MeetingVectors => ({
     if (!query.length || query.length > 65536 || Array.from(query).some((value) => !Number.isFinite(value)))
       throw new CliError("validation_error", "Query vector must have finite dimensions")
     if (input.afterChunkId !== undefined) positiveReadInteger(input.afterChunkId, "afterChunkId")
-    return meetingReadSnapshot(context.database, () => {
+    return read(context.database, () => {
       const selectedSql = `${LIVE.replace(" WHERE", " JOIN embeddings e ON e.content_hash=k.content_hash AND e.model=? WHERE")} AND k.id>? ORDER BY k.id LIMIT ?`
       const params = [model, input.accountId, input.afterChunkId ?? 0, maxChunks + 1]
       const preflight = context.database

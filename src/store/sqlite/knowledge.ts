@@ -7,7 +7,6 @@ import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import type { AccountKey } from "../store.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
-import { atomic } from "./atomic.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
@@ -26,6 +25,7 @@ import {
 } from "./tags.js"
 import { inboxKey, taskAccountOf, taskIdOf, taskRowOf } from "./tasks.js"
 import { referenceOfThing, stateOfThing, storedThing, type Thing, type ThingState, thingOf } from "./things.js"
+import { write } from "./transaction.js"
 import { type VocabularyStore, vocabularyStoreOver } from "./vocabulary.js"
 
 export type { Label } from "./tags.js"
@@ -464,7 +464,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         throw new CliError("validation_error", "annotate a folder, not one of its subfolders")
       const thing = available(key, target)
       const at = now()
-      const id = atomic(database, () => {
+      const id = write(database, () => {
         const owner = ownerPerson(database)
         return Number(
           database
@@ -527,8 +527,8 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const thing = available(key, target)
       const path = subfolder(target)
       const names = tagsOf(tags)
-      if (path === null) return atomic(database, () => addThingTags(context, thing, names))
-      return atomic(database, () =>
+      if (path === null) return write(database, () => addThingTags(context, thing, names))
+      return write(database, () =>
         names.filter((name) => {
           if (subfolderLabels(thing.id, path).includes(name)) return false
           const tag = canonicalTagNamed(database, name) ?? createTag(context, name, "tag", "owner")
@@ -547,7 +547,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const { thing, state } = resolve(key, target)
       if (!thing || state !== "available") return []
       const path = subfolder(target)
-      if (path === null) return atomic(database, () => removeThingTags(context, thing, tagsOf(tags)))
+      if (path === null) return write(database, () => removeThingTags(context, thing, tagsOf(tags)))
       return tagsOf(tags).filter(
         (name) =>
           database
@@ -559,10 +559,10 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       )
     },
     createTag: async (name, { kind = "tag", by = "owner", ...options } = {}) =>
-      atomic(database, () => createTag(context, canonicalTagName(name), kind, by, options)),
+      write(database, () => createTag(context, canonicalTagName(name), kind, by, options)),
     setMainTopic: async (key, target, topic) => {
       const thing = available(key, target)
-      atomic(database, () => setMainTopic(context, thing, topic === null ? null : canonicalTagName(topic)))
+      write(database, () => setMainTopic(context, thing, topic === null ? null : canonicalTagName(topic)))
     },
     labelled: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
@@ -621,7 +621,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         .all()
         .map(organizationOf),
     addProject: async ({ name, key, type = "other", organization, scope = "personal", description }) =>
-      atomic(database, () => {
+      write(database, () => {
         const title = textOf(name, 200)
         const organizationId =
           organization === undefined
@@ -704,7 +704,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       if (existing) return relationOf(linkOf(database, existing))
       const confirmed = input.confirmed !== false
       return relationOf(
-        atomic(database, () =>
+        write(database, () =>
           insertLink(context, {
             from: input.from,
             to: input.to,

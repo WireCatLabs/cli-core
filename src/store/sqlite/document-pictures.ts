@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { SqlValue } from "../driver.js"
-import { atomic } from "./atomic.js"
 import type { StoreContext } from "./open.js"
+import { write } from "./transaction.js"
 import { dot } from "./vectors.js"
 
 /** A document's picture is one chunk of this type at position 0; its vector is the picture's, not text's. */
@@ -64,7 +64,7 @@ export const documentPicturesOver = ({ database, now }: StoreContext): DocumentP
 
   savePicture: async (ref, { model, dims, hash, bytes, vector }) => {
     const id = idOf(ref)
-    atomic(database, () => {
+    write(database, () => {
       const document = database
         .prepare(
           `SELECT d.account_id AS account, a.scope, d.updated_at AS at FROM documents d
@@ -99,7 +99,7 @@ export const documentPicturesOver = ({ database, now }: StoreContext): DocumentP
     })
   },
 
-  removePicture: async (ref) => atomic(database, () => dropDocumentPicture(database, idOf(ref))),
+  removePicture: async (ref) => write(database, () => dropDocumentPicture(database, idOf(ref))),
 
   nearestPictures: async (model, query, { limit, folderIds }) => {
     const folders = folderIds?.length ? JSON.stringify(folderIds) : null

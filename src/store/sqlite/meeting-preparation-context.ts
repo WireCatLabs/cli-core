@@ -5,9 +5,9 @@ import {
   type MeetingPreparationContextStore,
   validateMeetingPreparationContext,
 } from "../../meetings/index.js"
-import { meetingReadSnapshot } from "./meeting-reads.js"
 import type { StoreContext } from "./open.js"
 import { preparationQueries } from "./preparation-context-queries.js"
+import { read } from "./transaction.js"
 
 export const meetingPreparationContextOver = ({
   database,
@@ -15,7 +15,7 @@ export const meetingPreparationContextOver = ({
   async preparationContext(original) {
     const input = validateMeetingPreparationContext(original)
     const { accountId, meetingId, seriesId, updatedAt, limit, maxReadBytes, signal } = input
-    return meetingReadSnapshot(database, () => {
+    return read(database, () => {
       const live = database
         .prepare(
           "SELECT 1 FROM meetings m JOIN meeting_series s ON s.id=m.meeting_series_id WHERE m.id=? AND m.account_id=? AND s.account_id=? AND s.id=? AND m.updated_at=? AND m.deleted_at IS NULL AND s.deleted_at IS NULL",

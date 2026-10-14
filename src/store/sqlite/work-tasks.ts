@@ -2,13 +2,13 @@ import { CliError } from "@wirecat/cli-base"
 import { TASK_KINDS, TASK_STATES, type TaskState, type TaskVerdict } from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { Actor } from "./actors.js"
-import { atomic } from "./atomic.js"
 import { folded } from "./folded.js"
 import { type Author, authorActor } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
 import { taskIdOf, taskRowOf } from "./things.js"
+import { write } from "./transaction.js"
 
 /** What the store writes itself; the task package finds only `TASK_KINDS`, in messages. */
 export const WORK_TASK_TYPES = ["bug", "feature", "chore"] as const
@@ -258,7 +258,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
     create: async (input, by) => {
       if (!WORK_TASK_TYPES.includes(input.type))
         throw new CliError("validation_error", `a task made here is one of ${WORK_TASK_TYPES.join(", ")}`)
-      const made = atomic(database, () => {
+      const made = write(database, () => {
         const project = projectOf(input.project)
         const { actor } = authorActor(context, by)
         const at = now()
@@ -299,14 +299,14 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
     },
     edit: async (id, fields, by) => {
       const task = required(id)
-      atomic(database, () => edit(task, fields, authorActor(context, by).actor))
+      write(database, () => edit(task, fields, authorActor(context, by).actor))
       return details(task)
     },
     assign: async (id, { to, role }, by) => {
       if (!TASK_ROLES.includes(role))
         throw new CliError("validation_error", `a role is one of ${TASK_ROLES.join(", ")}`)
       const task = required(id)
-      atomic(database, () => {
+      write(database, () => {
         const person = personOf(to)
         const held = database
           .prepare(
@@ -327,7 +327,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
     },
     unassign: async (id, { to, role }, by) => {
       const task = required(id)
-      atomic(database, () => {
+      write(database, () => {
         const person = personOf(to)
         const removed = database
           .prepare(

@@ -1,7 +1,8 @@
 import { trigrams } from "../../search/trigrams.js"
 import type { CacheDatabase } from "../driver.js"
 import { backfillNormalized, pendingNormalization } from "./backfill.js"
-import { drainInvolvementQueue } from "./involvement-queue.js"
+import { indexRow } from "./index-state.js"
+import { writeBatch } from "./transaction.js"
 
 const INDEX = "message_words"
 
@@ -27,13 +28,6 @@ export interface SearchIndexFill {
   terms: number
 }
 
-/** One index's row of `search_index_state`; `undefined` on a file before that index existed. */
-export const indexRow = (database: CacheDatabase, name: string) => {
-  const exists = database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'search_index_state'").get()
-  if (!exists) return undefined
-  return database.prepare("SELECT * FROM search_index_state WHERE name = ?").get(name)
-}
-
 /** `undefined` on a file before version 12, which has no word index. */
 export const searchIndexState = (database: CacheDatabase): SearchIndexState | undefined => {
   const row = indexRow(database, INDEX)
@@ -52,19 +46,6 @@ export const searchIndexState = (database: CacheDatabase): SearchIndexState | un
     newest,
     termsReady: termsThrough >= newest,
     builtAt: row.built_at === null ? null : new Date(Number(row.built_at)).toISOString(),
-  }
-}
-
-export const inBatch = <T>(database: CacheDatabase, body: () => T): T => {
-  database.exec("BEGIN IMMEDIATE")
-  try {
-    const result = body()
-    drainInvolvementQueue(database)
-    database.exec("COMMIT")
-    return result
-  } catch (error) {
-    database.exec("ROLLBACK")
-    throw error
   }
 }
 
@@ -104,7 +85,7 @@ export const fillSearchIndex = (
     const state = searchIndexState(database)
     if (!state || state.filledThrough >= state.watermark || until()) break
     const to = Math.min(state.filledThrough + batch, state.watermark)
-    filled.indexed += inBatch(database, () => {
+    filled.indexed += writeBatch(database, () => {
       const { changes } = index.run(state.filledThrough, to)
       advance.run(to, INDEX)
       return changes
@@ -149,13 +130,13 @@ const refreshTerms = (
     "SELECT normalized_text AS text FROM messages WHERE id > ? AND id <= ? AND normalized_text <> ''",
   )
   const advance = database.prepare("UPDATE search_index_state SET terms_through = ? WHERE name = ?")
-  const write = termWriters(database)
+  const addTerm = termWriters(database)
   let added = 0
   for (;;) {
     const through = Number(searchIndexState(database)?.termsThrough)
     if (through >= newest || until()) return added
     const to = Math.min(through + batch, newest)
-    inBatch(database, () => {
+    writeBatch(database, () => {
       const words = new Set(
         texts.all(through, to).flatMap((row) =>
           String(row.text)
@@ -163,7 +144,7 @@ const refreshTerms = (
             .filter(Boolean),
         ),
       )
-      for (const word of words) write(word)
+      for (const word of words) addTerm(word)
       advance.run(to, INDEX)
       added += words.size
     })
@@ -184,15 +165,15 @@ const buildTerms = (
   const next = database.prepare(
     `SELECT term FROM message_words_vocab WHERE col = 'normalized_text' AND term > ? ORDER BY term LIMIT ?`,
   )
-  const write = termWriters(database)
+  const addTerm = termWriters(database)
   let after = String(database.prepare("SELECT coalesce(max(term), '') AS term FROM search_terms").get()?.term)
   let written = 0
   for (;;) {
     if (until()) return written
     const terms = next.all(after, batch).map((row) => String(row.term))
     if (terms.length === 0) break
-    inBatch(database, () => {
-      for (const word of terms) write(word)
+    writeBatch(database, () => {
+      for (const word of terms) addTerm(word)
     })
     written += terms.length
     after = terms.at(-1) ?? after
@@ -209,7 +190,7 @@ const buildTerms = (
  */
 export const resetSearchIndex = (database: CacheDatabase): void => {
   if (!searchIndexState(database)) return
-  inBatch(database, () => {
+  writeBatch(database, () => {
     database.exec(`INSERT INTO ${INDEX} (${INDEX}) VALUES ('delete-all')`)
     database.exec("DELETE FROM search_terms")
     database.exec("DELETE FROM search_term_trigrams")

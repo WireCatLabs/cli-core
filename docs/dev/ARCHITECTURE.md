@@ -212,8 +212,10 @@ of record — `accounts`, `identities`, `chats`, `messages` (writes), `reads`, `
 `sync` (state and fetch leases), `transcripts`, `conversations`, `tags`, `searches` — as plain functions taking a `StoreContext`: the
 connection as the `CacheDatabase` seam and as Drizzle (`orm`), and the clock. Queries are Drizzle's
 builder, called synchronously (`.get()`, `.all()`, `.run()`); FTS `MATCH`, `json_extract` and the
-`coalesce(excluded.…)` upserts stay `sql` fragments. Use `inTransaction`, never Drizzle's
-`transaction`. A statement that runs for every saved message is `.prepare()`d once per store
+`coalesce(excluded.…)` upserts stay `sql` fragments. A write goes through `write` and a multi-query read
+through `read` (`src/store/sqlite/transaction.ts`), never Drizzle's `transaction` or a hand-written `BEGIN`:
+the outermost `write` recomputes what the triggers queued (stems, mentions, involvements) before it commits,
+and the nesting depth is kept per connection. A statement that runs for every saved message is `.prepare()`d once per store
 (`identities.ts`, `messages.ts`): built per call, Drizzle cost about a quarter of the load rate
 ([results](../../bench/search/results.md#the-real-store-after-the-message-writes-moved-to-drizzle)).
 `src/store/search-plan.test.ts` fails if search starts reading the text index once per message.

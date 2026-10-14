@@ -22,6 +22,7 @@ import type { ScoredHit } from "../store.js"
 import { emailHitsByPk } from "./emails.js"
 import type { StoreContext } from "./open.js"
 import { hitsByPk } from "./search.js"
+import { read } from "./transaction.js"
 import type { MatchPlace } from "./words.js"
 
 interface Fragment {
@@ -867,8 +868,7 @@ export const withQuerySelection = <T>(
   consume: (selection: QuerySelection, check: () => void) => T,
 ): T => {
   const { database } = context
-  database.exec("BEGIN")
-  try {
+  return read(database, () => {
     const query = compileQuery(context, execution, true)
     const { check, leaves, where, from, withRanking, ranked } = query
     check()
@@ -921,12 +921,8 @@ export const withQuerySelection = <T>(
     )
       throw new Error("query selection consumers must run synchronously")
     check()
-    database.exec("COMMIT")
     return result
-  } catch (error) {
-    database.exec("ROLLBACK")
-    throw error
-  }
+  })
 }
 
 const runQuery = async (

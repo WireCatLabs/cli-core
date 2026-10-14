@@ -8,13 +8,13 @@ import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
-import { atomic } from "./atomic.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
 import { LINK_KINDS, linkKind } from "./link-kinds.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
 import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
 import { canonicalThingReference, referenceOfThing, storedThing, type Thing, thingOf } from "./things.js"
+import { write } from "./transaction.js"
 
 export const NOTE_FORMATS = ["obsidian", "markdown"] as const
 export const LINK_ORIGINS = ["file", "owner", "suggested", "message"] as const
@@ -357,7 +357,6 @@ const pathParts = (path: string) => {
 
 export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof NoteSearch> => {
   const { database, now } = context
-  const inTransaction = <T>(body: () => T): T => atomic(database, body)
   const folderRow = (id: string) => {
     const row = /^\d+$/.test(id)
       ? database.prepare("SELECT * FROM accounts WHERE id = ? AND provider = 'folder'").get(Number(id))
@@ -406,7 +405,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
     folders: async () =>
       database.prepare("SELECT * FROM accounts WHERE provider = 'folder' ORDER BY name, id").all().map(folderOf),
     saveFileNote: async (input) =>
-      inTransaction(() => {
+      write(database, () => {
         const folder = Number(folderRow(input.folderId).id)
         const path = textOf(input.path, "a note's path", 4096)
         const text = textOf(input.text, "a note's text", MAX_TEXT_CHARS, true)
@@ -480,7 +479,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         return { note: documentOf(documentRow(String(found.id))), changed: true }
       }),
     renameFileNote: async (folderId, from, to) =>
-      inTransaction(() => {
+      write(database, () => {
         const folder = Number(folderRow(folderId).id)
         const target = textOf(to, "a note's path", 4096)
         const found = database
@@ -502,7 +501,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         return documentOf(documentRow(String(found.id)))
       }),
     deleteFileNotes: async (folderId, paths) =>
-      inTransaction(() => {
+      write(database, () => {
         const folder = Number(folderRow(folderId).id)
         const mark = database.prepare(
           "UPDATE documents SET deleted_at = ?, body = '' WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL",
@@ -510,7 +509,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         return paths.reduce((sum, path) => sum + mark.run(now(), folder, path).changes, 0)
       }),
     addNote: async ({ text, title, about = [] }) =>
-      inTransaction(() => {
+      write(database, () => {
         const at = now()
         const owner = ownerPerson(database)
         const [subject] = about.map((reference) => requiredThing(database, reference))
@@ -578,7 +577,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       return { items: all.slice(offset, offset + limit), hasMore: all.length > offset + limit }
     },
     editNote: async (id, text, revision) =>
-      inTransaction(() => {
+      write(database, () => {
         if (id.startsWith("document:"))
           throw new CliError("validation_error", "a file note is edited in its file; the next import reads it")
         const bare = id.replace(/^note:/, "")
@@ -596,7 +595,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         return noteOf(noteRow(bare))
       }),
     removeNote: async (id) =>
-      inTransaction(() => {
+      write(database, () => {
         if (id.startsWith("document:"))
           throw new CliError("validation_error", "a file note goes when its file does; the next import notices")
         const bare = id.replace(/^note:/, "")
@@ -604,7 +603,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         database.prepare("DELETE FROM notes WHERE id = ?").run(Number(bare))
         return { id, removed: true as const }
       }),
-    addLink: async (input) => inTransaction(() => insertLink(context, input)),
+    addLink: async (input) => write(database, () => insertLink(context, input)),
     links: async (options = {}) => {
       const pair = (reference: string | undefined) => {
         if (reference === undefined) return { known: true, type: null, id: null }
@@ -623,13 +622,13 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         .map((row) => linkOf(database, row))
     },
     removeLink: async (id) =>
-      inTransaction(() => {
+      write(database, () => {
         if (!/^\d+$/.test(id) || !database.prepare("DELETE FROM links WHERE id = ?").run(Number(id)).changes)
           throw new CliError("not_found", `no link ${id} in the local store`)
         return { id, removed: true as const }
       }),
     replaceFileLinks: async (documentId, links) =>
-      inTransaction(() => {
+      write(database, () => {
         const id = Number(documentRow(documentId).id)
         database.prepare("DELETE FROM links WHERE from_type = 'document' AND from_id = ? AND source = 'file'").run(id)
         return links.map((link) => insertLink(context, { ...link, from: `document:${id}`, origin: "file" }))
@@ -638,7 +637,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       const after = since === undefined ? null : Date.parse(since)
       if (after !== null && Number.isNaN(after))
         throw new CliError("validation_error", `since takes an ISO 8601 time, not "${since}"`)
-      return inTransaction(() => {
+      return write(database, () => {
         const candidates = database.prepare(
           "SELECT m.id, m.text FROM messages_fts f JOIN messages m ON m.id = f.rowid " +
             "WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND (? IS NULL OR m.created_at >= ?)",
@@ -671,7 +670,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       })
     },
     replaceFileTags: async (documentId, tags) =>
-      inTransaction(() => {
+      write(database, () => {
         const id = Number(documentRow(documentId).id)
         const stated = [...new Set(tags.map(normalizeTag))]
         database
@@ -689,7 +688,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       return labelsOf(database, { type: note.source === "file" ? "document" : "note", id: Number(note.id) })
     },
     resolveLinks: async () =>
-      inTransaction(() =>
+      write(database, () =>
         database
           .prepare("SELECT DISTINCT target_folded FROM links WHERE to_id IS NULL AND target_folded IS NOT NULL")
           .all()

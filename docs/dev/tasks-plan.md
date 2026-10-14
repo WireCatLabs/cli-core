@@ -49,7 +49,7 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
 7. **What the comparison can reuse:** the text normalizer and the Snowball stemmers (Russian, English, Spanish;
    `src/search/stem.ts`) behind message and note search; FTS5 tables per domain (`message_words` /
    `message_stems`, `note_words` / `note_stems`); `identities` for "the same person"; one write lock per
-   transaction (`BEGIN IMMEDIATE`, `src/store/sqlite/atomic.ts`).
+   transaction (`BEGIN IMMEDIATE`, `src/store/sqlite/transaction.ts`).
 
 ## What we take from beads, and what not
 

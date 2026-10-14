@@ -19,6 +19,7 @@ import {
   messageLinks,
   messages,
 } from "./schema.js"
+import { writeBatch } from "./transaction.js"
 import { toIso } from "./values.js"
 import { purgeVectorHashes } from "./vectors.js"
 
@@ -93,16 +94,11 @@ const inChat = (chatKey: number) => eq(messageLinks.chatId, chatKey)
  */
 const inTurns = async ({ database }: StoreContext, work: Iterator<unknown>, { holdMs = 250, pauseMs = 120 } = {}) => {
   for (let done = false; !done; ) {
-    database.exec("BEGIN IMMEDIATE")
-    try {
+    writeBatch(database, () => {
       const since = performance.now()
       do done = work.next().done === true
       while (!done && performance.now() - since < holdMs)
-      database.exec("COMMIT")
-    } catch (error) {
-      database.exec("ROLLBACK")
-      throw error
-    }
+    })
     if (!done) await setTimeout(pauseMs)
   }
 }
