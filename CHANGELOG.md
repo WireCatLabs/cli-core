@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A next step to a command that only changes this machine no longer runs unasked.** `server restart` and `store
+  reindex` read nothing remotely and write here, so their steps carry `safe_to_auto_execute: false`. A fetch's local
+  write (sync, download) stays incidental and its steps stay safe. Retries are unchanged: judged on the remote side
+  only (#1194).
+
 ## 0.272.0 — 14.10.2026
 
 ### Changed — may break callers
@@ -68,7 +75,7 @@ shape of this file.
   (`Valery` finds «Валерию»); two in a row that one person shares are a full name. A name links by rule to the one
   person it fits who wrote in that chat; the rest wait as `found`, and `mentions show` lists the candidates. A name
   is confirmed (`mentions confirm <id> person:<uid>`) and rejected where it is written, not everywhere. Names of
-  people added or renamed later are found by `mentions rebuild person-name`. Persons known only as an
+  people added or renamed later are found by `mentions rebuild --kind person-name`. Persons known only as an
   e-mail sender are left out: on one store they were about 3,300, by the look of them mostly companies and mailing
   lists.
 - **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
