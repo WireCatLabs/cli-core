@@ -54,7 +54,7 @@ const open = async (texts: Record<string, string[]>) => {
   return store
 }
 const run = (store: MessageStore, text: string, messenger = {}) =>
-  searchStore(store, account, { text, language: "lucene", limit: 100 }, messenger)
+  searchStore(store, account, { text, limit: 100 }, messenger)
 const ids = async (store: MessageStore, text: string) =>
   (await run(store, text)).items.map(({ id }) => Number(id)).sort((a, b) => a - b)
 const failure = async (work: Promise<unknown>) => {

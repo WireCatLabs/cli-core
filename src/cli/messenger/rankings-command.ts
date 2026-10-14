@@ -90,17 +90,13 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
         params = (await services.searches.resolve(saved, { ...params, text: words.join(" ") })).params
       if (params.target !== undefined && params.target !== target)
         throw new CliError("validation_error", "saved ranking belongs to a different target")
-      if (params.regex || params.language === "legacy" || params.newest || params.context)
-        throw new CliError(
-          "validation_error",
-          "saved ranking must use strict Lucene without regex/newest/context modes",
-        )
+      if (params.newest || params.context)
+        throw new CliError("validation_error", "saved ranking must not use newest/context modes")
       rankingOptions(target, params)
       const sync = syncRequest(this, context)
       return services.rankings.top(target, {
         ...params,
         ...sync,
-        language: "lucene",
         limit: params.limit ?? context.settings.limit,
         signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,
         ...(saved ? { saved } : {}),

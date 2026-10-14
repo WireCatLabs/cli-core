@@ -271,7 +271,7 @@ export const withPictures = (messages: MessagesService, pictures: PicturesServic
   ...messages,
   search: async (request) => {
     const found = await messages.search(request)
-    if (request.kind === "mail" || request.discover || request.pattern || request.text === undefined) return found
+    if (request.kind === "mail" || request.discover || request.text === undefined) return found
     if (request.offset) return found
     const chat = request.chat ?? found.coverage?.chat
     const lane = await pictures

@@ -8,7 +8,6 @@ import { type MessageLink, messageLinkTarget, validatePermalink } from "../domai
 import type { Deletion, Discussion, Id, Message, Page, Provider, WindowedMessage } from "../domain/models.js"
 import { type After, capability, type Download, type MessengerAdapter, type Sent } from "../ports/messenger.js"
 import type { SkippedSource } from "../search/account-list.js"
-import type { Match } from "../search/search.js"
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import type { PermissionKey } from "../sends/permissions.js"
 import { sendAsCheck } from "../sends/send-as.js"
@@ -71,14 +70,11 @@ export interface SearchQuery {
   server?: ServerOptions
   /** Only these messages, each named with its account — `--backend server` searches what the server returned. */
   only?: (AccountKey & { chatId: Id; id: Id })[]
-  /** Strict Lucene by default; legacy discovery is explicit through language or a RegExp pattern. */
   text?: string
   discover?: boolean
-  language?: "lucene" | "legacy"
   timezone?: string
   ast?: unknown
   signal?: AbortSignal
-  pattern?: RegExp
   chat?: string
   /** A messenger the store holds, or `all` — the same as `in:` in the query. The account it runs as when unset. */
   source?: string
@@ -105,7 +101,7 @@ export interface SearchQuery {
 
 export type FoundMessage = StoredHit & {
   discovery?: { coverage: number; matchedTerms: string[]; missingTerms: string[]; parent?: string }
-  match?: Match
+  match?: "words" | "beginnings" | "corrected"
   /** Where the words were: the text, a voice note's transcript, a file's name or a file's text. */
   matchedIn?: MatchPlace
   score?: number | null
@@ -129,7 +125,7 @@ export interface SearchFound extends Page<FoundMessage> {
   corrections: { from: string; to: string[] }[]
   /** Per chat of the page: how much of its history the store holds. */
   completeness: (ChatCompleteness & AccountKey)[]
-  /** `false` while the word index is being built: the answer came from the substring index. */
+  /** `false` while the word index is being built. */
   wordsReady: boolean
   /** The same for the stems, in strict search: `false` until a stemmed search may run. */
   stemsReady?: boolean
@@ -482,7 +478,6 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         throw new CliError("validation_error", "discovery searches the local archive; use backend archive")
       const query: SearchQuery = {
         ...request,
-        language: request.language ?? (request.pattern ? "legacy" : "lucene"),
         // Mail is only ever in the local store, and a saved search replays as `search messages`.
         ...(request.kind === "mail" || request.discover ? { backend: "archive" as const } : {}),
       }
@@ -510,18 +505,13 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         searchAllWithMeetings(store, account, request, deps.messenger, unifiedMessages(store, account)),
       ),
 
-    stats: (request) => {
-      const query: SearchQuery & { by: StatsGrouping } = {
-        ...request,
-        language: request.language ?? (request.pattern ? "legacy" : "lucene"),
-      }
-      return inStore(async (store, account) => {
+    stats: (query) =>
+      inStore(async (store, account) => {
         const refreshed = await refreshSearch(deps, query)
         const stats = await statsStore(store, account, query, deps.messenger)
         await remember(store, "stats", query)
         return withRefresh(stats, refreshed)
-      })
-    },
+      }),
 
     send: async ({
       chat,
@@ -724,16 +714,11 @@ const withServer = <T extends SearchFound>(found: T, account: AccountKey, server
       }
     : found
 
-/** What a run is kept as: the query and options it was given — a regular expression as its source. */
+/** What a run is kept as: the query and options it was given. */
 const paramsOf = (command: SearchCommand, query: SearchQuery & { by?: StatsGrouping }): SearchParams => ({
-  ...(query.pattern
-    ? { text: query.pattern.source, regex: true }
-    : query.text === undefined
-      ? {}
-      : { text: query.text }),
+  ...(query.text === undefined ? {} : { text: query.text }),
   ...(query.ast === undefined ? {} : { ast: query.ast }),
   ...(query.discover === undefined ? {} : { discover: query.discover }),
-  ...(query.language === undefined ? {} : { language: query.language }),
   ...(query.chat === undefined ? {} : { chat: query.chat }),
   ...(query.source === undefined ? {} : { source: query.source }),
   ...(query.timezone === undefined ? {} : { timezone: query.timezone }),

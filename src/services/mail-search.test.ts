@@ -116,7 +116,7 @@ const seeded = async () => {
 }
 
 const search = async (store: MessageStore, text: string, extra: { chat?: string; newest?: boolean } = {}) =>
-  searchStore(store, MAIL, { text, language: "lucene", kind: "mail", limit: 10, ...extra })
+  searchStore(store, MAIL, { text, kind: "mail", limit: 10, ...extra })
 const found = async (store: MessageStore, text: string, extra: { chat?: string; newest?: boolean } = {}) =>
   (await search(store, text, extra)).items.map(({ id }) => id)
 
@@ -194,7 +194,7 @@ describe("search mail over the mail tables", () => {
     expect(await sorted('subject:"quarterly planning"')).toEqual(["<one@example.com>", "<two@example.com>"])
 
     const TG: AccountKey = { provider: "tg", account: "1" }
-    await expect(searchStore(store, TG, { text: "subject:roadmap", language: "lucene", limit: 5 })).rejects.toThrow(
+    await expect(searchStore(store, TG, { text: "subject:roadmap", limit: 5 })).rejects.toThrow(
       "subject: is a mail field",
     )
   })
@@ -229,9 +229,7 @@ describe("search mail over the mail tables", () => {
     await expect(search(store, "is:important")).rejects.toThrow("is takes unread, read, starred")
 
     const TG: AccountKey = { provider: "tg", account: "1" }
-    await expect(searchStore(store, TG, { text: "is:unread", language: "lucene", limit: 5 })).rejects.toThrow(
-      "is: is a mail field",
-    )
+    await expect(searchStore(store, TG, { text: "is:unread", limit: 5 })).rejects.toThrow("is: is a mail field")
   })
 
   it("refuses messenger-only fields", async () => {
@@ -297,9 +295,7 @@ describe("search mail over the mail tables", () => {
       { via: "history" },
     )
     const both = async (text: string) =>
-      (await searchStore(store, TG, { text, language: "lucene", accounts: [TG, MAIL], limit: 10 })).items.map(
-        ({ locator }) => locator,
-      )
+      (await searchStore(store, TG, { text, accounts: [TG, MAIL], limit: 10 })).items.map(({ locator }) => locator)
     expect(await both("roadmap")).toEqual(
       expect.arrayContaining([
         formatLocator({ ...TG, chat: "5", message: "1" }),

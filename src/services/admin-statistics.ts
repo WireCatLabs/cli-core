@@ -210,8 +210,8 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
   report: async (report, query) => {
     if (!["unanswered", "responses", "newcomers", "discussion"].includes(report))
       invalid("unknown administrator report")
-    if (query.syncFirst || query.language === "legacy" || query.pattern || query.newest || query.context)
-      invalid("administrator reports read stored strict Lucene selections without sync/regex/newest/context")
+    if (query.syncFirst || query.newest || query.context)
+      invalid("administrator reports read stored strict Lucene selections without sync/newest/context")
     if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) invalid("report limit must be 1–100")
     const cutoff = Date.now(),
       store = await deps.store(),
@@ -232,7 +232,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
           timezone: pinned.base.timezone,
           selectedChat: pinned.base.contextChat ?? pinned.base.execution.chat,
         }
-      : await prepareLucene(store, account, { ...query, language: "lucene" }, deps.messenger)
+      : await prepareLucene(store, account, query, deps.messenger)
     if (pinned) await stemExecution(prepared.execution, store)
     if (pinned && query.text?.trim()) {
       const extra = await prepareLucene(
@@ -243,7 +243,6 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
           accounts: prepared.execution.accounts,
           timezone: prepared.timezone,
           limit: query.limit,
-          language: "lucene",
         },
         deps.messenger,
       )
@@ -320,7 +319,6 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
         searchRecordOf("admin-statistics", {
           adminReport: report,
           selection,
-          language: "lucene",
           timezone: prepared.timezone,
         }),
         saved ? { saved: saved.id } : {},

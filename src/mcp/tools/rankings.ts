@@ -83,16 +83,12 @@ export const rankingTools = (messenger: Messenger): Record<string, AnyTool> => {
         }
         if (params.target !== undefined && params.target !== target)
           throw new CliError("validation_error", "saved ranking belongs to a different target")
-        if (params.regex || params.language === "legacy" || params.newest || params.context)
-          throw new CliError(
-            "validation_error",
-            "saved ranking must use strict Lucene without regex/newest/context modes",
-          )
+        if (params.newest || params.context)
+          throw new CliError("validation_error", "saved ranking must not use newest/context modes")
         return rankingAnswer(
           await services.rankings.top(target, {
             ...params,
             ...syncArgs(args),
-            language: "lucene",
             limit: params.limit ?? defaults.limit,
             signal: defaults.signal,
             ...(saved ? { saved } : {}),

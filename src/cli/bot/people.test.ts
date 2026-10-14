@@ -146,6 +146,15 @@ describe("bot search messages and messages between", () => {
     expect((await call(["first", "bot", "search", "messages", "--json"])).code).toBe(2)
   })
 
+  it("**reads every copy --bots names**, a hit held only in the other bot's copy included", async () => {
+    configure({ bot: { profiles: { first: { readOtherBots: true } } } })
+    const own = await call(["first", "bot", "search", "messages", "ann", "elsewhere", "--json"])
+    const both = await call(["first", "bot", "search", "messages", "ann", "elsewhere", "--bots", "second", "--json"])
+
+    expect(own.answer.items).toEqual([])
+    expect(both.answer.items.map((message: Message) => message.id)).toEqual(["a2"])
+  })
+
   it("**keeps the chats every one of them wrote in**, and with --bots reads the other copy too", async () => {
     configure({ bot: { profiles: { first: { readOtherBots: true } } } })
     const own = await call(["first", "bot", "messages", "between", "@ann", "Bob", "--json"])

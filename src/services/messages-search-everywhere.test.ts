@@ -60,7 +60,7 @@ const seeded = async () => {
 }
 
 const search = (store: MessageStore, text: string, extra: Partial<Parameters<typeof searchStore>[2]> = {}) =>
-  searchStore(store, account, { limit: 20, text, language: "lucene", ...extra })
+  searchStore(store, account, { limit: 20, text, ...extra })
 const ids = (found: { items: { id: string }[] }) => found.items.map(({ id }) => id).sort()
 
 describe("a plain word searches everywhere", () => {

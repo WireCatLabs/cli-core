@@ -449,11 +449,6 @@
       "meaning": "chat kinds: dialog, group; comma-separated, empty for any",
       "value": "<kinds>"
     },
-    "--language": {
-      "value": "<lucene|legacy>",
-      "meaning": "the query language: strict Lucene or legacy discovery",
-      "default": "lucene"
-    },
     "--last": {
       "value": "<n>",
       "meaning": "stop once the newest n messages are held; not with --since",
@@ -842,9 +837,6 @@
     },
     "--refresh-metadata": {
       "meaning": "read current descriptions from the messenger before classifying"
-    },
-    "--regex": {
-      "meaning": "the words are one regular expression, case-insensitive, tested against every stored text"
     },
     "--remove": {
       "value": "<chat>",
@@ -3267,7 +3259,6 @@
         "--context": "all",
         "--discover": "all",
         "--exact": "all",
-        "--language": "all",
         "--limit": "all",
         "--max-chats": {
           "in": "all"
@@ -3277,7 +3268,6 @@
         },
         "--newest": "all",
         "--page": "all",
-        "--regex": "all",
         "--saved": {
           "in": "all"
         },
@@ -3350,16 +3340,10 @@
           "in": "all"
         },
         "--exact": "all",
-        "--language": {
-          "in": "all"
-        },
         "--limit": {
           "in": "all"
         },
         "--newest": {
-          "in": "all"
-        },
-        "--regex": {
           "in": "all"
         },
         "--replace": {

@@ -294,7 +294,7 @@ const samples: Record<EntityName, unknown> = {
     name: "invoices",
     command: "search",
     params: { text: "invoice chat:7", newest: true },
-    language: "lucene",
+    language: "lucene-v1",
     version: 1,
     fields_version: 4,
     created_at: at,

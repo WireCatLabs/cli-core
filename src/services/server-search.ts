@@ -15,7 +15,6 @@ export interface ServerOptions {
   timeMs?: number
 }
 export type ServerSkip =
-  | "legacy"
   | "unsupported"
   | "pushed_history"
   | "offline"
@@ -100,7 +99,6 @@ const asQuery = ({ words, from, ...rest }: Branch): ServerQuery => ({
 })
 
 const refusal: Record<ServerSkip, string> = {
-  legacy: "--backend server needs the strict query language, not legacy discovery or --regex",
   unsupported: "this messenger's server cannot search messages — use --backend archive",
   pushed_history: "this messenger's server cannot search messages — use --backend archive",
   offline: "--backend server needs the network — not with --offline",
@@ -136,7 +134,6 @@ export const searchServer = async (deps: ServiceDeps, request: SearchQuery): Pro
       })
     return { report: { ...report, skipped: reason, complete: false }, sources }
   }
-  if (request.pattern || (request.language !== "lucene" && request.ast === undefined)) return skip("legacy")
   if (!deps.messenger.serverSearch) return skip("unsupported")
   if (deps.reads === "store") return skip("pushed_history")
   if (deps.offline) return skip("offline")

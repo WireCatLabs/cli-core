@@ -4,7 +4,6 @@ import { migrate } from "./migrations.js"
 import { matchQuery } from "./sqlite/lucene.js"
 import { openSqlite } from "./sqlite/open.js"
 import { matching, newestHits } from "./sqlite/search.js"
-import { matchSubstring, matchWords } from "./sqlite/words.js"
 
 const opened = async () => {
   const sqlite = await openSqlite(":memory:")
@@ -32,38 +31,6 @@ describe("the search query plan", () => {
     const { sql, params } = newestHits(context, where, 21).toSQL()
 
     expect(perRow(planOf(context, sql, params))).toBe(false)
-    context.database.close()
-  })
-
-  it("**searches the word and substring indexes before the rows**, with a chat joined and with none", async () => {
-    const context = await opened()
-    context.database.exec(
-      `INSERT INTO accounts (id, provider, external_id, created_at,updated_at) VALUES (1, 'telegram', '1', 0,0)`,
-    )
-    context.database.exec(
-      `INSERT INTO chats (id, account_id, external_id, kind, updated_at, message_count,created_at) VALUES (1, 1, '-100', 'group', 0, 1000000,0)`,
-    )
-    const statements: string[] = []
-    const recording = {
-      ...context,
-      database: {
-        ...context.database,
-        prepare: (sql: string) => {
-          statements.push(sql)
-          return context.database.prepare(sql)
-        },
-      },
-    }
-    const account = { provider: "telegram", account: "1" }
-    const query = { required: [[{ kind: "word" as const, text: "valencia" }]], excluded: [] }
-    const options = { mode: "every" as const, beginnings: false, limit: 20 }
-    matchWords(recording, query, { accounts: [account], chat: { account, chatId: "-100" } }, options)
-    matchWords(recording, query, { accounts: [account] }, { ...options, newest: true })
-    matchSubstring(recording, query, { accounts: [account], chat: { account, chatId: "-100" } }, { limit: 20 })
-
-    const searches = statements.filter((sql) => / MATCH \?/.test(sql) && /CROSS JOIN/.test(sql))
-    expect(searches).toHaveLength(3)
-    for (const sql of searches) expect(perRow(planOf(context, sql, [])), sql).toBe(false)
     context.database.close()
   })
 

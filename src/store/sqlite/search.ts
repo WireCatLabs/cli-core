@@ -27,24 +27,13 @@ const wordsOf = (text: string): string => {
 /** What `find` keeps, as one condition. */
 export const matching = (
   context: StoreContext,
-  {
-    provider,
-    account,
-    accounts: within,
-    senders,
-    together = false,
-    text,
-    pattern,
-    chatId,
-    perChat = false,
-  }: Omit<MessageFilter, "limit">,
+  { provider, account, accounts: within, senders, together = false, text, chatId }: Omit<MessageFilter, "limit">,
 ): SQL | undefined => {
-  const trimmed = pattern ? undefined : text?.trim()
+  const trimmed = text?.trim()
   if (trimmed !== undefined && [...trimmed].length < 3) {
     throw new CliError("validation_error", "search needs at least three characters")
   }
-  if (pattern && perChat) throw new CliError("validation_error", "a pattern search is not per chat")
-  if (!trimmed && !pattern && !senders?.length) {
+  if (!trimmed && !senders?.length) {
     throw new CliError("validation_error", "say what to find: some text, or who wrote it")
   }
   if (chatId !== undefined && account === undefined)
@@ -113,9 +102,8 @@ export const newestHits = (context: StoreContext, where: SQL | undefined, wanted
     .limit(wanted)
 
 export const find = (context: StoreContext, filter: MessageFilter): Page<StoredHit> => {
-  const { limit, pattern, perChat = false } = filter
+  const { limit, perChat = false } = filter
   const where = matching(context, filter)
-  if (pattern) throw new CliError("validation_error", "regex search requires the asynchronous isolated executor")
   const rows: HitRow[] = perChat
     ? perChatNewest(context, where, limit + 1)
     : newestHits(context, where, limit + 1).all()

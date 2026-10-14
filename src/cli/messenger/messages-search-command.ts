@@ -41,7 +41,7 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
       "[query...]",
       mail
         ? 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges'
-        : 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges; --language legacy keeps discovery; with --saved, more words AND-ed to it',
+        : 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges; with --saved, more words AND-ed to it',
     )
   if (mail)
     command.option(
@@ -69,7 +69,6 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
       "--discover",
       "find partial lexical matches and eligible replies in the local archive; results are evidence, not confirmed answers",
     )
-    command.option("--language <lucene|legacy>", "the query language: strict Lucene or legacy discovery", languageOf)
   }
   command.option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
   command.addHelpText("after", SAVE_HELP)
@@ -94,7 +93,6 @@ content: (the text of files) and filename: (their names) narrow it to one —
 NOT has:attachment to voice messages, files or text alone. --json: the list is items; each hit's reference is ref.
 Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md`,
     )
-    .option("--regex", "the words are one regular expression, case-insensitive, tested against every stored text")
     .option("--saved <name|id>", "run a saved search or an earlier run; options typed here replace its own")
     .action(searchAction(messenger, kind))
 }
@@ -105,8 +103,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     const words = given
     const {
       source,
-      regex,
-      language,
       discover,
       timezone,
       newest,
@@ -117,9 +113,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       saved,
     } = this.opts<{
       source?: string
-      regex?: boolean
       discover?: boolean
-      language?: "lucene" | "legacy"
       timezone?: string
       newest?: boolean
       exact?: boolean
@@ -130,8 +124,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     }>()
     if (saved === undefined && words.length === 0)
       throw new CliError("validation_error", "give a query, or --saved <name> to run a saved search")
-    if (saved !== undefined && regex)
-      throw new CliError("validation_error", "--regex is kept with the saved search; not with --saved")
     const controller = new AbortController()
     context.track({ close: async () => controller.abort() })
     const external = environmentOf(this).signal
@@ -139,7 +131,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     const typed = {
       ...(source === undefined ? {} : { source }),
       ...(discover === undefined ? {} : { discover }),
-      ...(language === undefined ? {} : { language }),
       ...(timezone === undefined ? {} : { timezone }),
       ...(newest ? { newest: true } : {}),
       ...(exact ? { exact: true } : {}),
@@ -150,30 +141,28 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     const found: SearchFound = await context
       .withServices(async (services) => {
         if (saved === undefined) {
-          const pattern = regex ? patternOf(words.join(" ")) : undefined
           return services.messages.search({
             kind,
             ...syncRequest(this, context),
             ...backendRequest(this),
             ...threadRequest(this),
             ...typed,
-            ...(pattern ? { pattern } : { text: words.join(" ") }),
+            text: words.join(" "),
             limit,
             ...withOffset(page, limit),
             signal,
-            language: language ?? (pattern ? "legacy" : "lucene"),
             newest: newest === true,
             context: around ?? (context.format === "pretty" ? 2 : 0),
           })
         }
-        const { id, params, pattern } = await services.searches.resolve(saved, { ...typed, text: words.join(" ") })
+        const { id, params } = await services.searches.resolve(saved, { ...typed, text: words.join(" ") })
         limit = params.limit ?? limit
         return services.messages.search({
           kind,
           ...syncRequest(this, context),
           ...backendRequest(this),
           ...threadRequest(this),
-          ...(pattern ? { pattern } : params.text === undefined ? {} : { text: params.text }),
+          ...(params.text === undefined ? {} : { text: params.text }),
           ...(params.ast === undefined ? {} : { ast: params.ast }),
           ...(params.chat === undefined ? {} : { chat: params.chat }),
           ...(params.source === undefined ? {} : { source: params.source }),
@@ -181,7 +170,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
           limit,
           ...withOffset(page, limit),
           signal,
-          language: params.language ?? (pattern ? "legacy" : "lucene"),
           newest: params.newest === true,
           ...(params.discover === undefined ? {} : { discover: params.discover }),
           ...(params.exact ? { exact: true } : {}),
@@ -220,9 +208,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       )
     if (!found.wordsReady) {
       context.renderer.note(
-        found.query
-          ? `the word index is still being built, so a search by words fails until \`${command} store migrate\` finishes it`
-          : `the word index is still being built, so a search by words reads pieces of words until \`${command} store migrate\` finishes it`,
+        `the word index is still being built, so a search by words fails until \`${command} store migrate\` finishes it`,
       )
     }
     const incomplete = found.completeness.filter((chat) => chat.state !== "complete")
@@ -284,9 +270,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       ...(given.length ? { query: given.join(" ") } : {}),
       ...(saved === undefined ? {} : { saved }),
       ...(source === undefined ? {} : { source }),
-      ...(regex ? { regex: true } : {}),
       ...(discover ? { discover: true } : {}),
-      ...(language === undefined ? {} : { language }),
       ...(exact ? { exact: true } : {}),
       ...(newest ? { newest: true } : {}),
       ...(timezone === undefined ? {} : { timezone }),
@@ -304,23 +288,9 @@ const withOffset = (page: number | undefined, limit: number) => {
   return offset === undefined ? {} : { offset }
 }
 
-const patternOf = (source: string): RegExp => {
-  try {
-    return new RegExp(source, "iu")
-  } catch {
-    throw new CliError("validation_error", "not a regular expression — check JavaScript syntax or use Lucene regex")
-  }
-}
-
 export const wholeCount = (value: string): number => {
   if (!/^\d+$/.test(value.trim())) {
     throw new CliError("validation_error", `--context takes a whole number from 0 upwards, not "${value}"`)
   }
   return Number(value)
-}
-
-export const languageOf = (value: string): "lucene" | "legacy" => {
-  if (value !== "lucene" && value !== "legacy")
-    throw new CliError("validation_error", "--language takes lucene or legacy")
-  return value
 }

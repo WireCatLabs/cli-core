@@ -37,8 +37,6 @@ export const searchCombined = async (
   messenger: Partial<Pick<Messenger, "savedChatId" | "app" | "history" | "provider">> = {},
   options: CombinedOptions = COMBINED_DEFAULTS,
 ): Promise<CombinedFound> => {
-  if (request.pattern || request.language === "legacy")
-    throw new CliError("validation_error", "combined search takes Lucene text or AST, not legacy or JavaScript regex")
   if (request.thread) throw new CliError("validation_error", "internal combined evaluation does not hydrate threads")
   if (
     !Number.isInteger(options.candidateDepth) ||

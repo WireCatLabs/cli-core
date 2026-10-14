@@ -62,7 +62,6 @@ import * as imageChunks from "./sqlite/image-chunks.js"
 
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
-import { findRegex } from "./sqlite/legacy-regex.js"
 import { logPruner } from "./sqlite/log-pruning.js"
 import type { QueryGroup, QueryGrouping } from "./sqlite/lucene.js"
 import * as lucene from "./sqlite/lucene.js"
@@ -122,7 +121,7 @@ import { read, write } from "./sqlite/transaction.js"
 import * as transcripts from "./sqlite/transcripts.js"
 import type { ChunkToEmbed } from "./sqlite/vectors.js"
 import * as vectors from "./sqlite/vectors.js"
-import type { ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"
+import type { ScoredHit } from "./sqlite/words.js"
 import * as words from "./sqlite/words.js"
 
 /** Which account of which messenger a call is about. */
@@ -202,12 +201,6 @@ export interface AccountMessageFilter {
   senders?: Id[]
   together?: boolean
   text?: string
-  /**
-   * Tested against each stored message's text, newest first, in JavaScript — no index serves it, so
-   * it reads the chat (or the account) until `limit` match. Not with `text` or `perChat`.
-   */
-  pattern?: RegExp
-  signal?: AbortSignal
   /** Only this chat of the account. */
   chatId?: Id
   /** With `perChat`, the newest `limit` of each chat rather than of all of them together. */
@@ -518,10 +511,6 @@ export interface MessageStore {
   search(query: string, options: { limit: number; account?: AccountKey }): Promise<Page<StoredHit>>
   /** Newest first — by text, by who wrote it, or both. */
   find(filter: MessageFilter): Promise<Page<StoredHit>>
-  /**
-   * The word index, ranked by bm25, ties newest first (phase 2 plan S4 steps 1, 2 and 4). Chats marked
-   * not searchable are left out unless the scope names the chat.
-   */
   rankingDiscussionChats(account: AccountKey, chatId: string): Promise<string[]>
   rankingEvidence(execution: QueryExecution, request: RankingEvidenceRequest): Promise<RankedEvidence>
   retention(
@@ -537,13 +526,6 @@ export interface MessageStore {
   conversationEligibility(execution: QueryExecution): Promise<ConversationEligibility>
   /** The same matches as `matchQuery`, each counted once, grouped by chat, sender or quarter hour. */
   countQuery(execution: QueryExecution, by: QueryGrouping): Promise<QueryGroup[]>
-  matchWords(query: WordQuery, scope: SearchScope, options: WordOptions): Promise<Page<ScoredHit>>
-  /** The substring index, newest first (step 5); pieces under three letters are dropped. */
-  matchSubstring(query: WordQuery, scope: SearchScope, options: { limit: number }): Promise<Page<ScoredHit>>
-  /** The kinds of attachment held, for `has:` to name the ones it can find. */
-  attachmentKinds(): Promise<string[]>
-  /** Messages matching the scope alone, newest first: a search with filters and no word. */
-  matchFilters(scope: SearchScope, options: { limit: number }): Promise<Page<ScoredHit>>
   /** Per chat: whether its history is held up to date, without gaps, back to its start. */
   chatCompleteness(key: AccountKey, chatIds: Id[]): Promise<ChatCompleteness[]>
   /** Of `terms`, those the index knows as a word or the beginning of one. */
@@ -1600,7 +1582,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     search: async (query, { limit, account }) =>
       search.find(context, { text: query, limit, ...(account ? { account } : {}) }),
 
-    find: async (filter) => (filter.pattern ? findRegex(context, filter) : search.find(context, filter)),
+    find: async (filter) => search.find(context, filter),
 
     rankingDiscussionChats: async (account, chatId) => {
       const rows = database
@@ -1626,18 +1608,6 @@ const storeOver = (context: StoreContext): MessageStore => {
     matchQuery: async (execution) => lucene.matchQuery(context, mailIndexed(execution)),
     conversationEligibility: async (execution) => conversationEligibility(context, execution),
     countQuery: async (execution, by) => lucene.countQuery(context, mailIndexed(execution), by),
-
-    matchWords: async (query, scope, options) => words.matchWords(context, query, scope, options),
-
-    matchSubstring: async (query, scope, options) => words.matchSubstring(context, query, scope, options),
-
-    attachmentKinds: async () =>
-      database
-        .prepare("SELECT DISTINCT kind FROM attachments ORDER BY kind")
-        .all()
-        .map((row) => String(row.kind)),
-
-    matchFilters: async (scope, options) => words.matchFilters(context, scope, options),
 
     accounts: async () => accounts.heldAccounts(context),
     storedAccounts: async () => accounts.storedAccounts(context),
@@ -1963,5 +1933,5 @@ export {
 export { fillStems, resetStems } from "./sqlite/stems-fill.js"
 export type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
 export { inboxKey } from "./sqlite/tasks.js"
-export type { MatchPlace, ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"
+export type { MatchPlace, ScoredHit } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"

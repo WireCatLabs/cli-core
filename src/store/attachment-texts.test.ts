@@ -58,7 +58,7 @@ const seeded = async (path = fresh()) => {
 }
 
 const found = async (store: MessageStore, text: string) =>
-  (await searchStore(store, OWNER, { text, language: "lucene", limit: 10 })).items.map(({ id }) => id).sort()
+  (await searchStore(store, OWNER, { text, limit: 10 })).items.map(({ id }) => id).sort()
 
 describe("text of attachments in the store (version 19)", () => {
   it("**content: finds the message whose file holds the words; text: does not look inside files**", async () => {

@@ -1,13 +1,13 @@
 # How search works — the indexes, search by meaning, and what each one is for
 
-strict Lucene message search and optional graph/embedding conversation search are implemented. the automatic typo/any-word/substring pipeline described in the index-design sections belongs to explicit `--language legacy`, not the current default. The [query-language guide](../search/query-language.md) and [technical specification](../search/query-language-spec.md) define strict syntax, validation, limits and coverage. The semantic-search sections describe the existing separate conversation path. No live account or archive was used for this correction; source inspected at `680d22e`.
+strict Lucene message search and optional graph/embedding conversation search are implemented. the index-design sections also describe the typo/any-word/substring pipeline of the removed legacy search; of it, the vocabulary still gives `--discover` its typo corrections. The [query-language guide](../search/query-language.md) and [technical specification](../search/query-language-spec.md) define strict syntax, validation, limits and coverage. The semantic-search sections describe the existing separate conversation path. No live account or archive was used for this correction; source inspected at `680d22e`.
 
 ## Two searches
 
 | | `messages search` | `conversations search` |
 |---|---|---|
 | finds | messages | conversations inside a group chat |
-| by | strict Lucene words/phrases, Boolean fields and bounded patterns; legacy discovery only when selected | meaning, and the words it shares, merged |
+| by | strict Lucene words/phrases, Boolean fields and bounded patterns | meaning, and the words it shares, merged |
 | needs | stored history and a ready word index for strict text predicates | `conversations build`, then `conversations embed` |
 | runs | SQLite plus bounded validation/pattern checks; no embedding model | a model on this machine (or the user's API key), then a scan |
 | MCP tool | `<cli>_messages_search` | `<cli>_conversations_search` |
@@ -19,9 +19,6 @@ answers it, in the language it was held in.
 ```text
 messages search "gestor valencia"
   parse/validate/scope ─▶ SQLite word/metadata predicates ─▶ strict matching messages
-
-messages search "gestor valencia" --language legacy
-  words ─▶ nothing? correct typos ─▶ nothing? any word ─▶ nothing? substring
 
 conversations search "кто искал квартиру"
   the model turns the query into a vector ─▶ scan the chunks' vectors ─▶ conversations by meaning ─┐
@@ -37,7 +34,7 @@ conversations search "кто искал квартиру"
    `--chat`, `--from`, `--after`, `--before` fast. Always there.
 2. **The word index, ranked by BM25** — FTS5 with the `unicode61` tokenizer over `normalized_text`,
    with a prefix index.
-3. **The vocabulary** — FTS5 terms for bounded strict wildcard/regex expansion; legacy discovery additionally keeps term/trigram tables for typo candidates.
+3. **The vocabulary** — FTS5 terms for bounded strict wildcard/regex expansion; `--discover` also reads the term/trigram tables for typo candidates.
 4. **The substring index** — FTS5 with the `trigram` tokenizer over message text: any three letters
    anywhere. It exists today (migration 5).
 5. **Name indexes** — small trigram indexes over chat titles and over people's names and usernames.
@@ -129,23 +126,6 @@ Run on 2026-09-30 in `node:sqlite` (Node 24) with both FTS5 tokenizers over six 
 So: **words with BM25** rank best, bring no noise and handle short words; **the vocabulary** fixes
 typos neither index finds alone; **substring** finds fragments — parts of numbers, links, names, the
 middle of words — and brings noise.
-
-## Explicit legacy discovery order
-
-1. Word index, every word required, ranked by BM25.
-2. Nothing found → correct unknown words through the vocabulary, search again.
-3. Still nothing → any word instead of every word (NEED-375).
-4. Still nothing → the substring index.
-
-This sequence runs only in legacy discovery. Strict Lucene preserves the requested Boolean set, emits no automatic corrections, and errors when its word index is not ready or an execution budget is exceeded. Filters (chat, sender, source, date) apply at every legacy step in the database.
-
-As built in `src/search/search.ts`: step 1 also takes word beginnings
-(«квартир» finds квартиру), each step runs only when the one before found nothing, and until the word
-index is fully built a search uses the substring index alone. The index fills itself in batches —
-from `store migrate`, `store reindex`, and up to 200 ms before each `search messages`. `in:` and
-`--source` widen the search to other accounts the store holds (`in:personal`, `in:bots`, `in:all`).
-Every hit says which step found it (`match`: `words`, `beginnings`, `corrected`, `anyWord`,
-`substring`), and `corrections` lists the words that were replaced.
 
 **Stems** — the store keeps the Snowball stems of every message (`message_stems`), built by
 `store migrate`, rebuilt by `store reindex`, and reported as `stemIndex` by `store info` and

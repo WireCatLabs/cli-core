@@ -151,7 +151,6 @@ describe("the pictures lane", () => {
       kind: "messages",
       text: "from:anna receipt",
       limit: 10,
-      language: "lucene",
     } as never)
     expect(answer.items).toBe(found.items)
     expect(answer.pictures?.map(({ messageId }) => messageId)).toEqual(["2"])
@@ -178,7 +177,7 @@ describe("the pictures lane", () => {
       { search: async () => ({ items: [], hasMore: false }) } as unknown as MessagesService,
       service,
     )
-    const answer = await search.search({ kind: "messages", text: "receipt", limit: 10, language: "lucene" } as never)
+    const answer = await search.search({ kind: "messages", text: "receipt", limit: 10 } as never)
     expect(answer).not.toHaveProperty("pictures")
     expect(answer).not.toHaveProperty("picturesSkipped")
     await store.close()

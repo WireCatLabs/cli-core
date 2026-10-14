@@ -177,7 +177,6 @@ export const servicesFor = (deps: ServiceDeps): Services => {
   return deps.messenger.services ? { ...base, ...deps.messenger.services(base, deps) } : base
 }
 
-export { migrateLegacyQuery, type QueryMigration, type SavedQuery } from "../search/lucene/migration.js"
 export { FIELD_VERSION, QUERY_FIELDS, QUERY_OPERATORS, validateAst } from "../search/lucene/registry.js"
 export { QUERY_LIMITS, QUERY_VERSION } from "../search/lucene/types.js"
 export { TASK_KINDS, TASK_ORIGINS, type TaskKind, type TaskOrigin } from "../tasks/index.js"

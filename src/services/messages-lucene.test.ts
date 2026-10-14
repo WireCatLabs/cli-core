@@ -71,7 +71,7 @@ const run = (
   account: AccountKey,
   text: string,
   rest: Parameters<typeof searchStore>[2] = { limit: 100 },
-) => searchStore(store, account, { ...rest, text, language: "lucene" })
+) => searchStore(store, account, { ...rest, text })
 const comparable = reference.filter(
   (row) =>
     row.parsed &&
@@ -253,7 +253,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
       via: "history",
     })
     const stats = (text: string, by: "chat" | "sender" | "day" | "hour", extra = {}) =>
-      statsStore(store, account, { text, language: "lucene", limit: 10, by, timezone: "UTC", ...extra })
+      statsStore(store, account, { text, limit: 10, by, timezone: "UTC", ...extra })
     const byChat = await stats("invoice", "chat")
     expect(byChat.items.map(({ key, count }) => [key, count])).toEqual([
       ["1", 3],
@@ -311,9 +311,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     await expect(run(store, account, "body:/~alpha/")).rejects.toThrow("query.unsupported-regex")
     await expect(run(store, account, "text:/(/")).rejects.toThrow("query.invalid-regex")
     await expect(run(store, account, "alpha", { limit: 0 })).rejects.toThrow("query.invalid-limit")
-    await expect(searchStore(store, account, { language: "lucene", text: "alpha", ast, limit: 1 })).rejects.toThrow(
-      "query.conflict",
-    )
+    await expect(searchStore(store, account, { text: "alpha", ast, limit: 1 })).rejects.toThrow("query.conflict")
   })
   it("orders equal timestamps by qualified message ids before applying the page limit", async () => {
     const store = await open()
@@ -356,8 +354,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     const other = { provider: account.provider, account: "other" }
     await store.saveChats(other, [chat("9")])
     expect(
-      (await searchStore(store, account, { language: "lucene", text: "alpha", limit: 10, accounts: [account, other] }))
-        .coverage,
+      (await searchStore(store, account, { text: "alpha", limit: 10, accounts: [account, other] })).coverage,
     ).toMatchObject({ lastSyncedAt: null, inventoryComplete: false })
   })
   it("reports coverage even for empty hits and refuses invalid versions/modes", async () => {
@@ -372,12 +369,6 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
       coveredChats: 2,
     })
     expect(none.query).toMatchObject({ language: "lucene-v1", version: 1, fieldsVersion: 2, order: "relevance" })
-    await expect(searchStore(store, account, { language: "lucene", pattern: /a/, limit: 1 })).rejects.toThrow(
-      "--regex is legacy",
-    )
-    await expect(
-      searchStore(store, account, { language: "legacy", timezone: "UTC", text: "a", limit: 1 }),
-    ).rejects.toThrow("require the Lucene")
     expect(ids(await run(store, account, 'text:""'))).toEqual([])
     await expect(run(store, account, "alpha", { limit: 10, context: 21 })).rejects.toThrow("query.invalid-context")
     await expect(run(store, account, "body:/alpha/i")).rejects.toThrow("query.unsupported-regex-flags")

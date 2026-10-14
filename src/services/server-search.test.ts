@@ -67,8 +67,7 @@ const setup = async (
   const guard = { check: vi.fn(), record: vi.fn() } satisfies SendGuard
   const connection = vi.fn(async () => adapter)
   const deps = { ...storedDeps(messenger, store, account, guard), offline: false, connection }
-  const search = (query: Partial<SearchQuery>) =>
-    servicesFor(deps).messages.search({ language: "lucene", limit: 20, ...query })
+  const search = (query: Partial<SearchQuery>) => servicesFor(deps).messages.search({ limit: 20, ...query })
   return { store, deps, asked, guard, connection, search }
 }
 
@@ -199,27 +198,26 @@ describe("server search beside the archive", () => {
 
   it.each([
     { name: "no_words", query: { text: "has:file" }, deps: {} },
-    { name: "legacy", query: { text: "invoice", language: "legacy" as const }, deps: {} },
     { name: "offline", query: { text: "invoice" }, deps: { offline: true } },
     { name: "pushed_history", query: { text: "invoice" }, deps: { reads: "store" as const } },
     { name: "unsupported", query: { text: "invoice" }, deps: { messenger: { ...messenger, serverSearch: false } } },
   ])("falls back to the archive under both, and refuses under server: $name", async ({ name, query, deps }) => {
     const one = await setup()
     const services = servicesFor({ ...one.deps, ...deps })
-    const found = await services.messages.search({ language: "lucene", limit: 20, ...query, backend: "both" })
+    const found = await services.messages.search({ limit: 20, ...query, backend: "both" })
     expect(found.server).toMatchObject({ skipped: name, complete: false, calls: 0 })
     expect(found.items.every(({ source }) => source === "archive")).toBe(true)
     expect(one.connection).not.toHaveBeenCalled()
-    await expect(
-      services.messages.search({ language: "lucene", limit: 20, ...query, backend: "server" }),
-    ).rejects.toMatchObject({ code: "validation_error", details: { reason: name } })
+    await expect(services.messages.search({ limit: 20, ...query, backend: "server" })).rejects.toMatchObject({
+      code: "validation_error",
+      details: { reason: name },
+    })
   })
 
   it("asks a one-chat server only for a query that names one chat", async () => {
     const one = await setup()
     const services = servicesFor({ ...one.deps, messenger: { ...messenger, serverSearch: "chat" } })
-    const search = (query: Partial<SearchQuery>) =>
-      services.messages.search({ language: "lucene", limit: 20, text: "invoice", ...query })
+    const search = (query: Partial<SearchQuery>) => services.messages.search({ limit: 20, text: "invoice", ...query })
     expect((await search({ backend: "both" })).server).toMatchObject({ skipped: "needs_chat" })
     expect((await search({})).server).toBeUndefined()
     await expect(search({ backend: "server" })).rejects.toMatchObject({ details: { reason: "needs_chat" } })
@@ -280,7 +278,7 @@ describe("server search beside the archive", () => {
     const found = await one.search({ text: "invoice" })
     expect(found.server).toMatchObject({ backend: "both", calls: 1, new: 2 })
     const local = servicesFor({ ...one.deps, offline: true })
-    const offline = await local.messages.search({ language: "lucene", limit: 20, text: "invoice" })
+    const offline = await local.messages.search({ limit: 20, text: "invoice" })
     expect(offline.server).toBeUndefined()
     expect(offline.items[0]).not.toHaveProperty("source")
     const archive = await one.search({ text: "invoice", backend: "archive" })

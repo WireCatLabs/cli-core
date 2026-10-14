@@ -500,31 +500,6 @@ describe("searching message text", () => {
   })
 })
 
-describe("finding by pattern", () => {
-  it("**reads newest first past a chunk until the limit matches**, and says when there are more", async () => {
-    const store = await openStore({ path: fresh() })
-    const minute = (n: number) => new Date(Date.UTC(2026, 8, 1) + n * 60_000).toISOString()
-    await store.saveMessages(
-      ME,
-      chat.id,
-      Array.from({ length: 1200 }, (_, n) =>
-        message({ id: String(n + 1), timestamp: minute(n), text: n % 400 === 0 ? `invoice #${n}` : `chat ${n}` }),
-      ),
-      { via: "history" },
-    )
-
-    const page = await store.find({ account: ME, pattern: /INVOICE #\d+/iu, limit: 2 })
-    expect(page.items.map((hit) => hit.text)).toEqual(["invoice #800", "invoice #400"])
-    expect(page.hasMore).toBe(true)
-    expect(await store.find({ account: ME, pattern: /invoice #0$/u, limit: 5 })).toMatchObject({
-      items: [{ id: "1" }],
-      hasMore: false,
-    })
-    await expect(store.find({ account: ME, pattern: /x/u, perChat: true, limit: 1 })).rejects.toThrow("not per chat")
-    await store.close()
-  })
-})
-
 describe("the stretches held completely", () => {
   it("**merge when they overlap or touch**, and stay apart across a gap", async () => {
     const store = await openStore({ path: fresh() })

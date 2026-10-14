@@ -308,7 +308,6 @@ describe("graph context around a hit", () => {
     const one = await setup()
     const found = await one.services.messages.search({
       text: 'text:"synthetic message 5"',
-      language: "lucene",
       limit: 10,
       context: 1,
       thread: {},
@@ -321,7 +320,7 @@ describe("graph context around a hit", () => {
   it("validates thread bounds even when a search has no hits", async () => {
     const one = await setup()
     await expect(
-      one.services.messages.search({ text: "unmatched", language: "lucene", limit: 10, thread: { maxMessages: 0 } }),
+      one.services.messages.search({ text: "unmatched", limit: 10, thread: { maxMessages: 0 } }),
     ).rejects.toMatchObject({ code: "validation_error" })
   })
 

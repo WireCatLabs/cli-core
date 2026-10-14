@@ -86,7 +86,7 @@ export const countersService = (deps: ServiceDeps) => {
         })
       }
     } else {
-      const prepared = await prepareLucene(store, account, { ...query, limit, language: "lucene" }, deps.messenger)
+      const prepared = await prepareLucene(store, account, { ...query, limit }, deps.messenger)
       const found = await store.counterTargets(prepared.execution, { now, maxAge })
       items = found.items
       hasMore = found.hasMore

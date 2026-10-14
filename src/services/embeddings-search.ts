@@ -150,7 +150,6 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         limit,
         syncFirst,
         signal,
-        language: "lucene",
         text: filter,
         source,
         timezone,

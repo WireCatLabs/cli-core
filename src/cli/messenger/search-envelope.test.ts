@@ -138,17 +138,13 @@ describe("search answers", () => {
     const { store } = await setup()
     try {
       const ids = async (request: { text: string; chat?: string }) =>
-        (await searchStore(store, account, { ...request, limit: 10, language: "lucene" })).items.map(
-          ({ locator }) => locator,
-        )
+        (await searchStore(store, account, { ...request, limit: 10 })).items.map(({ locator }) => locator)
       const flag = await ids({ text: "chapter", chat: "7" })
       expect(flag).toHaveLength(3)
       expect(await ids({ text: "chapter chat:7" })).toEqual(flag)
       const mail = { provider: "email", account: "owner@example.test" }
       const thread = async (request: { text: string; chat?: string }) =>
-        (await searchStore(store, mail, { ...request, kind: "mail", limit: 10, language: "lucene" })).items.map(
-          ({ locator }) => locator,
-        )
+        (await searchStore(store, mail, { ...request, kind: "mail", limit: 10 })).items.map(({ locator }) => locator)
       const subject = await thread({ text: "chapter", chat: "Reading group" })
       expect(subject).toHaveLength(1)
       expect(await thread({ text: 'chapter chat:"Reading group"' })).toEqual(subject)

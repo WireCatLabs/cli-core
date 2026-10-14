@@ -267,7 +267,7 @@ describe("what a search says about the archive", () => {
     await store.fillSearchIndex()
     await store.fillStems()
     const search = (query: { chat?: string }) =>
-      servicesFor(deps).messages.search({ text: "chapter", language: "lucene", limit: 20, ...query })
+      servicesFor(deps).messages.search({ text: "chapter", limit: 20, ...query })
 
     const everywhere = await search({})
     const one = await search({ chat: "8" })

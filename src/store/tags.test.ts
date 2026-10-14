@@ -69,7 +69,7 @@ const count = async (path: string) => {
 }
 
 const found = async (store: MessageStore, text: string) =>
-  (await searchStore(store, OWNER, { text, language: "lucene", limit: 100 })).items.map(({ id }) => id).sort()
+  (await searchStore(store, OWNER, { text, limit: 100 })).items.map(({ id }) => id).sort()
 
 describe("tags in the store (version 16)", () => {
   it("**adds only what is new and removes only what was there**, answering each", async () => {
@@ -141,7 +141,7 @@ describe("tag: in a strict search", () => {
   it("counts by tag the same messages it finds", async () => {
     const { store } = await seeded()
     await store.addTags(OWNER, { type: "contact", personId: "8" }, ["work"])
-    const stats = await statsStore(store, OWNER, { text: "tag:work", language: "lucene", limit: 10, by: "chat" })
+    const stats = await statsStore(store, OWNER, { text: "tag:work", limit: 10, by: "chat" })
     expect(stats.items.map(({ key, count }) => [key, count])).toEqual([
       ["1", 1],
       ["2", 1],

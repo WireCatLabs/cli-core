@@ -71,7 +71,7 @@ const asAlpha = (store: MessageStore, reads: "store" | "server" = "store") => {
   return servicesFor(deps)
 }
 
-const search = { text: SHARED_WORD, language: "lucene" as const, limit: 50 }
+const search = { text: SHARED_WORD, limit: 50 }
 
 type Read = (twin: TwinStore) => Promise<unknown>
 
@@ -80,7 +80,6 @@ const BOUND: [string, Read][] = [
   ["messages list", ({ store }) => asAlpha(store).messages.list(CHAT, { limit: 10 })],
   ["messages around", ({ store }) => asAlpha(store).messages.around(CHAT, "2", { before: 2, after: 2 })],
   ["search messages", ({ store }) => asAlpha(store).messages.search({ ...search, backend: "archive" })],
-  ["search messages, legacy", ({ store }) => asAlpha(store).messages.search({ ...search, language: "legacy" })],
   ["search messages --chat 7", ({ store }) => asAlpha(store).messages.search({ ...search, chat: CHAT })],
   [
     "search messages chat:7",
