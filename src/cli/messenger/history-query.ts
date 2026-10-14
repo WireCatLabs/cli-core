@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { dateEndpoint, defineQuery, type Predicate, queryError, timezoneOf } from "@wirecat/cli-base/query"
 import type { ListWindow } from "../../services/messages.js"
-import { nativeField, type QueryWords, requiredTerms } from "./list-query.js"
+import { listQuery, nativeField, nativeTerms, type QueryWords, typedQuery } from "../list-query.js"
 
 /** What a chat's history can be read by: where it starts, and one topic. */
 export const HISTORY_QUERY = defineQuery({
@@ -73,7 +73,7 @@ export const historyWindow = (
   command: string,
   registry = HISTORY_QUERY,
 ): Omit<ListWindow, "limit"> => {
-  const terms = requiredTerms(words, registry, { command })
+  const terms = [...nativeTerms(listQuery(typedQuery(words), registry, command), command).values()]
   const starts = terms.filter((term) => term.field !== "topic").map((term) => startOf(term, command))
   if (cursor !== undefined) starts.push(fromCursor(cursor))
   if (starts.length > 1)
