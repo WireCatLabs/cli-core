@@ -10,14 +10,17 @@ import { momentOf } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
+import { renderAnswer } from "../envelope.js"
 import { isCliFailure } from "../failures.js"
-import { renderList } from "../paging.js"
+import { pagedList, pageOf } from "../list-query.js"
+import { renderList, withPaging } from "../paging.js"
 import { parseDuration } from "../settings.js"
 import {
   finishJob,
   JOB_STATES,
   type Job,
   type JobState,
+  jobItem,
   jobStarted,
   jobsDir,
   listJobs,
@@ -231,20 +234,28 @@ export const syncCommand = (messenger: Messenger): Command => {
 export const jobsCommand = (messenger: Messenger): Command => {
   const command = new Command("jobs").description("background sync jobs")
 
-  command
-    .command("list")
-    .description("background sync jobs, newest first")
-    .addOption(new Option("--state <state>", "only jobs in this state").choices(JOB_STATES))
-    .action(function (this: Command) {
-      const context = messengerContext(this, messenger)
-      const { state } = this.opts<{ state?: JobState }>()
-      const jobs = listJobs(jobsDir(messenger.app, context.env)).filter(
-        (job) => job.profile === context.profile && (state === undefined || stateOf(job) === state),
-      )
-      renderList(context.renderer, context.format, jobs.map(brief))
-      if (jobs.length === 0)
-        context.renderer.note(`no ${state === undefined ? "" : `${state} `}background sync jobs for this profile`)
-    })
+  annotate(
+    withPaging(command.command("list").description("background sync jobs, newest first")).addOption(
+      new Option("--state <state>", "only jobs in this state").choices(JOB_STATES),
+    ),
+    { output: { entity: "job" } },
+  ).action(function (this: Command) {
+    const context = messengerContext(this, messenger)
+    const { state } = this.opts<{ state?: JobState }>()
+    const jobs = listJobs(jobsDir(messenger.app, context.env)).filter(
+      (job) => job.profile === context.profile && (state === undefined || stateOf(job) === state),
+    )
+    const { limit, offset } = pageOf(context.settings)
+    const items = jobs.slice(offset, offset + limit).map(jobItem)
+    renderAnswer(
+      this,
+      context,
+      pagedList("store jobs list", context.settings, { items, has_more: jobs.length > offset + limit }),
+      () => items.map((one) => `${jobLine(one)}\n`).join(""),
+    )
+    if (jobs.length === 0 && context.format === "pretty")
+      context.renderer.note(`no ${state === undefined ? "" : `${state} `}background sync jobs for this profile`)
+  })
 
   command
     .command("show")
@@ -321,6 +332,10 @@ export const jobsCommand = (messenger: Messenger): Command => {
 
   return command
 }
+
+const jobLine = (one: ReturnType<typeof jobItem>) =>
+  `${one.id}  ${one.state.padEnd(9)}  ${one.started_at.slice(0, 16).replace("T", " ")}  ${one.chat}  ` +
+  `${one.fetched} fetched${one.issue ? `  ${one.issue.message}` : ""}${one.error ? `  ${one.error.message}` : ""}`
 
 const brief = (job: Job) => ({
   job: job.id,

@@ -1958,7 +1958,7 @@ describe("the MCP server", () => {
     })
     expect(repaired.isError, JSON.stringify(repaired.body)).toBe(false)
     expect(repaired.body).toHaveProperty("scope", "interior")
-    expect((await call("chat_store_jobs_list", {})).body).toMatchObject({ items: [], page: 1 })
+    expect((await call("chat_store_jobs_list", {})).body).toMatchObject({ items: [], page: { has_more: false } })
     expect((await call("chat_store_jobs_show", { job: "missing" })).isError).toBe(true)
     const readonly = await connect(scripted(), { root, config: READ_ONLY })
     expect((await readonly.client.listTools()).tools.map(({ name }) => name)).not.toContain("chat_store_gaps_repair")

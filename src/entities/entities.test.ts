@@ -145,6 +145,18 @@ const samples: Record<EntityName, unknown> = {
     updated_at: at,
   },
   reference: "note:42",
+  job: {
+    id: "a1b2c3",
+    chat: "Work",
+    state: "partial",
+    pid: 4242,
+    started_at: at,
+    finished_at: at,
+    fetched: 120,
+    limit: 500,
+    complete: false,
+    issue: { code: "rate_limited", message: "wait 30 s" },
+  },
   conversation: {
     id: "1",
     chat: "chat:chat/500/7",
