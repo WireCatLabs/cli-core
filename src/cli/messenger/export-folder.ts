@@ -5,6 +5,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Id, Message } from "../../domain/models.js"
 import { checkFor, type PasswordCheck, passes, seal } from "../../sealed.js"
 import type { AccountKey } from "../../store/store.js"
+import { messageItem } from "./message-items.js"
 
 const FORMAT = "cli-messaging-export"
 const MANIFEST = "manifest.json"
@@ -18,9 +19,12 @@ export interface ExportedChat {
   deleted: number
 }
 
+/** 2: lines are `messageItem`s; 1 wrote the domain record, so a run never adds the other shape to a folder. */
+const VERSION = 2
+
 export interface ExportManifest {
   format: typeof FORMAT
-  version: 1
+  version: typeof VERSION
   provider: string
   account: Id
   /** Every run sealed with a password; the manifest then names no chat, so it reads without one. */
@@ -37,7 +41,7 @@ export interface ExportManifest {
 export const openFolder = (dir: string, key: AccountKey, encrypted: boolean): ExportManifest => {
   const fresh: ExportManifest = {
     format: FORMAT,
-    version: 1,
+    version: VERSION,
     provider: key.provider,
     account: key.account,
     ...(encrypted ? { encrypted: true } : {}),
@@ -55,8 +59,14 @@ export const openFolder = (dir: string, key: AccountKey, encrypted: boolean): Ex
     return fresh
   }
   const found = JSON.parse(readFileSync(path, "utf8")) as Partial<ExportManifest>
-  if (found.format !== FORMAT || found.version !== 1 || typeof found.chats !== "object" || found.chats === null) {
+  if (found.format !== FORMAT || typeof found.chats !== "object" || found.chats === null) {
     throw new CliError("validation_error", `${path} is not an export manifest this version reads`)
+  }
+  if (found.version !== VERSION) {
+    throw new CliError(
+      "validation_error",
+      `${dir} holds lines of export version ${found.version}, this one writes ${VERSION} — export into a new folder`,
+    )
   }
   if (found.provider !== key.provider || found.account !== key.account) {
     throw new CliError(
@@ -75,10 +85,14 @@ export const openFolder = (dir: string, key: AccountKey, encrypted: boolean): Ex
   return found as ExportManifest
 }
 
-/** Messages first, oldest first, then one `{ id, chatId, deleted: true }` per deletion — never the deleted text. */
-export const linesOf = (chatId: Id, { messages, deleted }: { messages: Message[]; deleted: Id[] }): string[] => [
-  ...messages.map((message) => JSON.stringify(message)),
-  ...deleted.map((id) => JSON.stringify({ id, chatId, deleted: true })),
+/** Messages first, oldest first, then one `{ id, chat_id, deleted: true }` per deletion — never the deleted text. */
+export const linesOf = (
+  chatId: Id,
+  { messages, deleted }: { messages: Message[]; deleted: Id[] },
+  reader: AccountKey,
+): string[] => [
+  ...messages.map((message) => JSON.stringify(messageItem(message, reader))),
+  ...deleted.map((id) => JSON.stringify({ id, chat_id: chatId, deleted: true })),
 ]
 
 const stampOf = (mark: string) => mark.replace(/[^\dTZ]/g, "")
@@ -121,18 +135,16 @@ export const sealRun = async (
 
 const safe = (chatId: Id) => chatId.replace(/[^\w-]/g, "_")
 
-/**
- * Messages first, oldest first, then one `{ id, deleted: true }` per deletion — never the deleted
- * text. Named by the run's mark: a file left by a run stopped before its manifest is not in the way.
- */
+/** `linesOf` in a file named by the run's mark: a file left by a run stopped before its manifest is not in the way. */
 export const writeChanges = (
   dir: string,
   chatId: Id,
   mark: string,
   { messages, deleted }: { messages: Message[]; deleted: Id[] },
+  reader: AccountKey,
 ): string => {
   const name = `${safe(chatId)}-${stampOf(mark)}.jsonl`
-  const lines = linesOf(chatId, { messages, deleted })
+  const lines = linesOf(chatId, { messages, deleted }, reader)
   try {
     writeFileSync(join(dir, name), `${lines.join("\n")}\n`, { flag: "wx", mode: 0o600 })
   } catch (error) {

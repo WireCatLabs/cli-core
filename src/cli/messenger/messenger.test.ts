@@ -3512,6 +3512,8 @@ describe("the shared read commands", () => {
         .split("\n")
         .map((line) => JSON.parse(line).id),
     ).toEqual(["2", "3"])
+    expect(readFileSync(file, "utf8").split("\n")[0]).toContain('"chat_id":"7"')
+    expect(readFileSync(file, "utf8")).not.toContain("chatId")
     expect(again.code).toBe(2)
     expect(again.stderr.join("\n")).toContain("never overwrites")
     expect((await call(["store", "export", "7", "--since-time", "4242"], never, env)).code).toBe(2)
@@ -3544,7 +3546,9 @@ describe("the shared read commands", () => {
     expect(lines(first.chats[0].file).map((one: { id: string }) => one.id)).toEqual(["1", "2", "3"])
     expect(statSync(join(dir, first.chats[0].file)).mode & 0o777).toBe(0o600)
     expect(unchanged.chats[0]).toMatchObject({ file: null, messages: 0, deleted: 0 })
-    expect(lines(after.chats[0].file)).toEqual([{ id: "2", chatId: "7", deleted: true }])
+    expect(lines(first.chats[0].file)[0]).toMatchObject({ id: "1", chat_id: "7", ref: expect.any(String) })
+    expect(lines(after.chats[0].file)).toEqual([{ id: "2", chat_id: "7", deleted: true }])
+    expect(manifest.version).toBe(2)
     expect(JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")).chats["7"]).toMatchObject({
       messages: 3,
       deleted: 1,
@@ -3568,8 +3572,17 @@ describe("the shared read commands", () => {
     const nothing = await call(["store", "export", "--to", join(root, "y")], never, env)
     const several = await call(["store", "export", "7", "8"], never, env)
 
+    const older = join(root, "older")
+    mkdirSync(older)
+    writeFileSync(
+      join(older, "manifest.json"),
+      JSON.stringify({ format: "cli-messaging-export", version: 1, chats: {} }),
+    )
+    const intoOlder = await call(["store", "export", "7", "--to", older], never, env)
+
     expect(intoBusy.stderr.join("\n")).toContain("holds other files")
-    expect([intoBusy.code, markdown.code, nothing.code, several.code]).toEqual([2, 2, 2, 2])
+    expect(intoOlder.stderr.join("\n")).toContain("export version 1")
+    expect([intoBusy.code, intoOlder.code, markdown.code, nothing.code, several.code]).toEqual([2, 2, 2, 2, 2])
     expect(existsSync(join(root, "x"))).toBe(false)
   })
 

@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`store export` writes files in the shape it prints.** `--output` files and `--to` folders held the domain record
+  (`chatId`, `senderName`…) while the screen got `messageItem`s (`chat_id`, `sender_name`, `ref`…); both now write
+  the item, and a deletion line is `{ id, chat_id, deleted: true }`. A folder's manifest says `version: 2`; adding to
+  a version 1 folder is refused with "export into a new folder", so one folder never mixes the two shapes.
+
 ### Added
 
 - **Resumable syncs, one standard for every CLI** ([STANDARD](docs/dev/STANDARD.md#resumable-syncs)): a kill loses
