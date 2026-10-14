@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`config set` with a camelCase name answers with the snake_case setting it saved** (`"setting": "keep_runs_for_days"`
+  for `keepRunsForDays`), and the command's own rules for a setting, such as `default_profile` taking no profile, apply
+  to either spelling.
+
+### Added
+
+- **`declaredSettingName`** from `@wirecat/cli-core/cli`: the snake_case name for a setting typed in camelCase, for an
+  app with its own `config set` (max).
+
 ## 0.280.0 — 14.10.2026
 
 ### Changed — may break callers

@@ -155,7 +155,7 @@ export { PressLog, UpdatesCursor } from "./bot/updates.js"
 export { commandContract, type JsonSchema, SCHEMA_DIALECT } from "./command-contract.js"
 export { CONTRACT, commandsCommand } from "./commands-command.js"
 export { configCommand, refuseUnknownKey } from "./config-command.js"
-export { type ConfigRename, loadSnakeCaseConfig, snakeCaseConfig } from "./config-keys.js"
+export { type ConfigRename, declaredSettingName, loadSnakeCaseConfig, snakeCaseConfig } from "./config-keys.js"
 export {
   type BaseContext,
   type BaseEnvironment,

@@ -44,6 +44,16 @@ describe("config", () => {
     expect(await setting("limit")).toMatchObject({ value: 20, from: "config defaults" })
   })
 
+  it("answers a camelCase name with the snake_case setting it saved", async () => {
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
+
+    expect((await call(["work", "config", "set", "keepRunsForDays", "7", "--json"], env)).answer).toMatchObject({
+      setting: "keep_runs_for_days",
+      value: 7,
+    })
+  })
+
   it("**shows the permissions in force**, from every section, not only the profile's own", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
