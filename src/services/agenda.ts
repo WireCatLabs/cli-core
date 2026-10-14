@@ -1,6 +1,10 @@
+import { type QueryAst, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
+import type * as v from "valibot"
 import { formatLocator, isLocator, parseLocator } from "../domain/locator.js"
-import type { ChatKind } from "../domain/models.js"
-import { type ChatActivity, inboxKey, type TaskDetails } from "../store/store.js"
+import { formatReference } from "../domain/references.js"
+import { agenda } from "../entities/agenda.js"
+import { AGENDA_COLUMNS, type ChatActivity, inboxKey, queryFilter, type TaskDetails } from "../store/store.js"
+import { CHAT_KINDS } from "./chats.js"
 import type { ServiceDeps } from "./deps.js"
 import { taskAccount } from "./task-rules.js"
 
@@ -15,8 +19,26 @@ export interface AgendaOptions {
   unanswered?: number
   /** ms: chats silent for longer than this are not looked at: they ended, they did not go quiet. */
   within?: number
-  kinds?: readonly ChatKind[]
+  /** A `tasks agenda` query over `AGENDA_QUERY`; `listQuery` adds the default kinds. */
+  query?: QueryAst
 }
+
+export const AGENDA_QUERY = {
+  entity: "agenda",
+  backend: "sql",
+  fields: queryFieldsOf(agenda, {
+    exclude: ["at", "account", "stored_at", "stale"],
+    relations: {
+      chat_kind: {
+        type: "enum",
+        values: CHAT_KINDS,
+        example: "chat_kind:channel",
+        relation: "the kind of the chats in owed, waiting and unsynced",
+      },
+    },
+  }),
+  defaults: ["chat_kind:(dialog OR group)"],
+} as const satisfies QueryRegistry
 
 /** Why a task is on the agenda; a task planned for later and not due soon is not on it. */
 export type AgendaReason = "overdue" | "due" | "check" | "unplanned"
@@ -60,7 +82,7 @@ export interface AgendaService {
 }
 
 export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): AgendaService => ({
-  show: async ({ dueWithin = DAY, waiting = 7 * DAY, unanswered = DAY, within = 30 * DAY, kinds } = {}) => {
+  show: async ({ dueWithin = DAY, waiting = 7 * DAY, unanswered = DAY, within = 30 * DAY, query } = {}) => {
     const [store, account] = [await deps.store(), await deps.account()]
     const at = now()
     const open = await store.tasks
@@ -86,23 +108,21 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
         reasons,
       }))
 
-    const activity = await store.chatActivity(account, at - within)
-    const wanted = new Set<ChatKind>(kinds ?? ["dialog", "group"])
-    const chats = activity.chats
-      .filter((chat) => wanted.has(chat.kind))
-      .map(({ lastMessageId, ...chat }) => ({
-        ...chat,
-        lastMessage:
-          lastMessageId === null
-            ? null
-            : formatLocator({
-                provider: account.provider,
-                account: account.account,
-                chat: chat.chatId,
-                message: lastMessageId,
-              }),
-        openTasks: open.filter((task) => chatOf(task.source) === chat.chatId).map((task) => task.id),
-      }))
+    const where = query ? queryFilter(query, AGENDA_COLUMNS, { command: "tasks agenda" }) : undefined
+    const activity = await store.chatActivity(account, at - within, where)
+    const chats = activity.chats.map(({ lastMessageId, ...chat }) => ({
+      ...chat,
+      lastMessage:
+        lastMessageId === null
+          ? null
+          : formatLocator({
+              provider: account.provider,
+              account: account.account,
+              chat: chat.chatId,
+              message: lastMessageId,
+            }),
+      openTasks: open.filter((task) => chatOf(task.source) === chat.chatId).map((task) => task.id),
+    }))
     const silentFor = (chat: AgendaChat) => at - Date.parse(chat.lastMessageAt)
     return {
       at: new Date(at).toISOString(),
@@ -137,3 +157,40 @@ const urgency = (task: TaskDetails): number => {
 /** The chat a message locator names; a note or document source belongs to no chat. */
 const chatOf = (source: string | null): string | undefined =>
   source !== null && isLocator(source) ? parseLocator(source).chat : undefined
+
+export type AgendaItem = v.InferOutput<typeof agenda>
+
+/** The agenda in entity keys, as `--json` and MCP answer it; chats become `chat:` references. */
+export const agendaItem = (shown: Agenda): AgendaItem => {
+  const split = shown.account.indexOf(":")
+  const [provider, account] = [shown.account.slice(0, split), shown.account.slice(split + 1)]
+  const chat = (one: AgendaChat) => ({
+    chat: formatReference({ type: "chat", provider, account, chat: one.chatId }),
+    title: one.title,
+    kind: one.kind,
+    last_message: one.lastMessage,
+    last_message_at: one.lastMessageAt,
+    last_from_owner: one.lastFromOwner,
+    open_tasks: one.openTasks,
+  })
+  return {
+    at: shown.at,
+    account: shown.account,
+    stored_at: shown.storedAt,
+    stale: shown.stale,
+    tasks: shown.tasks.map((task) => ({
+      id: task.id,
+      key: task.key,
+      title: task.title,
+      kind: task.type,
+      source: task.source,
+      due_at: task.dueAt,
+      next_check_at: task.nextCheckAt,
+      created_at: task.createdAt,
+      reasons: task.reasons,
+    })),
+    owed: shown.owed.map(chat),
+    waiting: shown.waiting.map(chat),
+    unsynced: shown.unsynced.map(chat),
+  }
+}

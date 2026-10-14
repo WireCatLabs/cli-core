@@ -3921,7 +3921,6 @@
       "in": "all",
       "options": {
         "--due": "all",
-        "--kind": "all",
         "--unanswered": "all",
         "--waiting": "all",
         "--within": "all"

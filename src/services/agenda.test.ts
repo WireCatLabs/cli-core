@@ -1,10 +1,13 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import * as v from "valibot"
 import { expect, it } from "vitest"
+import { listQuery } from "../cli/list-query.js"
 import type { Chat, Message } from "../domain/models.js"
+import { agenda as agendaEntity } from "../entities/agenda.js"
 import { openStore } from "../store/store.js"
-import { agendaService } from "./agenda.js"
+import { AGENDA_QUERY, agendaItem, agendaService } from "./agenda.js"
 import { storeOnlyDeps } from "./deps.js"
 import { tasksService } from "./tasks.js"
 
@@ -38,6 +41,8 @@ const said = (chatId: string, id: string, days: number, outgoing: boolean): Mess
   attachments: [],
 })
 
+const kinds = (text: string) => listQuery(text, AGENDA_QUERY, "tasks agenda")
+
 const seeded = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "agenda-")), "m.db") })
   await store.saveChats(account, [
@@ -65,7 +70,7 @@ const seeded = async () => {
 it("lists the chats owed an answer and the ones waiting on others, from who wrote last and never the text", async () => {
   const { store, agenda } = await seeded()
   try {
-    const shown = await agenda.show()
+    const shown = await agenda.show({ query: kinds("") })
     expect(shown).toMatchObject({ account: "chat:500", stale: false, tasks: [] })
     expect(shown.owed.map((one) => one.chatId)).toEqual(["1"])
     expect(shown.owed[0]).toEqual({
@@ -90,9 +95,15 @@ it("lists the chats owed an answer and the ones waiting on others, from who wrot
       ["7", "Synthetic author", null, null],
     ])
     expect(JSON.stringify(shown)).not.toContain("synthetic")
-    expect((await agenda.show({ waiting: DAY / 2 })).waiting.map((one) => one.chatId)).toEqual(["2"])
-    expect((await agenda.show({ within: 90 * DAY })).owed.map((one) => one.chatId)).toEqual(["1", "5"])
-    expect((await agenda.show({ kinds: ["channel"] })).owed.map((one) => one.chatId)).toEqual(["4"])
+    expect((await agenda.show({ waiting: DAY / 2, query: kinds("") })).waiting.map((one) => one.chatId)).toEqual(["2"])
+    expect((await agenda.show({ within: 90 * DAY, query: kinds("") })).owed.map((one) => one.chatId)).toEqual([
+      "1",
+      "5",
+    ])
+    expect((await agenda.show({ query: kinds("chat_kind:channel") })).owed.map((one) => one.chatId)).toEqual(["4"])
+    expect((await agenda.show({ query: kinds("-chat_kind:dialog") })).owed.map((one) => one.chatId)).not.toContain("1")
+    const item = v.parse(agendaEntity, agendaItem(await agenda.show({ query: kinds("") })))
+    expect(item.owed[0]).toMatchObject({ chat: "chat:chat/500/1", kind: "dialog", last_message: "msg:chat/500/1/11" })
   } finally {
     await store.close()
   }
@@ -110,7 +121,7 @@ it("lists a task when it is due, overdue, due a check or never planned, and not 
     const closed = await add("msg:chat/500/3/30", { dueAt: new Date(now - DAY) })
     await tasks.close(closed.task.id, { as: "done", by: "owner" })
 
-    const shown = await agenda.show()
+    const shown = await agenda.show({ query: kinds("") })
     expect(shown.tasks.map(({ id, reasons }) => [id, reasons])).toEqual([
       [overdue.task.id, ["overdue"]],
       [check.task.id, ["check"]],

@@ -221,7 +221,10 @@ describe("tasks", () => {
     expect(json(await call("tasks", "show", planned.key, "--json")).links).toHaveLength(2)
 
     const agenda = json(await call("tasks", "agenda", "--due", "1d", "--within", "3650d", "--json"))
-    expect(agenda.tasks).toMatchObject([{ id: added.id, reasons: ["check"] }])
+    expect(agenda.item.tasks).toMatchObject([{ id: added.id, reasons: ["check"] }])
+    expect(json(await call("tasks", "agenda", "--within", "3650d", "chat_kind:channel", "--json")).item.owed).toEqual(
+      [],
+    )
     expect((await call("tasks", "agenda", "--waiting", "soon")).stderr).toContain("--waiting takes")
     const printed = (await call.pretty("tasks", "agenda", "--within", "3650d")).stdout.join("")
     expect(printed).toContain("Send the invoice")

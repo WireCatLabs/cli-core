@@ -157,6 +157,38 @@ const samples: Record<EntityName, unknown> = {
     complete: false,
     issue: { code: "rate_limited", message: "wait 30 s" },
   },
+  agenda: {
+    at,
+    account: "chat:500",
+    stored_at: null,
+    stale: true,
+    tasks: [
+      {
+        id: "t1",
+        key: "INBOX-1",
+        title: "reply to Ana",
+        kind: "question",
+        source: "msg:chat/500/7/1",
+        due_at: null,
+        next_check_at: null,
+        created_at: at,
+        reasons: ["unplanned"],
+      },
+    ],
+    owed: [
+      {
+        chat: "chat:chat/500/7",
+        title: "Work",
+        kind: "group",
+        last_message: null,
+        last_message_at: at,
+        last_from_owner: null,
+        open_tasks: ["t1"],
+      },
+    ],
+    waiting: [],
+    unsynced: [],
+  },
   conversation: {
     id: "1",
     chat: "chat:chat/500/7",

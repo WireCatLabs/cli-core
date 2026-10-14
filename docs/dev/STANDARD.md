@@ -787,7 +787,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--join-approval` | `<on\|off>` | people ask to join, and an admin lets them in |  | `chats update` (tg-only) |
 | `--json` |  | machine-readable output: one JSON value on stdout, nothing else |  | every command |
 | `--jsonl` |  | machine-readable output: one JSON object per line, for streaming and jq |  | every command |
-| `--kind` | `<kind>` | only chats of this kind: dialog, group, channel or saved |  | `inbox`, `review`, `store export`, `tasks agenda`, `tasks link` |
+| `--kind` | `<kind>` | only chats of this kind: dialog, group, channel or saved |  | `inbox`, `review`, `store export`, `tasks link` |
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
 | `--language` | `<lucene\|legacy>` | the query language: strict Lucene or legacy discovery | `lucene` | `search messages`, `searches create` |
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch`, `messages sync` |

@@ -3,6 +3,7 @@ import type { Attachment, ChatKind, Id, Message, Page, WindowedMessage } from ".
 import type { ChatActivity, ChatStats, SenderChatStats } from "../store.js"
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or, type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
+import type { ColumnMap, Where } from "./query-filter.js"
 import { attachments, chats, identities, messageRevisions, messages } from "./schema.js"
 import { parsed, present, toIso, toMs } from "./values.js"
 
@@ -351,10 +352,14 @@ const toMessage = (row: MessageRow, attachments: Attachment[]): Message => {
  * never the text. A dialog has no title, so it takes the name its other side last wrote under.
  * `storedAt` is when the store last saved any message of the account.
  */
+/** `tasks agenda` fields over `chatActivity`'s chats. */
+export const AGENDA_COLUMNS = { chat_kind: { type: "enum", sql: "c.kind" } } as const satisfies ColumnMap
+
 export const chatActivity = (
   { database }: StoreContext,
   accountKey: number,
   since: number,
+  where?: Where,
 ): { chats: ChatActivity[]; storedAt: string | null } => ({
   chats: database
     .prepare(
@@ -363,9 +368,10 @@ export const chatActivity = (
         "ORDER BY sent_at DESC LIMIT 1)) AS title " +
         "FROM chats c LEFT JOIN messages m ON m.id = (SELECT id FROM messages WHERE chat_id = c.id AND deleted_at IS NULL " +
         "ORDER BY sent_at DESC, id DESC LIMIT 1) " +
-        "WHERE c.account_id = ? AND max(coalesce(m.sent_at, 0), coalesce(c.last_message_at, 0)) >= ?",
+        "WHERE c.account_id = ? AND max(coalesce(m.sent_at, 0), coalesce(c.last_message_at, 0)) >= ?" +
+        (where ? ` AND (${where.sql})` : ""),
     )
-    .all(accountKey, since)
+    .all(accountKey, since, ...(where?.params ?? []))
     .map((row) => {
       const sent = row.sent_at == null ? null : Number(row.sent_at)
       const listed = row.listed == null ? null : Number(row.listed)
