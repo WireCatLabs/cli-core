@@ -15,9 +15,16 @@ shape of this file.
 - **`config set` with a camelCase name answers with the snake_case setting it saved** (`"setting": "keep_runs_for_days"`
   for `keepRunsForDays`), and the command's own rules for a setting, such as `default_profile` taking no profile, apply
   to either spelling.
+- **Every store write recomputes what its triggers queued before it commits** — stems, mentions and involvements,
+  in one place (`write` in `src/store/sqlite/transaction.ts`). Text read from a file or a voice note left its mentions
+  for the next message write. Fills, backfills, rebuilds and the conversation build write tables that queue nothing
+  and drain nothing (`writeBatch`), so what they report is what they did. The nesting depth of a write is kept per
+  connection, not shared by every open store in the process.
 
 ### Added
 
+- **`snakeKeysKeeping(keys)` from `./cli` is a `snakeKeys` that keeps what is under the listed keys as written**: a
+  note's front matter, an email's headers. The key itself still goes snake_case, and either spelling matches.
 - **`declaredSettingName`** from `@wirecat/cli-core/cli`: the snake_case name for a setting typed in camelCase, for an
   app with its own `config set` (max).
 

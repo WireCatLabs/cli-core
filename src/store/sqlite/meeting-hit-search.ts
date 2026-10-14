@@ -6,9 +6,10 @@ import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { indexedText } from "./meeting-index-values.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
-import { meetingReadSnapshot, positiveReadInteger } from "./meeting-reads.js"
+import { positiveReadInteger } from "./meeting-reads.js"
 import { meetingStemmableText, meetingStemState } from "./meeting-stem-state.js"
 import type { StoreContext } from "./open.js"
+import { read } from "./transaction.js"
 
 interface Cursor {
   version: 1
@@ -103,7 +104,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         fail("Meeting search query must be a bounded string")
       const rawWords = rawQuery.match(/[\p{L}\p{N}\p{M}]+/gu)?.filter((word) => normalize(word)) ?? []
       if (rawWords.length > 128) fail("Meeting search supports at most 128 query words")
-      return meetingReadSnapshot(database, () => {
+      return read(database, () => {
         checkMeetingCancelled(input.signal)
         const state = meetingStemState(database, input.accountId)
         const terms = rawWords.map((raw) => ({

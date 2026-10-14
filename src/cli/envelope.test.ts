@@ -4,7 +4,7 @@ import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { ENTITIES } from "../entities/index.js"
-import { itemOf, listOf, renderAnswer, sealed } from "./envelope.js"
+import { itemOf, listOf, renderAnswer, sealed, snakeKeys, snakeKeysKeeping } from "./envelope.js"
 import { inRun } from "./runs/scope.js"
 import { nextStep } from "./steps.js"
 
@@ -115,5 +115,22 @@ describe("the answer envelope", () => {
     expect(streams.stderr.join("\n")).toContain(
       "→ the local copy is missing messages; syncing brings them in: chat messages sync 2",
     )
+  })
+})
+
+describe("snakeKeys", () => {
+  it("keeps everything under a verbatim key as written, and still renames the key", () => {
+    const answer = {
+      savedAt: 1,
+      frontMatter: { createdBy: "owner", tags: [{ addedAt: 2 }] },
+      rows: [{ headers: { "Message-ID": "x", inReplyTo: "y" } }],
+    }
+    expect(snakeKeysKeeping(["frontMatter", "headers"])(answer)).toEqual({
+      saved_at: 1,
+      front_matter: { createdBy: "owner", tags: [{ addedAt: 2 }] },
+      rows: [{ headers: { "Message-ID": "x", inReplyTo: "y" } }],
+    })
+    expect(snakeKeysKeeping(["front_matter"])(answer)).toMatchObject({ front_matter: { createdBy: "owner" } })
+    expect(snakeKeys(answer)).toMatchObject({ front_matter: { created_by: "owner", tags: [{ added_at: 2 }] } })
   })
 })

@@ -2,13 +2,13 @@ import { CliError } from "@wirecat/cli-base"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import { normalize } from "../normalize.js"
 import { type Actor, botNamed, ownerPerson } from "./actors.js"
-import { atomic } from "./atomic.js"
 import { linkKind } from "./link-kinds.js"
 import { CORPORA, corpusIndexState, drainCorpus, type NoteIndexState } from "./note-index.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
 import { referenceOfThing, storedThing } from "./things.js"
+import { write } from "./transaction.js"
 
 export const MEMORY_KINDS = ["summary", "digest", "preference"] as const
 export const MEMORY_STATUSES = ["proposed", "confirmed", "stale", "superseded"] as const
@@ -180,7 +180,7 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
       if (input.confidence !== undefined && !(input.confidence >= 0 && input.confidence <= 1))
         throw new CliError("validation_error", "confidence takes 0–1")
       const status = oneOf(input.status ?? "proposed", ["proposed", "confirmed"] as const, "a new memory's status")
-      const id = atomic(database, () => {
+      const id = write(database, () => {
         const { actor, model } = authorActor(context, input.author)
         const subject = input.subject === undefined ? undefined : requiredThing(database, input.subject, "the subject")
         const replaced = input.supersedes === undefined ? undefined : Number(rowOf(input.supersedes).id)

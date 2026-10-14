@@ -1,5 +1,6 @@
 import type { CacheDatabase } from "../driver.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
+import { writeBatch } from "./transaction.js"
 
 /** Live messages stored before version 6, still without their normalized text. An index lookup. */
 export const pendingNormalization = (database: CacheDatabase): number =>
@@ -28,16 +29,11 @@ export const backfillNormalized = (
   let after = 0
   for (;;) {
     if (until()) return filled
-    database.exec("BEGIN IMMEDIATE")
-    let rows: Record<string, unknown>[]
-    try {
-      rows = next.all(after, batch)
-      for (const row of rows) fill.run(normalize(String(row.text)), NORMALIZER_VERSION, Number(row.pk))
-      database.exec("COMMIT")
-    } catch (error) {
-      database.exec("ROLLBACK")
-      throw error
-    }
+    const rows = writeBatch(database, () => {
+      const page = next.all(after, batch)
+      for (const row of page) fill.run(normalize(String(row.text)), NORMALIZER_VERSION, Number(row.pk))
+      return page
+    })
     if (rows.length === 0) return filled
     filled += rows.length
     after = Number(rows.at(-1)?.pk)

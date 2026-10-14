@@ -6,8 +6,8 @@ import {
   normalizeMeetingParticipantQuery,
   validateMeetingParticipantSearch,
 } from "../../meetings/index.js"
-import { meetingReadSnapshot } from "./meeting-reads.js"
 import type { StoreContext } from "./open.js"
+import { read } from "./transaction.js"
 
 interface Cursor {
   version: 1
@@ -47,7 +47,7 @@ export const meetingParticipantSearchOver = (context: StoreContext): MeetingPart
       .update(JSON.stringify([limits.accountId, limits.query]))
       .digest("hex")
     const previous = cursorOf(input.cursor, key)
-    return meetingReadSnapshot(context.database, () => {
+    return read(context.database, () => {
       const { database } = context
       const until =
         previous?.until ??

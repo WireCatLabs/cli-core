@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchIndexStore } from "../../meetings/index.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import { type INDEX_CODES, indexedText, meetingRowid } from "./meeting-index-values.js"
-import { checkMeetingCancelled, meetingWriteSnapshot } from "./meeting-operation.js"
+import { checkMeetingCancelled } from "./meeting-operation.js"
 import { positiveReadInteger } from "./meeting-reads.js"
 import {
   meetingCurrentIndexRows,
@@ -12,6 +12,7 @@ import {
   meetingStemStateName,
 } from "./meeting-stem-state.js"
 import type { StoreContext } from "./open.js"
+import { write } from "./transaction.js"
 
 export function meetingHitIndexOver({ database, now }: StoreContext): MeetingSearchIndexStore {
   return {
@@ -25,7 +26,7 @@ export function meetingHitIndexOver({ database, now }: StoreContext): MeetingSea
         throw new CliError("validation_error", "Meeting indexing limit must be from 1 through 1000")
       if (!Number.isSafeInteger(maxReadBytes) || maxReadBytes < 1 || maxReadBytes > 64 * 1024 ** 2)
         throw new CliError("validation_error", "Meeting indexing byte limit must be from 1 through 67108864")
-      return meetingWriteSnapshot(
+      return write(
         database,
         () => {
           checkMeetingCancelled(input.signal)
@@ -97,7 +98,7 @@ export function meetingHitIndexOver({ database, now }: StoreContext): MeetingSea
           checkMeetingCancelled(input.signal)
           return { indexed: rows.length, remaining }
         },
-        input.signal,
+        { beforeCommit: () => checkMeetingCancelled(input.signal) },
       )
     },
   }

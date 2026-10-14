@@ -4,7 +4,7 @@ import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { int, str } from "./events.js"
 import { CORPORA, drainCorpus } from "./note-index.js"
-import { inBatch } from "./search-index.js"
+import { write } from "./transaction.js"
 
 export const titleOf = (subject: string | null): string | null =>
   subject?.replace(/^\s*((re|fwd?|aw|wg)\s*:\s*)+/i, "").trim() || null
@@ -159,7 +159,7 @@ const CUT = "email"
 export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: Stemmers) => Stemmer): number => {
   // Mail was once cut without cleaning, then across the emails of a thread; a store cut either way is cut again.
   if (database.prepare("SELECT value FROM store_settings WHERE key = ?").get(MAIL_CUT)?.value !== CUT)
-    inBatch(database, () => {
+    write(database, () => {
       const single = database
         .prepare("SELECT DISTINCT content_hash AS hash FROM chunks WHERE chunkable_type = 'email'")
         .all()
@@ -193,7 +193,7 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
     )
     .all()
   if (unchunked.length)
-    inBatch(database, () => {
+    write(database, () => {
       for (const row of unchunked) {
         const before = dropAttachmentChunks(database, Number(row.id))
         chunkAttachments(database, Number(row.account_id), Number(row.id), Date.now())
@@ -207,7 +207,7 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
   const done = database.prepare("DELETE FROM email_index_pending WHERE indexable_type = 'email_thread' AND id = ?")
   let threads = 0
   for (;;) {
-    const count = inBatch(database, () => {
+    const count = write(database, () => {
       const ids = next.all().map(({ id }) => Number(id))
       for (const id of ids) {
         chunkThread(database, id, Date.now())

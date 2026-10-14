@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { type MeetingSeriesHistoryStore, validateMeetingSeriesHistory } from "../../meetings/index.js"
 import { int, str } from "./events.js"
-import { meetingReadSnapshot } from "./meeting-reads.js"
 import type { StoreContext } from "./open.js"
+import { read } from "./transaction.js"
 
 const bytes = "length(CAST(external_id AS BLOB)) + coalesce(length(CAST(title AS BLOB)), 0)"
 const ensureBytes = (size: number, budget: number) => {
@@ -14,7 +14,7 @@ export const meetingSeriesHistoryOver = ({ database }: Pick<StoreContext, "datab
   async seriesHistory(input) {
     const request = validateMeetingSeriesHistory(input)
     const { accountId, externalId, after, before, limit, maxReadBytes, signal } = request
-    return meetingReadSnapshot(database, () => {
+    return read(database, () => {
       const probe = database
         .prepare(
           `SELECT id, ${bytes} AS read_bytes FROM meeting_series WHERE account_id=? AND external_id=? AND deleted_at IS NULL`,

@@ -12,12 +12,12 @@ import {
 } from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { actorOfOrigin, originOfActor } from "./actors.js"
-import { atomic } from "./atomic.js"
 import { folded } from "./folded.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { taskRowOf, thingOf } from "./things.js"
+import { write } from "./transaction.js"
 import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
 
 export { taskIdOf, taskRowOf } from "./things.js"
@@ -146,7 +146,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         .map(toTask)
     },
     insert: async (task) => {
-      atomic(database, () => {
+      write(database, () => {
         const project = inbox(task.account, true) as number
         const counted = database
           .prepare(
@@ -194,7 +194,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
       const row = taskRowOf(database, task.id)
       if (row === undefined) throw new CliError("not_found", `no task ${task.id}`)
       const closedBy = task.closedBy ? actorOfOrigin(database, task.closedBy) : undefined
-      atomic(database, () => {
+      write(database, () => {
         const before = database.prepare("SELECT status, due_at FROM tasks WHERE id = ?").get(row) as Record<
           string,
           unknown
@@ -228,7 +228,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
       if (!text || text.length > 2000) throw new CliError("validation_error", "an answer takes 1–2000 characters")
       const row = required(id)
       const at = now()
-      atomic(database, () => {
+      write(database, () => {
         database.prepare("UPDATE tasks SET resolution = ?, updated_at = ? WHERE id = ?").run(text, at, row)
         if (!by) return
         database

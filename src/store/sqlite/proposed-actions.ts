@@ -1,11 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import type { AccountKey } from "../store.js"
 import type { Actor } from "./actors.js"
-import { atomic } from "./atomic.js"
 import { type Author, authorActor } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { referenceOfThing, storedThing } from "./things.js"
+import { write } from "./transaction.js"
 
 export const PROPOSAL_STATUSES = ["proposed", "approved", "rejected", "executed", "failed"] as const
 export const PROPOSAL_VERDICTS = ["useful", "not_useful"] as const
@@ -115,7 +115,7 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
     set = "",
     values: unknown[] = [],
   ) =>
-    atomic(database, () => {
+    write(database, () => {
       const row = rowOf(id)
       if (!from.includes(row.status as ProposedAction["status"]))
         throw new CliError("validation_error", `a ${String(row.status)} action cannot become ${to}`, {
@@ -145,7 +145,7 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
       const encoded = payload === undefined ? null : JSON.stringify(payload)
       if (encoded !== null && encoded.length > 100_000)
         throw new CliError("validation_error", "a payload takes up to 100000 characters")
-      const id = atomic(database, () => {
+      const id = write(database, () => {
         const accountId =
           account === undefined
             ? null

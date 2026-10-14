@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
 import { drainInvolvementQueue, INSERT, sourcesOf } from "./involvement-queue.js"
 import type { StoreContext } from "./open.js"
-import { inBatch } from "./search-index.js"
+import { write } from "./transaction.js"
 
 export interface Involvement {
   id: number
@@ -52,7 +52,7 @@ const pendingInvolvements = (database: CacheDatabase): number =>
 
 export const involvementStoreOver = ({ database, now }: Pick<StoreContext, "database" | "now">): InvolvementStore => ({
   rebuild: (personId) =>
-    inBatch(database, () => {
+    write(database, () => {
       if (personId !== undefined && (!Number.isSafeInteger(personId) || personId < 1))
         throw new CliError("validation_error", "a person id is a positive integer")
       database
@@ -65,7 +65,7 @@ export const involvementStoreOver = ({ database, now }: Pick<StoreContext, "data
         .run(now(), ...(personId === undefined ? [] : [personId])).changes
     }),
   drain: () => {
-    const recomputed = inBatch(database, () => drainInvolvementQueue(database))
+    const recomputed = write(database, () => drainInvolvementQueue(database))
     return { recomputed, pending: pendingInvolvements(database) }
   },
   pending: () => pendingInvolvements(database),

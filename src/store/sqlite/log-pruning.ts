@@ -1,4 +1,5 @@
 import type { CacheDatabase } from "../driver.js"
+import { write } from "./transaction.js"
 
 const DAY = 86_400_000
 const SETTING = "logs_pruned_at"
@@ -11,8 +12,7 @@ export const pruneLogs = (
   database: CacheDatabase,
   now: number,
 ): { agentActions: number; botUpdatePayloads: number } => {
-  database.exec("BEGIN IMMEDIATE")
-  try {
+  return write(database, () => {
     const agentActions = database
       .prepare("DELETE FROM agent_actions WHERE started_at < ?")
       .run(now - LOG_RETENTION.agentActionsMs).changes
@@ -22,12 +22,8 @@ export const pruneLogs = (
     database
       .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
       .run(SETTING, String(now), now)
-    database.exec("COMMIT")
     return { agentActions, botUpdatePayloads }
-  } catch (error) {
-    database.exec("ROLLBACK")
-    throw error
-  }
+  })
 }
 
 /**

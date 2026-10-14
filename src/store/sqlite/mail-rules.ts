@@ -1,6 +1,6 @@
 import type { JsonValue } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
-import { atomic } from "./atomic.js"
+import { write } from "./transaction.js"
 
 type Row = Record<string, unknown>
 type JsonObject = { [key: string]: JsonValue }
@@ -111,7 +111,7 @@ export const mailRulesOver = (database: CacheDatabase): MailRulesStore => ({
     return ruleOf(row as Row)
   },
   async remove(accountId, conditions) {
-    return atomic(database, () => {
+    return write(database, () => {
       const found = database
         .prepare("SELECT id FROM mail_rules WHERE account_id = ? AND conditions = ?")
         .get(accountId, conditionsKey(conditions))
@@ -133,7 +133,7 @@ export const mailRulesOver = (database: CacheDatabase): MailRulesStore => ({
       .map((row) => ({ ruleId: Number(row.rule), emails: Number(row.emails), bytes: Number(row.bytes) }))
   },
   async assign(accountId, ruleId, externalIds, now) {
-    return atomic(database, () => {
+    return write(database, () => {
       if (
         ruleId !== null &&
         !database.prepare("SELECT 1 FROM mail_rules WHERE id = ? AND account_id = ?").get(ruleId, accountId)

@@ -93,16 +93,30 @@ export const itemOf = <T>(
 const snake = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
 /**
- * An answer that has no entity yet — a write's receipt, a count — with snake_case keys, nested ones too.
- * Only for records whose keys are field names, never for one keyed by data.
+ * `snakeKeys` that keeps everything under the listed keys as written: a note's front matter, an email's headers — the
+ * owner's or a provider's words, not field names. The key itself still goes snake_case; either spelling matches.
  */
-export const snakeKeys = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(snakeKeys)
-  if (value === null || typeof value !== "object" || value.constructor !== Object) return value
-  return Object.fromEntries(
-    Object.entries(value).flatMap(([key, inner]) => (inner === undefined ? [] : [[snake(key), snakeKeys(inner)]])),
-  )
+export const snakeKeysKeeping = (verbatim: Iterable<string>): ((value: unknown) => unknown) => {
+  const kept = new Set(verbatim)
+  const convert = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(convert)
+    if (value === null || typeof value !== "object" || value.constructor !== Object) return value
+    return Object.fromEntries(
+      Object.entries(value).flatMap(([key, inner]) => {
+        if (inner === undefined) return []
+        const name = snake(key)
+        return [[name, kept.has(key) || kept.has(name) ? inner : convert(inner)]]
+      }),
+    )
+  }
+  return convert
 }
+
+/**
+ * An answer that has no entity yet — a write's receipt, a count — with snake_case keys, nested ones too.
+ * Only for records whose keys are field names; a record keyed by data goes through `snakeKeysKeeping`.
+ */
+export const snakeKeys = snakeKeysKeeping([])
 
 export const isBody = (value: unknown): value is Body => typeof value === "object" && value !== null && built.has(value)
 

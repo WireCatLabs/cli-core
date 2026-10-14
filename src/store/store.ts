@@ -60,7 +60,6 @@ import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import * as imageChunks from "./sqlite/image-chunks.js"
 
-import { drainInvolvementQueue } from "./sqlite/involvement-queue.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { findRegex } from "./sqlite/legacy-regex.js"
@@ -72,7 +71,6 @@ import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
 import {
   confirmMention,
-  drainMentions,
   listMentions,
   type MentionDecision,
   type MentionsRebuild,
@@ -115,10 +113,12 @@ import type { SearchRecord, StoredSearch } from "./sqlite/searches.js"
 import * as searchRecords from "./sqlite/searches.js"
 import type { StemsFill, StemsState } from "./sqlite/stems.js"
 import * as stems from "./sqlite/stems.js"
+import { fillStems, followDefaultStemmers } from "./sqlite/stems-fill.js"
 import * as sync from "./sqlite/sync.js"
 import type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
 import * as tagQueries from "./sqlite/tags.js"
 import { linkInbox, type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
+import { read, write } from "./sqlite/transaction.js"
 import * as transcripts from "./sqlite/transcripts.js"
 import type { ChunkToEmbed } from "./sqlite/vectors.js"
 import * as vectors from "./sqlite/vectors.js"
@@ -873,13 +873,13 @@ export const openStore = async ({ path, env, now = Date.now, command }: StoreOpt
     // A small file is filled on the spot; a larger one waits for `db migrate`, since nothing reads the copy yet.
     const pending = pendingNormalization(database)
     if (pending > 0 && pending <= BACKFILL_ON_OPEN) backfillNormalized(database)
-    stems.followDefaultStemmers(database, now)
+    followDefaultStemmers(database, now)
     const stemming = stems.stemsState(database)
     if (
       stemming?.cause === "building" &&
       stemming.watermark - stemming.filledThrough + stemming.pending <= BACKFILL_ON_OPEN
     ) {
-      stems.fillStems(database, { now })
+      fillStems(database, { now })
     }
     logPruner(database, now)()
   } catch (error) {
@@ -893,19 +893,6 @@ const storeOver = (context: StoreContext): MessageStore => {
   const { database } = context
   const stemmerFor = stems.stemmerCache()
   const pruneLogsWhenDue = logPruner(database, context.now)
-  const inTransaction = (body: () => void): void => {
-    database.exec("BEGIN IMMEDIATE")
-    try {
-      body()
-      stems.drainStems(database, stemmerFor)
-      drainMentions(database, context.now())
-      drainInvolvementQueue(database)
-      database.exec("COMMIT")
-    } catch (error) {
-      database.exec("ROLLBACK")
-      throw error
-    }
-  }
 
   const mailIndexed = (execution: QueryExecution) => {
     if (execution.corpus === "mail") drainEmailIndex(database, stemmerFor)
@@ -969,13 +956,13 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
 
     saveChats: async (key, list) =>
-      inTransaction(() => {
+      write(database, () => {
         const accountKey = accountPk(key)
         for (const chat of list) chatQueries.upsertChat(context, accountKey, chat)
       }),
 
     saveMessages: async (key, chatId, messages, { via, seenAt }) =>
-      inTransaction(() => {
+      write(database, () => {
         const accountKey = accountPk(key)
         const chatKey = chatPkFor(accountKey, chatId)
         for (const message of messages) {
@@ -984,11 +971,11 @@ const storeOver = (context: StoreContext): MessageStore => {
       }),
 
     saveMembers: async (key, chatId, memberIds) =>
-      inTransaction(() => writeMembers(key, accountPk(key), chatId, memberIds)),
+      write(database, () => writeMembers(key, accountPk(key), chatId, memberIds)),
 
     saveRoster: async (key, chatId, read) => {
       let change: RosterChange = { joined: [], gone: [], changed: [] }
-      inTransaction(() => {
+      write(database, () => {
         const accountKey = accountPk(key)
         change = roster.saveRoster(context, accountKey, key.provider, chatPkFor(accountKey, chatId), read)
       })
@@ -1015,7 +1002,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
 
     trackMembers: async (key, chatId, tracked) =>
-      inTransaction(() => roster.setTracked(context, chatPkFor(accountPk(key), chatId), tracked)),
+      write(database, () => roster.setTracked(context, chatPkFor(accountPk(key), chatId), tracked)),
 
     trackedChats: async (key) => {
       const accountKey = findAccountPk(key)
@@ -1032,18 +1019,10 @@ const storeOver = (context: StoreContext): MessageStore => {
     personSeenInAccounts: async (uid, accountIds) => personSeenInAccounts(context, uid, accountIds),
     personByUid: async (uid) => personLinks.personByUid(context, uid),
     linkIdentities: async (person, other, options) => {
-      let linked: PersonRecord | undefined
-      inTransaction(() => {
-        linked = personLinks.linkIdentities(context, person, other, options)
-      })
-      return linked as PersonRecord
+      return write(database, () => personLinks.linkIdentities(context, person, other, options))
     },
     unlinkIdentity: async (identity, options) => {
-      let alone: PersonRecord | undefined
-      inTransaction(() => {
-        alone = personLinks.unlinkIdentity(context, identity, options)
-      })
-      return alone as PersonRecord
+      return write(database, () => personLinks.unlinkIdentity(context, identity, options))
     },
     mentioning: async (key, person, limit) => {
       const accountKey = findAccountPk(key)
@@ -1062,10 +1041,10 @@ const storeOver = (context: StoreContext): MessageStore => {
       return accountKey === undefined ? undefined : sync.syncStateOf(context, accountKey, name)
     },
 
-    setSyncState: async (key, name, value) => inTransaction(() => writeState(accountPk(key), name, value)),
+    setSyncState: async (key, name, value) => write(database, () => writeState(accountPk(key), name, value)),
 
     applyDelta: async (key, { chats = [], people = [], members = new Map(), state = {} }) =>
-      inTransaction(() => {
+      write(database, () => {
         const accountKey = accountPk(key)
         for (const chat of chats) chatQueries.upsertChat(context, accountKey, chat)
         for (const person of people) identityPk(accountKey, key.provider, person.id, person.name, person)
@@ -1080,7 +1059,7 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     claim: async (key, chatId, anchor, holder, forMs) => {
       let taken = false
-      inTransaction(() => {
+      write(database, () => {
         taken = sync.claim(context, chatPkFor(accountPk(key), chatId), anchor, holder, forMs)
       })
       return taken
@@ -1100,7 +1079,7 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     keepTranscript: async (key, chatId, messageId, text, source) => {
       if (text.trim() === "") return
-      inTransaction(() =>
+      write(database, () =>
         transcripts.keepTranscript(context, chatPkFor(accountPk(key), chatId), messageId, text, source),
       )
     },
@@ -1125,7 +1104,7 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     keepAttachmentText: async (attachmentPk, entry) => {
       let kept = false
-      inTransaction(() => {
+      write(database, () => {
         kept = attachmentTexts.keepText(context, attachmentPk, entry)
       })
       return kept
@@ -1135,7 +1114,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       const chatKey = chatKeyOf(key, chatId)
       if (chatKey === undefined || files.length === 0) return 0
       let kept = 0
-      inTransaction(() => {
+      write(database, () => {
         kept = attachmentRows.keepDownloads(context, chatKey, messageId, files)
       })
       return kept
@@ -1219,7 +1198,7 @@ const storeOver = (context: StoreContext): MessageStore => {
         throw new CliError("validation_error", `the answer was not stored: ${batch} is not a batch of this account`)
       }
       let stored = 0
-      inTransaction(() => {
+      write(database, () => {
         stored = batches.saveAnswers(context, batch, answer)
       })
       return { chat, stored }
@@ -1229,7 +1208,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       const chatKey = chatKeyOf(key, chatId)
       if (chatKey === undefined) return 0
       let cleared = 0
-      inTransaction(() => {
+      write(database, () => {
         cleared = batches.clearAnswers(context, chatKey, model)
       })
       return cleared
@@ -1262,7 +1241,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
 
     saveVectors: async (model, dims, rows) => {
-      inTransaction(() => vectors.saveVectors(context, model, dims, rows))
+      write(database, () => vectors.saveVectors(context, model, dims, rows))
     },
 
     imagesToDescribe: async (key, chatId, window) => {
@@ -1274,7 +1253,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       const accountPk = findAccountPk(key)
       const chatKey = chatKeyOf(key, chatId)
       if (accountPk === undefined || chatKey === undefined) return
-      inTransaction(() => imageChunks.saveImageChunks(context, accountPk, chatKey, chunks, keep))
+      write(database, () => imageChunks.saveImageChunks(context, accountPk, chatKey, chunks, keep))
     },
 
     embeddedHashes: async (model, hashes) => imageChunks.embeddedHashes(context, model, hashes),
@@ -1327,7 +1306,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     savePictures: async (key, model, dims, pictures) => {
       const accountPk = findAccountPk(key)
       if (accountPk === undefined) return
-      inTransaction(() => {
+      write(database, () => {
         vectors.saveVectors(
           context,
           model,
@@ -1362,7 +1341,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       const chatKey = chatKeyOf(key, chatId)
       if (chatKey === undefined) return 0
       let cleared = 0
-      inTransaction(() => {
+      write(database, () => {
         cleared = vectors.clearVectors(context, chatKey, model)
       })
       return cleared
@@ -1543,21 +1522,13 @@ const storeOver = (context: StoreContext): MessageStore => {
           owner = { organization: Number(found.id) }
         }
       }
-      let decision: MentionDecision | undefined
-      inTransaction(() => {
-        decision = confirmMention(context, accountKey, id, owner, by)
-      })
-      return decision as MentionDecision
+      return write(database, () => confirmMention(context, accountKey, id, owner, by))
     },
 
     rejectMention: async (key, id, by) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) throw new CliError("not_found", `no mention ${id} in this account`)
-      let decision: MentionDecision | undefined
-      inTransaction(() => {
-        decision = rejectMention(context, accountKey, id, by)
-      })
-      return decision as MentionDecision
+      return write(database, () => rejectMention(context, accountKey, id, by))
     },
 
     rebuildMentions: async (options = {}) => rebuildMentions(database, { now: context.now(), ...options }),
@@ -1592,7 +1563,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined || messageIds.length === 0) return 0
       let changed = 0
-      inTransaction(() => {
+      write(database, () => {
         changed = messageWrites.markDeleted(context, accountKey, messageIds, chatId, among)
       })
       return changed
@@ -1601,14 +1572,14 @@ const storeOver = (context: StoreContext): MessageStore => {
     purge: async (key) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) return
-      inTransaction(() => accounts.purgeAccount(context, accountKey))
+      write(database, () => accounts.purgeAccount(context, accountKey))
     },
 
     markChatsLeft: async (key, present) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) return 0
       let marked = 0
-      inTransaction(() => {
+      write(database, () => {
         marked = chatQueries.markLeft(context, accountKey, present)
         writeState(accountKey, completeness.CHAT_LIST_KEY, String(present.length))
       })
@@ -1619,7 +1590,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) return { chats: 0, messages: 0 }
       let found = { pks: [] as number[], messages: 0 }
-      inTransaction(() => {
+      write(database, () => {
         found = chatQueries.leftChats(context, accountKey)
         if (clear) chatQueries.purgeChats(context, found.pks)
       })
@@ -1647,15 +1618,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
       if (accountKey === undefined || chatKey === undefined)
         throw new CliError("validation_error", "retention needs a stored chat and membership observations")
-      context.database.exec("BEGIN")
-      try {
-        const result = retentionQuery(context, accountKey, chatKey, chatId, options, evidence)
-        context.database.exec("COMMIT")
-        return result
-      } catch (error) {
-        context.database.exec("ROLLBACK")
-        throw error
-      }
+      return read(database, () => retentionQuery(context, accountKey, chatKey, chatId, options, evidence))
     },
     adminStatisticsQuery: async (execution, request) => adminStatisticsQuery(context, execution, request),
     rankQuery: async (execution, request) => rankQuery(context, execution, request),
@@ -1697,21 +1660,21 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     stemsState: async () => stems.stemsState(database),
 
-    fillStems: async ({ until } = {}) => stems.fillStems(database, { now: context.now, ...(until ? { until } : {}) }),
+    fillStems: async ({ until } = {}) => fillStems(database, { now: context.now, ...(until ? { until } : {}) }),
 
     stemmers: async () => stems.savedStemmers(database),
 
-    saveStemmers: async (stemmers) => inTransaction(() => stems.saveStoreStemmers(database, stemmers, context.now())),
+    saveStemmers: async (stemmers) => write(database, () => stems.saveStoreStemmers(database, stemmers, context.now())),
 
     accountGroups: async () => accountGroupsOf(database),
 
     profiles: async () => profilesOf(database),
 
     saveProfile: async (app, profile, key) =>
-      inTransaction(() => saveProfile(database, app, profile, key, context.now())),
+      write(database, () => saveProfile(database, app, profile, key, context.now())),
 
     saveAccountGroup: async (name, members) =>
-      inTransaction(() => {
+      write(database, () => {
         const groups = accountGroupsOf(database)
         if (members === undefined) delete groups[name]
         else groups[name] = members
@@ -1737,7 +1700,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
 
     savePeople: async (key, people) =>
-      inTransaction(() => {
+      write(database, () => {
         const accountKey = accountPk(key)
         for (const person of people) identityPk(accountKey, key.provider, person.id, person.name, person)
       }),
@@ -1755,7 +1718,7 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     updateCounterObservations: async (key, chatId, messageId, observations) => {
       let updated = 0
-      inTransaction(() => {
+      write(database, () => {
         const row = database
           .prepare(
             "SELECT m.id AS pk FROM messages m JOIN chats c ON c.id=m.chat_id JOIN accounts ac ON ac.id=m.account_id WHERE ac.provider=? AND ac.external_id=? AND c.external_id=? AND m.external_id=? AND m.deleted_at IS NULL",
@@ -1770,7 +1733,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
       if (chatKey === undefined) return false
       let saved = false
-      inTransaction(() => {
+      write(database, () => {
         saved = messageWrites.saveReactions(context, chatKey, messageId, reactions)
         const row = database
           .prepare("SELECT id AS pk FROM messages WHERE chat_id=? AND external_id=? AND deleted_at IS NULL")
@@ -1783,7 +1746,7 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     markRange: async (key, chatId, from, to) => {
       let merged: Range = { from, to }
-      inTransaction(() => {
+      write(database, () => {
         merged = ranges.markRange(context, chatPkFor(accountPk(key), chatId), from, to)
       })
       return merged
@@ -1820,35 +1783,23 @@ const storeOver = (context: StoreContext): MessageStore => {
     chatMetadata: async (key, chatId) => metadataQueries.metadata(context, key, chatId),
     saveChatMetadata: async (key, entry) => metadataQueries.saveMetadata(context, key, entry),
     replaceAutoTags: async (key, chatId, algorithm, matches) =>
-      inTransaction(() => metadataQueries.replaceAutoTags(context, key, chatId, algorithm, matches)),
+      write(database, () => metadataQueries.replaceAutoTags(context, key, chatId, algorithm, matches)),
     privateContact: async (key, person) => privatePeople.privateContact(context, key, person),
     setContactAlias: async (key, person, alias) => {
-      let result: { personId: Id; alias: string | null } | undefined
-      inTransaction(() => {
-        result = privatePeople.setAlias(context, key, person, alias)
-      })
-      return result as { personId: Id; alias: string | null }
+      return write(database, () => privatePeople.setAlias(context, key, person, alias))
     },
     addContactNote: async (key, person, text) => {
-      let added: PrivateContactNote | undefined
-      inTransaction(() => {
-        added = privatePeople.addNote(context, key, person, text)
-      })
-      return added as PrivateContactNote
+      return write(database, () => privatePeople.addNote(context, key, person, text))
     },
     contactNote: async (key, person, id) => privatePeople.note(context, key, person, id),
     editContactNote: async (key, person, id, text, revision) => {
-      let edited: PrivateContactNote | undefined
-      inTransaction(() => {
-        edited = privatePeople.editNote(context, key, person, id, text, revision)
-      })
-      return edited as PrivateContactNote
+      return write(database, () => privatePeople.editNote(context, key, person, id, text, revision))
     },
     removeContactNote: async (key, person, id) => privatePeople.removeNote(context, key, person, id),
 
     addTags: async (key, target, list) => {
       let added: string[] = []
-      inTransaction(() => {
+      write(database, () => {
         added = tagQueries.addTags(context, tagQueries.targetThing(context, key, target), list)
       })
       return added
@@ -1856,7 +1807,7 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     removeTags: async (key, target, list, source) => {
       let removed: string[] = []
-      inTransaction(() => {
+      write(database, () => {
         removed = tagQueries.removeTags(context, tagQueries.targetThing(context, key, target), list, source)
       })
       return removed
@@ -1864,14 +1815,10 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     tags: async (key, filter = {}) => tagQueries.tagsOf(context, key, filter),
 
-    recordSearch: async (run, { saved } = {}) => inTransaction(() => searchRecords.recordRun(context, run, saved)),
+    recordSearch: async (run, { saved } = {}) => write(database, () => searchRecords.recordRun(context, run, saved)),
 
     saveSearch: async (name, search, { replace = false } = {}) => {
-      let saved: StoredSearch | undefined
-      inTransaction(() => {
-        saved = searchRecords.saveSearch(context, name, search, replace)
-      })
-      return saved as StoredSearch
+      return write(database, () => searchRecords.saveSearch(context, name, search, replace))
     },
 
     storedSearch: async (reference) => searchRecords.findSearch(context, reference),
@@ -1881,16 +1828,12 @@ const storeOver = (context: StoreContext): MessageStore => {
     searchHistory: async (limit, offset) => searchRecords.searchHistory(context, limit, offset),
 
     deleteSearch: async (reference) => {
-      let deleted: StoredSearch | undefined
-      inTransaction(() => {
-        deleted = searchRecords.deleteSearch(context, reference)
-      })
-      return deleted as StoredSearch
+      return write(database, () => searchRecords.deleteSearch(context, reference))
     },
 
     clearSearchHistory: async () => {
       let cleared = 0
-      inTransaction(() => {
+      write(database, () => {
         cleared = searchRecords.clearHistory(context)
       })
       return cleared
@@ -2011,14 +1954,13 @@ export type {
 export { fillSearchIndex, resetSearchIndex, searchIndexState } from "./sqlite/search-index.js"
 export type { SearchCommand, SearchRecord, StoredSearch } from "./sqlite/searches.js"
 export {
-  fillStems,
-  resetStems,
   type StemsState,
   savedStemmers,
   stemmerCache,
   stemmersOrigin,
   stemsState,
 } from "./sqlite/stems.js"
+export { fillStems, resetStems } from "./sqlite/stems-fill.js"
 export type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
 export { inboxKey } from "./sqlite/tasks.js"
 export type { MatchPlace, ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"

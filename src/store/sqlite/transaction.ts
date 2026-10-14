@@ -1,0 +1,83 @@
+import type { Stemmer, Stemmers } from "../../search/stem.js"
+import type { CacheDatabase } from "../driver.js"
+import { drainInvolvementQueue } from "./involvement-queue.js"
+import { drainMentions } from "./mention-drain.js"
+import { drainStems, stemmerCache } from "./stems.js"
+
+type Connection = { depth: number; reading: boolean; stemmerFor: (stemmers: Stemmers) => Stemmer }
+
+const connections = new WeakMap<CacheDatabase, Connection>()
+
+const connectionOf = (database: CacheDatabase): Connection => {
+  let connection = connections.get(database)
+  if (!connection) {
+    connection = { depth: 0, reading: false, stemmerFor: stemmerCache() }
+    connections.set(database, connection)
+  }
+  return connection
+}
+
+/**
+ * One write transaction. The outermost takes the write lock at once (`BEGIN IMMEDIATE`): a deferred one that
+ * reads first fails with SQLITE_BUSY when another process writes in between, and tg, max, memo and zm share
+ * the file. A nested call is a savepoint. The outermost recomputes what the triggers queued (stems, mentions,
+ * involvements) before it commits. `beforeCommit` runs after that, so a check there can still roll it back.
+ */
+export const write = <T>(
+  database: CacheDatabase,
+  body: () => T,
+  { beforeCommit }: { beforeCommit?: () => void } = {},
+) => transact(database, body, true, beforeCommit)
+
+/**
+ * A write to tables that queue no derived work, in a loop that budgets its lock time or reports what it did: a fill,
+ * a backfill, a rebuild. It drains nothing, so it neither does nor hides another write's work; the queues wait for
+ * the next `write`.
+ */
+export const writeBatch = <T>(database: CacheDatabase, body: () => T): T => transact(database, body, false)
+
+const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, beforeCommit?: () => void): T => {
+  const connection = connectionOf(database)
+  if (connection.reading) throw new Error("a store write cannot run inside a read")
+  const outer = connection.depth === 0
+  const name = `w${connection.depth + 1}`
+  database.exec(outer ? "BEGIN IMMEDIATE" : `SAVEPOINT ${name}`)
+  connection.depth += 1
+  try {
+    const result = body()
+    if (outer && drain) {
+      drainStems(database, connection.stemmerFor)
+      drainMentions(database, Date.now())
+      drainInvolvementQueue(database)
+    }
+    beforeCommit?.()
+    database.exec(outer ? "COMMIT" : `RELEASE ${name}`)
+    return result
+  } catch (error) {
+    database.exec(outer ? "ROLLBACK" : `ROLLBACK TO ${name}; RELEASE ${name}`)
+    throw error
+  } finally {
+    connection.depth -= 1
+  }
+}
+
+/** Several queries that must see one state of the file. Never drains: that is the outer write's work, or nobody's. */
+export const read = <T>(database: CacheDatabase, body: () => T): T => {
+  const connection = connectionOf(database)
+  const outer = connection.depth === 0
+  const name = `r${connection.depth + 1}`
+  database.exec(`SAVEPOINT ${name}`)
+  connection.depth += 1
+  if (outer) connection.reading = true
+  try {
+    const result = body()
+    database.exec(`RELEASE ${name}`)
+    return result
+  } catch (error) {
+    database.exec(`ROLLBACK TO ${name}; RELEASE ${name}`)
+    throw error
+  } finally {
+    connection.depth -= 1
+    if (outer) connection.reading = false
+  }
+}

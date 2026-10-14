@@ -3,10 +3,10 @@ import { defineQuery, type Predicate, type QueryAst, validateQuery, walkQuery } 
 import { normalizeTag } from "../../domain/tags.js"
 import type { SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
-import { atomic } from "./atomic.js"
 import type { StoreContext } from "./open.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 import { canonicalTagNamed } from "./tags.js"
+import { write } from "./transaction.js"
 
 export interface CatalogActor {
   id?: string
@@ -183,7 +183,7 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
           modified: date(input.modifiedAt),
         }
       })
-      atomic(database, () => {
+      write(database, () => {
         const at = now()
         for (const { input, created, modified } of checked) {
           const before = database
@@ -254,7 +254,7 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
       const id = account(accountId)
       if (externalIds.length > 10000) throw new CliError("validation_error", "catalog scope exceeds 10000 entries")
       const current = [...new Set(externalIds.map((key) => field(key)))]
-      return atomic(
+      return write(
         database,
         () =>
           database

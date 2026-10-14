@@ -2,8 +2,8 @@ import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference } from "../../domain/meeting-reference.js"
 import type { AccountKey } from "../store.js"
-import { atomic } from "./atomic.js"
 import type { StoreContext } from "./open.js"
+import { write } from "./transaction.js"
 
 export interface MeetingProjectLink {
   id: string
@@ -83,7 +83,7 @@ export const meetingProjectsStoreOver = ({ database, now }: StoreContext): Meeti
         (typeof options.provenance !== "string" || options.provenance.length > 2000)
       )
         throw new CliError("validation_error", "meeting project provenance takes at most 2000 characters")
-      return atomic(database, () => {
+      return write(database, () => {
         const accountId = account(key)
         if (
           !database

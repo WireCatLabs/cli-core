@@ -131,7 +131,7 @@ export const QUEUE_CAP = 10_000
 
 /**
  * Recomputes the queued things inside the caller's transaction, so a write leaves the index current when it
- * commits. Every write transaction calls it last (`inTransaction`, `atomic`, `inBatch`); reads never do.
+ * commits. `write` in `transaction.ts` calls it on every outermost commit; reads never do.
  */
 export const drainInvolvementQueue = (database: CacheDatabase, cap = QUEUE_CAP): number => {
   const batch = database.prepare("SELECT indexable_type AS type, id FROM involvement_pending LIMIT 500")

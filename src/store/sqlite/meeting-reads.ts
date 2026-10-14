@@ -10,6 +10,7 @@ import type {
 import type { CacheDatabase } from "../driver.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
+import { read } from "./transaction.js"
 
 export type {
   MeetingContextReadCapabilities,
@@ -59,18 +60,6 @@ const ensureBytes = (bytes: unknown, budget: number): number => {
   if (!Number.isSafeInteger(size) || size < 0 || size > budget)
     throw new CliError("validation_error", "Meeting read exceeds the stored text byte budget")
   return size
-}
-/** The preflight and value reads share one snapshot; this read transaction never drains write queues. */
-export const meetingReadSnapshot = <T>(database: CacheDatabase, body: () => T): T => {
-  database.exec("BEGIN")
-  try {
-    const result = body()
-    database.exec("COMMIT")
-    return result
-  } catch (error) {
-    database.exec("ROLLBACK")
-    throw error
-  }
 }
 const parent = (database: CacheDatabase, input: MeetingReadScope, budget: number, load: boolean) => {
   const preflight = database
@@ -124,7 +113,7 @@ export const meetingReadsOver = ({
       input.before + input.after > 999
     )
       throw new CliError("validation_error", "context requires a cue position and 0–999 surrounding cues in total")
-    return meetingReadSnapshot(database, () => {
+    return read(database, () => {
       const m = parent(database, input, budget, true)
       const t = revision(database, input, budget - m.bytes, true)
       const columns = `id,position,${bytesOf(ROW_TEXT)} AS read_bytes`
@@ -166,7 +155,7 @@ export const meetingReadsOver = ({
   },
   async meetingMetadata(input) {
     const budget = check(input)
-    return meetingReadSnapshot(database, () => {
+    return read(database, () => {
       const result = parent(database, input, budget, true)
       input.signal?.throwIfAborted()
       return result.meeting as Meeting
@@ -175,7 +164,7 @@ export const meetingReadsOver = ({
   async transcriptMetadata(input) {
     const budget = check(input)
     positiveReadInteger(input.transcriptId, "transcriptId")
-    return meetingReadSnapshot(database, () => {
+    return read(database, () => {
       parent(database, input, budget, false)
       const result = revision(database, input, budget, true)
       input.signal?.throwIfAborted()
@@ -185,7 +174,7 @@ export const meetingReadsOver = ({
   async transcripts(input) {
     const budget = check(input)
     page(input.limit, input.afterId, "afterId")
-    return meetingReadSnapshot(database, () => {
+    return read(database, () => {
       parent(database, input, budget, false)
       const where =
         "meeting_id = ? AND id > ? AND deleted_at IS NULL" +
@@ -213,7 +202,7 @@ export const meetingReadsOver = ({
     const budget = check(input)
     positiveReadInteger(input.transcriptId, "transcriptId")
     page(input.limit, input.afterPosition, "afterPosition", true)
-    return meetingReadSnapshot(database, () => {
+    return read(database, () => {
       const m = parent(database, input, budget, true)
       input.signal?.throwIfAborted()
       const t = revision(database, input, budget - m.bytes, true)

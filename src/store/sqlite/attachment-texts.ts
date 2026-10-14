@@ -4,7 +4,7 @@ import type { CacheDatabase } from "../driver.js"
 import { normalize } from "../normalize.js"
 import type { StoreContext } from "./open.js"
 import type { ColumnMap, Where } from "./query-filter.js"
-import { inBatch } from "./search-index.js"
+import { write } from "./transaction.js"
 
 export type TextOrigin = "extracted" | "agent"
 
@@ -147,7 +147,7 @@ export const keepText = (
 export const resetAttachmentWords = (database: CacheDatabase): number => {
   const exists = database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'attachment_words'").get()
   if (!exists) return 0
-  return inBatch(database, () => {
+  return write(database, () => {
     // Transcripts kept before they were copied to the voice attachment.
     database
       .prepare(

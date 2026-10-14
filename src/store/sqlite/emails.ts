@@ -22,8 +22,8 @@ import { ensurePerson } from "./identities.js"
 import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
 import type { Orm, StoreContext } from "./open.js"
-import { inBatch } from "./search-index.js"
 import { stemmerCache } from "./stems.js"
+import { write } from "./transaction.js"
 import { dot } from "./vectors.js"
 
 type Row = Record<string, unknown>
@@ -708,7 +708,7 @@ export const mailStoreOver = (
 ): MailStore => ({
   rules: mailRulesOver(database),
   async saveThread(input) {
-    const id = inBatch(database, () => saveThread(database, orm, input))
+    const id = write(database, () => saveThread(database, orm, input))
     return threadDetails(database, id) as ThreadDetails
   },
   async threads(filter = {}) {
@@ -770,7 +770,7 @@ export const mailStoreOver = (
       }))
   },
   async setMailboxes(accountId, scanned, found, now) {
-    return inBatch(database, () => {
+    return write(database, () => {
       const boxes = new Map(scanned.map((box) => [box.externalId, mailboxPk(database, accountId, box, now)]))
       const lookup = database.prepare("SELECT id FROM emails WHERE account_id = ? AND external_id = ?")
       const leave = database.prepare(
@@ -794,7 +794,7 @@ export const mailStoreOver = (
     })
   },
   async setFlags(accountId, flags, now) {
-    return inBatch(database, () => {
+    return write(database, () => {
       const update = database.prepare(
         `UPDATE emails SET read = CASE WHEN ?1 IS NULL THEN read ELSE ?1 END,
            flagged = CASE WHEN ?2 IS NULL THEN flagged ELSE ?2 END, updated_at = ?3
@@ -808,7 +808,7 @@ export const mailStoreOver = (
     })
   },
   async markDeleted(accountId, externalIds, now) {
-    return inBatch(database, () => {
+    return write(database, () => {
       const mark = database.prepare(
         `UPDATE emails SET deleted_at = ?, body_text = NULL, body_html = NULL, snippet = NULL, updated_at = ?
            WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL

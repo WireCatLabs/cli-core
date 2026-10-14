@@ -1,19 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
 import { defineQuery, type QueryAst } from "@wirecat/cli-base/query"
-import {
-  findMentions,
-  MENTION_KINDS,
-  MENTION_VERSIONS,
-  type MentionKind,
-  normalizedValue,
-  siteOf,
-} from "../../domain/mentions.js"
-import { findNames, type KnownPerson, nameIndex } from "../../domain/person-names.js"
+import { MENTION_KINDS, type MentionKind, normalizedValue, siteOf } from "../../domain/mentions.js"
+import { findNames, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import { knownPeople, participants, SOURCE_TYPES, SOURCES, type SourceType, sourceOf, writer } from "./mention-drain.js"
 import type { StoreContext } from "./open.js"
 import { linkIdentityToPerson } from "./person-links.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
+import { writeBatch } from "./transaction.js"
 
 /** A stored mention of a message's text, with what `mentions list` and `show` need to point at it. */
 export interface StoredMention {
@@ -85,197 +80,8 @@ export interface MentionsRebuild {
   mentions: number
 }
 
-/** Mentions a store write finds before it commits: an older binary may have queued thousands. */
-export const DRAIN_ON_WRITE = 500
 const REBUILD_BATCH = 1000
 const REBUILT_AT = "mentionsRebuiltAt"
-const METHOD = "rules"
-
-type Decision = { status: unknown; target_type: unknown; target_id: unknown; author: unknown }
-
-/**
- * What a new mention starts as when nothing was decided where it was written: dismissed if its value was
- * dismissed anywhere, linked when the value already has an original — an identity a person or an organization owns for a phone
- * or an address, the stored document for a document id.
- */
-const originalOf = (database: CacheDatabase) => {
-  const dismissed = database.prepare(
-    "SELECT status, NULL AS target_type, NULL AS target_id, author FROM mentions " +
-      "WHERE kind = ? AND value = ? AND status = 'dismissed' LIMIT 1",
-  )
-  const identity = database.prepare(
-    "SELECT 'linked' AS status, 'identity' AS target_type, i.id AS target_id, 'rules' AS author FROM identities i " +
-      "WHERE i.provider = ? AND i.external_id = ? AND (EXISTS (SELECT 1 FROM identity_links l WHERE l.identity_id = i.id) " +
-      "OR EXISTS (SELECT 1 FROM organization_identities o WHERE o.identity_id = i.id))",
-  )
-  const document = database.prepare(
-    "SELECT 'linked' AS status, 'document' AS target_type, id AS target_id, 'rules' AS author FROM documents " +
-      "WHERE json_extract(front_matter, '$.fileId') = ? AND deleted_at IS NULL ORDER BY id LIMIT 1",
-  )
-  return (kind: MentionKind, value: string): Decision | undefined =>
-    (dismissed.get(kind, value) as Decision | undefined) ??
-    ((kind === "phone" || kind === "email"
-      ? identity.get(kind, value)
-      : kind === "document"
-        ? document.get(value)
-        : undefined) as Decision | undefined)
-}
-
-/**
- * People whose names are looked for: not the owner, and only people met in a messenger, a meeting or a confirmed
- * phone. Thousands of persons can exist only as an e-mail sender, and their names look mostly like companies and
- * mailing lists. The owner's own name for a contact is that person's name too.
- */
-const knownPeople = (database: CacheDatabase): KnownPerson[] => {
-  const rows = database
-    .prepare(
-      "WITH met AS (SELECT DISTINCT l.person_id AS id FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
-        "JOIN persons p ON p.id = l.person_id WHERE p.owner = 0 AND i.provider <> 'email' AND coalesce(i.bot, 0) = 0) " +
-        "SELECT p.id, p.name FROM persons p JOIN met ON met.id = p.id WHERE p.name IS NOT NULL " +
-        "UNION SELECT l.person_id, i.name FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
-        "JOIN met ON met.id = l.person_id WHERE i.name IS NOT NULL AND i.provider <> 'email' " +
-        "UNION SELECT a.aliasable_id, a.name FROM aliases a JOIN persons p ON p.id = a.aliasable_id " +
-        "WHERE a.aliasable_type = 'person' AND p.owner = 0 " +
-        "UNION SELECT l.person_id, a.name FROM aliases a JOIN identity_links l ON l.identity_id = a.aliasable_id " +
-        "JOIN met ON met.id = l.person_id WHERE a.aliasable_type = 'identity'",
-    )
-    .all()
-  const names = new Map<number, string[]>()
-  for (const row of rows) names.set(Number(row.id), [...(names.get(Number(row.id)) ?? []), String(row.name)])
-  return [...names].map(([id, all]) => ({ id, names: all }))
-}
-
-/** Who wrote in a chat, as people: a name alone is linked by rule only to someone the chat already holds. */
-const participants = (database: CacheDatabase) => {
-  const query = database.prepare(
-    "SELECT DISTINCT l.person_id FROM messages m JOIN identity_links l ON l.identity_id = m.sender_identity_id " +
-      "WHERE m.chat_id = ?",
-  )
-  const cached = new Map<number, Set<number>>()
-  return (chat: number): Set<number> => {
-    const known = cached.get(chat) ?? new Set(query.all(chat).map((row) => Number(row.person_id)))
-    cached.set(chat, known)
-    return known
-  }
-}
-
-/** Where mentions are read from: a message's own text, and the text of its files and voice notes. */
-const SOURCES = {
-  message: {
-    count: "SELECT count(*) AS n FROM messages WHERE deleted_at IS NULL",
-    page: "SELECT id, text, 'text' AS field, chat_id FROM messages WHERE id > ? AND deleted_at IS NULL ORDER BY id LIMIT ?",
-    one: "SELECT text, 'text' AS field, chat_id FROM messages WHERE id = ? AND deleted_at IS NULL",
-  },
-  attachment: {
-    count:
-      "SELECT count(*) AS n FROM attachments a JOIN messages m ON m.id = a.attachable_id " +
-      "WHERE a.attachable_type = 'message' AND a.text IS NOT NULL AND a.text <> '' AND m.deleted_at IS NULL",
-    page:
-      "SELECT a.id, a.text, CASE WHEN coalesce(a.extractor, '') LIKE 'speech:%' THEN 'transcript' ELSE 'file_text' END AS field, " +
-      "m.chat_id FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id > ? AND a.attachable_type = 'message' " +
-      "AND a.text IS NOT NULL AND a.text <> '' AND m.deleted_at IS NULL ORDER BY a.id LIMIT ?",
-    one:
-      "SELECT a.text, CASE WHEN coalesce(a.extractor, '') LIKE 'speech:%' THEN 'transcript' ELSE 'file_text' END AS field, " +
-      "m.chat_id FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id = ? AND a.attachable_type = 'message' " +
-      "AND a.text IS NOT NULL AND m.deleted_at IS NULL",
-  },
-} as const
-type SourceType = keyof typeof SOURCES
-const SOURCE_TYPES = Object.keys(SOURCES) as SourceType[]
-
-type Source = { text: string; field: string; chat: number }
-
-const writer = (database: CacheDatabase, now: number, kinds: readonly MentionKind[] | undefined) => {
-  // Only the kinds this build finds: a later build's kinds stay when this one reads the text again.
-  const scope = kinds ?? MENTION_KINDS
-  const only = ` AND kind IN (${scope.map(() => "?").join(", ")})`
-  const decided = database.prepare(
-    "SELECT kind, value, status, target_type, target_id, author FROM mentions " +
-      `WHERE source_type = ? AND source_id = ? AND status <> 'found' AND author IS NOT '${METHOD}'${only}`,
-  )
-  const remove = database.prepare(`DELETE FROM mentions WHERE source_type = ? AND source_id = ?${only}`)
-  const insert = database.prepare(
-    "INSERT OR IGNORE INTO mentions (kind, source_type, source_id, source_field, start_offset, end_offset, value, " +
-      "domain, method, version, confidence, status, target_type, target_id, author, created_at, updated_at) " +
-      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-  )
-  const original = originalOf(database)
-  const names = !kinds || kinds.includes("person-name") ? nameIndex(knownPeople(database), createStemmer()) : undefined
-  const chatPeople = participants(database)
-  const found = (source: Source) => [
-    ...findMentions(source.text).map((one) => ({ ...one, decision: undefined as Decision | undefined })),
-    ...(names
-      ? findNames(source.text, names).map(({ people, ...one }) => {
-          // One person can be a row per messenger until merged, so a name often fits several: the one who wrote
-          // in this chat settles it, if only one did.
-          const here = people.filter((one) => chatPeople(source.chat).has(one))
-          const [person] = here
-          const settled = here.length === 1 && person !== undefined
-          return {
-            ...one,
-            kind: "person-name" as const,
-            domain: null,
-            decision: settled
-              ? { status: "linked", target_type: "person", target_id: person, author: METHOD }
-              : { status: "found", target_type: null, target_id: null, author: null },
-          }
-        })
-      : []),
-  ]
-  return (type: SourceType, pk: number, source: Source | null): number => {
-    const kept = new Map(decided.all(type, pk, ...scope).map((row) => [`${row.kind}\u0000${row.value}`, row] as const))
-    remove.run(type, pk, ...scope)
-    if (source === null) return 0
-    let written = 0
-    for (const one of found(source)) {
-      if (kinds && !kinds.includes(one.kind)) continue
-      const decision = kept.get(`${one.kind}\u0000${one.value}`) ?? one.decision ?? original(one.kind, one.value)
-      written += Number(
-        insert.run(
-          one.kind,
-          type,
-          pk,
-          source.field,
-          one.start,
-          one.end,
-          one.value,
-          one.domain,
-          METHOD,
-          MENTION_VERSIONS[one.kind],
-          one.confidence,
-          decision ? String(decision.status) : "found",
-          decision?.target_type == null ? null : String(decision.target_type),
-          decision?.target_id == null ? null : Number(decision.target_id),
-          decision?.author == null ? null : String(decision.author),
-          now,
-          now,
-        ).changes,
-      )
-    }
-    return written
-  }
-}
-
-const sourceOf = (row: Record<string, unknown> | undefined): Source | null =>
-  row ? { text: String(row.text), field: String(row.field), chat: Number(row.chat_id) } : null
-
-/** Finds the mentions of the texts a store write queued, inside that write's transaction. */
-export const drainMentions = (database: CacheDatabase, now: number, limit = DRAIN_ON_WRITE): number => {
-  const queued = database
-    .prepare("SELECT source_type, source_id FROM mention_pending ORDER BY source_type, source_id LIMIT ?")
-    .all(limit)
-    .map((row) => ({ type: String(row.source_type), pk: Number(row.source_id) }))
-  if (queued.length === 0) return 0
-  const write = writer(database, now, undefined)
-  const read = Object.fromEntries(SOURCE_TYPES.map((type) => [type, database.prepare(SOURCES[type].one)]))
-  const dequeue = database.prepare("DELETE FROM mention_pending WHERE source_type = ? AND source_id = ?")
-  for (const { type, pk } of queued) {
-    const known = SOURCE_TYPES.find((one) => one === type)
-    if (known) write(known, pk, sourceOf(read[known]?.get(pk)))
-    dequeue.run(type, pk)
-  }
-  return queued.length
-}
 
 /**
  * Finds the mentions of every stored message and attachment text again, in short write transactions. Decisions
@@ -299,19 +105,14 @@ export const rebuildMentions = (
     for (;;) {
       const rows = batch.all(after, REBUILD_BATCH)
       if (rows.length === 0) break
-      database.exec("BEGIN IMMEDIATE")
-      try {
-        const write = writer(database, now, kinds)
+      writeBatch(database, () => {
+        const found = writer(database, now, kinds)
         const dequeue = database.prepare("DELETE FROM mention_pending WHERE source_type = ? AND source_id = ?")
         for (const row of rows) {
-          mentions += write(type, Number(row.id), sourceOf(row))
+          mentions += found(type, Number(row.id), sourceOf(row))
           if (!kinds) dequeue.run(type, Number(row.id))
         }
-        database.exec("COMMIT")
-      } catch (error) {
-        database.exec("ROLLBACK")
-        throw error
-      }
+      })
       read[type] += rows.length
       after = Number(rows.at(-1)?.id)
       onBatch?.(read.message + read.attachment, total)
