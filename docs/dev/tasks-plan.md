@@ -120,12 +120,11 @@ Stems and the normalized text are written to two new FTS5 tables, `task_words` a
 
 ### 2. Certain matches — attach without scoring
 
-1. The new message **replies to** a message already linked to an open task (`reply_to`, the messenger's own
-   thread link).
-2. The **same rule on the same message** — a unique index on (source, rule).
-3. The **same normalized title for the same person** on an open task.
+Only one: the **same rule on the same message** — a unique index on (source, rule). Nothing new is created.
 
-The message is linked to that task, nothing new is created, and the answer says which task and why.
+A reply and the same title were certain in the first draft; the test set (§ Test set) found them wrong 6 times
+in 11 — a reply that adds a new request, another person's "+1", the same title for a different job. A reply is
+now a weighted field (§ 4), and the same title is just a high text score.
 
 ### 3. Candidates — a union of cheap lookups
 
@@ -155,25 +154,32 @@ Each level carries a weight `log2(m / u)`: `m` how often true duplicates show th
 tasks do. A level duplicates usually share pushes the sum up, one they rarely share pushes it down. Starting
 weights, set by hand and tuned on the test set (§ Test set) before they are trusted:
 
-| Level | Weight |
-|---|---|
-| Text ≥ 0.6 / 0.3–0.6 / < 0.3 | +4 / +2 / −2 |
-| Person same / different / unknown | +3 / −3 / 0 |
-| Amount equal / different / missing | +3 / −4 / 0 |
-| Category same / different | +1 / −1 |
-| Due ≤ 2 days / more / missing | +1 / −1 / 0 |
-| Reply chain | +6 |
-| Time ≤ 3 days / > 14 days | +1 / −1 |
+| Level | First draft | After the test set |
+|---|---|---|
+| Text ≥ 0.6 / 0.3–0.6 / < 0.3 | +4 / +2 / −2 | +5 / +5 / −2 |
+| Person same / different / unknown | +3 / −3 / 0 | +1 / −3 / 0 |
+| Amount equal / different / missing | +3 / −4 / 0 | +6 / −4 / 0 |
+| Category same / different | +1 / −1 | +1 / −1 |
+| Due ≤ 2 days / more / missing | +1 / −1 / 0 | +4 / −1 / 0 |
+| Reply chain | +6 | +6 |
+| Time ≤ 3 / 4–14 / > 14 days | +1 / 0 / −1 | +2 / −2 / −3 |
 
-Bands: **≥ 8 same, 3–7 maybe, < 3 different.** Weights and bands live in one module with the reason for each
-number; nothing else hard-codes them.
+Levels no duplicate in the set showed (a different person, amount or category) would count to −5 or −6 from zero
+observations; they keep the first draft's values.
+
+Bands: **≥ 10 likely, 5–9 maybe, < 5 different.** On the set (cli-testing#60) "maybe or likely" finds 90% of
+duplicates at 58% precision and refuses 21% of new tasks; "likely" alone is 85% precise, 43% recall. **No
+threshold gives a band that merges safely**: the zero-wrong-merge point is ≥ 16 and catches 4%. The look-alikes
+that stay — a gift for mum or for dad, the same amount, two days apart — differ in the meaning of one word, which
+no field here sees. So "likely" only orders the list; nothing merges on a score. Weights and bands live in one
+module with the reason for each number; nothing else hard-codes them.
 
 ### 6. Decide
 
 | Band | Created by an agent | Created by a rule |
 |---|---|---|
-| Certain (§ 2) | linked to the task, nothing new | same |
-| Same | listed first; the agent must choose (below) | to the review list — no score merges on its own yet |
+| Certain (§ 2) | — | nothing new |
+| Likely | listed first; the agent must choose (below) | to the review list |
 | Maybe | `tasks add` refuses and lists up to 5 candidates with score and reasons ("same person, same amount, 2 of 5 stems shared"); the agent repeats with `--attach <task>` or `--new` | to the review list |
 | Different | created | created |
 
@@ -191,8 +197,8 @@ number; nothing else hard-codes them.
 
 Every merge, rejection, `--attach` and `--new` after a candidate list is a labelled pair. With enough of them,
 `m` and `u` per level are recounted from the pairs — the Splink estimate by counting, no training step — and
-the "same" band may start merging on its own, rule-created pairs first. Until the owner says so, only § 2 merges
-without a person.
+the bands move. A score never merges on its own: the test set shows the fields cannot tell some look-alikes
+apart. If real answers show "likely" pairs are almost always accepted, merging them is the owner's call.
 
 ## Rules on `sync`
 
@@ -208,12 +214,18 @@ English), pairs that look alike and are not (same person, other job; same words,
 in one chat. It reports wrong merges and missed duplicates per band, and the weights move until wrong merges in
 "same" are zero. A run on the owner's store reports totals only there; per-pair rows go to cli-private.
 
+Measured: [cli-testing#60](https://github.com/WireCatLabs/cli-testing/pull/60),
+`performance/tasks/duplicates/` — 251 synthetic Russian/English tasks, 80 duplicate pairs, real FTS5 `bm25()`,
+cli-core 0.277.0's stemmer; weights tuned on one half, tested on the other. Limits: the same author wrote the data
+and the scorer; duplicates across languages are weak (2 of 5 scored "different"); no real data yet. It also
+found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`), and search has no stop words.
+
 ## Build order
 
 1. **Test set** in cli-testing, with the scoring module stubbed to the starting weights.
 2. **Fields:** category, labels, keys per type, `claimed_by` / `claimed_until`, relation kinds `duplicate-of`
    and `discovered-from` — one migration (reserve its number in COORDINATION.md).
-3. **`task_words` / `task_stems`** and the normalizer + signature extraction.
+3. **`task_words` / `task_stems`**, the normalizer + signature extraction, digit groups joined, a stop-word list.
 4. **Scoring module** (candidates, comparison, weights, bands), tuned on the test set.
 5. **`tasks add` check** (`--attach`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`.
 6. **`tasks claim` / `release`**, `agenda --category --label --claimed`.
