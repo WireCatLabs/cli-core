@@ -69,6 +69,8 @@ const ACCOUNT_METHODS = [
   "documentLinkMessages",
   "mentions",
   "mention",
+  "confirmMention",
+  "rejectMention",
   "changes",
   "messagesWindow",
   "around",

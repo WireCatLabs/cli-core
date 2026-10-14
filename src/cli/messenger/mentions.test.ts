@@ -37,7 +37,7 @@ const message = (id: string, text: string, sent: string): Message => ({
   reactions: null,
 })
 
-const setup = async () => {
+const setup = async (extra: Record<string, string> = {}) => {
   const root = mkdtempSync(join(tmpdir(), "mentions-cli-"))
   const env = {
     ...process.env,
@@ -46,6 +46,7 @@ const setup = async () => {
     CHAT_CONFIG_DIR: join(root, "config"),
     MESSAGING_STORE: join(root, "m.db"),
     NO_COLOR: "1",
+    ...extra,
   }
   rememberAccount(app, "default", "500", env)
   const store = await openStore({ path: env.MESSAGING_STORE })
@@ -109,5 +110,21 @@ describe("mentions", () => {
     const missing = await chat("mentions", "show", "999", "--json")
     expect(missing.code).not.toBe(0)
     expect(missing.stderr + missing.stdout).toContain("no mention 999")
+  })
+
+  it("records who decided: the agent whose terminal runs it, or the owner with --as-owner", async () => {
+    const chat = await setup({ AI_AGENT: "claude-code_2-1-296_agent" })
+    const [link] = JSON.parse((await chat("mentions", "list", "kind:url", "--json")).stdout).items
+    const [document] = JSON.parse((await chat("mentions", "list", "kind:document", "--json")).stdout).items
+
+    const rejected = await chat("mentions", "reject", String(link.id), "--json")
+    expect(rejected.code, rejected.stderr).toBe(0)
+    expect(JSON.parse(rejected.stdout)).toMatchObject({ status: "dismissed", mentions: 1 })
+    const shown = JSON.parse((await chat("mentions", "list", "status:dismissed", "--json")).stdout)
+    expect(shown.items).toMatchObject([{ author: "claude-code" }])
+
+    const unstored = await chat("mentions", "confirm", String(document.id), "--as-owner", "--json")
+    expect(unstored.code).not.toBe(0)
+    expect(unstored.stderr).toContain("not in the store yet")
   })
 })

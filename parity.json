@@ -88,6 +88,9 @@
     "--as-file": {
       "meaning": "send every --file as a plain file to download, a video included"
     },
+    "--as-owner": {
+      "meaning": "record a decision as the owner's although an agent's terminal runs the tool"
+    },
     "--as-reply": {
       "meaning": "send as a reply to the matched message"
     },
@@ -2572,6 +2575,22 @@
         "tg": "mentions (docs/dev/mentions-plan.md)"
       }
     },
+    "mentions confirm": {
+      "in": [],
+      "planned": {
+        "max": "mentions (docs/dev/mentions-plan.md)",
+        "tg": "mentions (docs/dev/mentions-plan.md)"
+      },
+      "options": {
+        "--as-owner": {
+          "in": [],
+          "planned": {
+            "max": "mentions (docs/dev/mentions-plan.md)",
+            "tg": "mentions (docs/dev/mentions-plan.md)"
+          }
+        }
+      }
+    },
     "mentions list": {
       "in": [],
       "planned": {
@@ -2600,6 +2619,22 @@
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
+      }
+    },
+    "mentions reject": {
+      "in": [],
+      "planned": {
+        "max": "mentions (docs/dev/mentions-plan.md)",
+        "tg": "mentions (docs/dev/mentions-plan.md)"
+      },
+      "options": {
+        "--as-owner": {
+          "in": [],
+          "planned": {
+            "max": "mentions (docs/dev/mentions-plan.md)",
+            "tg": "mentions (docs/dev/mentions-plan.md)"
+          }
+        }
       }
     },
     "mentions show": {

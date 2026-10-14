@@ -700,6 +700,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--approval` |  | who joins by it asks first, and an admin lets them in |  | `chats link create` (tg-only), `chats link update` (tg-only) |
 | `--as` | `<state>` | how a task is closed: done, or dismissed — it needs no answer |  | `tasks close` |
 | `--as-file` |  | send every --file as a plain file to download, a video included |  | `bot messages send`, `messages send` |
+| `--as-owner` |  | record a decision as the owner's although an agent's terminal runs the tool |  | `mentions confirm` (planned), `mentions reject` (planned) |
 | `--as-reply` |  | send as a reply to the matched message |  | `replies edit` |
 | `--at` | `<HH:MM>` | every day at this local time |  | `schedule agent`, `schedule command` |
 | `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m |  | `messages send` |

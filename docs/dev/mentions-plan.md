@@ -196,6 +196,12 @@ final when the match is exact — the same number in the person's contact card o
 an agent's link of a name or a place waits for the owner, as its facts do. The owner's is final. `mentions show`
 offers candidates: known people whose name matches the stem, the identity whose `phone_hmac` equals the mention's.
 
+Who decided is the author rule memo uses (`authorOf`, `src/cli/author.ts`): the agent named by `AI_AGENT` or
+`CLAUDECODE`, else the owner; `--as-owner` records the owner. A value that already has an original when it is
+written — an identity with an owner, the stored document — starts as `linked` with author `rules`; a value
+dismissed anywhere starts as `dismissed`. A link (`url`) is only rejected for now: there is nothing to link it to
+until 1d resolves links to stored documents and chats.
+
 ## Cost
 
 Rules run where stems already run. Expected (not measured): phone and URL search are linear in text length;
@@ -205,9 +211,7 @@ an index lookup.
 
 ## Phases
 
-1. **1a** — `mentions` (migration 7); `email`, `url` with `domain`, `document`, `phone` in message text;
-   `mentions list|show`; filled as messages are written and by `mentions rebuild`.
-   **1b** — `mentions confirm|reject`; `phone` identities, made when a number gets an owner.
+1. **1a, 1b — built** (0.264.0 and this release): `mentions list|show|rebuild|confirm|reject`, message text.
    **1c** — organizations own identities (its own migration).
    **1d** — fields `phone:`, `email:`, `url:`, `domain:` (the query parser lives in cli-base); `links domains list`.
    **1e** — the other texts: transcripts, file texts, notes, documents, mail.

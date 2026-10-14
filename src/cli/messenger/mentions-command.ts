@@ -2,6 +2,8 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
+import { authorOf } from "../author.js"
+import { environmentOf } from "../context.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList, queryHelp } from "../list-query.js"
 import { positiveCount, window } from "../paging.js"
@@ -59,6 +61,33 @@ export const mentionsCommand = (messenger: Messenger): Command => {
           `${line(found)}\n…${found.before}[${found.written}]${found.after}…\n` +
           `same ${found.kind} in ${found.sameValue} other place${found.sameValue === 1 ? "" : "s"}\n`,
       )
+    })
+
+  annotate(mentions.command("confirm"), {
+    mutates: true,
+    local: true,
+    examples: [`${tool} mentions confirm 12 person:7`, `${tool} mentions confirm 15`],
+  })
+    .description("say what a mention is, everywhere its value is written: a phone's owner, the stored document")
+    .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
+    .argument("[person]", "person:<uid> who owns the phone or the address; a document needs none")
+    .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
+    .action(async function (this: Command, id: number, person: string | undefined) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, tool, "mentions.confirm")
+      const by = authorOf(environmentOf(this).env ?? process.env, this.opts<{ asOwner?: boolean }>().asOwner)
+      context.renderer.result(await context.withServices((services) => services.mentions.confirm(id, person, by)))
+    })
+
+  annotate(mentions.command("reject"), { mutates: true, local: true, examples: [`${tool} mentions reject 12`] })
+    .description("not a real mention, or not worth keeping: dismiss its value everywhere, and on later syncs")
+    .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
+    .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
+    .action(async function (this: Command, id: number) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, tool, "mentions.reject")
+      const by = authorOf(environmentOf(this).env ?? process.env, this.opts<{ asOwner?: boolean }>().asOwner)
+      context.renderer.result(await context.withServices((services) => services.mentions.reject(id, by)))
     })
 
   annotate(mentions.command("rebuild"), { mutates: true, local: true, examples: [`${tool} mentions rebuild`] })
