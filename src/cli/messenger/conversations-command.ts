@@ -5,7 +5,7 @@ import { openAnalysis, providerIdentity } from "../../analysis/provider.js"
 import { runAnalysis } from "../../analysis/runner.js"
 import { isLocal } from "../../embeddings/remote.js"
 import { renderMessages } from "../../render/messages.js"
-import { BATCH_SIZE } from "../../services/conversations.js"
+import { BATCH_SIZE, CONVERSATION_QUERY, type ConversationItem } from "../../services/conversations.js"
 import {
   type ChatReadiness,
   type EmbedStatus,
@@ -20,6 +20,8 @@ import { momentOf } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
 import { embeddingChoice, type ModelOptions } from "../embedding-choice.js"
+import { renderAnswer } from "../envelope.js"
+import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, renderList } from "../paging.js"
 import { nextStep, rootOf, runnable, stepLine } from "../steps.js"
 import { answerOf as askOwner } from "./ask.js"
@@ -146,27 +148,24 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     } else context.renderer.result(built)
   })
 
-  conversations
-    .command("list")
-    .description("a chat's conversations, the newest first: when, how many messages, how many people")
-    .requiredOption("--chat <chat>", messenger.chatArgument)
-    .option("--since-time <time>", "only those that started at this ISO 8601 time, or 30m / 2h / 1d ago, or later")
+  withQuery(
+    conversations
+      .command("list")
+      .description("a chat's conversations, the newest first: when, how many messages, how many people")
+      .argument("<chat>", messenger.chatArgument),
+    CONVERSATION_QUERY,
+  )
     .option("--limit <n>", "how many", positiveCount("--limit"))
-    .action(async function (this: Command) {
-      const { chat, sinceTime: since } = this.opts<{ chat: string; sinceTime?: string }>()
+    .action(async function (this: Command, chat: string, words: string[]) {
       const context = messengerContext(this, messenger)
-      const { limit } = context.settings
-      const page = await context.withServices((services) =>
-        services.conversations.list(chat, {
-          limit,
-          ...(since === undefined ? {} : { since: new Date(momentOf(since, "--since-time")).toISOString() }),
-        }),
+      const query = listQuery(typedQuery(words), CONVERSATION_QUERY, "conversations list")
+      const found = await context.withServices((services) =>
+        services.conversations.list(chat, { ...pageOf(context.settings), ...(query ? { query } : {}) }),
       )
-      if (context.format === "pretty") {
-        context.streams.data(page.items.map((one) => `${line(one)}\n`).join(""))
-        if (page.items.length === 0) context.renderer.note("no conversations in that window")
-      } else if (context.format === "jsonl") context.renderer.stream(page.items)
-      else context.renderer.result({ items: page.items, limit, hasMore: page.hasMore })
+      renderAnswer(this, context, pagedList("conversations list", context.settings, found), () =>
+        found.items.map((one) => `${itemLine(one)}\n`).join(""),
+      )
+      if (found.items.length === 0 && context.format === "pretty") context.renderer.note("no conversations match")
     })
 
   conversations
@@ -709,6 +708,10 @@ export const linksCommand = (messenger: Messenger): Command =>
 const line = (one: ConversationSummary) =>
   `${one.id}  ${one.firstAt.slice(0, 16).replace("T", " ")}–${one.lastAt.slice(11, 16)}  ` +
   `${one.messageCount} messages · ${one.senders} people · from message ${one.firstMessageId}`
+
+const itemLine = (one: ConversationItem) =>
+  `${one.id}  ${one.started_at.slice(0, 16).replace("T", " ")}–${one.ended_at.slice(11, 16)}  ` +
+  `${one.messages_count} messages · ${one.senders_count} people · from ${one.first_message}`
 
 const hitLine = ({ summary, chunk, score, stale, locator }: FoundConversation) =>
   `${score === null ? "  —  " : score.toFixed(3)}  ${line(summary)}  ` +

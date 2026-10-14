@@ -5,6 +5,7 @@ import type { ConversationBuild, ConversationSummary, StoredLink } from "../stor
 import { and, asc, desc, eq, isNull, type SQL, sql } from "./drizzle/core.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
+import type { ColumnMap, Where } from "./query-filter.js"
 import { selectMessages, toMessages } from "./reads.js"
 import {
   accounts,
@@ -428,23 +429,40 @@ const toSummary = (row: {
   algorithmVersion: row.algorithmVersion,
 })
 
-/** Newest first. `after` and `before` bound when a conversation started. */
+/** The SQL a list query compiled to, with its values bound, for a Drizzle `where`. */
+const bound = ({ sql: text, params }: Where): SQL =>
+  sql.join(
+    text.split("?").map((part, at) => (at < params.length ? sql`${sql.raw(part)}${params[at]}` : sql.raw(part))),
+    sql``,
+  )
+
+/** A list query's columns: the conversation's own, and how many people wrote in it. */
+export const CONVERSATION_COLUMNS = {
+  id: { type: "kw", sql: "CAST(conversations.id AS TEXT)" },
+  started_at: { type: "time", sql: "conversations.first_at" },
+  ended_at: { type: "time", sql: "conversations.last_at" },
+  messages_count: { type: "num", sql: "conversations.message_count" },
+  senders_count: {
+    type: "num",
+    sql:
+      "(SELECT count(DISTINCT coalesce(m.sender_chat_external_id, m.sender_identity_id)) FROM conversation_messages cm " +
+      "JOIN messages m ON m.id = cm.message_id WHERE cm.conversation_id = conversations.id)",
+  },
+  built_at: { type: "time", sql: "conversations.built_at" },
+  rules_version: { type: "num", sql: "conversations.algorithm_version" },
+} as const satisfies ColumnMap
+
+/** Newest first. */
 export const conversationPage = (
   context: StoreContext,
   chatKey: number,
-  { limit, after, before }: { limit: number; after?: number; before?: number },
+  { limit, offset = 0, where }: { limit: number; offset?: number; where?: Where },
 ): { items: ConversationSummary[]; hasMore: boolean } => {
   const rows = summaries(context)
-    .where(
-      and(
-        eq(conversations.chatId, chatKey),
-        isCurrent,
-        after === undefined ? undefined : sql`${conversations.firstAt} >= ${after}`,
-        before === undefined ? undefined : sql`${conversations.firstAt} < ${before}`,
-      ),
-    )
+    .where(and(eq(conversations.chatId, chatKey), isCurrent, where === undefined ? undefined : bound(where)))
     .orderBy(desc(conversations.firstAt), desc(conversations.id))
     .limit(limit + 1)
+    .offset(offset)
     .all()
   return { items: rows.slice(0, limit).map(toSummary), hasMore: rows.length > limit }
 }

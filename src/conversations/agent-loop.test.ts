@@ -76,7 +76,7 @@ describe("the agent loop, end to end", () => {
     await conversations.build("9")
 
     const page = await conversations.list("9", { limit: 1000 })
-    expect(page.hasMore).toBe(false)
+    expect(page.has_more).toBe(false)
     const built = await Promise.all(
       page.items.map(async ({ id }) => (await conversations.show({ id })).messages.map((one) => one.id).join(",")),
     )

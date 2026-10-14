@@ -120,6 +120,17 @@ const samples: Record<EntityName, unknown> = {
     updated_at: at,
   },
   reference: "note:42",
+  conversation: {
+    id: "1",
+    chat: "chat:chat/500/7",
+    first_message: "msg:chat/500/7/101",
+    started_at: at,
+    ended_at: at,
+    messages_count: 3,
+    senders_count: 2,
+    built_at: at,
+    rules_version: 1,
+  },
   tagging: {
     tag: "work",
     type: "chat",

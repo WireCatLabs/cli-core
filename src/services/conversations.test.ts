@@ -61,9 +61,9 @@ describe("the conversations service", () => {
     expect(await conversations.build("7")).toMatchObject({ chat: "7", messages: 5, links: 3, conversations: 2 })
 
     const { items } = await conversations.list("7", { limit: 10 })
-    expect(items.map(({ firstMessageId, messageCount }) => [firstMessageId, messageCount])).toEqual([
-      ["3", 2],
-      ["1", 3],
+    expect(items.map(({ first_message, messages_count }) => [first_message, messages_count])).toEqual([
+      ["msg:test/500/7/3", 2],
+      ["msg:test/500/7/1", 3],
     ])
     const byId = await conversations.show({ id: items[1]?.id as string })
     expect(byId.messages.map(({ id }) => id)).toEqual(["1", "2", "5"])

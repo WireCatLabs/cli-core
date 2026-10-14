@@ -1,8 +1,21 @@
 import { CliError } from "@wirecat/cli-base"
+import { type QueryAst, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
+import type * as v from "valibot"
 import { cutChunks } from "../conversations/chunks.js"
 import { type LinkInput, linkMessages, RULES_VERSION } from "../conversations/link.js"
-import type { Id, Message, Page } from "../domain/models.js"
-import type { AgentAnswer, ConversationSummary, LinkBatch, StoredLink } from "../store/store.js"
+import { formatLocator } from "../domain/locator.js"
+import type { Id, Message } from "../domain/models.js"
+import { formatReference } from "../domain/references.js"
+import { conversation } from "../entities/conversation.js"
+import {
+  type AccountKey,
+  type AgentAnswer,
+  CONVERSATION_COLUMNS,
+  type ConversationSummary,
+  type LinkBatch,
+  queryFilter,
+  type StoredLink,
+} from "../store/store.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
 import { chatIdIn } from "./messages.js"
 
@@ -30,13 +43,39 @@ export interface MessageLinks {
   chain: Id[]
 }
 
+export type ConversationItem = v.InferOutput<typeof conversation>
+
+export const CONVERSATION_QUERY = {
+  entity: "conversation",
+  backend: "sql",
+  fields: queryFieldsOf(conversation, {
+    exclude: ["chat", "first_message"],
+    examples: { id: "id:12", messages_count: "messages_count>=10", senders_count: "senders_count>2" },
+  }),
+} as const satisfies QueryRegistry
+
+export const conversationItem = (account: AccountKey, one: ConversationSummary): ConversationItem => ({
+  id: one.id,
+  chat: formatReference({ type: "chat", provider: account.provider, account: account.account, chat: one.chatId }),
+  first_message: formatLocator({ ...account, chat: one.chatId, message: one.firstMessageId }),
+  started_at: one.firstAt,
+  ended_at: one.lastAt,
+  messages_count: one.messageCount,
+  senders_count: one.senders,
+  built_at: one.builtAt,
+  rules_version: one.algorithmVersion,
+})
+
 /**
  * Conversations inside a chat, built from the store alone by rules (phase 3): replies, mentions and one
  * sender's messages in a row. Nothing is built on sync; a chat has conversations once `build` ran for it.
  */
 export interface ConversationsService {
   build(chat: string, options?: { maxMessages?: number; check?: () => void }): Promise<Built>
-  list(chat: string, window: { limit: number; since?: string }): Promise<Page<ConversationSummary>>
+  list(
+    chat: string,
+    window: { limit: number; offset?: number; query?: QueryAst },
+  ): Promise<{ items: ConversationItem[]; has_more: boolean }>
   /** By the conversation's id, or as the conversation a message is in. */
   show(
     target: { id: string } | { chat: string; message: Id },
@@ -132,10 +171,13 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
       }
     },
 
-    list: async (chat, { limit, since }) => {
+    list: async (chat, { limit, offset = 0, query }) => {
       const { store, chatId } = await found(chat)
       if (!(await store.conversationState(chatId))?.builtAt) throw notBuilt(chatId)
-      return store.conversations(chatId, { limit, ...(since === undefined ? {} : { after: since }) })
+      const where = query ? queryFilter(query, CONVERSATION_COLUMNS, { command: "conversations list" }) : undefined
+      const page = await store.conversations(chatId, { limit, offset, ...(where ? { where } : {}) })
+      const account = await deps.account()
+      return { items: page.items.map((one) => conversationItem(account, one)), has_more: page.hasMore }
     },
 
     show: async (target) => {

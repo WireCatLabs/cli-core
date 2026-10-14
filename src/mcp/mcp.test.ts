@@ -1323,7 +1323,8 @@ describe("the MCP server", () => {
     await store.close()
 
     const { body } = await call("chat_conversations_list", { chat: "7" })
-    expect(body.items).toMatchObject([{ firstMessageId: "1", messageCount: 1 }])
+    expect(body.items).toMatchObject([{ first_message: "msg:chat/500/7/1", messages_count: 1 }])
+    expect((await call("chat_conversations_list", { chat: "7", query: "messages_count>1" })).body.items).toEqual([])
     const shown = await call("chat_conversations_show", { id: body.items[0].id })
     expect(shown.body.messages.map((one: { id: string }) => one.id)).toEqual(["1"])
     expect((await call("chat_conversations_show", { chat: "7" })).isError).toBe(true)
