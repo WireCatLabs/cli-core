@@ -58,7 +58,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
         })
         if (args.format === "base64") return itemOf(snakeKeys(done))
         const { base64, ...rest } = done
-        const about = snakeKeys(rest) as object
+        const about = itemOf(snakeKeys(rest))
         if (done.complete && ["image/png", "image/jpeg", "image/webp"].includes(done.mimeType)) {
           const bytes = Buffer.from(base64, "base64")
           try {

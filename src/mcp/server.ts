@@ -3,6 +3,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError } from "@wirecat/cli-base"
 import { skillResource } from "@wirecat/cli-base/skill"
 import * as v from "valibot"
+import { itemOf } from "../cli/envelope.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
 import { connected, type Messenger, type MessengerContext } from "../cli/messenger/context.js"
 import { warmEmbedders } from "../embeddings/embed.js"
@@ -74,13 +75,14 @@ export const createServer = (
       "are on. Never connects, so it answers when the login is what is broken.",
     input: v.strictObject({}),
     annotations: { ...READ, idempotentHint: true },
-    local: async () => ({
-      profile: settings.profile,
-      account: recalledAccount(app, provider, settings.profile, context.env)?.account ?? null,
-      writes: Object.keys(writes).map(commandOf),
-      permissions: settings.permissions,
-      ...(messenger.diagnose ? { [messenger.provider]: await messenger.diagnose(command, context) } : {}),
-    }),
+    local: async () =>
+      itemOf({
+        profile: settings.profile,
+        account: recalledAccount(app, provider, settings.profile, context.env)?.account ?? null,
+        writes: Object.keys(writes).map(commandOf),
+        permissions: settings.permissions,
+        ...(messenger.diagnose ? { [messenger.provider]: await messenger.diagnose(command, context) } : {}),
+      }),
   })
   const skill = messenger.skill ? skillResource(app, messenger.skill) : undefined
   const log = agentLog(() => openStore({ env: context.env, command: app.command }))

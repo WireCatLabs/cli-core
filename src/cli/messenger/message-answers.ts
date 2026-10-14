@@ -1,7 +1,10 @@
 import type { StoredEvidencePacket } from "../../services/evidence-read.js"
+import type { ThreadContext } from "../../services/thread-context.js"
 import type { Heard } from "../../speech/transcribe.js"
+import type { AccountKey } from "../../store/store.js"
 import { itemOf, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
+import { messageItems } from "./message-items.js"
 
 /**
  * The packet as one item; its fingerprints were taken over the library's own field names and stay valid as ids.
@@ -28,3 +31,7 @@ export const heardAnswer = (heard: Heard, chat: string) =>
     snakeKeys(heard),
     heard.pending ? { next: [nextStep("messages.transcribe", { args: { chat, message: heard.messageId } })] } : {},
   )
+
+/** `messages context --thread`: the thread's own fields snake_case, its messages as `message` items. */
+export const threadAnswer = ({ items, ...thread }: ThreadContext, reader: AccountKey) =>
+  itemOf({ ...(snakeKeys(thread) as object), items: messageItems(items, reader) })

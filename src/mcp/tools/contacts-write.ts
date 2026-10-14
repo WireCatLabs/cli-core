@@ -38,12 +38,16 @@ export const contactWriteTools = (messenger: Messenger): Record<string, AnyTool>
       }),
       annotations: WRITE,
       permission: "profile",
-      online: (adapter, args, { guard }) =>
-        servicesFor(onlineDeps(messenger, adapter, guard)).account.update({
-          ...(args.first_name === undefined ? {} : { firstName: args.first_name }),
-          ...(args.last_name === undefined ? {} : { lastName: args.last_name }),
-          ...(args.description === undefined ? {} : { description: args.description }),
-        }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await servicesFor(onlineDeps(messenger, adapter, guard)).account.update({
+              ...(args.first_name === undefined ? {} : { firstName: args.first_name }),
+              ...(args.last_name === undefined ? {} : { lastName: args.last_name }),
+              ...(args.description === undefined ? {} : { description: args.description }),
+            }),
+          ),
+        ),
     }),
     contacts_rename: tool({
       title: "Rename a contact",

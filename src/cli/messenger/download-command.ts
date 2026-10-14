@@ -71,9 +71,7 @@ export const downloadSubcommand = (messages: Command, messenger: Messenger): Com
             extraction = await services.attachments.extract({ chat, message: id, paths: done.map((file) => file.path) })
           } catch (error) {
             const issue = progress.fail(id, "extract", error)
-            context.renderer.warn(
-              `message ${id}: ${issue.code} — ${issue.actions.map((action) => action.message).join(" ")}`,
-            )
+            context.renderer.warn(`message ${id}: ${issue.code} — ${issue.message}`)
           }
         }
         const merged = mergeBatches(progress.result(), extraction?.batch)
@@ -329,7 +327,7 @@ const walkChat = async (
       )
     } catch (error) {
       const issue = batch.fail(chat, "history", error)
-      warn(`history: ${issue.code} — ${issue.actions.map((action) => action.message).join(" ")}`)
+      warn(`history: ${issue.code} — ${issue.message}`)
       break
     }
     const first = page.items[0]
@@ -391,7 +389,7 @@ const walkChat = async (
           if (extracted) batch.absorb(extracted)
         } catch (error) {
           const issue = batch.fail(message.id, "download", error)
-          warn(`message ${message.id}: ${issue.code} — ${issue.actions.map((action) => action.message).join(" ")}`)
+          warn(`message ${message.id}: ${issue.code} — ${issue.message}`)
           messageComplete = false
         }
         if (messageComplete) {

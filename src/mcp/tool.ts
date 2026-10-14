@@ -4,7 +4,7 @@ import { CliError, errorCodes, errorObjectOf, mcpErrorResult } from "@wirecat/cl
 import { type ErrorObject, itemEnvelopeSchema, listEnvelopeSchema, traceIdOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { AISettings } from "../analysis/settings.js"
-import { isBody, sealed } from "../cli/envelope.js"
+import { sealed } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { MAX_BUFFERED_INPUT } from "../cli/input-policy.js"
 import type { Messenger } from "../cli/messenger/context.js"
@@ -99,8 +99,6 @@ interface Tool<S extends Input> {
   outputLimit?: (args: Record<string, unknown>, defaults: Defaults) => number
   /** The entity it answers with, once it answers in the envelope: its `outputSchema` is generated from it. */
   output?: { entity: EntityName; list: boolean }
-  /** Content reads only: added to the answer as `next_steps`. */
-  nextSteps?: string
   storedWhen?: (args: v.InferOutput<S>) => boolean
   /** Uses the local store; an explicit network option may use the retained session. */
   stored?: (
@@ -132,18 +130,6 @@ export type AnyTool = Omit<Tool<Input>, "online" | "stored" | "served" | "local"
 
 /** Typed where it is written; erased here because the SDK checks the arguments against `input` first. */
 export const tool = <S extends Input>(definition: Tool<S>): AnyTool => definition as unknown as AnyTool
-
-/** The envelope `--json` prints for a paged listing. */
-export const envelope = <T>(
-  { items, hasMore }: { items: T[]; hasMore: boolean },
-  pageNumber: number,
-  pageSize: number,
-) => ({
-  items,
-  page: pageNumber,
-  limit: pageSize,
-  hasMore,
-})
 
 export const paging = (args: { limit?: number; page?: number }, defaults: Defaults) => {
   const size = args.limit ?? defaults.limit
@@ -312,11 +298,6 @@ export const entryRunner = (registration: Registration): RunEntry => {
   }
 }
 
-const withNextSteps = (definition: AnyTool, result: object): object =>
-  definition.nextSteps === undefined || result instanceof Picture || result instanceof BinaryResource || isBody(result)
-    ? result
-    : { ...result, next_steps: definition.nextSteps }
-
 const callRunner = ({ messenger, session, withStore, withServices, defaults, around }: Registration): RunEntry => {
   const where = {
     profile: defaults.settings.profile,
@@ -343,13 +324,10 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
           throw new CliError("permission_error", "messages.sync-first is not allowed by this profile")
         if (definition.custom) {
           const result = await definition.custom(args, { ...defaults, signal: ctx.mcpReq.signal }, ctx)
-          return answered(withNextSteps(definition, result), definition.outputLimit?.(args, defaults))
+          return answered(result, definition.outputLimit?.(args, defaults))
         }
         if (definition.local)
-          return answered(
-            withNextSteps(definition, await definition.local(args, defaults)),
-            definition.outputLimit?.(args, defaults),
-          )
+          return answered(await definition.local(args, defaults), definition.outputLimit?.(args, defaults))
         const { online, stored: local, served } = definition
         const stored = local && (!definition.storedWhen || definition.storedWhen(args)) ? local : undefined
         const result = stored
@@ -401,7 +379,7 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
                 : await session.use(run, (adapter, release) =>
                     (online as NonNullable<typeof online>)(adapter, args, { ...defaults, release }),
                   )
-        return answered(withNextSteps(definition, result), definition.outputLimit?.(args, defaults))
+        return answered(result, definition.outputLimit?.(args, defaults))
       }
       return around ? await around(key, definition, execute) : await execute()
     } catch (error) {
@@ -494,20 +472,22 @@ export const answered = (answer: object, maxBytes = DEFAULT_OUTPUT_BYTES): CallT
     return serialized as Record<string, unknown>
   }
   if (value instanceof BinaryResource) {
+    const about = sealed(value.about)
     return bounded({
-      structuredContent: objectBody(value.about),
+      structuredContent: objectBody(about),
       content: [
         { type: "resource", resource: { uri: value.uri, mimeType: value.mimeType, blob: value.base64 } },
-        { type: "text", text: agentJson(value.about) },
+        { type: "text", text: agentJson(about) },
       ],
     })
   }
   if (value instanceof Picture) {
+    const about = sealed(value.about)
     return bounded({
-      structuredContent: objectBody(value.about),
+      structuredContent: objectBody(about),
       content: [
         { type: "image", data: Buffer.from(value.bytes).toString("base64"), mimeType: value.mimeType },
-        { type: "text", text: agentJson(value.about) },
+        { type: "text", text: agentJson(about) },
       ],
     })
   }

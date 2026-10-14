@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { itemOf } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { capability, type RemoteFile } from "../../cli/messenger/port.js"
 import { type AnyTool, chatOf, message, Picture, READ, tool } from "../tool.js"
@@ -52,7 +53,7 @@ export const messagesPhotoTools = (messenger: Messenger): Record<string, AnyTool
       const bytes = await readUpTo(photo, PHOTO_LIMIT, saveIt)
       const mimeType = IMAGE_TYPES.find(([, is]) => is(bytes))?.[0]
       if (!mimeType) throw new CliError("validation_error", `the photo is not JPEG, PNG or WebP — ${saveIt}`)
-      return new Picture(bytes, mimeType, { chat_id: chatId, message_id: args.message, bytes: bytes.length })
+      return new Picture(bytes, mimeType, itemOf({ chat_id: chatId, message_id: args.message, bytes: bytes.length }))
     },
   }),
 })

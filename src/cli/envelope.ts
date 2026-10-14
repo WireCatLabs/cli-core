@@ -1,13 +1,16 @@
 import type { Renderer, RenderFormat, Streams } from "@wirecat/cli-base"
 import {
   type ItemEnvelope,
+  itemEnvelopeSchema,
   type ListEnvelope,
+  listEnvelopeSchema,
   MAX_NEXT_STEPS,
   type Meta,
   type Missing,
   type NextStep,
 } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import * as v from "valibot"
 import { currentRun } from "./runs/scope.js"
 import { nextStep, rootOf, runnable, stepLine } from "./steps.js"
 
@@ -32,6 +35,10 @@ export interface ListInput<T> {
   missing?: Missing[]
   meta?: Partial<Meta>
 }
+
+/** Every answer: a list or one thing, with items of `item` — any value where the command declares no entity. */
+export const answerSchema = (item: v.GenericSchema = v.unknown()) =>
+  v.union([listEnvelopeSchema(item), itemEnvelopeSchema(item)])
 
 const capped = (steps: NextStep[]) => (steps.length > 0 ? { next: steps.slice(0, MAX_NEXT_STEPS) } : {})
 

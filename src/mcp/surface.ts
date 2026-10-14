@@ -2,6 +2,7 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { answerSchema } from "../cli/envelope.js"
 import type { AppErrors } from "../cli/reasons.js"
 import { agentArguments } from "./text.js"
 import {
@@ -19,6 +20,7 @@ import {
 } from "./tool.js"
 
 const MATCHES = 8
+const ANSWER = answerSchema()
 
 type Input = v.ObjectSchema<v.ObjectEntries, undefined> | v.StrictObjectSchema<v.ObjectEntries, undefined>
 
@@ -28,7 +30,7 @@ export interface McpCommand {
   description: string
   writes: boolean
   input: Input
-  /** The envelope it answers with, once it declares its entity. */
+  /** The envelope it answers with, when it declares its entity; any envelope otherwise. */
   output?: v.GenericSchema
   /** `run` checks the arguments itself, and records a refusal. */
   checked?: boolean
@@ -110,7 +112,7 @@ export const registerCommands = (
       title: "Find a command",
       description:
         `Find the command for a task — "unread", "send message", "chat members" — before calling ` +
-        `${prefix}_read or ${prefix}_write with it. Each match gives its command, whether it writes, and its arguments. ` +
+        `${prefix}_read or ${prefix}_write with it. Each match gives its command, whether it writes, its arguments and the shape of its answer. ` +
         "With no words, lists every command and title, without arguments.",
       inputSchema: toStandardJsonSchema(
         v.strictObject({ query: v.optional(v.pipe(v.string(), v.description("words that describe the task"))) }),
@@ -128,7 +130,7 @@ export const registerCommands = (
                 description: one.description,
                 writes: one.writes,
                 arguments: toJsonSchema(one.input),
-                ...(one.output ? { output: toJsonSchema(one.output) } : {}),
+                output: toJsonSchema(one.output ?? ANSWER),
               })),
               more: found.length > MATCHES,
             }
@@ -184,7 +186,7 @@ export const registerCommands = (
   server.registerTool(
     `${prefix}_read`,
     {
-      outputSchema: toStandardJsonSchema(v.looseObject({})),
+      outputSchema: toStandardJsonSchema(ANSWER),
       title: "Run a reading command",
       description: `Run one command that only reads, with the arguments ${prefix}_tools_search showed. ${UNTRUSTED}`,
       inputSchema: toStandardJsonSchema(call),
@@ -196,7 +198,7 @@ export const registerCommands = (
     server.registerTool(
       `${prefix}_write`,
       {
-        outputSchema: toStandardJsonSchema(v.looseObject({})),
+        outputSchema: toStandardJsonSchema(ANSWER),
         title: "Run a writing command",
         description: `Run one command that changes something — sends, edits, deletes, joins — with the arguments ${prefix}_tools_search showed. ${UNTRUSTED}`,
         inputSchema: toStandardJsonSchema(call),

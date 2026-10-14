@@ -37,9 +37,7 @@ it("keeps successful downloads after a failed middle stream and records their or
     attempted: 3,
     failed: 1,
     succeeded: 2,
-    failures: [
-      { id: "50", attachment: 2, stage: "download", error: { code: "provider_error", actions: expect.any(Array) } },
-    ],
+    failures: [{ id: "50", attachment: 2, stage: "download", error: { code: "provider_error", retryable: false } }],
   })
   expect(keepDownloaded.mock.calls[0]?.[2]?.map((file: { position?: number }) => file.position)).toEqual([0, 2])
   expect(readdirSync(root).filter((name) => name.endsWith(".part"))).toEqual([])

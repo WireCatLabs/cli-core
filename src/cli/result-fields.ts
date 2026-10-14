@@ -1,8 +1,5 @@
 import { CliError, fieldsOf as coreFieldsOf, projectFields as coreProjectFields } from "@wirecat/cli-base"
 
-/** cli-base keeps `operation_id` and `send_id`; this package's results still say `operationId` and `sendId`. */
-const CORRELATION = ["operationId", "sendId"]
-
 const named = <T>(work: () => T): T => {
   try {
     return work()
@@ -22,8 +19,7 @@ const isItemAnswer = (value: unknown): value is { item: unknown } =>
 
 /** An item answer keeps its `next`, `missing` and `meta`; only the item is cut down. */
 export const projectFields = (value: unknown, fields: readonly string[]): unknown => {
-  const kept = [...fields, ...CORRELATION.filter((name) => !fields.includes(name))]
   return named(() =>
-    isItemAnswer(value) ? { ...value, item: coreProjectFields(value.item, kept) } : coreProjectFields(value, kept),
+    isItemAnswer(value) ? { ...value, item: coreProjectFields(value.item, fields) } : coreProjectFields(value, fields),
   )
 }

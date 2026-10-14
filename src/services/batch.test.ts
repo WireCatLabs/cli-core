@@ -22,9 +22,7 @@ it("respects configurable error rate and stops account throttling immediately", 
     failures: expect.arrayContaining([
       expect.objectContaining({
         id: "21",
-        error: expect.objectContaining({
-          actions: expect.arrayContaining([{ type: "wait", message: expect.any(String), afterMs: 600000 }]),
-        }),
+        error: expect.objectContaining({ retryable: true }),
       }),
     ]),
   })

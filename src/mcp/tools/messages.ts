@@ -3,7 +3,7 @@ import * as v from "valibot"
 import { itemOf, listOf } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { COMMENTS_QUERY, cursorOf, historyWindow } from "../../cli/messenger/history-query.js"
-import { evidenceAnswer } from "../../cli/messenger/message-answers.js"
+import { evidenceAnswer, threadAnswer } from "../../cli/messenger/message-answers.js"
 import { messageItems, type ReadMessage, selfOf } from "../../cli/messenger/message-items.js"
 import { capability } from "../../cli/messenger/port.js"
 import { isLocator, parseLocator } from "../../domain/locator.js"
@@ -184,12 +184,15 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
         const services = searchServices(messenger, store, account, defaults)
         if (!args.thread)
           return windowOf(await services.messages.around(args.chat, args.message, window), account, window)
-        return services.messages.thread(args.chat, args.message, {
-          ...threadArgs(args).thread,
-          before: args.before_n ?? 5,
-          after: args.after_n ?? 5,
-          signal: defaults.signal,
-        })
+        return threadAnswer(
+          await services.messages.thread(args.chat, args.message, {
+            ...threadArgs(args).thread,
+            before: args.before_n ?? 5,
+            after: args.after_n ?? 5,
+            signal: defaults.signal,
+          }),
+          account,
+        )
       },
       served: async (services, args) => {
         if (args.message === undefined && !isLocator(args.chat))

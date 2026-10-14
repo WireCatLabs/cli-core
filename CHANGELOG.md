@@ -30,6 +30,17 @@ shape of this file.
   `details.operation_id`, `details.send_id` and `retryable: false`, so the send is not repeated.
 - **A missing model is `reason: "model.not-downloaded"`** with `details.model` (text, picture and speech models), so
   a caller branches on the reason, not on the message text.
+- **What no command used any more is gone, and the MCP router answers only envelopes.** Removed:
+  `renderPage`, `renderList`, `listed` (`./cli`), `resultSchemaFor` (`./cli`; `commands --json` contracts now
+  generate `outputSchema` from the entity a command declares — `declared-entity` — or any envelope —
+  `envelope-with-open-items` — and `jsonlSchema` is the entity), the MCP tool `nextSteps` field and the paging
+  `envelope()` helper, `RecoveryAction` and the prose `actions` of a batch failure (`ActionableError` keeps `code`,
+  `message`, `retryable`, `retry_after_ms`), and the camelCase `operationId`/`sendId` that `--json <fields>` kept
+  (cli-base keeps `operation_id`/`send_id`). `<cli>_read` and `<cli>_write` declare the list ∪ item envelope as
+  `outputSchema`, so a command that answers anything else fails output validation; `<cli>_tools_search` gives every
+  match's `output`. `mentions list|show|rebuild`, `messages context --thread` (MCP `messages_context` with
+  `thread`), MCP `account_update` and the `status` tool now answer in the envelope; a picture or file answer's text
+  part is an `{item}` envelope.
 - **Every `bot *` command answers in the envelope**, snake_case: writes `{item: {operation_id, chat_id, …}}`;
   `bot messages send|edit` carry the `message` entity, `bot messages list|show`, `bot search messages` (now paged
   with `--page`), `bot messages between` and `bot contacts show` answer `message` items; `bot list`, `bot chats

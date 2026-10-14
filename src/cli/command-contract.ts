@@ -1,65 +1,30 @@
 import { CliError } from "@wirecat/cli-base"
 import { describeOptions, metaOf } from "@wirecat/cli-base/commands"
+import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import type * as v from "valibot"
+import { ENTITIES, type EntityName } from "../entities/index.js"
 import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
+import { answerSchema } from "./envelope.js"
 
 export type JsonSchema = Record<string, unknown>
 export const SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
-const objectResult: JsonSchema = { type: "object", additionalProperties: true }
-const identity: JsonSchema = { type: "string", description: "An opaque domain id; never converted to a number" }
-const messageResult: JsonSchema = {
-  type: "object",
-  additionalProperties: true,
-  properties: {
-    id: identity,
-    chatId: identity,
-    senderId: { anyOf: [identity, { type: "null" }] },
-    text: { type: "string" },
-    timestamp: { type: "string" },
-    locator: { type: "string" },
-  },
-}
-const pagedResult = (item: JsonSchema): JsonSchema => ({
-  type: "object",
-  additionalProperties: true,
-  properties: {
-    items: { type: "array", items: item },
-    page: { type: "integer", minimum: 1 },
-    limit: { type: "integer", minimum: 0 },
-    hasMore: { type: "boolean" },
-  },
-})
 
-export const resultSchemaFor = (
-  path: readonly string[],
-  format: "json" | "jsonl" = "json",
-): { schema: JsonSchema; coverage: string } => {
-  if (format === "jsonl") {
-    if (path[0] === "messages" && ["list", "search", "between"].includes(path[1] ?? ""))
-      return { schema: messageResult, coverage: "declared-domain-fields" }
-    if (path.at(-1) === "list") return { schema: objectResult, coverage: "open-collection-item" }
-  }
-  if (path[0] === "messages" && ["list", "search", "between"].includes(path[1] ?? ""))
-    return { schema: pagedResult(messageResult), coverage: "declared-domain-fields" }
-  if (path[0] === "messages" && path[1] === "show") return { schema: messageResult, coverage: "declared-domain-fields" }
-  if (path.at(-1) === "list")
-    return {
-      schema: { anyOf: [pagedResult(objectResult), { type: "array", items: objectResult }] },
-      coverage: "collection-with-open-items",
-    }
-  return {
-    schema: {
-      anyOf: [
-        objectResult,
-        { type: "array", items: {} },
-        { type: "string" },
-        { type: "number" },
-        { type: "boolean" },
-        { type: "null" },
-      ],
-    },
-    coverage: "open-command-result",
-  }
+/**
+ * What `--json` prints, from the entity the command declares (`annotate(…, { output })`): a list or one thing of it.
+ * A command that declares none answers the same envelopes with items of any shape; `--jsonl` streams the items.
+ */
+const outputOf = (command: Command) => {
+  const output = metaOf(command).output
+  const entity = output
+    ? (ENTITIES[(output.view ? `${output.entity}.${output.view}` : output.entity) as EntityName] as
+        | v.GenericSchema
+        | undefined)
+    : undefined
+  const { $schema: _, ...schema } = jsonSchemaOf(answerSchema(entity)) as JsonSchema
+  const { $schema: __, ...item } = (entity ? jsonSchemaOf(entity) : {}) as JsonSchema
+  const coverage = entity ? "declared-entity" : "envelope-with-open-items"
+  return { schema, item, coverage }
 }
 
 export const commandPathOf = (command: Command): string[] => {
@@ -124,7 +89,7 @@ export const commandContract = (command: Command) => {
     ]),
   )
   const meta = metaOf(command)
-  const output = resultSchemaFor(path)
+  const output = outputOf(command)
   const permission = keyForCommand(path)
   const writes =
     meta.mutates === true || (permission !== null && permission !== undefined && WRITE_KEYS.includes(permission))
@@ -154,8 +119,8 @@ export const commandContract = (command: Command) => {
     },
     outputSchema: { $schema: SCHEMA_DIALECT, ...output.schema },
     outputSchemaCoverage: output.coverage,
-    jsonlSchema: { $schema: SCHEMA_DIALECT, ...resultSchemaFor(path, "jsonl").schema },
-    jsonlSchemaCoverage: resultSchemaFor(path, "jsonl").coverage,
+    jsonlSchema: { $schema: SCHEMA_DIALECT, ...output.item },
+    jsonlSchemaCoverage: output.coverage,
     projection:
       "--json=<fields> may omit item/object members; present members retain their types and envelopes are preserved",
     validation: {

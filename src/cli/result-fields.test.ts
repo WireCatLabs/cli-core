@@ -28,8 +28,8 @@ describe("machine result projection", () => {
   })
   it("never removes correlation or invents missing values", () => {
     expect(
-      projectFields({ id: "7", operationId: "synthetic-operation", missing: null }, ["id", "missing", "unknown"]),
-    ).toEqual({ id: "7", operationId: "synthetic-operation", missing: null })
+      projectFields({ id: "7", operation_id: "synthetic-operation", missing: null }, ["id", "missing", "unknown"]),
+    ).toEqual({ id: "7", operation_id: "synthetic-operation", missing: null })
     expect(projectFields([{ id: "7", text: "synthetic" }], ["id"])).toEqual([{ id: "7" }])
     expect(projectFields(null, ["id"])).toBeNull()
   })
@@ -61,34 +61,12 @@ it("accepts items.id consistently for paged rows, arrays and JSONL items", () =>
   expect(projectFields({ id: "synthetic", text: "synthetic" }, ["items.id"])).toEqual({ id: "synthetic" })
 })
 
-it("reuses core projection while preserving metadata-only empty selections", () => {
+it("is the core projection", () => {
   const value = {
-    items: [
-      { id: "example", operationId: "example-operation", sendId: "example-send" },
-      { id: "second-example" },
-      null,
-    ],
-    page: 2,
-    limit: 3,
-    hasMore: false,
-    coverage: { state: "partial" },
-    operationId: "example-page-operation",
+    items: [{ id: "example", operation_id: "example-operation", send_id: "example-send" }, { id: "second-example" }],
+    page: { limit: 3, has_more: false },
   }
-  expect(projectFields(value, [])).toEqual({
-    ...value,
-    items: [{ operationId: "example-operation", sendId: "example-send" }, {}, null],
-  })
-  expect(projectFields({ id: "example", sendId: "example-send" }, [])).toEqual({ sendId: "example-send" })
-  expect(projectFields([{ id: "example" }, null, 3], [])).toEqual([{}, null, 3])
-  expect(projectFields({ items: null, id: "example" }, [])).toEqual({})
-  expect(projectFields(value, fieldsOf("items.id"))).toEqual({
-    ...(coreProjectFields(value, fieldsOf("items.id")) as object),
-    items: [
-      { id: "example", operationId: "example-operation", sendId: "example-send" },
-      { id: "second-example" },
-      null,
-    ],
-  })
+  expect(projectFields(value, fieldsOf("items.id"))).toEqual(coreProjectFields(value, fieldsOf("items.id")))
 })
 
 it("rejects unsafe direct paths and excessive selections before projection", () => {
