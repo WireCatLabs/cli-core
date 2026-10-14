@@ -193,6 +193,14 @@ export type {
   MeetingSearchStore,
 } from "./search-store.js"
 export { validateMeetingHitSearch } from "./search-validation.js"
+export {
+  type MeetingHistoryEntry,
+  type MeetingSeriesContext,
+  type MeetingSeriesHistory,
+  type MeetingSeriesHistoryRequest,
+  type MeetingSeriesHistoryStore,
+  validateMeetingSeriesHistory,
+} from "./series-history.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,
