@@ -9,6 +9,11 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`searches create|show|list|history|delete` answer in the envelope** with the new `saved_search` entity
+  (`fields_version`, `created_at`, `last_run_at` replace `fieldsVersion`, `createdAt`, `lastRunAt`), CLI and MCP
+  alike: one search is `{item}`, the lists `{items, page}`. `searches history` pages with `--page` and `--all` too,
+  and MCP `searches_history` takes `page`; its "more — --limit" note is a `page.next` step. `searches clear` is
+  unchanged.
 - **`models audio|text|image list` answer in the list envelope** with the new `model` entity: `kind`, and
   `size_bytes` (a number) in place of `size` (a "120 MB" string). `directory` leaves the answer (a person still sees
   it); a default text or image model that is not downloaded adds a `models.download` or `models.download-image` step.

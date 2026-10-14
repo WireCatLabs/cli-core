@@ -33,6 +33,7 @@ import { person } from "./person.js"
 import { pollVote } from "./poll-vote.js"
 import { ranking } from "./ranking.js"
 import { retention } from "./retention.js"
+import { savedSearch } from "./saved-search.js"
 import { tagging } from "./tagging.js"
 import { task } from "./task.js"
 import { topic } from "./topic.js"
@@ -78,6 +79,7 @@ export {
   ranking,
   reference,
   retention,
+  savedSearch,
   tagging,
   task,
   topic,
@@ -127,6 +129,7 @@ export const ENTITIES = {
   reference,
   tagging,
   conversation,
+  saved_search: savedSearch,
   job,
   agenda,
   model,

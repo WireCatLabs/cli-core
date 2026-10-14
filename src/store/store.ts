@@ -679,7 +679,7 @@ export interface MessageStore {
   storedSearch(reference: string): Promise<StoredSearch | undefined>
   savedSearches(): Promise<StoredSearch[]>
   /** Runs, newest first, one more than `limit` when there are more. */
-  searchHistory(limit: number): Promise<StoredSearch[]>
+  searchHistory(limit: number, offset?: number): Promise<StoredSearch[]>
   deleteSearch(reference: string): Promise<StoredSearch>
   /** Drops the unnamed runs; answers how many. */
   clearSearchHistory(): Promise<number>
@@ -1845,7 +1845,7 @@ const storeOver = (context: StoreContext): MessageStore => {
 
     savedSearches: async () => searchRecords.savedSearches(context),
 
-    searchHistory: async (limit) => searchRecords.searchHistory(context, limit),
+    searchHistory: async (limit, offset) => searchRecords.searchHistory(context, limit, offset),
 
     deleteSearch: async (reference) => {
       let deleted: StoredSearch | undefined
