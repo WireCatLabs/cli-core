@@ -2466,7 +2466,11 @@
       "in": "all"
     },
     "images embed": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--chat": "all",
+        "--limit": "all"
+      }
     },
     "images models": {
       "in": "all"
