@@ -158,15 +158,16 @@ A real person, whatever accounts they write from: their identities point here. `
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `identity_id` | integer | PK | → `identities.id` |  |
-| `person_id` | integer | not null | → `persons.id` | the `person` it belongs to |
+| `person_id` | integer |  | → `persons.id` | the `person` it belongs to |
 | `method` | text | not null |  | How the identity was assigned to its person: `initial` when first seen, or a caller's label such as `manual` or `same-email`. |
 | `confidence` | real | not null |  | How sure the link is, from 0 to 1; 1 for every link the store writes. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `author` | text | not null |  | Who decided the link: `ingest` for the automatic first link, otherwise `owner` or the name of a program. |
 | `source` | text |  |  | which integration or importer proposed it |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `organization_id` | integer |  | → `organizations.id` | the organization that owns it — a shop's number, `info@`; exactly one of this and `person_id` |
 
-*Keys and indexes:* `INDEX (person_id)`
+*Keys and indexes:* `INDEX (person_id)`, `INDEX (organization_id)`
 
 ### `identity_link_events`
 
@@ -175,12 +176,14 @@ A real person, whatever accounts they write from: their identities point here. `
 | `id` | integer | PK |  |  |
 | `identity_id` | integer | not null | → `identities.id` | the `identity` it belongs to |
 | `from_person_id` | integer |  | → `persons.id` | the `person` it belongs to |
-| `to_person_id` | integer | not null | → `persons.id` | the `person` it belongs to |
+| `to_person_id` | integer |  | → `persons.id` | the `person` it belongs to |
 | `method` | text | not null |  | How this move of an identity between persons was decided (`initial`, `manual`, `same-email`…), kept so a bad link can be undone. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `author` | text | not null |  | Who made this move: `ingest`, `owner`, or a program's name. |
+| `from_organization_id` | integer |  | → `organizations.id` | the organization it moved from |
+| `to_organization_id` | integer |  | → `organizations.id` | the organization it moved to |
 
-*Keys and indexes:* `INDEX (identity_id)`, `INDEX (from_person_id)`, `INDEX (to_person_id)`
+*Keys and indexes:* `INDEX (identity_id)`, `INDEX (from_person_id)`, `INDEX (to_person_id)`, `INDEX (from_organization_id)`, `INDEX (to_organization_id)`
 
 ### `identity_revisions`
 

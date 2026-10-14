@@ -70,7 +70,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
   })
     .description("say what a mention is, everywhere its value is written: a phone's owner, the stored document")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
-    .argument("[person]", "person:<uid> who owns the phone or the address; a document needs none")
+    .argument("[owner]", "person:<uid> or organization:<id> that owns the phone or the address; a document needs none")
     .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
     .action(async function (this: Command, id: number, person: string | undefined) {
       const context = messengerContext(this, messenger)

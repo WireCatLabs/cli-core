@@ -44,12 +44,28 @@ const EDITS = {
   identities: { cols: { is_bot: "bot", first_seen_at: "created_at" } },
   identity_links: {
     cols: { linked_at: "created_at", linked_by: "author" },
+    nullable: ["person_id"],
     add: [
       ["source", "text", { note: "which integration or importer proposed it" }],
       ["updated_at", "integer", { notnull: true }],
+      [
+        "organization_id",
+        "integer",
+        {
+          ref: "organizations.id",
+          note: "the organization that owns it — a shop's number, `info@`; exactly one of this and `person_id`",
+        },
+      ],
     ],
   },
-  identity_link_events: { cols: { at: "created_at", by: "author" } },
+  identity_link_events: {
+    cols: { at: "created_at", by: "author" },
+    nullable: ["to_person_id"],
+    add: [
+      ["from_organization_id", "integer", { ref: "organizations.id", note: "the organization it moved from" }],
+      ["to_organization_id", "integer", { ref: "organizations.id", note: "the organization it moved to" }],
+    ],
+  },
   identity_revisions: { cols: { captured_at: "created_at" }, keys: ["INDEX (identity_id, created_at)"] },
   account_identities: { cols: { first_seen_at: "created_at" }, add: [["updated_at", "integer", { notnull: true }]] },
   contact_aliases: {
@@ -1197,7 +1213,7 @@ const transform = (name) => {
         const isTextId = x.name === "id" && e.pkInteger
         return c(now, isTextId ? "integer" : (e.colTypes?.[now] ?? TYPE[x.type] ?? x.type.toLowerCase()), {
           pk: x.pk === 1 && singlePk,
-          notnull: (!!x.notnull || x.pk > 0) && !(x.pk && singlePk),
+          notnull: (!!x.notnull || x.pk > 0) && !(x.pk && singlePk) && !(e.nullable ?? []).includes(now),
           was: now !== x.name ? x.name : undefined,
           ref: e.colRefs?.[now] ?? (f ? `${EDITS[f.table]?.rename ?? f.table}.${ruleName(f.to ?? "pk")}` : undefined),
           note: e.colNotes?.[now] ?? d.cols[x.name],

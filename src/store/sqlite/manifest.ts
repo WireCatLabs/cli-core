@@ -28,6 +28,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261013215251_version-7-mentions-triggers", version: 7, minCompatible: 1 },
   { name: "20261014100438_version-8-folded-names", version: 8, minCompatible: 1 },
   { name: "20261014105203_version-9-folded-fill", version: 9, minCompatible: 1 },
+  { name: "20261014122043_version-10-organization-owners", version: 10, minCompatible: 1 },
+  { name: "20261014122124_version-10-organization-owners-triggers", version: 10, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

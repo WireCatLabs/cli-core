@@ -464,10 +464,10 @@ export interface MessageStore {
     id: number,
   ): Promise<(StoredMention & { before: string; after: string; sameValue: number }) | undefined>
   /**
-   * Says what a mention's value is, everywhere it is written: a phone or an address belongs to the person
-   * (`personUid`), a document id names the stored document.
+   * Says what a mention's value is, everywhere it is written: a phone or an address belongs to its owner
+   * (`person:<uid>` or `organization:<id>`), a document id names the stored document.
    */
-  confirmMention(key: AccountKey, id: number, personUid: string | undefined, by: string): Promise<MentionDecision>
+  confirmMention(key: AccountKey, id: number, owner: string | undefined, by: string): Promise<MentionDecision>
   /** Dismisses a mention's value everywhere it is written, and on later syncs. */
   rejectMention(key: AccountKey, id: number, by: string): Promise<MentionDecision>
   /** Finds the mentions of every stored message again, every account's; decisions stay. */
@@ -1542,18 +1542,27 @@ const storeOver = (context: StoreContext): MessageStore => {
       return accountKey === undefined ? undefined : showMention(database, accountKey, id)
     },
 
-    confirmMention: async (key, id, personUid, by) => {
+    confirmMention: async (key, id, ownerRef, by) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) throw new CliError("not_found", `no mention ${id} in this account`)
-      let personPk: number | undefined
-      if (personUid !== undefined) {
-        const person = personLinks.personByUid(context, personUid)
-        if (!person) throw new CliError("not_found", `no person:${personUid} in the store`)
-        personPk = Number(person.uid)
+      let owner: personLinks.IdentityOwner | undefined
+      if (ownerRef !== undefined) {
+        const [type, uid = ""] = ownerRef.split(":")
+        if (type === "person") {
+          const person = personLinks.personByUid(context, uid)
+          if (!person) throw new CliError("not_found", `no ${ownerRef} in the store`)
+          owner = { person: Number(person.uid) }
+        } else {
+          const found = database
+            .prepare("SELECT id FROM organizations WHERE id = ? AND deleted_at IS NULL")
+            .get(Number(uid) || 0)
+          if (!found) throw new CliError("not_found", `no ${ownerRef} in the store`)
+          owner = { organization: Number(found.id) }
+        }
       }
       let decision: MentionDecision | undefined
       inTransaction(() => {
-        decision = confirmMention(context, accountKey, id, personPk, by)
+        decision = confirmMention(context, accountKey, id, owner, by)
       })
       return decision as MentionDecision
     },

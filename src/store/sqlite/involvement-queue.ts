@@ -9,7 +9,7 @@ const ARMS: [string, string, string][] = [
     `
   SELECT il.person_id, m.sender_identity_id AS identity_id, 'message' AS subject_type, m.id AS subject_id,
     'sender' AS role, m.sent_at AS occurred_at, coalesce(c.scope,a.scope) AS scope, m.account_id, NULL AS project_id
-    FROM messages m JOIN identity_links il ON il.identity_id=m.sender_identity_id
+    FROM messages m JOIN identity_links il ON il.identity_id=m.sender_identity_id AND il.person_id IS NOT NULL
     JOIN chats c ON c.id=m.chat_id JOIN accounts a ON a.id=m.account_id WHERE m.deleted_at IS NULL
 `,
   ],
@@ -20,7 +20,7 @@ const ARMS: [string, string, string][] = [
   SELECT il.person_id, i.id, 'message', m.id, 'mentioned', m.sent_at, coalesce(c.scope,a.scope), m.account_id, NULL
     FROM messages m JOIN chats c ON c.id=m.chat_id JOIN accounts a ON a.id=m.account_id
     JOIN identities i ON i.provider=a.provider AND i.external_id IN (SELECT value FROM json_each(m.mentions))
-    JOIN identity_links il ON il.identity_id=i.id WHERE m.deleted_at IS NULL
+    JOIN identity_links il ON il.identity_id=i.id AND il.person_id IS NOT NULL WHERE m.deleted_at IS NULL
 `,
   ],
   [
@@ -29,7 +29,7 @@ const ARMS: [string, string, string][] = [
     `
   SELECT il.person_id, cm.identity_id, 'chat', c.id, 'participant', cm.created_at,
     coalesce(c.scope,a.scope), c.account_id, NULL FROM chat_members cm
-    JOIN identity_links il ON il.identity_id=cm.identity_id JOIN chats c ON c.id=cm.chat_id JOIN accounts a ON a.id=c.account_id WHERE 1
+    JOIN identity_links il ON il.identity_id=cm.identity_id AND il.person_id IS NOT NULL JOIN chats c ON c.id=cm.chat_id JOIN accounts a ON a.id=c.account_id WHERE 1
 `,
   ],
   [
@@ -37,7 +37,7 @@ const ARMS: [string, string, string][] = [
     "m.id",
     `
   SELECT il.person_id, mp.identity_id, 'meeting', m.id, 'participant', coalesce(m.started_at,m.created_at),
-    a.scope, m.account_id, NULL FROM meeting_participants mp JOIN identity_links il ON il.identity_id=mp.identity_id
+    a.scope, m.account_id, NULL FROM meeting_participants mp JOIN identity_links il ON il.identity_id=mp.identity_id AND il.person_id IS NOT NULL
     JOIN meetings m ON m.id=mp.meeting_id JOIN accounts a ON a.id=m.account_id WHERE m.deleted_at IS NULL
 `,
   ],
@@ -46,7 +46,7 @@ const ARMS: [string, string, string][] = [
     "e.id",
     `
   SELECT il.person_id, e.from_identity_id, 'email', e.id, 'sender', coalesce(e.sent_at,e.received_at,e.created_at),
-    a.scope, e.account_id, NULL FROM emails e JOIN identity_links il ON il.identity_id=e.from_identity_id
+    a.scope, e.account_id, NULL FROM emails e JOIN identity_links il ON il.identity_id=e.from_identity_id AND il.person_id IS NOT NULL
     JOIN accounts a ON a.id=e.account_id WHERE e.deleted_at IS NULL
 `,
   ],
@@ -55,7 +55,7 @@ const ARMS: [string, string, string][] = [
     "e.id",
     `
   SELECT il.person_id, er.identity_id, 'email', e.id, 'recipient', coalesce(e.sent_at,e.received_at,e.created_at),
-    a.scope, e.account_id, NULL FROM email_recipients er JOIN identity_links il ON il.identity_id=er.identity_id
+    a.scope, e.account_id, NULL FROM email_recipients er JOIN identity_links il ON il.identity_id=er.identity_id AND il.person_id IS NOT NULL
     JOIN emails e ON e.id=er.email_id JOIN accounts a ON a.id=e.account_id WHERE e.deleted_at IS NULL
 `,
   ],
@@ -84,7 +84,7 @@ const linkArm = (linkFrom: string, linkTo: string) => `
     coalesce(c.scope,a.scope,p.scope,'personal') AS scope, coalesce(m.account_id,c.account_id,e.account_id,mt.account_id,d.account_id) AS account_id, p.id AS project_id
     FROM (SELECT from_type,from_id,to_type,to_id,role,created_at,confirmed FROM links WHERE ${linkFrom}
       UNION ALL SELECT to_type,to_id,from_type,from_id,role,created_at,confirmed FROM links WHERE from_type IN ('person','identity') AND to_id IS NOT NULL AND ${linkTo}) l
-    LEFT JOIN identity_links il ON l.to_type='identity' AND il.identity_id=l.to_id
+    LEFT JOIN identity_links il ON l.to_type='identity' AND il.identity_id=l.to_id AND il.person_id IS NOT NULL
     LEFT JOIN messages m ON l.from_type='message' AND m.id=l.from_id
     LEFT JOIN chats c ON c.id=CASE WHEN l.from_type='chat' THEN l.from_id ELSE m.chat_id END
     LEFT JOIN emails e ON l.from_type='email' AND e.id=l.from_id

@@ -769,7 +769,9 @@ export const messageOfEmail = (email: Email, thread: string): Message => {
  * so an address in Cc is shown in Cc only.
  */
 const mailFieldsOf = (database: CacheDatabase, email: Email, thread: string, key: AccountRow): MailFields => {
-  const personOf = database.prepare("SELECT person_id AS person FROM identity_links WHERE identity_id = ?")
+  const personOf = database.prepare(
+    "SELECT person_id AS person FROM identity_links WHERE identity_id = ? AND person_id IS NOT NULL",
+  )
   const person = (identityId: number | null, address: string, name: string | null): MailPerson => {
     const found = identityId === null ? undefined : personOf.get(identityId)
     return { name, address, ref: found ? `person:${found.person}` : null }

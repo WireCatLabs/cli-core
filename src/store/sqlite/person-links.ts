@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Id, Page } from "../../domain/models.js"
 import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredHit } from "../store.js"
-import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
+import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import {
@@ -15,13 +15,16 @@ import {
 } from "./schema.js"
 import { hitsWhere } from "./search.js"
 
-const identityRow = ({ orm }: StoreContext, { provider, id }: IdentityRef) =>
-  orm
+/** An identity with a person; one an organization owns is nobody's person. */
+const identityRow = ({ orm }: StoreContext, { provider, id }: IdentityRef) => {
+  const row = orm
     .select({ pk: identities.id, personPk: identityLinks.personId })
     .from(identities)
     .innerJoin(identityLinks, eq(identityLinks.identityId, identities.id))
-    .where(and(eq(identities.provider, provider), eq(identities.externalId, id)))
+    .where(and(eq(identities.provider, provider), eq(identities.externalId, id), isNotNull(identityLinks.personId)))
     .get()
+  return row ? { pk: row.pk, personPk: Number(row.personPk) } : undefined
+}
 
 const required = (context: StoreContext, ref: IdentityRef) => {
   const found = identityRow(context, ref)
@@ -82,33 +85,62 @@ export const personOf = (context: StoreContext, ref: IdentityRef): PersonRecord 
   return found ? recordOf(context, found.personPk) : undefined
 }
 
-const move = (context: StoreContext, identityPk: number, from: number, to: number, { method, by }: LinkOptions) => {
+/** An identity's one owner: a person or an organization. */
+export type IdentityOwner = { person: number; organization?: undefined } | { organization: number; person?: undefined }
+
+const ownerOf = (context: StoreContext, identityPk: number) =>
+  context.orm
+    .select({ person: identityLinks.personId, organization: identityLinks.organizationId })
+    .from(identityLinks)
+    .where(eq(identityLinks.identityId, identityPk))
+    .get()
+
+const move = (
+  context: StoreContext,
+  identityPk: number,
+  from: { person: number | null; organization: number | null },
+  to: IdentityOwner,
+  { method, by }: LinkOptions,
+) => {
   const at = context.now()
   context.orm
     .update(identityLinks)
-    .set({ personId: to, method, confidence: 1, createdAt: at, updatedAt: at, author: by })
+    .set({
+      personId: to.person ?? null,
+      organizationId: to.organization ?? null,
+      method,
+      confidence: 1,
+      createdAt: at,
+      updatedAt: at,
+      author: by,
+    })
     .where(eq(identityLinks.identityId, identityPk))
     .run()
   context.orm
     .insert(identityLinkEvents)
-    .values({ identityId: identityPk, fromPersonId: from, toPersonId: to, method, createdAt: at, author: by })
+    .values({
+      identityId: identityPk,
+      fromPersonId: from.person,
+      toPersonId: to.person ?? null,
+      fromOrganizationId: from.organization,
+      toOrganizationId: to.organization ?? null,
+      method,
+      createdAt: at,
+      author: by,
+    })
     .run()
 }
 
-/** A reviewed meeting participant association moves only its selected identity. */
-export const linkIdentityToPerson = (
+/** Gives an identity its owner, a person or an organization, moving it from the one it had. */
+export const linkIdentityToOwner = (
   context: StoreContext,
   identityPk: number,
-  target: number,
+  owner: IdentityOwner,
   options: LinkOptions,
 ): void => {
-  const found = context.orm
-    .select({ personId: identityLinks.personId })
-    .from(identityLinks)
-    .where(eq(identityLinks.identityId, identityPk))
-    .get()
+  const found = ownerOf(context, identityPk)
   if (found) {
-    move(context, identityPk, found.personId, target, options)
+    move(context, identityPk, found, owner, options)
     return
   }
   const at = context.now()
@@ -116,7 +148,8 @@ export const linkIdentityToPerson = (
     .insert(identityLinks)
     .values({
       identityId: identityPk,
-      personId: target,
+      personId: owner.person ?? null,
+      organizationId: owner.organization ?? null,
       method: options.method,
       confidence: 1,
       createdAt: at,
@@ -129,13 +162,22 @@ export const linkIdentityToPerson = (
     .values({
       identityId: identityPk,
       fromPersonId: null,
-      toPersonId: target,
+      toPersonId: owner.person ?? null,
+      toOrganizationId: owner.organization ?? null,
       method: options.method,
       createdAt: at,
       author: options.by,
     })
     .run()
 }
+
+/** A reviewed meeting participant association moves only its selected identity. */
+export const linkIdentityToPerson = (
+  context: StoreContext,
+  identityPk: number,
+  target: number,
+  options: LinkOptions,
+): void => linkIdentityToOwner(context, identityPk, { person: target }, options)
 
 /**
  * Makes `other` and everyone already linked to it the same person as `person`. Never inferred from a
@@ -155,7 +197,8 @@ export const linkIdentities = (
       .from(identityLinks)
       .where(eq(identityLinks.personId, moving.personPk))
       .all()
-    for (const { identityPk } of together) move(context, identityPk, moving.personPk, target.personPk, options)
+    for (const { identityPk } of together)
+      move(context, identityPk, { person: moving.personPk, organization: null }, { person: target.personPk }, options)
   }
   const record = recordOf(context, target.personPk)
   // Two identities that were two people named alike are one now, so a name that was ambiguous may not be.
@@ -185,7 +228,7 @@ export const unlinkIdentity = (context: StoreContext, ref: IdentityRef, options:
       .returning({ pk: persons.id })
       .get()?.pk,
   )
-  move(context, found.pk, found.personPk, alone, options)
+  move(context, found.pk, { person: found.personPk, organization: null }, { person: alone }, options)
   return recordOf(context, alone)
 }
 

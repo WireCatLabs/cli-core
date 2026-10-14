@@ -10,7 +10,7 @@ import {
 } from "../../domain/mentions.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { StoreContext } from "./open.js"
-import { linkIdentityToPerson } from "./person-links.js"
+import { type IdentityOwner, linkIdentityToOwner } from "./person-links.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 
 /** A stored mention of a message's text, with what `mentions list` and `show` need to point at it. */
@@ -350,22 +350,25 @@ const decide = (
 
 /**
  * Says what a value is, for every place it is written. A phone or an address gets an identity of its own
- * (`provider` = the kind, the value as its id) owned by `personPk`; moving it to another person later is
+ * (`provider` = the kind, the value as its id) owned by a person or an organization; moving it to another person later is
  * that identity's link, not the mentions. A document id names the stored document.
  */
 export const confirmMention = (
   context: StoreContext,
   accountPk: number,
   id: number,
-  personPk: number | undefined,
+  owner: IdentityOwner | undefined,
   by: string,
 ): MentionDecision => {
   const { database } = context
   const mention = mentionOfAccount(database, accountPk, id)
   const now = context.now()
   if (mention.kind === "phone" || mention.kind === "email") {
-    if (personPk === undefined)
-      throw new CliError("validation_error", `a ${mention.kind} is confirmed to someone — name them as person:<uid>`)
+    if (owner === undefined)
+      throw new CliError(
+        "validation_error",
+        `a ${mention.kind} is confirmed to its owner — person:<uid> or organization:<id>`,
+      )
     database
       .prepare(
         "INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES (?, ?, ?, ?) " +
@@ -377,7 +380,7 @@ export const confirmMention = (
         .prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
         .get(mention.kind, mention.value)?.id,
     )
-    linkIdentityToPerson(context, identity, personPk, { method: "mention", by })
+    linkIdentityToOwner(context, identity, owner, { method: "mention", by })
     return decide(database, mention, "linked", { type: "identity", id: identity }, by, now)
   }
   if (mention.kind === "document") {

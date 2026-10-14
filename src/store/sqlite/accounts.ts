@@ -215,7 +215,7 @@ const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<number>) =>
   const gone = JSON.stringify(orphans.filter((id) => !kept.has(id)))
   const persons = database
     .prepare(
-      "SELECT DISTINCT person_id AS id FROM identity_links WHERE identity_id IN (SELECT value FROM json_each(?))",
+      "SELECT DISTINCT person_id AS id FROM identity_links WHERE person_id IS NOT NULL AND identity_id IN (SELECT value FROM json_each(?))",
     )
     .all(gone)
     .map(({ id }) => Number(id))

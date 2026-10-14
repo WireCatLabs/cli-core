@@ -396,5 +396,42 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE INDEX `meetings_title_to_fold` ON `meetings` (`id`) WHERE title IS NOT NULL AND title_folded IS NULL;",
       "CREATE INDEX `tasks_close_reason_to_fold` ON `tasks` (`id`) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL;"
     ]
+  },
+  {
+    "name": "20261014122043_version-10-organization-owners",
+    "statements": [
+      "ALTER TABLE `identity_link_events` ADD `from_organization_id` integer REFERENCES organizations(id);",
+      "ALTER TABLE `identity_link_events` ADD `to_organization_id` integer REFERENCES organizations(id);",
+      "ALTER TABLE `identity_links` ADD `organization_id` integer REFERENCES organizations(id);",
+      "PRAGMA foreign_keys=OFF;",
+      "CREATE TABLE `__new_identity_link_events` (\n\t`id` integer PRIMARY KEY,\n\t`identity_id` integer NOT NULL,\n\t`from_person_id` integer,\n\t`to_person_id` integer,\n\t`method` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`author` text NOT NULL,\n\t`from_organization_id` integer,\n\t`to_organization_id` integer,\n\tCONSTRAINT `fk_identity_link_events_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `fk_identity_link_events_from_person_id_persons_id_fk` FOREIGN KEY (`from_person_id`) REFERENCES `persons`(`id`),\n\tCONSTRAINT `fk_identity_link_events_to_person_id_persons_id_fk` FOREIGN KEY (`to_person_id`) REFERENCES `persons`(`id`),\n\tCONSTRAINT `fk_identity_link_events_from_organization_id_organizations_id_fk` FOREIGN KEY (`from_organization_id`) REFERENCES `organizations`(`id`),\n\tCONSTRAINT `fk_identity_link_events_to_organization_id_organizations_id_fk` FOREIGN KEY (`to_organization_id`) REFERENCES `organizations`(`id`)\n);",
+      "INSERT INTO `__new_identity_link_events`(`id`, `identity_id`, `from_person_id`, `to_person_id`, `method`, `created_at`, `author`) SELECT `id`, `identity_id`, `from_person_id`, `to_person_id`, `method`, `created_at`, `author` FROM `identity_link_events`;",
+      "DROP TABLE `identity_link_events`;",
+      "ALTER TABLE `__new_identity_link_events` RENAME TO `identity_link_events`;",
+      "PRAGMA foreign_keys=ON;",
+      "PRAGMA foreign_keys=OFF;",
+      "CREATE TABLE `__new_identity_links` (\n\t`identity_id` integer PRIMARY KEY,\n\t`person_id` integer,\n\t`method` text NOT NULL,\n\t`confidence` real NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`author` text NOT NULL,\n\t`source` text,\n\t`updated_at` integer NOT NULL,\n\t`organization_id` integer,\n\tCONSTRAINT `fk_identity_links_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `fk_identity_links_person_id_persons_id_fk` FOREIGN KEY (`person_id`) REFERENCES `persons`(`id`),\n\tCONSTRAINT `fk_identity_links_organization_id_organizations_id_fk` FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`)\n);",
+      "INSERT INTO `__new_identity_links`(`identity_id`, `person_id`, `method`, `confidence`, `created_at`, `author`, `source`, `updated_at`) SELECT `identity_id`, `person_id`, `method`, `confidence`, `created_at`, `author`, `source`, `updated_at` FROM `identity_links`;",
+      "DROP TABLE `identity_links`;",
+      "ALTER TABLE `__new_identity_links` RENAME TO `identity_links`;",
+      "PRAGMA foreign_keys=ON;",
+      "CREATE INDEX `identity_link_events_by_identity_id` ON `identity_link_events` (`identity_id`);",
+      "CREATE INDEX `identity_link_events_by_from_person_id` ON `identity_link_events` (`from_person_id`);",
+      "CREATE INDEX `identity_link_events_by_to_person_id` ON `identity_link_events` (`to_person_id`);",
+      "CREATE INDEX `identity_link_events_by_from_organization_id` ON `identity_link_events` (`from_organization_id`);",
+      "CREATE INDEX `identity_link_events_by_to_organization_id` ON `identity_link_events` (`to_organization_id`);",
+      "CREATE INDEX `identity_links_by_person_id` ON `identity_links` (`person_id`);",
+      "CREATE INDEX `identity_links_by_organization_id` ON `identity_links` (`organization_id`);"
+    ]
+  },
+  {
+    "name": "20261014122124_version-10-organization-owners-triggers",
+    "statements": [
+      "-- Rebuilding identity_links dropped its triggers; they come back here. An identity an organization owns has no\n-- person, so it takes part in nothing as a person: a move to an organization drops its involvements, and a move from\n-- one to a person queues them.\nCREATE TRIGGER involvement_identity_link_ai AFTER INSERT ON identity_links BEGIN\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'message', id FROM messages WHERE sender_identity_id = new.identity_id;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'chat', chat_id FROM chat_members WHERE identity_id = new.identity_id;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'meeting', meeting_id FROM meeting_participants WHERE identity_id = new.identity_id;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'email', id FROM emails WHERE from_identity_id = new.identity_id;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'email', email_id FROM email_recipients WHERE identity_id = new.identity_id;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT from_type, from_id FROM links WHERE to_type = 'identity' AND to_id = new.identity_id;\nEND;",
+      "CREATE TRIGGER involvement_identity_link_au AFTER UPDATE OF person_id ON identity_links WHEN old.person_id IS NOT new.person_id BEGIN\n  UPDATE involvements SET person_id = new.person_id WHERE identity_id = new.identity_id AND new.person_id IS NOT NULL;\n  DELETE FROM involvements WHERE identity_id = new.identity_id AND new.person_id IS NULL;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'message', id FROM messages WHERE sender_identity_id = new.identity_id AND old.person_id IS NULL;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'chat', chat_id FROM chat_members WHERE identity_id = new.identity_id AND old.person_id IS NULL;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'meeting', meeting_id FROM meeting_participants WHERE identity_id = new.identity_id AND old.person_id IS NULL;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'email', id FROM emails WHERE from_identity_id = new.identity_id AND old.person_id IS NULL;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT 'email', email_id FROM email_recipients WHERE identity_id = new.identity_id AND old.person_id IS NULL;\n  INSERT OR IGNORE INTO involvement_pending (indexable_type, id) SELECT from_type, from_id FROM links WHERE to_type = 'identity' AND to_id = new.identity_id AND old.person_id IS NULL;\nEND;",
+      "CREATE TRIGGER involvement_identity_link_ad AFTER DELETE ON identity_links BEGIN\n  DELETE FROM involvements WHERE identity_id = old.identity_id;\nEND;",
+      "-- Exactly one owner: a person or an organization.\nCREATE TRIGGER identity_links_one_owner_ai BEFORE INSERT ON identity_links\n  WHEN (new.person_id IS NULL) = (new.organization_id IS NULL) BEGIN\n  SELECT RAISE(ABORT, 'an identity has exactly one owner: a person or an organization');\nEND;",
+      "CREATE TRIGGER identity_links_one_owner_au BEFORE UPDATE OF person_id, organization_id ON identity_links\n  WHEN (new.person_id IS NULL) = (new.organization_id IS NULL) BEGIN\n  SELECT RAISE(ABORT, 'an identity has exactly one owner: a person or an organization');\nEND;"
+    ]
   }
 ]

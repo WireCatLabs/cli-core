@@ -9,7 +9,8 @@ export const resolvePersonLinks = (database: CacheDatabase, names: (string | nul
     const people = new Set<number>()
     for (const row of database
       .prepare(
-        "SELECT i.name, i.username, il.person_id FROM identities i JOIN identity_links il ON il.identity_id=i.id",
+        "SELECT i.name, i.username, il.person_id FROM identities i JOIN identity_links il ON il.identity_id=i.id " +
+          "WHERE il.person_id IS NOT NULL",
       )
       .all()) {
       if ([row.name, row.username].some((name) => name != null && keyOf(String(name)) === key))
@@ -17,7 +18,7 @@ export const resolvePersonLinks = (database: CacheDatabase, names: (string | nul
     }
     for (const row of database
       .prepare(
-        "SELECT a.name, il.person_id FROM aliases a JOIN identity_links il ON il.identity_id=a.aliasable_id WHERE a.aliasable_type='identity' UNION ALL SELECT name, aliasable_id AS person_id FROM aliases WHERE aliasable_type='person'",
+        "SELECT a.name, il.person_id FROM aliases a JOIN identity_links il ON il.identity_id=a.aliasable_id WHERE a.aliasable_type='identity' AND il.person_id IS NOT NULL UNION ALL SELECT name, aliasable_id AS person_id FROM aliases WHERE aliasable_type='person'",
       )
       .all())
       if (keyOf(String(row.name)) === key) people.add(Number(row.person_id))

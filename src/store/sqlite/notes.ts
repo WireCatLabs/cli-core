@@ -241,7 +241,7 @@ const personsNamed = (database: CacheDatabase, key: string): Set<number> => {
     const rows = database
       .prepare(
         "SELECT i.name, i.username, il.person_id FROM identities_fts f JOIN identities i ON i.id = f.rowid " +
-          "JOIN identity_links il ON il.identity_id = i.id WHERE identities_fts MATCH ?",
+          "JOIN identity_links il ON il.identity_id = i.id AND il.person_id IS NOT NULL WHERE identities_fts MATCH ?",
       )
       .all(`"${key.replaceAll('"', '""')}"`)
     for (const row of rows) {

@@ -155,17 +155,19 @@ export const identityLinks = sqliteTable(
     identityId: integer("identity_id")
       .primaryKey()
       .references(() => identities.id),
-    personId: integer("person_id")
-      .notNull()
-      .references(() => persons.id),
+    personId: integer("person_id").references(() => persons.id),
     method: text("method").notNull(),
     confidence: real("confidence").notNull(),
     createdAt: integer("created_at").notNull(),
     author: text("author").notNull(),
     source: text("source"),
     updatedAt: integer("updated_at").notNull(),
+    organizationId: integer("organization_id").references(() => organizations.id),
   },
-  (table) => [index("identity_links_by_person_id").on(table.personId)],
+  (table) => [
+    index("identity_links_by_person_id").on(table.personId),
+    index("identity_links_by_organization_id").on(table.organizationId),
+  ],
 )
 
 export const identityLinkEvents = sqliteTable(
@@ -176,17 +178,19 @@ export const identityLinkEvents = sqliteTable(
       .notNull()
       .references(() => identities.id),
     fromPersonId: integer("from_person_id").references(() => persons.id),
-    toPersonId: integer("to_person_id")
-      .notNull()
-      .references(() => persons.id),
+    toPersonId: integer("to_person_id").references(() => persons.id),
     method: text("method").notNull(),
     createdAt: integer("created_at").notNull(),
     author: text("author").notNull(),
+    fromOrganizationId: integer("from_organization_id").references(() => organizations.id),
+    toOrganizationId: integer("to_organization_id").references(() => organizations.id),
   },
   (table) => [
     index("identity_link_events_by_identity_id").on(table.identityId),
     index("identity_link_events_by_from_person_id").on(table.fromPersonId),
     index("identity_link_events_by_to_person_id").on(table.toPersonId),
+    index("identity_link_events_by_from_organization_id").on(table.fromOrganizationId),
+    index("identity_link_events_by_to_organization_id").on(table.toOrganizationId),
   ],
 )
 
