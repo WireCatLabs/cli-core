@@ -33,6 +33,8 @@ shape of this file.
 
 ### Fixed
 
+- Recorded message reads and sends retain their numeric message IDs as `ids.message_id`, so run search can find them after log redaction. Message text and content-bearing keys remain excluded.
+
 - **Search, `inbox`, `review` and a person's context work on a store with very many chats.** The chat-coverage
   check built one SQL parameter per chat and failed past 32,766 chats, and several steps passed every chat as
   function arguments, which Node refuses past about 125,000. Both now read any number of chats.
