@@ -39,14 +39,15 @@ export const runsCommand = (app: AppIdentity): Command => {
   command
     .command("show")
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
-    .description("one run: what it was, how it ended and what went wrong; -v for every event")
+    .description("one run: what it was, how it ended, and every event it logged")
+    .option("--problems", "only failed responses, warnings and crashes")
     .action(function (this: Command, id: string) {
       const output = outputFor(this)
       const { renderer } = output
       const found = runOrRefuse(this, id)
       const events = readEvents(found.dir).map(readable)
-      const all = (this.optsWithGlobals<{ verbose?: number }>().verbose ?? 0) > 0
-      const shown = all ? events : events.filter(notable)
+      const { problems } = this.opts<{ problems?: boolean }>()
+      const shown = problems ? events.filter(notable) : events
       // Events are log records as written; only the run's own fields are renamed here.
       renderAnswer(
         this,
@@ -60,7 +61,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       )
       if (shown.length < events.length)
         renderer.note(
-          `${events.length - shown.length} more events — \`${app.command} runs show ${id} -v\` shows them all`,
+          `${events.length - shown.length} other events — \`${app.command} runs show ${id}\` shows them all`,
         )
     })
 
@@ -120,4 +121,4 @@ const notable = (event: Record<string, unknown>): boolean =>
   event.outcome === "error" || event.event === "warning" || event.event === "crash"
 
 /** Drops what the logger puts on every line and `show` already prints once above the events. */
-const readable = ({ level, runId, command, profile, ...event }: Record<string, unknown>) => event
+const readable = ({ level, run_id, runId, command, profile, ...event }: Record<string, unknown>) => event
