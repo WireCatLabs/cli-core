@@ -1,3 +1,5 @@
+import type { QueryAst } from "@wirecat/cli-base/query"
+import type { MeetingOwner } from "./item.js"
 import type {
   Attachment,
   ChatLine,
@@ -58,6 +60,8 @@ export interface MeetingDetails {
 }
 export interface MeetingFilter {
   accountId?: number
+  /** A validated `meetings list` query over `MEETING_QUERY`'s fields. */
+  query?: QueryAst
   eventId?: number
   meetingSeriesId?: number
   since?: number
@@ -91,6 +95,8 @@ export interface MeetingStore {
   /** Atomic, keyed by account + external id. Preserves event links and transcript history. */
   saveMeeting(input: MeetingSave): Promise<MeetingDetails>
   meetings(filter?: MeetingFilter): Promise<Meeting[]>
+  /** The provider and account a meeting account id stands for; `null` when the store has no such account. */
+  account(id: number): Promise<MeetingOwner | null>
   meeting(id: number): Promise<MeetingDetails | null>
   participants(query: string, accountId?: number): Promise<Participant[]>
   search(query: string, filter?: MeetingFilter): Promise<SearchHit[]>

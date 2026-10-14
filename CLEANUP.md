@@ -18,3 +18,4 @@
 - /home/leemour/Projects/AI/cli-messaging-wt-a2-s3b — second worktree of the a2 S3 slice (conversations list); remove after its PR merges. 2026-10-14
 - `/home/leemour/Projects/AI/cli-messaging-wt-a2-s1` (feat/a2-s1-chats-contacts): stream A wave 2 slice S1 worktree; remove after merge (2026-10-14)
 - 2026-10-14: `../cli-messaging-wt-a2-s3c`, branch `feat/a2-s3-store-lists-3` and later S3 part-3 branches — wave 2 slice S3 (attachments, meetings, jobs lists, agenda); remove once merged.
+- 2026-10-14: `../cli-messaging-wt-a2-s3d`, branch `feat/a2-s3-meetings-list` — wave 2 slice S3 (meetings list onto the envelope); remove once merged.

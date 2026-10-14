@@ -16,6 +16,7 @@ export {
   serializeVtt,
 } from "./export.js"
 export { type ImportFile, importFiles } from "./import.js"
+export { MEETING_QUERY, type MeetingItem, type MeetingOwner, meeting, meetingItem } from "./item.js"
 export {
   createMeetingContext,
   MEETING_FACT_TYPES,
@@ -117,6 +118,12 @@ export {
   strongRecordingValidator,
   transferRecording,
 } from "./recording-transfer.js"
+export {
+  canonicalMeetingReference,
+  formatMeetingReference,
+  type MeetingReference,
+  parseMeetingReference,
+} from "./reference.js"
 export { SAVE_HELP, SAVE_NEXT_STEPS } from "./save-hints.js"
 export type {
   MeetingHitSearchRequest,
