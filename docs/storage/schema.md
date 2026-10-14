@@ -690,7 +690,7 @@ A file of a message, an email or a meeting, with its extracted text.
 | `name_folded` | text |  |  | `fold(name)`, which `attachments list name:` compares: SQLite's `lower()` folds ASCII only |
 | `local_path_folded` | text |  |  | `fold(local_path)`, for `local_path:` |
 
-*Keys and indexes:* `UNIQUE (attachable_type, attachable_id, position)`, `INDEX (name_folded)`
+*Keys and indexes:* `UNIQUE (attachable_type, attachable_id, position)`, `INDEX (name_folded)`, `INDEX (id) WHERE local_path IS NOT NULL AND local_path_folded IS NULL`
 
 ### `attachment_words`
 
@@ -1014,7 +1014,7 @@ One occurrence: it happened once, at one time.
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `title_folded` | text |  |  | `fold(title)`, which `meetings list title:` compares |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
 
 ### `meeting_participants`
 
@@ -1245,7 +1245,7 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `title_folded` | text |  |  | `fold(title)`, which `tasks list title:` compares |
 | `close_reason_folded` | text |  |  | `fold(close_reason)`, for `reason:` |
 
-*Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`
+*Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`
 
 ### `task_assignments`
 

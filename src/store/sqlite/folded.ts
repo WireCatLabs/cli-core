@@ -13,16 +13,33 @@ export const FOLDED = [
 export const folded = (value: string | null | undefined): string | null =>
   value === null || value === undefined ? null : fold(value)
 
-/** Fills the copies a file stored before they existed; each writer keeps its own from then on. */
-export const fillFolded = (database: CacheDatabase): number => {
+/**
+ * Fills the copies still empty: rows stored before version 8, and rows an older build writes into a store a newer one
+ * migrated — it does not know the columns. Run on every open; each batch is its own short write, so another process
+ * waits for one batch at most, and a store with nothing to fill costs one index probe per column (version 9).
+ */
+export const fillFolded = (database: CacheDatabase, { batch = 2_000 }: { batch?: number } = {}): number => {
   let filled = 0
   for (const { table, column } of FOLDED) {
-    const rows = database
-      .prepare(`SELECT id, ${column} AS value FROM ${table} WHERE ${column} IS NOT NULL AND ${column}_folded IS NULL`)
-      .all()
+    const pending = database.prepare(
+      `SELECT id, ${column} AS value FROM ${table} WHERE ${column} IS NOT NULL AND ${column}_folded IS NULL LIMIT ?`,
+    )
+    if (pending.get(1) === undefined) continue
     const fill = database.prepare(`UPDATE ${table} SET ${column}_folded = ? WHERE id = ?`)
-    for (const row of rows) fill.run(fold(String(row.value)), Number(row.id))
-    filled += rows.length
+    for (;;) {
+      database.exec("BEGIN IMMEDIATE")
+      let rows: Record<string, unknown>[]
+      try {
+        rows = pending.all(batch)
+        for (const row of rows) fill.run(fold(String(row.value)), Number(row.id))
+        database.exec("COMMIT")
+      } catch (error) {
+        database.exec("ROLLBACK")
+        throw error
+      }
+      filled += rows.length
+      if (rows.length < batch) break
+    }
   }
   return filled
 }

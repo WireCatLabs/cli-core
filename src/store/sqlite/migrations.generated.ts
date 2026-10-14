@@ -388,5 +388,13 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE INDEX `meetings_by_account_id_title_folded` ON `meetings` (`account_id`,`title_folded`);",
       "CREATE INDEX `tasks_by_title_folded` ON `tasks` (`title_folded`);"
     ]
+  },
+  {
+    "name": "20261014105203_version-9-folded-fill",
+    "statements": [
+      "CREATE INDEX `attachments_local_path_to_fold` ON `attachments` (`id`) WHERE local_path IS NOT NULL AND local_path_folded IS NULL;",
+      "CREATE INDEX `meetings_title_to_fold` ON `meetings` (`id`) WHERE title IS NOT NULL AND title_folded IS NULL;",
+      "CREATE INDEX `tasks_close_reason_to_fold` ON `tasks` (`id`) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL;"
+    ]
   }
 ]

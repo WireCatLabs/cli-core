@@ -1,0 +1,3 @@
+CREATE INDEX `attachments_local_path_to_fold` ON `attachments` (`id`) WHERE local_path IS NOT NULL AND local_path_folded IS NULL;--> statement-breakpoint
+CREATE INDEX `meetings_title_to_fold` ON `meetings` (`id`) WHERE title IS NOT NULL AND title_folded IS NULL;--> statement-breakpoint
+CREATE INDEX `tasks_close_reason_to_fold` ON `tasks` (`id`) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL;

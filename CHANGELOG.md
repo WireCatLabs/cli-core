@@ -38,8 +38,9 @@ shape of this file.
 - **List filters fold case in every script:** `tasks list title:|reason:`, `attachments list name:|local_path:`,
   `meetings list title:` and the catalog's `name:` compare `fold()`ed copies (case, accents, ё/й, as search does),
   so `title:КНИЖ*` and `name:"cafe"` match; before, `lower()` folded ASCII only and a Cyrillic name typed in another
-  case matched nothing. Store migration 8 adds the copies (`*_folded`, indexed where a list filters by them) and
-  fills them as the file opens. Wildcards compare with GLOB, so a prefix uses the index.
+  case matched nothing. Store migration 8 adds the copies (`*_folded`, indexed where a list filters by them).
+  Every open fills the copies still empty — rows from before, and rows an older build writes into a migrated store —
+  in short batches; migration 9 adds the partial indexes that make an open with nothing to fill one probe per column. Wildcards compare with GLOB, so a prefix uses the index.
 - **`contacts list name:` refuses while the store keeps no contacts** (`query.unsupported-field`, as `notes:` did),
   instead of filtering the chat list in memory. `people.list` takes `name` as the query term (was `search`).
 - **`searchNotes` answers in snake_case**, as an app prints it: `NotesFound` has `has_more`, `next_offset`,
