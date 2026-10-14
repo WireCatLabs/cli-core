@@ -9,6 +9,12 @@ shape of this file.
 
 ### Added
 
+- `createMeetingPreparationService` from `./services` composes a selected upcoming series with
+  bounded stored history, cited transcript cues, stored person links, confirmed projects, accepted
+  meeting facts and directly sourced tasks. It reports truncated/unavailable context and performs
+  no writes. `store.meetings.preparationContext` supplies compact, account- and revision-checked
+  local context with a shared stored-text byte budget. These SDK capabilities add no CLI command.
+
 - `store.meetings.seriesHistory` reads prior occurrences by exact account and provider series ID,
   with an absolute time window, bounded metadata rows and stored text bytes. It reports truncated
   and undated history without loading transcripts or inferring links from similar meeting titles.

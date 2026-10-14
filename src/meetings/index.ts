@@ -95,6 +95,13 @@ export {
   meetingHitContextLimits,
   validateMeetingPassage,
 } from "./passage.js"
+export {
+  type MeetingPreparationContext,
+  type MeetingPreparationContextRequest,
+  type MeetingPreparationContextStore,
+  type PreparationPage,
+  validateMeetingPreparationContext,
+} from "./preparation-context.js"
 export type {
   MeetingProjectDiscoveryOptions,
   MeetingProjectDiscoveryPage,

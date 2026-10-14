@@ -221,6 +221,13 @@ export {
   openMeetingEmbedder,
 } from "./meeting-model.js"
 export { formatMeetingPassage, type MeetingPassageFormat, readMeetingPassage } from "./meeting-passage-format.js"
+export { createMeetingPreparationService } from "./meeting-preparation.js"
+export type {
+  MeetingPreparation,
+  MeetingPreparationEntry,
+  MeetingPreparationPorts,
+  MeetingPreparationRequest,
+} from "./meeting-preparation-types.js"
 export {
   type MeetingReadStore,
   type MeetingReferenceReadOptions,
