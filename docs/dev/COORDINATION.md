@@ -4,7 +4,9 @@ Several sessions work on cli-core, tg-cli and max-cli at once. This page is what
 
 ## Store migrations
 
-**The next free migration version is 12.** Version 11 is taken by organizations owning identities
+**The next free migration version is 13.** Version 12 is taken by `mail_rules` (mail rules move from memo's
+config into the store, with the rule that decided each email; universal mail rules plan in cli-memo, 2026-10-14).
+Version 11 is taken by organizations owning identities
 (`organization_identities`, a table of its own beside `identity_links`; mentions plan phase 1c, owner's choice,
 2026-10-14). Version 10 is taken by mentions in file texts and voice transcripts (triggers queue an
 attachment's text; mentions plan phase 1e, 2026-10-14). Version 9 is taken by partial indexes over the folded copies still to
