@@ -165,7 +165,16 @@ export {
 } from "./context.js"
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
-export { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_READ, REMOTE_WRITE } from "./effects.js"
+export {
+  FETCH,
+  judgedEffects,
+  judgedTargets,
+  LOCAL_READ,
+  LOCAL_WRITE,
+  NO_EFFECTS,
+  REMOTE_READ,
+  REMOTE_WRITE,
+} from "./effects.js"
 export {
   type AnswerOutput,
   answerSchema,
@@ -173,6 +182,7 @@ export {
   type ItemBody,
   itemOf,
   jsonlRecords,
+  judgedAnswer,
   type ListBody,
   type ListInput,
   listOf,
@@ -321,5 +331,6 @@ export {
   settingsFor,
 } from "./settings.js"
 export { skillCommand } from "./skill-command.js"
+export { runnable, withSafety } from "./steps.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
 export { type UpgradeContext, upgradeCommand } from "./upgrade-command.js"
