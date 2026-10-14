@@ -52,8 +52,8 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         "link batches using the configured analysis provider; requires --chat and remembers consent for this chat/provider",
       )
       .option("--provider <provider>", "analysis: agent, openai or anthropic")
-      .option("--model <model>", "analysis model; overrides analysisModel")
-      .option("--base-url <url>", "analysis API endpoint; overrides analysisBaseUrl")
+      .option("--model <model>", "analysis model; overrides analysis_model")
+      .option("--base-url <url>", "analysis API endpoint; overrides analysis_base_url")
       .option("--size <n>", "analysis answer messages per batch, 10–200; default 50", positiveCount("--size"))
       .option(
         "--max-tokens <n>",

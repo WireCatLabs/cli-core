@@ -13,7 +13,7 @@ import type { Config, ProfileKind } from "./settings.js"
 
 type Scope = Record<string, unknown>
 type Levels = Record<string, Level>
-const LEGACY = ["readOnly", "allow", "mcpTools"] as const
+const LEGACY = ["read_only", "readOnly", "allow", "mcpTools"] as const
 const KINDS: ProfileKind[] = ["personal", "bot"]
 
 export interface PermissionMigration {
@@ -44,10 +44,11 @@ const effective = (config: Config, kind: ProfileKind, profile?: string): Levels 
     config.defaults,
   ]
   const nearest = (key: string) => layers.findIndex((scope) => scope?.[key] !== undefined)
-  const readOnly = layers[nearest("readOnly")]?.readOnly === true
+  const readOnlyKey = layers.some((scope) => scope?.read_only !== undefined) ? "read_only" : "readOnly"
+  const readOnly = layers[nearest(readOnlyKey)]?.[readOnlyKey] === true
   const allow = layers[nearest("allow")]?.allow as Permission[] | undefined
   const old = fromOldSettings(readOnly, allow, { bot: kind === "bot" })
-  const oldAt = nearest(readOnly ? "readOnly" : "allow")
+  const oldAt = nearest(readOnly ? readOnlyKey : "allow")
   return layerPermissions(
     layers.flatMap((scope, at): [string, Levels][] => [
       ["", levels(scope)],
@@ -60,8 +61,9 @@ const effective = (config: Config, kind: ProfileKind, profile?: string): Levels 
 const migrateLegacyPermissionConfig = (input: Config): PermissionMigration => {
   const before = scopes(input)
   for (const [name, scope] of before) {
-    if (scope.readOnly !== undefined && typeof scope.readOnly !== "boolean")
-      throw invalid(`${name}.readOnly must be true or false`)
+    for (const key of ["read_only", "readOnly"])
+      if (scope[key] !== undefined && typeof scope[key] !== "boolean")
+        throw invalid(`${name}.${key} must be true or false`)
     if (
       scope.allow !== undefined &&
       (!Array.isArray(scope.allow) || !scope.allow.every((word) => PERMISSIONS.includes(word)))

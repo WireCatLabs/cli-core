@@ -82,7 +82,7 @@ guessable from the others.
    allowed when they identify a part of the resource (`chats members list`), not an implementation
    detail. A group without a leaf command shows help, never runs a hidden default action.
    **The profile is chosen, never assumed.** A command that acts for one of several accounts or
-   profiles takes it explicitly (the first word, the tool's profile variable, or `defaultProfile` in
+   profiles takes it explicitly (the first word, the tool's profile variable, or `default_profile` in
    its config file); none given is an error that lists the profiles — never the first in the config,
    never an implicit `default`, not even the only profile; with none the error says how to create one
    by name (`tg personal setup`). A command that touches no account (`account list`, `config show`)
@@ -160,7 +160,7 @@ guessable from the others.
    keeps its name until then. `session` is this tool's login; `account sessions` are the other
    devices. **`flood`** is what the messenger told this profile to hold off on — the waits it asked
    for and a hold on writes — kept on this machine; `flood clear` is the owner's and has no MCP tool. The
-   **pace** is how fast one profile may ask its messenger, counted across every process (`requestsPerMinute`).
+   **pace** is how fast one profile may ask its messenger, counted across every process (`requests_per_minute`).
 8. **An MCP tool is named after its command** — see [MCP](#mcp).
 9. **No aliases.** A renamed command's old name stops working, and the release notes say so under
    "may break scripts".
@@ -682,7 +682,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--agent` | `<agent>` | install the skill for this agent; asks at a terminal, otherwise none |  | `setup` |
 | `--ai` |  | call the configured reply model with stored message data; requires reply consent, otherwise uses fallback |  | `replies test` |
 | `--all` |  | every row, no paging. **chats requests accept and decline take every pending request instead — Telegram counts them against its hourly limit first; MAX has no way to answer them all at once and refuses it, naming chats requests list — so it differs on purpose (Help text rule 4)** |  | `attachments list`, `chats list`, `chats members list`, `chats requests accept`, `chats requests decline`, `contacts list`, `inbox`, `messages download`, `messages sync`, `review`, `searches history`, `sends list`, `store export`, `store jobs list` |
-| `--all-bots` |  | also read every other bot's copy on this machine that readOtherBots allows |  | `bot contacts show`, `bot messages between`, `bot search messages` |
+| `--all-bots` |  | also read every other bot's copy on this machine that read_other_bots allows |  | `bot contacts show`, `bot messages between`, `bot search messages` |
 | `--all-can-pin` | `<on\|off>` | every member may pin messages |  | `chats update` |
 | `--allow-any-file` |  | send a --file even from credential folders or the tool's own folders |  | `bot messages send`, `messages send` |
 | `--allow-chats` | `<ids>` | replace allowed chat ids, comma-separated; empty clears |  | `replies audience` |
@@ -711,7 +711,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--before-n` | `<n>` | how many messages before it |  | `messages context` |
 | `--block` | `<value>` | Set to `true` if user should be blocked in chat. |  | `bot chats members remove` |
 | `--bot` |  | the bot section of the profile's settings, rather than the personal account's |  | `config set`, `config show`, `config unset` |
-| `--bots` | `<profiles>` | also read these bots' copies, comma separated — each allowed by readOtherBots |  | `bot contacts show`, `bot messages between`, `bot search messages` |
+| `--bots` | `<profiles>` | also read these bots' copies, comma separated — each allowed by read_other_bots |  | `bot contacts show`, `bot messages between`, `bot search messages` |
 | `--brief` |  | found messages and mail as reference, title, time, sender and excerpt only |  | every command (planned) |
 | `--budget` | `<pages>` | at most this many pages of a list, with a pause between them |  | `chats members audit`, `chats members fetch` |
 | `--by` | `<grouping>` | what to count by. **each command names its own groupings — stats messages show chat, sender, day or hour, and searches create the same for stats messages show --saved; stats chats show day or week, as a series beside its totals — so it differs on purpose (Help text rule 4)** |  | `searches create`, `stats charts`, `stats chats retention`, `stats chats show`, `stats messages show` |
@@ -836,7 +836,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--no-contacts-only` |  | do not require a contact |  | `replies edit` |
 | `--no-hours` |  | clear the working window |  | `replies edit` |
 | `--no-input` |  | never prompt or open an interactive login; piped input remains available |  | every command |
-| `--no-mark-read` |  | do not mark read, whatever the catchUpMarksRead setting says |  | `inbox`, `review` |
+| `--no-mark-read` |  | do not mark read, whatever the catch_up_marks_read setting says |  | `inbox`, `review` |
 | `--no-mentions-me` |  | do not require a mention of you or a reply to you |  | `replies edit` |
 | `--no-preview` |  | no preview card for a link in the text |  | `messages send` |
 | `--no-question` |  | do not require a question |  | `replies edit` |
@@ -1109,7 +1109,7 @@ whose values are levels. It holds for a command the owner types and for an agent
 5. **A group's moderation rules use the same four levels** for each kind of action (delete,
    remove, accept, decline), `readonly` meaning "report it, do nothing". A rule's level can only be
    as loose as the profile's level for `chats.moderate`.
-6. **The settings it replaces** — `readOnly`, `allow`, max's `mcpTools`, and the moderation words
+6. **The settings it replaces** — `read_only`, `allow`, max's `mcpTools`, and the moderation words
    `forbid`, `flag`, `confirm` — are translated once by `config migrate`, then refused with a
    message naming the new key.
 
@@ -1117,10 +1117,10 @@ whose values are levels. It holds for a command the owner types and for an agent
    `bot.chats.members.remove`, `bot.webhooks`. A profile can allow its bot what it does not allow
    its personal account, and the other way round; `bot` alone covers every bot command. The default
    is the personal one's: `bot.messages.delete: ask`. Housekeeping under `bot` is never gated —
-   `bot auth`, `bot list`, `bot recipients`, `bot sends`, `bot mcp`. The bot's old `readOnly` and
+   `bot auth`, `bot list`, `bot recipients`, `bot sends`, `bot mcp`. The bot's old `read_only` and
    `allow` words are translated by `config migrate` with the personal ones.
 
-What it does not decide stays separate: the recipient list (which chats), `sendsPerHour` (how
+What it does not decide stays separate: the recipient list (which chats), `sends_per_hour` (how
 many), `--allow-any-file` (which files).
 
 ## Retention and counter observation contract
@@ -1311,7 +1311,7 @@ Approved2026-10-07. These additive shared surfaces are implemented in the search
   uses `from_dir`, `download`, `output_dir` and `limit`, matching CLI semantics. A bounded
   scan returns `cursor`; pass it as MCP `cursor` or CLI `--cursor` to continue.
 - `messages download --extract` extracts only the files this download mapped to stored attachments.
-- Per-profile `searchCatchUp` defaults to false. `messages sync --catch-up` or `--no-catch-up` overrides
+- Per-profile `search_catch_up` defaults to false. `messages sync --catch-up` or `--no-catch-up` overrides
   it; `--catch-up-chunks`, `--catch-up-messages` and `--catch-up-time` bound local preparation.
   Defaults are500chunks,10,000messages and30seconds for the fetched chat. It never downloads a model
   or activates a remote embedding/analysis provider.

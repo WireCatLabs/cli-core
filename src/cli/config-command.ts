@@ -1,15 +1,9 @@
-import {
-  CliError,
-  configFilePath,
-  loadConfigFile,
-  pathsAreOverridden,
-  resolvePaths,
-  saveConfigFile,
-} from "@wirecat/cli-base"
+import { CliError, configFilePath, pathsAreOverridden, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
 import { type AppIdentity, envName } from "./app.js"
+import { loadSnakeCaseConfig } from "./config-keys.js"
 import { baseContext } from "./context.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { knownBeside, knownPermissionKeys, type PermissionKeyOf } from "./permission-keys.js"
@@ -42,7 +36,7 @@ export const configCommand = (
         if (!dryRun && env[envName(app, "PROFILE_LOCK")])
           throw new CliError("permission_error", "config migrate changes every profile — run outside the profile lock")
         const path = configFilePath(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).config)
-        const migrated = migratePermissionConfig(loadConfigFile(path, config.schema, () => ({ profiles: {} })))
+        const migrated = migratePermissionConfig(loadSnakeCaseConfig(path, config.schema, () => ({ profiles: {} })))
         if (migrated.changed) {
           const checked = v.safeParse(config.schema, migrated.config)
           if (!checked.success)
@@ -82,8 +76,8 @@ export const configCommand = (
           config_file: settings.configPath,
           config_found: settings.configFound,
           paths_overridden: overridden,
-          settings: [...config.allSettings, "commandTimeoutMs"]
-            .filter((setting) => bot || setting !== "readOtherBots")
+          settings: [...config.allSettings, "command_timeout_ms"]
+            .filter((setting) => bot || setting !== "read_other_bots")
             .map((setting) => sourced(settings, setting, config.schema)),
           store_settings: await storeSettings(env),
         }),
@@ -121,7 +115,7 @@ export const configCommand = (
       const context = baseContext(this, (flags, options) =>
         config.resolveSettings(flags, {
           ...options,
-          needsProfile: !everyone && setting !== "defaultProfile" && !isStoreSetting(setting),
+          needsProfile: !everyone && setting !== "default_profile" && !isStoreSetting(setting),
         }),
       )
       const { settings, renderer, env } = context
@@ -148,25 +142,25 @@ export const configCommand = (
         return
       }
       const defaults = everyone === true
-      if (setting === "defaultProfile" && (defaults || personal || bot))
+      if (setting === "default_profile" && (defaults || personal || bot))
         throw new CliError(
           "validation_error",
-          "defaultProfile is one for the whole file — drop --defaults, --personal and --bot",
+          "default_profile is one for the whole file — drop --defaults, --personal and --bot",
         )
       if (personal && bot)
         throw new CliError("validation_error", "--personal and --bot name different sections; use one")
       const kind = bot ? "bot" : personal ? "personal" : undefined
       const lock = envName(app, "PROFILE_LOCK")
-      if ((defaults || setting === "defaultProfile") && env[lock]) {
-        // The defaults are every other profile's settings too, and defaultProfile picks one of them.
+      if ((defaults || setting === "default_profile") && env[lock]) {
+        // The defaults are every other profile's settings too, and default_profile picks one of them.
         throw new CliError(
           "permission_error",
-          `this process is locked to profile ${settings.profile} (${lock}) — ${setting === "defaultProfile" ? setting : "--defaults"} changes other profiles`,
+          `this process is locked to profile ${settings.profile} (${lock}) — ${setting === "default_profile" ? setting : "--defaults"} changes other profiles`,
         )
       }
       if (
-        ["readOnly", "allow", "mcpTools"].includes(setting) &&
-        hasPermissionConfig(loadConfigFile(settings.configPath, config.schema, () => ({ profiles: {} })))
+        ["read_only", "allow", "mcpTools"].includes(setting) &&
+        hasPermissionConfig(loadSnakeCaseConfig(settings.configPath, config.schema, () => ({ profiles: {} })))
       ) {
         throw new CliError(
           "validation_error",
@@ -175,7 +169,7 @@ export const configCommand = (
       }
       if (action === "set") refuseUnknownKey(this, setting, String(given), permissionKey)
       const saved = config.changeSetting(settings.configPath, {
-        profile: defaults || setting === "defaultProfile" ? undefined : settings.profile,
+        profile: defaults || setting === "default_profile" ? undefined : settings.profile,
         setting,
         value: action === "set" ? String(given) : undefined,
         kind,
@@ -186,7 +180,7 @@ export const configCommand = (
         itemOf({
           config_file: settings.configPath,
           scope:
-            setting === "defaultProfile" ? "defaultProfile" : scopeOf(kind, defaults ? undefined : settings.profile),
+            setting === "default_profile" ? "default_profile" : scopeOf(kind, defaults ? undefined : settings.profile),
           setting,
           value: saved,
         }),
@@ -240,8 +234,8 @@ const scopeOf = (kind: string | undefined, profile: string | undefined): string 
 
 /** A shared setting from what was resolved; a messenger's own from the file, where it lives. */
 const sourced = (settings: Settings, setting: string, schema: Configuration["schema"]) => {
-  if (setting === "defaultProfile") {
-    const named = loadConfigFile(settings.configPath, schema, () => ({ profiles: {} })).defaultProfile
+  if (setting === "default_profile") {
+    const named = loadSnakeCaseConfig(settings.configPath, schema, () => ({ profiles: {} })).default_profile
     return { setting, value: named ?? null, from: named === undefined ? "default" : "config file" }
   }
   if (setting === "models") {
@@ -257,14 +251,16 @@ const sourced = (settings: Settings, setting: string, schema: Configuration["sch
     const from = Object.keys(settings.permissions).length > 0 ? "config file" : "default"
     return { setting, value: settings.permissions, from, sources: settings.permissionSources }
   }
-  if (setting in settings.sources) {
-    const value = (settings as unknown as Record<string, unknown>)[setting]
+  // The code reads `timeoutMs`; the file says `timeout_ms`.
+  const field = setting.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase())
+  if (field in settings.sources) {
+    const value = (settings as unknown as Record<string, unknown>)[field]
     // No list is every action, and `null` would read as none.
-    return { setting, value: setting === "allow" ? (value ?? "all") : (value ?? null), from: settings.sources[setting] }
+    return { setting, value: setting === "allow" ? (value ?? "all") : (value ?? null), from: settings.sources[field] }
   }
   const { value, from } = fromFile<unknown>(settings, setting, UNLISTED_DEFAULTS[setting] ?? null)
   return { setting, value, from }
 }
 
 /** Settings read where they are used rather than in `resolveSettings`, and what an unset one means there. */
-const UNLISTED_DEFAULTS: Record<string, unknown> = { transcribeWith: "auto" }
+const UNLISTED_DEFAULTS: Record<string, unknown> = { transcribe_with: "auto" }

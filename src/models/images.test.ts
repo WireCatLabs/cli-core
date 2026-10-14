@@ -146,7 +146,7 @@ describe("shared gateway image input", () => {
         app,
         env: {},
         enabled: true,
-        settings: { models: { ocr: { provider: "openai", model, ...(baseUrl ? { baseUrl } : {}) } } },
+        settings: { models: { ocr: { provider: "openai", model, ...(baseUrl ? { base_url: baseUrl } : {}) } } },
       }).extractor
     expect(configured("a")).toBe(configured("a"))
     expect(configured("a")).not.toBe(configured("b"))

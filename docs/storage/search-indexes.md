@@ -182,7 +182,7 @@ photo's message, `matchedIn: "context"`, beside the conversation's own hit. Prov
 
 A photo's **picture** has a second chunk, `chunkable_type = 'image'` at `position = 1` (the context text is position
 0), whose hash is the sha256 of the image bytes and whose vector is in `embeddings` under the model key
-`local:clip-b32:512`, written by `images embed` for profiles with `pictureSearch` on. Position 0 and 1 never mix:
+`local:clip-b32:512`, written by `images embed` for profiles with `picture_search` on. Position 0 and 1 never mix:
 `saveImageChunks` replaces position 0 alone, and a picture search reads position 1 alone. The vector of a deleted
 message's picture is dropped on the next `images embed`.
 

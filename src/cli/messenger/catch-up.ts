@@ -8,9 +8,9 @@ export const MARK_READ_OPTION = [
   "--mark-read",
   "also mark each chat shown read, up to the newest message shown; the other side sees it",
 ] as const
-export const NO_MARK_READ_OPTION = ["--no-mark-read", "do not, whatever the catchUpMarksRead setting says"] as const
+export const NO_MARK_READ_OPTION = ["--no-mark-read", "do not, whatever the catch_up_marks_read setting says"] as const
 
-/** The typed flag decides; without one, the owner's `catchUpMarksRead` setting, off unless turned on (NEED-566). */
+/** The typed flag decides; without one, the owner's `catch_up_marks_read` setting, off unless turned on (NEED-566). */
 export const marksRead = (typed: boolean | undefined, settings: Settings): boolean => {
   const marking = typed ?? settings.catchUpMarksRead
   if (marking && settings.offline) {

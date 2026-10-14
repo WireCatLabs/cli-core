@@ -107,10 +107,10 @@ describe("bot contacts show", () => {
     expect(answer.messages.map((message: Message) => message.text)).toEqual(["hi bot"])
   })
 
-  it("**reads another bot's copy only when readOtherBots allows it**, and names the setting", async () => {
+  it("**reads another bot's copy only when read_other_bots allows it**, and names the setting", async () => {
     const refused = await call(["first", "bot", "contacts", "show", "@ann", "--bots", "second", "--json"])
     expect(refused.code).toBe(5)
-    expect(refused.stderr).toContain("readOtherBots")
+    expect(refused.stderr).toContain("read_other_bots")
 
     configure({ bot: { profiles: { first: { readOtherBots: ["second"] } } } })
     const allowed = await call(["first", "bot", "contacts", "show", "@ann", "--all-bots", "--json"])

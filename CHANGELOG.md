@@ -17,6 +17,14 @@ shape of this file.
   The TypeScript shapes (`DiagnosticEvent`, `SendEntry`, `RunMetadata`) keep their names: the conversion is at the
   file. Files written before are still read: `runs list|show|search`, the runs index, the doctor report and the send
   guard's hourly limit and retry check take either key, so nothing is rebuilt. `readEvents` returns snake_case keys.
+- **Config file setting names are snake_case** (`timeout_ms`, `keep_runs_for_days`, `sends_per_hour`,
+  `read_only`, `read_other_bots`, `default_profile`, `embedding_provider`, `analysis_base_url`,
+  `models.<purpose>.base_url`, …), in the file, in `config set|unset` and in `config show`. **An existing file moves
+  by itself:** the first read renames every setting the schema now declares in snake_case, in every section, and
+  writes the file back in its own mode — once, and only when the result is valid. Profile names, `permissions` paths
+  and model purposes are data and keep their spelling; a key an app still declares in camelCase stays until it renames
+  it. One setting under both names with different values is refused. `snakeCaseConfig` and `loadSnakeCaseConfig` are
+  exported for an app that reads its own config file. The code's `Settings` fields keep their names.
 - **`stats` reports refuse `--jsonl`** (`reason: "output.one-object"`), as charts and official statistics did:
   `stats messages show|unanswered|discussion|top|counters show|counters refresh`, `stats contacts responses|top`,
   `stats chats show|newcomers|retention|official`, `stats tasks show`, `stats charts`. The `* evidence` lists still
