@@ -1758,7 +1758,7 @@ describe("the MCP server", () => {
     })
     const kept = await call("chat_attachments_text_set", { message: "msg:chat/500/9/108", text: "Квартальный отчёт" })
     expect(kept.body.item).toEqual({
-      locator: "msg:chat/500/9/108",
+      ref: "msg:chat/500/9/108",
       attachment: 1,
       origin: "agent",
       chars: 17,

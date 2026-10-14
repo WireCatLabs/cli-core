@@ -21,6 +21,8 @@ shape of this file.
 - `messages evidence --cursor` and `chats media --cursor` take `<cursor>`, as every other list does. `chats list`,
   `contacts list`, `mentions confirm` and `mentions reject` have a summary of at most 80 characters; `--help` keeps
   the full description.
+- **`ref`, not `locator`, names the message** in `attachments extract` (`files[]`), `attachments show`,
+  `attachments text set` and `messages context --thread` (CLI and MCP), as in every other answer.
 
 ### Added
 
@@ -33,6 +35,9 @@ shape of this file.
 - **MCP prompts name only arguments the tools take.** `review` asked for `since`, which `review` refuses since
   0.268; it now passes the window as `query` (`date>"…"`). Every prompt writes its calls as the tool's
   `{ command, arguments }`, and a test checks each argument against the command's input.
+- **`config migrate --dry-run` leaves the file as it is.** Reading settings moved camelCase names to snake_case and
+  rewrote the file before the dry run started; a dry run, the global `--dry-run` preview, the update notice and the
+  failure record now read the file without writing it.
 
 ## 0.269.0 — 14.10.2026
 

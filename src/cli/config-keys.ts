@@ -76,12 +76,13 @@ export const snakeCaseConfig = (
 /**
  * Reads a config file, moving setting names an older version wrote in camelCase to snake_case. The file is
  * rewritten — in its own mode — only when something moved and the result is valid: a broken file is left as it
- * is for the schema to report.
+ * is for the schema to report. `rewrite: false` reads the moved names and leaves the file as it is.
  */
 export const loadSnakeCaseConfig = <T extends v.GenericSchema>(
   path: string,
   schema: T,
   fallback: () => v.InferOutput<T>,
+  { rewrite = true }: { rewrite?: boolean } = {},
 ): v.InferOutput<T> => {
   let text: string
   try {
@@ -101,6 +102,7 @@ export const loadSnakeCaseConfig = <T extends v.GenericSchema>(
     const problems = result.issues.map((issue) => `${v.getDotPath(issue) ?? "(root)"}: ${issue.message}`)
     throw new CliError("configuration_error", `${path} is not a valid config:\n  ${problems.join("\n  ")}`)
   }
-  if (renames.length > 0) writeSecurely(path, `${JSON.stringify(config, null, 2)}\n`, statSync(path).mode & 0o777)
+  if (rewrite && renames.length > 0)
+    writeSecurely(path, `${JSON.stringify(config, null, 2)}\n`, statSync(path).mode & 0o777)
   return result.output
 }

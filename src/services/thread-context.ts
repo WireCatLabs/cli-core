@@ -16,7 +16,7 @@ export interface ThreadOptions {
   signal?: AbortSignal
 }
 export interface ThreadContext {
-  locator: string
+  ref: string
   chat: Id
   message: Id
   mode: "thread" | "time"
@@ -66,7 +66,7 @@ export const readThreadContext = async (
 ): Promise<ThreadContext> => {
   const bounds = threadBounds(options)
   const result: ThreadContext = {
-    locator: formatLocator({ ...account, chat, message }),
+    ref: formatLocator({ ...account, chat, message }),
     chat,
     message,
     mode: "thread",

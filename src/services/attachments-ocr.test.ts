@@ -98,7 +98,7 @@ describe("API OCR in the existing attachment index", () => {
     const ocr = { extractor: "ocr:v1:fixture", transcribe }
     const first = await service.extract({ ocr, concurrency: 2, limit: 3 })
     expect(first).toMatchObject({ extracted: 3, complete: false, cursor: expect.any(String) })
-    expect(first.items.map(({ locator }) => locator)).toEqual([
+    expect(first.items.map(({ ref }) => ref)).toEqual([
       "msg:fixture/500/7/5",
       "msg:fixture/500/7/4",
       "msg:fixture/500/7/3",
@@ -114,7 +114,7 @@ describe("API OCR in the existing attachment index", () => {
     const { service, files } = await setup(1)
     expect(await service.extract()).toMatchObject({
       needsAgent: 1,
-      items: [{ localPath: join(files, "1.png"), locator: "msg:fixture/500/7/1", attachment: 1 }],
+      items: [{ localPath: join(files, "1.png"), ref: "msg:fixture/500/7/1", attachment: 1 }],
     })
     await service.setText({ chat: "7", message: "1", text: "agentliteral" })
     const transcribe = vi.fn(async () => "must not replace agent")

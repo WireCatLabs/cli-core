@@ -72,7 +72,7 @@ describe("graph context around a hit", () => {
     const found = await one.services.messages.thread("7", "5")
     expect(ids(found)).toEqual(["1", "3", "5", "6"])
     expect(found.chain).toEqual(["3", "1"])
-    expect(found).toMatchObject({ locator: "msg:test/500/7/5", mode: "thread", stale: false, stopped: [] })
+    expect(found).toMatchObject({ ref: "msg:test/500/7/5", mode: "thread", stale: false, stopped: [] })
     expect(found.links).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

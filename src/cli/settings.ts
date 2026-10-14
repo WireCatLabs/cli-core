@@ -253,6 +253,8 @@ export interface ResolveOptions {
    * when no profile is named. Its `profile` is then `default`, from `none named`.
    */
   needsProfile?: boolean
+  /** Read the config file without writing it: no default file, no setting names moved. For a dry run. */
+  readOnly?: boolean
 }
 
 /** Where `profile` came from when none was named and the command needs none. */
@@ -323,9 +325,11 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const configPathFor = ({ env = process.env, configDir }: ResolveOptions) =>
     configFilePath(configDir ?? resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).config)
 
-  const readConfig = (path: string): Config => {
+  const readConfig = (path: string, readOnly = false): Config => {
     try {
-      return loadSnakeCaseConfig(path, extension.schema ?? schema, () => ({ profiles: {} })) as Config
+      return loadSnakeCaseConfig(path, extension.schema ?? schema, () => ({ profiles: {} }), {
+        rewrite: !readOnly,
+      }) as Config
     } catch (error) {
       throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
     }
@@ -373,11 +377,12 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const env = options.env ?? process.env
     const configPath = configPathFor(options)
     try {
-      ensureDefaultConfig(configPath, snakeCaseConfig(extension.schema ?? schema, DEFAULT_CONFIG).config)
+      if (!options.readOnly)
+        ensureDefaultConfig(configPath, snakeCaseConfig(extension.schema ?? schema, DEFAULT_CONFIG).config)
     } catch (error) {
       throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
     }
-    const config = readConfig(configPath)
+    const config = readConfig(configPath, options.readOnly)
 
     const lock = given(env[PROFILE_LOCK])
     const named = first<string | undefined>(
