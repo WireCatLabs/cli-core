@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`images models list|download` need no permission**, as `models` never did: they look after the tool's own
+  files. Since 0.270.0 an app that maps every command (max) found no key for them.
+
 ### Changed — may break callers
 
 - **A next step to a command that only changes this machine no longer runs unasked.** `server restart` and `store

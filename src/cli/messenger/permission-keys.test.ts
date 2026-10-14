@@ -96,6 +96,8 @@ describe("the permission key of a command", () => {
     expect(keyForCommand(["store", "export"])).toBe("messages")
     expect(keyForCommand(["messages", "sync"])).toBe("messages")
     expect(keyForCommand(["conversations", "show"])).toBe("messages")
+    expect(keyForCommand(["images", "models", "download"])).toBeNull()
+    expect(keyForCommand(["images", "embed"])).toBe("conversations.embed")
     expect(keyForCommand(["conversations", "links", "add"])).toBe("conversations.links")
     expect(keyForCommand(["conversations", "embed"])).toBe("conversations.embed")
     expect(keyForCommand(["conversations", "embed", "clear"])).toBe("conversations.embed")

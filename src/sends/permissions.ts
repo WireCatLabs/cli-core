@@ -438,6 +438,8 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
   if (top === "conversations" && next === "links") return "conversations.links"
   // Vectors are written to the local store only, and the text never leaves the machine (phase 5 E10).
   if ((top === "conversations" || top === "images") && next === "embed") return "conversations.embed"
+  // The picture models moved under `images` (0.270.0) and stay what `models` is: the tool's own files.
+  if (top === "images" && next === "models") return null
   // Which files a message has, and where they are saved, tells as much as a message does; so does who
   // shared which document link, and when.
   if ((top === "attachments" && next === "list") || (top === "chats" && next === "documents")) return "messages"
