@@ -20,13 +20,21 @@ export const NO_EFFECTS: Effects = { remote: "none", local: "none" }
 export const judgedEffects = (effects: Effects | undefined): Effects | undefined =>
   effects && { remote: effects.remote, local: "none" }
 
-/** `stepTargets`, with each command's effects judged as above. */
+/**
+ * An unasked step is judged stricter than a retry: only a fetch's local write is incidental. A command that reads
+ * nothing remotely and writes here (`server restart`, `store reindex`) is the whole point of the step, so it waits
+ * to be asked (RISK-1211).
+ */
+const judgedStepEffects = (effects: Effects | undefined): Effects | undefined =>
+  effects?.remote === "none" ? effects : judgedEffects(effects)
+
+/** `stepTargets`, with each command's effects judged for running unasked. */
 export const judgedTargets = (root: Command): NonNullable<StepInput["targets"]> => {
   const targets = stepTargets(root)
   return (command) => {
     const target = targets(command)
     if (!target) return undefined
-    const effects = judgedEffects(target.effects)
+    const effects = judgedStepEffects(target.effects)
     return { names: target.names, ...(effects ? { effects } : {}) }
   }
 }
