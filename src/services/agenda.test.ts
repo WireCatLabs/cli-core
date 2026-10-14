@@ -9,7 +9,7 @@ import { agenda as agendaEntity } from "../entities/agenda.js"
 import { openStore } from "../store/store.js"
 import { AGENDA_QUERY, agendaItem, agendaService } from "./agenda.js"
 import { storeOnlyDeps } from "./deps.js"
-import { tasksService } from "./tasks.js"
+import { type TaskCard, tasksService } from "./tasks.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const account = { provider: "chat", account: "500" }
@@ -148,11 +148,11 @@ it("plans and links a task, refusing a date on a closed one and a mistyped refer
     const planned = await tasks.plan(task.id, { dueAt: new Date(now + 2 * DAY), nextCheckAt: null }, "agent")
     expect(planned).toMatchObject({ dueAt: new Date(now + 2 * DAY).toISOString(), nextCheckAt: null })
 
-    const linked = await tasks.link(
+    const linked = (await tasks.link(
       task.id,
       { references: ["msg:chat/500/2/21", "msg:chat/500/9/99", "https://docs.example.com/d/1"], chats: ["3"] },
       { kind: "related-to", by: "owner" },
-    )
+    )) as TaskCard
     expect(linked.links.map(({ to, targetText, kind }) => [to, targetText, kind])).toEqual([
       ["msg:chat/500/2/21", null, "related-to"],
       [null, "msg:chat/500/9/99", "related-to"],
