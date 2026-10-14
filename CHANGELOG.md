@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.270.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **Picture models moved to `images models list|download`**, registered with `imagesCommand`: they serve only
