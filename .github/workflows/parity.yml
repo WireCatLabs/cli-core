@@ -5,20 +5,10 @@ name: Parity
 # Their main, not npm: a row lists a CLI in `in` once its main has it, and a release always trails that.
 # Built against this checkout, not their pin: the pin prints the last release's shape, which a change to
 # that shape can never match. The pinned pairing is each CLI's own `parity:check`.
-# A pull request builds a CLI's branch of the same name instead of its main when one exists
-# (scripts/parity/app-ref.sh), so a change the CLI must adopt can merge green before its release.
-# `app_ref` names that branch outright, for a release whose CLIs adopt it on a branch (bin/release --app-ref).
+# It runs inside full validation (push to main, release, monthly) and by hand, never on a pull request.
+# `app_ref` builds a CLI's branch instead of its main, for a release whose CLIs adopt it on a branch
+# (bin/release --app-ref, scripts/parity/app-ref.sh).
 on:
-  pull_request:
-    paths:
-      - parity.json
-      - src/parity/**
-      - .github/workflows/parity.yml
-      - scripts/parity/build-app.sh
-      - scripts/parity/app-ref.sh
-      - src/cli/**
-      - src/mcp/**
-      - src/entities/**
   workflow_call:
     inputs:
       app_ref:
@@ -45,6 +35,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: shared
+          persist-credentials: false
       - id: app
         run: shared/scripts/parity/app-ref.sh ${{ matrix.cli }} >> "$GITHUB_OUTPUT"
         env:
@@ -55,16 +46,16 @@ jobs:
           repository: WireCatLabs/${{ matrix.cli }}-cli
           ref: ${{ steps.app.outputs.ref }}
           path: cli
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: shared/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: |
-            shared/pnpm-lock.yaml
-            cli/pnpm-lock.yaml
+          # No store cache: this job builds other repositories' branches, so a cache it saved would
+          # feed their dependencies to the next run.
+          package-manager-cache: false
       - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-core.tgz
         working-directory: shared
       - name: Build ${{ matrix.cli }}-cli ${{ steps.app.outputs.ref }} against this cli-core
@@ -82,6 +73,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: shared
+          persist-credentials: false
       - id: max
         run: shared/scripts/parity/app-ref.sh max >> "$GITHUB_OUTPUT"
         env:
@@ -97,22 +89,22 @@ jobs:
           repository: WireCatLabs/max-cli
           ref: ${{ steps.max.outputs.ref }}
           path: max
+          persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: WireCatLabs/tg-cli
           ref: ${{ steps.tg.outputs.ref }}
           path: tg
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: shared/package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: |
-            shared/pnpm-lock.yaml
-            max/pnpm-lock.yaml
-            tg/pnpm-lock.yaml
+          # No store cache: this job builds other repositories' branches, so a cache it saved would
+          # feed their dependencies to the next run.
+          package-manager-cache: false
       - run: pnpm install --frozen-lockfile && pnpm build && pnpm pack --out ../cli-core.tgz
         working-directory: shared
       - name: Build max-cli ${{ steps.max.outputs.ref }} against this cli-core

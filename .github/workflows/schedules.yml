@@ -1,12 +1,8 @@
 name: Schedules on macOS and Windows
 
 # `schedule` registers launchd agents and Task Scheduler tasks; this runs them for real on both.
+# Manual: a platform suite, so it stays off ordinary pull requests (community standard, CI and hooks).
 on:
-  pull_request:
-    paths:
-      - src/background/schedules*.ts
-      - src/cli/messenger/schedule-command.ts
-      - .github/workflows/schedules.yml
   workflow_dispatch:
 
 permissions:
