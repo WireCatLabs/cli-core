@@ -1,16 +1,17 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { ChatStats, StatsPeriod } from "../../services/chat-stats.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { momentOf } from "../../services/moment.js"
-import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { nextStep } from "../steps.js"
+import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { chatStatsAnswer, refuseJsonl } from "./stats-answers.js"
 
 const PERIODS: StatsPeriod[] = ["day", "week"]
 
 export const statsCommand = (messenger: Messenger): Command =>
-  new Command("show")
+  annotate(new Command("show"), { output: { entity: "chat_stats" } })
     .description(
       "a group's or channel's numbers for a period: messages, active members, replies, reactions, questions answered, " +
         "joins and leaves — counted from the local store; joins and leaves are asked of the messenger",
@@ -22,33 +23,21 @@ export const statsCommand = (messenger: Messenger): Command =>
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
       const { sinceTime, by, timezone } = this.opts<{ sinceTime?: string; by?: StatsPeriod; timezone?: string }>()
-      const stats = await context.withServices((services) =>
-        services.chats.stats(chat, {
+      refuseJsonl(context.format)
+      const { stats, account } = await context.withServices(async (services) => ({
+        stats: await services.chats.stats(chat, {
           ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
           ...(by ? { by } : {}),
           ...(timezone === undefined ? {} : { timezone }),
         }),
-      )
+        account: await services.messages.reader(),
+      }))
       if (!stats.complete && stats.completeness.state === "complete")
         context.renderer.note(
           "the messenger stopped reading joins and leaves before the period's start — those are lower bounds",
         )
       if (!stats.members) context.renderer.note("joins and leaves were not asked of the messenger")
-      const { fetch, ...shown } = stats
-      const missing =
-        fetch === undefined
-          ? {}
-          : {
-              missing: [
-                {
-                  field: "messages",
-                  why: "the store does not hold this chat whole, so these are lower bounds",
-                  step: "messages.sync",
-                },
-              ],
-              next: [nextStep("messages.sync", { args: { chat: stats.chatId } })],
-            }
-      renderAnswer(this, context, itemOf(snakeKeys(shown), missing), () => view(stats))
+      renderAnswer(this, context, chatStatsAnswer(stats, account), () => view(stats))
     })
 
 const view = (stats: ChatStats): string => {

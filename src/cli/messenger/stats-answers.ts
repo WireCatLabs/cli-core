@@ -1,14 +1,18 @@
+import { CliError } from "@wirecat/cli-base"
 import type { InferOutput } from "valibot"
 import type { ChartData } from "../../charts/model.js"
 import type { CounterState } from "../../domain/counters.js"
+import { formatLocator } from "../../domain/locator.js"
 import type { OfficialChatStats, OfficialPerson } from "../../domain/models.js"
 import type { RetentionCohort, RetentionStay } from "../../domain/retention.js"
 import type { ENTITIES } from "../../entities/index.js"
 import type { AdminEvidenceFound, AdminFound } from "../../services/admin-statistics.js"
+import type { ChatStats } from "../../services/chat-stats.js"
 import type { MessageStats } from "../../services/messages-search.js"
 import type { RankingFound } from "../../services/rankings.js"
 import type { RetentionService } from "../../services/retention.js"
 import type { AccountKey, RankedEvidence, StoredHit } from "../../store/store.js"
+import type { GroupStats } from "../../tasks/index.js"
 import { type ItemBody, itemOf, type ListBody, listOf } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { chatRef, contactRef } from "./chat-answers.js"
@@ -441,3 +445,97 @@ export const chartAnswer = (
   chart: ChartData,
   file?: { path: string; format: "svg" | "png"; width: number; height: number },
 ): ItemBody<Of<"chart">> => itemOf(defined({ ...chart, file }))
+
+/** A report or a chart is one object: `--jsonl` would print one line pretending to be a stream. */
+export const refuseJsonl = (format: string): void => {
+  if (format === "jsonl")
+    throw new CliError("validation_error", "a report is one JSON object — use --json, not --jsonl", {
+      reason: "output.one-object",
+    })
+}
+
+/** `stats chats show`, CLI and MCP alike; a chat the store does not hold whole names the sync that fills it. */
+export const chatStatsAnswer = (stats: ChatStats, account: AccountKey): ItemBody<Of<"chat_stats">> => {
+  const { chatId, completeness, topPosts, questions, memberCounts, members, series, fetch } = stats
+  const item = defined({
+    chat: chatRef(account, chatId),
+    since: stats.since,
+    until: stats.until,
+    complete: stats.complete,
+    completeness: {
+      state: completeness.state,
+      up_to_date: completeness.upToDate,
+      gaps: completeness.gaps,
+      reaches_start: completeness.reachesStart,
+      fetched_at: completeness.fetchedAt,
+    },
+    messages: stats.messages,
+    senders: stats.senders,
+    replies: stats.replies,
+    threads: stats.threads,
+    reactions: stats.reactions,
+    views: stats.views,
+    forwards: stats.forwards,
+    comments: stats.comments,
+    top_posts: topPosts.map((post) =>
+      defined({
+        ref: formatLocator({
+          provider: account.provider,
+          account: account.account,
+          chat: chatId,
+          message: post.messageId,
+        }),
+        timestamp: post.timestamp,
+        reactions: post.reactions,
+        views: post.views,
+        forwards: post.forwards,
+        comments: post.comments,
+      }),
+    ),
+    questions: {
+      asked: questions.asked,
+      answered: questions.answered,
+      median_minutes_to_answer: questions.medianMinutesToAnswer,
+      answered_by: questions.answeredBy,
+    },
+    member_counts: memberCounts,
+    members:
+      members &&
+      defined({
+        joined: members.joined,
+        left: members.left,
+        net: members.net,
+        wrote: members.wrote,
+        median_minutes_to_first_message: members.medianMinutesToFirstMessage,
+        more: members.more,
+      }),
+    series: series?.map((row) => defined({ ...row })),
+  })
+  return itemOf(
+    item,
+    fetch === undefined
+      ? {}
+      : {
+          missing: [
+            {
+              field: "messages",
+              why: "the store does not hold this chat whole, so these are lower bounds",
+              step: "messages.sync",
+            },
+          ],
+          next: [nextStep("messages.sync", { args: { chat: chatId } })],
+        },
+  )
+}
+
+/** `stats tasks show`, CLI and MCP alike. */
+export const taskStatsAnswer = (rows: GroupStats[], account: AccountKey): ItemBody<Of<"task_stats">> =>
+  itemOf({
+    open: rows.reduce((sum, row) => sum + row.open, 0),
+    rows: rows.map((row) => ({
+      chat: chatRef(account, row.group),
+      open: row.open,
+      oldest_open_at: row.oldestOpenAt?.toISOString() ?? null,
+      median_close_ms: row.medianCloseMs ?? null,
+    })),
+  })

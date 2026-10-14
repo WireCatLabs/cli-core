@@ -1,11 +1,10 @@
-import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { OfficialChatStats, OfficialPerson, OfficialValue } from "../../domain/models.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { capability } from "./port.js"
-import { officialAnswer } from "./stats-answers.js"
+import { officialAnswer, refuseJsonl } from "./stats-answers.js"
 
 const TOP = 5
 
@@ -18,8 +17,7 @@ export const officialStatsCommand = (messenger: Messenger): Command =>
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      if (context.format === "jsonl")
-        throw new CliError("validation_error", "official statistics are one JSON object — use --json, not --jsonl")
+      refuseJsonl(context.format)
       const stats = await context.withMessenger((adapter) =>
         capability(adapter, "officialChatStats", "read its own statistics for a chat")(chat),
       )

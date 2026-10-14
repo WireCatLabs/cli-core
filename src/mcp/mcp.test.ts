@@ -1638,7 +1638,9 @@ describe("the MCP server", () => {
     ])
     const closed = await call("chat_tasks_close", { task: taskId, as: "dismissed", reason: "no-reply-needed" })
     expect(closed.body.item).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closed_by: "agent" })
-    expect((await call("chat_stats_tasks_show")).body).toMatchObject({ items: [{ group: "7", open: 0 }] })
+    expect((await call("chat_stats_tasks_show")).body).toMatchObject({
+      item: { open: 0, rows: [{ chat: "chat:chat/500/7", open: 0 }] },
+    })
     const foreign = await call("chat_tasks_add", { message: "msg:chat/999/7/101", type: "promise" })
     expect([foreign.isError, foreign.body.error.code]).toEqual([true, "validation_error"])
 

@@ -2597,7 +2597,10 @@ describe("the shared read commands", () => {
       )
       expect(chatStats.code).toBe(0)
       expect(chatStats.stdout).toHaveLength(1)
-      expect(JSON.parse(chatStats.stdout[0] ?? "null").item).toMatchObject({ chat_id: "7", complete: false })
+      expect(JSON.parse(chatStats.stdout[0] ?? "null").item).toMatchObject({
+        chat: expect.stringMatching(/\/7$/),
+        complete: false,
+      })
       expect(chatStats.stderr.join("\n")).toContain("joins and leaves were not asked of the messenger")
       const asked: string[] = []
       const joins = async () =>

@@ -19,7 +19,7 @@ import { messagesStatsCommand } from "./messages-stats-command.js"
 import { officialStatsCommand } from "./official-stats-command.js"
 import { rankingEvidenceCommand, rankingsTopCommand } from "./rankings-command.js"
 import { retentionCommand } from "./retention-command.js"
-import { chartAnswer } from "./stats-answers.js"
+import { chartAnswer, refuseJsonl } from "./stats-answers.js"
 import { tasksStatsCommand } from "./tasks-command.js"
 
 export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer): Command => {
@@ -75,8 +75,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
         timezone?: string
         output?: string
       }>()
-      if (context.format === "jsonl")
-        throw new CliError("validation_error", "charts return one JSON object — use --json, not --jsonl")
+      refuseJsonl(context.format)
       const extension = output === undefined ? undefined : extname(output).toLowerCase()
       if (output !== undefined && extension !== ".svg" && extension !== ".png") {
         throw new CliError(

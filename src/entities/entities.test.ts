@@ -467,6 +467,25 @@ const samples: Record<EntityName, unknown> = {
     partial: false,
     reasons: [],
   },
+  chat_stats: {
+    chat: "chat:synthetic/1/2",
+    since: at,
+    until: at,
+    complete: false,
+    completeness: { state: "partial", up_to_date: true, gaps: false, reaches_start: false, fetched_at: at },
+    messages: 3,
+    senders: 2,
+    replies: 1,
+    threads: 1,
+    reactions: 0,
+    top_posts: [{ ref: message.ref, timestamp: at, reactions: 0 }],
+    questions: { asked: 1, answered: 1, median_minutes_to_answer: 4, answered_by: "owner" },
+    series: [{ key: "2026-10-13", messages: 3, senders: 2 }],
+  },
+  task_stats: {
+    open: 2,
+    rows: [{ chat: "chat:synthetic/1/2", open: 2, oldest_open_at: at, median_close_ms: null }],
+  },
 }
 
 /** The names each entity's fields had elsewhere, which a schema must refuse. */

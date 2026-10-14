@@ -8,6 +8,7 @@ import { attachment } from "./attachment.js"
 import { chart } from "./chart.js"
 import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
+import { chatStats, taskStats } from "./chat-stats.js"
 import { contact } from "./contact.js"
 import { contactNote } from "./contact-note.js"
 import { conversation } from "./conversation.js"
@@ -55,6 +56,7 @@ export {
   chart,
   chat,
   chatEvent,
+  chatStats,
   contact,
   contactNote,
   conversation,
@@ -86,6 +88,7 @@ export {
   savedSearch,
   tagging,
   task,
+  taskStats,
   topic,
 }
 
@@ -169,6 +172,8 @@ export const ENTITIES = {
   counter_refresh: counterRefresh,
   official_stats: officialStats,
   chart,
+  chat_stats: chatStats,
+  task_stats: taskStats,
 } as const
 
 export type EntityName = keyof typeof ENTITIES

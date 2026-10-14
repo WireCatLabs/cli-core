@@ -2,7 +2,7 @@ import * as v from "valibot"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { listed } from "../../cli/paging.js"
+import { taskStatsAnswer } from "../../cli/messenger/stats-answers.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { AGENDA_QUERY, agendaItem } from "../../services/agenda.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
@@ -209,15 +209,17 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Task statistics",
       description:
         "Per chat: how many tasks are open, when the oldest open one was opened, and the median time to close. " +
-        "Returns { items: [{ group, open, oldestOpenAt?, medianCloseMs? }], page, limit, hasMore }.",
+        "Returns { item: { rows: [{ chat, open, oldest_open_at, median_close_ms }] } }.",
       input: v.object({ chat: v.optional(chatOf(messenger)), type: v.optional(type) }),
       annotations: { ...READ, openWorldHint: false },
+      output: { entity: "task_stats", list: false },
       stored: async (store, account, args, defaults) =>
-        listed(
+        taskStatsAnswer(
           await tasks(store, account, defaults.guard).stats({
             ...(args.chat === undefined ? {} : { chat: args.chat }),
             ...(args.type === undefined ? {} : { type: args.type }),
           }),
+          account,
         ),
     }),
   }

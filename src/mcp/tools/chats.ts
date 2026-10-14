@@ -6,6 +6,7 @@ import { chatShown, documentLinkAnswer, wholeList } from "../../cli/messenger/ch
 import { chatEvents, chatsList, membersAudit, membersHistory, membersList } from "../../cli/messenger/chat-lists.js"
 import { AUDIT_QUERY, CHATS_QUERY, EVENTS_QUERY, HISTORY_QUERY } from "../../cli/messenger/chat-queries.js"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { chatStatsAnswer } from "../../cli/messenger/stats-answers.js"
 import { casKey } from "../../cli/registry-keys.js"
 import { nextStep } from "../../cli/steps.js"
 import { EVENTS_DAYS, onlineDeps, servicesFor, storedDeps } from "../../services/index.js"
@@ -60,19 +61,16 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         timezone: v.optional(v.pipe(v.string(), v.description("the IANA timezone for calendar days"))),
       }),
       annotations: { ...READ, openWorldHint: false },
-      stored: async (store, account, args, defaults) => {
-        const { fetch, ...stats } = await servicesFor(
-          storedDeps(messenger, store, account, defaults.guard),
-        ).chats.stats(args.chat, {
-          ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
-          ...(args.by ? { by: args.by } : {}),
-          ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
-        })
-        return itemOf(
-          snakeKeys(stats),
-          fetch === undefined ? {} : { next: [nextStep("messages.sync", { args: { chat: stats.chatId } })] },
-        )
-      },
+      output: { entity: "chat_stats", list: false },
+      stored: async (store, account, args, defaults) =>
+        chatStatsAnswer(
+          await servicesFor(storedDeps(messenger, store, account, defaults.guard)).chats.stats(args.chat, {
+            ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
+            ...(args.by ? { by: args.by } : {}),
+            ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
+          }),
+          account,
+        ),
     }),
 
     chats_members: tool({

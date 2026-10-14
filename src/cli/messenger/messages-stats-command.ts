@@ -6,7 +6,7 @@ import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
-import { countsAnswer } from "./stats-answers.js"
+import { countsAnswer, refuseJsonl } from "./stats-answers.js"
 
 const GROUPINGS: StatsGrouping[] = ["chat", "sender", "day", "hour"]
 
@@ -41,6 +41,7 @@ export const messagesStatsCommand = (messenger: Messenger): Command =>
     )
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
+      refuseJsonl(context.format)
       const {
         by,
         chat,
