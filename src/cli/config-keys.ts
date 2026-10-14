@@ -2,7 +2,7 @@ import { readFileSync, statSync } from "node:fs"
 import { CliError, writeSecurely } from "@wirecat/cli-base"
 import * as v from "valibot"
 
-const snake = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+export const snake = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
 type Schema = v.GenericSchema & { type: string; entries?: v.ObjectEntries; wrapped?: Schema; value?: Schema }
 
@@ -20,6 +20,17 @@ const camel = (key: string) => key.replace(/_([a-z0-9])/g, (_, letter: string) =
  */
 export const settingAt = (scope: Readonly<Record<string, unknown>> | undefined, key: string): unknown =>
   scope?.[key] ?? scope?.[camel(key)]
+
+/**
+ * A setting name as typed into `config set`, in the schema's snake_case: `readOtherBots` is `read_other_bots`. A command
+ * path under `permissions` and a model purpose are data and keep their spelling.
+ */
+export const declaredSettingName = (setting: string): string => {
+  const [head = setting, ...rest] = setting.split(".")
+  if (head === "permissions") return setting
+  if (head === "models" && rest.length === 2) return `models.${rest[0]}.${snake(rest[1] as string)}`
+  return [snake(head), ...rest].join(".")
+}
 
 export interface ConfigRename {
   /** `defaults.timeoutMs`, as found in the file. */

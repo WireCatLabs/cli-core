@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`config set` and `config unset` take a setting's camelCase name too** and write it in snake_case:
+  `config set readOtherBots true` writes `read_other_bots`. A command path under `permissions` keeps its spelling.
+
 ## 0.278.0 — 14.10.2026
 
 ### Added
