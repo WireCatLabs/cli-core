@@ -7,6 +7,26 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **An `Upload` carries a `source`, not `bytes`**: `{ kind, name, source, asFile? }`, where `source` is
+  `{ kind: "file", path, size }` or `{ kind: "bytes", bytes }`. `readUpload` and `readAttachments` check the file
+  and record its size; nothing is read until an adapter sends it, so a file of any size is accepted here and a
+  send no longer holds every attachment in memory first. Adapters read it with `uploadBlob(source)`, which reads
+  the file as it goes, or `uploadBytes(source)`, which refuses more than `MAX_BUFFERED_UPLOAD_BYTES` (256 MiB);
+  both refuse a file whose size changed after the check. `uploadSize` gives the size. All are exported from
+  `@wirecat/cli-core/sends`. The "2 GiB or more" refusal is gone: each messenger's own limit applies.
+- **`mentions rebuild` takes its kind as an argument**: `mentions rebuild person-name`, not `--kind person-name`.
+
+### Added
+
+- A provider-neutral upcoming-occurrence SDK reader for one selected meeting/series and an absolute time window. Its coverage reports simultaneous candidates so callers can explain an ambiguous next occurrence. It distinguishes verified occurrences from series dates, retains missing capabilities and incomplete coverage, and checks row/byte bounds and cancellation without opening a calendar or store.
+
+### Fixed
+
+- **`images models list|download` have a permission key** (none: housekeeping, like `models`). An app that registered
+  `imagesCommand` threw "unmapped permission path: images models list" in its permission check (max found it).
+
 ## 0.271.0 — 14.10.2026
 
 ### Changed — may break callers
@@ -35,34 +55,22 @@ shape of this file.
 - **`--operation-id` replaces `--send-id`** (`messages send|forward`, `polls create`, `topics create`), and the MCP
   argument `operation_id` replaces `send_id`. A write's answer and an unknown outcome's error carry one
   `operation_id`; `send_id` is gone.
-- **An `Upload` carries a `source`, not `bytes`**: `{ kind, name, source, asFile? }`, where `source` is
-  `{ kind: "file", path, size }` or `{ kind: "bytes", bytes }`. `readUpload` and `readAttachments` check the file
-  and record its size; nothing is read until an adapter sends it, so a file of any size is accepted here and a
-  send no longer holds every attachment in memory first. Adapters read it with `uploadBlob(source)`, which reads
-  the file as it goes, or `uploadBytes(source)`, which refuses more than `MAX_BUFFERED_UPLOAD_BYTES` (256 MiB);
-  both refuse a file whose size changed after the check. `uploadSize` gives the size. All are exported from
-  `@wirecat/cli-core/sends`. The "2 GiB or more" refusal is gone: each messenger's own limit applies.
 
 ### Added
 
 - **`sealed`, `metaNow` and `jsonlRecords` from `@wirecat/cli-core/cli`**: an app's own answer gets the same `meta`
   and JSON lines (with the end line) as cli-core's.
-- A provider-neutral upcoming-occurrence SDK reader for one selected meeting/series and an absolute time window. Its coverage reports simultaneous candidates so callers can explain an ambiguous next occurrence. It distinguishes verified occurrences from series dates, retains missing capabilities and incomplete coverage, and checks row/byte bounds and cancellation without opening a calendar or store.
 
 - **Known people's names in stored messages** (`kind:person-name`, no migration). A capitalized word that is a name
   of someone met in a messenger, a meeting or through a confirmed phone, in any case and from a Latin profile too
   (`Valery` finds «Валерию»); two in a row that one person shares are a full name. A name links by rule to the one
   person it fits who wrote in that chat; the rest wait as `found`, and `mentions show` lists the candidates. A name
   is confirmed (`mentions confirm <id> person:<uid>`) and rejected where it is written, not everywhere. Names of
-  people added or renamed later are found by `mentions rebuild person-name`. Persons known only as an
+  people added or renamed later are found by `mentions rebuild --kind person-name`. Persons known only as an
   e-mail sender are left out: on one store they were thousands of companies and newsletters.
 - **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
   or address; `organization:<id>` and `document:<id>` too. Mentions now carry `target`.
 
-### Fixed
-
-- **`images models list|download` have a permission key** (none: housekeeping, like `models`). An app that registered
-  `imagesCommand` threw "unmapped permission path: images models list" in its permission check (max found it).
 
 ## 0.270.0 — 14.10.2026
 
