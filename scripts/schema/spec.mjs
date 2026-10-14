@@ -1110,7 +1110,7 @@ const NEW = {
         }),
         c("title_folded", "text", { note: "`fold(title)`, which `tasks list title:` compares" }),
         c("close_reason_folded", "text", { note: "`fold(close_reason)`, for `reason:`" }),
-        c("category", "text", { note: "a name from the `tasks.categories` list; null on a project task" }),
+        c("category", "text", { note: "a name from the list `tasks categories` prints; null on a project task" }),
         c("claimed_by", "text", { note: "who works on it now: `owner` or an agent's name" }),
         c("claimed_until", "integer", { note: "when the claim lapses; a lapsed claim holds nothing" }),
       ],

@@ -1280,7 +1280,7 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `next_check_at` | integer |  |  | when an agent should look at the open task again; the agenda lists it from then. Not a reminder: nothing reaches the owner |
 | `title_folded` | text |  |  | `fold(title)`, which `tasks list title:` compares |
 | `close_reason_folded` | text |  |  | `fold(close_reason)`, for `reason:` |
-| `category` | text |  |  | a name from the `tasks.categories` list; null on a project task |
+| `category` | text |  |  | a name from the list `tasks categories` prints; null on a project task |
 | `claimed_by` | text |  |  | who works on it now: `owner` or an agent's name |
 | `claimed_until` | integer |  |  | when the claim lapses; a lapsed claim holds nothing |
 

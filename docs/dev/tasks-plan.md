@@ -45,7 +45,12 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
 5. **Rules run in `review` and `serve`, not in `sync`** (`src/services/inbox.ts:359`,
    `src/cli/messenger/serve-command.ts:232`). `applyTaskRulesToStored(store, account, since)` (0.274.0) runs
    them over what is stored, from a stop point.
-6. **No category, no label on a task, no claim, no "duplicate of".**
+6. **Store version 13 (step 2) added** a category from a list in code (`DEFAULT_TASK_CATEGORIES`,
+   `src/services/task-categories.ts`; no `tasks.categories` config yet — the config schema is strict and the rule
+   passes read no settings), tags on tasks, keys per type, the claim lease (`tasks claim`, `release`,
+   `agenda --claimed`) and the relation kinds `duplicate-of` and `discovered-from`. A relation joins only
+   owner-project tasks (`liveTask`, `src/store/sqlite/task-relations.ts`), so `duplicate-of` between two message
+   tasks is refused until step 5 opens it. MCP has no claim tools yet.
 7. **What the comparison can reuse:** the text normalizer and the Snowball stemmers (Russian, English, Spanish;
    `src/search/stem.ts`) behind message and note search; FTS5 tables per domain (`message_words` /
    `message_stems`, `note_words` / `note_stems`); `identities` for "the same person"; one write lock per
@@ -231,12 +236,14 @@ found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`)
 ## Build order
 
 1. **Test set** in cli-testing, with the scoring module stubbed to the starting weights.
-2. **Fields:** category, labels, keys per type, `claimed_by` / `claimed_until`, relation kinds `duplicate-of`
-   and `discovered-from` — one migration (reserve its number in COORDINATION.md).
+2. **Fields:** category, labels, keys per type, `claimed_by` / `claimed_until` with `tasks claim` / `release` and
+   `agenda --claimed`, relation kinds `duplicate-of` and `discovered-from` — store version 13.
 3. **`task_words` / `task_stems`**, the normalizer + signature extraction, digit groups joined, a stop-word list.
 4. **Scoring module** (candidates, comparison, weights, bands), tuned on the test set.
-5. **`tasks add` check** (`--attach`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`.
-6. **`tasks claim` / `release`**, `agenda --category --label --claimed`.
+5. **`tasks add` check** (`--attach`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`;
+   relations between message tasks (`liveTask` allows owner-project tasks only).
+6. **`agenda --category --label`**, the MCP tools `tasks_claim` / `tasks_release`, and the `tasks.categories`
+   config.
 7. **Rules on `sync`.**
 8. Then tg and max move their cli-core pin together with cli-core#1121 (`search mail` leaves them).
 

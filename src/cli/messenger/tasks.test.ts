@@ -268,6 +268,8 @@ describe("tasks", () => {
     const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
     expect(added).toMatchObject({ key: "PR-1", category: "money" })
     expect(item(await call("tasks", "plan", "PR-1", "--category", "Documents", "--json")).category).toBe("documents")
+    expect(json(await call("tasks", "list", "category:documents", "key:PR-1", "--json")).items).toHaveLength(1)
+    expect(json(await call("tasks", "list", "category:money", "--json")).items).toEqual([])
     expect((await call("tasks", "plan", "PR-1", "--category", "finance")).stderr).toContain("--category takes money")
 
     expect((await call("tags", "add", "urgent", "--task", "PR-1", "--json")).code).toBe(0)
