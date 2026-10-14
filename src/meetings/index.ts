@@ -226,5 +226,14 @@ export {
   type MeetingTranscriptionSource,
   transcribeMeeting,
 } from "./transcription.js"
+export { createUpcomingMeetingReader } from "./upcoming.js"
+export type {
+  MeetingOccurrence,
+  MeetingOccurrencePort,
+  MeetingOccurrenceRead,
+  MeetingOccurrenceSchedule,
+  UpcomingMeetingRequest,
+  UpcomingMeetingResult,
+} from "./upcoming-types.js"
 export { parseVtt, VttError } from "./vtt.js"
 export { type WatchOptions, type WatchSleep, watchMeetingIngestion } from "./watch.js"
