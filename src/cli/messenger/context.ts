@@ -132,6 +132,11 @@ export interface Messenger {
   adminRights?: readonly AdminRight[]
   /** The chat `me` names, when the messenger has a notes-to-self chat. */
   savedChatId?: (account: AccountKey) => Id
+  /**
+   * The account a command names itself, in place of the one its profile remembers: memo has no messenger
+   * profile and mounts the local task builders with `--provider --account`.
+   */
+  accountOf?: (command: Command) => AccountKey | undefined
   /** The other person in a one-to-one chat, when the chat says who — a recipient list matches on it. */
   partnerOf?: (chat: Chat) => Id | undefined
   /**
@@ -366,6 +371,11 @@ export const messengerContext = (
   }
   // Read when warning, not now: serve swaps the renderer's methods for log records after this.
   const warn = (text: string) => base.renderer.warn(text)
+  const accountFor = (): AccountKey => {
+    const account = messenger.accountOf?.(command) ?? recalledAccount(app, provider, profile, base.env)
+    if (!account) throw unrecorded(messenger, profile)
+    return account
+  }
   const guard =
     messenger.guard?.(command, base.settings, warn) ??
     guardFor(app, base.settings, warn, base.env, terminalAsker(command))
@@ -394,8 +404,7 @@ export const messengerContext = (
     withStore: (work, { name } = {}) =>
       base.run(
         async () => {
-          const account = recalledAccount(app, provider, profile, base.env)
-          if (!account) throw unrecorded(messenger, profile)
+          const account = accountFor()
           const store = await openStore({ env: base.env, command: app.command })
           try {
             return await work(store, account)
@@ -437,11 +446,7 @@ export const messengerContext = (
               }
               return held.adapter
             },
-            account: async () => {
-              const account = recalledAccount(app, provider, profile, base.env)
-              if (!account) throw unrecorded(messenger, profile)
-              return account
-            },
+            account: async () => accountFor(),
             store: () => {
               store ??= openStore({ env: base.env, command: app.command }).then(async (opened) => {
                 if (messenger.history === "store") await warnUnserved(messenger, profile, base, opened)

@@ -4,6 +4,7 @@ import type * as v from "valibot"
 import { isLocator, parseLocator } from "../domain/locator.js"
 import { formatReference } from "../domain/references.js"
 import { task as taskEntity } from "../entities/task.js"
+import { TASK_RELATION_KINDS, type TaskRelation, type TaskRelationKind } from "../store/index.js"
 import type { AccountKey, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
 import { type ColumnMap, queryFilter } from "../store/store.js"
 import {
@@ -95,6 +96,11 @@ export interface TaskPlan {
 /** What a task may be linked to: what it is about, what shows it, what it came from. */
 export const TASK_LINK_KINDS = ["related-to", "evidence", "created-from"] as const
 export type TaskLinkKind = (typeof TASK_LINK_KINDS)[number]
+/** `tasks link --kind`: a link's kinds, and a `task:` target's relation kinds; `related-to` is both. */
+export const TASK_LINK_OPTION_KINDS = [...TASK_LINK_KINDS, "blocked-by", "follow-up-of"] as const
+export type TaskLinkOptionKind = (typeof TASK_LINK_OPTION_KINDS)[number]
+/** An owner-project task's id, `task:<id>` written without its prefix, or a project key such as `HRB-12`. */
+const BARE_TASK = /^(\d+|[A-Z][A-Z0-9]*-\d+)$/
 
 export interface TaskCard extends TaskDetails {
   links: ThingLink[]
@@ -120,8 +126,8 @@ export interface TasksService {
   link(
     id: string,
     targets: { references?: readonly string[]; chats?: readonly string[] },
-    options: { kind: TaskLinkKind; by: TaskOrigin },
-  ): Promise<TaskCard>
+    options: { kind: TaskLinkOptionKind; by: TaskOrigin },
+  ): Promise<TaskCard | { relations: TaskRelation[] }>
   show(id: string): Promise<TaskCard>
 }
 
@@ -141,7 +147,7 @@ const oneOf =
 export const taskTypeOf = oneOf(TASK_KINDS, "task type", "--type")
 export const taskStateOf = oneOf(TASK_STATES, "task state", "--state")
 export const closedStateOf = oneOf(["done", "dismissed"] as const, "way to close a task", "--as")
-export const taskLinkKindOf = oneOf(TASK_LINK_KINDS, "link kind", "--kind")
+export const taskLinkKindOf = oneOf(TASK_LINK_OPTION_KINDS, "link kind", "--kind")
 export const taskTypesOf = (typed: string): TaskKind[] => [
   ...new Set(
     typed
@@ -159,6 +165,12 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
   const groupOf = async (store: MessageStore, account: AccountKey, chat: string | undefined) =>
     chat === undefined ? undefined : storedChatId(deps.messenger, chat, store, account)
 
+  const refuseBare = (target: string): never => {
+    throw new CliError(
+      "validation_error",
+      `no task ${singleLine(target)} — write task:${singleLine(target)} for a task`,
+    )
+  }
   const owned = async (store: MessageStore, account: AccountKey, id: string): Promise<Task> => {
     const existing = await store.tasks.get(id)
     if (!existing || existing.account !== taskAccount(account))
@@ -259,8 +271,43 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
         return planOf(store, id, plan, by)
       }),
 
-    link: (id, { references = [], chats = [] }, { kind, by }) =>
-      inStore(async (store, account) => {
+    link: async (id, { references = [], chats = [] }, { kind, by }) => {
+      const written = references.map((one) => one.trim()).filter(Boolean)
+      const relationKind = (TASK_RELATION_KINDS as readonly string[]).includes(kind)
+      const store = await deps.store()
+      // A bare id with a kind only tasks have is a task; with related-to only when that task exists.
+      const asTask = async (target: string) =>
+        target.startsWith("task:")
+          ? target
+          : BARE_TASK.test(target) && relationKind
+            ? kind !== "related-to" ||
+              (await store.tasks.taskRelations(target).then(
+                () => true,
+                () => false,
+              ))
+              ? `task:${target}`
+              : refuseBare(target)
+            : undefined
+      const tasks = (await Promise.all(written.map(asTask))).filter((one): one is string => one !== undefined)
+      if (tasks.length > 0) {
+        if (tasks.length !== written.length || chats.length > 0)
+          throw new CliError(
+            "validation_error",
+            "a task: target links two tasks; link messages, chats, people and URLs in a call of their own",
+          )
+        if (!relationKind)
+          throw new CliError("validation_error", "a task: target takes --kind blocked-by, follow-up-of or related-to")
+        if (by !== "owner")
+          throw new CliError("permission_error", "an agent proposes task relationships; only the owner applies them")
+        for (const target of tasks) await store.tasks.linkTask(id, target, kind as TaskRelationKind, "owner")
+        return { relations: await store.tasks.taskRelations(id) }
+      }
+      if (!(TASK_LINK_KINDS as readonly string[]).includes(kind))
+        throw new CliError(
+          "validation_error",
+          `--kind ${kind} is for a task: target; a link takes related-to, evidence or created-from`,
+        )
+      return inStore(async (store, account) => {
         await owned(store, account, id)
         const from = (await store.tasks.details(id)).ref
         const chatRefs = await Promise.all(
@@ -274,19 +321,19 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
           ),
         )
         const origin = by === "owner" ? "owner" : "suggested"
-        for (const target of [...references.map((one) => one.trim()), ...chatRefs]) {
-          if (!target) continue
+        for (const target of [...written, ...chatRefs]) {
           try {
-            await store.notes.addLink({ from, to: target, kind, origin })
+            await store.notes.addLink({ from, to: target, kind: kind as TaskLinkKind, origin })
           } catch (error) {
             // Only text that names nothing typed, or a message not saved yet; a mistyped `person:9` is refused.
             const unsaved = error instanceof CliError && error.code === "not_found" && target.startsWith("msg:")
             if (!unsaved && !(error instanceof CliError && error.code === "validation_error")) throw error
-            await store.notes.addLink({ from, targetText: target, kind, origin })
+            await store.notes.addLink({ from, targetText: target, kind: kind as TaskLinkKind, origin })
           }
         }
         return cardOf(store, id)
-      }),
+      })
+    },
 
     show: (id) =>
       inStore(async (store, account) => {

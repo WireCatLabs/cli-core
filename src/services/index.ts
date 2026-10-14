@@ -316,5 +316,6 @@ export {
   SERVER_SEARCH_KEY,
   type ServerSearched,
 } from "./server-search.js"
+export { applyTaskRulesToStored, type RuleResult } from "./task-rules.js"
 export type { ThreadContext, ThreadOptions } from "./thread-context.js"
 export { readThreadContext, THREAD_BOUNDS } from "./thread-context.js"
