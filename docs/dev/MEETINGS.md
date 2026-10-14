@@ -1,5 +1,9 @@
 # Meetings
 
+The next CLI/MCP consumer contract for project-name evidence is
+[Project-word evidence](MEETING-PROJECT-EVIDENCE.md). It distinguishes the implemented SDK from
+the interface that still needs application adoption.
+
 `src/meetings/`, exported as `@wirecat/cli-core/meetings` (and `/meetings/cli`, `/meetings/mcp`,
 `/meetings/testing`); up to 0.4.2 it was the separate package `@wirecat/cli-meetings`. Each meeting provider
 is its own package that implements `MeetingSource`; the shared store implements `MeetingStore`; this module
