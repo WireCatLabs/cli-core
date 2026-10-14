@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.279.0 — 14.10.2026
+
 ### Added
 
 - Shared `meetings prepare <series-id>` and `meeting_prepare` adapters from `./cli` validate windows
