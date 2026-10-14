@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.267.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **`store jobs list [query...]` filters by query; `--state` is gone** (`state:failed`, `chat:7`,
