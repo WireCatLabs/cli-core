@@ -22,10 +22,10 @@ const FIELDS = [
   "bytes",
   "ids",
   "counts",
-  "durationMs",
+  "duration_ms",
   "outcome",
-  "errorCode",
-  "providerError",
+  "error_code",
+  "provider_error",
   "code",
   "reason",
   "time",
@@ -87,7 +87,7 @@ export const searchRuns = (
     const events = found ? readEvents(found.dir).map(safeEvent) : []
     const filtered = events.filter(
       (event) =>
-        (!errorCode || event.errorCode === errorCode || event.code === errorCode) &&
+        (!errorCode || event.error_code === errorCode || event.code === errorCode) &&
         (!operation || event.operation === operation) &&
         (!needle || JSON.stringify(event).toLowerCase().includes(needle)),
     )

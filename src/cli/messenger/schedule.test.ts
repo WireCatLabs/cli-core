@@ -243,7 +243,7 @@ describe("a run", () => {
 
     expect(records.map((record) => record.attributes)).toEqual([
       { event: "schedule.start", schedule: "review", kind: "agent" },
-      { event: "schedule.exit", schedule: "review", kind: "agent", exitCode: 0, durationMs: expect.any(Number) },
+      { event: "schedule.exit", schedule: "review", kind: "agent", exit_code: 0, duration_ms: expect.any(Number) },
     ])
     expect(records.every((record) => record.trace_id === last.traceId)).toBe(true)
     expect(text).not.toContain("secret words")

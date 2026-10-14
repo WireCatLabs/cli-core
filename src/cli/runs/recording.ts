@@ -2,6 +2,7 @@ import { processStreams, type RenderFormat, type Streams } from "@wirecat/cli-ba
 import type { AppIdentity } from "../app.js"
 import { isCliFailure } from "../failures.js"
 import { type DiagnosticEvent, type EventSink, providerErrorKey, renderEvent } from "./events.js"
+import { logAttributes } from "./log-keys.js"
 import { newRunId, type Run, runsDirFor, startRun } from "./run.js"
 import { enclosingTraceId, inRun, traceOf } from "./scope.js"
 
@@ -97,7 +98,8 @@ export const startRecording = (options: RecordingOptions): Recording => {
 
   const events: EventSink = (event) => {
     if (event.event === "request") requests += 1
-    if (options.trace) streams.diagnostic(options.format === "pretty" ? renderEvent(event) : JSON.stringify(event))
+    if (options.trace)
+      streams.diagnostic(options.format === "pretty" ? renderEvent(event) : JSON.stringify(logAttributes(event)))
     if (run) logEvent(run, event)
     if (held) {
       held.push(event)
