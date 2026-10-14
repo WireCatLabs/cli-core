@@ -13,6 +13,24 @@ shape of this file.
   list` and their MCP tools add `{field: "transcript", step: "messages.transcribe"}` for each voice message that has
   no kept transcript, so an answer whose only content is a voice message no longer reads as complete. Nothing more
   is heard or fetched.
+- **`tasks link <task> task:<id>` records a task-to-task relation** (owner, 2026-10-14), where it stored an
+  ordinary link: a `task:` target always means a relation between two project tasks, with `--kind blocked-by`,
+  `follow-up-of` or `related-to` (the default); every other target is a link as before (`related-to`, `evidence`,
+  `created-from`). A bare id is a task with `blocked-by` or `follow-up-of`, and with `related-to` when that task
+  exists; otherwise it is refused with "write task:<id>". Task and other targets go in separate calls, and only
+  the owner applies a relation. `tasksService().link` answers `{ relations }` for a relation, the task's card
+  otherwise. memo's `tasks link <task> <other-task> --kind …` keeps working once it mounts this command.
+
+### Added
+
+- **`Messenger.accountOf(command)`: a command can name its own account** in place of the one its profile
+  remembers, so a program with no messenger profile — memo, with `--provider --account` — mounts the local
+  builders. `withStore` and the services' `account()` use it first. **`tasksStatsCommand` is exported** beside
+  `tasksCommand`, for a program that mounts `stats tasks show` without the rest of `stats`.
+- **`applyTaskRulesToStored(store, account, since?)` from `@wirecat/cli-core/services`:** the task rules `review`
+  applies (a question nobody answered, a mention of the owner; closed once the owner answers), run over what is
+  already stored — each chat stored into after `since`, its new messages with the 50 before them. It returns
+  `until`, the newest store time it saw, for the next pass to start from. For memo, which reads no messenger.
 
 ## 0.273.0 — 14.10.2026
 
