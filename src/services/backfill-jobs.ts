@@ -135,7 +135,7 @@ export const jobDetails = (job: Job) => ({
   startedAt: job.startedAt,
   ...(job.finishedAt ? { finishedAt: job.finishedAt } : {}),
   fetched: Number(job.result?.fetched ?? job.progress?.fetched ?? 0),
-  ...(job.limit === undefined ? {} : { limit: job.limit }),
+  ...(job.limit === undefined ? {} : { messageLimit: job.limit }),
   ...(job.pageSize === undefined ? {} : { pageSize: job.pageSize }),
   ...(job.last === undefined ? {} : { last: job.last }),
   ...(job.result
@@ -160,7 +160,7 @@ export const jobItem = (job: Job) => {
     started_at: job.startedAt,
     ...(job.finishedAt ? { finished_at: job.finishedAt } : {}),
     fetched: Number(job.result?.fetched ?? job.progress?.fetched ?? 0),
-    ...(job.limit === undefined ? {} : { limit: job.limit }),
+    ...(job.limit === undefined ? {} : { message_limit: job.limit }),
     ...(job.pageSize === undefined ? {} : { page_size: job.pageSize }),
     ...(job.last === undefined ? {} : { last: job.last }),
     ...(job.result ? { complete: job.result.complete === true } : {}),

@@ -6,7 +6,7 @@ import { Command, Option } from "commander"
 import type * as v from "valibot"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, TEXT_MODELS, type TextModel, textModel } from "../../embeddings/models.js"
-import type { model } from "../../entities/model.js"
+import { model as modelEntity } from "../../entities/model.js"
 import {
   DEFAULT_IMAGE_MODEL,
   IMAGE_MODELS,
@@ -32,6 +32,7 @@ import { readSecret } from "../../terminal/prompt.js"
 import { baseContext, environmentOf } from "../context.js"
 import { embeddingKeys } from "../embedding-keys.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
+import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { nextStep } from "../steps.js"
 import type { Messenger } from "./context.js"
 
@@ -40,7 +41,10 @@ import type { Messenger } from "./context.js"
  * `messages transcribe --local`, `text` the embedding models behind `conversations embed`. Nothing here talks to the messenger. The folder is shared by every
  * messenger CLI, so a model downloaded once serves them all.
  */
-type ModelItem = v.InferOutput<typeof model>
+type ModelItem = v.InferOutput<typeof modelEntity>
+
+/** A model list is the catalog this version ships. */
+const MODELS_QUERY = unfilteredQuery("model", modelEntity)
 
 /** Every model this version knows: a short, fixed list, never paged. */
 const everyModel = (command: string, items: ModelItem[], next: NextStep[] = []) =>
@@ -92,11 +96,12 @@ export const modelsCommand = (messenger: Messenger): Command => {
   const models = new Command("models").description("models that run on this machine")
   const audio = models.command("audio").description("speech models for transcribing voice messages")
 
-  annotate(audio.command("list"), { output: { entity: "model" } })
+  withQuery(audio.command("list"), MODELS_QUERY)
     .description("the speech models, most suitable first, which are downloaded, and which one is the default")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(async () => {
+        listQuery(typedQuery(words), MODELS_QUERY, "models audio list")
         const directory = modelsDirectory(context.env)
         const chosen = choose(messenger, context.settings, {}, context.env).model.id
         const items = orderedModels(messenger.speechModels).map((model) => audioItem(model, directory, chosen))
@@ -141,11 +146,12 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   const text = models.command("text").description("embedding models for searching conversations by meaning")
 
-  annotate(text.command("list"), { output: { entity: "model" } })
+  withQuery(text.command("list"), MODELS_QUERY)
     .description("the embedding models, most suitable first, which are downloaded, and which one is the default")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(async () => {
+        listQuery(typedQuery(words), MODELS_QUERY, "models text list")
         const directory = textModelsDirectory(context.env)
         const items = TEXT_MODELS.map((model) => textItem(model, directory))
         const missing = items.find((item) => item.default && !item.downloaded)
@@ -201,63 +207,6 @@ export const modelsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  const image = models
-    .command("image")
-    .description("models that read pictures, for `images embed` and search by what a picture shows")
-
-  annotate(image.command("list"), { output: { entity: "model" } })
-    .description("the picture models, which are downloaded, and which one is the default")
-    .action(async function (this: Command) {
-      const context = baseContext(this, messenger.resolveSettings)
-      await context.run(async () => {
-        const directory = imageModelsDirectory(context.env)
-        const items = IMAGE_MODELS.map((model) => imageItem(model, directory))
-        const missing = items.find((item) => item.default && !item.downloaded)
-        renderAnswer(
-          this,
-          context,
-          everyModel(
-            "models image list",
-            items,
-            missing ? [nextStep("models.download-image", { args: { model: missing.id } })] : [],
-          ),
-          () => items.map((item) => `${modelLine(item, 16)}  ${item.licence}  ${item.languages}\n`).join(""),
-        )
-        if (context.format === "pretty") context.renderer.note(`kept in ${directory}`)
-      })
-    })
-
-  annotate(image.command("download"), { output: { entity: "model" } })
-    .argument("<model>", "a model id from `models image list`")
-    .description("download a picture model once, checked against the sha256 this version expects")
-    .action(async function (this: Command, id: string) {
-      const context = baseContext(this, messenger.resolveSettings)
-      await context.run(
-        async () => {
-          const model = imageModel(id)
-          const directory = imageModelsDirectory(context.env)
-          if (!isImageModelInstalled(model, directory)) {
-            context.renderer.note(
-              `${model.id}: ${megabytes(model.files.reduce((sum, file) => sum + file.bytes, 0))} from Hugging Face`,
-            )
-            await installFiles(placedImage(model, directory), { progress: (line) => context.renderer.note(line) })
-          }
-          context.renderer.note(`${model.id}: loading it once to check it works`)
-          const { openPictureEmbedder } = await import("../../images/picture/embedder.js")
-          const embedder = await openPictureEmbedder(model, directory)
-          try {
-            const vector = await embedder.embedQuery("check")
-            if (vector.length !== model.dims)
-              throw new CliError("invalid_response", `${model.id} gave a vector of the wrong size`)
-          } finally {
-            await embedder.close()
-          }
-          renderAnswer(this, context, itemOf(imageItem(model, directory)), downloaded)
-        },
-        { unbounded: true },
-      )
-    })
-
   const key = text.command("key").description("API keys for embedding and analysis providers")
 
   key
@@ -291,4 +240,69 @@ export const modelsCommand = (messenger: Messenger): Command => {
     })
 
   return models
+}
+
+/** `images models`: registered with picture search, the only thing these models serve. */
+export const imageModelsCommand = (messenger: Messenger): Command => {
+  const tool = messenger.app.command
+  const image = new Command("models").description("models that read pictures, for `images embed` and picture search")
+
+  withQuery(annotate(image.command("list"), { examples: [`${tool} images models list`] }), MODELS_QUERY)
+    .description("the picture models, which are downloaded, and which one is the default")
+    .action(async function (this: Command, words: string[]) {
+      const context = baseContext(this, messenger.resolveSettings)
+      await context.run(async () => {
+        listQuery(typedQuery(words), MODELS_QUERY, "images models list")
+        const directory = imageModelsDirectory(context.env)
+        const items = IMAGE_MODELS.map((model) => imageItem(model, directory))
+        const missing = items.find((item) => item.default && !item.downloaded)
+        renderAnswer(
+          this,
+          context,
+          everyModel(
+            "images models list",
+            items,
+            missing ? [nextStep("models.download-image", { args: { model: missing.id } })] : [],
+          ),
+          () => items.map((item) => `${modelLine(item, 16)}  ${item.licence}  ${item.languages}\n`).join(""),
+        )
+        if (context.format === "pretty") context.renderer.note(`kept in ${directory}`)
+      })
+    })
+
+  annotate(image.command("download"), {
+    output: { entity: "model" },
+    examples: [`${tool} images models download ${DEFAULT_IMAGE_MODEL}`],
+  })
+    .argument("<model>", "a model id from `images models list`")
+    .description("download a picture model once, checked against the sha256 this version expects")
+    .action(async function (this: Command, id: string) {
+      const context = baseContext(this, messenger.resolveSettings)
+      await context.run(
+        async () => {
+          const model = imageModel(id)
+          const directory = imageModelsDirectory(context.env)
+          if (!isImageModelInstalled(model, directory)) {
+            context.renderer.note(
+              `${model.id}: ${megabytes(model.files.reduce((sum, file) => sum + file.bytes, 0))} from Hugging Face`,
+            )
+            await installFiles(placedImage(model, directory), { progress: (line) => context.renderer.note(line) })
+          }
+          context.renderer.note(`${model.id}: loading it once to check it works`)
+          const { openPictureEmbedder } = await import("../../images/picture/embedder.js")
+          const embedder = await openPictureEmbedder(model, directory)
+          try {
+            const vector = await embedder.embedQuery("check")
+            if (vector.length !== model.dims)
+              throw new CliError("invalid_response", `${model.id} gave a vector of the wrong size`)
+          } finally {
+            await embedder.close()
+          }
+          renderAnswer(this, context, itemOf(imageItem(model, directory)), downloaded)
+        },
+        { unbounded: true },
+      )
+    })
+
+  return image
 }

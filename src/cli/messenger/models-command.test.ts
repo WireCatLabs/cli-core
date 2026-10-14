@@ -152,6 +152,15 @@ describe("models text", () => {
     expect(answer.items[0]?.path).toMatch(/e5-small$/)
   })
 
+  it("refuses a query term: the catalog has nothing to filter", async () => {
+    const { go } = await call(["models", "text", "list", "kind:text", "--json"])
+
+    const { code, stderr } = await go()
+
+    expect(code).toBe(2)
+    expect(stderr.join("")).toContain("query.unsupported-field")
+  })
+
   it("refuses a model with its own licence until its terms are accepted, downloading nothing", async () => {
     const { go } = await call(["models", "text", "download", "embeddinggemma", "--json"])
 

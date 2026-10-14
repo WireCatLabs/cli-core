@@ -3,12 +3,12 @@ import { Command } from "commander"
 import { registriesCover } from "../../botcheck/registries.js"
 import { AUDIT_BUDGET, AUDIT_PAGE } from "../../services/members-audit.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { withQuery } from "../list-query.js"
+import { listQuery, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
 import { lines } from "./chat-answers.js"
 import { membersAudit, membersHistory, membersList } from "./chat-lists.js"
-import { AUDIT_QUERY, HISTORY_QUERY } from "./chat-queries.js"
+import { AUDIT_QUERY, HISTORY_QUERY, MEMBERS_QUERY } from "./chat-queries.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `chats members …`; a subcommand that changes membership belongs here too. */
@@ -17,14 +17,18 @@ export const membersCommand = (messenger: Messenger): Command => {
 
   members.addCommand(
     annotate(
-      withPaging(
-        new Command("list")
-          .description("everyone in a group, a page at a time, with their role and when they were last seen")
-          .argument("<chat>", messenger.chatArgument),
+      withQuery(
+        withPaging(
+          new Command("list")
+            .description("everyone in a group, a page at a time, with their role and when they were last seen")
+            .argument("<chat>", messenger.chatArgument),
+        ),
+        MEMBERS_QUERY,
       ),
       { output: { entity: "member" } },
-    ).action(async function (this: Command, chat: string) {
+    ).action(async function (this: Command, chat: string, words: string[]) {
       const context = messengerContext(this, messenger)
+      listQuery(typedQuery(words), MEMBERS_QUERY, "chats members list")
       const body = await context.withServices((services) => membersList(services, chat, context.settings))
       renderAnswer(
         this,

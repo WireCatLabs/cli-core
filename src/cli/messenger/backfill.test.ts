@@ -448,7 +448,7 @@ describe("store fetch in the background", () => {
       (await call(["store", "jobs", "list", "--json"], idle, env)).answer,
     )
     expect(listed.items).toEqual([
-      expect.objectContaining({ id: job, state: "running", fetched: 0, limit: 300, page_size: 100, last: 250 }),
+      expect.objectContaining({ id: job, state: "running", fetched: 0, message_limit: 300, page_size: 100, last: 250 }),
     ])
     expect(listed.page).toMatchObject({ has_more: false })
 

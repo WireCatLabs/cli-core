@@ -1,12 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { savedSearch } from "../../entities/index.js"
 import { isAdminSelection } from "../../services/admin-statistics.js"
 import { readRankingSelection } from "../../services/rankings-selection.js"
 import { type SearchParams, savedSearchItem } from "../../services/searches.js"
 import type { StoredSearch } from "../../store/store.js"
 import { itemOf, listOf, renderAnswer } from "../envelope.js"
-import { pagedList, pageOf } from "../list-query.js"
+import { listQuery, pagedList, pageOf, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { positiveCount, withPaging } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { languageOf, wholeCount } from "./messages-search-command.js"
@@ -21,6 +22,8 @@ const line = ({ id, name, command, params, runs, lastRunAt }: StoredSearch) =>
     `${runs} runs`,
     lastRunAt?.slice(0, 16).replace("T", " ") ?? "never run",
   ].join("  ")
+
+const SEARCHES_QUERY = unfilteredQuery("saved_search", savedSearch)
 
 /** Saved searches and the history of `search messages` and `stats messages show`, in the local store only. */
 export const searchesCommand = (messenger: Messenger): Command => {
@@ -91,10 +94,11 @@ export const searchesCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(savedSearchItem(found)), () => `${line(found)}\n`)
     })
 
-  annotate(searches.command("list"), { output: { entity: "saved_search" } })
+  withQuery(searches.command("list"), SEARCHES_QUERY)
     .description("the saved searches, by name")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
+      listQuery(typedQuery(words), SEARCHES_QUERY, "searches list")
       const found = await context.withServices((services) => services.searches.list())
       const items = found.map(savedSearchItem)
       renderAnswer(

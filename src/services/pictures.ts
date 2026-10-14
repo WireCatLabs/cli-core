@@ -53,7 +53,7 @@ export interface PictureLane {
 export const PICTURES_OFF =
   "picture search is off for this profile — set pictureSearch to true in its config to turn it on"
 
-const missingModel = (id: string) => `the picture model is not downloaded — \`models image download ${id}\` fetches it`
+const missingModel = (id: string) => `the picture model is not downloaded — \`images models download ${id}\` fetches it`
 
 /** What CLIP's text side can use of a Lucene query: the words, without fields, operators and quotes. */
 export const plainWords = (query: string): string =>

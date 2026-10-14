@@ -1,10 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { accountSession } from "../../entities/index.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { sessionAnswer, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { capability } from "./port.js"
+
+const SESSIONS_QUERY = unfilteredQuery("account_session", accountSession)
 
 /** `account sessions …` — where else the account is logged in, not this tool's own `session`. */
 export const accountSessionsCommand = (messenger: Messenger): Command => {
@@ -12,10 +16,11 @@ export const accountSessionsCommand = (messenger: Messenger): Command => {
     `where else this account is logged in — not \`${messenger.app.command} session\`, which is this tool's own login`,
   )
 
-  annotate(sessions.command("list"), { output: { entity: "account_session" } })
+  withQuery(sessions.command("list"), SESSIONS_QUERY)
     .description("every device and app logged in to this account; nothing is ended")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
+      listQuery(typedQuery(words), SESSIONS_QUERY, "account sessions list")
       const found = await context.withMessenger((adapter) =>
         capability(adapter, "sessions", "list the account's sessions")(),
       )

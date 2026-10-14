@@ -9,6 +9,7 @@ import { chatsCommand } from "./messenger/chats-command.js"
 import type { Messenger } from "./messenger/context.js"
 import { conversationsCommand } from "./messenger/conversations-command.js"
 import { doctorCommand } from "./messenger/doctor-command.js"
+import { imagesCommand } from "./messenger/images-command.js"
 import { inboxCommand } from "./messenger/inbox.js"
 import { mcpCommand } from "./messenger/mcp-command.js"
 import { messagesCommand } from "./messenger/messages-command.js"
@@ -36,6 +37,7 @@ const program = createProgram({
     chatsCommand(messenger),
     messagesCommand(messenger),
     modelsCommand(messenger),
+    imagesCommand(messenger),
     inboxCommand(messenger),
     reviewCommand(messenger),
     storeCommand(messenger),
@@ -60,7 +62,8 @@ const program = createProgram({
   ],
 })
 const parity = JSON.parse(readFileSync(join(import.meta.dirname, "../../parity.json"), "utf8")) as {
-  commands: Record<string, { in: unknown }>
+  clis: string[]
+  commands: Record<string, { in: unknown; planned?: Record<string, string> }>
 }
 
 /** A value of the right kind for each argument, so the line parses as typed. */
@@ -75,8 +78,9 @@ const sample = (command: Command, name: string): unknown =>
 describe("the next-step registry", () => {
   const named = STEPS.filter((step) => step.command !== "*")
 
-  it.each(named.map((step) => [step.id, step]))("%s names a command tg and max both have", (_, step) => {
-    expect(parity.commands[step.command]?.in).toBe("all")
+  it.each(named.map((step) => [step.id, step]))("%s names a command tg and max both have or both plan", (_, step) => {
+    const row = parity.commands[step.command]
+    expect(row?.in === "all" || Object.keys(row?.planned ?? {}).length === parity.clis.length).toBe(true)
     expect(commandAt(program, step.command)).toBeDefined()
   })
 

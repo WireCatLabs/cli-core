@@ -11,6 +11,19 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Picture models moved to `images models list|download`**, registered with `imagesCommand`: they serve only
+  picture search, which no app registers yet, and `models image` was not a resource name. `modelsCommand` keeps
+  `models audio` and `models text`; the `models.download-image` step and the "not downloaded" texts name the new
+  command.
+- **`account sessions list`, `chats folders list`, `chats members list`, `contacts notes list`, `models audio list`,
+  `models text list` and `searches list` take a query**, last. Their sources answer whole, so no field filters yet:
+  any term is `query.unsupported-field` (exit 2).
+- **The `job` entity's `limit` is `message_limit`** (`store jobs list|show`): the `--limit` the sync started with,
+  no longer read as the list's own paging flag.
+- `messages evidence --cursor` and `chats media --cursor` take `<cursor>`, as every other list does. `chats list`,
+  `contacts list`, `mentions confirm` and `mentions reject` have a summary of at most 80 characters; `--help` keeps
+  the full description.
+
 - **`contacts timeline` and `contacts_timeline` page like every other list:** a list cut at `--limit` now answers
   `page.has_more: true`, `page.cursor` and a `page.next` step (`--cursor` continues, with the same `--scope`,
   `--since-time` and `--until-time`), where it said `has_more: false` and `meta.truncated`. `meta.truncated` stays

@@ -96,7 +96,7 @@ export const STEPS = defineSteps([
   },
   {
     id: "models.download-image",
-    command: "models image download",
+    command: "images models download",
     args: [{ name: "model", required: true }],
     why: "{model} is not downloaded, so pictures are not searched by what they show",
   },

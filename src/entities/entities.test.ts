@@ -270,7 +270,7 @@ const samples: Record<EntityName, unknown> = {
     started_at: at,
     finished_at: at,
     fetched: 120,
-    limit: 500,
+    message_limit: 500,
     complete: false,
     issue: { code: "rate_limited", message: "wait 30 s" },
   },

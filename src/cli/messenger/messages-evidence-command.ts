@@ -10,7 +10,7 @@ export const evidenceCommand = (messenger: Messenger): Command =>
     .description("a bounded evidence packet from stored messages, newest first")
     .argument("<chat>", messenger.chatArgument)
     .option("--limit <n>", "how many, 1–100", positiveCount("--limit"))
-    .option("--cursor <id>", "go on from where page.next says the last packet stopped")
+    .option("--cursor <cursor>", "go on from where page.next says the last packet stopped")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
       const { cursor } = this.opts<{ cursor?: string }>()

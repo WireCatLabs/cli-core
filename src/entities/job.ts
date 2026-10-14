@@ -15,7 +15,8 @@ export const job = v.strictObject({
   finished_at: v.optional(time),
   /** Messages fetched so far, or in all once it finished. */
   fetched: count,
-  limit: v.optional(count),
+  /** The `--limit` the sync was started with: how many messages it may fetch. */
+  message_limit: v.optional(count),
   page_size: v.optional(count),
   last: v.optional(count),
   /** Whether the sync reached its window; set once it finished. */

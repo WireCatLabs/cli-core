@@ -2,8 +2,10 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { FOLDER_KINDS, FOLDER_SKIPS } from "../../domain/models.js"
+import { folder as folderEntity } from "../../entities/index.js"
 import type { FolderRulesEdit } from "../../services/folders.js"
 import { itemOf, renderAnswer } from "../envelope.js"
+import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { folderAnswer, lines, renderItem, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -57,14 +59,18 @@ const rulesOf = (command: Command): FolderRulesEdit => {
   }
 }
 
+const FOLDERS_QUERY = unfilteredQuery("folder", folderEntity)
+
 /** `chats folders …`, in max-cli's words. */
 export const foldersCommand = (messenger: Messenger): Command => {
   const folders = new Command("folders").description("your chat folders")
   folders.addCommand(
-    annotate(new Command("list").description("your chat folders, in the order the app shows them"), {
-      output: { entity: "folder" },
-    }).action(async function (this: Command) {
+    withQuery(
+      new Command("list").description("your chat folders, in the order the app shows them"),
+      FOLDERS_QUERY,
+    ).action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
+      listQuery(typedQuery(words), FOLDERS_QUERY, "chats folders list")
       const found = await context.withServices((services) => services.folders.list())
       renderAnswer(
         this,

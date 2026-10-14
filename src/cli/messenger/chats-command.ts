@@ -25,10 +25,12 @@ export const chatsCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         withPaging(
-          new Command("list").description(
-            "chats, newest first, archived ones included; the query is answered from the local store, " +
-              "so online, where the messenger filters nothing, it needs --offline",
-          ),
+          new Command("list")
+            .summary("chats, newest first, archived ones included")
+            .description(
+              "chats, newest first, archived ones included; the query is answered from the local store, " +
+                "so online, where the messenger filters nothing, it needs --offline",
+            ),
         ),
         {
           output: { entity: "chat" },

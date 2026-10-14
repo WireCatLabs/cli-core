@@ -2476,6 +2476,27 @@
         "tg": "tg's bump that registers imagesCommand"
       }
     },
+    "images models": {
+      "in": [],
+      "planned": {
+        "max": "max's bump that registers imagesCommand",
+        "tg": "tg's bump that registers imagesCommand"
+      }
+    },
+    "images models download": {
+      "in": [],
+      "planned": {
+        "max": "max's bump that registers imagesCommand",
+        "tg": "tg's bump that registers imagesCommand"
+      }
+    },
+    "images models list": {
+      "in": [],
+      "planned": {
+        "max": "max's bump that registers imagesCommand",
+        "tg": "tg's bump that registers imagesCommand"
+      }
+    },
     "inbox": {
       "in": "all",
       "options": {
@@ -2889,15 +2910,6 @@
       "in": "all"
     },
     "models audio list": {
-      "in": "all"
-    },
-    "models image": {
-      "in": "all"
-    },
-    "models image download": {
-      "in": "all"
-    },
-    "models image list": {
       "in": "all"
     },
     "models text": {
