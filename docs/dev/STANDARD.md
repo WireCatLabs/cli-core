@@ -660,6 +660,7 @@ The shared shell adds these conventions; the manifest tracks adoption:
   wildcards are unsupported. Selecting a parent retains that entire subtree. Missing fields are omitted;
   explicitly selected nulls remain null. Projection retains `page`, `next`, `missing`, `meta`, `coverage`
   and `operation_id` at each selected object, so a compact result still describes its limits.
+  Typed JSONL item records select from `data`; their `type` marker and the completion record stay.
   All CLIs use Base's projector; Core owns the `--json=<paths>` grammar and translates validation errors.
   `--max-output-bytes` bounds serialized machine data (4 MiB; zero explicitly disables the bound).
   Exceeding a bound fails visibly with `retry.safe: false`, never a malformed or silently cropped JSON
