@@ -49,8 +49,9 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       }),
       annotations: WRITE,
       permission: "edit",
-      online: async (adapter, args, { guard }) =>
-        writtenAnswer(
+      online: async (adapter, args, { guard }) => {
+        const reader = selfOf(messenger, adapter)
+        return writtenAnswer(
           await messages(adapter, guard).edit({
             chat: args.chat,
             message: args.message,
@@ -58,8 +59,9 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
             markdown: args.md === true,
             ...(args.html === true ? { html: true } : {}),
           }),
-          selfOf(messenger, adapter),
-        ),
+          reader,
+        )
+      },
     }),
     messages_forward: tool({
       title: "Forward a message",
@@ -70,8 +72,9 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       input: v.object(forwardInput),
       annotations: WRITE,
       permission: "forward",
-      online: async (adapter, args, { guard }) =>
-        writtenAnswer(
+      online: async (adapter, args, { guard }) => {
+        const reader = selfOf(messenger, adapter)
+        return writtenAnswer(
           await messages(adapter, guard).forward({
             chat: args.chat,
             message: args.message,
@@ -81,8 +84,9 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
             ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
             ...(args.topic === undefined ? {} : { threadId: args.topic }),
           }),
-          selfOf(messenger, adapter),
-        ),
+          reader,
+        )
+      },
     }),
     messages_pin: tool({
       title: "Pin a message",

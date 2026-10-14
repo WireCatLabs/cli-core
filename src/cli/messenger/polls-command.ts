@@ -183,25 +183,28 @@ export const pollsCommand = (messenger: Messenger): Command => {
     const sendAs = typedSendAs(given)
     const asQuiz = quizOf({ quiz, correct, solution })
     const closeAfter = closeAfterOf(closeTime, messenger.pollCloseSeconds)
-    const { sent, reader } = await context.withMessenger(async (connection) => ({
-      sent: await guardedCreatePoll(context.guard, connection, {
-        chat,
-        ...(threadId === undefined ? {} : { threadId }),
-        poll: {
-          question,
-          answers,
-          multiple: multiple === true,
-          anonymous: anonymous === true,
-          revote: revote === true,
-          ...(asQuiz === undefined ? {} : { quiz: asQuiz }),
-          ...(closeAfter === undefined ? {} : { closeAfter }),
-        },
-        silent: silent === true,
-        ...(sendId === undefined ? {} : { sendId }),
-        ...(sendAs === undefined ? {} : { sendAs }),
-      }),
-      reader: selfOf(messenger, connection),
-    }))
+    const { sent, reader } = await context.withMessenger(async (connection) => {
+      const reader = selfOf(messenger, connection)
+      return {
+        sent: await guardedCreatePoll(context.guard, connection, {
+          chat,
+          ...(threadId === undefined ? {} : { threadId }),
+          poll: {
+            question,
+            answers,
+            multiple: multiple === true,
+            anonymous: anonymous === true,
+            revote: revote === true,
+            ...(asQuiz === undefined ? {} : { quiz: asQuiz }),
+            ...(closeAfter === undefined ? {} : { closeAfter }),
+          },
+          silent: silent === true,
+          ...(sendId === undefined ? {} : { sendId }),
+          ...(sendAs === undefined ? {} : { sendAs }),
+        }),
+        reader,
+      }
+    })
     renderAnswer(this, context, writtenAnswer(sent, reader))
   })
 

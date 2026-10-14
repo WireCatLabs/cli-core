@@ -38,7 +38,6 @@ shape of this file.
   and a `messages.scheduled` next step in place of the stderr note. Delete, pin, unpin and press are their receipts
   (`operation_id`, `chat_id`, `message_id`, `for_everyone`…). `--json <fields>` still keeps `operation_id` and
   `send_id`; an `outcome_unknown` error is unchanged.
-- **`snakeKeys` moves to `src/cli/envelope.ts`** from `chat-answers.ts`.
 
 ### Added
 

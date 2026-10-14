@@ -148,6 +148,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
           ...(args.solution === undefined ? {} : { solution: args.solution }),
         })
         const closeAfter = closeAfterOf(args.close_time, messenger.pollCloseSeconds)
+        const reader = selfOf(messenger, adapter)
         const sent = await guardedCreatePoll(guard, adapter, {
           chat: args.chat,
           poll: {
@@ -164,7 +165,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
           ...(args.topic === undefined ? {} : { threadId: args.topic }),
           ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
         })
-        return writtenAnswer(sent, selfOf(messenger, adapter))
+        return writtenAnswer(sent, reader)
       },
     }),
   }

@@ -99,6 +99,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
         if ((args.text ?? "").trim() === "" && attachments.length === 0) {
           throw new CliError("validation_error", "nothing to send — give text, a file or a photo")
         }
+        const reader = selfOf(messenger, adapter)
         const sent = await servicesFor({ ...onlineDeps(messenger, adapter, guard) }).messages.send({
           chat: args.chat,
           text: args.text ?? "",
@@ -116,7 +117,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
           ...(args.html === true ? { html: true } : {}),
           ...(at === undefined ? {} : { at }),
         })
-        return writtenAnswer({ ...sent, ...(at === undefined ? {} : { scheduledFor: at }) }, selfOf(messenger, adapter))
+        return writtenAnswer({ ...sent, ...(at === undefined ? {} : { scheduledFor: at }) }, reader)
       },
     }),
   }
