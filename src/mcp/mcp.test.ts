@@ -2274,7 +2274,8 @@ describe("the transcribe tool", () => {
 
     const { body } = await call("chat_inbox", { transcribe: true })
 
-    expect(body).toMatchObject({ chats: [{ messages: [{ transcript: "read me" }] }], unheard: [] })
+    expect(body).toMatchObject({ items: [{ transcript: "read me" }] })
+    expect(body.missing).toBeUndefined()
   })
 
   it("hears a review's voice messages with `transcribe`, and refuses `model` alone", async () => {
@@ -2285,10 +2286,10 @@ describe("the transcribe tool", () => {
       }),
     )
 
-    const heard = await call("chat_review", { since_time: "2000-01-01", all: true, transcribe: true })
-    const lonely = await call("chat_review", { since_time: "2000-01-01", model: "gigaam-v3" })
+    const heard = await call("chat_review", { query: "date>2000-01-01", all: true, transcribe: true })
+    const lonely = await call("chat_review", { query: "date>2000-01-01", model: "gigaam-v3" })
 
-    expect(heard.body).toMatchObject({ chats: [{ messages: [{ transcript: "read me" }] }], unheard: [] })
+    expect(heard.body).toMatchObject({ items: [{ transcript: "read me" }] })
     expect(lonely.isError).toBe(true)
   })
 
@@ -3322,8 +3323,8 @@ describe("catching up with `new` over MCP", () => {
     const first = await call("chat_inbox", { new: true })
     const second = await call("chat_inbox", { new: true })
 
-    expect(first.body.chats.map((one: { id: string }) => one.id)).toEqual(["7"])
-    expect(second.body.chats).toEqual([])
+    expect(first.body.items.map((one: { chat_id: string }) => one.chat_id)).toEqual(["7"])
+    expect(second.body.items).toEqual([])
     const owners = checkPoints(app, { command: "inbox", profile: "default", env, firstLookMs: 0 })
     expect([...owners.chats.keys()]).toEqual([])
   })
@@ -3334,13 +3335,13 @@ describe("catching up with `new` over MCP", () => {
     await call("chat_inbox", { new: true })
     const review = await call("chat_review", { new: true })
 
-    expect(review.body.chats.map((one: { id: string }) => one.id)).toEqual(["7"])
+    expect([...new Set(review.body.items.map((one: { chat_id: string }) => one.chat_id))]).toEqual(["7"])
   })
 
   it("refuses `new` with a time of its own", async () => {
     const { call } = await connect(fresh())
 
-    const inbox = await call("chat_inbox", { new: true, since_time: "2h" })
+    const inbox = await call("chat_inbox", { new: true, query: "date>2h" })
     const review = await call("chat_review", { new: true, unanswered: 4 })
 
     expect(inbox.body.error).toMatchObject({ code: "validation_error" })
@@ -3412,7 +3413,7 @@ describe("MCP prompts and resources", () => {
     expect(plain).toContain('Call chat_read with command "inbox" once.')
     expect(plain).toContain('command "chats mark-read"')
     expect(channels).toContain('kinds ["channel","group"] and new true')
-    expect(since).toContain('since_time "2h"')
+    expect(since).toContain('query "date>2h"')
   })
 
   it("lists no chats before anything was read, then the kept ones without connecting, and reads one", async () => {
@@ -3468,7 +3469,7 @@ describe("MCP tools for a messenger whose history is kept in the store", () => {
     const around = await call("chat_messages_context", { chat: "7", message: "1" })
     const contacts = await call("chat_contacts_list")
     const inbox = await call("chat_inbox")
-    const review = await call("chat_review", { since_time: "2026-09-27T00:00:00.000Z" })
+    const review = await call("chat_review", { query: 'date>"2026-09-27T00:00:00.000Z"' })
     const nothing = await call("chat_messages_list", { chat: "99" })
 
     expect(chats.body.items.map((one: Chat) => one.id)).toEqual(["7"])
@@ -3476,8 +3477,8 @@ describe("MCP tools for a messenger whose history is kept in the store", () => {
     expect(messages.body.items.map((one: Message) => one.id)).toEqual(["1"])
     expect(around.body.items).toEqual([expect.objectContaining({ id: "1", anchor: true })])
     expect(contacts.isError).toBe(false)
-    expect(inbox.body.chats.map((one: { id: string }) => one.id)).toEqual(["7"])
-    expect(review.body.chats[0].messages.map((one: Message) => one.id)).toEqual(["1"])
+    expect(inbox.body.items.map((one: { chat_id: string }) => one.chat_id)).toContain("7")
+    expect(review.body.items.map((one: { ref: string }) => one.ref.split("/").at(-1))).toEqual(["1"])
     expect(nothing.body.error).toMatchObject({ code: "not_found" })
     expect(nothing.body.error.message).toContain("nothing stored for this chat yet")
     expect(telegram.opened()).toBe(0)
@@ -3503,31 +3504,32 @@ describe("MCP tools for a messenger whose history is kept in the store", () => {
         { streams, tty: false, env },
       )
       expect(code, argv.join(" ")).toBe(0)
-      return JSON.parse(streams.stdout.join(""))
+      const { meta: _, ...answer } = JSON.parse(streams.stdout.join(""))
+      return answer
+    }
+    const tool = async (name: string, args?: Record<string, unknown>) => {
+      const { meta: _, ...answer } = (await call(name, args)).body
+      return answer
     }
 
-    const since = "2026-09-27T00:00:00.000Z"
-    expect((await call("chat_inbox")).body).toEqual(await command(["inbox", "--json"]))
-    expect((await call("chat_inbox", { since_time: since })).body).toEqual(
-      await command(["inbox", "--since-time", since, "--json"]),
-    )
-    expect((await call("chat_review", { since_time: since })).body).toEqual(
-      await command(["review", "--since-time", since, "--json"]),
-    )
+    const since = 'date>"2026-09-27T00:00:00.000Z"'
+    expect(await tool("chat_inbox")).toEqual(await command(["inbox", "--json"]))
+    expect(await tool("chat_inbox", { query: since })).toEqual(await command(["inbox", since, "--json"]))
+    expect(await tool("chat_review", { query: since })).toEqual(await command(["review", since, "--json"]))
     expect(telegram.opened()).toBe(0)
   })
 
   it("filters `inbox` and `review` by kind", async () => {
     const { call } = await connect(scripted(), { history: "store", root: await filledRoot() })
-    const since = "2026-09-27T00:00:00.000Z"
+    const since = 'date>"2026-09-27T00:00:00.000Z"'
 
-    const groups = await call("chat_review", { since_time: since, kinds: ["group"] })
-    const dialogs = await call("chat_review", { since_time: since, kinds: ["dialog"] })
+    const groups = await call("chat_review", { query: since, kinds: ["group"] })
+    const dialogs = await call("chat_review", { query: since, kinds: ["dialog"] })
     const unread = await call("chat_inbox", { kinds: ["dialog", "channel"] })
 
-    expect(groups.body.chats.map((one: { id: string }) => one.id)).toEqual(["7"])
-    expect(dialogs.body.chats).toEqual([])
-    expect(unread.body.chats).toEqual([])
+    expect([...new Set(groups.body.items.map((one: { chat_id: string }) => one.chat_id))]).toEqual(["7"])
+    expect(dialogs.body.items).toEqual([])
+    expect(unread.body.items).toEqual([])
   })
 
   it("**still connect to write**, through the guard", async () => {

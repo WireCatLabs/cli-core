@@ -50,6 +50,30 @@ export const STEPS = defineSteps([
     why: "it stopped before the whole chat; running it again goes on where it stopped",
   },
   {
+    id: "messages.list",
+    command: "messages list",
+    args: [{ name: "chat", required: true }],
+    why: "only the newest were read here; this reads the chat itself",
+  },
+  {
+    id: "inbox.all",
+    command: "inbox",
+    args: [{ name: "all", required: true }],
+    why: "muted and archived chats were left out; --all reads them too",
+  },
+  {
+    id: "review.all",
+    command: "review",
+    args: [{ name: "all", required: true }],
+    why: "muted and archived chats were left out; --all reads them too",
+  },
+  {
+    id: "review.next",
+    command: "review",
+    args: [{ name: "query", required: true }],
+    why: "the next review starts where this one ended",
+  },
+  {
     id: "chats.members",
     command: "chats members list",
     args: [{ name: "chat", required: true }],
