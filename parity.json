@@ -2695,7 +2695,7 @@
     "messages evidence": {
       "in": "all",
       "options": {
-        "--before-id": "all",
+        "--cursor": "all",
         "--limit": "all"
       }
     },

@@ -40,6 +40,16 @@ export const STEPS = defineSteps([
     why: "it is waiting to be sent and gets a new id then; this lists what is still waiting",
   },
   {
+    id: "messages.download",
+    command: "messages download",
+    args: [
+      { name: "chat", required: true },
+      { name: "all", required: false },
+      { name: "output_dir", required: false },
+    ],
+    why: "it stopped before the whole chat; running it again goes on where it stopped",
+  },
+  {
     id: "chats.members",
     command: "chats members list",
     args: [{ name: "chat", required: true }],

@@ -1,0 +1,30 @@
+import type { StoredEvidencePacket } from "../../services/evidence-read.js"
+import type { Heard } from "../../speech/transcribe.js"
+import { itemOf, snakeKeys } from "../envelope.js"
+import { nextStep } from "../steps.js"
+
+/**
+ * The packet as one item; its fingerprints were taken over the library's own field names and stay valid as ids.
+ * Older messages are `page.next`, whose cursor is the id the packet stopped before.
+ */
+export const evidenceAnswer = ({ nextBeforeId, ...packet }: StoredEvidencePacket, chat: string, limit: number) =>
+  itemOf(snakeKeys(packet), {
+    ...(nextBeforeId === null
+      ? {}
+      : {
+          next: [
+            nextStep("page.next", {
+              command: "messages evidence",
+              args: { chat, cursor: nextBeforeId, limit },
+              values: { shown: packet.items.length },
+            }),
+          ],
+        }),
+  })
+
+/** A transcript the messenger has not finished is asked for again later; its step says so. */
+export const heardAnswer = (heard: Heard, chat: string) =>
+  itemOf(
+    snakeKeys(heard),
+    heard.pending ? { next: [nextStep("messages.transcribe", { args: { chat, message: heard.messageId } })] } : {},
+  )

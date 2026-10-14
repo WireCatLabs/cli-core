@@ -229,6 +229,8 @@ are omitted; replies retain source locators and attachments retain kinds only.
 
 Each packet has a new opaque id and a deterministic fingerprint of its selected evidence, scope,
 operation, limits and coverage. A message fingerprint covers the fields that the agent sees.
+`messages evidence` and its MCP tool print the packet with snake_case keys; the fingerprints are
+taken over the library's own field names, as this function returns them.
 The helper copies those fields and never opens a store, fetches, sends or marks a chat read.
 It is a library building block; it does not generate summaries.
 

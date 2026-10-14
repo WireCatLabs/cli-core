@@ -2,7 +2,9 @@ import type { Command } from "commander"
 import { type Kept, openKept } from "../../speech/hearing.js"
 import { isInstalled } from "../../speech/install.js"
 import { choose, type Heard, hearLocally, hearOnline, notDownloaded } from "../../speech/transcribe.js"
+import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { heardAnswer } from "./message-answers.js"
 
 /** `messages transcribe`: a voice message as text, by the messenger or by a model on this machine. */
 export const transcribeSubcommand = (messages: Command, messenger: Messenger): Command =>
@@ -54,10 +56,8 @@ export const transcribeSubcommand = (messages: Command, messenger: Messenger): C
         : online instanceof Uint8Array
           ? await hearLocally(online, id, choice)
           : (online as Heard)
-      if (heard.pending) context.renderer.note("the transcription was not finished yet — ask again later")
-      else if (!before) {
+      if (!heard.pending && !before) {
         await withKept((kept) => kept.keep({ chatId, messageId: id }, heard.text, heard.model ?? heard.via))
       }
-      if (context.format === "pretty") context.streams.data(`${heard.text}\n`)
-      else context.renderer.result(heard)
+      renderAnswer(this, context, heardAnswer(heard, chatId), () => `${heard.text}\n`)
     })
