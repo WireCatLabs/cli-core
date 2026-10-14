@@ -28,6 +28,9 @@ shape of this file.
 
 ### Added
 
+- **`useAsProcessRun(scope)`** (`./cli`) names the run of a one-shot command whose action runs outside `inRun` as the
+  process's run, so `currentRun()` — and an answer's `meta.run_id` — name the run `runs show` finds. For max's `max bot`,
+  recorded from commander's hooks with `startRecording`, whose answers carried a `…-process-…` id.
 - **`itemOf`, `listOf`, `pagedList`, `renderAnswer`, `answerSchema` and `snakeKeys` from `@wirecat/cli-core/cli`**,
   with the `Body`, `ItemBody`, `ListBody`, `ListInput` and `AnswerOutput` types: an app's own command answers in the
   same envelope, `meta` and next steps as cli-core's, without a copy of them.

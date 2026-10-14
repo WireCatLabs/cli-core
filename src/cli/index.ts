@@ -295,7 +295,7 @@ export {
   runtime,
   startRun,
 } from "./runs/run.js"
-export { currentRun, inRun, type RunScope } from "./runs/scope.js"
+export { currentRun, inRun, type RunScope, useAsProcessRun } from "./runs/scope.js"
 export {
   type Config,
   type Configuration,
