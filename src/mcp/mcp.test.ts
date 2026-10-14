@@ -1782,7 +1782,7 @@ describe("the MCP server", () => {
         blob: bytes.toString("base64"),
       },
     })
-    expect(answer.structuredContent).toMatchObject({ complete: true, totalBytes: bytes.length })
+    expect(answer.structuredContent).toMatchObject({ complete: true, total_bytes: bytes.length })
     expect(JSON.stringify(answer.structuredContent)).not.toContain("base64")
     const fallback = await client.callTool({
       name: "chat_attachments_show",
@@ -1800,7 +1800,7 @@ describe("the MCP server", () => {
     })
     expect(preview.isError).not.toBe(true)
     expect(preview.content[0]).toMatchObject({ type: "image", mimeType: "image/png" })
-    expect(preview.structuredContent).toMatchObject({ pdf: { page: 1, pageCount: 1 }, complete: true })
+    expect(preview.structuredContent).toMatchObject({ pdf: { page: 1, page_count: 1 }, complete: true })
     expect(JSON.stringify(preview.structuredContent)).not.toContain("base64")
     const foreign = await client.callTool({
       name: "chat_attachments_show",

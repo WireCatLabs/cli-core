@@ -4,7 +4,12 @@ import { embeddingChoice } from "../../cli/embedding-choice.js"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { conversationShown, foundConversations, refreshedAnswer } from "../../cli/messenger/conversation-answers.js"
+import {
+  conversationShown,
+  foundConversations,
+  readinessList,
+  refreshedAnswer,
+} from "../../cli/messenger/conversation-answers.js"
 import { nextStep } from "../../cli/steps.js"
 import { BATCH_SIZE, CONVERSATION_QUERY } from "../../services/conversations.js"
 import { REFRESH_BOUNDS } from "../../services/embeddings.js"
@@ -144,18 +149,17 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
       description:
         "The conversations nearest to `query`, best first, in one chat or every chat: by meaning in the chats " +
         `embedded with \`${command} conversations embed --chat <chat>\` (a model on this machine), and by the ` +
-        "words they share, the two lists merged. Returns { model, meaning, items, limit, readiness, " +
-        "embeddedOnlyElsewhere }; each item has the conversation's summary, the chunk that matched, `by` " +
-        "(meaning, words or both), a `score`, the meaning's cosine, null when only words found it, and `stale`, " +
-        "true when the chunk changed after it was embedded — its id goes to conversations_show. `meaning` is " +
-        `"unavailable" when the model is not downloaded (\`${command} models text download\`) and only words ` +
-        "were searched. readiness lists chat ids: searchedByMeaning, wordsOnly, partial (some chunks not " +
-        "embedded), stale (changed since the build) and notBuilt. embeddedOnlyElsewhere names chats embedded " +
-        "only with another model. filter is strict Lucene: any message in the conversation must match before ranking. " +
-        "source explicitly widens accounts; by default only the active account is searched. Hits include source and locator. " +
-        "sync_first optionally fetches new messages first under messages.sync-first; max_chats (5), sync_time (30s) " +
-        "and max_messages (500) bound the fetch. This does not build or embed; refreshed describes the network step " +
-        "and incomplete refreshes label coverage stale. Uses the profile embedding provider/model settings; remote providers receive query text.",
+        "words they share, the two lists merged. Returns { items, page, next?, missing?, meta }; each item has the " +
+        "conversation's summary, the chunk that matched, `by` (meaning, words or both), a `score`, the meaning's " +
+        "cosine, null when only words found it, and `stale`, true when the chunk changed after it was embedded — " +
+        "its id goes to conversations_show. What the search could not see is a `missing` entry with the step " +
+        "that fixes it: the model is not downloaded (models.download), chats with no vector of the model or only " +
+        "some (conversations.embed), chats changed since the build or never built (conversations.build), a fetch " +
+        "that stopped early (messages.sync). filter is strict Lucene: any message in the conversation must match " +
+        "before ranking. source explicitly widens accounts; by default only the active account is searched " +
+        "(meta.accounts). Hits include source and locator. sync_first optionally fetches new messages first under " +
+        "messages.sync-first; max_chats (5), sync_time (30s) and max_messages (500) bound the fetch. This does not " +
+        "build or embed. Uses the profile embedding provider/model settings; remote providers receive query text.",
       input: v.object({
         ...syncInputs,
         query: v.pipe(v.string(), v.description("what to look for, in your own words")),
@@ -197,11 +201,11 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
       description:
         "The conversations nearest in meaning to the one `message` is in, in every built chat, best first, never " +
         "that one. Uses the vectors stored by " +
-        `\`${command} conversations embed\`: no model runs. Returns { model, source, items, limit, readiness }: ` +
-        "source is the message's conversation; each item has the conversation's summary, the chunk that matched, " +
-        "`score` (cosine) and `stale`, true when the chunk changed after it was embedded — its id goes to " +
-        "conversations_show. readiness lists chat ids as search_conversations does. Refused, naming the " +
-        "command, when the message's conversation has no vector that matches its messages now.",
+        `\`${command} conversations embed\`: no model runs. Returns { items, page, next?, missing? }: each item ` +
+        "has the conversation's summary, the chunk that matched, `score` (cosine) and `stale`, true when the chunk " +
+        "changed after it was embedded — its id goes to conversations_show. Chats it could not compare are " +
+        "`missing` entries with their step, as in search_conversations. Refused, naming the command, when the " +
+        "message's conversation has no vector that matches its messages now.",
       input: v.object({ chat, message, limit }),
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account, args, defaults) => {
@@ -223,9 +227,9 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
       description:
         "How fresh each built chat's conversations and vectors are, or one chat's: state (ready, stale, " +
         "partial, words-only, not-built), the build's time and rules, messages it has not seen (new, edited, " +
-        "deleted) and chunks with a current, stale or missing vector of the default model. Returns " +
-        "{ items, page, limit, hasMore, model, unbuiltGroups? } — unbuiltGroups, without chat, counts group " +
-        `chats never built. Fix with \`${command} conversations build\` and \`embed\`.`,
+        "deleted) and chunks with a current, stale or missing vector of the default model (each item's `model`). " +
+        "Returns { items, page, next?, missing? }; without chat, group chats never built are a `missing` entry " +
+        `with the conversations.build step. Fix with \`${command} conversations build\` and \`embed\`.`,
       input: v.object({ chat: v.optional(chat) }),
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account, args, defaults) => {
@@ -237,11 +241,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
           ...(args.chat === undefined ? {} : { chat: args.chat }),
           model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env, { needKey: false }),
         })
-        return listOf("conversations status", {
-          items: found.chats.map((one) => snakeKeys({ ...one, model: found.model })),
-          limit: Math.max(1, found.chats.length),
-          has_more: false,
-        })
+        return readinessList(found)
       },
     }),
 
@@ -252,9 +252,9 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
         "group chats never built — or only `chat` — at most `max_chats` chats " +
         `(${REFRESH_BOUNDS.maxChats}) and \`max_chunks\` chunks (${MCP_MAX_CHUNKS}) per call; call again for the ` +
         "rest. Writes only to the local store: nothing is sent, no model is downloaded and no remote model is " +
-        "used. Returns { model, modelAvailable, built, embedded, left }; `left` lists chats that still need " +
-        "`build` or `embed`. modelAvailable false means nothing was embedded: " +
-        `\`${command} models text download\`. What \`${command} search conversations --refresh\` runs first.`,
+        "used. Returns { item: { model, model_available, built, embedded, left } }; `left` lists chats that still " +
+        "need `build` or `embed`. model_available false means nothing was embedded, and the answer names the " +
+        `models.download step. What \`${command} search conversations --refresh\` runs first.`,
       input: v.object({
         chat: v.optional(chat),
         max_chats: v.optional(
@@ -287,7 +287,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
       title: "Read a conversation",
       description:
         "One conversation's messages, oldest first: by `id` from conversations_list, or the conversation a " +
-        "message is in (`chat` and `message`). Returns the summary with { messages }.",
+        "message is in (`chat` and `message`). Returns { item }: the conversation's fields and its `messages`.",
       input: v.object({
         id: v.optional(v.pipe(v.string(), v.regex(/^\d+$/), v.description("conversation id"))),
         chat: v.optional(chat),

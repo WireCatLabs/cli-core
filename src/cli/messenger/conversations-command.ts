@@ -25,7 +25,7 @@ import { positiveCount } from "../paging.js"
 import { nextStep, rootOf, runnable, stepLine } from "../steps.js"
 import { answerOf as askOwner } from "./ask.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
-import { conversationShown, foundConversations, refreshedAnswer } from "./conversation-answers.js"
+import { conversationShown, foundConversations, readinessList, refreshedAnswer } from "./conversation-answers.js"
 import { messageItems } from "./message-items.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
 import { readAll } from "./stdin.js"
@@ -250,24 +250,13 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     } = await context.withServices((services) =>
       services.embeddings.readiness({ ...(options.chat === undefined ? {} : { chat: options.chat }), model }),
     )
-    if (unbuiltGroups)
-      context.renderer.note(
-        `${unbuiltGroups} group chat${unbuiltGroups === 1 ? " was" : "s were"} never built — \`${messenger.app.command} conversations build\` builds them`,
-      )
-    if (context.format !== "pretty") {
-      renderAnswer(
-        this,
-        context,
-        listOf("conversations status", {
-          items: chats.map((one) => snakeKeys({ ...one, model: id })),
-          limit: Math.max(1, chats.length),
-          has_more: false,
-        }),
-      )
-      return
-    }
-    context.streams.data(chats.map((one) => `${readinessLine(one, id)}\n`).join(""))
-    if (chats.length === 0 && !unbuiltGroups)
+    renderAnswer(
+      this,
+      context,
+      readinessList({ model: id, chats, ...(unbuiltGroups === undefined ? {} : { unbuiltGroups }) }),
+      () => chats.map((one) => `${readinessLine(one, id)}\n`).join(""),
+    )
+    if (chats.length === 0 && !unbuiltGroups && context.format === "pretty")
       context.renderer.note("no chat has conversations yet — `conversations build --chat <chat>`")
   })
 

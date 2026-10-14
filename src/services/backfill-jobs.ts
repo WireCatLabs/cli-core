@@ -125,6 +125,30 @@ export const listJobs = (dir: string): Job[] =>
         .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
     : []
 
+/** One job as `store jobs show` answers it, CLI and MCP alike: the `job` fields and how it stopped. */
+export const jobDetails = (job: Job) => ({
+  job: job.id,
+  profile: job.profile,
+  chat: job.chat,
+  state: stateOf(job),
+  pid: job.pid,
+  startedAt: job.startedAt,
+  ...(job.finishedAt ? { finishedAt: job.finishedAt } : {}),
+  fetched: Number(job.result?.fetched ?? job.progress?.fetched ?? 0),
+  ...(job.limit === undefined ? {} : { limit: job.limit }),
+  ...(job.pageSize === undefined ? {} : { pageSize: job.pageSize }),
+  ...(job.last === undefined ? {} : { last: job.last }),
+  ...(job.result
+    ? {
+        complete: job.result.complete === true,
+        ...(job.result.issue ? { issue: job.result.issue } : {}),
+        ...(job.result.batch ? { batch: job.result.batch } : {}),
+        ...(job.result.resume ? { resume: job.result.resume } : {}),
+      }
+    : {}),
+  ...(job.error ? { error: job.error } : {}),
+})
+
 /** A job as `store jobs list` answers it. */
 export const jobItem = (job: Job) => {
   const issue = job.result?.issue as { code?: unknown; message?: unknown } | undefined

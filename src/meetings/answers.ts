@@ -215,6 +215,7 @@ export const MEETING_STEPS = defineSteps([
     why: "passages that changed since they were indexed were left out; the next search indexes them first",
   },
 ])
+const SEARCH_AGAIN = MEETING_STEPS[0] as StepDefinition
 
 /** `search meetings`: the store's page, its cursor as `page.next`, and passages not indexed yet as `missing`. */
 export const meetingHitsList = (
@@ -231,13 +232,18 @@ export const meetingHitsList = (
     offset_ms: hit.startMs,
   }))
   const cursor = found.hasMore && found.nextCursor !== null ? found.nextCursor : undefined
+  const pending = found.coverage.indexing === "pending"
+  const next = [
+    ...(cursor === undefined
+      ? []
+      : [stepOf(PAGE_NEXT, { command, args: { cursor, limit }, values: { shown: items.length } })]),
+    ...(pending ? [stepOf(SEARCH_AGAIN, { command, args: {} })] : []),
+  ]
   return {
     items,
     page: { limit, has_more: cursor !== undefined, ...(cursor === undefined ? {} : { cursor }) },
-    ...(cursor === undefined
-      ? {}
-      : { next: [stepOf(PAGE_NEXT, { command, args: { cursor, limit }, values: { shown: items.length } })] }),
-    ...(found.coverage.indexing === "pending"
+    ...(next.length > 0 ? { next } : {}),
+    ...(pending
       ? {
           missing: [
             {
