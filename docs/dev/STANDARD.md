@@ -654,6 +654,14 @@ The shared shell adds these conventions; the manifest tracks adoption:
   SIGINT/SIGTERM follow shell exit conventions. Broken pipes end quietly without a stack trace.
 - `--json=id,text` keeps only those fields of each item; the envelope (`page`, `next`, `meta`) stays. A bare
   `--json` at a terminal names the fields of a command that declares its answer, instead of printing them all.
+  Paths are relative to the payload: `source.title` selects a nested object field, and
+  `groups.cues.text` projects every element of nested arrays without changing their order or length.
+  `items.ref` is the list-item shorthand, including report lists inside `item`; numeric indexes and
+  wildcards are unsupported. Selecting a parent retains that entire subtree. Missing fields are omitted;
+  explicitly selected nulls remain null. Projection retains `page`, `next`, `missing`, `meta`, `coverage`
+  and `operation_id` at each selected object, so a compact result still describes its limits.
+  Typed JSONL item records select from `data`; their `type` marker and the completion record stay.
+  All CLIs use Base's projector; Core owns the `--json=<paths>` grammar and translates validation errors.
   `--max-output-bytes` bounds serialized machine data (4 MiB; zero explicitly disables the bound).
   Exceeding a bound fails visibly with `retry.safe: false`, never a malformed or silently cropped JSON
   response. File exports retain their streaming contract.
