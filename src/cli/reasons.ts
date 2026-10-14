@@ -15,6 +15,7 @@ const QUERY: Entry[] = [
   ["query.invalid-limit", "the limit is out of range"],
   ["query.invalid-scope", "the query selects no account"],
   ["query.invalid-size", "a size in the query cannot be read"],
+  ["query.invalid-reference", "a reference in the query is not valid"],
   ["query.invalid-tag", "a tag in the query is not valid"],
   ["query.invalid-topic", "a topic in the query is not valid"],
   ["query.topic-scope", "a topic needs its chat in the query"],

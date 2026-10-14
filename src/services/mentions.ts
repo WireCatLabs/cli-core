@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLucene, validateQuery } from "@wirecat/cli-base/query"
 import { formatLocator } from "../domain/locator.js"
+import type { MentionKind } from "../domain/mentions.js"
 import type { Page } from "../domain/models.js"
 import { parseReference } from "../domain/references.js"
 import {
@@ -22,6 +23,8 @@ export interface MentionDetails extends Mention {
   after: string
   /** Other places, in any account, that hold the same kind and value. */
   sameValue: number
+  /** A name's possible people, `person:<uid>`, those who wrote in its chat first. */
+  candidates: string[]
 }
 
 export interface Mentions extends Page<Mention> {
@@ -33,7 +36,10 @@ export interface MentionsService {
   /** `query` empty lists every mention; a bare word is a value. */
   list(query: string, window: { limit?: number; offset: number }): Promise<Mentions>
   show(id: number): Promise<MentionDetails>
-  rebuild(options?: { onBatch?: (done: number, total: number) => void }): Promise<MentionsRebuild>
+  rebuild(options?: {
+    kinds?: readonly MentionKind[]
+    onBatch?: (done: number, total: number) => void
+  }): Promise<MentionsRebuild>
   /** `target` is `person:<uid>` or `organization:<id>` for a phone or an address; a document needs none. */
   confirm(id: number, target: string | undefined, by: string): Promise<MentionDecision>
   reject(id: number, by: string): Promise<MentionDecision>
@@ -64,8 +70,8 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
       const { store, mention } = await located()
       const found = await store.mention(id)
       if (!found) throw new CliError("not_found", `no mention ${id} in this account`)
-      const { before, after, sameValue, ...rest } = found
-      return { ...mention(rest), before, after, sameValue }
+      const { before, after, sameValue, candidates, ...rest } = found
+      return { ...mention(rest), before, after, sameValue, candidates }
     },
     confirm: async (id, target, by) => {
       let owner: string | undefined

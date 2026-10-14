@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Known people's names in stored messages** (`kind:person-name`, no migration). A capitalized word that is a name
+  of someone met in a messenger, a meeting or through a confirmed phone, in any case and from a Latin profile too
+  (`Valery` finds «Валерию»); two in a row that one person shares are a full name. A name links by rule to the one
+  person it fits who wrote in that chat; the rest wait as `found`, and `mentions show` lists the candidates. A name
+  is confirmed (`mentions confirm <id> person:<uid>`) and rejected where it is written, not everywhere. Names of
+  people added or renamed later are found by `mentions rebuild --kind person-name`. Persons known only as an
+  e-mail sender are left out: on one store they were thousands of companies and newsletters.
+- **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
+  or address; `organization:<id>` and `document:<id>` too. Mentions now carry `target`.
+
 ## 0.270.0 — 14.10.2026
 
 ### Changed — may break callers

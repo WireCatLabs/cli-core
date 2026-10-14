@@ -3,11 +3,17 @@ import { domainToUnicode } from "node:url"
 import psl from "psl"
 import { googleDocumentId, trimUrl } from "./google-documents.js"
 
-export const MENTION_KINDS = ["phone", "email", "url", "document"] as const
+export const MENTION_KINDS = ["phone", "email", "url", "document", "person-name"] as const
 export type MentionKind = (typeof MENTION_KINDS)[number]
 
 /** Bumped when a kind's rule changes, so `mentions rebuild` can redo that kind alone. */
-export const MENTION_VERSIONS: Record<MentionKind, number> = { phone: 1, email: 1, url: 1, document: 1 }
+export const MENTION_VERSIONS: Record<MentionKind, number> = {
+  phone: 1,
+  email: 1,
+  url: 1,
+  document: 1,
+  "person-name": 1,
+}
 
 /** One value found in a text, before it is stored. */
 export interface FoundMention {

@@ -462,7 +462,7 @@ export interface MessageStore {
   mention(
     key: AccountKey,
     id: number,
-  ): Promise<(StoredMention & { before: string; after: string; sameValue: number }) | undefined>
+  ): Promise<(StoredMention & { before: string; after: string; sameValue: number; candidates: string[] }) | undefined>
   /**
    * Says what a mention's value is, everywhere it is written: a phone or an address belongs to its owner
    * (`person:<uid>` or `organization:<id>`), a document id names the stored document.

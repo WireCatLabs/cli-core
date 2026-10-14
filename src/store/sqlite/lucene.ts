@@ -357,6 +357,36 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
           sender.id,
         )
       else searchError("query.invalid-ast", node.span)
+    } else if (field === "mentions") {
+      const [type, id = ""] = value.split(":")
+      const pk = Number(id)
+      // A person is mentioned by name, or by a phone or an address that is theirs.
+      const linked: Record<string, [string, number[]]> = {
+        person: [
+          "(mn.target_type = 'person' AND mn.target_id = ?) OR (mn.target_type = 'identity' " +
+            "AND mn.target_id IN (SELECT identity_id FROM identity_links WHERE person_id = ?))",
+          [pk, pk],
+        ],
+        organization: [
+          "mn.target_type = 'identity' AND mn.target_id IN " +
+            "(SELECT identity_id FROM organization_identities WHERE organization_id = ?)",
+          [pk],
+        ],
+        document: ["mn.target_type = 'document' AND mn.target_id = ?", [pk]],
+      }
+      const target = linked[type ?? ""]
+      if (target === undefined) searchError("query.invalid-reference", node.span)
+      else if (corpus.item !== "message") fragment = bound("0")
+      else {
+        const [where, params] = target
+        fragment = bound(
+          `m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND mn.status = 'linked' AND (${where}) ` +
+            "UNION SELECT a.attachable_id FROM mentions mn JOIN attachments a ON a.id=mn.source_id " +
+            `AND a.attachable_type='message' WHERE mn.source_type='attachment' AND mn.status = 'linked' AND (${where}))`,
+          ...params,
+          ...params,
+        )
+      }
     } else if (field === "phone" || field === "email" || field === "url" || field === "domain") {
       // Mentions are found in message text only so far: mail has none to match.
       if (corpus.item !== "message") fragment = bound("0")
