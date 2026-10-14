@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { storedKinds } from "../../domain/attachments.js"
+import { normalizedValue, siteOf } from "../../domain/mentions.js"
 import type { Page } from "../../domain/models.js"
 import { tagOf } from "../../domain/tags.js"
 import {
@@ -356,6 +357,20 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
           sender.id,
         )
       else searchError("query.invalid-ast", node.span)
+    } else if (field === "phone" || field === "email" || field === "url" || field === "domain") {
+      // Mentions are found in message text only so far: mail has none to match.
+      if (corpus.item !== "message") fragment = bound("0")
+      else if (field === "domain")
+        fragment = bound(
+          "m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND mn.domain = ? AND mn.status <> 'dismissed')",
+          siteOf(value.toLowerCase()),
+        )
+      else
+        fragment = bound(
+          "m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND mn.kind = ? AND mn.value = ? AND mn.status <> 'dismissed')",
+          field,
+          normalizedValue(value),
+        )
     } else if (field === "tag") {
       const tag = tagOf(value)
       if (tag === undefined) searchError("query.invalid-tag", node.span)

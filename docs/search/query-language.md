@@ -366,6 +366,10 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `lang` | kw | language tag or its prefix, lowercase; notes and files only | `lang:ru` | term, phrase |
 | `author` | kw | contained, folded as text is; notes and files only | `author:ivanov` | term, phrase |
 | `keyword` | kw | whole keyword, folded as text is; notes and files only | `keyword:invoices` | term, phrase |
+| `phone` | kw | a phone found in the text, written any way: +7…, 8…, with spaces or dashes | `phone:"8 900 000-00-01"` | term, phrase |
+| `email` | kw | an address found in the text, lower-cased; quoted, since @ is an operator | `email:"ana@example.com"` | term, phrase |
+| `url` | kw | a link found in the text, without utm_*, fbclid and the fragment | `url:"https://example.com/a"` | term, phrase |
+| `domain` | kw | the site of a link or an address in the text; docs.google.com means google.com | `domain:google.com` | term, phrase |
 | `tag` | kw | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase |
 
 <!-- fields: end -->

@@ -16,6 +16,10 @@ shape of this file.
 
 ### Added
 
+- **`phone:`, `email:`, `url:` and `domain:` in a message search** find messages by what their text mentions:
+  `phone:"8 900 000-00-01"` finds `+7 900 000-00-01` and `89000000001` alike, `domain:docs.google.com` every link
+  and address of `google.com`, `url:` one link without its tracking. An address is quoted (`email:"ana@example.com"`),
+  since `@` is an operator. A dismissed mention is not found. Mail has no mentions yet, so these match no email.
 - **`mentions confirm <id> [person:<uid>]` and `mentions reject <id>`** decide a mention's value everywhere it is
   written. A phone or an address gets an identity of its own (`provider` `phone` or `email`, the value as its id)
   owned by the person, through the identity links that already keep their history; a Google document id names the
