@@ -26,6 +26,7 @@ import { memory } from "./memory.js"
 import { message } from "./message.js"
 import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
+import { model } from "./model.js"
 import { note } from "./note.js"
 import { officialStats } from "./official-stats.js"
 import { person } from "./person.js"
@@ -69,6 +70,7 @@ export {
   message,
   messageCounts,
   messageLink,
+  model,
   note,
   officialStats,
   person,
@@ -127,6 +129,7 @@ export const ENTITIES = {
   conversation,
   job,
   agenda,
+  model,
   chat_event: chatEvent,
   invite_link: inviteLink,
   join_request: joinRequest,

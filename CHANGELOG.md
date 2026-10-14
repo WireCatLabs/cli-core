@@ -9,6 +9,9 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`models audio|text|image list` answer in the list envelope** with the new `model` entity: `kind`, and
+  `size_bytes` (a number) in place of `size` (a "120 MB" string). `directory` leaves the answer (a person still sees
+  it); a default text or image model that is not downloaded adds a `models.download` or `models.download-image` step.
 - **`messages evidence|transcribe|download` answer in the envelope**, CLI and MCP alike, snake_case. `evidence` is
   one item, the packet (fingerprints unchanged, still taken over the library's field names); `--before-id` and MCP
   `before_id` become `--cursor`/`cursor`, given by a `page.next` step in place of `nextBeforeId` and the stderr note.

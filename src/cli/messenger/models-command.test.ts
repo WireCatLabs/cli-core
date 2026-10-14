@@ -3,9 +3,12 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
+import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import { placedText, textModelsDirectory } from "../../embeddings/embed.js"
 import { textModel } from "../../embeddings/models.js"
+import { model as modelEntity } from "../../entities/model.js"
 import { modelPath, modelsDirectory, vadPath } from "../../speech/install.js"
 import { speechModel, VAD } from "../../speech/models.js"
 import { embeddingKeys } from "../embedding-keys.js"
@@ -130,13 +133,21 @@ describe("models text", () => {
     const { code, stdout } = await go()
 
     expect(code).toBe(0)
-    const { items } = JSON.parse(stdout[0] ?? "")
+    const { items, next } = v.parse(listEnvelopeSchema(modelEntity), JSON.parse(stdout[0] ?? ""))
+    expect(next).toBeUndefined()
     expect(
       items.map(({ id, downloaded, default: chosen }: Record<string, unknown>) => [id, downloaded, chosen]),
     ).toEqual([
       ["e5-small", true, true],
       ["embeddinggemma", false, false],
     ])
+  })
+
+  it("names the download step while the default embedding model is missing", async () => {
+    const { go } = await call(["models", "text", "list", "--json"])
+    const answer = v.parse(listEnvelopeSchema(modelEntity), JSON.parse((await go()).stdout[0] ?? ""))
+    expect(answer.next).toMatchObject([{ step: "models.download", args: { model: "e5-small" } }])
+    expect(answer.items[0]).toMatchObject({ kind: "text", size_bytes: expect.any(Number) })
   })
 
   it("refuses a model with its own licence until its terms are accepted, downloading nothing", async () => {
