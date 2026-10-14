@@ -171,7 +171,7 @@ describe("search answers", () => {
     }
   })
 
-  it("puts the picture lane after the text hits", () => {
+  it("puts the picture lane after the text hits and names the missing picture model", () => {
     const text = {
       locator: "msg:chat/500/7/1",
       chatId: "7",
@@ -200,6 +200,7 @@ describe("search answers", () => {
           score: 0.28,
         },
       ],
+      picturesModel: "clip-b32",
       wordsReady: true,
     } as never
     const answer = messagesAnswer("search messages", found, { limit: 10 })
@@ -207,5 +208,6 @@ describe("search answers", () => {
       ["msg:chat/500/7/1", undefined],
       ["msg:chat/500/7/2", "picture"],
     ])
+    expect(answer.missing).toEqual([expect.objectContaining({ field: "pictures", step: "models.download-image" })])
   })
 })

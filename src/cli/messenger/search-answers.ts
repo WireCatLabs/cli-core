@@ -110,6 +110,14 @@ const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } =>
       step: "store.migrate",
     })
   }
+  if (found.picturesModel !== undefined) {
+    next.push(nextStep("models.download-image", { args: { model: found.picturesModel } }))
+    missing.push({
+      field: "pictures",
+      why: "the picture model is not downloaded, so pictures were not searched by what they show",
+      step: "models.download-image",
+    })
+  }
   return { next, missing }
 }
 

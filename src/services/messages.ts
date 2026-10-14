@@ -151,6 +151,8 @@ export interface SearchFound extends Page<FoundMessage> {
   pictures?: PictureHit[]
   /** Why a profile with picture search on has no `pictures` list: the model is not downloaded. */
   picturesSkipped?: string
+  /** The picture model to download, when its absence is why `picturesSkipped` is set. */
+  picturesModel?: string
 }
 
 export interface SendRequest {

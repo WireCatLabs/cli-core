@@ -46,6 +46,8 @@ export interface PictureLane {
   pictures?: PictureHit[]
   /** Why a profile that turned picture search on has no `pictures` list, said as `meaningSkipped` says it. */
   picturesSkipped?: string
+  /** The picture model to download, when its absence is why `picturesSkipped` is set. */
+  picturesModel?: string
 }
 
 export const PICTURES_OFF =
@@ -214,7 +216,8 @@ export const picturesService = (deps: ServiceDeps) => {
         const use = await embedder()
         vector = await use.embedQuery(words)
       } catch (error) {
-        if (error instanceof CliError && error.code === "not_found") return { picturesSkipped: error.message }
+        if (error instanceof CliError && error.code === "not_found")
+          return { picturesSkipped: error.message, picturesModel: model.id }
         throw error
       } finally {
         const held = opened
