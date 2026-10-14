@@ -5,9 +5,11 @@ contract for the next shared CLI/MCP adapters. It is not mounted in a released a
 
 ## Commands and scope
 
-`meetings evidence <project> [query...]` reads one bounded name page for an existing project,
+`meetings projects evidence <project> [query...]` reads one bounded name page for an existing project,
 resolved by its canonical name, key or explicit alias. `evidence` is an existing shared noun view;
-it sits under meetings because it reads stored meeting passages. It does not create membership.
+it sits under the `projects` subresource because it reads project-name evidence in stored meeting
+passages. The existing `meetings evidence <meeting-reference>` remains the whole-meeting evidence
+view. These distinct views do not create membership.
 `meeting_project_evidence` is the corresponding MCP tool. Both bind the selected account through
 the host; neither accepts an account override.
 
