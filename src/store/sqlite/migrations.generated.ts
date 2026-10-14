@@ -411,5 +411,13 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TABLE `organization_identities` (\n\t`id` integer PRIMARY KEY,\n\t`identity_id` integer NOT NULL,\n\t`organization_id` integer NOT NULL,\n\t`method` text NOT NULL,\n\t`author` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_organization_identities_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `fk_organization_identities_organization_id_organizations_id_fk` FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`),\n\tCONSTRAINT `organization_identities_identity_id_organization_id_unique` UNIQUE(`identity_id`,`organization_id`)\n);",
       "CREATE INDEX `organization_identities_by_organization_id` ON `organization_identities` (`organization_id`);"
     ]
+  },
+  {
+    "name": "20261014195259_version-12-mail-rules",
+    "statements": [
+      "CREATE TABLE `mail_rules` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`conditions` text NOT NULL,\n\t`actions` text NOT NULL,\n\t`protected` integer DEFAULT 0 NOT NULL,\n\t`source` text NOT NULL,\n\t`reason` text,\n\t`decided_at` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_mail_rules_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `mail_rules_account_id_conditions_unique` UNIQUE(`account_id`,`conditions`)\n);",
+      "ALTER TABLE `emails` ADD `mail_rule_id` integer;",
+      "CREATE INDEX `emails_by_mail_rule_id` ON `emails` (`mail_rule_id`) WHERE mail_rule_id IS NOT NULL;"
+    ]
   }
 ]

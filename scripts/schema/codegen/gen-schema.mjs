@@ -11,6 +11,7 @@ const DEFAULTS = {
   "chats.searchable": 1,
   "chats.message_count": 0,
   "email_threads.emails_count": 0,
+  "mail_rules.protected": 0,
   "documents.revision": 1,
   "notes.revision": 1,
   "reminders.revision": 1,
