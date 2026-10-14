@@ -1952,6 +1952,7 @@ export {
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
 export type { ProposedAction } from "./sqlite/proposed-actions.js"
+export { type ColumnMap, queryFilter, type Where } from "./sqlite/query-filter.js"
 export type { RankedEvidence, RankingEvidenceItem, RankingEvidenceRequest } from "./sqlite/ranking-evidence.js"
 export type { RankedStoreFound, RankedStoreRow, RankingRequest } from "./sqlite/rankings.js"
 export type { RetentionResult } from "./sqlite/retention.js"

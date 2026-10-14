@@ -120,6 +120,14 @@ const samples: Record<EntityName, unknown> = {
     updated_at: at,
   },
   reference: "note:42",
+  tagging: {
+    tag: "work",
+    type: "chat",
+    target: "chat:chat/500/7",
+    name: "Book club",
+    sources: ["manual"],
+    created_at: at,
+  },
 }
 
 /** The names each entity's fields had elsewhere, which a schema must refuse. */

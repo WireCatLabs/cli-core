@@ -13,6 +13,7 @@ import { memory } from "./memory.js"
 import { message } from "./message.js"
 import { note } from "./note.js"
 import { person } from "./person.js"
+import { tagging } from "./tagging.js"
 import { task } from "./task.js"
 
 /**
@@ -35,6 +36,7 @@ export {
   note,
   person,
   reference,
+  tagging,
   task,
 }
 
@@ -55,6 +57,7 @@ export const ENTITIES = {
   memory,
   meeting,
   reference,
+  tagging,
 } as const
 
 export type EntityName = keyof typeof ENTITIES

@@ -14,3 +14,4 @@
 - 2026-10-13: `../cli-messaging-wt-mcp-default-test`, branch `fix/mcp-entry-default-test` — worktree for the 0.260.0 changelog section; remove once merged.
 - 2026-10-13: `../cli-messaging-wt-a2-core`, branches `feat/a2-core-entities` and `feat/a2-core-output` — stream A a2-core worktree; remove once both PRs are merged.
 - 2026-10-14: `.worktrees/meeting-hit-context`, branch `feat/meeting-hit-context` — shared cue context, compact passages and synthetic adapter proofs; retain until approved cleanup.
+- /home/leemour/Projects/AI/cli-messaging-wt-a2-s3 — worktree of the a2 S3 slice (store lists); remove after its PRs merge. 2026-10-14

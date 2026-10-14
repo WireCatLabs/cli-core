@@ -1,9 +1,10 @@
 import * as v from "valibot"
+import { listOf } from "../../cli/envelope.js"
+import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { listed } from "../../cli/paging.js"
-import { TAG_TYPES } from "../../domain/tags.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
-import { type AnyTool, chatOf, READ, tool } from "../tool.js"
+import { TAGGING_QUERY } from "../../services/tags.js"
+import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.js"
 
 const LOCAL = { readOnlyHint: false, idempotentHint: true, openWorldHint: false }
 const TARGET =
@@ -34,16 +35,19 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "List tags",
       description:
         "The owner's own tags in the local store: this account's tagged chats and messages, and the people of its " +
-        "messenger. `tag:<tag>` in search_messages finds the messages they label. Returns { items: [{ tag, type, " +
-        "chatId?, chatTitle?, personId?, name?, messageId?, locator?, createdAt }], page, limit, hasMore }.",
-      input: v.object({
-        tag: v.optional(v.pipe(v.string(), v.minLength(1), v.description("only this tag"))),
-        type: v.optional(v.picklist(TAG_TYPES)),
-        source: v.optional(v.picklist(["manual", "auto"])),
-      }),
+        "messenger. `tag:<tag>` in search_messages finds the messages they label.",
+      input: v.object({ query: queryArgument(TAGGING_QUERY), limit, page }),
       annotations: { ...READ, openWorldHint: false },
-      stored: async (store, account, args, defaults) =>
-        listed(await servicesFor(storedDeps(messenger, store, account, defaults.guard)).tags.list(args)),
+      output: { entity: "tagging", list: true },
+      stored: async (store, account, args, defaults) => {
+        const { size, number, window } = paging(args, defaults)
+        const query = listQuery(args.query ?? "", TAGGING_QUERY, "tags list")
+        const found = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).tags.list({
+          ...window,
+          ...(query ? { query } : {}),
+        })
+        return listOf("tags list", { items: found.items, limit: size, has_more: found.has_more, page: number })
+      },
     }),
 
     tags_add: tool({

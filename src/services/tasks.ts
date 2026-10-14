@@ -1,7 +1,11 @@
 import { CliError, isCliError, singleLine } from "@wirecat/cli-base"
+import { type QueryAst, type QueryRegistry, queryFieldsOf, walkQuery } from "@wirecat/cli-base/query"
+import type * as v from "valibot"
 import { isLocator, parseLocator } from "../domain/locator.js"
 import { formatReference } from "../domain/references.js"
+import { task as taskEntity } from "../entities/task.js"
 import type { AccountKey, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
+import { type ColumnMap, queryFilter } from "../store/store.js"
 import {
   type ClosedState,
   createTaskService,
@@ -11,7 +15,6 @@ import {
   type Task,
   type TaskKind,
   type TaskOrigin,
-  type TaskState,
 } from "../tasks/index.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./messages.js"
@@ -25,13 +28,57 @@ export interface TaskView extends Task {
   note?: { id: string; title: string | null; text: string; updatedAt: string } | null
 }
 
-export interface TaskListFilter {
-  state?: TaskState
-  chat?: string
-  types?: readonly TaskKind[]
-  /** ms: only tasks opened before it. */
-  before?: number
-  limit?: number
+export const TASK_QUERY = {
+  entity: "task",
+  backend: "sql",
+  fields: queryFieldsOf(taskEntity, {
+    exclude: ["ref", "description", "project", "account", "priority", "parent"],
+    examples: {
+      kind: "kind:question",
+      chat: "chat:12345",
+      title: "title:*invoice*",
+      source_message: 'source_message:"msg:telegram/1/2/3"',
+    },
+  }),
+} as const satisfies QueryRegistry
+
+const TIME = (sql: string) => ({ type: "time", sql }) as const
+
+/** `chat:` names the chat as the messenger does; `groups` holds each name already resolved to its stored id. */
+const taskColumns = (groups: ReadonlyMap<string, string>): ColumnMap => ({
+  id: { type: "kw", sql: "t.package_id" },
+  title: { type: "kw", sql: "t.title" },
+  kind: { type: "enum", sql: "t.type" },
+  state: { type: "enum", sql: "t.status" },
+  origin: { type: "enum", sql: "t.source" },
+  chat: {
+    where: (node) =>
+      node.operator === "wildcard"
+        ? { sql: "t.source_group IS NOT NULL", params: [] }
+        : { sql: "t.source_group = ?", params: [groups.get(node.value) ?? ""] },
+  },
+  source_message: { type: "ref", sql: "t.source_locator" },
+  reason: { type: "kw", sql: "t.close_reason" },
+  due_at: TIME("t.due_at"),
+  closed_at: TIME("t.closed_at"),
+  created_at: TIME("t.created_at"),
+  updated_at: TIME("t.updated_at"),
+})
+
+export type TaskItem = v.InferOutput<typeof taskEntity>
+
+export interface TaskListRequest {
+  query?: QueryAst
+  limit: number
+  offset: number
+  /** Each task's message or note preview, for a person's view; never in the answer. */
+  previews?: boolean
+}
+
+export interface TaskList {
+  items: TaskItem[]
+  has_more: boolean
+  previews?: TaskView[]
 }
 
 /**
@@ -55,7 +102,7 @@ export interface TaskCard extends TaskDetails {
 
 /** What waits on the owner, kept in the local store by `src/tasks/`; nothing here reaches the messenger. */
 export interface TasksService {
-  list(filter?: TaskListFilter): Promise<TaskView[]>
+  list(request: TaskListRequest): Promise<TaskList>
   add(
     message: string,
     type: TaskKind,
@@ -131,18 +178,20 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
   }
 
   return {
-    list: (filter = {}) =>
+    list: ({ query, limit, offset, previews }) =>
       inStore(async (store, account) => {
-        const group = await groupOf(store, account, filter.chat)
-        const found = await service(store).list({
-          account: taskAccount(account),
-          ...(filter.state === undefined ? {} : { state: filter.state }),
-          ...(group === undefined ? {} : { group }),
-          ...(filter.before === undefined ? {} : { createdBefore: new Date(filter.before) }),
-        })
-        const typed = filter.types?.length ? found.filter((task) => filter.types?.includes(task.kind)) : found
-        const shown = filter.limit === undefined ? typed : typed.slice(0, filter.limit)
-        return Promise.all(shown.map((task) => taskView(store, account, task)))
+        const groups = new Map<string, string>()
+        for (const node of query ? walkQuery(query.root) : [])
+          if (node.field === "chat" && node.operator !== "wildcard" && !groups.has(node.value))
+            groups.set(node.value, await storedChatId(deps.messenger, node.value, store, account))
+        const where = query ? queryFilter(query, taskColumns(groups), { command: "tasks list" }) : undefined
+        const rows = await store.tasks.query(taskAccount(account), where, { limit: limit + 1, offset })
+        const shown = rows.slice(0, limit)
+        return {
+          items: shown.map((row) => taskItem(account, row)),
+          has_more: rows.length > limit,
+          ...(previews ? { previews: await Promise.all(shown.map(({ task }) => taskView(store, account, task))) } : {}),
+        }
       }),
 
     add: (message, type, origin, plan = {}) =>
@@ -256,6 +305,32 @@ export const tasksService = (deps: ServiceDeps): TasksService => {
       }),
   }
 }
+
+const iso = (at: Date | undefined) => (at === undefined ? null : at.toISOString())
+
+/** A stored task as the `task` entity: its chat as a `chat:` reference, its times in ISO 8601. */
+export const taskItem = (
+  account: AccountKey,
+  { task, title, updatedAt }: { task: Task; title: string; updatedAt: Date },
+): TaskItem => ({
+  ref: `task:${task.id}`,
+  id: task.id,
+  title,
+  kind: task.kind,
+  state: task.state,
+  origin: task.origin,
+  account: task.account,
+  chat:
+    task.sourceKind === "note"
+      ? null
+      : formatReference({ type: "chat", provider: account.provider, account: account.account, chat: task.group }),
+  source_message: task.source,
+  due_at: iso(task.dueAt),
+  closed_at: iso(task.closedAt),
+  ...(task.reason === undefined ? {} : { reason: task.reason }),
+  created_at: task.createdAt.toISOString(),
+  updated_at: updatedAt.toISOString(),
+})
 
 /** A file in a notes folder is a `document:`, a written note a `note:`. */
 const isNoteReference = (source: string) => source.startsWith("note:") || source.startsWith("document:")

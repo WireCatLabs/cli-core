@@ -1,14 +1,16 @@
 import * as v from "valibot"
+import { listOf } from "../../cli/envelope.js"
+import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { listed } from "../../cli/paging.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { kindsOf } from "../../services/inbox.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
-import { TASK_LINK_KINDS, type TaskPlan } from "../../services/tasks.js"
+import { TASK_LINK_KINDS, TASK_QUERY, type TaskPlan } from "../../services/tasks.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
-import { TASK_KINDS, TASK_STATES } from "../../tasks/index.js"
-import { type AnyTool, chatOf, limit, READ, tool } from "../tool.js"
+import { TASK_KINDS } from "../../tasks/index.js"
+import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.js"
 
 const LOCAL = { readOnlyHint: false, openWorldHint: false }
 const ROW =
@@ -62,33 +64,17 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     tasks_list: tool({
       title: "List tasks",
       description:
-        "What waits on the owner — questions nobody answered, mentions, requests, promises — oldest first, each with " +
-        "its current message or note preview (`null` when unavailable or deleted). review and serve open and close them. " +
-        `Returns { items: [${ROW}], page, limit, hasMore }.`,
-      input: v.object({
-        state: v.optional(v.picklist(TASK_STATES)),
-        chat: v.optional(chatOf(messenger)),
-        type: v.optional(v.pipe(v.array(type), v.minLength(1), v.description("only these types"))),
-        before_time: v.optional(
-          v.pipe(
-            v.string(),
-            v.minLength(1),
-            v.description("only tasks opened before this ISO 8601 time, or 2h / 1d ago"),
-          ),
-        ),
-        limit,
-      }),
+        "What waits on the owner — questions nobody answered, mentions, requests, promises — oldest first. review " +
+        "and serve open and close them; `source_message` is the message to read for the context.",
+      input: v.object({ query: queryArgument(TASK_QUERY), limit, page }),
       annotations: { ...READ, openWorldHint: false },
-      stored: async (store, account, args, defaults) =>
-        listed(
-          await tasks(store, account, defaults.guard).list({
-            ...(args.state === undefined ? {} : { state: args.state }),
-            ...(args.chat === undefined ? {} : { chat: args.chat }),
-            ...(args.type === undefined ? {} : { types: args.type }),
-            ...(args.before_time === undefined ? {} : { before: momentOf(args.before_time, "before_time") }),
-            limit: args.limit ?? defaults.limit,
-          }),
-        ),
+      output: { entity: "task", list: true },
+      stored: async (store, account, args, defaults) => {
+        const { size, number, window } = paging(args, defaults)
+        const query = listQuery(args.query ?? "", TASK_QUERY, "tasks list")
+        const found = await tasks(store, account, defaults.guard).list({ ...window, ...(query ? { query } : {}) })
+        return listOf("tasks list", { items: found.items, limit: size, has_more: found.has_more, page: number })
+      },
     }),
 
     tasks_add: tool({

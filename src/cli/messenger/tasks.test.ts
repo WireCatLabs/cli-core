@@ -2,8 +2,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
+import { task } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -93,12 +96,9 @@ describe("tasks", () => {
       created: false,
     })
     const listed = json(await call("tasks", "list", "--json"))
-    expect(listed.items).toHaveLength(1)
-    expect(listed.items[0].message).toEqual({
-      senderName: "Ana",
-      text: "I'll send the invoice tomorrow",
-      timestamp: "2026-10-06T10:01:00.000Z",
-    })
+    expect(v.parse(listEnvelopeSchema(task), listed).items).toMatchObject([
+      { ref: `task:${added.id}`, chat: "chat:chat/500/7", source_message: PROMISE, kind: "promise" },
+    ])
   })
 
   it("**closes a task, keeps the reason, and refuses to close it twice**", async () => {
@@ -109,22 +109,28 @@ describe("tasks", () => {
     expect(closed).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closedBy: "owner" })
     const again = await call("tasks", "close", id, "--as", "done", "--json")
     expect([again.code, again.stderr]).toEqual([2, expect.stringContaining("a closed task stays closed")])
-    expect(json(await call("tasks", "list", "--state", "open", "--json")).items).toEqual([])
+    expect(json(await call("tasks", "list", "state:open", "--json")).items).toEqual([])
   })
 
-  it("filters by type, chat and age", async () => {
+  it("**narrows by a query** over kind, chat and age, and names the fields it has", async () => {
     const call = await setup()
     await call("tasks", "add", PROMISE, "--type", "promise", "--json")
     await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--json")
 
     const types = (result: { stdout: string[] }) => json(result).items.map((task: { kind: string }) => task.kind)
-    expect(types(await call("tasks", "list", "--type", "question", "--json"))).toEqual(["question"])
-    expect(types(await call("tasks", "list", "--type", "question,promise", "--json")).sort()).toEqual([
+    expect(types(await call("tasks", "list", "kind:question", "--json"))).toEqual(["question"])
+    expect(types(await call("tasks", "list", "kind:question OR kind:promise", "--json")).sort()).toEqual([
       "promise",
       "question",
     ])
-    expect(types(await call("tasks", "list", "--chat", "7", "--json"))).toHaveLength(2)
-    expect(types(await call("tasks", "list", "--before-time", "2026-01-01T00:00:00Z", "--json"))).toEqual([])
+    expect(types(await call("tasks", "list", "chat:7", "--json"))).toHaveLength(2)
+    expect(types(await call("tasks", "list", "NOT kind:question", "--json"))).toEqual(["promise"])
+    expect(types(await call("tasks", "list", "created_at<2026-01-01", "--json"))).toEqual([])
+    const paged = json(await call("tasks", "list", "--limit", "1", "--json"))
+    expect([paged.items.length, paged.page.has_more, paged.next[0].step]).toEqual([1, true, "page.next"])
+    const unknown = await call("tasks", "list", "type:question", "--json")
+    expect([unknown.code, unknown.stderr]).toEqual([2, expect.stringContaining("query.unknown-field")])
+    expect((await call("tasks", "list", "invoice", "--json")).stderr).toContain("query.bare-word")
   })
 
   it("**a backup keeps the tasks**: restored, a closed one is open again", async () => {
