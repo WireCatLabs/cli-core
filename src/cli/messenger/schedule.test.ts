@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams, NOT_ALLOWED } from "@wirecat/cli-base"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
+import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
@@ -291,5 +292,70 @@ describe("a run", () => {
     expect(readFileSync(last.output, "utf8")).toBe("writable\n")
     expect(removed).toEqual(["once"])
     expect(existsSync(file)).toBe(false)
+  })
+
+  it("counts failures in a row with the first one's time and the last line said, and a success clears them", async () => {
+    const { env } = setup()
+    const failing = machine("linux", [
+      process.execPath,
+      "-e",
+      'console.error("noise\\nvault has no folder id"); process.exit(8)',
+    ])
+    const file = scheduled(env.CHAT_STATE_DIR, { name: "sync", kind: "command", argv: [], when: { every: 5 } })
+    const first = await runSchedule(app, failing.system, env, file, { now: () => new Date("2026-10-14T00:58:00Z") })
+    const second = await runSchedule(app, failing.system, env, file, { now: () => new Date("2026-10-14T01:03:00Z") })
+    expect(first).toMatchObject({ exitCode: 8, failures: 1, failingSince: "2026-10-14T00:58:00.000Z" })
+    expect(second).toMatchObject({
+      exitCode: 8,
+      failures: 2,
+      failingSince: "2026-10-14T00:58:00.000Z",
+      reason: "vault has no folder id",
+    })
+
+    const passing = machine("linux", [process.execPath, "-e", ""])
+    const third = await runSchedule(app, passing.system, env, file)
+    expect(third).not.toHaveProperty("failures")
+    expect(third).not.toHaveProperty("reason")
+  })
+})
+
+describe("a failing schedule", () => {
+  const other = () => new Command("chats").addCommand(new Command("list").action(() => {}))
+  const failed = (state: string) => {
+    const folder = join(state, "schedules", "sync")
+    mkdirSync(folder, { recursive: true })
+    writeFileSync(
+      join(folder, "schedule.json"),
+      JSON.stringify({ name: "sync", kind: "command", argv: [], when: { every: 5 }, environment: {}, createdAt: "" }),
+    )
+    writeFileSync(
+      join(folder, "last.json"),
+      JSON.stringify({ at: "2026-10-14T10:00:00Z", exitCode: 1, output: "", reason: "no folder id", failures: 3 }),
+    )
+  }
+  const command = async (argv: string[], env: NodeJS.ProcessEnv) => {
+    const streams = captureStreams()
+    const code = await run(["default", ...argv], { app, commands: () => [other()] }, { streams, env })
+    return { code, err: streams.stderr.join("") }
+  }
+
+  it("is said on stderr before any other command, with the reason and where to look", async () => {
+    const { env } = setup()
+    failed(env.CHAT_STATE_DIR)
+    const { code, err } = await command(["chats", "list"], env)
+    expect(code).toBe(0)
+    expect(err).toMatch(/^chat: scheduled sync failing since .+ \(3 runs\): no folder id — chat schedule list\n?$/)
+  })
+
+  it("is not said inside the scheduled run, nor under --quiet", async () => {
+    const { env } = setup()
+    failed(env.CHAT_STATE_DIR)
+    expect((await command(["chats", "list"], { ...env, CHAT_SCHEDULED: "sync" })).err).toBe("")
+    expect((await command(["chats", "list", "--quiet"], env)).err).toBe("")
+  })
+
+  it("is not said for a schedule that last ran fine, or one never run", async () => {
+    const { env } = setup()
+    expect((await command(["chats", "list"], env)).err).toBe("")
   })
 })

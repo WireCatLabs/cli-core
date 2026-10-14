@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A failing schedule is said before every other command:** while a schedule's last run failed, each command
+  prints one stderr line first — `tg: scheduled sync failing since 2026-10-14 00:58 (3 runs): <reason> — tg schedule
+  list` — so a timer that has been failing for hours is no longer found only by asking. Not inside the scheduled
+  run (`<PREFIX>_SCHEDULED`, which the run now gets), not under `--quiet`, not for `schedule` itself.
+  `last.json` gains `reason` (the last line the run printed), `failingSince` and `failures`, cleared by the next
+  success; older files read as before. `schedule list` shows the streak.
+- **`recordRun`, `failingNotice`, `reasonOf` and `scheduledRuns` from `@wirecat/cli-core/background`,** so a CLI with
+  its own timer (memo, zoom) records its runs in the same shape and prints the same line.
+
 ## 0.268.0 — 14.10.2026
 
 ### Changed — may break callers

@@ -29,6 +29,83 @@ export interface LastRun {
   output: string
   /** Shared by every command the run started (`TRACEPARENT`), so `runs list` names them. */
   traceId?: string
+  /** Why a failed run failed, in one line: the last thing it said, not its whole output. */
+  reason?: string
+  /** The first failure of the failures in a row, so "failing since" survives every retry. */
+  failingSince?: string
+  /** Failed runs in a row; absent once a run succeeds. */
+  failures?: number
+}
+
+const REASON_CHARS = 200
+
+/** The last line a failed run printed, which is where a CLI says why it stopped. */
+export const reasonOf = (output: string): string | undefined => {
+  const line = output
+    .split("\n")
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .at(-1)
+  return line === undefined ? undefined : line.length > REASON_CHARS ? `${line.slice(0, REASON_CHARS - 1)}…` : line
+}
+
+const readRun = (path: string): LastRun | undefined => {
+  try {
+    return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as LastRun) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Writes one run's result to `path`, carrying the failure streak over from the run before. Any CLI's own
+ * timer can call this, so `failingNotice` reads every tool's background runs the same way.
+ */
+export const recordRun = (
+  path: string,
+  run: { at: string; exitCode: number; output: string; traceId?: string; reason?: string },
+): LastRun => {
+  const before = readRun(path)
+  const { reason, ...rest } = run
+  const last: LastRun =
+    run.exitCode === 0
+      ? rest
+      : {
+          ...rest,
+          ...(reason === undefined ? {} : { reason }),
+          failingSince: before?.exitCode ? (before.failingSince ?? before.at) : run.at,
+          failures: before?.exitCode ? (before.failures ?? 1) + 1 : 1,
+        }
+  mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 })
+  writeFileSync(path, `${JSON.stringify(last, null, 2)}\n`, { mode: 0o600 })
+  return last
+}
+
+const shortTime = (iso: string) => {
+  const at = new Date(iso)
+  const two = (n: number) => String(n).padStart(2, "0")
+  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}`
+}
+
+/**
+ * One stderr line per failing background job, or nothing: `tg: scheduled digest failing since … (3 runs):
+ * <reason> — tg schedule list`. A status the owner has to ask for is how a broken timer goes unnoticed.
+ */
+export const failingNotice = (
+  command: string,
+  runs: readonly { job: string; last: LastRun | undefined }[],
+  statusCommand: string,
+): string | undefined => {
+  const lines = runs.flatMap(({ job, last }) =>
+    last && last.exitCode !== 0
+      ? [
+          `${command}: scheduled ${job} failing since ${shortTime(last.failingSince ?? last.at)} ` +
+            `(${last.failures ?? 1} run${(last.failures ?? 1) === 1 ? "" : "s"})` +
+            `${last.reason ? `: ${last.reason}` : ""} — ${statusCommand}`,
+        ]
+      : [],
+  )
+  return lines.length ? lines.join("\n") : undefined
 }
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,39}$/
@@ -48,9 +125,18 @@ export const readSchedule = (file: string): Schedule => {
   return JSON.parse(readFileSync(file, "utf8")) as Schedule
 }
 
-export const lastRun = (file: string): LastRun | undefined => {
-  const path = join(file, "..", "last.json")
-  return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as LastRun) : undefined
+export const lastRun = (file: string): LastRun | undefined => readRun(join(file, "..", "last.json"))
+
+/** The CLI's own schedules with their last runs, for `failingNotice`; a broken file is skipped, not thrown. */
+export const scheduledRuns = (state: string): { job: string; last: LastRun | undefined }[] => {
+  try {
+    return listSchedules(state).map((schedule) => ({
+      job: schedule.name,
+      last: lastRun(scheduleFile(state, schedule.name)),
+    }))
+  } catch {
+    return []
+  }
 }
 
 export const listSchedules = (state: string): Schedule[] =>
@@ -352,6 +438,7 @@ export const runSchedule = async (
     ...env,
     ...schedule.environment,
     TRACEPARENT: trace.traceparent,
+    [`${app.envPrefix}_SCHEDULED`]: schedule.name,
     ...(agent ? { [`${app.envPrefix}_READ_ONLY`]: "1" } : {}),
   }
   // The child's output is data, and an agent's is another program's: it is kept as it came. These lines say
@@ -383,8 +470,14 @@ export const runSchedule = async (
     exitCode,
     durationMs: ended.getTime() - began,
   })
-  const last: LastRun = { at: ended.toISOString(), exitCode, output, traceId: trace.traceId }
-  writeFileSync(join(folder, "last.json"), `${JSON.stringify(last, null, 2)}\n`, { mode: 0o600 })
+  const said = exitCode === 0 ? undefined : reasonOf(readFileSync(errors, "utf8"))
+  const last = recordRun(join(folder, "last.json"), {
+    at: ended.toISOString(),
+    exitCode,
+    output,
+    traceId: trace.traceId,
+    ...(said === undefined ? {} : { reason: said }),
+  })
   if (agent && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
 
   const stampOf = (file: string) => file.split(".")[0] ?? file
