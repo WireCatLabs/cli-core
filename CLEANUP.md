@@ -37,3 +37,5 @@
 - 2026-10-14: `../cli-base/.worktrees/meeting-project-aliases`, branch `feat/meeting-project-aliases` — unused clean vocabulary-design checkout; retained pending the owner-approved cleanup batch.
 - 2026-10-14: `../cli-messaging-wt-a2-s5a`, branches `feat/a2-s5a-*` — wave 2 slice S5a (account, runtime, bot onto the envelope; removals); remove once merged.
 - 2026-10-14: `../cli-messaging-wt-a2-s5a-r` — second worktree of S5a for rebasing its PRs while the first is busy; remove once merged.
+
+- 2026-10-14: retain `feat/meeting-occurrence-foundation`, its worktree and isolated `/var/tmp/core-occurrence-*` states and `/tmp/core-occurrence-*` logs until owner-approved cleanup; normalized synthetic providers only.

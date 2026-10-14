@@ -213,3 +213,31 @@ The testing entry point exports runner-independent contracts using invented fixt
 Each contract case exposes `{ name, run }`. Give each case a fresh fixture and keep filesystem tests
 inside an isolated temporary home. Test the host's URL trust, token selection, filesystem races,
 cross-process locks and OS scheduler separately; the pure SDK cannot establish those guarantees.
+
+## Upcoming occurrence reads
+
+`createUpcomingMeetingReader(scope, port)` is a read-only SDK foundation for one selected provider
+meeting or recurring series. It does not discover the owner's next meeting across a calendar or
+build a preparation brief. The provider/account scope and port are captured when the reader is
+created. `next(meetingId, {after, until, limit?, maxReadBytes?, signal?})` uses absolute epoch
+milliseconds and a half-open `[after, until)` window. Defaults are 100 normalized entries and
+1 MiB; hard limits are 1000 entries and 4 MiB. Invalid requests fail before provider I/O.
+
+The provider supplies a `MeetingOccurrenceSchedule`: its meeting ID, single/recurring/unscheduled/
+unknown kind, optional IANA timezone, explicit occurrence entries and completeness/missing-capability
+status. Recurring verified entries require occurrence IDs; a series start date alone is insufficient.
+Keep provider date parsing and wire-response byte limits in the adapter. The shared reader validates
+the detached normalized answer, its UTF-8 budget and row count, then selects the earliest active
+candidate within the window. It never retries a provider failure or performs a write.
+
+`candidate` can be useful even when `verifiedNext` is false. A verified-next claim requires a
+verified candidate, a complete schedule for this selected series/window, no active unverified entries
+and no simultaneous candidate ambiguity. Cancelled entries are excluded. Missing detail access is
+represented by an incomplete schedule and `missing` capabilities; do not start login or change app
+settings. Completeness here does not establish full calendar coverage or identify attendees.
+The result retains inspection, cancellation, undated and unverified counts. Late cancellation
+refuses the result. Importing this SDK never opens a provider, database or model.
+
+The SDK currently has normalized synthetic provider proofs. Provider calendar adapters and a cited
+preparation entity with shared CLI/MCP adapters remain separate work; there is no new preparation
+command or automatic findings intake in this slice.
