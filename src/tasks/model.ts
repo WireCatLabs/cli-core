@@ -28,10 +28,18 @@ export interface Task {
   dueAt?: Date
   closedAt?: Date
   closedBy?: TaskOrigin
+  /** The readable key the host gave it (`Q-15`); the host sets it on insert, so a new task has none yet. */
+  key?: string
+  /** One name from the host's category list; a host without one leaves it unset. */
+  category?: string
+  /** Who works on it now, until `claimedUntil`; a lapsed claim holds nothing. */
+  claimedBy?: string
+  claimedUntil?: Date
 }
 
 export function closeTask(task: Task, state: ClosedState, by: TaskOrigin, at: Date, reason?: string): Task {
   if (task.state !== "open")
     throw new CliError("validation_error", `task ${task.id} is already ${task.state}`, { reason: "task.closed" })
-  return { ...task, state, closedAt: at, closedBy: by, ...(reason === undefined ? {} : { reason }) }
+  const { claimedBy: _by, claimedUntil: _until, ...unclaimed } = task
+  return { ...unclaimed, state, closedAt: at, closedBy: by, ...(reason === undefined ? {} : { reason }) }
 }

@@ -1110,6 +1110,9 @@ const NEW = {
         }),
         c("title_folded", "text", { note: "`fold(title)`, which `tasks list title:` compares" }),
         c("close_reason_folded", "text", { note: "`fold(close_reason)`, for `reason:`" }),
+        c("category", "text", { note: "a name from the list `tasks categories` prints; null on a project task" }),
+        c("claimed_by", "text", { note: "who works on it now: `owner` or an agent's name" }),
+        c("claimed_until", "integer", { note: "when the claim lapses; a lapsed claim holds nothing" }),
       ],
       keys: [
         "UNIQUE (project_id, number)",
@@ -1120,6 +1123,11 @@ const NEW = {
         "INDEX (project_id, source_locator)",
         "INDEX (source_group)",
       ],
+    },
+    {
+      name: "task_key_counters",
+      doc: "The last number given out per key prefix of a task found in a message (`Q`, `REQ`, `M`, `PR`).",
+      cols: [c("prefix", "text", { pk: true }), c("tasks_count", "integer", { notnull: true })],
     },
     {
       name: "task_assignments",

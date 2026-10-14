@@ -3,7 +3,9 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { AGENDA_QUERY, type Agenda, agendaItem } from "../../services/agenda.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
+import { taskCategoryOf } from "../../services/task-categories.js"
 import {
+  CLAIM_LEASE_MS,
   closedStateOf,
   TASK_QUERY,
   type TaskCard,
@@ -13,6 +15,8 @@ import {
   taskLinkKindOf,
   taskTypeOf,
 } from "../../services/tasks.js"
+import { holderOf as holderIn } from "../author.js"
+import { environmentOf } from "../context.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
@@ -20,9 +24,9 @@ import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { refuseJsonl, taskStatsAnswer } from "./stats-answers.js"
 
-const line = ({ id, state, kind, group, createdAt, message, note }: TaskView) =>
+const line = ({ id, key, state, kind, group, createdAt, message, note }: TaskView) =>
   [
-    id.slice(0, 8),
+    key ?? id.slice(0, 8),
     state.padEnd(9),
     kind.padEnd(8),
     group,
@@ -38,8 +42,9 @@ const when = (at: string | null) => (at === null ? "—" : at.slice(0, 16).repla
 
 const card = (task: TaskCard) =>
   [
-    `${task.key}  ${task.status}  ${task.type}  ${task.title}`,
+    `${task.key}  ${task.status}  ${task.type}  ${task.category ?? "—"}  ${task.title}`,
     `due ${when(task.dueAt)}  next check ${when(task.nextCheckAt)}  source ${task.source ?? "—"}`,
+    ...(task.claimedBy === null ? [] : [`claimed by ${task.claimedBy} until ${when(task.claimedUntil)}`]),
     ...(task.description ? ["", task.description, ""] : []),
     ...task.links.map((link) => `${link.kind.padEnd(12)} ${link.to ?? link.targetText ?? "?"}`),
   ].join("\n")
@@ -54,7 +59,9 @@ const agendaText = (agenda: Agenda) => {
       : []),
     `tasks (${agenda.tasks.length})`,
     ...agenda.tasks.map(
-      (task) => `  ${task.key}  ${task.reasons.join(",").padEnd(9)}  due ${when(task.dueAt)}  ${task.title}`,
+      (task) =>
+        `  ${task.key}  ${task.reasons.join(",").padEnd(9)}  due ${when(task.dueAt)}  ${task.title}` +
+        (task.claimedBy === null ? "" : `  (claimed by ${task.claimedBy} until ${when(task.claimedUntil)})`),
     ),
     `owed — they wrote last (${agenda.owed.length})`,
     ...agenda.owed.map(chat),
@@ -92,8 +99,23 @@ const planOptions = (command: Command, verb: string) =>
       dateOrNone("--check"),
     )
 
-const planFrom = (options: { title?: string; description?: string; due?: Date | "none"; check?: Date | "none" }) => {
+const categoryHelp = "what it is about, from the list tasks categories prints: money, documents, meeting, …"
+
+const holderOf = (command: Command) =>
+  holderIn(environmentOf(command).env ?? process.env, command.opts<{ holder?: string }>().holder)
+
+const HOLDER_HELP =
+  "who you are for claims: a session id or a chat id; default WIRECAT_HOLDER, else Claude Code's session, else the agent's name"
+
+const planFrom = (options: {
+  title?: string
+  description?: string
+  due?: Date | "none"
+  check?: Date | "none"
+  category?: string
+}) => {
   const plan: TaskPlan = {}
+  if (options.category !== undefined) plan.category = options.category
   if (options.title !== undefined) plan.title = options.title
   if (options.description !== undefined) plan.description = options.description
   if (options.due !== undefined) plan.dueAt = options.due === "none" ? null : options.due
@@ -137,12 +159,19 @@ export const tasksCommand = (messenger: Messenger): Command => {
     annotate(tasks.command("add"), { effects: LOCAL_WRITE })
       .description("add a task for a stored message or note — a promise, a request")
       .argument("<message>", "a message locator, msg:<provider>/<account>/<chat>/<message>, or note:<id>")
-      .requiredOption("--type <name>", "the task's type: question, request, mention or promise", taskTypeOf),
+      .requiredOption("--type <name>", "the task's type: question, request, mention or promise", taskTypeOf)
+      .requiredOption("--category <name>", categoryHelp, taskCategoryOf()),
     "send Alex the API token",
   ).action(async function (this: Command, message: string) {
     const context = messengerContext(this, messenger)
     refuseLocalWrite(context, messenger.app.command, "tasks.add")
-    const options = this.opts<{ type: TaskView["kind"]; title?: string; description?: string; due?: Date | "none" }>()
+    const options = this.opts<{
+      type: TaskView["kind"]
+      category: string
+      title?: string
+      description?: string
+      due?: Date | "none"
+    }>()
     const plan = planFrom(options)
     const {
       task,
@@ -161,15 +190,16 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   planOptions(
     annotate(tasks.command("plan"), { effects: LOCAL_WRITE })
-      .description("set a task's title, description, due date and next check; nothing reaches the messenger")
-      .argument("<task>", "the task's id or key, as tasks list shows it"),
+      .description("set a task's title, description, due date, next check and category; nothing reaches the messenger")
+      .argument("<task>", "the task's id or key, as tasks list shows it")
+      .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`, taskCategoryOf()),
     "send Alex the API token",
   ).action(async function (this: Command, id: string) {
     const context = messengerContext(this, messenger)
     refuseLocalWrite(context, messenger.app.command, "tasks.plan")
     const plan = planFrom(this.opts())
     if (Object.keys(plan).length === 0)
-      throw new CliError("validation_error", "give at least one of --title, --description, --due, --check")
+      throw new CliError("validation_error", "give at least one of --title, --description, --due, --check, --category")
     const planned = await context.withServices((services) => services.tasks.plan(id, plan, "owner"))
     renderAnswer(this, context, itemOf(snakeKeys(planned)), () => `${card(planned)}\n`)
   })
@@ -189,7 +219,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .option(
       "--kind <kind>",
       "related-to (default), evidence — it shows the task is real — or created-from; for task:<id>, related-to, " +
-        "blocked-by or follow-up-of",
+        "blocked-by, follow-up-of, duplicate-of or discovered-from",
       taskLinkKindOf,
     )
     .action(async function (this: Command, id: string, targets: string[]) {
@@ -235,9 +265,17 @@ export const tasksCommand = (messenger: Messenger): Command => {
       "leave out chats silent longer than this: they ended (default 30d)",
       durationOf("--within"),
     )
+    .option("--claimed", "also list tasks someone else holds (tasks claim); hidden by default")
+    .option("--holder <name>", HOLDER_HELP)
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
-      const options = this.opts<{ due?: number; unanswered?: number; waiting?: number; within?: number }>()
+      const options = this.opts<{
+        due?: number
+        unanswered?: number
+        waiting?: number
+        within?: number
+        claimed?: boolean
+      }>()
       const query = listQuery(typedQuery(words), AGENDA_QUERY, "tasks agenda")
       const agenda = await context.withServices((services) =>
         services.agenda.show({
@@ -246,9 +284,53 @@ export const tasksCommand = (messenger: Messenger): Command => {
           ...(options.waiting === undefined ? {} : { waiting: options.waiting }),
           ...(options.within === undefined ? {} : { within: options.within }),
           ...(query ? { query } : {}),
+          holder: holderOf(this),
+          claimed: options.claimed === true,
         }),
       )
       renderAnswer(this, context, itemOf(agendaItem(agenda)), () => `${agendaText(agenda)}\n`)
+    })
+
+  annotate(tasks.command("categories"), { effects: LOCAL_READ })
+    .description("the categories a task takes, with what each means and the words a rule picks it by")
+    .action(async function (this: Command) {
+      const context = messengerContext(this, messenger)
+      const list = await context.withServices(async (services) => services.tasks.categories())
+      const items = list.map(({ name, meaning, triggers }) => ({ name, meaning, triggers }))
+      renderAnswer(
+        this,
+        context,
+        itemOf({ categories: items }),
+        () => `${items.map(({ name, meaning }) => `${name.padEnd(10)} ${meaning}`).join("\n")}\n`,
+      )
+    })
+
+  annotate(tasks.command("claim"), { effects: LOCAL_WRITE })
+    .description("take an open task so no other agent works it at once; the claim lapses by itself")
+    .argument("<task>", "the task's id or key, as tasks list shows it")
+    .option(
+      "--for <span>",
+      "how long the claim lasts: 30m, 2h (default 30m); claiming again extends it",
+      durationOf("--for"),
+    )
+    .option("--holder <name>", HOLDER_HELP)
+    .action(async function (this: Command, id: string) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, messenger.app.command, "tasks.claim")
+      const { for: forMs = CLAIM_LEASE_MS } = this.opts<{ for?: number }>()
+      const claimed = await context.withServices((services) => services.tasks.claim(id, holderOf(this), forMs))
+      renderAnswer(this, context, itemOf(snakeKeys(claimed)), () => `${card(claimed)}\n`)
+    })
+
+  annotate(tasks.command("release"), { effects: LOCAL_WRITE })
+    .description("give back a task you claimed, before the claim lapses; the owner may release any")
+    .argument("<task>", "the task's id or key, as tasks list shows it")
+    .option("--holder <name>", HOLDER_HELP)
+    .action(async function (this: Command, id: string) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, messenger.app.command, "tasks.release")
+      const released = await context.withServices((services) => services.tasks.release(id, holderOf(this)))
+      renderAnswer(this, context, itemOf(snakeKeys(released)), () => `${card(released)}\n`)
     })
 
   annotate(tasks.command("close"), { effects: LOCAL_WRITE })

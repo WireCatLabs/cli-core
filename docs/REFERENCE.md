@@ -68,8 +68,15 @@ New owner projects receive a 3–4-character uppercase key, or take an explicit 
 Existing keys stay stable. Task creation allocates `<project key>-<number>` inside a write transaction;
 a failed creation rolls back the counter. No project or task is renumbered.
 
-`store.tasks.linkTask(from, to, kind, "owner")` and `unlinkTask` manage `blocked-by`, `follow-up-of`
-and `related-to`. `RES-2 blocked-by RES-1` means RES-1 must finish first. Informational follow-up and
+A task found in a message takes a key by its type instead — `Q-n` question, `REQ-n` request, `M-n` mention,
+`PR-n` promise — from a counter per type (`task_key_counters`) taken in the same write as the insert. Tasks made
+before store version 13 keep their inbox key (`IN1A2B3C4D-17`); either key and the task's id resolve. `REQ` is
+kept from new project keys. `store.tasks.claim(id, holder, until)` takes an open task in one `UPDATE … RETURNING`
+under the write lock and refuses, naming the holder, while an unlapsed claim holds it; `release` and closing the
+task clear it.
+
+`store.tasks.linkTask(from, to, kind, "owner")` and `unlinkTask` manage `blocked-by`, `follow-up-of`,
+`related-to`, `duplicate-of` and `discovered-from`. `RES-2 blocked-by RES-1` means RES-1 must finish first. Informational follow-up and
 related links do not affect readiness; related pairs are symmetric. Cycles and self-links fail before
 writing, replays return `changed: false`, and actual changes append linked/unlinked task events.
 Agents propose changes for owner review. Targets must be live tasks in owner projects; inbox tasks

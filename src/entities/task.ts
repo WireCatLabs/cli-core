@@ -6,6 +6,8 @@ import { id, reference, text, time } from "./fields.js"
 export const task = v.strictObject({
   ref: reference,
   id,
+  /** The readable key: `Q-15` for a task found in a message from now on, `IN1A2B3C4D-17` before, `HRB-12` in a project. */
+  key: v.optional(v.nullable(text)),
   title: v.nullable(text),
   description: v.optional(v.nullable(text)),
   kind: v.picklist(TASK_TYPES),
@@ -22,6 +24,11 @@ export const task = v.strictObject({
   due_at: v.optional(v.nullable(time)),
   closed_at: v.optional(v.nullable(time)),
   reason: v.optional(v.nullable(text)),
+  /** One name from the category list (`tasks categories`). */
+  category: v.optional(v.nullable(text)),
+  /** Who works on it now, and until when; null when nobody does. */
+  claimed_by: v.optional(v.nullable(text)),
+  claimed_until: v.optional(v.nullable(time)),
   created_at: time,
   updated_at: v.optional(time),
 })

@@ -5,6 +5,43 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Task fields (store version 13)**: a task found in a message now gets a readable key by its type — `Q-15`
+  question, `REQ-22` request, `M-7` mention, `PR-4` promise — from a counter per type taken in the same write as
+  the task. Tasks made before keep their `IN…-n` key; that key, the new one and the id all resolve. `REQ` is no
+  longer given out as a new project key. Migration 13 adds a table and three columns: no rebuild, older builds keep
+  working.
+- **Task categories**: every task found in a message has one from a fixed list — money, documents, meeting,
+  delivery, access, personal, other. `tasks categories` prints it with what each means and its trigger words. A rule
+  picks the category whose trigger stems the message shares most (Russian, English, Spanish), else `other`;
+  `tasks plan --category` corrects it, and each change is a `category` event in the task's history. `tasks list
+  category:money` and `key:Q-15` filter by them.
+- **Tasks take tags**: `tags add <tag> --task <task>` and `tags remove … --task`, `tags_add` and `tags_remove`
+  with `task`; `tags list` shows them, and `tasks list tag:<tag>` filters by them.
+- **Claiming a task**: `tasks claim <task> [--for 30m]` takes an open task in one write and refuses while someone
+  else holds it, naming who and until when. The holder is one agent session: `--holder <name>`, else
+  `WIRECAT_HOLDER`, else `claude-code:<session id>` from the `CLAUDE_CODE_SESSION_ID` Claude Code sets, else the
+  agent's name (`AI_AGENT`) or `owner`; a web agent with no environment passes `--holder` (its chat id). Claiming
+  again extends one's own claim. The claim lapses by itself (30 minutes by default); `tasks release <task>` gives
+  back one's own claim (the owner may release any), and closing the task clears it. `tasks agenda` shows each
+  task's holder and hides tasks someone else holds unless `--claimed`; it takes `--holder` too (MCP: `claimed`,
+  `holder`). New permission keys `tasks.claim` and `tasks.release`.
+- Task relations `duplicate-of` and `discovered-from`, for `tasks link task:<id> --kind` and `store.tasks.linkTask`.
+
+### Changed — may break callers
+
+- **`tasks add` needs `--category <name>`**, and the MCP tool `tasks_add` needs `category`: an agent names what a
+  task is about from the list, and an unknown name is refused with the list, so "finance" and "payments" never
+  coexist. Add `--category other` where nothing fits. `TasksService.add` without one picks it by the rule's trigger
+  words. Task answers carry `key`, `category`, `claimed_by` and `claimed_until`; the agenda's tasks too.
+- `TagType` and `StoredTag` gain a `task` member (a tagging on a task, from `tags list`); the store's `addTags` and
+  `removeTags` also take the new `TaskTagTarget`, while `TagTarget` itself is unchanged. `TaskDetails` gains
+  `category`, `claimedBy` and `claimedUntil`, and `WorkTasks` / `TasksService` gain `claim` and `release`
+  (`TasksService` also `categories`): a fake that implements these interfaces adds the members.
+
 ## 0.281.0 — 15.10.2026
 
 ### Changed — may break callers

@@ -10,6 +10,7 @@ export interface NewTask {
   kind: TaskKind
   origin: TaskOrigin
   dueAt?: Date
+  category?: string
 }
 
 export interface CloseOptions {

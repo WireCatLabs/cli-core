@@ -1237,6 +1237,9 @@ export const tasks = sqliteTable(
     /** `fold(title)`, `fold(close_reason)`: SQLite's lower() folds ASCII only, so filters compare these. */
     titleFolded: text("title_folded"),
     closeReasonFolded: text("close_reason_folded"),
+    category: text("category"),
+    claimedBy: text("claimed_by"),
+    claimedUntil: integer("claimed_until"),
   },
   (table) => [
     unique().on(table.projectId, table.number),
@@ -1255,6 +1258,11 @@ export const tasks = sqliteTable(
     index("tasks_by_author_type_author_id").on(table.authorType, table.authorId),
   ],
 )
+
+export const taskKeyCounters = sqliteTable("task_key_counters", {
+  prefix: text("prefix").primaryKey(),
+  tasksCount: integer("tasks_count").notNull(),
+})
 
 export const taskAssignments = sqliteTable(
   "task_assignments",

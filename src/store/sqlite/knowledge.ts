@@ -23,10 +23,13 @@ import {
   type TagKind,
   type TagRow,
 } from "./tags.js"
+import { TASK_KEY_PREFIXES } from "./task-keys.js"
 import { inboxKey, taskAccountOf, taskIdOf, taskRowOf } from "./tasks.js"
 import { referenceOfThing, stateOfThing, storedThing, type Thing, type ThingState, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 import { type VocabularyStore, vocabularyStoreOver } from "./vocabulary.js"
+
+const TYPED_KEY_PREFIXES: ReadonlySet<string> = new Set(Object.values(TASK_KEY_PREFIXES))
 
 export type { Label } from "./tags.js"
 
@@ -653,9 +656,15 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
             reason: "vocabulary.alias-conflict",
             candidates: alias.map((row) => ({ kind: "project", id: String(row.id), name: String(row.name) })),
           })
+        if (key !== undefined && TYPED_KEY_PREFIXES.has(wanted))
+          throw new CliError(
+            "validation_error",
+            `the project key ${wanted} is kept for the keys of tasks found in messages`,
+          )
         let chosen = wanted
         for (
           let n = 2;
+          TYPED_KEY_PREFIXES.has(chosen) ||
           database.prepare("SELECT 1 FROM projects WHERE key = ?").get(chosen) ||
           database
             .prepare(

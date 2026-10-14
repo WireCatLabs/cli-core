@@ -114,7 +114,7 @@ import type { StemsFill, StemsState } from "./sqlite/stems.js"
 import * as stems from "./sqlite/stems.js"
 import { fillStems, followDefaultStemmers } from "./sqlite/stems-fill.js"
 import * as sync from "./sqlite/sync.js"
-import type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
+import type { AnyTagTarget, StoredTag, TagFilter } from "./sqlite/tags.js"
 import * as tagQueries from "./sqlite/tags.js"
 import { linkInbox, type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
 import { read, write } from "./sqlite/transaction.js"
@@ -652,9 +652,9 @@ export interface MessageStore {
     revision: number,
   ): Promise<PrivateContactNote>
   removeContactNote(key: AccountKey, personId: Id, id: string): Promise<{ id: string; personId: Id; removed: boolean }>
-  addTags(key: AccountKey, target: TagTarget, tags: string[]): Promise<string[]>
+  addTags(key: AccountKey, target: AnyTagTarget, tags: string[]): Promise<string[]>
   /** Answers the tags it had. */
-  removeTags(key: AccountKey, target: TagTarget, tags: string[], source?: "manual" | "auto"): Promise<string[]>
+  removeTags(key: AccountKey, target: AnyTagTarget, tags: string[], source?: "manual" | "auto"): Promise<string[]>
   /** The account's tagged chats and messages, and its messenger's tagged people. */
   tags(key: AccountKey, filter?: TagFilter): Promise<StoredTag[]>
   /** One run of a search or stats; the same unnamed run again counts on its row. `saved` is the saved search it ran. */
@@ -1931,7 +1931,7 @@ export {
   stemsState,
 } from "./sqlite/stems.js"
 export { fillStems, resetStems } from "./sqlite/stems-fill.js"
-export type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
+export type { StoredTag, TagFilter, TagTarget, TaskTagTarget } from "./sqlite/tags.js"
 export { inboxKey } from "./sqlite/tasks.js"
 export type { MatchPlace, ScoredHit } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"

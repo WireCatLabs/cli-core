@@ -10,14 +10,19 @@ import type { EntityType } from "./entity-types.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { guardTagCreation, type TagCreationOptions } from "./tag-creation.js"
-import { emailOf, emailThreadOf, type Thing } from "./things.js"
+import { inboxKey, taskAccountOf } from "./task-keys.js"
+import { emailOf, emailThreadOf, type Thing, taskRowOf } from "./things.js"
 import { toIso } from "./values.js"
 
-/** What a tag labels: a chat or a message of the account, or a person of its messenger. */
+/** What a messenger tag labels: a chat or a message of the account, or a person of its messenger. */
 export type TagTarget =
   | { type: "chat"; chatId: Id }
   | { type: "contact"; personId: Id }
   | { type: "message"; chatId: Id; messageId: Id }
+
+/** A task of the account; apart from `TagTarget`, so code that narrows a messenger target keeps compiling. */
+export type TaskTagTarget = { type: "task"; taskId: string }
+export type AnyTagTarget = TagTarget | TaskTagTarget
 
 export interface StoredTag {
   tag: string
@@ -28,6 +33,8 @@ export interface StoredTag {
   name?: string | null
   messageId?: Id
   locator?: string
+  /** The task's id, as `task:` takes it. */
+  taskId?: string
   sources?: ("manual" | "auto")[]
   createdAt: string
 }
@@ -51,16 +58,23 @@ export type TagKind = (typeof TAG_KINDS)[number]
 export type TaggingSource = "owner" | "file" | "auto" | "agent"
 
 /** A messenger tag target's polymorphic type: a contact is an `identity` row. */
-const TAGGABLE: Record<TagType, EntityType> = { chat: "chat", contact: "identity", message: "message" }
+const TAGGABLE: Record<TagType, EntityType> = { chat: "chat", contact: "identity", message: "message", task: "task" }
 const TAG_TYPE: Record<string, TagType> = {
   chat: "chat",
   identity: "contact",
   message: "message",
   email_thread: "chat",
   email: "message",
+  task: "task",
 }
 
-export const targetThing = ({ database }: StoreContext, key: AccountKey, target: TagTarget): Thing => {
+export const targetThing = ({ database }: StoreContext, key: AccountKey, target: TagTarget | TaskTagTarget): Thing => {
+  if (target.type === "task") {
+    const row = taskRowOf(database, target.taskId)
+    if (row === undefined || taskAccountOf(database, row) !== `${key.provider}:${key.account}`)
+      throw new CliError("not_found", `no task ${target.taskId} for this account — tasks list shows the ids`)
+    return { type: "task", id: row }
+  }
   const mail =
     key.provider !== "email" || target.type === "contact"
       ? undefined
@@ -268,7 +282,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "chat",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, c.external_id AS chat_id, c.title AS chat_title, " +
-        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id " +
+        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN chats c ON c.id=g.taggable_id " +
         "JOIN accounts a ON a.id=c.account_id WHERE g.taggable_type='chat' AND a.provider=? AND a.external_id=?",
       params: [key.provider, key.account],
@@ -277,7 +291,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "contact",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, NULL AS chat_id, NULL AS chat_title, " +
-        "i.external_id AS person_id, i.name AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id " +
+        "i.external_id AS person_id, i.name AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN identities i ON i.id=g.taggable_id " +
         "WHERE g.taggable_type='identity' AND i.provider=?",
       params: [key.provider],
@@ -286,7 +300,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "message",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, c.external_id AS chat_id, c.title AS chat_title, " +
-        "NULL AS person_id, NULL AS name, m.external_id AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id " +
+        "NULL AS person_id, NULL AS name, m.external_id AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN messages m ON m.id=g.taggable_id JOIN chats c ON c.id=m.chat_id " +
         "JOIN accounts a ON a.id=c.account_id WHERE g.taggable_type='message' AND a.provider=? AND a.external_id=?",
       params: [key.provider, key.account],
@@ -295,7 +309,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "chat",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, th.external_id AS chat_id, th.subject AS chat_title, " +
-        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id " +
+        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN email_threads th ON th.id=g.taggable_id " +
         "JOIN accounts a ON a.id=th.account_id WHERE g.taggable_type='email_thread' AND a.provider=? AND a.external_id=?",
       params: [key.provider, key.account],
@@ -304,11 +318,21 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       type: "message",
       sql:
         "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, th.external_id AS chat_id, th.subject AS chat_title, " +
-        "NULL AS person_id, NULL AS name, e.external_id AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id " +
+        "NULL AS person_id, NULL AS name, e.external_id AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, NULL AS task_id " +
         "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN emails e ON e.id=g.taggable_id " +
         "JOIN email_threads th ON th.id=e.email_thread_id JOIN accounts a ON a.id=e.account_id " +
         "WHERE g.taggable_type='email' AND e.deleted_at IS NULL AND a.provider=? AND a.external_id=?",
       params: [key.provider, key.account],
+    },
+    {
+      type: "task",
+      sql:
+        "SELECT t.name AS tag, g.taggable_type AS type, g.created_at, NULL AS chat_id, k.title AS chat_title, " +
+        "NULL AS person_id, NULL AS name, NULL AS message_id, g.source, g.taggable_id AS target_id, t.id AS tag_id, " +
+        "COALESCE(k.package_id, k.key) AS task_id " +
+        "FROM taggings g JOIN tags t ON t.id=g.tag_id JOIN tasks k ON k.id=g.taggable_id JOIN projects p ON p.id=k.project_id " +
+        "WHERE g.taggable_type='task' AND k.deleted_at IS NULL AND p.key=?",
+      params: [inboxKey(`${key.provider}:${key.account}`)],
     },
   ]
   const chosen = parts.filter(({ type }) => filter.type === undefined || filter.type === type)
@@ -347,6 +371,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
       ...(type === "contact"
         ? { personId: String(row.person_id), name: row.name == null ? null : String(row.name) }
         : { chatId, chatTitle: row.chat_title == null ? null : String(row.chat_title) }),
+      ...(type === "task" ? { taskId: String(row.task_id) } : {}),
       ...(type === "message" && chatId !== undefined && messageId !== undefined
         ? { messageId, locator: formatLocator({ ...key, chat: chatId, message: messageId }) }
         : {}),

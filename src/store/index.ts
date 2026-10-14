@@ -152,5 +152,6 @@ export {
   type StoreOptions,
   type TagFilter,
   type TagTarget,
+  type TaskTagTarget,
   type TextOrigin,
 } from "./store.js"

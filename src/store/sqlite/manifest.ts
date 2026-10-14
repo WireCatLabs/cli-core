@@ -31,6 +31,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261014123446_version-10-mentions-in-attachments", version: 10, minCompatible: 1 },
   { name: "20261014125554_version-11-organization-identities", version: 11, minCompatible: 1 },
   { name: "20261014195259_version-12-mail-rules", version: 12, minCompatible: 1 },
+  { name: "20261014204055_version-13-task-fields", version: 13, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

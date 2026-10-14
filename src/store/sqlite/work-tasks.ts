@@ -24,6 +24,7 @@ export const TASK_EVENT_KINDS = [
   "moved",
   "linked",
   "unlinked",
+  "category",
 ] as const
 
 export type WorkTaskType = (typeof WORK_TASK_TYPES)[number]
@@ -42,6 +43,8 @@ export interface TaskFields {
   nextCheckAt?: Date | null
   status?: TaskState
   reason?: string | null
+  /** A name the caller checked against its category list; every change is a `category` event. */
+  category?: string
 }
 
 export interface NewWorkTask extends Omit<TaskFields, "status" | "reason"> {
@@ -76,6 +79,10 @@ export interface TaskDetails {
   closedAt: string | null
   reason: string | null
   verdict: TaskVerdict | null
+  category: string | null
+  /** Who works on it now; null when nobody does or the claim lapsed. */
+  claimedBy: string | null
+  claimedUntil: string | null
   assignments: TaskAssignment[]
   createdAt: string
   updatedAt: string
@@ -104,6 +111,14 @@ export interface WorkTasks extends TaskRelationsStore {
     limit?: number
   }): Promise<TaskDetails[]>
   events(id: string): Promise<TaskEvent[]>
+  /**
+   * Takes an open task for `holder` until `until`, unless someone else holds it now — a lapsed claim holds nothing,
+   * and the holder's own claim is extended.
+   * One statement under the write lock, so two processes never both win.
+   */
+  claim(id: string, holder: string, until: Date): Promise<TaskDetails>
+  /** Gives a task back; only its holder or the owner may. */
+  release(id: string, holder: string): Promise<TaskDetails>
 }
 
 type Row = Record<string, unknown>
@@ -129,6 +144,12 @@ const textOf = (value: string, what: string, max: number): string => {
   if (!text || text.length > max) throw new CliError("validation_error", `${what} takes 1–${max} characters`)
   return text
 }
+
+/** A claim that lapsed reads as none, so nobody has to clean it up. */
+const claimOf = (row: Row, at: number): Pick<TaskDetails, "claimedBy" | "claimedUntil"> =>
+  row.claimed_by != null && Number(row.claimed_until) >= at
+    ? { claimedBy: String(row.claimed_by), claimedUntil: iso(row.claimed_until) }
+    : { claimedBy: null, claimedUntil: null }
 
 const priorityOf = (value: number | null): number | null => {
   if (value !== null && !(Number.isInteger(value) && value >= 0 && value <= 4))
@@ -193,6 +214,8 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
       closedAt: iso(row.closed_at),
       reason: row.close_reason == null ? null : String(row.close_reason),
       verdict: row.verdict == null ? null : (row.verdict as TaskVerdict),
+      category: row.category == null ? null : String(row.category),
+      ...claimOf(row, now()),
       assignments: database
         .prepare(
           "SELECT assignee_id, role FROM task_assignments WHERE task_id = ? AND assignee_type = 'person' ORDER BY id",
@@ -240,6 +263,10 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
         change("closed_at", closed ? at : null)
         change("closed_by_type", closed ? actor.type : null)
         change("closed_by_id", closed ? actor.id : null)
+        if (closed) {
+          change("claimed_by", null)
+          change("claimed_until", null)
+        }
       }
     }
     if (fields.reason !== undefined) {
@@ -247,6 +274,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
       change("close_reason", reason)
       change("close_reason_folded", folded(reason))
     }
+    if (fields.category !== undefined) change("category", fields.category, "category")
     if (set.length === 0) return
     database.prepare(`UPDATE tasks SET ${set.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, at, task)
   }
@@ -365,6 +393,52 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
           Math.min(Math.max(limit, 1), 500),
         )
         .map(detailsOf)
+    },
+    claim: async (id, holder, until) => {
+      const task = required(id)
+      const at = now()
+      const won = write(database, () =>
+        database
+          .prepare(
+            "UPDATE tasks SET claimed_by = ?, claimed_until = ?, updated_at = ? " +
+              "WHERE id = ? AND status = 'open' AND (claimed_by IS NULL OR claimed_until < ? OR claimed_by = ?) RETURNING id",
+          )
+          .get(holder, until.getTime(), at, task, at, holder),
+      )
+      if (!won) {
+        const row = rowById(task)
+        if (row.status !== "open")
+          throw new CliError(
+            "validation_error",
+            `task ${String(row.key)} is ${String(row.status)}; only an open task is claimed`,
+          )
+        throw new CliError(
+          "validation_error",
+          `${String(row.claimed_by)} holds task ${String(row.key)} until ${iso(row.claimed_until)}; ` +
+            "wait for it, or ask them to release it",
+          { reason: "task.claimed", holder: String(row.claimed_by), until: iso(row.claimed_until) },
+        )
+      }
+      return details(task)
+    },
+    release: async (id, holder) => {
+      const task = required(id)
+      write(database, () => {
+        const row = rowById(task)
+        const { claimedBy } = claimOf(row, now())
+        if (claimedBy !== null && claimedBy !== holder && holder !== "owner")
+          throw new CliError(
+            "validation_error",
+            `${claimedBy} holds task ${String(row.key)}; only they or the owner release it`,
+            {
+              reason: "task.claimed",
+            },
+          )
+        database
+          .prepare("UPDATE tasks SET claimed_by = NULL, claimed_until = NULL, updated_at = ? WHERE id = ?")
+          .run(now(), task)
+      })
+      return details(task)
     },
     events: async (id) =>
       database
