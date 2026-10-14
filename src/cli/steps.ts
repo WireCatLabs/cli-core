@@ -34,6 +34,12 @@ export const STEPS = defineSteps([
     why: "a voice message is not heard yet; this hears it",
   },
   {
+    id: "messages.scheduled",
+    command: "messages scheduled",
+    args: [{ name: "chat", required: true }],
+    why: "it is waiting to be sent and gets a new id then; this lists what is still waiting",
+  },
+  {
     id: "chats.members",
     command: "chats members list",
     args: [{ name: "chat", required: true }],

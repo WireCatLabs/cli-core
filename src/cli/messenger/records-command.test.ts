@@ -22,15 +22,20 @@ const chat: Chat = {
   lastMessageAt: null,
   participantsCount: 3,
 }
-const message = (id: string): Message =>
-  ({
-    id,
-    chatId: "7",
-    senderId: "9",
-    text: "",
-    sentAt: "2026-10-08T00:00:00.000Z",
-    attachments: [],
-  }) as unknown as Message
+const message = (id: string): Message => ({
+  id,
+  chatId: "7",
+  senderId: "9",
+  senderName: null,
+  text: "",
+  timestamp: "2026-10-08T00:00:00.000Z",
+  editedAt: null,
+  outgoing: true,
+  attachments: [],
+  replyTo: null,
+  forwardedFrom: null,
+  reactions: null,
+})
 const call: CallRecord = {
   id: "1",
   chatId: "7",

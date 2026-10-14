@@ -4,7 +4,9 @@ import { Command } from "commander"
 import { sendTime } from "../../domain/send-time.js"
 import { typedSendAs } from "../../sends/send-as.js"
 import { readAttachments } from "../../sends/upload.js"
+import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { writtenAnswer } from "./message-writes.js"
 import { readAll } from "./stdin.js"
 import { threadIdOf } from "./thread.js"
 
@@ -121,8 +123,8 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
   if (body.trim() === "" && attachments.length === 0 && sticker === undefined) {
     throw new CliError("validation_error", "nothing to send — give the text or pipe it in")
   }
-  const sent = await context.withServices((services) =>
-    services.messages.send({
+  const { sent, reader } = await context.withServices(async (services) => ({
+    sent: await services.messages.send({
       chat,
       text: body,
       ...(sendId === undefined ? {} : { sendId }),
@@ -140,9 +142,11 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
       ...(captionAbove === true ? { captionAbove } : {}),
       ...(sticker === undefined ? {} : { sticker }),
     }),
+    reader: await services.messages.reader(),
+  }))
+  renderAnswer(
+    command,
+    context,
+    writtenAnswer({ ...sent, ...(scheduledFor === undefined ? {} : { scheduledFor }) }, reader),
   )
-  if (scheduledFor !== undefined) {
-    context.renderer.note(`scheduled for ${scheduledFor} — it gets a new id when it is sent`)
-    context.renderer.result({ sendId: sent.sendId, operationId: sent.operationId, message: sent.message, scheduledFor })
-  } else context.renderer.result({ sendId: sent.sendId, operationId: sent.operationId, message: sent.message })
 }

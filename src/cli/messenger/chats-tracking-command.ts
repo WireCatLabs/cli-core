@@ -1,7 +1,7 @@
 import { Command } from "commander"
 import { TRACKED_DAYS } from "../../services/chats.js"
-import { itemOf, renderAnswer } from "../envelope.js"
-import { lines, snakeKeys, wholeList } from "./chat-answers.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { lines, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
 interface TrackedAnswer {

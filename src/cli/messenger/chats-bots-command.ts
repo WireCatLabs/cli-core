@@ -1,8 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { guardedApp, guardedStart } from "../../sends/buttons.js"
-import { itemOf, renderAnswer } from "../envelope.js"
-import { snakeKeys } from "./chat-answers.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `chats start` and `chats app` — a bot in a one-to-one chat with the personal account. */

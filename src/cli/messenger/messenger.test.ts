@@ -274,7 +274,7 @@ describe("explicit topic addressing", () => {
     expect(sent.code).toBe(0)
     expect(poll.code).toBe(0)
     expect(sent.stdout).toHaveLength(1)
-    expect(JSON.parse(sent.stdout[0] ?? "")).toMatchObject({ sendId: "42" })
+    expect(JSON.parse(sent.stdout[0] ?? "").item).toMatchObject({ send_id: "42", operation_id: "42" })
     expect(validateThread.mock.calls).toEqual([
       ["7", "12", { replyTo: "14" }],
       ["7", "12", {}],
@@ -511,7 +511,32 @@ describe("the shared read commands", () => {
     expect(journal).not.toContain("bold")
   })
 
-  it("**schedule a send with --at-time**, answer scheduledFor, journal it for that hour, and never repeat one", async () => {
+  it("**a send answers its receipt in the envelope**: the message entity, and the ids to repeat it by even under --json message", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const sending: MessengerAdapter = {
+      ...fake,
+      send: async (_chatId, text, { sendId }) => ({ message: { ...message, text }, sendId }),
+    }
+
+    const whole = await call(["messages", "send", "Book", "hi", "--send-id", "77", "--json"], async () => sending, env)
+    const cut = await call(
+      ["messages", "send", "Book", "hi", "--send-id", "78", "--json=message"],
+      async () => sending,
+      env,
+    )
+
+    const answer = v.parse(itemEnvelopeSchema(v.unknown()), JSON.parse(whole.stdout[0] ?? ""))
+    expect(answer.item).toMatchObject({ operation_id: "77", send_id: "77" })
+    expect(() => v.parse(ENTITIES.message, (answer.item as { message: unknown }).message)).not.toThrow()
+    expect(JSON.parse(cut.stdout[0] ?? "").item).toEqual({
+      operation_id: "78",
+      send_id: "78",
+      message: expect.objectContaining({ ref: expect.stringMatching(/^msg:/), text: "hi" }),
+    })
+  })
+
+  it("**schedule a send with --at-time**, answer scheduled_for with the queue as the next step, journal it for that hour, and never repeat one", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const sent: SendOptions[] = []
@@ -537,10 +562,11 @@ describe("the shared read commands", () => {
     const listed = await call(["messages", "scheduled", "Book", "--json"], async () => later, env)
 
     expect(scheduled.code).toBe(0)
-    const { scheduledFor } = JSON.parse(scheduled.stdout[0] ?? "")
+    const answer = JSON.parse(scheduled.stdout[0] ?? "")
+    const scheduledFor = answer.item.scheduled_for
     expect(sent.map((one) => one.at)).toEqual([scheduledFor])
     expect(Date.parse(scheduledFor) - Date.now()).toBeGreaterThan(28 * 60_000)
-    expect(scheduled.stderr.join("\n")).toContain("scheduled for")
+    expect(answer.next).toMatchObject([{ command: "messages scheduled", args: { chat: "7" } }])
     expect(new SendJournal(sendsPathFor(app, "default", env)).entries()).toMatchObject([
       { outcome: "sent", scheduledFor },
     ])
@@ -665,7 +691,7 @@ describe("the shared read commands", () => {
     const unable = await call(["messages", "edit", "Book", "3", "again"], async () => fake, env)
 
     expect(done.code).toBe(0)
-    expect(JSON.parse(done.stdout[0] ?? "").message).toMatchObject({ id: "3", text: "new plan" })
+    expect(JSON.parse(done.stdout[0] ?? "").item.message).toMatchObject({ id: "3", text: "new plan" })
     expect(edits).toEqual([["7", "3", "new plan"]])
     expect(unable.stderr.join("\n")).toContain("cannot edit a message")
     const journal = new SendJournal(sendsPathFor(app, "default", env)).entries()
@@ -722,7 +748,7 @@ describe("the shared read commands", () => {
     )
 
     expect(done.code).toBe(0)
-    expect(JSON.parse(done.stdout[0] ?? "").message).toMatchObject({ id: "50", chatId: "20" })
+    expect(JSON.parse(done.stdout[0] ?? "").item.message).toMatchObject({ id: "50", chat_id: "20" })
     expect(forwards).toEqual([["7", "3", "20", { sendId: expect.any(String), silent: true }]])
     const journal = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(journal.at(-1)).toMatchObject({ kind: "forward", outcome: "sent", chatId: "20", messageId: "50" })
@@ -784,7 +810,7 @@ describe("the shared read commands", () => {
     const repeated = await call(forward, async () => deduplicating, env)
 
     expect(repeated.code).toBe(0)
-    expect(JSON.parse(repeated.stdout[0] ?? "")).toMatchObject({ sendId: "9001", message: { id: "50" } })
+    expect(JSON.parse(repeated.stdout[0] ?? "").item).toMatchObject({ send_id: "9001", message: { id: "50" } })
     expect(copies.size).toBe(1)
     const journal = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(journal.filter((entry) => entry.outcome !== "reserved")).toMatchObject([
@@ -817,17 +843,17 @@ describe("the shared read commands", () => {
     const over = await call(["messages", "pin", "Book", "5", "--notify"], async () => pinning, env)
     const off = await call(["messages", "unpin", "Book", "3", "--json"], async () => pinning, env)
 
-    expect(JSON.parse(quiet.stdout[0] ?? "")).toEqual({
-      operationId: expect.any(String),
-      chatId: "7",
-      messageId: "3",
+    expect(JSON.parse(quiet.stdout[0] ?? "").item).toEqual({
+      operation_id: expect.any(String),
+      chat_id: "7",
+      message_id: "3",
       pinned: true,
     })
     expect([loud.code, over.code]).toEqual([0, 8])
-    expect(JSON.parse(off.stdout[0] ?? "")).toEqual({
-      operationId: expect.any(String),
-      chatId: "7",
-      messageId: "3",
+    expect(JSON.parse(off.stdout[0] ?? "").item).toEqual({
+      operation_id: expect.any(String),
+      chat_id: "7",
+      message_id: "3",
       pinned: false,
     })
     expect(pins).toEqual([
@@ -1012,15 +1038,15 @@ describe("the shared read commands", () => {
 
     expect(unasked.stderr.join("\n")).toContain("--allow-dangerous")
     expect(tooMany.stderr.join("\n")).toContain("at most 10")
-    const answer = JSON.parse(done.stdout[0] ?? "")
-    expect(answer).toEqual({ operationId: expect.any(String), chatId: "7", deleted: ["3", "4"], forEveryone: true })
+    const answer = JSON.parse(done.stdout[0] ?? "").item
+    expect(answer).toEqual({ operation_id: expect.any(String), chat_id: "7", deleted: ["3", "4"], for_everyone: true })
     expect(over.code).toBe(8)
     expect(deletions).toEqual([["7", ["3", "4"], { forEveryone: true }]])
     const journal = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(journal.filter((entry) => entry.outcome === "sent")).toMatchObject([
-      { kind: "delete", count: 2, forEveryone: true, operationId: answer.operationId },
+      { kind: "delete", count: 2, forEveryone: true, operationId: answer.operation_id },
     ])
-    expect(done.stderr.join("\n")).toContain(`"ids":{"operation":"${answer.operationId}"}`)
+    expect(done.stderr.join("\n")).toContain(`"ids":{"operation":"${answer.operation_id}"}`)
   })
 
   it("**asks before a write whose level is ask**, refuses one that is readonly, and never asks at allow", async () => {
@@ -1212,9 +1238,9 @@ describe("the shared read commands", () => {
     const missing = await call(["messages", "press", "Book", "3", "9"], async () => keyboard, env, {}, bots)
     const unsupported = await call(["messages", "press", "Book", "3", "1"], async () => fake, env, {}, bots)
 
-    expect(JSON.parse(byNumber.stdout[0] ?? "")).toMatchObject({
-      chatId: "7",
-      messageId: "3",
+    expect(JSON.parse(byNumber.stdout[0] ?? "").item).toMatchObject({
+      chat_id: "7",
+      message_id: "3",
       button: { kind: "callback", text: "No" },
     })
     expect(byText.code).toBe(0)

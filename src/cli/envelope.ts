@@ -75,6 +75,20 @@ export const itemOf = <T>(
   return body
 }
 
+const snake = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+
+/**
+ * An answer that has no entity yet — a write's receipt, a count — with snake_case keys, nested ones too.
+ * Only for records whose keys are field names, never for one keyed by data.
+ */
+export const snakeKeys = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(snakeKeys)
+  if (value === null || typeof value !== "object" || value.constructor !== Object) return value
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, inner]) => (inner === undefined ? [] : [[snake(key), snakeKeys(inner)]])),
+  )
+}
+
 export const isBody = (value: unknown): value is Body => typeof value === "object" && value !== null && built.has(value)
 
 /** `meta` from the run the answer belongs to, so `runs show <run_id>` finds it. */

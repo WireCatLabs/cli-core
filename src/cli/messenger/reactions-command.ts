@@ -1,7 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { itemOf, renderAnswer } from "../envelope.js"
-import { snakeKeys } from "./chat-answers.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `reactions add|remove`: the owner's own reaction on a message. */

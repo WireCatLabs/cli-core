@@ -1,7 +1,9 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { typedSendAs } from "../../sends/send-as.js"
+import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { writtenAnswer } from "./message-writes.js"
 
 export const forwardCommand = (messenger: Messenger): Command => {
   const forward = annotate(new Command("forward"), { mutates: true })
@@ -32,18 +34,18 @@ export const forwardCommand = (messenger: Messenger): Command => {
       topic?: string
     }>()
     const sendAs = typedSendAs(given)
-    context.renderer.result(
-      await context.withServices((services) =>
-        services.messages.forward({
-          chat,
-          message: message.trim(),
-          to,
-          silent: silent === true,
-          ...(sendId === undefined ? {} : { sendId }),
-          ...(sendAs === undefined ? {} : { sendAs }),
-          ...(topic === undefined ? {} : { threadId: topic }),
-        }),
-      ),
-    )
+    const { forwarded, reader } = await context.withServices(async (services) => ({
+      forwarded: await services.messages.forward({
+        chat,
+        message: message.trim(),
+        to,
+        silent: silent === true,
+        ...(sendId === undefined ? {} : { sendId }),
+        ...(sendAs === undefined ? {} : { sendAs }),
+        ...(topic === undefined ? {} : { threadId: topic }),
+      }),
+      reader: await services.messages.reader(),
+    }))
+    renderAnswer(this, context, writtenAnswer(forwarded, reader))
   })
 }

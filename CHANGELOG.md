@@ -36,6 +36,12 @@ shape of this file.
   `picturesSkipped`.
 - `MessageStore.chats` and `countChats` take `{ where }` (a query compiled over the exported `CHAT_COLUMNS`) in place
   of `{ query, kind, unread }`; `contacts`/`countContacts` take `notes` beside `query`.
+- **`messages send|edit|forward|delete|pin|unpin|press` and `polls create` answer in the envelope**, CLI and MCP
+  alike: `{item, next?, meta}` with snake_case keys. A send, forward, edit or poll is `{operation_id, send_id?,
+  message}` with `message` the `message` entity (`ref` is its `msg:` locator); a scheduled send adds `scheduled_for`
+  and a `messages.scheduled` next step in place of the stderr note. Delete, pin, unpin and press are their receipts
+  (`operation_id`, `chat_id`, `message_id`, `for_everyone`…). `--json <fields>` still keeps `operation_id` and
+  `send_id`; an `outcome_unknown` error is unchanged.
 
 ### Added
 

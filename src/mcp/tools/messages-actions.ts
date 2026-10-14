@@ -1,5 +1,8 @@
 import * as v from "valibot"
+import { itemOf, snakeKeys } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { selfOf } from "../../cli/messenger/message-items.js"
+import { writtenAnswer } from "../../cli/messenger/message-writes.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
@@ -46,14 +49,19 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       }),
       annotations: WRITE,
       permission: "edit",
-      online: (adapter, args, { guard }) =>
-        messages(adapter, guard).edit({
-          chat: args.chat,
-          message: args.message,
-          text: args.text,
-          markdown: args.md === true,
-          ...(args.html === true ? { html: true } : {}),
-        }),
+      online: async (adapter, args, { guard }) => {
+        const reader = selfOf(messenger, adapter)
+        return writtenAnswer(
+          await messages(adapter, guard).edit({
+            chat: args.chat,
+            message: args.message,
+            text: args.text,
+            markdown: args.md === true,
+            ...(args.html === true ? { html: true } : {}),
+          }),
+          reader,
+        )
+      },
     }),
     messages_forward: tool({
       title: "Forward a message",
@@ -64,16 +72,21 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       input: v.object(forwardInput),
       annotations: WRITE,
       permission: "forward",
-      online: (adapter, args, { guard }) =>
-        messages(adapter, guard).forward({
-          chat: args.chat,
-          message: args.message,
-          to: args.to,
-          silent: args.silent === true,
-          ...(args.send_id === undefined ? {} : { sendId: args.send_id }),
-          ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
-          ...(args.topic === undefined ? {} : { threadId: args.topic }),
-        }),
+      online: async (adapter, args, { guard }) => {
+        const reader = selfOf(messenger, adapter)
+        return writtenAnswer(
+          await messages(adapter, guard).forward({
+            chat: args.chat,
+            message: args.message,
+            to: args.to,
+            silent: args.silent === true,
+            ...(args.send_id === undefined ? {} : { sendId: args.send_id }),
+            ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
+            ...(args.topic === undefined ? {} : { threadId: args.topic }),
+          }),
+          reader,
+        )
+      },
     }),
     messages_pin: tool({
       title: "Pin a message",
@@ -87,8 +100,16 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       }),
       annotations: WRITE,
       permission: "pin",
-      online: (adapter, args, { guard }) =>
-        messages(adapter, guard).pin({ chat: args.chat, message: args.message, notify: args.notify === true }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await messages(adapter, guard).pin({
+              chat: args.chat,
+              message: args.message,
+              notify: args.notify === true,
+            }),
+          ),
+        ),
     }),
     messages_unpin: tool({
       title: "Unpin a message",
@@ -96,7 +117,8 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       input: v.object({ chat, message }),
       annotations: WRITE,
       permission: "pin",
-      online: (adapter, args, { guard }) => messages(adapter, guard).unpin({ chat: args.chat, message: args.message }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await messages(adapter, guard).unpin({ chat: args.chat, message: args.message }))),
     }),
   }
 }

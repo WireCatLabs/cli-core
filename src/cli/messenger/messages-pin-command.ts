@@ -1,5 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const pinCommand = (messenger: Messenger): Command =>
@@ -11,11 +12,10 @@ export const pinCommand = (messenger: Messenger): Command =>
     .action(async function (this: Command, chat: string, message: string) {
       const context = messengerContext(this, messenger)
       const { notify } = this.opts<{ notify?: boolean }>()
-      context.renderer.result(
-        await context.withServices((services) =>
-          services.messages.pin({ chat, message: message.trim(), notify: notify === true }),
-        ),
+      const pinned = await context.withServices((services) =>
+        services.messages.pin({ chat, message: message.trim(), notify: notify === true }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(pinned)))
     })
 
 export const unpinCommand = (messenger: Messenger): Command =>
@@ -25,7 +25,8 @@ export const unpinCommand = (messenger: Messenger): Command =>
     .argument("<message>", "the message id")
     .action(async function (this: Command, chat: string, message: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withServices((services) => services.messages.unpin({ chat, message: message.trim() })),
+      const unpinned = await context.withServices((services) =>
+        services.messages.unpin({ chat, message: message.trim() }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(unpinned)))
     })
