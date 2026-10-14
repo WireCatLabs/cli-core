@@ -944,10 +944,6 @@
       "value": "<param>",
       "meaning": "the start parameter the app reads"
     },
-    "--state": {
-      "value": "<state>",
-      "meaning": "only those in this state: tasks open, done or dismissed; jobs running, done, failed, cancelled or died"
-    },
     "--status": {
       "value": "<status>",
       "meaning": "filter diagnostic runs by outcome"
@@ -3818,8 +3814,7 @@
       "options": {
         "--all": "all",
         "--limit": "all",
-        "--page": "all",
-        "--state": "all"
+        "--page": "all"
       }
     },
     "store jobs retry": {

@@ -2015,6 +2015,8 @@ describe("the MCP server", () => {
       pid: 999999,
     })
     expect((await call("chat_store_jobs_list", { limit: 1, page: 1 })).body.items).toHaveLength(1)
+    expect((await call("chat_store_jobs_list", { query: "chat:7" })).body.items).toHaveLength(1)
+    expect((await call("chat_store_jobs_list", { query: "chat:8" })).body.items).toHaveLength(0)
   })
 
   it("checks one person without the ban lists when asked, and says a non-Telegram account is not in them", async () => {

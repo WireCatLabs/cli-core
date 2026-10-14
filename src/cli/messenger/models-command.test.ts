@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
-import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import { placedText, textModelsDirectory } from "../../embeddings/embed.js"
@@ -93,11 +93,12 @@ describe("models audio", () => {
     const { code, stdout } = await go()
 
     expect(code).toBe(0)
-    expect(JSON.parse(stdout[0] ?? "")).toEqual({
+    const { item } = v.parse(itemEnvelopeSchema(modelEntity), JSON.parse(stdout[0] ?? ""))
+    expect(item).toMatchObject({
       id: "gigaam-v3-ctc",
+      kind: "audio",
       downloaded: true,
-      works: true,
-      directory: modelsDirectory(env),
+      path: join(modelsDirectory(env), "gigaam-v3-ctc"),
     })
     expect(recognized).toBe(1)
   })
@@ -148,6 +149,7 @@ describe("models text", () => {
     const answer = v.parse(listEnvelopeSchema(modelEntity), JSON.parse((await go()).stdout[0] ?? ""))
     expect(answer.next).toMatchObject([{ step: "models.download", args: { model: "e5-small" } }])
     expect(answer.items[0]).toMatchObject({ kind: "text", size_bytes: expect.any(Number) })
+    expect(answer.items[0]?.path).toMatch(/e5-small$/)
   })
 
   it("refuses a model with its own licence until its terms are accepted, downloading nothing", async () => {
@@ -166,7 +168,7 @@ describe("models text key", () => {
     const set = await call(["models", "text", "key", "set", "openai", "--json"], undefined, false, "sk-test\n")
     const { code, stdout, stderr } = await set.go()
     expect(code).toBe(0)
-    expect(JSON.parse(stdout[0] ?? "")).toMatchObject({ provider: "openai" })
+    expect(JSON.parse(stdout[0] ?? "")).toMatchObject({ item: { provider: "openai" } })
     expect([...stdout, ...stderr].join("\n")).not.toContain("sk-test")
     expect(embeddingKeys(app, set.env).read("openai")?.key).toBe("sk-test")
   })
