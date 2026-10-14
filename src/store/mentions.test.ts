@@ -374,6 +374,15 @@ describe("known people's names", () => {
     await store.close()
   })
 
+  it("finds a person by the owner's own name for their contact", async () => {
+    const { store, belkin } = await named()
+    await store.setContactAlias(OWNER, "7", "Кузнечик")
+    await store.saveMessages(OWNER, "-1", [from("1", "7", "Кузнечику привет")], { via: "history" })
+
+    expect(await names(store)).toEqual([`1 Кузнечику linked ${belkin}`])
+    await store.close()
+  })
+
   it("leaves the kinds a later build finds when it reads a text again", async () => {
     const { path, store } = await fresh()
     await store.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01")], { via: "history" })

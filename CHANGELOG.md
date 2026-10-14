@@ -14,6 +14,12 @@ shape of this file.
   and undated history without loading transcripts or inferring links from similar meeting titles.
   The optional `MeetingSeriesHistoryStore` capability and its types are exported from `./meetings`.
 
+### Fixed
+
+- **The owner's own name for a contact finds that person in text** (`kind:person-name`): `contacts alias set` stores
+  the name on the account, and names were looked for on the person only. `mentions rebuild person-name` reads the
+  stored messages again.
+
 ## 0.277.0 — 14.10.2026
 
 ### Added
