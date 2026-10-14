@@ -2,6 +2,12 @@ import { CliError } from "@wirecat/cli-base"
 import { parseLucene, type QueryAst, validateQuery } from "@wirecat/cli-base/query"
 import { type ListEnvelope, STEPS, type StepDefinition, stepOf } from "@wirecat/cli-base/standards"
 import { MEETING_QUERY, type MeetingItem, type MeetingOwner, meetingItem } from "./item.js"
+import {
+  type MeetingParticipantSearchOptions,
+  type MeetingParticipantSearchStore,
+  validateMeetingParticipantQuery,
+  validateMeetingParticipantSearch,
+} from "./participant-search.js"
 import type { MeetingDetails, MeetingFilter, MeetingStore } from "./store.js"
 
 export class MeetingError extends CliError {
@@ -33,6 +39,51 @@ export const meetingShow = async (store: MeetingStore, id: number, accountId?: n
   return details
 }
 export const listed = <T>(items: T[]) => ({ items, page: 1, limit: items.length, hasMore: false })
+export const meetingPeople = async (
+  store: MeetingStore & Partial<MeetingParticipantSearchStore>,
+  query: string,
+  accountId?: number,
+  options: Omit<MeetingParticipantSearchOptions, "accountId"> = {},
+) => {
+  if (accountId === undefined) validateMeetingParticipantQuery(query)
+  else validateMeetingParticipantSearch(query, { ...options, accountId })
+  if (store.participantCandidates && accountId === undefined)
+    throw new MeetingError("configuration_error", "select an account for bounded participant lookup")
+  if (accountId !== undefined && store.participantCandidates) {
+    const { limit, has_more, next_cursor, ...packet } = await store.participantCandidates(query, {
+      ...options,
+      accountId,
+    })
+    return {
+      ...packet,
+      page: { limit, has_more, ...(next_cursor ? { cursor: next_cursor } : {}) },
+      ...(next_cursor
+        ? {
+            next: [
+              stepOf(PAGE_NEXT, {
+                command: "meetings people",
+                args: {
+                  query,
+                  limit,
+                  ...(options.scanLimit === undefined ? {} : { scan_limit: options.scanLimit }),
+                  ...(options.maxReadBytes === undefined ? {} : { max_read_bytes: options.maxReadBytes }),
+                  cursor: next_cursor,
+                },
+                values: { shown: packet.items.length },
+              }),
+            ],
+          }
+        : {}),
+    }
+  }
+  if (Object.values(options).some((value) => value !== undefined))
+    throw new MeetingError(
+      "configuration_error",
+      "bounded participant lookup needs a selected account and capable store",
+    )
+  return listed(await store.participants(query, accountId))
+}
+
 /** A list answer without `meta`: the host adds it, as it knows the run. */
 export type MeetingList = Omit<ListEnvelope<MeetingItem>, "meta">
 

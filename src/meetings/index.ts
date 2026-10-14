@@ -62,6 +62,15 @@ export type {
   TranscriptRow,
 } from "./model.js"
 export {
+  type MeetingParticipantCandidate,
+  type MeetingParticipantPage,
+  type MeetingParticipantReader,
+  type MeetingParticipantSearchOptions,
+  type MeetingParticipantSearchStore,
+  normalizeMeetingParticipantQuery,
+  validateMeetingParticipantSearch,
+} from "./participant-search.js"
+export {
   type MeetingContextCue,
   type MeetingHitContextOptions,
   type MeetingHitContextPacket,
@@ -74,7 +83,18 @@ export {
 } from "./passage.js"
 export { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
 export { type PullOptions, pull, type RunReport } from "./pull.js"
-export { listed, MeetingError, meetingSummary, type TranscriptReadOptions } from "./reads.js"
+export type {
+  MeetingContextReadCapabilities,
+  MeetingReadBudget,
+  MeetingReadCapabilities,
+  MeetingReadScope,
+  TranscriptContextInput,
+  TranscriptContextPage,
+  TranscriptPage,
+  TranscriptReadScope,
+  TranscriptRowPage,
+} from "./read-store.js"
+export { listed, MeetingError, meetingPeople, meetingSummary, type TranscriptReadOptions } from "./reads.js"
 export {
   installRecordingArchiveSchedule,
   parseRecordingArchiveSchedule,

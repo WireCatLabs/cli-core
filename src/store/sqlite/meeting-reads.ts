@@ -1,57 +1,27 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Meeting, Transcript, TranscriptRow } from "../../meetings/index.js"
+import type {
+  Meeting,
+  MeetingContextReadCapabilities,
+  MeetingReadCapabilities,
+  MeetingReadScope,
+  Transcript,
+  TranscriptReadScope,
+} from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
 
-interface ReadBudget {
-  maxReadBytes?: number
-  signal?: AbortSignal
-}
-export interface MeetingReadScope extends ReadBudget {
-  accountId: number
-  meetingId: number
-}
-export interface TranscriptReadScope extends MeetingReadScope {
-  transcriptId: number
-  includeHistorical?: boolean
-}
-export interface TranscriptPage extends MeetingReadScope {
-  afterId?: number
-  limit: number
-  includeHistorical?: boolean
-}
-export interface TranscriptRowPage extends TranscriptReadScope {
-  afterPosition?: number
-  limit: number
-}
-export interface TranscriptContextInput extends TranscriptReadScope {
-  position: number
-  before: number
-  after: number
-}
-export interface TranscriptContextPage {
-  meeting: Meeting
-  transcript: Transcript
-  rows: TranscriptRow[]
-  hasBefore: boolean
-  hasAfter: boolean
-}
-export interface MeetingContextReadCapabilities {
-  transcriptContext(input: TranscriptContextInput): Promise<TranscriptContextPage>
-}
-export interface MeetingReadCapabilities {
-  meetingMetadata(input: MeetingReadScope): Promise<Meeting>
-  transcriptMetadata(input: TranscriptReadScope): Promise<Transcript>
-  transcripts(input: TranscriptPage): Promise<{ items: Transcript[]; hasMore: boolean; nextId?: number }>
-  transcriptRows(input: TranscriptRowPage): Promise<{
-    meeting: Meeting
-    transcript: Transcript
-    rows: TranscriptRow[]
-    hasMore: boolean
-    nextPosition?: number
-  }>
-}
+export type {
+  MeetingContextReadCapabilities,
+  MeetingReadCapabilities,
+  MeetingReadScope,
+  TranscriptContextInput,
+  TranscriptContextPage,
+  TranscriptPage,
+  TranscriptReadScope,
+  TranscriptRowPage,
+} from "../../meetings/index.js"
+
 const MEETING_TEXT = ["external_id", "title", "description", "location", "join_url", "timezone", "metadata"]
 const TRANSCRIPT_TEXT = ["source", "format", "language", "content_hash", "metadata"]
 const ROW_TEXT = ["speaker_name", "text", "normalized_text", "metadata"]
