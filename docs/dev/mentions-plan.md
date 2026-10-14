@@ -92,9 +92,10 @@ in two chats can mean two people. Each name mention gets its own target (`person
 offers the people with that name met in the same chat first, and `mentions confirm --chat` links every «Ольга» of
 one chat to one person in one step — still one target per row, so one wrong chat is fixed alone.
 
-**An organization may own an identity** (a shop's number, `info@`; owner, NEED-1032 A): `identity_links` and
-`identity_link_events` get a nullable `organization_id` beside `person_id`, exactly one of the two set (a CHECK),
-each a foreign key. SQLite changes a NOT NULL column only by rebuilding the table, so this is its own migration.
+**An organization owns an identity** in a table of its own, `organization_identities` (owner, NEED-1065): a
+shop's number, `info@`. It is apart from `identity_links`, which says which person an identity is, so one number
+can be both someone's and their company's, and organizations link to documents and the rest through `links` as
+before. The migration adds the table; nothing is rebuilt.
 
 **Edits and rebuilds.** An edited text rebuilds its mentions; a decision survives: a `linked` or `dismissed` status
 is carried to the new row with the same `kind`, `value` and source. A rule `version` bump rebuilds only its kind.
@@ -212,7 +213,7 @@ an index lookup.
 ## Phases
 
 1. **1a, 1b — built** (0.264.0 and this release): `mentions list|show|rebuild|confirm|reject`, message text.
-   **1c** — organizations own identities (its own migration).
+   **1c** — organizations own identities: built (store version 11, `organization_identities`).
    **1d** — fields `phone:`, `email:`, `url:`, `domain:` in `search messages`: built. Still to come: links resolved
    to stored documents and chats, and `links domains list` (sites by number of links).
    **1e** — the other texts: file texts and voice transcripts built (store version 10); notes, documents and mail

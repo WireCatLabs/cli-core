@@ -91,7 +91,7 @@ type Decision = { status: unknown; target_type: unknown; target_id: unknown; aut
 
 /**
  * What a new mention starts as when nothing was decided where it was written: dismissed if its value was
- * dismissed anywhere, linked when the value already has an original — an identity with an owner for a phone
+ * dismissed anywhere, linked when the value already has an original — an identity a person or an organization owns for a phone
  * or an address, the stored document for a document id.
  */
 const originalOf = (database: CacheDatabase) => {
@@ -101,7 +101,8 @@ const originalOf = (database: CacheDatabase) => {
   )
   const identity = database.prepare(
     "SELECT 'linked' AS status, 'identity' AS target_type, i.id AS target_id, 'rules' AS author FROM identities i " +
-      "JOIN identity_links l ON l.identity_id = i.id WHERE i.provider = ? AND i.external_id = ?",
+      "WHERE i.provider = ? AND i.external_id = ? AND (EXISTS (SELECT 1 FROM identity_links l WHERE l.identity_id = i.id) " +
+      "OR EXISTS (SELECT 1 FROM organization_identities o WHERE o.identity_id = i.id))",
   )
   const document = database.prepare(
     "SELECT 'linked' AS status, 'document' AS target_type, id AS target_id, 'rules' AS author FROM documents " +
@@ -376,22 +377,26 @@ const decide = (
 
 /**
  * Says what a value is, for every place it is written. A phone or an address gets an identity of its own
- * (`provider` = the kind, the value as its id) owned by `personPk`; moving it to another person later is
+ * (`provider` = the kind, the value as its id) owned by a person (`identity_links`) or an organization
+ * (`organization_identities`); moving it to another person later is
  * that identity's link, not the mentions. A document id names the stored document.
  */
 export const confirmMention = (
   context: StoreContext,
   accountPk: number,
   id: number,
-  personPk: number | undefined,
+  owner: { person: number } | { organization: number } | undefined,
   by: string,
 ): MentionDecision => {
   const { database } = context
   const mention = mentionOfAccount(database, accountPk, id)
   const now = context.now()
   if (mention.kind === "phone" || mention.kind === "email") {
-    if (personPk === undefined)
-      throw new CliError("validation_error", `a ${mention.kind} is confirmed to someone — name them as person:<uid>`)
+    if (owner === undefined)
+      throw new CliError(
+        "validation_error",
+        `a ${mention.kind} is confirmed to its owner — person:<uid> or organization:<id>`,
+      )
     database
       .prepare(
         "INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES (?, ?, ?, ?) " +
@@ -403,7 +408,14 @@ export const confirmMention = (
         .prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
         .get(mention.kind, mention.value)?.id,
     )
-    linkIdentityToPerson(context, identity, personPk, { method: "mention", by })
+    if ("person" in owner) linkIdentityToPerson(context, identity, owner.person, { method: "mention", by })
+    else
+      database
+        .prepare(
+          "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
+            "VALUES (?, ?, 'mention', ?, ?, ?) ON CONFLICT (identity_id, organization_id) DO NOTHING",
+        )
+        .run(identity, owner.organization, by, now, now)
     return decide(database, mention, "linked", { type: "identity", id: identity }, by, now)
   }
   if (mention.kind === "document") {

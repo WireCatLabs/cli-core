@@ -16,6 +16,10 @@ shape of this file.
 
 ### Added
 
+- **An organization owns a phone or an address** (store version 11, table `organization_identities`):
+  `mentions confirm <id> organization:<id>` records that a shop's number or `info@` belongs to it, apart from any
+  person, so one number can be both someone's and their company's. Later mentions of it start as linked. The
+  migration only adds the table: older builds keep working.
 - **Mentions in a message's files and voice notes** (store version 10). The text `attachments extract` read and a
   voice note's transcript yield mentions too, listed with their message and `field` `file_text` or `transcript`;
   `phone:`, `email:`, `url:` and `domain:` find the message. Attachments with text from before version 10 need one

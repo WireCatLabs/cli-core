@@ -134,7 +134,7 @@ describe("deciding a mention", () => {
     })
     const [one] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
 
-    const decided = await store.confirmMention(OWNER, one?.id ?? 0, ana?.uid, "owner")
+    const decided = await store.confirmMention(OWNER, one?.id ?? 0, `person:${ana?.uid}`, "owner")
 
     expect(decided).toMatchObject({ kind: "phone", value: "+79000000001", status: "linked", mentions: 2 })
     expect(await status(store, "89000000001")).toEqual(["linked", "linked"])
@@ -281,5 +281,37 @@ describe("mentions in files and voice notes", () => {
     await store.saveMessages(OWNER, "-1", [message("4", "ещё раз")], { via: "update" })
     expect((await store.mentions(OWNER, q("kind:email"), { offset: 0 })).items).toEqual([])
     await store.close()
+  })
+})
+
+describe("an organization's number", () => {
+  it("is owned by the organization apart from any person, and later mentions of it are linked", async () => {
+    const { path, store } = await fresh()
+    const shop = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Shop" })
+    await store.saveMessages(OWNER, "-1", [message("1", "магазин: +7 900 000-00-02")], { via: "history" })
+    const [phone] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+
+    expect(await store.confirmMention(OWNER, phone?.id ?? 0, `organization:${shop.id}`, "owner")).toMatchObject({
+      status: "linked",
+      target: expect.stringMatching(/^identity:/),
+    })
+    expect(await store.personOf({ provider: "phone", id: "+79000000002" })).toBeUndefined()
+    await store.saveMessages(OWNER, "-1", [message("2", "тот же 89000000002", "2026-10-02T10:00:00.000Z")], {
+      via: "update",
+    })
+    expect((await store.mentions(OWNER, q("89000000002"), { offset: 0 })).items.map((one) => one.status)).toEqual([
+      "linked",
+      "linked",
+    ])
+    await expect(store.confirmMention(OWNER, phone?.id ?? 0, "organization:999", "owner")).rejects.toThrow(
+      /no organization/,
+    )
+    await store.close()
+
+    const raw = new DatabaseSync(path)
+    expect(raw.prepare("SELECT method, author FROM organization_identities").all()).toEqual([
+      { method: "mention", author: "owner" },
+    ])
+    raw.close()
   })
 })

@@ -34,7 +34,7 @@ export interface MentionsService {
   list(query: string, window: { limit?: number; offset: number }): Promise<Mentions>
   show(id: number): Promise<MentionDetails>
   rebuild(options?: { onBatch?: (done: number, total: number) => void }): Promise<MentionsRebuild>
-  /** `target` is `person:<uid>` for a phone or an address; a document needs none. */
+  /** `target` is `person:<uid>` or `organization:<id>` for a phone or an address; a document needs none. */
   confirm(id: number, target: string | undefined, by: string): Promise<MentionDecision>
   reject(id: number, by: string): Promise<MentionDecision>
 }
@@ -68,14 +68,17 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
       return { ...mention(rest), before, after, sameValue }
     },
     confirm: async (id, target, by) => {
-      let personUid: string | undefined
+      let owner: string | undefined
       if (target !== undefined) {
         const reference = parseReference(target)
-        if (reference.type !== "person")
-          throw new CliError("validation_error", `a mention is confirmed to a person:<uid>, not ${reference.type}`)
-        personUid = reference.id
+        if (reference.type !== "person" && reference.type !== "organization")
+          throw new CliError(
+            "validation_error",
+            `a mention is confirmed to person:<uid> or organization:<id>, not ${reference.type}`,
+          )
+        owner = `${reference.type}:${reference.id}`
       }
-      return (await accountStore(deps)).confirmMention(id, personUid, by)
+      return (await accountStore(deps)).confirmMention(id, owner, by)
     },
     reject: async (id, by) => (await accountStore(deps)).rejectMention(id, by),
     rebuild: async (options = {}) =>

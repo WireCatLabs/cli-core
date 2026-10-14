@@ -435,6 +435,19 @@ const NEW = {
       ],
     },
     {
+      name: "organization_identities",
+      doc: "A phone, an address or an account an organization owns: a shop's number, `info@`. Apart from `identity_links`, which says which person an identity is: one identity may be both someone's and an organization's.",
+      cols: [
+        id(),
+        fk("identity_id", "identities", { notnull: true }),
+        fk("organization_id", "organizations", { notnull: true }),
+        c("method", "text", { notnull: true, note: "how it was decided: `mention`, `owner`, an import" }),
+        c("author", "text", { notnull: true, note: "`owner`, an agent by name, `rules`" }),
+        ...ts(),
+      ],
+      keys: ["UNIQUE (identity_id, organization_id)"],
+    },
+    {
       name: "bots",
       doc: "An AI agent or a script that works here: it registers itself, owns projects and tasks, is assigned work, writes notes. A bot of a messenger (a Telegram bot) is an identity, not this.",
       cols: [
