@@ -16,7 +16,7 @@ export const hit = v.strictObject({
   sender_name: v.optional(v.nullable(text)),
   /** The writer's `person:` reference, where the store has one. */
   sender_ref: v.optional(v.nullable(reference)),
-  found_by: v.optional(v.array(v.picklist(["words", "meaning"]))),
+  found_by: v.optional(v.array(v.picklist(["title", "words", "meaning"]))),
   /** How far into the meeting the passage is. */
   offset_ms: v.optional(v.nullable(count)),
 })

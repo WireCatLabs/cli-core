@@ -282,6 +282,14 @@ never embedded can still be found by its words. When the local model is not down
 words alone, says `meaning: "unavailable"` and names `models text download` on stderr (NEED-552 A); it never
 downloads a model or calls a remote one in its place. A remote model that fails is still an error.
 
+### Notes and documents: a title match comes first
+
+`search notes` (and the notes inside `search all`, and `drive search`) merge words and meaning the same way, with one
+exception. When the query is only words or quoted phrases, notes whose title equals the query come first, then notes whose
+title contains it as a phrase (compared without case or accents), each group in its word order. They are followed by
+the merged list without repeats, and `found_by` lists `title` for them. A query with a field, `OR`, `NOT`, a wildcard,
+a regex or a group is merged as before.
+
 ### Related to a message
 
 `conversations related <chat> <message>` (MCP `conversations_related`) answers "what else was like this":

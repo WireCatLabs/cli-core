@@ -30,7 +30,7 @@ export interface SearchAllItem {
   /** A mail's people, labels and thread, as `search mail` gives them. */
   email?: MailFields
   /** Which search found it: words, meaning or both. */
-  foundBy: ("words" | "meaning")[]
+  foundBy: ("title" | "words" | "meaning")[]
 }
 
 /** One account a search read, by the kind it was read for: the shape memo's `search all` answers too. */
