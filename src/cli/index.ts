@@ -122,6 +122,18 @@ export {
 } from "./context.js"
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
+export {
+  type AnswerOutput,
+  answerSchema,
+  type Body,
+  type ItemBody,
+  itemOf,
+  type ListBody,
+  type ListInput,
+  listOf,
+  renderAnswer,
+  snakeKeys,
+} from "./envelope.js"
 export { withAbort } from "./execution.js"
 export { isCliFailure, isCommanderFailure } from "./failures.js"
 export {
@@ -132,6 +144,7 @@ export {
   MAX_SECRET_INPUT,
   provideInputPolicy,
 } from "./input-policy.js"
+export { pagedList } from "./list-query.js"
 export { accountCommand } from "./messenger/account-command.js"
 export { accountFileFor, profilesHere, rememberAccount } from "./messenger/accounts.js"
 export { storeCommand } from "./messenger/archive-commands.js"

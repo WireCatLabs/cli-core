@@ -18,6 +18,9 @@ shape of this file.
 
 ### Added
 
+- **`itemOf`, `listOf`, `pagedList`, `renderAnswer`, `answerSchema` and `snakeKeys` from `@wirecat/cli-core/cli`**,
+  with the `Body`, `ItemBody`, `ListBody`, `ListInput` and `AnswerOutput` types: an app's own command answers in the
+  same envelope, `meta` and next steps as cli-core's, without a copy of them.
 - **An organization owns a phone or an address** (store version 11, table `organization_identities`):
   `mentions confirm <id> organization:<id>` records that a shop's number or `info@` belongs to it, apart from any
   person, so one number can be both someone's and their company's. Later mentions of it start as linked. The
@@ -49,6 +52,9 @@ shape of this file.
 
 ### Fixed
 
+- **MCP prompts name only arguments the tools take.** `review` asked for `since`, which `review` refuses since
+  0.268; it now passes the window as `query` (`date>"…"`). Every prompt writes its calls as the tool's
+  `{ command, arguments }`, and a test checks each argument against the command's input.
 - **`mentions list --help` no longer prints a phone-shaped example.** The query argument said `89001234567` finds
   `+79001234567`; the second matched the leak scanner's phone rule, so `commands --json` failed tg's and max's
   `discovery` contract. It now says it in words.
