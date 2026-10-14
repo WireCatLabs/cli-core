@@ -222,16 +222,17 @@ export const nearestNotes = async (
 export interface FoundNote {
   ref: string
   source: Note["source"]
-  folderId: string | null
+  folder_id: string | null
   /** The note's path inside its folder; `null` for a note written in memo. */
   path: string | null
   title: string | null
-  modifiedAt: string
+  /** When the store's copy last changed. */
+  updated_at: string
   /** The first line holding a word of the query. */
-  line: string
-  links: Pick<Link, "to" | "targetText" | "kind" | "anchor">[]
+  excerpt: string
+  links: { to: Link["to"]; target_text: Link["targetText"]; kind: Link["kind"]; anchor: Link["anchor"] }[]
   /** Which halves of the search found it. */
-  foundBy: ("words" | "meaning")[]
+  found_by: ("words" | "meaning")[]
 }
 
 export interface LinkedRecord {
@@ -249,16 +250,16 @@ export interface NotesFound {
   /** Words and word stems always; meaning too when the model is there and the query is not exact. */
   by: "words" | "words and meaning"
   /** Why meaning was not searched, when it was not. */
-  meaningSkipped?: string
+  meaning_skipped?: string
   hits: FoundNote[]
-  hasMore: boolean
-  nextOffset?: number
+  has_more: boolean
+  next_offset?: number
   /** What the notes found link to, most linked first. */
   linked: LinkedRecord[]
   /** Documents whose picture is nearest the words, best first; only when `pictures` was asked for. Never in `hits`. */
   pictures?: { ref: string; score: number }[]
   /** Why pictures were asked for and none were searched. */
-  picturesSkipped?: string
+  pictures_skipped?: string
 }
 
 export interface NotesQuery {
@@ -322,7 +323,7 @@ const pictureLane = async (
     command: string
     embedder: PictureEmbedder | undefined
   },
-): Promise<Pick<NotesFound, "pictures" | "picturesSkipped">> => {
+): Promise<Pick<NotesFound, "pictures" | "pictures_skipped">> => {
   const words = plainWords(query)
   if (words === "" || source === "internal") return {}
   let vector: Float32Array
@@ -334,7 +335,7 @@ const pictureLane = async (
       if (!embedder) await use.close()
     }
   } catch (error) {
-    if (error instanceof CliError && error.code === "not_found") return { picturesSkipped: error.message }
+    if (error instanceof CliError && error.code === "not_found") return { pictures_skipped: error.message }
     throw error
   }
   const near = await store.notes.nearestPictures(imageModel(DEFAULT_IMAGE_MODEL).key, vector, {
@@ -433,24 +434,24 @@ export const searchNotes = async (
   for (const [ref, { note, foundBy }] of page) {
     const links = (await store.notes.links({ from: ref })).map(({ to, targetText, kind, anchor }) => ({
       to,
-      targetText,
+      target_text: targetText,
       kind,
       anchor,
     }))
     hits.push({
       ref,
       source: note.source,
-      folderId: note.folderId,
+      folder_id: note.folderId,
       path: note.path,
       title: note.title,
-      modifiedAt: note.updatedAt,
-      line: firstLine(note.text, query),
+      updated_at: note.updatedAt,
+      excerpt: firstLine(note.text, query),
       links,
-      foundBy,
+      found_by: foundBy,
     })
-    for (const link of new Map(links.map((link) => [link.to ?? `?${link.targetText}`, link])).values()) {
-      const key = link.to ?? `?${link.targetText}`
-      const known = counts.get(key) ?? { ref: link.to, name: link.targetText, notes: 0 }
+    for (const link of new Map(links.map((link) => [link.to ?? `?${link.target_text}`, link])).values()) {
+      const key = link.to ?? `?${link.target_text}`
+      const known = counts.get(key) ?? { ref: link.to, name: link.target_text, notes: 0 }
       known.notes++
       counts.set(key, known)
     }
@@ -483,10 +484,10 @@ export const searchNotes = async (
     ...(label === undefined ? {} : { tag: label }),
     ...(filter === undefined ? {} : { filter }),
     by: meaning === undefined ? "words" : "words and meaning",
-    ...(meaningSkipped === undefined ? {} : { meaningSkipped }),
+    ...(meaningSkipped === undefined ? {} : { meaning_skipped: meaningSkipped }),
     hits,
-    hasMore,
-    ...(hasMore && window <= MAX_NOTES_OFFSET ? { nextOffset: window } : {}),
+    has_more: hasMore,
+    ...(hasMore && window <= MAX_NOTES_OFFSET ? { next_offset: window } : {}),
     linked: [...counts.values()].sort(
       (a, b) => b.notes - a.notes || (a.name ?? a.ref ?? "").localeCompare(b.name ?? b.ref ?? ""),
     ),

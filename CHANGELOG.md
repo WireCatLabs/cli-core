@@ -9,6 +9,9 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`searchNotes` answers in snake_case**, as an app prints it: `NotesFound` has `has_more`, `next_offset`,
+  `meaning_skipped`, `pictures_skipped`; each `FoundNote` has `folder_id`, `updated_at` (was `modifiedAt`), `excerpt`
+  (was `line`), `found_by` and `links[].target_text` — the `note` entity's names.
 - **Follow-ups to the S3 envelope moves:** `store export --jsonl` on stdout streams `message` items (files keep
   their format); `conversations status` names group chats never built as a `missing` entry with the
   `conversations.build` step, whose `chat` is now optional; MCP `store_jobs_show` answers what `store jobs show`
@@ -46,6 +49,12 @@ shape of this file.
   `store.reindex` and `messages.sync`, a cut-short `attachments extract` names `attachments.extract` with its cursor.
   `attachments extract --json` calls its per-file rows `files` (was `items`); a missing package stays in
   `engines_missing` and the stderr hint, since installing it is not a command of this CLI.
+
+### Added
+
+- `CORE_REASONS`, `CORE_DETAILS` and `failureContext` from the package root: an app that renders its own errors
+  passes `failureContext({ reasons: REASONS })` to `errorObjectOf`, so cli-core's reasons and detail keys keep their
+  names in its output.
 
 ## 0.267.0 — 14.10.2026
 

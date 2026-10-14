@@ -170,21 +170,21 @@ export const searchAll = async (
           ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
           ...(request.env === undefined ? {} : { env: request.env }),
         })
-        hasMore ||= found.hasMore
+        hasMore ||= found.has_more
         notes = {
           by: found.by,
-          ...(found.meaningSkipped === undefined ? {} : { meaningSkipped: found.meaningSkipped }),
+          ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
         }
         lists.push(
           found.hits.map((hit) => ({
             kind: "note",
             ref: hit.ref,
             provider: "notes",
-            account: hit.folderId ?? INTERNAL_NOTES,
+            account: hit.folder_id ?? INTERNAL_NOTES,
             title: hit.title,
-            timestamp: hit.modifiedAt,
-            text: hit.line,
-            foundBy: hit.foundBy,
+            timestamp: hit.updated_at,
+            text: hit.excerpt,
+            foundBy: hit.found_by,
           })),
         )
         const read = chosen?.map(({ account }) => account) ?? [
