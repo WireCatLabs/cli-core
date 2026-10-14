@@ -9,6 +9,10 @@ the one page that covers what you are about to touch:
 - [`docs/dev/TESTING.md`](docs/dev/TESTING.md) — the sandbox, the coverage floor, no real waits.
 - [`docs/dev/BACKLOG.md`](docs/dev/BACKLOG.md) — open work; [`docs/dev/COORDINATION.md`](docs/dev/COORDINATION.md) — migration numbers and releases across sessions.
 
+Security audits of this repository follow the shared
+[security method](https://github.com/WireCatLabs/cli-testing/tree/main/docs/security) in cli-testing;
+vulnerabilities are reported as the [security policy](SECURITY.md) says.
+
 ## The constraints that shape everything
 
 1. **Nothing here knows a messenger.** No provider library, no adapter; `biome.json` refuses them.
