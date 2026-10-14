@@ -41,7 +41,8 @@ const fileState = (database: CacheDatabase): { version: number; minCompatible: n
 /**
  * Brings the file up to this version, or opens a newer one it can still write to, or refuses.
  * Inside `BEGIN IMMEDIATE`, so two processes opening an old file at once migrate it once. A migration
- * that fails names `store reset`: without it the owner is stuck until a build that can migrate the file.
+ * that fails names `store reset` when the app has one: without it the owner is stuck until a build that can migrate
+ * the file. An app without that command (drive) passes no `command`, and the advice names none.
  */
 export const migrate = (
   database: CacheDatabase,
@@ -79,7 +80,9 @@ export const migrate = (
     throw new CliError(
       "configuration_error",
       `the message store could not be brought up to schema ${ours}: ${cause}. ` +
-        `\`${command ? `${command} ` : ""}store reset\` takes a backup of it first, then starts an empty store`,
+        (command
+          ? `\`${command} store reset\` takes a backup of it first, then starts an empty store`
+          : "moving the file aside keeps it as a backup and starts an empty store"),
       { cause },
     )
   }

@@ -43,3 +43,11 @@ it("upgrades a store 0.218.0 created in place, keeping its rows", async () => {
   expect(upgraded.prepare("SELECT max(version) AS v FROM schema_migrations").get()?.v).toBe(MIGRATIONS.at(-1)?.version)
   upgraded.close()
 })
+
+it("advises no other app's command when a migration fails in an app without store reset", async () => {
+  const database = await openCache(join(mkdtempSync(join(tmpdir(), "upgrade-")), "wirecat.db"))
+  const broken = [{ version: 1, minCompatible: 1, statements: ["CREATE TABLE twice (x)", "CREATE TABLE twice (x)"] }]
+  expect(() => migrate(database, { migrations: broken })).toThrow(/moving the file aside keeps it as a backup/)
+  expect(() => migrate(database, { migrations: broken })).not.toThrow(/store reset/)
+  database.close()
+})
