@@ -6,8 +6,10 @@ import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { storePath } from "../../store/path.js"
 import { type BaseContext, baseContext, environmentOf, outputFor } from "../context.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { providerErrorKey } from "../runs/events.js"
 import { listRuns, runsDirFor, runtime } from "../runs/run.js"
+import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 import type { AccountStanding, MessengerAdapter } from "./port.js"
@@ -27,15 +29,22 @@ export const doctorCommand = (messenger: Messenger): Command => {
     .option("--online", "also connect once and read the account; sends nothing")
     .action(async function (this: Command) {
       const { online } = this.opts<{ online?: boolean }>()
-      const { report, renderer } = await diagnose(this, messenger)
+      const { report, renderer, fixes = [] } = await diagnose(this, messenger)
       if (online && renderer) {
         const checked = await onlineCheck(this, messenger, rememberedOf(report))
         report.online = checked
-        report.login = { state: checked.ok ? "ok" : "failed", ...(checked.hint ? { hint: checked.hint } : {}) }
+        report.login = { state: checked.ok ? "ok" : "failed" }
         const flood = report.flood as { path: string } | undefined
         if (flood) report.flood = floodState(followStanding(new FloodMemory(flood.path), checked.standing))
       }
-      ;(renderer ?? outputFor(this).renderer).result(report)
+      const output = outputFor(this)
+      const unchecked = (report.login as { state?: string } | undefined)?.state === "not checked"
+      renderAnswer(
+        this,
+        { ...output, ...(renderer ? { renderer } : {}) },
+        itemOf(report, { next: unchecked ? [nextStep("doctor.online", { args: { online: true } })] : [] }),
+      )
+      for (const fix of fixes) (renderer ?? output.renderer).note(`to make it private: ${fix}`)
     })
   command.addCommand(reportCommand(messenger))
   return command
@@ -55,24 +64,27 @@ const reportCommand = (messenger: Messenger): Command => {
   const report = new Command("report").description("what a problem report holds; writes nothing").action(function (
     this: Command,
   ) {
-    const { renderer, format, streams } = outputFor(this)
+    const output = outputFor(this)
     const create = `${app.command} doctor report create`
-    if (format !== "pretty") {
-      renderer.result({ includes: INCLUDES, excludes: EXCLUDES, create, ...(app.issues ? { sendTo: app.issues } : {}) })
-      return
-    }
-    streams.data(
-      [
-        `A problem report is one file for the author of ${app.command}.`,
-        "",
-        "It holds:",
-        ...INCLUDES.map((line) => `- ${line}`),
-        "",
-        `It never holds: ${EXCLUDES.join(", ")}.`,
-        "",
-        `Create one:          ${create}`,
-        `About a given run:   ${create} --run <id>   (ids: ${app.command} runs list)`,
-      ].join("\n"),
+    renderAnswer(
+      this,
+      output,
+      itemOf(
+        { includes: INCLUDES, excludes: EXCLUDES, ...(app.issues ? { send_to: app.issues } : {}) },
+        { next: [nextStep("doctor.report-create", { args: {} })] },
+      ),
+      () =>
+        [
+          `A problem report is one file for the author of ${app.command}.`,
+          "",
+          "It holds:",
+          ...INCLUDES.map((line) => `- ${line}`),
+          "",
+          `It never holds: ${EXCLUDES.join(", ")}.`,
+          "",
+          `Create one:          ${create}`,
+          `About a given run:   ${create} --run <id>   (ids: ${app.command} runs list)`,
+        ].join("\n"),
     )
   })
 
@@ -97,8 +109,13 @@ const reportCommand = (messenger: Messenger): Command => {
       })
       const path = resolve(options.output ?? reportFileName(app.command, now))
       writeSecurely(path, `${JSON.stringify(built, null, 2)}\n`, 0o600)
-      const out = renderer ?? outputFor(this).renderer
-      out.result({ path, run: built.run?.metadata.runId ?? null, ...(app.issues ? { sendTo: app.issues } : {}) })
+      const output = outputFor(this)
+      const out = renderer ?? output.renderer
+      renderAnswer(
+        this,
+        { ...output, renderer: out },
+        itemOf({ path, run: built.run?.metadata.runId ?? null, ...(app.issues ? { send_to: app.issues } : {}) }),
+      )
       if (!built.run) {
         out.note("no failed run is recorded — run the failing command again, and the failure is kept by itself")
       }
@@ -120,7 +137,13 @@ const rememberedOf = (report: Record<string, unknown>) =>
 const diagnose = async (
   command: Command,
   messenger: Messenger,
-): Promise<{ report: Record<string, unknown>; renderer?: BaseContext["renderer"]; profile?: string }> => {
+): Promise<{
+  report: Record<string, unknown>
+  renderer?: BaseContext["renderer"]
+  profile?: string
+  /** The shell line that makes each file private: for a person, not a step this CLI can run. */
+  fixes?: string[]
+}> => {
   const { app, provider } = messenger
   const env = environmentOf(command).env ?? process.env
   const cli = {
@@ -143,30 +166,32 @@ const diagnose = async (
   const store = storePath(env)
   const sends = sendsPathFor(app, profile, env)
   const flood = floodPathFor(app, profile, env)
+  const files = privateFiles({
+    files: [...withSqliteSidecars(store), sends, flood],
+    // A folder the owner chose with MESSAGING_STORE may rightly be shared, like the home folder itself.
+    dirs: [...(env.MESSAGING_STORE ? [] : [dirname(store)]), dirname(sends), dirname(flood), runsDirFor(app, env)],
+  })
 
   return {
     renderer,
     profile,
+    fixes: files.checked ? files.problems.map((problem) => problem.fix) : [],
     report: {
       cli,
       profile,
       config: { path: settings.configPath, found: settings.configFound },
       account: { remembered: account?.account ?? null },
       // A session file on disk says nothing about whether the messenger still accepts it.
-      login: {
-        state: "not checked",
-        hint: `\`${app.command} doctor --online\` logs in once and checks it; it sends nothing`,
-      },
-      store: await storeSummary(env),
+      login: { state: "not checked" },
+      store: snakeKeys(await storeSummary(env)),
       readers: engineStates(),
       sends: sendsState(new SendJournal(sendsPathFor(app, profile, env))),
       flood: floodState(new FloodMemory(flood)),
       runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
-      files: privateFiles({
-        files: [...withSqliteSidecars(store), sends, flood],
-        // A folder the owner chose with MESSAGING_STORE may rightly be shared, like the home folder itself.
-        dirs: [...(env.MESSAGING_STORE ? [] : [dirname(store)]), dirname(sends), dirname(flood), runsDirFor(app, env)],
-      }),
+      // The messenger's own block keeps the keys it gives: some of them are file paths.
+      files: files.checked
+        ? { ...files, problems: files.problems.map(({ path, mode, want }) => ({ path, mode, want })) }
+        : files,
       [provider]: await (messenger.diagnose?.(command, context) ?? Promise.resolve({})).catch((error) => ({
         error: messageOf(error),
       })),
@@ -177,7 +202,7 @@ const diagnose = async (
 /** What the messenger asked this profile to wait for, still in force — what the next command would be refused. */
 export const floodState = (memory: FloodMemory) => {
   const { deadlines, sendBlock } = memory.read()
-  return { path: memory.path, deadlines, sendBlock: sendBlock ?? null }
+  return { path: memory.path, deadlines: snakeKeys(deadlines), send_block: snakeKeys(sendBlock ?? null) }
 }
 
 /**
@@ -202,7 +227,7 @@ const sendsState = (journal: SendJournal) => {
   const hourAgo = Date.now() - 60 * 60 * 1000
   return {
     attempts: entries.length,
-    lastHour: entries.filter((entry) => Date.parse(entry.at) > hourAgo).length,
+    last_hour: entries.filter((entry) => Date.parse(entry.at) > hourAgo).length,
   }
 }
 
@@ -272,12 +297,15 @@ const onlineCheck = async (command: Command, messenger: Messenger, remembered: s
     return {
       ok: true,
       account: me.id,
-      ...(remembered === undefined ? {} : { matchesRemembered: me.id === remembered }),
-      durationMs: Date.now() - started,
-      standing: standing ?? { state: health.standingChecked ? "active" : "unknown" },
-      clock: health.clock,
-      ...(health.healthError ? { healthError: health.healthError } : {}),
-      ...(standing?.hint ? { hint: standing.hint } : {}),
+      ...(remembered === undefined ? {} : { matches_remembered: me.id === remembered }),
+      duration_ms: Date.now() - started,
+      standing: snakeKeys(standing ?? { state: health.standingChecked ? "active" : "unknown" }) as {
+        state: string
+        until?: string
+        hint?: string
+      },
+      clock: snakeKeys(health.clock),
+      ...(health.healthError ? { health_error: health.healthError } : {}),
     }
   } catch (error) {
     const { health } = read
@@ -287,12 +315,12 @@ const onlineCheck = async (command: Command, messenger: Messenger, remembered: s
     )
     return {
       ok: false,
-      errorCode: codeOf(error),
-      ...(providerError ? { providerError } : {}),
-      durationMs: Date.now() - started,
-      standing: standing ?? { state: "unknown" },
-      clock: health.clock,
-      hint: standing?.hint ?? messageOf(error),
+      error_code: codeOf(error),
+      ...(providerError ? { provider_error: providerError } : {}),
+      duration_ms: Date.now() - started,
+      standing: snakeKeys(standing ?? { state: "unknown" }) as { state: string; until?: string; hint?: string },
+      clock: snakeKeys(health.clock),
+      error: messageOf(error),
     }
   }
 }

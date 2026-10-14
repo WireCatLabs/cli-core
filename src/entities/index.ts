@@ -1,6 +1,7 @@
 import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { account } from "./account.js"
+import { accountSession } from "./account-session.js"
 import { adminReport } from "./admin-report.js"
 import { agenda } from "./agenda.js"
 import { attachment } from "./attachment.js"
@@ -47,6 +48,7 @@ import { topic } from "./topic.js"
 
 export {
   account,
+  accountSession,
   adminReport,
   agenda,
   attachment,
@@ -120,6 +122,7 @@ export const ENTITIES = {
   contact,
   contact_note: contactNote,
   account,
+  account_session: accountSession,
   note,
   "note.hit": v.pick(note, [
     "ref",

@@ -18,6 +18,10 @@ const call = async (command: string, argv: string[], ports: PackageUpgradePorts,
   )
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
+const itemOf = (line: string | undefined, format = "json") => {
+  const parsed = JSON.parse(line ?? "")
+  return format === "json" ? parsed.item : parsed
+}
 const fake = (): PackageUpgradePorts => ({
   installer: () => "npm",
   latest: async () => "2.0.0",
@@ -31,7 +35,7 @@ describe.each(["max", "tg"])("the shared upgrade command for %s", (command) => {
     const result = await call(command, ["upgrade", "--check", "--json"], ports)
     expect(result.code).toBe(0)
     expect(result.stdout).toHaveLength(1)
-    expect(JSON.parse(result.stdout[0] ?? "")).toEqual({
+    expect(itemOf(result.stdout[0])).toEqual({
       current: "1.0.0",
       latest: "2.0.0",
       newer: true,
@@ -51,7 +55,7 @@ describe.each(["max", "tg"])("the shared upgrade command for %s", (command) => {
     const result = await call(command, ["upgrade", `--${format}`], ports)
     expect(result.code).toBe(0)
     expect(result.stdout).toHaveLength(1)
-    expect(JSON.parse(result.stdout[0] ?? "")).toMatchObject({ updated: true, restarted: ["synthetic"] })
+    expect(itemOf(result.stdout[0], format)).toMatchObject({ updated: true, restarted: ["synthetic"] })
     expect(result.stderr.join("\n")).toContain("running: npm install")
     expect(result.stderr.join("\n")).toContain(`${command} manual server restart`)
     expect(ports.install).toHaveBeenCalledOnce()
@@ -62,7 +66,7 @@ describe.each(["max", "tg"])("the shared upgrade command for %s", (command) => {
     ports.installer = () => installer
     const result = await call(command, ["upgrade", "--json"], ports)
     expect(result.code).toBe(0)
-    expect(JSON.parse(result.stdout[0] ?? "")).toMatchObject({ updated: false, command: null, restarted: [] })
+    expect(itemOf(result.stdout[0])).toMatchObject({ updated: false, command: null, restarted: [] })
     expect(result.stderr.length).toBeGreaterThan(0)
     expect(ports.install).not.toHaveBeenCalled()
   })

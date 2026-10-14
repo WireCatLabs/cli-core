@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { momentOf } from "../../services/moment.js"
+import { listOf, snakeKeys } from "../envelope.js"
 import { findRun, listRuns, readEvents } from "./run.js"
 
 export interface RunSearch {
@@ -126,3 +127,13 @@ export const searchRuns = (
   }
   return { items: matches.slice(offset, offset + limit), page, limit, hasMore: matches.length > offset + limit }
 }
+
+/** A page of `searchRuns` in the list envelope; `args` are the search's own, so `page.next` reruns it. */
+export const runsFound = (found: ReturnType<typeof searchRuns>, args: Record<string, unknown>) =>
+  listOf("runs search", {
+    items: found.items.map(snakeKeys),
+    limit: found.limit,
+    has_more: found.hasMore,
+    page: found.page,
+    args: Object.fromEntries(Object.entries(args).filter(([name, value]) => value !== undefined && name !== "page")),
+  })

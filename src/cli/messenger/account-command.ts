@@ -5,10 +5,11 @@ import { readUpload } from "../../sends/upload.js"
 import { maskedAccount } from "../../services/people.js"
 import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
-import { renderList } from "../paging.js"
+import { itemOf, renderAnswer } from "../envelope.js"
 import { NONE_NAMED } from "../settings.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
 import { recalledAccount } from "./accounts.js"
+import { accountAnswer, renderItem, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { privacyCommand } from "./records-command.js"
 
@@ -39,21 +40,25 @@ export const accountCommand = (messenger: Messenger): Command => {
                 name: key && store ? await store.accountName(key) : null,
               })
             }
-            renderList(context.renderer, context.format, items)
+            renderAnswer(this, context, wholeList("account list", items))
           } finally {
             await store?.close()
           }
         }),
     )
     .addCommand(
-      new Command("show")
+      annotate(new Command("show"), { output: { entity: "account" } })
         .description("who this profile is logged in as; the phone number shows its last four digits")
         .option("--show-phone", "print the whole phone number")
         .action(async function (this: Command) {
           const whole = this.opts<{ showPhone?: boolean }>().showPhone === true
           const context = messengerContext(this, messenger)
           const account = await context.withMessenger((connection) => connection.me())
-          context.renderer.result(whole ? account : maskedAccount(account))
+          renderAnswer(
+            this,
+            context,
+            itemOf(accountAnswer(messenger.provider, whole ? account : maskedAccount(account))),
+          )
         }),
     )
     .addCommand(
@@ -73,7 +78,9 @@ export const accountCommand = (messenger: Messenger): Command => {
           }>()
           const upload =
             photo === undefined ? undefined : await readUpload("photo", photo, { app: messenger.app, env: context.env })
-          context.renderer.result(
+          renderItem(
+            this,
+            context,
             await context.withServices((services) =>
               services.account.update({
                 ...(firstName === undefined ? {} : { firstName }),

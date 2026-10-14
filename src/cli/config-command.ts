@@ -11,9 +11,11 @@ import { Command } from "commander"
 import * as v from "valibot"
 import { type AppIdentity, envName } from "./app.js"
 import { baseContext } from "./context.js"
+import { itemOf, renderAnswer } from "./envelope.js"
 import { knownBeside, knownPermissionKeys, type PermissionKeyOf } from "./permission-keys.js"
 import { hasPermissionConfig, migratePermissionConfig } from "./permission-migration.js"
 import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
+import { nextStep } from "./steps.js"
 import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
 
 /**
@@ -32,9 +34,10 @@ export const configCommand = (
       .description("replace legacy access settings with permissions, preserving this file's effective levels")
       .option("--dry-run", "show the migration without writing the file")
       .action(function () {
-        const { renderer, env } = baseContext(this, (flags, options) =>
+        const context = baseContext(this, (flags, options) =>
           config.resolveSettings(flags, { ...options, needsProfile: false }),
         )
+        const { env } = context
         const dryRun = this.opts<{ dryRun?: boolean }>().dryRun === true
         if (!dryRun && env[envName(app, "PROFILE_LOCK")])
           throw new CliError("permission_error", "config migrate changes every profile — run outside the profile lock")
@@ -49,7 +52,11 @@ export const configCommand = (
             )
           if (!dryRun) saveConfigFile(path, checked.output)
         }
-        renderer.result({ configFile: path, changed: migrated.changed, dryRun, changes: migrated.changes })
+        renderAnswer(
+          this,
+          context,
+          itemOf({ config_file: path, changed: migrated.changed, dry_run: dryRun, changes: migrated.changes }),
+        )
       }),
   )
 
@@ -59,23 +66,28 @@ export const configCommand = (
     .option("--bot", "the settings a bot command on this profile gets, rather than the personal account's")
     .action(async function (this: Command) {
       const bot = this.opts<{ bot?: boolean }>().bot === true
-      const { settings, renderer, env } = baseContext(this, (flags, options) =>
+      const context = baseContext(this, (flags, options) =>
         config.resolveSettings(flags, { ...options, needsProfile: false, ...(bot ? { kind: "bot" } : {}) }),
       )
+      const { settings, renderer, env } = context
       const overridden = pathsAreOverridden({ appName: app.appName, prefix: app.envPrefix, env })
 
-      renderer.result({
-        profile: settings.sources.profile === NONE_NAMED ? null : settings.profile,
-        profileFrom: settings.sources.profile,
-        profiles: settings.profilesHere,
-        configFile: settings.configPath,
-        configFound: settings.configFound,
-        pathsOverridden: overridden,
-        settings: [...config.allSettings, "commandTimeoutMs"]
-          .filter((setting) => bot || setting !== "readOtherBots")
-          .map((setting) => sourced(settings, setting, config.schema)),
-        storeSettings: await storeSettings(env),
-      })
+      renderAnswer(
+        this,
+        context,
+        itemOf({
+          profile: settings.sources.profile === NONE_NAMED ? null : settings.profile,
+          profile_from: settings.sources.profile,
+          profiles: settings.profilesHere,
+          config_file: settings.configPath,
+          config_found: settings.configFound,
+          paths_overridden: overridden,
+          settings: [...config.allSettings, "commandTimeoutMs"]
+            .filter((setting) => bot || setting !== "readOtherBots")
+            .map((setting) => sourced(settings, setting, config.schema)),
+          store_settings: await storeSettings(env),
+        }),
+      )
 
       if (overridden) {
         renderer.note(
@@ -106,12 +118,13 @@ export const configCommand = (
         personal,
         bot,
       } = this.opts<{ defaults?: boolean; personal?: boolean; bot?: boolean }>()
-      const { settings, renderer, env } = baseContext(this, (flags, options) =>
+      const context = baseContext(this, (flags, options) =>
         config.resolveSettings(flags, {
           ...options,
           needsProfile: !everyone && setting !== "defaultProfile" && !isStoreSetting(setting),
         }),
       )
+      const { settings, renderer, env } = context
       if (isStoreSetting(setting)) {
         if (everyone || personal || bot)
           throw new CliError(
@@ -125,14 +138,13 @@ export const configCommand = (
             `this process is locked to profile ${settings.profile} (${lock}) — ${setting} changes every profile, tg and MAX`,
           )
         }
-        const { result, note } = await changeStoreSetting(
-          app,
-          env,
-          setting,
-          action === "set" ? String(given) : undefined,
+        const changed = await changeStoreSetting(app, env, setting, action === "set" ? String(given) : undefined)
+        renderAnswer(
+          this,
+          context,
+          itemOf(changed.result, { next: "reindex" in changed ? [nextStep("store.reindex", { args: {} })] : [] }),
         )
-        renderer.result(result)
-        renderer.note(note)
+        renderer.note(changed.note)
         return
       }
       const defaults = everyone === true
@@ -168,12 +180,17 @@ export const configCommand = (
         value: action === "set" ? String(given) : undefined,
         kind,
       })
-      renderer.result({
-        configFile: settings.configPath,
-        scope: setting === "defaultProfile" ? "defaultProfile" : scopeOf(kind, defaults ? undefined : settings.profile),
-        setting,
-        value: saved,
-      })
+      renderAnswer(
+        this,
+        context,
+        itemOf({
+          config_file: settings.configPath,
+          scope:
+            setting === "defaultProfile" ? "defaultProfile" : scopeOf(kind, defaults ? undefined : settings.profile),
+          setting,
+          value: saved,
+        }),
+      )
     })
   }
 

@@ -44,6 +44,6 @@ it("**flood clear forgets the profile's waits and lifts its hold, says what it c
   expect(other.read().deadlines).toHaveLength(1)
 
   const json = await call(["work", "flood", "clear", "--json"], env)
-  expect(JSON.parse(json.stdout)).toEqual({ profile: "work", cleared: { deadlines: [], sendBlock: null } })
+  expect(JSON.parse(json.stdout).item).toEqual({ profile: "work", cleared: { deadlines: [], send_block: null } })
   expect((await call(["work", "flood", "clear"], env, true)).stdout).toBe("Nothing to clear for profile work.")
 })

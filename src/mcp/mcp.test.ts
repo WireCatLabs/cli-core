@@ -2752,7 +2752,7 @@ describe("sending over MCP", () => {
 
     const { body } = await call("chat_account_show", {})
 
-    expect(body).toMatchObject({ id: "500", phone: "***1234" })
+    expect(body).toMatchObject({ item: { provider: "chat", id: "500", phone: "***1234" } })
   })
 
   it("forwards through the guard, as a forward into the target chat", async () => {
@@ -3646,7 +3646,7 @@ describe("mcp config", () => {
     expect(config).toMatchObject({ mcpServers: { chat: { args: [PNPM, "default", "mcp"] } } })
   })
 
-  it("refuses npx, whose cache is cleared, and warns about a Node version manager", () => {
+  it("refuses npx, whose cache is cleared, and marks a path bound to a Node version manager", () => {
     expect(() =>
       serverEntry(app, {
         profile: "default",
@@ -3655,12 +3655,12 @@ describe("mcp config", () => {
         env: {},
       }),
     ).toThrow(/npx/)
-    const { warning } = serverEntry(app, {
+    const { nodeBound } = serverEntry(app, {
       profile: "default",
       execPath: "/h/.nvm/versions/node/v24/bin/node",
       scriptPath: PNPM,
       env: {},
     })
-    expect(warning).toMatch(/one Node version/)
+    expect(nodeBound).toBe(true)
   })
 })

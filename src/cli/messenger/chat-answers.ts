@@ -3,6 +3,8 @@ import type { NextStep } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import type * as v from "valibot"
 import type {
+  Account,
+  AccountSession,
   Chat,
   ChatCard,
   ChatEvent,
@@ -19,6 +21,7 @@ import type {
 } from "../../domain/models.js"
 import { formatReference } from "../../domain/references.js"
 import type {
+  account as accountSchema,
   chatEvent as chatEventSchema,
   chat as chatSchema,
   contact as contactSchema,
@@ -318,4 +321,23 @@ export const documentLinkAnswer = ({ url, documentId, title, inStore, locator, s
   ref: locator,
   sent_at: sentAt,
   sender,
+})
+
+/** The account as `account show` answers it: what the messenger said, under the provider that said it. */
+export const accountAnswer = (provider: string, { id, name, username, phone }: Account): Out<typeof accountSchema> => ({
+  provider,
+  id,
+  name,
+  username,
+  ...(phone === undefined ? {} : { phone }),
+})
+
+/** Somewhere else the account is logged in, as `account sessions list` answers it. */
+export const sessionAnswer = ({ current, client, device, location, lastActiveAt, createdAt }: AccountSession) => ({
+  current,
+  client,
+  device,
+  location,
+  last_active_at: lastActiveAt,
+  ...(createdAt === undefined ? {} : { created_at: createdAt }),
 })

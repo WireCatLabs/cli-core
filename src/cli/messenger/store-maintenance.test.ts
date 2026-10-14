@@ -529,7 +529,7 @@ describe("the stems", () => {
       ready: true,
       built: "snowball-3.1.1 cyrillic=russian latin=english",
     })
-    const shown = (await call(["config", "show", "--json"], env)).answer.storeSettings
+    const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
     expect(shown).toContainEqual({ setting: "searchStemmers.latin", value: "english", from: "store", scope: "store" })
   })
 
@@ -550,7 +550,7 @@ describe("the stems", () => {
       setting: "accountGroups.work",
       value: ["telegram:102", "email:me@work.example"],
     })
-    const shown = (await call(["config", "show", "--json"], env)).answer.storeSettings
+    const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
     expect(shown).toContainEqual({
       setting: "accountGroups.work",
       value: "telegram:102,email:me@work.example",
@@ -558,7 +558,7 @@ describe("the stems", () => {
       scope: "store",
     })
     await call(["config", "unset", "accountGroups.work", "--json"], env)
-    const after = (await call(["config", "show", "--json"], env)).answer.storeSettings
+    const after = (await call(["config", "show", "--json"], env)).answer.store_settings
     expect(after.map(({ setting }: { setting: string }) => setting)).not.toContain("accountGroups.work")
     const nested = await call(["config", "set", "accountGroups.all-work", "group:work", "--json"], env)
     expect(nested.code).not.toBe(0)

@@ -2,6 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type AudienceEdits, addRule, editAudience, editRule, type RuleEdits, switchRule } from "../../replies/edit.js"
 import { audienceWarnings, repliesPathFor } from "../../replies/rules.js"
+import { renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const REPLY_EDIT_OPTIONS = [
@@ -44,8 +45,9 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
       .description("add a rule with every default written out, off until you edit and enable it")
       .argument("<id>", "lower-case letters, digits and -; unique in this profile")
       .action(function (this: Command, id: string) {
-        const { settings, renderer, env } = messengerContext(this, messenger)
-        renderer.result(addRule(repliesPathFor(messenger.app, settings.profile, env), messenger.provider, id))
+        const context = messengerContext(this, messenger)
+        const { settings, env } = context
+        renderItem(this, context, addRule(repliesPathFor(messenger.app, settings.profile, env), messenger.provider, id))
       }),
   )
   for (const on of [true, false]) {
@@ -54,8 +56,13 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
         .description(on ? "enable one reply rule; its template must be ready" : "disable one reply rule")
         .argument("<id>", "the rule's id")
         .action(function (this: Command, id: string) {
-          const { settings, renderer, env } = messengerContext(this, messenger)
-          renderer.result(switchRule(repliesPathFor(messenger.app, settings.profile, env), messenger.provider, id, on))
+          const context = messengerContext(this, messenger)
+          const { settings, env } = context
+          renderItem(
+            this,
+            context,
+            switchRule(repliesPathFor(messenger.app, settings.profile, env), messenger.provider, id, on),
+          )
         }),
     )
   }
@@ -67,8 +74,13 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
   edit.action(function (this: Command, id: string) {
     const options = this.opts<RuleEdits>()
     if (this.getOptionValueSource("hours") === "default") delete options.hours
-    const { settings, renderer, env } = messengerContext(this, messenger)
-    renderer.result(editRule(repliesPathFor(messenger.app, settings.profile, env), messenger.provider, id, options))
+    const context = messengerContext(this, messenger)
+    const { settings, env } = context
+    renderItem(
+      this,
+      context,
+      editRule(repliesPathFor(messenger.app, settings.profile, env), messenger.provider, id, options),
+    )
   })
   replies.addCommand(edit)
   const audience = annotate(new Command("audience"), { mutates: true, local: true }).description(
@@ -76,14 +88,15 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
   )
   for (const [flag, help] of REPLY_AUDIENCE_OPTIONS) audience.option(flag, help)
   audience.action(function (this: Command) {
-    const { settings, renderer, env } = messengerContext(this, messenger)
+    const context = messengerContext(this, messenger)
+    const { settings, renderer, env } = context
     const answer = editAudience(
       repliesPathFor(messenger.app, settings.profile, env),
       messenger.provider,
       this.opts<AudienceEdits>(),
     )
     for (const warning of audienceWarnings(answer)) renderer.warn(warning)
-    renderer.result(answer)
+    renderItem(this, context, answer)
   })
   replies.addCommand(audience)
 }
