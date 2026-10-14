@@ -11,6 +11,8 @@ shape of this file.
 
 - **`config set` and `config unset` take a setting's camelCase name too** and write it in snake_case:
   `config set readOtherBots true` writes `read_other_bots`. A command path under `permissions` keeps its spelling.
+- **A camelCase name inside a list in the config file moves to snake_case too**, like any other: `rules[].decidedAt` is
+  read and saved as `rules[].decided_at` (`snakeCaseConfig`, `loadSnakeCaseConfig`).
 
 ## 0.278.0 — 14.10.2026
 

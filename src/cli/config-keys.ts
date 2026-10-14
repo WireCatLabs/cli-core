@@ -4,7 +4,13 @@ import * as v from "valibot"
 
 export const snake = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
-type Schema = v.GenericSchema & { type: string; entries?: v.ObjectEntries; wrapped?: Schema; value?: Schema }
+type Schema = v.GenericSchema & {
+  type: string
+  entries?: v.ObjectEntries
+  wrapped?: Schema
+  value?: Schema
+  item?: Schema
+}
 
 const unwrapped = (schema: Schema): Schema =>
   schema.wrapped && ["optional", "nullable", "nullish", "exact_optional"].includes(schema.type)
@@ -46,7 +52,11 @@ export interface ConfigRename {
  */
 const renamed = (schema: Schema, value: unknown, path: string, renames: ConfigRename[]): unknown => {
   const at = unwrapped(schema)
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return value
+  if (Array.isArray(value)) {
+    const item = at.type === "array" ? at.item : undefined
+    return item ? value.map((one, index) => renamed(item, one, `${path}${index}.`, renames)) : value
+  }
+  if (value === null || typeof value !== "object") return value
   if (at.type === "record" && at.value) {
     const inner = at.value
     return Object.fromEntries(
