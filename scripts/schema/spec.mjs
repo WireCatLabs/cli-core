@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
 const info = JSON.parse(readFileSync(`${scratch}/info.json`, "utf8"))
@@ -319,38 +320,6 @@ const DROPPED = {
   tasks: "replaced by the task system below; today's kinds (question, request, mention, promise) become task types",
 }
 
-const c = (name, type, o = {}) => ({ name, type, ...o })
-const id = () => c("id", "integer", { pk: true })
-const ts = () => [c("created_at", "integer", { notnull: true }), c("updated_at", "integer", { notnull: true })]
-const del = () => c("deleted_at", "integer", { note: "gone at the source; sync never hard-deletes" })
-const meta = () =>
-  c("metadata", "text", { note: "JSON: what the source sends that has no column, and is not searched" })
-const fk = (name, table, o = {}) => c(name, "integer", { ref: `${table}.id`, ...o })
-const poly = (name, note) => [
-  c(`${name}_type`, "text", { notnull: true, note }),
-  c(`${name}_id`, "integer", { notnull: true }),
-]
-const actor = (name, o = {}) => [
-  c(`${name}_type`, "text", { note: "`person` or `bot`", ...o }),
-  c(`${name}_id`, "integer", o),
-]
-const fts = (name, doc, cols) => {
-  const words = name.endsWith("_words")
-  const sql = `CREATE VIRTUAL TABLE ${name} USING fts5(${cols}, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2'${words ? ", prefix = '3'" : ""})`
-  return {
-    name,
-    virtual: true,
-    doc,
-    sql: words ? `${sql};\nCREATE VIRTUAL TABLE ${name}_vocab USING fts5vocab(${name}, 'col')` : sql,
-  }
-}
-const queue = (name, of) => ({
-  name,
-  doc: `Rows of ${of} waiting to be indexed: triggers enqueue, JS normalizes, stems and writes the index.`,
-  cols: [c("id", "integer", { notnull: true }), c("indexable_type", "text", { notnull: true })],
-  keys: ["PRIMARY KEY (indexable_type, id)"],
-})
-
 const NEW = {
   chats: [
     {
@@ -510,8 +479,34 @@ const NEW = {
         meta(),
         ...ts(),
         del(),
+        c("mail_rule_id", "integer", {
+          note: "the `mail_rules` row that decided how this email is stored; no constraint, removing the rule clears it",
+        }),
       ],
-      keys: ["UNIQUE (account_id, external_id)", "INDEX (account_id, sent_at DESC)"],
+      keys: [
+        "UNIQUE (account_id, external_id)",
+        "INDEX (account_id, sent_at DESC)",
+        "INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL",
+      ],
+    },
+    {
+      name: "mail_rules",
+      doc: "A mail rule of one account: conditions an email must match, and what to do with it (store in full, as an envelope, skip, tag).",
+      cols: [
+        id(),
+        fk("account_id", "accounts", { notnull: true }),
+        c("conditions", "text", {
+          notnull: true,
+          note: "JSON with sorted keys: sender, domain, List-Id and more; all must match",
+        }),
+        c("actions", "text", { notnull: true, note: "JSON: `store` (`full`, `envelope`, `skip`), `tags`" }),
+        c("protected", "integer", { notnull: true, note: "1: no cleanup may cut, archive or trash what it matches" }),
+        c("source", "text", { notnull: true, note: "`owner`, `preset:<name>`, `probe`, `gmail-filter`" }),
+        c("reason", "text", { note: "why, in the owner's or the proposer's words" }),
+        c("decided_at", "integer", { notnull: true }),
+        ...ts(),
+      ],
+      keys: ["UNIQUE (account_id, conditions)"],
     },
     {
       name: "email_recipients",

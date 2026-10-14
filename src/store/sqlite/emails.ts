@@ -19,6 +19,7 @@ import {
 } from "./email-index.js"
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { ensurePerson } from "./identities.js"
+import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
 import type { Orm, StoreContext } from "./open.js"
 import { inBatch } from "./search-index.js"
@@ -62,6 +63,8 @@ export interface EmailInput {
   size?: number | null
   headers?: Metadata
   metadata?: Metadata
+  /** The `mail_rules` row that decided how this email is stored; `null` clears it. */
+  mailRuleId?: number | null
   /** Added to the mailboxes the email is already in; one scan sees one folder, so none is taken away. */
   mailboxes?: MailboxInput[]
   /** Replaced when given; the text is word-indexed. */
@@ -132,6 +135,7 @@ export interface Email {
   size: number | null
   headers: Metadata
   metadata: Metadata
+  mailRuleId: number | null
   recipients: EmailRecipient[]
   mailboxes: Mailbox[]
   attachments: EmailAttachment[]
@@ -273,6 +277,8 @@ export interface MailStore {
     query: Float32Array,
     options: { accountId: number; limit: number; threadExternalId?: string; since?: number },
   ): Promise<EmailVectorHit[]>
+  /** The account's mail rules, and which rule decided each email. */
+  readonly rules: MailRulesStore
 }
 
 const ROLES = [
@@ -318,6 +324,7 @@ const emailOf = (database: CacheDatabase, row: Row): Email => ({
   size: int(row.size),
   headers: fromJson(row.headers),
   metadata: fromJson(row.metadata),
+  mailRuleId: int(row.mail_rule_id),
   recipients: database
     .prepare("SELECT * FROM email_recipients WHERE email_id = ? ORDER BY position")
     .all(Number(row.id))
@@ -466,6 +473,7 @@ const saveEmail = (
     ["size", "size", (v: number | null) => v],
     ["headers", "headers", toJson],
     ["metadata", "metadata", toJson],
+    ["mailRuleId", "mail_rule_id", (v: number | null) => v],
   ]
   for (const [field, column, encode] of optional)
     if (mail[field] !== undefined) values.push([column, encode(mail[field] as never)])
@@ -698,6 +706,7 @@ export const mailStoreOver = (
   { database, orm }: Pick<StoreContext, "database" | "orm">,
   stemmerFor: (stemmers: Stemmers) => Stemmer = stemmerCache(),
 ): MailStore => ({
+  rules: mailRulesOver(database),
   async saveThread(input) {
     const id = inBatch(database, () => saveThread(database, orm, input))
     return threadDetails(database, id) as ThreadDetails

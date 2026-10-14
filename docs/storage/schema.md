@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-82 tables, 17 full-text indexes.
+83 tables, 17 full-text indexes.
 
 ## Conventions
 
@@ -592,8 +592,28 @@ One email.
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `mail_rule_id` | integer |  |  | the `mail_rules` row that decided how this email is stored; no constraint, removing the rule clears it |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, sent_at DESC)`, `INDEX (mail_rule_id) WHERE mail_rule_id IS NOT NULL`, `INDEX (email_thread_id)`, `INDEX (from_identity_id)`
+
+### `mail_rules`
+
+A mail rule of one account: conditions an email must match, and what to do with it (store in full, as an envelope, skip, tag).
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the integration account it came through |
+| `conditions` | text | not null |  | JSON with sorted keys: sender, domain, List-Id and more; all must match |
+| `actions` | text | not null |  | JSON: `store` (`full`, `envelope`, `skip`), `tags` |
+| `protected` | integer | not null |  | 1: no cleanup may cut, archive or trash what it matches |
+| `source` | text | not null |  | `owner`, `preset:<name>`, `probe`, `gmail-filter` |
+| `reason` | text |  |  | why, in the owner's or the proposer's words |
+| `decided_at` | integer | not null |  |  |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (account_id, conditions)`
 
 ### `email_recipients`
 

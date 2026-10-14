@@ -43,6 +43,7 @@ export type {
   Reminder,
 } from "./sqlite/knowledge.js"
 export { ORGANIZATION_KINDS, PROJECT_TYPES, SCOPES } from "./sqlite/knowledge.js"
+export type { MailRule, MailRuleCount, MailRuleInput, MailRulesStore } from "./sqlite/mail-rules.js"
 export type { MeetingProjectLink, MeetingProjectsStore } from "./sqlite/meeting-projects.js"
 export type {
   MeetingContextReadCapabilities,

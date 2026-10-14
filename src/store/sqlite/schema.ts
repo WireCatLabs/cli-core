@@ -649,13 +649,35 @@ export const emails = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    // No constraint: older stores add the column without a rebuild; removing a rule clears it.
+    mailRuleId: integer("mail_rule_id"),
   },
   (table) => [
     unique().on(table.accountId, table.externalId),
     index("emails_by_time").on(table.accountId, desc(table.sentAt)),
+    index("emails_by_mail_rule_id").on(table.mailRuleId).where(sql`mail_rule_id IS NOT NULL`),
     index("emails_by_email_thread_id").on(table.emailThreadId),
     index("emails_by_from_identity_id").on(table.fromIdentityId),
   ],
+)
+
+export const mailRules = sqliteTable(
+  "mail_rules",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    conditions: text("conditions").notNull(),
+    actions: text("actions").notNull(),
+    protected: integer("protected").notNull().default(0),
+    source: text("source").notNull(),
+    reason: text("reason"),
+    decidedAt: integer("decided_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [unique().on(table.accountId, table.conditions)],
 )
 
 export const emailRecipients = sqliteTable(

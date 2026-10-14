@@ -19,6 +19,12 @@ shape of this file.
   with an absolute time window, bounded metadata rows and stored text bytes. It reports truncated
   and undated history without loading transcripts or inferring links from similar meeting titles.
   The optional `MeetingSeriesHistoryStore` capability and its types are exported from `./meetings`.
+- **Mail rules live in the store (store version 12)**: `store.mail.rules` lists, upserts and removes an account's
+  rules, each with its conditions, actions, a `protected` flag, its source and reason. Rules with the same conditions,
+  in any key order, are one rule. `counts(accountId)` answers every rule's live emails and bytes in one query, from
+  the new `emails.mail_rule_id` (the rule that decided how an email is stored, set through `EmailInput.mailRuleId`);
+  `assign` records it for emails saved before. Migration 12 adds a table, a column and a partial index: no rebuild,
+  older builds keep working.
 
 ### Fixed
 
