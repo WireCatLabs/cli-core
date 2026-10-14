@@ -14,9 +14,11 @@ import { isCliFailure } from "../failures.js"
 import { renderList } from "../paging.js"
 import { parseDuration } from "../settings.js"
 import {
+  finishJob,
   JOB_STATES,
   type Job,
   type JobState,
+  jobStarted,
   jobsDir,
   listJobs,
   readJob,
@@ -25,6 +27,7 @@ import {
   saveJob,
   spawnDetached,
   stateOf,
+  tracedJob,
   updateJob,
 } from "./backfill-jobs.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
@@ -201,7 +204,7 @@ export const syncCommand = (messenger: Messenger): Command => {
           (services): Promise<Fetched | FetchedAll> =>
             chat === undefined ? services.archive.fetchAll(options) : services.archive.fetch(chat, options),
         )
-        if (jobId) updateJob(jobs, jobId, { finishedAt: new Date().toISOString(), result })
+        if (jobId) finishJob(messenger.app, jobs, jobId, { finishedAt: new Date().toISOString(), result })
         context.renderer.result(result)
         const prepared = "prepared" in result ? result.prepared : undefined
         if (prepared && !prepared.complete && "chat" in result && result.chat !== null) {
@@ -215,7 +218,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         if (jobId) {
           const code = isCliFailure(error) ? error.code : "generic_failure"
           const message = error instanceof Error ? error.message : String(error)
-          updateJob(jobs, jobId, { finishedAt: new Date().toISOString(), error: { code, message } })
+          finishJob(messenger.app, jobs, jobId, { finishedAt: new Date().toISOString(), error: { code, message } })
         }
         throw error
       } finally {
@@ -430,7 +433,11 @@ const launchJob = (
   const log = join(dir, `${id}.log`)
   // A shell's --timeout default would cut a job short that was asked to outlive the shell.
   const { [envName(app, "TIMEOUT")]: _timeout, ...inherited } = context.env
-  const env = { ...inherited, [envName(app, "PROFILE")]: context.profile, [envName(app, "BACKFILL_JOB")]: id }
+  const traced = tracedJob({
+    ...inherited,
+    [envName(app, "PROFILE")]: context.profile,
+    [envName(app, "BACKFILL_JOB")]: id,
+  })
   const job: Job = {
     id,
     chat,
@@ -445,8 +452,8 @@ const launchJob = (
   }
   saveJob(dir, job)
   const spawnJob = environmentOf<BaseEnvironment & { spawnJob?: SpawnJob }>(command).spawnJob ?? spawnDetached
-  const pid = spawnJob(argv, env, log)
-  saveJob(dir, { ...job, pid })
+  const pid = spawnJob(argv, traced.env, log)
+  jobStarted(app, dir, { ...job, pid, traceId: traced.traceId })
   return { job: id, pid, chat, log }
 }
 

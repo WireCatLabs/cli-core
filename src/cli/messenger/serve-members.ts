@@ -1,5 +1,6 @@
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { failureKey } from "../failures.js"
+import type { ServeNotice } from "./serve-notice.js"
 
 /** After connecting, `serve` waits this long before its first member fetch: catch-up comes first. */
 export const FIRST_FETCH_MS = 60_000
@@ -26,7 +27,7 @@ export const memberFetches = ({
 }: {
   withStore: <T>(work: (store: MessageStore, account: AccountKey) => Promise<T>) => Promise<T>
   fetch: (store: MessageStore, account: AccountKey, chatId: string) => Promise<unknown>
-  warn: (text: string) => void
+  warn: (notice: ServeNotice) => void
   firstMs?: number
   everyMs?: number
 }): MemberFetches => {
@@ -46,7 +47,13 @@ export const memberFetches = ({
           done.fetched += 1
         } catch (error) {
           done.failed += 1
-          warn(`members of ${chatId} were not fetched: ${failureKey(error)}`)
+          const errorCode = failureKey(error)
+          warn({
+            code: "members_not_fetched",
+            chatId,
+            errorCode,
+            text: `members of ${chatId} were not fetched: ${errorCode}`,
+          })
         }
       }
     })
@@ -54,7 +61,10 @@ export const memberFetches = ({
   const tick = () => {
     const next = Date.now() + everyMs
     round = fetchAll()
-      .catch((error) => warn(`the daily member fetch failed: ${failureKey(error)}`))
+      .catch((error) => {
+        const errorCode = failureKey(error)
+        warn({ code: "member_fetch_failed", errorCode, text: `the daily member fetch failed: ${errorCode}` })
+      })
       .finally(() => {
         if (!stopped) timer = setTimeout(tick, Math.max(0, next - Date.now()))
       })

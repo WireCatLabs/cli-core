@@ -1,7 +1,7 @@
 import type { CallToolResult, McpServer, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
 import { toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError, errorCodes, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
-import { type ErrorObject, itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import { type ErrorObject, itemEnvelopeSchema, listEnvelopeSchema, traceIdOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { AISettings } from "../analysis/settings.js"
 import { isBody, sealed } from "../cli/envelope.js"
@@ -251,25 +251,30 @@ export const entryRunner = (registration: Registration): RunEntry => {
   return async (key, definition, args, ctx) => {
     const startedAt = Date.now()
     const command = `mcp ${key.replaceAll("_", " ")}`
-    const result = await inRun({ runId: newRunId(new Date(startedAt), command), command, startedAt }, () =>
-      run(key, definition, args, ctx),
-    )
-    if (
-      key !== "runs_search" &&
-      registration.defaults.history !== false &&
-      registration.messenger?.app?.appName &&
-      (result.isError || partialOutcome(result.structuredContent))
-    ) {
-      const recording = startRecording({
-        app: registration.messenger.app,
-        command: `mcp ${key.replaceAll("_", " ")}`,
-        profile: registration.defaults.settings.profile ?? "default",
-        env: registration.defaults.env,
-        record: false,
-        keepFailed: true,
-        trace: false,
-        format: "json",
-      })
+    const traceId = traceIdOf(ctx?.mcpReq?._meta?.traceparent)
+    const app = registration.messenger?.app
+    const recording =
+      key !== "runs_search" && registration.defaults.history !== false && app?.appName
+        ? startRecording({
+            app,
+            command,
+            profile: registration.defaults.settings.profile ?? "default",
+            env: registration.defaults.env,
+            record: false,
+            keepFailed: true,
+            trace: false,
+            format: "json",
+            ...(traceId === undefined ? {} : { traceId }),
+          })
+        : undefined
+    const scope = {
+      runId: recording?.runId ?? newRunId(new Date(startedAt), command),
+      command,
+      startedAt,
+      ...(traceId === undefined ? {} : { traceId }),
+    }
+    const result = await inRun(scope, () => run(key, definition, args, ctx))
+    if (recording && (result.isError || partialOutcome(result.structuredContent))) {
       if (result.isError) {
         const error = (result.structuredContent as { error?: { code?: string; message?: string } } | undefined)?.error
         const code =

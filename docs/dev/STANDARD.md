@@ -230,6 +230,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `backup` | copy a file somewhere safe |  |
 | `restore` | put a backup back in its place |  |
 | `repair` | bring a file's tables to this build's shape without deleting anything |  |
+| `rebuild` | compute again, from what the store already holds, what the tool derives from it, keeping the owner's decisions |  |
 | `link` | record that two identities are one person |  |
 | `unlink` | undo a link |  |
 | `lookup` | ask the messenger who is behind a phone number |  |
@@ -262,6 +263,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 
 | View | Meaning |
 |---|---|
+| `tree` | the parent and child hierarchy of stored sources |
 | `logs` | the log of a running process |
 | `events` | what happened in a thing over time |
 | `scheduled` | what is scheduled to happen |
@@ -273,6 +275,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `official` | the view the messenger itself computed, under stats |
 | `transcript` | the text of speech: a voice message or a meeting recording |
 | `evidence` | the stored messages or lines a result or a reference rests on |
+| `passage` | a cited transcript line with bounded surrounding lines from the same revision |
 
 <!-- views: end -->
 
@@ -305,7 +308,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `notes` | collection | text the owner writes, or files from a notes folder |  |
 | `projects` | collection | the owner's work units with a task key |  |
 | `organizations` | collection | companies, teams, families or communities |  |
-| `identities` | collection | accounts of a person in one messenger or mailbox |  |
+| `identities` | collection | ways to reach a person or an organization: an account in one messenger or mailbox, an e-mail address, a phone |  |
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
 | `relationships` | collection | confirmed or suggested links between people, organizations and projects |  |
@@ -316,11 +319,13 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `jobs` | collection | work this tool runs in the background or on a timer |  |
 | `actions` | collection | what an agent proposes to do; the owner confirms or rejects each |  |
 | `aliases` | collection | other names of one thing |  |
+| `mentions` | collection | phones, e-mail addresses, links and documents found in stored text, each where it was written |  |
 | `session` | singular | this tool's login |  |
 | `account` | singular | the messenger or mail account behind a profile |  |
 | `config` | singular | a profile's settings |  |
 | `server` | singular | the long-running process of a profile |  |
 | `store` | singular | the local SQLite database the tools share |  |
+| `catalog` | singular | stored source file and folder metadata and parent relationships |  |
 | `skill` | singular | the agent skill file of this tool |  |
 | `cache` | singular | max's per-profile cache |  |
 | `flood` | singular | what the messenger told this profile to hold off on |  |
@@ -356,6 +361,10 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 
 | Flag | Value | Kind | Meaning | Unit |
 |---|---|---|---|---|
+| `--bytes` | `<bytes>` | count | at most this many bytes of included evidence content | bytes |
+| `--max-read-bytes` | `<bytes>` | count | at most this many stored text bytes read for one bounded evidence window | bytes |
+| `--expected-fingerprint` | `<hash>` | string | require the selected evidence anchor to match this previously read fingerprint |  |
+| `--depth` | `<n>` | count | maximum descendant depth in a hierarchy | levels |
 | `--limit` | `<n>` | count | how many items | items |
 | `--page` | `<n>` | count | which page, from 1, where the source has no cursor |  |
 | `--page-size` | `<n>` | count | how many items one request to the source asks for | items |
@@ -367,8 +376,8 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--since-time` | `<time>` | time | only what came since this time |  |
 | `--until-time` | `<time>` | time | only what came up to and including this time |  |
 | `--at-time` | `<time>` | time | do it at this time |  |
-| `--before-n` | `<n>` | count | how many messages before it | messages |
-| `--after-n` | `<n>` | count | how many messages after it | messages |
+| `--before-n` | `<n>` | count | how many messages or transcript lines before it | items |
+| `--after-n` | `<n>` | count | how many messages or transcript lines after it | items |
 | `--timeout` | `<duration>` | duration | give up after this long |  |
 | `--account` | `<account>` | string | the account to use; never assumed |  |
 | `--provider` | `<provider>` | choice | read every account of this provider |  |
@@ -514,6 +523,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `option-role` | high | option | every option has a role in the vocabulary; a filter has none, it is a query field |
 | `list-without-query` | medium | command | a list that answers with an entity takes a query over that entity's fields |
 | `query-example` | high | command | every query field's example, and every default term, parses and validates |
+| `log-attribute-key` | high | key | no log attribute key on the allow-list names message text, a token or a phone number |
 
 <!-- lint rules: end -->
 

@@ -3,6 +3,7 @@ import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFile
 import { join } from "node:path"
 import { createRecordLog, type Logger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../app.js"
+import { LOG_ATTRIBUTES } from "./log-attributes.js"
 
 export type RunStatus = "success" | "failed" | "partial"
 
@@ -41,6 +42,8 @@ export interface RunMetadata {
   operations?: string[]
   /** Every `errorCode` and warning `code` its events carried, for the same reason. */
   codes?: string[]
+  /** The caller's trace: the MCP client's, or the schedule's or job's that started it. */
+  traceId?: string
 }
 
 export interface StartRunOptions {
@@ -56,6 +59,8 @@ export interface StartRunOptions {
   now?: () => Date
   /** When the command began, if that was before the run was opened — a failure kept after the fact. */
   startedAt?: Date
+  /** The caller's trace, written on every record as `trace_id`. */
+  traceId?: string
   /** The log file could not be opened or written; the run goes on unrecorded from here. */
   onError?: (error: Error) => void
 }
@@ -116,6 +121,8 @@ export const startRun = (options: StartRunOptions): Run => {
     runId: id,
     command: options.command,
     resource: { service: options.service, version: options.cliVersion },
+    allow: LOG_ATTRIBUTES,
+    ...(options.traceId === undefined ? {} : { traceId: options.traceId }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
   })
   const operations = new Set<string>()
@@ -145,6 +152,7 @@ export const startRun = (options: StartRunOptions): Run => {
     runtime: runtime(),
     platform: process.platform,
     arch: process.arch,
+    ...(options.traceId === undefined ? {} : { traceId: options.traceId }),
   }
   writeRunFile(dir, metadata)
 

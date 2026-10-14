@@ -1,8 +1,10 @@
 import { type ChildProcess, spawn } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { CliError, captureStreams } from "@wirecat/cli-base"
+import { CliError, captureStreams, NOT_ALLOWED } from "@wirecat/cli-base"
+import { logRecordSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it, onTestFinished } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { run } from "../program.js"
@@ -465,6 +467,26 @@ describe("store fetch in the background", () => {
       complete: true,
       held: [{ from: 1, to: 150 }],
     })
+  })
+
+  it("logs the job's start and exit as records sharing the trace its commands get", async () => {
+    const env = setup()
+    const { calls, spawnJob } = spawned(process.pid)
+    const { job } = (await call(["messages", "sync", "7", "--background", "--json"], idle, env, { spawnJob })).answer
+    await call(calls[0]?.argv ?? [], chatOf({ newest: 5, asked: [] }), { ...env, ...calls[0]?.env })
+
+    const text = readFileSync(join(jobsDir(app, env), `${job}.jsonl`), "utf8")
+    const records = text
+      .trimEnd()
+      .split("\n")
+      .map((line) => v.parse(logRecordSchema, JSON.parse(line)))
+    const traceId = readJob(jobsDir(app, env), job)?.traceId
+    expect(calls[0]?.env.TRACEPARENT).toContain(`-${traceId}-`)
+    expect(records.map((record) => [record.attributes, record.trace_id])).toEqual([
+      [{ event: "job.start", job, pid: process.pid }, traceId],
+      [{ event: "job.exit", job, outcome: "done" }, traceId],
+    ])
+    expect(text).not.toContain(NOT_ALLOWED)
   })
 
   it("a job that fails says how; one that vanished without a word has died", async () => {

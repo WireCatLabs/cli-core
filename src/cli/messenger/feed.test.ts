@@ -123,7 +123,8 @@ describe("a messenger that pushes its history", () => {
 
     const { code, stderr } = await call(["serve", "--json"], env, connect, stop.signal, "store")
     expect(code).toBe(0)
-    expect(stderr).toContain("not saved to the local store")
+    expect(stderr).toContain('"severity":"warn"')
+    expect(stderr).not.toContain("not saved to the local store")
   })
 
   it("a feed that fails ends serve with its error and leaves no lock", async () => {
