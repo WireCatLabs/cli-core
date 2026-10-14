@@ -28,9 +28,10 @@ export interface ConfigRename {
 }
 
 /**
- * Renames a setting the schema knows only in snake_case from the camelCase name an older version wrote. Only names
- * the schema declares move: a profile name, a command path under `permissions` or a model purpose is data and keeps
- * its spelling, and a key the schema still declares in camelCase (an app's own, until it renames it) stays.
+ * Renames a setting to the spelling the schema declares: snake_case from the camelCase name an older version wrote,
+ * or back to camelCase for an app whose own schema still says so (max-cli's, until it renames). Only names the
+ * schema declares move: a profile name, a command path under `permissions` or a model purpose is data and keeps its
+ * spelling.
  */
 const renamed = (schema: Schema, value: unknown, path: string, renames: ConfigRename[]): unknown => {
   const at = unwrapped(schema)
@@ -45,7 +46,7 @@ const renamed = (schema: Schema, value: unknown, path: string, renames: ConfigRe
   if (!entries || !["object", "strict_object", "loose_object"].includes(at.type)) return value
   const result: Record<string, unknown> = {}
   for (const [key, one] of Object.entries(value)) {
-    const target = !(key in entries) && snake(key) in entries ? snake(key) : key
+    const target = key in entries ? key : snake(key) in entries ? snake(key) : camel(key) in entries ? camel(key) : key
     if (target !== key) {
       if (
         Object.hasOwn(value, target) &&
