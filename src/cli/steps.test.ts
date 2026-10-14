@@ -4,8 +4,10 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { chatsCommand } from "./messenger/chats-command.js"
 import type { Messenger } from "./messenger/context.js"
+import { inboxCommand } from "./messenger/inbox.js"
 import { messagesCommand } from "./messenger/messages-command.js"
 import { modelsCommand } from "./messenger/models-command.js"
+import { reviewCommand } from "./messenger/review.js"
 import { storeMaintenanceCommands } from "./messenger/store-maintenance-command.js"
 import { createProgram } from "./program.js"
 import { REASONS } from "./reasons.js"
@@ -29,7 +31,14 @@ const store = () => {
 }
 const program = createProgram({
   app,
-  commands: () => [chatsCommand(messenger), messagesCommand(messenger), modelsCommand(messenger), store()],
+  commands: () => [
+    chatsCommand(messenger),
+    messagesCommand(messenger),
+    modelsCommand(messenger),
+    inboxCommand(messenger),
+    reviewCommand(messenger),
+    store(),
+  ],
 })
 const parity = JSON.parse(readFileSync(join(import.meta.dirname, "../../parity.json"), "utf8")) as {
   commands: Record<string, { in: unknown }>

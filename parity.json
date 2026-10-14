@@ -2485,7 +2485,6 @@
           },
           "reason": "old option removed as max mounts the shared command"
         },
-        "--since-time": "all",
         "--transcribe": "all"
       }
     },
@@ -3047,7 +3046,6 @@
       "in": "all",
       "options": {
         "--all": "all",
-        "--chat": "all",
         "--kind": "all",
         "--mark-read": "all",
         "--model": "all",
@@ -3060,7 +3058,6 @@
           },
           "reason": "old option removed as max mounts the shared command"
         },
-        "--since-time": "all",
         "--transcribe": "all",
         "--unanswered": "all"
       }

@@ -9,6 +9,16 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`inbox` and `review` answer the list envelope**, CLI and MCP alike: the messages, oldest first, as
+  `message.summary` (now `ref`, `chat_id`, `chat_title`, `timestamp`, `sender_name`, `outgoing`, `text`,
+  `transcript`, `attachments`); the MCP tools publish their `outputSchema`. Where to start is the query:
+  `inbox date>2h`, `review date>"2026-10-01T09:00:00Z" chat:7` — `--since-time` and review's `--chat` are gone, and
+  so are MCP `since_time` and `chat`. A review that can be continued names the next one as its first step,
+  `review.next` (`date>"<until>"`, or the same start again when it was incomplete). A chat cut short, chats skipped
+  and muted chats left out are `missing` entries with `messages.list`, `inbox.all`/`review.all` steps; unheard voice
+  messages the `transcript` entry; a chat list the messenger could not give whole is `meta.truncated`. `mode`,
+  `since`, `until`, `checked`, `complete`, `unheard` and `markedRead` leave the answer (`--mark-read` says what it
+  marked on stderr). `--kind`, `--all`, `--unanswered` and `--new` stay.
 - **`searches create|show|list|history|delete` answer in the envelope** with the new `saved_search` entity
   (`fields_version`, `created_at`, `last_run_at` replace `fieldsVersion`, `createdAt`, `lastRunAt`), CLI and MCP
   alike: one search is `{item}`, the lists `{items, page}`. `searches history` pages with `--page` and `--all` too,

@@ -38,7 +38,16 @@ const samples: Record<EntityName, unknown> = {
     discovery: { coverage: 0.5, matched_terms: ["a"], missing_terms: ["b"] },
     context: [{ ref: message.ref, timestamp: at, sender_name: null, text: "synthetic" }],
   },
-  "message.summary": { ref: message.ref, timestamp: at, sender_name: null, text: "synthetic" },
+  "message.summary": {
+    ref: message.ref,
+    chat_id: "7",
+    chat_title: null,
+    timestamp: at,
+    sender_name: null,
+    outgoing: false,
+    text: "synthetic",
+    attachments: [],
+  },
   message_link: { ref: message.ref, url: null, access: "unavailable", reason: "offline" },
   chat: {
     ref: "chat:telegram/1/2",

@@ -124,13 +124,13 @@ const fixture = (
   return { env, events, messenger, adapter, execute }
 }
 
-const review = ["review", "--chat", "9", "--since-time", "1d", "--unanswered", "1m"]
+const review = ["review", "chat:9", "date>1d", "--unanswered", "1m"]
 
 describe("read hearing lifecycle", () => {
   it.each([
     ["messages", "list", "9"],
-    ["inbox", "--since-time", "1d"],
-    ["review", "--chat", "9", "--since-time", "1d"],
+    ["inbox", "date>1d"],
+    ["review", "chat:9", "date>1d"],
   ])("uses one connection for %j and hearing", async (...argv) => {
     const test = fixture([voice("1"), voice("2")])
     const answer = await test.execute([...argv, "--transcribe"])
@@ -144,7 +144,7 @@ describe("read hearing lifecycle", () => {
     const test = fixture()
     const answer = await test.execute([...review, "--transcribe"])
     expect(answer.code).toBe(0)
-    expect(answer.body.chats[0]?.messages).toMatchObject([{ text: "", transcript: question }])
+    expect(answer.body.items).toMatchObject([{ text: "", transcript: question }])
     expect(test.events.indexOf("admins")).toBeLessThan(test.events.indexOf("transcribe"))
     expect(test.events.filter((event) => event === "connect")).toHaveLength(1)
   })
@@ -159,7 +159,7 @@ describe("read hearing lifecycle", () => {
     }
     const answer = await test.execute(review)
     expect(answer.code).toBe(0)
-    expect(answer.body.chats[0]?.messages).toMatchObject([{ text: "", transcript: question }])
+    expect(answer.body.items).toMatchObject([{ text: "", transcript: question }])
     expect(test.events).not.toContain("transcribe")
   })
 
@@ -167,8 +167,11 @@ describe("read hearing lifecycle", () => {
     const test = fixture([voice()], { pending: true })
     const answer = await test.execute([...review, "--transcribe"])
     expect(answer.code).toBe(0)
-    expect(answer.body.complete).toBe(false)
-    expect(answer.body.unheard).toEqual([{ chatId: "9", messageId: "1" }])
+    expect(answer.body.missing).toContainEqual({
+      field: "transcript",
+      why: "1 voice message(s) not heard yet: 1",
+      step: "messages.transcribe",
+    })
   })
 
   it("excludes a voice question answered by an admin", async () => {
@@ -183,7 +186,7 @@ describe("read hearing lifecycle", () => {
     const answer = await test.execute([...review, "--transcribe"])
     expect(answer.code).toBe(0)
     expect(test.events).toContain("transcribe")
-    expect(answer.body.chats).toEqual([])
+    expect(answer.body.items).toEqual([])
   })
 
   it("applies hearing before unanswered filtering in shared MCP", async () => {
@@ -198,11 +201,11 @@ describe("read hearing lifecycle", () => {
       const settings = test.messenger.resolveSettings({}, { env: test.env })
       const answer = await reviewTools(test.messenger).review?.served?.(
         services,
-        { since_time: "1d", chat: "9", unanswered: 0 },
+        { query: "date>1d chat:9", unanswered: 0 },
         { settings, env: test.env, guard, limit: 20 },
         (work) => work(connection),
       )
-      expect(answer).toMatchObject({ chats: [{ messages: [{ text: "", transcript: question }] }] })
+      expect(answer).toMatchObject({ items: [{ text: "", transcript: question }] })
     } finally {
       await store.close()
     }
@@ -219,8 +222,11 @@ describe("read hearing lifecycle", () => {
     const test = fixture([voice()], { failure: true })
     const answer = await test.execute([...review, "--transcribe"])
     expect(answer.code).toBe(0)
-    expect(answer.body.complete).toBe(false)
-    expect(answer.body.transcribeProblem).toBe("synthetic hearing failed")
+    expect(answer.body.missing).toContainEqual({
+      field: "transcript",
+      why: "not transcribed: synthetic hearing failed",
+      step: "messages.transcribe",
+    })
     expect(test.events.filter((event) => event === "closed")).toHaveLength(1)
   })
 

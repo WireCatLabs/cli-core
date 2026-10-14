@@ -73,7 +73,7 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
           ? []
           : mode === "new"
             ? ["new true"]
-            : [`since_time ${JSON.stringify(mode)}`]),
+            : [`query ${JSON.stringify(mode.includes(":") ? `date>"${mode}"` : `date>${mode}`)}`]),
       ]
       return asked(
         [

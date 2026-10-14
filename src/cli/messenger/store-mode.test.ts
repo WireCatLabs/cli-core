@@ -363,17 +363,19 @@ describe("a messenger whose history is read from the store", () => {
 
     for (const argv of [
       ["inbox", "--json"],
-      ["inbox", "--since-time", since, "--json"],
-      ["review", "--since-time", since, "--json"],
-      ["review", "--since-time", since, "--chat", "Book", "--unanswered", "1h", "--json"],
+      ["inbox", `date>"${since}"`, "--json"],
+      ["review", `date>"${since}"`, "--json"],
+      ["review", `date>"${since}"`, "chat:Book", "--unanswered", "1h", "--json"],
     ]) {
       const asked = await call(argv, env, async () => online())
       const stored = await call(argv, env, connect, "store")
       expect(stored.code, argv.join(" ")).toBe(0)
-      expect(JSON.parse(stored.stdout), argv.join(" ")).toEqual(JSON.parse(asked.stdout))
+      const { meta: _stored, ...fromStore } = JSON.parse(stored.stdout)
+      const { meta: _asked, ...fromMessenger } = JSON.parse(asked.stdout)
+      expect(fromStore, argv.join(" ")).toEqual(fromMessenger)
     }
     const inbox = JSON.parse((await call(["inbox", "--json"], env, connect, "store")).stdout)
-    expect(inbox.chats[0].messages.map((one: Message) => one.id)).toEqual(["2", "3"])
+    expect(inbox.items.map((one: { ref: string }) => one.ref.split("/").at(-1))).toEqual(["2", "3"])
     expect(connects).toEqual([])
   })
 
@@ -389,18 +391,22 @@ describe("a messenger whose history is read from the store", () => {
     }
     const { connect } = pushing()
 
-    const fresh = await call(["inbox", "--since-time", "2026-09-27T09:30:00.000Z", "--json"], env, connect, "store")
-    const review = await call(["review", "--since-time", "2026-09-27T09:30:00.000Z", "--json"], env, connect, "store")
+    const fresh = await call(["inbox", 'date>"2026-09-27T09:30:00.000Z"', "--json"], env, connect, "store")
+    const review = await call(["review", 'date>"2026-09-27T09:30:00.000Z"', "--json"], env, connect, "store")
 
-    expect(JSON.parse(fresh.stdout).chats[0].messages.map((one: Message) => one.id)).toEqual(["1", "2", "3"])
-    expect(JSON.parse(review.stdout)).toMatchObject({ until: "2026-09-27T10:02:00.000Z", complete: true })
+    expect(JSON.parse(fresh.stdout).items.map((one: { ref: string }) => one.ref.split("/").at(-1))).toEqual([
+      "1",
+      "2",
+      "3",
+    ])
+    expect(JSON.parse(review.stdout).next[0].args.query).toBe('date>"2026-09-27T10:02:00.000Z"')
   })
 
-  it("**answers not_found for `review --chat` with nothing stored**", async () => {
+  it("**answers not_found for `review chat:` with nothing stored**", async () => {
     const env = await filled()
     const { connects, connect } = pushing()
 
-    const { code, stderr } = await call(["review", "--chat", "Zoe", "--json"], env, connect, "store")
+    const { code, stderr } = await call(["review", "chat:Zoe", "--json"], env, connect, "store")
 
     expect(code).not.toBe(0)
     expect(stderr).toContain("nothing stored for this chat yet — keep `chat serve` running")

@@ -369,6 +369,8 @@ describe("inbox --new", () => {
     }
   }
 
+  const chatIds = (answer: { items: { chat_id: string }[] }) => [...new Set(answer.items.map((one) => one.chat_id))]
+
   const startedAt = Date.now()
   const minutesAgo = (minutes: number) => new Date(startedAt - minutes * 60_000).toISOString()
   const recentChat = (id: string, minutes: number, kind: Chat["kind"] = "group"): Chat => ({
@@ -389,9 +391,8 @@ describe("inbox --new", () => {
     const first = await inbox(["--new"])
     const second = await inbox(["--new"])
 
-    expect(first.answer.chats.map((one: { id: string }) => one.id)).toEqual(["1"])
-    expect(second.answer.chats).toEqual([])
-    expect(second.answer.since).toBe(recent)
+    expect(chatIds(first.answer)).toEqual(["1"])
+    expect(second.answer.items).toEqual([])
   })
 
   it(`loses nothing past the first ${INBOX_CHATS} chats: the next run shows the ones skipped`, async () => {
@@ -402,8 +403,8 @@ describe("inbox --new", () => {
     const first = await inbox(["--new"])
     const second = await inbox(["--new"])
 
-    expect(first.answer.chats).toHaveLength(INBOX_CHATS)
-    expect(second.answer.chats.map((one: { id: string }) => one.id)).toEqual([`c${INBOX_CHATS}`, `c${INBOX_CHATS + 1}`])
+    expect(chatIds(first.answer)).toHaveLength(INBOX_CHATS)
+    expect(chatIds(second.answer).sort()).toEqual([`c${INBOX_CHATS}`, `c${INBOX_CHATS + 1}`])
   })
 
   it("says how many chats it skipped, and which", async () => {
@@ -412,10 +413,14 @@ describe("inbox --new", () => {
     const { inbox, review } = setup(histories, chats)
 
     const fresh = await inbox(["--new"])
-    const reviewed = await review(["--since-time", "1d"])
+    const reviewed = await review(["date>1d"])
 
-    expect(fresh.stderr).toContain(`skipped 2 chats — too many at once: Chat c${INBOX_CHATS}, Chat c${INBOX_CHATS + 1}`)
-    expect(reviewed.stderr).toContain("skipped 2 chats — too many at once")
+    expect(fresh.answer.missing).toContainEqual({
+      field: "items",
+      why: `skipped 2 chats — too many at once: Chat c${INBOX_CHATS}, Chat c${INBOX_CHATS + 1}`,
+      step: "messages.list",
+    })
+    expect(JSON.stringify(reviewed.answer.missing)).toContain("skipped 2 chats — too many at once")
   })
 
   it("a channels-only run leaves the groups for the next run", async () => {
@@ -425,8 +430,8 @@ describe("inbox --new", () => {
     const channels = await inbox(["--new", "--kind", "channel"])
     const groups = await inbox(["--new", "--kind", "group"])
 
-    expect(channels.answer.chats.map((one: { id: string }) => one.id)).toEqual(["c"])
-    expect(groups.answer.chats.map((one: { id: string }) => one.id)).toEqual(["g"])
+    expect(chatIds(channels.answer)).toEqual(["c"])
+    expect(chatIds(groups.answer)).toEqual(["g"])
   })
 
   it("reads the single point older versions kept, and keeps it as where unread chats start", async () => {
@@ -436,8 +441,8 @@ describe("inbox --new", () => {
 
     const { answer } = await inbox(["--new"])
 
-    expect(answer.since).toBe(point)
-    expect(saved()).toEqual({ lastCheckAt: point, chats: { g: answer.until } })
+    expect(chatIds(answer)).toEqual(["g"])
+    expect(saved()).toEqual({ lastCheckAt: point, chats: { g: expect.any(String) } })
   })
 
   it("--all takes in muted and archived chats", async () => {
@@ -445,19 +450,19 @@ describe("inbox --new", () => {
     const chat = { ...chatAt("1", 0), lastMessageAt: recent, archived: true }
     const { inbox } = setup({ "1": [{ ...messageAt("1", "10", 0), timestamp: recent }] }, [chat])
 
-    expect((await inbox(["--since-time", "1d"])).answer.chats).toEqual([])
-    expect((await inbox(["--since-time", "1d", "--all"])).answer.chats).toHaveLength(1)
+    expect((await inbox(["date>1d"])).answer.items).toEqual([])
+    expect(chatIds((await inbox(["date>1d", "--all"])).answer)).toHaveLength(1)
   })
 
   it("looks back 24 hours the first time", async () => {
-    const { inbox } = setup({}, [])
+    const { inbox, saved } = setup({ g: [recentMessage("g", 5)] }, [recentChat("g", 5)])
 
-    const { answer } = await inbox(["--new"])
+    await inbox(["--new"])
 
-    expect(Date.now() - Date.parse(answer.since)).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 5000)
+    expect(Date.now() - Date.parse(saved().lastCheckAt)).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 5000)
   })
 
-  it("leaves the saved point alone after a run that failed, or one given --since", async () => {
+  it("leaves the saved point alone after a run that failed, and refuses a date beside --new", async () => {
     const recent = new Date(Date.now() - 60_000).toISOString()
     const chat = { ...chatAt("1", 0), lastMessageAt: recent }
     const { inbox, fail } = setup({ "1": [{ ...messageAt("1", "10", 0), timestamp: recent }] }, [chat])
@@ -465,10 +470,10 @@ describe("inbox --new", () => {
     fail(true)
     expect((await inbox(["--new"])).code).not.toBe(0)
     fail(false)
-    expect((await inbox(["--new", "--since-time", "1d"])).answer.chats).toHaveLength(1)
+    expect((await inbox(["--new", "date>1d"])).code).toBe(2)
     const { answer } = await inbox(["--new"])
 
-    expect(answer.chats.map((one: { id: string }) => one.id)).toEqual(["1"])
+    expect(chatIds(answer)).toEqual(["1"])
   })
 
   it("review --new keeps its own points: an inbox --new run does not move them", async () => {
@@ -479,14 +484,14 @@ describe("inbox --new", () => {
     const first = await review(["--new"])
     const second = await review(["--new"])
 
-    expect(first.answer.chats.map((one: { id: string }) => one.id)).toEqual(["g"])
-    expect(second.answer.chats).toEqual([])
+    expect(chatIds(first.answer)).toEqual(["g"])
+    expect(second.answer.items).toEqual([])
   })
 
-  it("review --new refuses --since-time and --unanswered: it keeps its own point", async () => {
+  it("review --new refuses a date and --unanswered: it keeps its own point", async () => {
     const { review } = setup({}, [])
 
-    expect((await review(["--new", "--since-time", "1d"])).code).toBe(2)
+    expect((await review(["--new", "date>1d"])).code).toBe(2)
     expect((await review(["--new", "--unanswered"])).code).toBe(2)
   })
 
@@ -494,19 +499,20 @@ describe("inbox --new", () => {
     const chats = [recentChat("g", 2), recentChat("d", 1, "dialog")]
     const { inbox, review, marks, configure } = setup({ g: [recentMessage("g", 2)], d: [recentMessage("d", 1)] }, chats)
 
-    await inbox(["--since-time", "1d"])
+    await inbox(["date>1d"])
     expect(marks).toEqual([])
-    const asked = await inbox(["--since-time", "1d", "--kind", "dialog", "--mark-read"])
+    const asked = await inbox(["date>1d", "--kind", "dialog", "--mark-read"])
     expect(marks).toEqual([["d", "d-1"]])
-    expect(asked.answer.markedRead).toEqual([{ chatId: "d", until: "d-1" }])
+    expect(chatIds(asked.answer)).toEqual(["d"])
+    expect(asked.stderr).toContain("marked 1 chat(s) read up to the newest message shown")
 
     configure({ catchUpMarksRead: true })
-    await review(["--since-time", "1d", "--kind", "group"])
-    await inbox(["--since-time", "1d", "--no-mark-read"])
+    await review(["date>1d", "--kind", "group"])
+    await inbox(["date>1d", "--no-mark-read"])
     expect(marks).toEqual([
       ["d", "d-1"],
       ["g", "g-1"],
     ])
-    expect((await inbox(["--since-time", "1d", "--mark-read", "--offline"])).code).toBe(2)
+    expect((await inbox(["date>1d", "--mark-read", "--offline"])).code).toBe(2)
   })
 })

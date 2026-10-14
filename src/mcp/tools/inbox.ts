@@ -1,10 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { catchUpQuery, INBOX_QUERY, inboxAnswer } from "../../cli/messenger/catch-up-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { checkPoints } from "../../cli/messenger/points.js"
 import { CHAT_KINDS } from "../../services/chats.js"
-import { momentOf } from "../../services/moment.js"
-import { heard, hearForTool, modelWith } from "../../speech/hearing.js"
+import { hearForTool, modelWith } from "../../speech/hearing.js"
 import { type AnyTool, READ, tool } from "../tool.js"
 
 /** Per chat: unread across many chats at a hundred each would outgrow what a client keeps of one answer. */
@@ -20,15 +20,15 @@ export const inboxTools = (messenger: Messenger): Record<string, AnyTool> => {
     inbox: tool({
       title: "What is new",
       description:
-        "Other people's messages waiting for the owner, grouped by chat, in one call: the unread ones; with " +
-        "`since_time` everything after that point; with `new` what arrived since the last `new` call, each message " +
+        "Other people's messages waiting for the owner, every chat in one call, oldest first: the unread ones; with " +
+        "`query` date>2h everything after that point; with `new` what arrived since the last `new` call, each message " +
         "once, from saved points this tool keeps apart from the owner's own " +
         `\`${messenger.app.command} inbox --new\`. Marks nothing read. Muted and archived chats are left out unless they ` +
-        "mention the owner or reply to them, or `all` is set. Returns { mode, chats: [{ id, title, messages, more }], " +
-        "skipped, partial, quiet }, where quiet counts the chats left out. A voice message carries `transcript` once " +
-        "heard; `transcribe` hears the rest.",
+        "mention the owner or reply to them, or `all` is set. Each item names its chat; chats cut short, skipped or " +
+        "left out are `missing` entries, a cut-short chat also a messages.list step. A voice message carries " +
+        "`transcript` once heard; `transcribe` hears the rest.",
       input: v.object({
-        since_time: v.optional(v.pipe(v.string(), v.description("an ISO 8601 time, or 2h / 1d ago"))),
+        query: v.optional(v.pipe(v.string(), v.description("from when: date>2h, date>2026-10-01"))),
         new: v.optional(v.pipe(v.boolean(), v.description("what arrived since the last call with new"))),
         kinds: kindsInput,
         all: v.optional(v.pipe(v.boolean(), v.description("muted and archived chats too"))),
@@ -47,9 +47,11 @@ export const inboxTools = (messenger: Messenger): Record<string, AnyTool> => {
         ),
       }),
       annotations: READ,
+      output: { entity: "message.summary", list: true },
       served: async (services, args, defaults, connect) => {
-        if (args.new && args.since_time !== undefined) {
-          throw new CliError("validation_error", "new keeps its own point — not with since_time")
+        const { since: from } = catchUpQuery(args.query, INBOX_QUERY, "inbox")
+        if (args.new && from !== undefined) {
+          throw new CliError("validation_error", "new keeps its own point — not with a date in the query")
         }
         const limit = args.limit ?? INBOX_LIMIT
         const saved = args.new
@@ -60,7 +62,7 @@ export const inboxTools = (messenger: Messenger): Record<string, AnyTool> => {
               firstLookMs: FIRST_LOOK_MS,
             })
           : undefined
-        const since = args.since_time === undefined ? saved?.first : momentOf(args.since_time, "since_time")
+        const since = from ?? saved?.first
         const inbox = await services.inbox.read({
           ...(since === undefined ? {} : { since }),
           ...(saved === undefined ? {} : { points: saved.chats }),
@@ -77,13 +79,9 @@ export const inboxTools = (messenger: Messenger): Record<string, AnyTool> => {
           defaults,
           modelWith(args.transcribe, args.model),
         )
+        const answer = inboxAnswer(inbox, hearing, await services.messages.reader(), args.transcribe === true)
         saved?.save(inbox.checked ?? {})
-        return {
-          ...inbox,
-          chats: inbox.chats.map((chat) => ({ ...chat, messages: heard(chat.messages, hearing) })),
-          ...(args.transcribe ? { unheard: hearing?.unheard ?? [] } : {}),
-          ...(hearing?.problem === undefined ? {} : { transcribeProblem: hearing.problem }),
-        }
+        return answer
       },
     }),
   }

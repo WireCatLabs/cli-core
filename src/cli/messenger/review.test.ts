@@ -210,48 +210,52 @@ describe("review, the command", () => {
     return { code, answer: JSON.parse(streams.stdout[0] ?? "null"), stderr: streams.stderr.join("\n") }
   }
 
-  it("reads since --since, --all takes in a muted chat, and says where the next review starts", async () => {
-    const quiet = await review(["--since-time", "2d"])
-    const all = await review(["--since-time", "2d", "--all"])
+  const ids = (answer: { items: { ref: string }[] }) => answer.items.map((one) => one.ref.split("/").at(-1))
 
-    expect(quiet.answer.chats).toEqual([])
-    expect(all.answer.chats[0].messages.map((one: Message) => one.id)).toEqual(["10", "11"])
-    expect(all.stderr).toContain(`--since-time ${all.answer.until}`)
+  it("reads from a date, --all takes in a muted chat, and its review.next step goes on without a gap or a repeat", async () => {
+    const quiet = await review(["date>2d"])
+    const all = await review(["date>2d", "--all"])
+
+    expect(quiet.answer.items).toEqual([])
+    expect(quiet.answer.missing).toContainEqual(expect.objectContaining({ step: "review.all" }))
+    expect(ids(all.answer)).toEqual(["10", "11"])
+    const [next] = all.answer.next
+    expect(next).toMatchObject({ step: "review.next", args: { query: expect.stringMatching(/^date>"/) } })
+    const after = await review([next.args.query, "--all"])
+    expect(after.code).toBe(0)
+    expect(after.answer.items).toEqual([])
   })
 
-  it("--chat and --unanswered narrow it to one chat's open questions; three days back without --since", async () => {
-    const { code, answer } = await review(["--chat", "Valencia", "--unanswered", "12h"])
+  it("narrows to one chat by chat: and to its open questions with --unanswered; no review.next then", async () => {
+    const { code, answer } = await review(["chat:Valencia", "--unanswered", "12h"])
 
     expect(code).toBe(0)
-    expect(Date.parse(answer.until) - Date.parse(answer.since)).toBeGreaterThan(2 * 86_400_000)
-    expect(answer.chats[0].messages.map((one: Message) => one.id)).toEqual(["10"])
-    expect(answer.unanswered).toEqual({ olderThanHours: 12 })
+    expect(ids(answer)).toEqual(["10"])
+    expect(answer.next ?? []).not.toContainEqual(expect.objectContaining({ step: "review.next" }))
   })
 
-  it("reports a review with unheard voice messages as incomplete, even without --transcribe", async () => {
+  it("starts the next review where this one started when voice messages were left unheard", async () => {
     const message = scripted.adapter.history
     scripted.adapter.history = async (...args) => {
       const page = await message(...args)
       return { ...page, items: page.items.map((one) => ({ ...one, attachments: [{ kind: "voice" as const }] })) }
     }
     try {
-      const result = await review(["--since-time", "2d", "--all"])
+      const result = await review(['date>"2026-01-01T00:00:00.000Z"', "--all"])
       expect(result.code).toBe(0)
-      expect(result.answer.chats[0].messages[0].attachments).toHaveLength(1)
-      expect(result.answer.complete).toBe(false)
-      expect(result.answer.unheard).toHaveLength(2)
-      expect(result.stderr).toContain("incomplete")
+      expect(result.answer.items[0].attachments).toHaveLength(1)
+      expect(result.answer.next[0].args.query).toBe('date>"2026-01-01T00:00:00.000Z"')
     } finally {
       scripted.adapter.history = message
     }
   })
 
   it("--transcribe says which voice messages stay unheard; --model alone is refused", async () => {
-    const heard = await review(["--since-time", "2d", "--all", "--transcribe"])
-    const lonely = await review(["--since-time", "2d", "--model", "gigaam-v3"])
+    const heard = await review(["date>2d", "--all", "--transcribe"])
+    const lonely = await review(["date>2d", "--model", "gigaam-v3"])
 
     expect(heard.code).toBe(0)
-    expect(heard.answer.unheard).toEqual([])
+    expect(heard.answer.missing ?? []).not.toContainEqual(expect.objectContaining({ field: "transcript" }))
     expect(lonely.code).toBe(2)
   })
 })
