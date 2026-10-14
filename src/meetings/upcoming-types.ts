@@ -42,6 +42,7 @@ export interface MeetingOccurrencePort {
 export interface UpcomingMeetingResult {
   scope: Readonly<MeetingProviderScope>
   meetingId: string
+  kind: MeetingOccurrenceSchedule["kind"]
   after: number
   until: number
   timezone: string | null

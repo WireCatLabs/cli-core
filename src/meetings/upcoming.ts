@@ -58,6 +58,7 @@ export const createUpcomingMeetingReader = (scope: MeetingProviderScope, port: M
       return {
         scope: fixed,
         meetingId,
+        kind: schedule.kind,
         after,
         until,
         timezone: schedule.timezone,
