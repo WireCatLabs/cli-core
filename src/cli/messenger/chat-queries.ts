@@ -3,6 +3,7 @@ import { type Predicate, type QueryRegistry, queryError, queryFieldsOf } from "@
 import { chat, chatEvent, inviteLink, joinRequest, member } from "../../entities/index.js"
 import { AUDIT_MIN_SCORE } from "../../services/members-audit.js"
 import { CHAT_COLUMNS, titlePart } from "../../store/store.js"
+import { unfilteredQuery } from "../list-query.js"
 
 const titleWords = (node: Predicate) => {
   const part = titlePart(node.value)
@@ -40,6 +41,9 @@ export const HISTORY_QUERY: QueryRegistry = {
   backend: "native",
   fields: queryFieldsOf(chatEvent, { native: ["time"], examples: { time: "time>=7d" } }),
 }
+
+/** The messenger hands the member list back a page at a time, as it keeps it. */
+export const MEMBERS_QUERY = unfilteredQuery("member", member)
 
 /** The audit scores every member it reads; the query sets the lowest score it shows. */
 export const AUDIT_QUERY: QueryRegistry = {

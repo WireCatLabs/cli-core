@@ -7,6 +7,33 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Picture models moved to `images models list|download`**, registered with `imagesCommand`: they serve only
+  picture search, which no app registers yet, and `models image` was not a resource name. `modelsCommand` keeps
+  `models audio` and `models text`; the `models.download-image` step and the "not downloaded" texts name the new
+  command.
+- **`account sessions list`, `chats folders list`, `chats members list`, `contacts notes list`, `models audio list`,
+  `models text list` and `searches list` take a query**, last. Their sources answer whole, so no field filters yet:
+  any term is `query.unsupported-field` (exit 2).
+- **The `job` entity's `limit` is `message_limit`** (`store jobs list|show`): the `--limit` the sync started with,
+  no longer read as the list's own paging flag.
+- `messages evidence --cursor` and `chats media --cursor` take `<cursor>`, as every other list does. `chats list`,
+  `contacts list`, `mentions confirm` and `mentions reject` have a summary of at most 80 characters; `--help` keeps
+  the full description.
+
+### Added
+
+- **`itemOf`, `listOf`, `pagedList`, `renderAnswer`, `answerSchema` and `snakeKeys` from `@wirecat/cli-core/cli`**,
+  with the `Body`, `ItemBody`, `ListBody`, `ListInput` and `AnswerOutput` types: an app's own command answers in the
+  same envelope, `meta` and next steps as cli-core's, without a copy of them.
+
+### Fixed
+
+- **MCP prompts name only arguments the tools take.** `review` asked for `since`, which `review` refuses since
+  0.268; it now passes the window as `query` (`date>"…"`). Every prompt writes its calls as the tool's
+  `{ command, arguments }`, and a test checks each argument against the command's input.
+
 ## 0.269.0 — 14.10.2026
 
 ### Changed — may break callers
@@ -18,9 +45,6 @@ shape of this file.
 
 ### Added
 
-- **`itemOf`, `listOf`, `pagedList`, `renderAnswer`, `answerSchema` and `snakeKeys` from `@wirecat/cli-core/cli`**,
-  with the `Body`, `ItemBody`, `ListBody`, `ListInput` and `AnswerOutput` types: an app's own command answers in the
-  same envelope, `meta` and next steps as cli-core's, without a copy of them.
 - **An organization owns a phone or an address** (store version 11, table `organization_identities`):
   `mentions confirm <id> organization:<id>` records that a shop's number or `info@` belongs to it, apart from any
   person, so one number can be both someone's and their company's. Later mentions of it start as linked. The
@@ -52,9 +76,6 @@ shape of this file.
 
 ### Fixed
 
-- **MCP prompts name only arguments the tools take.** `review` asked for `since`, which `review` refuses since
-  0.268; it now passes the window as `query` (`date>"…"`). Every prompt writes its calls as the tool's
-  `{ command, arguments }`, and a test checks each argument against the command's input.
 - **`mentions list --help` no longer prints a phone-shaped example.** The query argument said `89001234567` finds
   `+79001234567`; the second matched the leak scanner's phone rule, so `commands --json` failed tg's and max's
   `discovery` contract. It now says it in words.
@@ -1038,7 +1059,6 @@ shape of this file.
   follow that length and skip both held keys and aliases. Existing project/task keys are retained;
   project tasks continue to receive the atomic `<project>-<number>` key, such as `RES-1`.
 
-
 ## 0.241.0 — 11.10.2026
 
 ### Fixed
@@ -1483,13 +1503,11 @@ shape of this file.
 - **An inbox project learns its account when the messenger saves the account**, not only on the inbox's next
   task.
 
-
 - Explicitly associated stable meeting participant identities now have their own person and account association;
 
   older orphan identities are repaired when ingested again. Existing owner links are preserved,
   and participant names or emails never merge people or resolve document links. Unmarked or explicitly
   unassociated guests retain their detached identity without creating a person.
-
 
 ## 0.221.0 — 11.10.2026
 
@@ -1497,7 +1515,6 @@ shape of this file.
 
 - **`store reset --no-backup`** deletes the store and starts an empty one without the `VACUUM INTO` copy beside
   it; the result has `backup: null` and `backedUp: null`. Without it, `store reset` backs up first as before.
-
 
 ## 0.220.0 — 10.10.2026
 
@@ -1672,7 +1689,6 @@ shape of this file.
 - Word document extraction applies the same expanded archive limits as the other office readers
   before loading document content.
 
-
 ## 0.213.0 — 09.10.2026
 
 ### Changed — may break callers
@@ -1823,7 +1839,6 @@ shape of this file.
 - `polls create --close-time <delay>` (MCP `close_time`): the poll closes by itself `90s` or `5m` after sending,
   within the messenger's `Messenger.pollCloseSeconds`; outside it, or where it is unset, refused before
   connecting. `NewPoll.closeAfter` carries the seconds.
-
 
 ## 0.203.0 — 08.10.2026
 
@@ -2183,7 +2198,6 @@ shape of this file.
   messenger's server», not that only the local store was searched. The search docs and the MCP description say
   the server is asked by default where it can search.
 
-
 ## 0.175.0 — 08.10.2026
 
 ### Added
@@ -2398,7 +2412,6 @@ Released early: tg-cli and max-cli adopt stemmed search today, at the owner's re
 - First-run settings resolution creates a starter `config.json` with common defaults. Existing files
   are preserved, concurrent runs publish complete files, and flags/environment values are never saved.
   Successful-run recording remains opt-in.
-
 
 - `topics edit <chat> <topic> [--title <t>] [--closed on|off] [--pinned on|off] [--hidden on|off]` and the MCP
   tool `topics_edit` rename, close, reopen, pin or unpin a forum topic, or hide its General topic;
@@ -2783,7 +2796,6 @@ Released early: max-cli chart adoption needs the capability that hides unsupport
 - `Services` has a new required member, `botcheck`. A `Services` object written by hand — a test fake — adds it;
   `servicesFor` already does. The audit's reasons and weights moved to `src/botcheck/reasons.ts`; `AuditReason` is
   still exported from the same place.
-
 
 ## 0.149.0 — 06.10.2026
 
@@ -3354,7 +3366,6 @@ Released early: MAX permission cutover needs legacy pin/unpin preservation and e
   unpin writes now check `messages.unpin`, so an explicit per-command override applies to the
   operation as well as its CLI read gate. MAX permission migration depends on this correction.
 
-
 ## 0.137.0 — 03.10.2026
 
 ### Fixed
@@ -3483,7 +3494,6 @@ Released early: max-cli needs the common upgrade workflow and metadata-preservin
 
 Released early: max-cli shared group reads need accurate truncation guidance and compatible event flags
 
-
 ## 0.127.0 — 03.10.2026
 
 Released early: max-cli and tg-cli search integration need the shared Lucene query profile
@@ -3520,7 +3530,6 @@ Released early: tg-cli forum setup needs the guarded enable and creation command
 
 - `topics enable --upgrade` explicitly upgrades a basic group and enables forum topics; staged errors retain the new chat id. `topics create` creates a named topic with an attempt id. Reusing a sent, unknown or reserved creation id is refused by the profile journal; an unknown creation must never be repeated. CLI and MCP use the same permissions, preflight and metadata-only journal; enabling defaults to confirmation. No implicit group upgrade occurs when sending or creating a topic.
 
-
 ## 0.125.0 — 03.10.2026
 
 Released early: tg-cli needs the shared bot identity command and MCP tool
@@ -3529,7 +3538,6 @@ Released early: tg-cli needs the shared bot identity command and MCP tool
 
 - An opt-in shared `bot me` reads the bot profile's identity and offers the matching MCP tool.
   It refuses offline reads and closes its connection on every exit path; existing consumer commands migrate explicitly.
-
 
 ## 0.124.0 — 03.10.2026
 
@@ -3548,7 +3556,6 @@ Released early: max-cli release needs the corrected embedding status estimate an
 
 - A truncated `runs list` now suggests increasing `--limit`, instead of the unsupported
   `--page` option. The JSON envelope still reports `hasMore`; listing records creates no new run.
-
 
 ## 0.122.0 — 03.10.2026
 

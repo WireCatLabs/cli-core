@@ -24,7 +24,7 @@ export const mediaCommand = (messenger: Messenger): Command =>
     .argument("<chat>", messenger.chatArgument)
     .option("--type <names>", `only these kinds, comma-separated: ${MEDIA_KINDS.join(", ")}`)
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
-    .option("--cursor <id>", "go on from where page.next says the last page stopped")
+    .option("--cursor <cursor>", "go on from where page.next says the last page stopped")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
       const { type, cursor } = this.opts<{ type?: string; cursor?: string }>()

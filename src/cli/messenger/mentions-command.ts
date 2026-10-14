@@ -69,6 +69,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     local: true,
     examples: [`${tool} mentions confirm 12 person:7`, `${tool} mentions confirm 15`],
   })
+    .summary("say what a mention is, everywhere its value is written")
     .description("say what a mention is, everywhere its value is written: a phone's owner, the stored document")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
     .argument("[person]", "person:<uid> or organization:<id> that owns the phone or the address; a document needs none")
@@ -81,6 +82,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(mentions.command("reject"), { mutates: true, local: true, examples: [`${tool} mentions reject 12`] })
+    .summary("dismiss a mention's value everywhere, and on later syncs")
     .description("not a real mention, or not worth keeping: dismiss its value everywhere, and on later syncs")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
     .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")

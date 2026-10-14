@@ -11,6 +11,7 @@ import {
   type QueryAst,
   type QueryRegistry,
   queryError,
+  queryFieldsOf,
   validateQuery,
 } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
@@ -40,6 +41,16 @@ export const withQuery = (command: Command, registry: QueryRegistry): Command =>
   if (shown.length > 0) command.addHelpText("after", `\n${fieldsHelp({ ...query, fields: shown }, LIST_QUERY_GUIDE)}`)
   return command
 }
+
+/**
+ * A list its source answers whole and cannot narrow: the entity's fields are named, none is filterable, so any
+ * term is `query.unsupported-field` rather than a filter applied to what came back.
+ */
+export const unfilteredQuery = (entity: string, schema: Parameters<typeof queryFieldsOf>[0]): QueryRegistry => ({
+  entity,
+  backend: "native",
+  fields: queryFieldsOf(schema, {}),
+})
 
 /** `tasks list`, as a query error names the command. */
 export const commandPath = (command: Command): string => {

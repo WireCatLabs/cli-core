@@ -1,6 +1,7 @@
 import { Command } from "commander"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
+import { imageModelsCommand } from "./models-command.js"
 
 const DEFAULT_LIMIT = 100
 
@@ -15,7 +16,7 @@ export const imagesCommand = (messenger: Messenger): Command => {
     .command("embed")
     .description(
       "compute a vector for each picture the store knows and has none for — downloading it through the messenger, " +
-        "keeping only the vector; needs `picture_search` on in the profile and `models image download clip-b32`; " +
+        "keeping only the vector; needs `picture_search` on in the profile and `images models download clip-b32`; " +
         "resumes where it stopped",
     )
     .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
@@ -42,5 +43,6 @@ export const imagesCommand = (messenger: Messenger): Command => {
       } else context.renderer.result(done)
     })
 
+  images.addCommand(imageModelsCommand(messenger))
   return images
 }

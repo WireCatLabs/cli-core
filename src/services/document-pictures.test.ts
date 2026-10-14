@@ -65,7 +65,7 @@ describe("savePicture", () => {
       savePicture(store, { ref }, Uint8Array.of(1), {
         env: { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) },
       }),
-    ).rejects.toMatchObject({ code: "not_found", message: expect.stringContaining("models image download clip-b32") })
+    ).rejects.toMatchObject({ code: "not_found", message: expect.stringContaining("images models download clip-b32") })
   })
 })
 
@@ -98,7 +98,7 @@ describe("searchNotes with pictures", () => {
       pictures: true,
       env: { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) },
     })
-    expect(found.pictures_skipped).toContain("models image download clip-b32")
+    expect(found.pictures_skipped).toContain("images models download clip-b32")
     expect(found.pictures).toBeUndefined()
   })
 

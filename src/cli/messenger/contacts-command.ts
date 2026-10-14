@@ -30,10 +30,12 @@ export const contactsCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         withPaging(
-          new Command("list").description(
-            "people you have a one-to-one chat with; name: matches the name, your local alias or the @username, " +
-              "notes: your private notes about them",
-          ),
+          new Command("list")
+            .summary("people you have a one-to-one chat with")
+            .description(
+              "people you have a one-to-one chat with; name: matches the name, your local alias or the @username, " +
+                "notes: your private notes about them",
+            ),
         ).option("--order <recent|name>", "newest conversation first, or alphabetical", "recent"),
         { output: { entity: "contact" } },
       ),

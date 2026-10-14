@@ -31,7 +31,7 @@ export const openPictureEmbedderFor = async ({
   if (!isImageModelInstalled(model, directory))
     throw new CliError(
       "not_found",
-      `the picture model is not downloaded — \`${command} models image download ${model.id}\` fetches it`,
+      `the picture model is not downloaded — \`${command} images models download ${model.id}\` fetches it`,
       { reason: "model.not-downloaded", model: model.id },
     )
   const { openPictureEmbedder } = await import("../images/picture/embedder.js")
