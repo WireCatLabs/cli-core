@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- `store.meetings.seriesHistory` reads prior occurrences by exact account and provider series ID,
+  with an absolute time window, bounded metadata rows and stored text bytes. It reports truncated
+  and undated history without loading transcripts or inferring links from similar meeting titles.
+  The optional `MeetingSeriesHistoryStore` capability and its types are exported from `./meetings`.
+
 ## 0.277.0 — 14.10.2026
 
 ### Added

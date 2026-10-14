@@ -23,15 +23,6 @@ import type {
   WindowedMessage,
 } from "../domain/models.js"
 import type { RetentionOptions } from "../domain/retention.js"
-import type {
-  MeetingContextStore,
-  MeetingParticipantSearchStore,
-  MeetingSearchIndexStore,
-  MeetingSearchStore,
-  MeetingStore,
-  MeetingTranscriptReceiptStore,
-  MeetingTranscriptStore,
-} from "../meetings/index.js"
 import type { PeopleLookup } from "../resolve.js"
 import { ACCOUNT_GROUPS, type AccountGroups, type Profiles } from "../search/account-list.js"
 import type { QueryExecution } from "../search/lucene/resolved.js"
@@ -76,9 +67,8 @@ import { findRegex } from "./sqlite/legacy-regex.js"
 import { logPruner } from "./sqlite/log-pruning.js"
 import type { QueryGroup, QueryGrouping } from "./sqlite/lucene.js"
 import * as lucene from "./sqlite/lucene.js"
-import type { MeetingContextReadCapabilities, MeetingReadCapabilities } from "./sqlite/meeting-reads.js"
 import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
-import { meetingStoreOver } from "./sqlite/meetings.js"
+import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
 import {
   confirmMention,
@@ -715,15 +705,7 @@ export interface MessageStore {
   readonly agentActions: AgentActionsStore
   /** Meetings and calendar events: the port `src/meetings/` defines. */
   readonly meetingVectors: MeetingVectors
-  readonly meetings: MeetingStore &
-    MeetingTranscriptStore &
-    MeetingReadCapabilities &
-    MeetingContextReadCapabilities &
-    MeetingParticipantSearchStore &
-    MeetingSearchStore &
-    MeetingTranscriptReceiptStore &
-    MeetingContextStore &
-    MeetingSearchIndexStore
+  readonly meetings: StoredMeetings
   /** Email threads, emails, recipients and mailboxes. */
   readonly mail: MailStore
   /** The same store with this account bound — what a service of one account reads and writes through. */

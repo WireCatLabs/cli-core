@@ -10,6 +10,7 @@ import type {
   MeetingSearchIndexStore,
   MeetingSearchStore,
   MeetingSeries,
+  MeetingSeriesHistoryStore,
   MeetingStore,
   MeetingTranscriptReceiptStore,
   MeetingTranscriptStore,
@@ -37,6 +38,7 @@ import {
   meetingReadSnapshot,
   meetingReadsOver,
 } from "./meeting-reads.js"
+import { meetingSeriesHistoryOver } from "./meeting-series-history.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
@@ -656,10 +658,8 @@ const participants = (database: CacheDatabase, query: string, accountId?: number
     .filter((p) => `${p.displayName ?? ""} ${p.email ?? ""}`.toLocaleLowerCase().includes(term))
 }
 
-/** The `MeetingStore` of `src/meetings/` over the shared store. */
-export const meetingStoreOver = (
-  context: StoreContext,
-): MeetingStore &
+export type StoredMeetings = MeetingStore &
+  MeetingSeriesHistoryStore &
   MeetingTranscriptStore &
   MeetingReadCapabilities &
   MeetingContextReadCapabilities &
@@ -667,10 +667,14 @@ export const meetingStoreOver = (
   MeetingSearchStore &
   MeetingTranscriptReceiptStore &
   MeetingContextStore &
-  MeetingSearchIndexStore => {
+  MeetingSearchIndexStore
+
+/** The `MeetingStore` of `src/meetings/` over the shared store. */
+export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
   const { database } = context
   return {
     ...meetingReadsOver(context),
+    ...meetingSeriesHistoryOver(context),
     ...meetingHitSearchOver(context),
     ...meetingParticipantSearchOver(context),
     ...meetingHitIndexOver(context),

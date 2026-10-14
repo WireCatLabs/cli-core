@@ -59,6 +59,29 @@ A capable store requires an account; older stores retain default legacy reads an
 paging options. Use the atomic cue-context port and shared passage formatter for cited context,
 rather than reconstructing transcript windows in each provider.
 
+## Exact stored series history
+
+`MeetingSeriesHistoryStore` is an optional read capability, separate from `MeetingStore`. The shared
+SQLite store implements it as `store.meetings.seriesHistory({ accountId, externalId, after, before,
+limit?, maxReadBytes?, signal? })`. The host selects the authorized numeric store account; `externalId`
+is the exact provider series key, not an occurrence ID, title, person name or account label.
+
+The half-open `[after, before)` window uses absolute epoch milliseconds. Defaults are 20 rows and
+256 KiB of stored text; hard limits are 100 rows and 4 MiB. The text budget includes the selected
+series and occurrence titles/IDs, including one lookahead row, before values are loaded in the same
+read snapshot. Returned metadata excludes descriptions, URLs, provider metadata and transcripts.
+The row limit bounds hydration, not the database's work finding and ordering eligible occurrences.
+
+Results contain a compact `series` or `null`, `items` ordered by start descending then internal ID
+descending, `hasMore`, and `hasUndated`. Soft-deleted series and occurrences are excluded. An empty
+window differs from a missing series. Undated occurrences are reported separately because they
+cannot be assigned to the window. A full page is only stored history; it establishes neither archive
+completeness nor attendee identity. Reads leave search queues untouched and perform no writes.
+
+This capability supports preparation services; it adds no preparation CLI/MCP command. Reuse
+bounded transcript evidence and explicit people/project links when composing a brief. Do not call
+legacy full-detail hydration for every occurrence or derive membership from matching titles.
+
 ## Remote management
 
 ```ts
