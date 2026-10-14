@@ -14,7 +14,7 @@ import {
   RESOURCES,
 } from "../sends/permissions.js"
 import { type AppIdentity, envName } from "./app.js"
-import { loadSnakeCaseConfig, settingAt } from "./config-keys.js"
+import { loadSnakeCaseConfig, settingAt, snakeCaseConfig } from "./config-keys.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
 import { DEFAULT_PROFILE, usableProfileName } from "./profile.js"
@@ -373,7 +373,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const env = options.env ?? process.env
     const configPath = configPathFor(options)
     try {
-      ensureDefaultConfig(configPath)
+      ensureDefaultConfig(configPath, snakeCaseConfig(extension.schema ?? schema, DEFAULT_CONFIG).config)
     } catch (error) {
       throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
     }

@@ -24,7 +24,8 @@ shape of this file.
   writes the file back in its own mode — once, and only when the result is valid. Profile names, `permissions` paths
   and model purposes are data and keep their spelling; a key an app still declares in camelCase stays until it renames
   it. One setting under both names with different values is refused. `snakeCaseConfig` and `loadSnakeCaseConfig` are
-  exported for an app that reads its own config file. The code's `Settings` fields keep their names.
+  exported for an app that reads its own config file. The code's `Settings` fields keep their names. A missing
+  file starts in the spelling the reading schema declares, so an app with its own camelCase schema still starts.
 - **`stats` reports refuse `--jsonl`** (`reason: "output.one-object"`), as charts and official statistics did:
   `stats messages show|unanswered|discussion|top|counters show|counters refresh`, `stats contacts responses|top`,
   `stats chats show|newcomers|retention|official`, `stats tasks show`, `stats charts`. The `* evidence` lists still

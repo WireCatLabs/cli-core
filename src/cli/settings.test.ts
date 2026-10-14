@@ -695,6 +695,46 @@ describe("a config file written before setting names were snake_case", () => {
     expect(readFileSync(path(), "utf8")).toBe(file)
   })
 
+  it("**starts a missing file in the spelling the app's own schema declares**", () => {
+    const camelDefaults = v.strictObject({
+      limit: v.optional(v.number()),
+      keepRunsForDays: v.optional(v.number()),
+      sendsPerHour: v.optional(v.number()),
+      updateCheck: v.optional(v.boolean()),
+      skillHint: v.optional(v.boolean()),
+    })
+    const own = settingsFor(
+      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
+      {
+        schema: v.strictObject({
+          defaults: v.optional(camelDefaults),
+          profiles: v.optional(v.record(v.string(), v.strictObject({})), {}),
+        }),
+      },
+    )
+    const fresh = mkdtempSync(join(tmpdir(), "app-fresh-"))
+    const read = own.resolveSettings({}, { env: {}, configDir: fresh, needsProfile: false })
+    expect(read.keepRunsForDays).toBe(30)
+    expect(JSON.parse(readFileSync(join(fresh, "config.json"), "utf8")).defaults).toEqual({
+      limit: 20,
+      keepRunsForDays: 30,
+      sendsPerHour: 30,
+      updateCheck: true,
+      skillHint: true,
+    })
+    const ours = mkdtempSync(join(tmpdir(), "app-fresh-"))
+    settingsFor({
+      command: "app",
+      appName: "app-cli",
+      envPrefix: "APP",
+      description: "",
+      version: "0.0.0",
+    }).resolveSettings({}, { env: {}, configDir: ours, needsProfile: false })
+    expect(JSON.parse(readFileSync(join(ours, "config.json"), "utf8")).defaults).toMatchObject({
+      keep_runs_for_days: 30,
+    })
+  })
+
   it("keeps a name an app still declares in camelCase", () => {
     const own = settingsFor(
       { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
