@@ -130,10 +130,6 @@
       "value": "<n>",
       "meaning": "how many messages before it"
     },
-    "--before-time": {
-      "value": "<time>",
-      "meaning": "read what came before this ISO 8601 time, or 2h / 1d ago; not with --before-id"
-    },
     "--block": {
       "value": "<value>",
       "meaning": "Set to `true` if user should be blocked in chat."

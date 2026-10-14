@@ -707,7 +707,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--batch` | `<id>` | the batch id `conversations batches next` printed |  | `conversations links add` |
 | `--before-id` | `<id>` | read what came before this message id; not with --before-time |  | `chats media` (planned), `messages evidence` |
 | `--before-n` | `<n>` | how many messages before it |  | `messages context` |
-| `--before-time` | `<time>` | read what came before this ISO 8601 time, or 2h / 1d ago; not with --before-id |  |  |
 | `--block` | `<value>` | Set to `true` if user should be blocked in chat. |  | `bot chats members remove` |
 | `--bot` |  | the bot section of the profile's settings, rather than the personal account's |  | `config set`, `config show`, `config unset` |
 | `--bots` | `<profiles>` | also read these bots' copies, comma separated — each allowed by readOtherBots |  | `bot contacts show`, `bot messages between`, `bot search messages` |
