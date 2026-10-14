@@ -1484,7 +1484,7 @@ describe("the shared read commands", () => {
     const flat = (list: CommandInfo[]): CommandInfo[] => list.flatMap((one) => [one, ...flat([...one.commands])])
     const find = (path: string[]) => flat(described.commands).find((one) => one.path.join(" ") === path.join(" "))
 
-    expect(described).toMatchObject({ cli: "chat", contract: 1 })
+    expect(described).toMatchObject({ cli: "chat", contract: 2 })
     expect(find(["messages", "send"])?.mutates).toBe(true)
     expect(find(["messages", "edit"])?.mutates).toBe(true)
     expect(find(["messages", "forward"])?.mutates).toBe(true)
