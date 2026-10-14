@@ -1,7 +1,9 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
 import { parseLucene, type QueryAst } from "@wirecat/cli-base/query"
+import type * as v from "valibot"
 import type { AdminReport } from "../domain/admin-statistics.js"
 import type { RankingInput, RankingTarget } from "../domain/rankings-options.js"
+import type { savedSearch } from "../entities/saved-search.js"
 import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
 import { QUERY_VERSION, SEARCH_QUERY } from "../search/lucene/types.js"
 import type { MessageStore, SearchCommand, SearchRecord, StoredSearch } from "../store/store.js"
@@ -39,12 +41,28 @@ export interface ResolvedSearch {
   pattern?: RegExp
 }
 
+export type SavedSearchItem = v.InferOutput<typeof savedSearch>
+
+/** A saved search or a run as every searches command answers it. */
+export const savedSearchItem = (one: StoredSearch): SavedSearchItem => ({
+  id: one.id,
+  name: one.name,
+  command: one.command,
+  params: one.params,
+  language: one.language,
+  version: one.version,
+  fields_version: one.fieldsVersion,
+  created_at: one.createdAt,
+  last_run_at: one.lastRunAt,
+  runs: one.runs,
+})
+
 export interface SearchesService {
   /** Saves without running (STANDARD rule 4): the query is checked against today's fields first. */
   create(name: string, params: SearchParams, options?: { replace?: boolean }): Promise<StoredSearch>
   show(reference: string): Promise<StoredSearch>
   list(): Promise<StoredSearch[]>
-  history(limit: number): Promise<{ items: StoredSearch[]; hasMore: boolean }>
+  history(limit: number, offset?: number): Promise<{ items: StoredSearch[]; has_more: boolean }>
   delete(reference: string): Promise<StoredSearch>
   clear(): Promise<{ cleared: number }>
   /**
@@ -186,10 +204,10 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
 
     list: () => inStore((store) => store.savedSearches()),
 
-    history: (limit) =>
+    history: (limit, offset = 0) =>
       inStore(async (store) => {
-        const rows = await store.searchHistory(limit)
-        return { items: rows.slice(0, limit), hasMore: rows.length > limit }
+        const rows = await store.searchHistory(limit, offset)
+        return { items: rows.slice(0, limit), has_more: rows.length > limit }
       }),
 
     delete: (reference) => inStore(async (store) => store.deleteSearch((await found(store, reference)).id)),

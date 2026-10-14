@@ -2073,7 +2073,7 @@ describe("the MCP server", () => {
     await store.close()
 
     expect(
-      (await call("chat_searches_create", { name: "invoices", text: "invoice", by: "sender" })).body,
+      (await call("chat_searches_create", { name: "invoices", text: "invoice", by: "sender" })).body.item,
     ).toMatchObject({
       name: "invoices",
       command: "stats",
@@ -2087,9 +2087,11 @@ describe("the MCP server", () => {
     const ast = await call("chat_search_messages", { saved: "invoices", ast: parseLucene("alpha") })
     expect([ast.isError, ast.body.error.code]).toEqual([true, "validation_error"])
     expect((await call("chat_searches_list")).body).toMatchObject({ items: [{ name: "invoices", runs: 2 }] })
-    expect((await call("chat_searches_history", { limit: 1 })).body).toMatchObject({ limit: 1, hasMore: true })
+    expect((await call("chat_searches_history", { limit: 1 })).body).toMatchObject({
+      page: { limit: 1, has_more: true },
+    })
     expect((await call("chat_searches_clear")).body).toEqual({ cleared: 2 })
-    expect((await call("chat_searches_delete", { name: "invoices" })).body).toMatchObject({ name: "invoices" })
+    expect((await call("chat_searches_delete", { name: "invoices" })).body.item).toMatchObject({ name: "invoices" })
 
     const readOnly = await connect(scripted(), { config: levels({ searches: "readonly" }) })
     const names = (await readOnly.client.listTools()).tools.map(({ name }) => name)

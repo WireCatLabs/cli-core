@@ -155,6 +155,18 @@ const samples: Record<EntityName, unknown> = {
     downloaded: false,
     default: true,
   },
+  saved_search: {
+    id: "3",
+    name: "invoices",
+    command: "search",
+    params: { text: "invoice chat:7", newest: true },
+    language: "lucene",
+    version: 1,
+    fields_version: 4,
+    created_at: at,
+    last_run_at: null,
+    runs: 0,
+  },
   job: {
     id: "a1b2c3",
     chat: "Work",

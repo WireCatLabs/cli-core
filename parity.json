@@ -3348,7 +3348,13 @@
     "searches history": {
       "in": "all",
       "options": {
+        "--all": {
+          "in": "all"
+        },
         "--limit": {
+          "in": "all"
+        },
+        "--page": {
           "in": "all"
         }
       }

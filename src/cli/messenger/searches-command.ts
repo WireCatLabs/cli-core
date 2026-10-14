@@ -1,10 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { isAdminSelection } from "../../services/admin-statistics.js"
 import { readRankingSelection } from "../../services/rankings-selection.js"
-import type { SearchParams } from "../../services/searches.js"
+import { type SearchParams, savedSearchItem } from "../../services/searches.js"
 import type { StoredSearch } from "../../store/store.js"
-import { listed, positiveCount } from "../paging.js"
+import { itemOf, listOf, renderAnswer } from "../envelope.js"
+import { pagedList, pageOf } from "../list-query.js"
+import { positiveCount, withPaging } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { languageOf, wholeCount } from "./messages-search-command.js"
 import { groupingOf } from "./messages-stats-command.js"
@@ -25,8 +28,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
     "saved searches and the history of search messages and stats messages show, kept in the local store; --saved runs one",
   )
 
-  searches
-    .command("create")
+  annotate(searches.command("create"), { output: { entity: "saved_search" } })
     .description("save a search under a name without running it; search messages --saved <name> runs it")
     .argument("<name>", "up to 64 letters a–z, digits and hyphens, not only digits")
     .argument("[query...]", "the query, as for search messages; none matches every stored message")
@@ -77,59 +79,65 @@ export const searchesCommand = (messenger: Messenger): Command => {
       const saved = await context.withServices((services) =>
         services.searches.create(name, params, { replace: replace === true }),
       )
-      if (context.format !== "pretty") context.renderer.result(saved)
-      else context.streams.data(`${line(saved)}\n`)
+      renderAnswer(this, context, itemOf(savedSearchItem(saved)), () => `${line(saved)}\n`)
     })
 
-  searches
-    .command("show")
+  annotate(searches.command("show"), { output: { entity: "saved_search" } })
     .description("one saved search or earlier run: its query, options and how often it ran")
     .argument("<name|id>", "a saved search's name, or the id of any row of searches history")
     .action(async function (this: Command, reference: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.searches.show(reference)))
+      const found = await context.withServices((services) => services.searches.show(reference))
+      renderAnswer(this, context, itemOf(savedSearchItem(found)), () => `${line(found)}\n`)
     })
 
-  searches
-    .command("list")
+  annotate(searches.command("list"), { output: { entity: "saved_search" } })
     .description("the saved searches, by name")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const found = await context.withServices((services) => services.searches.list())
-      if (context.format === "jsonl") context.renderer.stream(found)
-      else if (context.format !== "pretty") context.renderer.result(listed(found))
-      else if (found.length === 0)
+      const items = found.map(savedSearchItem)
+      renderAnswer(
+        this,
+        context,
+        listOf("searches list", { items, limit: Math.max(1, items.length), has_more: false }),
+        () => found.map((one) => `${line(one)}\n`).join(""),
+      )
+      if (found.length === 0 && context.format === "pretty")
         context.renderer.note("no saved searches — `searches create <name> <query>` saves one")
-      else context.streams.data(`${found.map(line).join("\n")}\n`)
     })
 
-  searches
-    .command("history")
+  annotate(withPaging(searches.command("history")), { output: { entity: "saved_search" } })
     .description("the searches and counts that ran, newest first — saved ones included; never their results")
-    .option("--limit <n>", "how many", positiveCount("--limit"))
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
-      const { limit } = context.settings
-      const found = await context.withServices((services) => services.searches.history(limit))
-      if (context.format === "jsonl") context.renderer.stream(found.items)
-      else if (context.format !== "pretty") context.renderer.result({ ...found, page: 1, limit })
-      else {
-        if (found.items.length > 0) context.streams.data(`${found.items.map(line).join("\n")}\n`)
-        else context.renderer.note("no searches ran yet")
-        if (found.hasMore) context.renderer.note(`more — \`searches history --limit ${limit * 2}\``)
-      }
+      const { limit, offset } = pageOf(context.settings)
+      const found = await context.withServices((services) => services.searches.history(limit, offset))
+      renderAnswer(
+        this,
+        context,
+        pagedList("searches history", context.settings, {
+          items: found.items.map(savedSearchItem),
+          has_more: found.has_more,
+        }),
+        () => found.items.map((one) => `${line(one)}\n`).join(""),
+      )
+      if (found.items.length === 0 && context.format === "pretty") context.renderer.note("no searches ran yet")
     })
 
-  searches
-    .command("delete")
+  annotate(searches.command("delete"), { output: { entity: "saved_search" } })
     .description("delete a saved search, or one run from the history")
     .argument("<name|id>", "a saved search's name, or the id of any row of searches history")
     .action(async function (this: Command, reference: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "searches.delete")
       const deleted = await context.withServices((services) => services.searches.delete(reference))
-      if (context.format !== "pretty") context.renderer.result(deleted)
-      else context.streams.data(`deleted ${deleted.name ?? `run ${deleted.id}`}\n`)
+      renderAnswer(
+        this,
+        context,
+        itemOf(savedSearchItem(deleted)),
+        () => `deleted ${deleted.name ?? `run ${deleted.id}`}\n`,
+      )
     })
 
   searches

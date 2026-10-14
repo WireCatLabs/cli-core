@@ -111,10 +111,12 @@ export const savedSearches = ({ database }: StoreContext): StoredSearch[] =>
   database.prepare(`SELECT ${COLUMNS} FROM searches WHERE name IS NOT NULL ORDER BY name`).all().map(searchOf)
 
 /** Runs, newest first: unnamed ones and saved searches that have run. One more than `limit` says there are more. */
-export const searchHistory = ({ database }: StoreContext, limit: number): StoredSearch[] =>
+export const searchHistory = ({ database }: StoreContext, limit: number, offset = 0): StoredSearch[] =>
   database
-    .prepare(`SELECT ${COLUMNS} FROM searches WHERE last_run_at IS NOT NULL ORDER BY last_run_at DESC, id DESC LIMIT ?`)
-    .all(limit + 1)
+    .prepare(
+      `SELECT ${COLUMNS} FROM searches WHERE last_run_at IS NOT NULL ORDER BY last_run_at DESC, id DESC LIMIT ? OFFSET ?`,
+    )
+    .all(limit + 1, offset)
     .map(searchOf)
 
 export const deleteSearch = (context: StoreContext, reference: string): StoredSearch => {

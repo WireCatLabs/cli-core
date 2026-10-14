@@ -2,10 +2,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
-import { itemEnvelopeSchema } from "@wirecat/cli-base/standards"
+import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { ENTITIES } from "../../entities/index.js"
+import { savedSearch } from "../../entities/saved-search.js"
 import { openStore } from "../../store/store.js"
 import { seedSearchRecipes } from "../../testing/search-recipes.js"
 import { run } from "../program.js"
@@ -78,7 +79,10 @@ const ids = (answer: { items: { id?: string; ref?: string }[] }) => answer.items
 describe("searches", () => {
   it("**saves a search, runs it with --saved and more words, and keeps every run in the history**", async () => {
     const call = await setup()
-    const saved = json(await call("searches", "create", "invoices", "invoice", "--limit", "2", "--newest", "--json"))
+    const saved = v.parse(
+      itemEnvelopeSchema(savedSearch),
+      json(await call("searches", "create", "invoices", "invoice", "--limit", "2", "--newest", "--json")),
+    ).item
     expect(saved).toMatchObject({ name: "invoices", command: "search", runs: 0, params: { text: "invoice", limit: 2 } })
     expect(json(await call("searches", "history", "--json")).items).toEqual([])
 
@@ -90,21 +94,23 @@ describe("searches", () => {
     const stats = json(await call("stats", "messages", "show", "--saved", "invoices", "--by", "sender", "--json"))
     expect(v.parse(itemEnvelopeSchema(ENTITIES.message_counts), stats).item.total).toBe(4)
 
-    const history = json(await call("searches", "history", "--json"))
-    const runs = history.items.map(
-      ({ command, params }: { command: string; params: { text: string } }) => `${command} ${params.text}`,
-    )
+    const history = v.parse(listEnvelopeSchema(savedSearch), json(await call("searches", "history", "--json")))
+    const runs = history.items.map(({ command, params }) => `${command} ${String(params.text)}`)
     expect(runs[0]).toBe("stats invoice")
     expect(runs.sort()).toEqual(["search (invoice) AND (alpha)", "search invoice", "search invoice", "stats invoice"])
-    expect(history.items.find(({ name }: { name: string | null }) => name === "invoices").runs).toBe(3)
-    expect(json(await call("searches", "list", "--json"))).toMatchObject({
-      items: [{ name: "invoices" }],
-      hasMore: false,
+    expect(history.items.find(({ name }) => name === "invoices")?.runs).toBe(3)
+    expect(json(await call("searches", "history", "--limit", "1", "--page", "2", "--json")).page).toMatchObject({
+      limit: 1,
+      has_more: true,
     })
-    expect(json(await call("searches", "show", "invoices", "--json")).runs).toBe(3)
+    expect(json(await call("searches", "list", "--json"))).toMatchObject({
+      items: [{ name: "invoices", fields_version: expect.any(Number) }],
+      page: { has_more: false },
+    })
+    expect(json(await call("searches", "show", "invoices", "--json")).item.runs).toBe(3)
 
     expect(json(await call("searches", "clear", "--json"))).toEqual({ cleared: 3 })
-    expect(json(await call("searches", "delete", "invoices", "--json")).name).toBe("invoices")
+    expect(json(await call("searches", "delete", "invoices", "--json")).item.name).toBe("invoices")
     expect(json(await call("searches", "list", "--json")).items).toEqual([])
   })
 

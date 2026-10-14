@@ -1,16 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { itemOf, listOf } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { listed } from "../../cli/paging.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { isAdminSelection } from "../../services/admin-statistics.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { readRankingSelection } from "../../services/rankings-selection.js"
+import { savedSearchItem } from "../../services/searches.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
-import { type AnyTool, chatOf, limit, READ, tool } from "../tool.js"
+import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.js"
 
 const LOCAL = { readOnlyHint: false, openWorldHint: false }
-const ROW = "{ id, name, command, params, language, version, fieldsVersion, createdAt, lastRunAt, runs }"
 const reference = v.pipe(
   v.string(),
   v.minLength(1),
@@ -23,23 +23,33 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
   return {
     searches_list: tool({
       title: "List saved searches",
-      description: `The saved searches, by name; search_messages and stats_messages_show run one with \`saved\`. Returns { items: [${ROW}], page, limit, hasMore }.`,
+      description: "The saved searches, by name; search_messages and stats_messages_show run one with `saved`.",
       input: v.object({}),
       annotations: { ...READ, openWorldHint: false },
-      stored: async (store, account, _args, defaults) =>
-        listed(await services(store, account, defaults.guard).searches.list()),
+      output: { entity: "saved_search", list: true },
+      stored: async (store, account, _args, defaults) => {
+        const items = (await services(store, account, defaults.guard).searches.list()).map(savedSearchItem)
+        return listOf("searches list", { items, limit: Math.max(1, items.length), has_more: false })
+      },
     }),
 
     searches_history: tool({
       title: "Search history",
       description:
         "The searches and counts that ran, newest first, saved ones included: the query and options as given, " +
-        `never the results. \`saved\` with an id runs one again. Returns { items: [${ROW}], page, limit, hasMore }.`,
-      input: v.object({ limit }),
+        "never the results. `saved` with an id runs one again.",
+      input: v.object({ limit, page }),
       annotations: { ...READ, openWorldHint: false },
+      output: { entity: "saved_search", list: true },
       stored: async (store, account, args, defaults) => {
-        const size = args.limit ?? defaults.limit
-        return { ...(await services(store, account, defaults.guard).searches.history(size)), page: 1, limit: size }
+        const { size, number, window } = paging(args, defaults)
+        const found = await services(store, account, defaults.guard).searches.history(window.limit, window.offset)
+        return listOf("searches history", {
+          items: found.items.map(savedSearchItem),
+          limit: size,
+          has_more: found.has_more,
+          page: number,
+        })
       },
     }),
 
@@ -48,7 +58,7 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
       description:
         "Saves a search under a name without running it; the query is checked against today's fields. Takes " +
         "search_messages's arguments, plus `by` for stats_messages_show. A taken name is refused unless `replace`. " +
-        `Writes only to the local store. Returns ${ROW}.`,
+        "Writes only to the local store.",
       input: v.object({
         name: v.pipe(v.string(), v.minLength(1), v.description("up to 64 letters a–z, digits and hyphens")),
         text: v.optional(v.pipe(v.string(), v.minLength(1), v.description("the query: Lucene text or legacy syntax"))),
@@ -65,6 +75,7 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
         replace: v.optional(v.pipe(v.boolean(), v.description("overwrite a saved search of the same name"))),
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: false },
+      output: { entity: "saved_search", list: false },
       stored: async (store, account, { name, replace, ...params }, defaults) => {
         if (params.selection !== undefined) {
           if (Object.entries(params).some(([key, value]) => key !== "selection" && value !== undefined))
@@ -73,9 +84,15 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
               "with selection, save the resolved ranking query without additional options",
             )
           if (isAdminSelection(params.selection))
-            return services(store, account, defaults.guard).searches.create(name, params, { replace: replace === true })
+            return itemOf(
+              savedSearchItem(
+                await services(store, account, defaults.guard).searches.create(name, params, {
+                  replace: replace === true,
+                }),
+              ),
+            )
           const selection = await readRankingSelection(store, params.selection)
-          return services(store, account, defaults.guard).searches.create(
+          const saved = await services(store, account, defaults.guard).searches.create(
             name,
             {
               selection,
@@ -86,18 +103,24 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
             },
             { replace: replace === true },
           )
+          return itemOf(savedSearchItem(saved))
         }
-        return services(store, account, defaults.guard).searches.create(name, params, { replace: replace === true })
+        return itemOf(
+          savedSearchItem(
+            await services(store, account, defaults.guard).searches.create(name, params, { replace: replace === true }),
+          ),
+        )
       },
     }),
 
     searches_delete: tool({
       title: "Delete a saved search",
-      description: `Deletes a saved search, or one run from the history. Writes only to the local store. Returns ${ROW}.`,
+      description: "Deletes a saved search, or one run from the history. Writes only to the local store.",
       input: v.object({ name: reference }),
       annotations: { ...LOCAL, destructiveHint: true, idempotentHint: false },
+      output: { entity: "saved_search", list: false },
       stored: async (store, account, args, defaults) => {
-        return services(store, account, defaults.guard).searches.delete(args.name)
+        return itemOf(savedSearchItem(await services(store, account, defaults.guard).searches.delete(args.name)))
       },
     }),
 
