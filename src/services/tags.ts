@@ -7,7 +7,7 @@ import { formatReference } from "../domain/references.js"
 import { normalizeTag, type TagType } from "../domain/tags.js"
 import { tagging } from "../entities/tagging.js"
 import { pickPerson } from "../resolve.js"
-import type { AccountKey, MessageStore, StoredTag, TagTarget } from "../store/store.js"
+import type { AccountKey, MessageStore, StoredTag, TagTarget, TaskTagTarget } from "../store/store.js"
 import { type ColumnMap, queryFilter } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
@@ -111,7 +111,7 @@ const targetOf = async (
   store: MessageStore,
   account: AccountKey,
   { chat, contact, message, task }: TagTargetInput,
-): Promise<TagTarget> => {
+): Promise<TagTarget | TaskTagTarget> => {
   if (task !== undefined) {
     if (chat !== undefined || contact !== undefined || message !== undefined)
       throw new CliError("validation_error", ONE_TARGET)
@@ -134,7 +134,7 @@ const targetOf = async (
   return message === undefined ? { type: "chat", chatId } : { type: "message", chatId, messageId: message.trim() }
 }
 
-const viewOf = (account: AccountKey, target: TagTarget): TagTargetView =>
+const viewOf = (account: AccountKey, target: TagTarget | TaskTagTarget): TagTargetView =>
   target.type === "message"
     ? { ...target, locator: formatLocator({ ...account, chat: target.chatId, message: target.messageId }) }
     : target

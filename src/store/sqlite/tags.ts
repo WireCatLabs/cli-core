@@ -14,12 +14,15 @@ import { inboxKey, taskAccountOf } from "./task-keys.js"
 import { emailOf, emailThreadOf, type Thing, taskRowOf } from "./things.js"
 import { toIso } from "./values.js"
 
-/** What a tag labels: a chat, a message or a task of the account, or a person of its messenger. */
+/** What a messenger tag labels: a chat or a message of the account, or a person of its messenger. */
 export type TagTarget =
   | { type: "chat"; chatId: Id }
   | { type: "contact"; personId: Id }
   | { type: "message"; chatId: Id; messageId: Id }
-  | { type: "task"; taskId: string }
+
+/** A task of the account; apart from `TagTarget`, so code that narrows a messenger target keeps compiling. */
+export type TaskTagTarget = { type: "task"; taskId: string }
+export type AnyTagTarget = TagTarget | TaskTagTarget
 
 export interface StoredTag {
   tag: string
@@ -65,7 +68,7 @@ const TAG_TYPE: Record<string, TagType> = {
   task: "task",
 }
 
-export const targetThing = ({ database }: StoreContext, key: AccountKey, target: TagTarget): Thing => {
+export const targetThing = ({ database }: StoreContext, key: AccountKey, target: TagTarget | TaskTagTarget): Thing => {
   if (target.type === "task") {
     const row = taskRowOf(database, target.taskId)
     if (row === undefined || taskAccountOf(database, row) !== `${key.provider}:${key.account}`)

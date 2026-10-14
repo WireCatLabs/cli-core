@@ -6,7 +6,7 @@ import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { tagging } from "../../entities/index.js"
-import { openStore, type TagTarget } from "../../store/store.js"
+import { openStore, type TagTarget, type TaskTagTarget } from "../../store/store.js"
 import { seedSearchRecipes } from "../../testing/search-recipes.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -46,7 +46,7 @@ const setup = async (config?: object) => {
   const store = await openStore({ path: env.MESSAGING_STORE })
   await seedSearchRecipes(store, { provider: "chat", account: "500" })
   for (const one of await store.tags({ provider: "chat", account: "500" })) {
-    const target: TagTarget =
+    const target: TagTarget | TaskTagTarget =
       one.type === "chat"
         ? { type: one.type, chatId: one.chatId as string }
         : one.type === "contact"
