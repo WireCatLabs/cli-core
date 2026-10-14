@@ -1,5 +1,8 @@
 # Cleanup
 
+- 2026-10-14: `.worktrees/meeting-evidence-contract-fix`, branch `docs/meeting-project-evidence-path` — documentation-only command-path correction; retain until owner-approved cleanup.
+- 2026-10-14: `../zoom-cli/.worktrees/meeting-evidence-contract-fix`, branch `docs/meeting-project-evidence-path` — unused clean Zoom checkout created during command-boundary review; retain until owner-approved cleanup.
+
 - 2026-10-14: `.worktrees/meeting-participant-discovery` and `/tmp/meeting-test-people-*` — isolated bounded participant lookup implementation and invented SQLite fixtures; retain until the owner's cleanup batch.
 
 - `scripts/parity-convert.ts` — the one-off rewrite of `parity.json` into the N-CLI shape; delete once no open branch edits the old shape (feat/parity-n-clis). 2026-10-01
