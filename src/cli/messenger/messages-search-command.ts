@@ -263,19 +263,18 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
           `hits in ${elsewhere.join(", ")} open in that messenger's own CLI, by the locator: messages context msg:…`,
         )
       }
-      if (found.pictures?.length)
-        context.streams.data(
-          `\n\nPictures, by what they show (an English query matches best):\n${found.pictures
-            .map(({ locator, score }) => `  ${locator}  ${score.toFixed(2)}`)
-            .join("\n")}\n`,
-        )
       if (found.items.length === 0)
         context.renderer.note(
           found.server && !found.server.skipped
             ? "nothing found in the local store or on the messenger's server"
             : "nothing found — only what is in the local store is searched",
         )
-      return lines
+      const pictures = found.pictures?.length
+        ? `\n\nPictures, by what they show (an English query matches best):\n${found.pictures
+            .map(({ locator, score }) => `  ${locator}  ${score.toFixed(2)}`)
+            .join("\n")}\n`
+        : ""
+      return `${lines}${pictures}`
     }
     const again = {
       ...(given.length ? { query: given.join(" ") } : {}),

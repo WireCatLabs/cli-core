@@ -113,6 +113,20 @@ const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } =>
   return { next, missing }
 }
 
+/** The picture lane's hits, after the text hits and not among them. */
+const pictureItems = (found: SearchFound): MessageHitItem[] => {
+  const shown = new Set(found.items.map(({ locator }) => locator))
+  return (found.pictures ?? [])
+    .filter(({ locator }) => !shown.has(locator))
+    .map(({ locator, timestamp, senderName, score }) => ({
+      ref: locator,
+      timestamp,
+      sender_name: senderName,
+      matched_in: "picture",
+      score,
+    }))
+}
+
 export interface Paging {
   limit: number
   page?: number
@@ -129,7 +143,7 @@ export const messagesAnswer = (
 ): ListBody<MessageHitItem> => {
   const accounts = found.coverage?.accounts ?? found.accounts ?? []
   return listOf(command, {
-    items: found.items.map((hit) => messageHitItem(hit, query)),
+    items: [...found.items.map((hit) => messageHitItem(hit, query)), ...pictureItems(found)],
     limit,
     has_more: found.hasMore && (page ?? 1) * limit <= MAX_SEARCH_OFFSET,
     page: page ?? 1,

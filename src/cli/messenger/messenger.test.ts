@@ -2040,7 +2040,7 @@ describe("the shared read commands", () => {
     expect((await call(["search", "mail", "chapter", "--brief", "--full", "--json"], never, env)).code).toBe(2)
   })
 
-  it("**search mail** and **search all** page with --offset and say where the next page starts", async () => {
+  it("**search mail** and **search all** page with --page and say where the next page starts", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-offset-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)

@@ -15,6 +15,7 @@ import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
 import { messagesCommand } from "./messages-command.js"
 import type { MessengerAdapter } from "./port.js"
+import { messagesAnswer } from "./search-answers.js"
 import { searchCommand } from "./search-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "synthetic", version: "1.0.0" }
@@ -168,5 +169,43 @@ describe("search answers", () => {
     } finally {
       await store.close()
     }
+  })
+
+  it("puts the picture lane after the text hits", () => {
+    const text = {
+      locator: "msg:chat/500/7/1",
+      chatId: "7",
+      timestamp: "2026-09-27T10:01:00.000Z",
+      senderName: "Olga",
+      text: "the red cat",
+    }
+    const found = {
+      items: [text],
+      hasMore: false,
+      pictures: [
+        {
+          locator: "msg:chat/500/7/1",
+          chatId: "7",
+          messageId: "1",
+          timestamp: text.timestamp,
+          senderName: "Olga",
+          score: 0.3,
+        },
+        {
+          locator: "msg:chat/500/7/2",
+          chatId: "7",
+          messageId: "2",
+          timestamp: text.timestamp,
+          senderName: null,
+          score: 0.28,
+        },
+      ],
+      wordsReady: true,
+    } as never
+    const answer = messagesAnswer("search messages", found, { limit: 10 })
+    expect(answer.items.map(({ ref, matched_in }) => [ref, matched_in])).toEqual([
+      ["msg:chat/500/7/1", undefined],
+      ["msg:chat/500/7/2", "picture"],
+    ])
   })
 })

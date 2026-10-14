@@ -37,7 +37,8 @@ export const message = v.strictObject({
   anchor: v.optional(v.boolean()),
   /** A stretch of the text, transcript, file name or file text around what a search matched. */
   excerpt: v.optional(text),
-  matched_in: v.optional(v.picklist(["text", "transcript", "filename", "file", "context"])),
+  /** `picture`: the picture search lane found it by what the picture shows; it follows the text hits. */
+  matched_in: v.optional(v.picklist(["text", "transcript", "filename", "file", "context", "picture"])),
   score: v.optional(v.number()),
   /** Where a search found it: the local archive, the messenger's server, or both. */
   found_in: v.optional(v.picklist(["archive", "server", "both"])),

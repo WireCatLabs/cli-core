@@ -131,7 +131,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "search_messages; one mail thread is one chat. It reads every mail account; `source` narrows it: email:<address>, " +
       "or a list with group:<name>; an entry naming no mailbox is in meta.skipped. chat: narrows to one thread, by id or " +
       "subject. Returns { items, page, next?, missing?, meta }; meta.accounts lists the mailboxes read.",
-    input: mailSearchInput(messenger),
+    input: mailSearchInput(),
     annotations: { ...READ, openWorldHint: false },
     output: { entity: "message.hit", list: true },
     stored: (store, account, args, defaults) => {

@@ -107,7 +107,7 @@ const refusal: Record<ServerSkip, string> = {
   not_allowed: "the server search is not allowed by this profile",
   other_accounts: "the server searches only the account this runs as",
   no_words: "--backend server needs words to send to the server",
-  needs_chat: "this messenger's server searches one chat at a time — name it with chat: or --chat",
+  needs_chat: "this messenger's server searches one chat at a time — name it with chat:",
 }
 
 const BOUND = Symbol("bound")

@@ -37,6 +37,8 @@ export interface PictureHit {
   locator: string
   chatId: Id
   messageId: Id
+  timestamp: string
+  senderName: string | null
   score: number
 }
 
@@ -226,21 +228,30 @@ export const picturesService = (deps: ServiceDeps) => {
         limit,
         query: vector,
       })
-      return {
-        pictures: near
+      const hits = await Promise.all(
+        near
           .filter(({ score }) => score >= PICTURE_FLOOR)
-          .map(({ chatId: chatKey, messageId, score }) => ({
-            locator: formatLocator({
-              provider: account.provider,
-              account: account.account,
-              chat: chatKey,
-              message: messageId,
-            }),
-            chatId: chatKey,
-            messageId,
-            score: Number(score.toFixed(4)),
-          })),
-      }
+          .map(async ({ chatId: chatKey, messageId, score }) => {
+            const message = await store.message(account, messageId, { chatId: chatKey })
+            if (!message) return []
+            return [
+              {
+                locator: formatLocator({
+                  provider: account.provider,
+                  account: account.account,
+                  chat: chatKey,
+                  message: messageId,
+                }),
+                chatId: chatKey,
+                messageId,
+                timestamp: message.timestamp,
+                senderName: message.senderName,
+                score: Number(score.toFixed(4)),
+              },
+            ]
+          }),
+      )
+      return { pictures: hits.flat() }
     },
   }
 }
@@ -257,8 +268,9 @@ export const withPictures = (messages: MessagesService, pictures: PicturesServic
     const found = await messages.search(request)
     if (request.kind === "mail" || request.discover || request.pattern || request.text === undefined) return found
     if (request.offset) return found
+    const chat = request.chat ?? found.coverage?.chat
     const lane = await pictures
-      .lane(request.text, request.chat === undefined ? {} : { chat: request.chat })
+      .lane(request.text, chat === undefined ? {} : { chat })
       .catch(
         (error: unknown): PictureLane => ({ picturesSkipped: error instanceof Error ? error.message : String(error) }),
       )

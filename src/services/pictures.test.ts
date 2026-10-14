@@ -158,6 +158,20 @@ describe("the pictures lane", () => {
     await store.close()
   })
 
+  it("keeps to the one chat a chat: in the query chose", async () => {
+    const { store, service } = await setUp()
+    await store.saveChats(account, [
+      { id: "8", title: "Chat 8", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.saveMessages(account, "8", [{ ...photo("2", 5), chatId: "8" }], { via: "history" })
+    await service.embed({ limit: 10, pauseMs: 0 })
+    const found = { items: [], hasMore: false, coverage: { chat: "9" } }
+    const search = withPictures({ search: async () => found } as unknown as MessagesService, service)
+    const answer = await search.search({ kind: "messages", text: "receipt chat:9", limit: 10 } as never)
+    expect(answer.pictures?.map(({ locator }) => locator)).toEqual(["msg:test/1/9/2"])
+    await store.close()
+  })
+
   it("has no lane, and no note, for a profile with picture search off", async () => {
     const { store, service } = await setUp({ pictures: false })
     const search = withPictures(

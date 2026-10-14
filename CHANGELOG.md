@@ -19,6 +19,19 @@ shape of this file.
   `page.next` step with `--cursor`. Voice messages left unheard are a `missing` entry; `--mark-read` names its
   operation on stderr. MCP `messages_list` and `messages_context` no longer add `next_steps`; the server instructions
   carry the save hint.
+- **`search all|messages|mail|notes` answer the list envelope, CLI and MCP alike:** `{items, page, next?, missing?,
+  meta}` with the entities `hit`, `message.hit` and `note.hit` (snake_case keys: `matched_in`, `found_in`,
+  `found_by`, `discovery.missing_terms`). `--page <n>` (MCP `page`) replaces `--offset`, and the next page is a
+  `page.next` step that repeats the query. `coverage.next` becomes a `messages.sync` step with a `missing` entry for
+  `coverage`; a word index still being built, a `store.migrate` step; a stopped meeting scan, a `search.meetings`
+  step. MCP `detail` and `next_steps` are gone from these tools.
+- **Filter flags folded into the query:** `--chat` is `chat:` (also for mail threads), `--type text|voice|file` is
+  `NOT has:attachment`, `has:voice`, `has:file`, and `search notes --tag` is `--filter tag:<tag>`; the MCP `chat`,
+  `type` and `tag` arguments go the same way. Same hits, same order (tested side by side).
+- **Picture hits are items:** the picture lane's hits follow the text hits on the first page as `message.hit` items
+  with `matched_in: "picture"`, still ranked on their own; `chat:` in the query now narrows them as `--chat` did. A
+  missing picture model is a `missing` entry `pictures` with a `models.download-image` step, in place of
+  `picturesSkipped`.
 
 ### Added
 
