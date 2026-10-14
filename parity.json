@@ -712,7 +712,7 @@
     },
     "--only": {
       "value": "<resources>",
-      "meaning": "only these resources, separated by commas: messages, mail, notes; meetings when --source names a meeting account"
+      "meaning": "only these resources, separated by commas: messages, notes; meetings when --source names a meeting account"
     },
     "--only-admins-add": {
       "value": "<on|off>",
@@ -3343,24 +3343,6 @@
         "--timezone": {
           "in": "all"
         }
-      }
-    },
-    "search mail": {
-      "in": "all",
-      "options": {
-        "--context": "all",
-        "--exact": "all",
-        "--limit": "all",
-        "--newest": "all",
-        "--page": "all",
-        "--source": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-core bump",
-            "tg": "each CLI’s next cli-core bump"
-          }
-        },
-        "--timezone": "all"
       }
     },
     "search messages": {

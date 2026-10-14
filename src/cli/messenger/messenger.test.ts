@@ -1821,7 +1821,7 @@ describe("the shared read commands", () => {
     expect((await call(["search", "messages", "--regex", "ch.pt", "--json"], never, env)).code).toBe(2)
   })
 
-  it("**search mail reads the mailboxes only** and search messages never returns mail", async () => {
+  it("**search mail is memo's**: it answers with the pointer, and search messages never returns mail", async () => {
     const root = mkdtempSync(join(tmpdir(), "mail-search-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -1839,14 +1839,8 @@ describe("the shared read commands", () => {
       throw new Error("search must never connect")
     })
     const mail = await call(["search", "mail", "chapter", "--json"], never, env)
-    expect(mail.code).toBe(0)
-    expect(mail.stderr.join("\n")).not.toContain("messages sync")
-    expect(mail.stderr.join("\n").match(/mail search covers imported messages only/g)).toHaveLength(1)
-    expect(mail.stderr.join("\n")).toContain("memo sync --mail --since-time <time>")
-    const answer = JSON.parse(mail.stdout[0] ?? "")
-    expect(answer.items).toHaveLength(2)
-    expect(answer.items.every(({ ref }: { ref: string }) => ref.startsWith("msg:email/"))).toBe(true)
-    expect(answer).not.toHaveProperty("missing")
+    expect(mail.code).toBe(2)
+    expect(mail.stderr.join("\n")).toContain("mail is memo's: install @wirecat/cli-memo, then `memo search mail …`")
 
     const args = ["search", "messages", "chapter", "--json"]
     const all = await call([...args, "--source", "all"], never, env)
@@ -1857,11 +1851,11 @@ describe("the shared read commands", () => {
     expect(all.stderr.join("\n")).not.toContain("mail search")
     const asked = await call([...args, "--source", "email"], never, env)
     expect(asked.code).toBe(2)
-    expect(asked.stderr.join("\n")).toContain("chat search mail")
+    expect(asked.stderr.join("\n")).toContain("memo search mail")
     expect(never).not.toHaveBeenCalled()
   })
 
-  it("**search all** finds messages in a store of two accounts with no notes or mail, and **search mail** answers empty", async () => {
+  it("**search all** finds messages in a store of two accounts with no notes or mail", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-only-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -1882,14 +1876,9 @@ describe("the shared read commands", () => {
     const answer = JSON.parse(all.stdout[0] ?? "")
     expect(answer.meta.accounts).toContain("chat:500")
     expect(answer.items.filter(({ kind }: { kind: string }) => kind === "message")).toHaveLength(messages.items.length)
-
-    const mail = await call(["search", "mail", "chapter", "--json"], never, env)
-    expect(mail.code).toBe(0)
-    expect(JSON.parse(mail.stdout[0] ?? "").items).toEqual([])
-    expect(mail.stderr.join("\n")).toContain("no mail in the store yet")
   })
 
-  it("**search all** and **search mail** find mail saved in the mail tables, with context", async () => {
+  it("**search all** leaves the mail in the store out: mail is memo's", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-mail-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -1915,46 +1904,11 @@ describe("the shared read commands", () => {
     })
 
     const all = JSON.parse((await call(["search", "all", "chapter", "--json"], never, env)).stdout[0] ?? "")
-    const mail = all.items.find(({ kind }: { kind: string }) => kind === "mail")
-    expect(mail.ref).toBe("msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E")
-    expect(mail.title).toBe("Reading group")
-    expect(mail).toMatchObject({
-      excerpt: "Reading group Which chapter next?",
-      sender_name: "Alice Example",
-      sender_ref: expect.stringMatching(/^person:\d+$/),
-      found_by: ["words"],
-    })
-
-    const kinds = JSON.parse(
-      (await call(["search", "all", "chapter kind:group", "--json"], never, env)).stdout[0] ?? "",
-    )
-    expect(kinds.meta).toMatchObject({
-      complete: false,
-      issues: expect.arrayContaining([{ code: "validation_error", source: "mail" }]),
-    })
-
-    const withContext = await call(["search", "mail", "chapter", "--context", "1", "--json"], never, env)
-    expect(withContext.code).toBe(0)
-    const [hit] = JSON.parse(withContext.stdout[0] ?? "").items
-    expect(hit.ref).toBe("msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E")
-    expect(hit.context.map(({ ref }: { ref: string }) => ref)).toEqual([
-      "msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E",
-      "msg:email/owner%40example.test/thread-7/%3Cb%40example.test%3E",
-    ])
-
-    const one = await call(["search", "mail", "chapter", "--source", "email:Owner@example.test", "--json"], never, env)
-    const narrowed = JSON.parse(one.stdout[0] ?? "")
-    expect(narrowed.items.map(({ ref }: { ref: string }) => ref)).toEqual([
-      "msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E",
-    ])
-    expect(narrowed.meta.accounts).toEqual(["email:owner@example.test"])
-    const unheld = await call(
-      ["search", "mail", "chapter", "--source", "email:other@example.test", "--json"],
-      never,
-      env,
-    )
-    expect(unheld.code).not.toBe(0)
-    expect(unheld.stderr.join("\n")).toContain("owner@example.test")
+    expect(all.items.some(({ kind }: { kind: string }) => kind === "mail")).toBe(false)
+    expect(all.meta.accounts).not.toContain("email:owner@example.test")
+    const only = await call(["search", "all", "chapter", "--only", "mail", "--json"], never, env)
+    expect(only.code).toBe(2)
+    expect(only.stderr.join("\n")).toContain("memo search mail")
   })
 
   it("**messages show** and **messages context** open an email by its locator, whole, with its thread", async () => {
@@ -2002,88 +1956,12 @@ describe("the shared read commands", () => {
     expect(missing.stderr.join("\n")).toContain("no stored email")
   })
 
-  it("**search mail** answers each email with its people, labels and thread, at the detail asked", async () => {
-    const root = mkdtempSync(join(tmpdir(), "search-mail-detail-"))
-    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
-    await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
-    const store = await openStore({ path: env.MESSAGING_STORE })
-    const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
-    const kai = { address: "kai@example.test", name: "Kai Sample" }
-    const body = `${"Notes from the reading group. ".repeat(12)}We agreed the third chapter is next.`
-    await store.mail.saveThread({
-      accountId,
-      externalId: "thread-8",
-      now: Date.UTC(2026, 0, 9),
-      emails: [
-        {
-          externalId: "<c@example.test>",
-          subject: "Reading group",
-          from: { address: "alice@example.test", name: "Alice Example" },
-          to: [{ address: "bob@example.test", name: "Bob Sample" }, kai],
-          cc: [kai],
-          bcc: [{ address: "dana@example.test", name: null }],
-          sentAt: Date.UTC(2026, 0, 1),
-          bodyText: body,
-          read: false,
-          flagged: true,
-          mailboxes: [{ externalId: "starred", name: "Starred", kind: null }],
-        },
-      ],
-    })
-    await store.close()
-    const never = vi.fn(async (): Promise<MessengerAdapter> => {
-      throw new Error("search must never connect")
-    })
-    const search = async (...flags: string[]) =>
-      JSON.parse((await call(["search", "mail", "chapter", "--json", ...flags], never, env)).stdout[0] ?? "")
-
-    const answer = await search()
-    expect(answer).not.toHaveProperty("missing")
-    const [hit] = answer.items
-    expect(hit).not.toHaveProperty("text")
-    expect(hit).not.toHaveProperty("provider_metadata")
-    expect(hit.excerpt).toContain("third chapter")
-    expect(hit.excerpt.length).toBeLessThan(260)
-    expect(hit.email).toEqual({
-      subject: "Reading group",
-      from: { name: "Alice Example", address: "alice@example.test", ref: expect.stringMatching(/^person:\d+$/) },
-      to: [{ name: "Bob Sample", address: "bob@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
-      cc: [{ name: "Kai Sample", address: "kai@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
-      bcc: [{ name: null, address: "dana@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
-      reply_addresses: [],
-      labels: ["Starred"],
-      thread: "chat:email/owner%40example.test/thread-8",
-      read: false,
-      flagged: true,
-    })
-
-    const [picked] = (await search("--json=ref,email")).items
-    expect(Object.keys(picked).sort()).toEqual(["email", "ref"])
-    expect(picked.email.labels).toEqual(["Starred"])
-    expect((await call(["search", "mail", "chapter", "--brief", "--full", "--json"], never, env)).code).toBe(2)
-  })
-
-  it("**search mail** and **search all** page with --page and say where the next page starts", async () => {
+  it("**search all** pages with --page and says where the next page starts", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-offset-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
-    const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
-    for (const day of [1, 2, 3])
-      await store.mail.saveThread({
-        accountId,
-        externalId: `thread-${day}`,
-        now: Date.UTC(2026, 0, 9),
-        emails: [
-          {
-            externalId: `<${day}@example.test>`,
-            subject: `Lighthouse ${day}`,
-            from: { address: "alice@example.test", name: "Alice Example" },
-            sentAt: Date.UTC(2026, 0, day),
-            bodyText: "Lighthouse notes",
-          },
-        ],
-      })
+    for (const day of [1, 2, 3]) await store.notes.addNote({ text: "Lighthouse notes", title: `Lighthouse ${day}` })
     await store.close()
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -2091,26 +1969,20 @@ describe("the shared read commands", () => {
     const page = async (...args: string[]) =>
       JSON.parse((await call([...args, "--limit", "1", "--json"], never, env)).stdout[0] ?? "")
 
-    const seen: string[] = []
-    let next: number | undefined = 1
-    while (next !== undefined) {
-      const found = await page("search", "mail", "lighthouse", "--newest", "--page", String(next))
-      seen.push(...found.items.map(({ ref }: { ref: string }) => ref))
-      next = found.next?.find(({ step }: { step: string }) => step === "page.next")?.args.page
-    }
-    expect(seen).toHaveLength(3)
-    expect(new Set(seen).size).toBe(3)
-    const second = await page("search", "all", "lighthouse", "--only", "mail", "--page", "2")
-    expect(second).toMatchObject({
-      page: { has_more: true },
-      next: [{ step: "page.next", command: "search all", args: { query: "lighthouse", only: "mail", page: 3 } }],
+    const second = await page("search", "all", "lighthouse", "--only", "notes", "--page", "2", "--exact")
+    const pageStep = (answer: { next?: { step: string; args: object }[] }) =>
+      answer.next?.find(({ step }) => step === "page.next")
+    expect(second.page).toMatchObject({ has_more: true })
+    expect(pageStep(second)).toMatchObject({
+      command: "search all",
+      args: { query: "lighthouse", only: "notes", page: 3 },
     })
     expect(second.items).toHaveLength(1)
-    const last = await page("search", "all", "lighthouse", "--only", "mail", "--page", "3")
-    expect(last).not.toHaveProperty("next")
+    const last = await page("search", "all", "lighthouse", "--only", "notes", "--page", "3", "--exact")
+    expect(pageStep(last)).toBeUndefined()
   })
 
-  it("**search all** finds a message, a mail and a note with one query, each typed, and says what it skipped", async () => {
+  it("**search all** finds a message and a note with one query, each typed, never the mail, and says what it skipped", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-all-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -2135,14 +2007,10 @@ describe("the shared read commands", () => {
     const all = await call(["search", "all", "chapter", "--json"], never, env)
     expect(all.code).toBe(0)
     const answer = JSON.parse(all.stdout[0] ?? "")
-    expect(new Set(answer.items.map(({ kind }: { kind: string }) => kind))).toEqual(
-      new Set(["message", "mail", "note"]),
-    )
+    expect(new Set(answer.items.map(({ kind }: { kind: string }) => kind))).toEqual(new Set(["message", "note"]))
     expect(answer.items.find(({ kind }: { kind: string }) => kind === "note").ref).toMatch(/^note:/)
-    expect(answer.items.find(({ kind }: { kind: string }) => kind === "mail").ref).toMatch(/^msg:email\//)
-    expect(answer.meta.accounts).toEqual(
-      expect.arrayContaining(["chat:500", "email:owner@example.test", "notes:internal"]),
-    )
+    expect(answer.meta.accounts).toEqual(expect.arrayContaining(["chat:500", "notes:internal"]))
+    expect(answer.meta.accounts).not.toContain("email:owner@example.test")
     expect(answer.items.find(({ kind }: { kind: string }) => kind === "note").found_by).toEqual(["words"])
 
     const notesOnly = JSON.parse(

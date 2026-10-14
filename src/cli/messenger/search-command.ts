@@ -3,11 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { SAVE_HELP } from "../../meetings/index.js"
 import { searchNotesOf } from "../../services/notes-search.js"
-import {
-  RESOURCES_SEARCHED_WITH_MEETINGS,
-  type ResourceWithMeetings,
-  type SearchAllIncludingMeetingsFound,
-} from "../../services/search-all-meetings.js"
+import type { SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
 import type { Note } from "../../store/index.js"
 import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
@@ -15,19 +11,21 @@ import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { conversationsSearchCommand } from "./conversations-command.js"
 import { messagesSearchCommand } from "./messages-search-command.js"
-import { allAnswer, notesAnswer, offsetOf } from "./search-answers.js"
+import { allAnswer, notesAnswer, offsetOf, SOURCE_SEARCHED, type SourceSearched } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { topicsSearchCommand } from "./topics-command.js"
 
-const onlyOf = (value: string): ResourceWithMeetings[] => {
+const onlyOf = (value: string): SourceSearched[] => {
   const chosen = value.split(",").map((one) => one.trim())
-  const unknown = chosen.find((one) => !(RESOURCES_SEARCHED_WITH_MEETINGS as readonly string[]).includes(one))
+  if (chosen.includes("mail"))
+    throw new CliError("validation_error", "mail is memo's: install @wirecat/cli-memo, then `memo search mail …`")
+  const unknown = chosen.find((one) => !(SOURCE_SEARCHED as readonly string[]).includes(one))
   if (unknown !== undefined || chosen.length === 0)
     throw new CliError(
       "validation_error",
-      `--only takes ${RESOURCES_SEARCHED_WITH_MEETINGS.join(", ")}, separated by commas; meetings when --source names a meeting account`,
+      `--only takes ${SOURCE_SEARCHED.join(", ")}, separated by commas; meetings when --source names a meeting account`,
     )
-  return [...new Set(chosen)] as ResourceWithMeetings[]
+  return [...new Set(chosen)] as SourceSearched[]
 }
 
 const lineOf = (item: SearchAllIncludingMeetingsFound["items"][number]): string =>
@@ -52,12 +50,12 @@ const allCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("all"), { effects: REMOTE_READ, partial: true })
     .description(
       (messenger.serverSearch
-        ? "search messenger messages, mail and notes in the local store, and the messenger's server for messages " +
-          "(--backend; mail and notes are local only)"
-        : "search messenger messages, mail and notes in the local store") +
-        ", and a meeting account's transcripts when --source names one — best match first; not tasks, people, memories or " +
-        "projects. Use it when you do not know where something was written; search mail, messages or notes reads one " +
-        "kind with all its fields",
+        ? "search messenger messages and notes in the local store, and the messenger's server for messages " +
+          "(--backend; notes are local only)"
+        : "search messenger messages and notes in the local store") +
+        ", and a meeting account's transcripts when --source names one — best match first; not mail (memo search mail), " +
+        "tasks, people, memories or projects. Use it when you do not know where something was written; search messages " +
+        "or notes reads one kind with all its fields",
     )
     .argument("<query...>", 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges')
     .addHelpText("after", SAVE_HELP)
@@ -68,7 +66,7 @@ const allCommand = (messenger: Messenger): Command => {
     )
     .option(
       "--only <resources>",
-      "only these resources, separated by commas: messages, mail, notes; meetings when --source names a meeting account",
+      "only these resources, separated by commas: messages, notes; meetings when --source names a meeting account",
       onlyOf,
     )
     .option(
@@ -99,7 +97,7 @@ const allCommand = (messenger: Messenger): Command => {
       exact,
       timezone,
     } = this.opts<{
-      only?: ResourceWithMeetings[]
+      only?: SourceSearched[]
       source?: string
       maxMeetings?: number | "all"
       limit?: number
@@ -118,7 +116,7 @@ const allCommand = (messenger: Messenger): Command => {
         ...(timezone === undefined ? {} : { timezone }),
         ...backendRequest(this),
         env: context.env,
-        ...(only === undefined ? {} : { only }),
+        only: only ?? SOURCE_SEARCHED,
         ...(source === undefined ? {} : { source }),
         ...(maxMeetings === undefined ? {} : { maxMeetings }),
       }),
@@ -230,12 +228,11 @@ const notesCommand = (messenger: Messenger): Command =>
  */
 export const searchCommand = (messenger: Messenger, { topics = false }: { topics?: boolean } = {}): Command => {
   const search = new Command("search").description(
-    "find things by text: one resource when you know it (mail, messages, notes), or search all across messages, mail and notes",
+    "find things by text: one resource when you know it (messages, notes), or search all across messages and notes; mail is memo search mail",
   )
   search
     .addCommand(allCommand(messenger))
-    .addCommand(messagesSearchCommand(messenger, "messages"))
-    .addCommand(messagesSearchCommand(messenger, "mail"))
+    .addCommand(messagesSearchCommand(messenger))
     .addCommand(notesCommand(messenger))
     .addCommand(conversationsSearchCommand(messenger))
   if (topics) search.addCommand(topicsSearchCommand(messenger))

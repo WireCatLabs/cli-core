@@ -124,7 +124,7 @@ describe("--source as a list of accounts and groups", () => {
     const found = await prepared(store, "group:work", "messages")
     expect(found.scopeAccounts).toEqual([tg2])
     expect(found.skipped).toEqual([
-      { source: "email:me@work.example", code: "validation_error", reason: "a mailbox — search mail reads it" },
+      { source: "email:me@work.example", code: "validation_error", reason: "a mailbox — memo search mail reads it" },
       { source: `notes:${folder.id}`, code: "validation_error", reason: "notes — search notes reads them" },
       { source: "zoom:z1", code: "validation_error", reason: "meetings — search all reads them" },
     ])

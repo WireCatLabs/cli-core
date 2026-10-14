@@ -6,7 +6,6 @@ import { SAVE_HELP } from "../../meetings/index.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
 import type { SearchFound } from "../../services/messages.js"
-import { NO_MAIL, type SearchKind } from "../../services/search-kind.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
@@ -20,42 +19,28 @@ import { threadOptions, threadRequest } from "./thread-options.js"
 
 const PLACES = { transcript: "transcript", filename: "file name", file: "file text" } as const
 
-/** `search messages`, or with `mail` the same leaf over the mailboxes only — never both, so they do not overlap. */
-export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "messages"): Command => {
-  const mail = kind === "mail"
-  const base = new Command(kind)
-  const command = annotate(mail ? base : backendOptions(threadOptions(syncOptions(base)), messenger), {
+/** `search messages`: this messenger's messages; mail is memo's, read by the same services with kind mail. */
+export const messagesSearchCommand = (messenger: Messenger): Command => {
+  const command = annotate(backendOptions(threadOptions(syncOptions(new Command("messages"))), messenger), {
     effects: REMOTE_READ,
     partial: true,
     output: { entity: "message", view: "hit" },
   })
-  command
+  return command
     .description(
-      mail
-        ? "search the mail imported into the local store — memo sync --mail brings it in"
-        : messenger.serverSearch
-          ? "search messenger messages in the local store and on the messenger's server (--backend); optionally fetches new messages with --sync-first; --discover searches the archive only"
-          : "search messenger messages in the local store — what was read, fetched or kept by serve; optionally fetches new messages with --sync-first; --discover searches the archive only",
+      messenger.serverSearch
+        ? "search messenger messages in the local store and on the messenger's server (--backend); optionally fetches new messages with --sync-first; --discover searches the archive only"
+        : "search messenger messages in the local store — what was read, fetched or kept by serve; optionally fetches new messages with --sync-first; --discover searches the archive only",
     )
     .argument(
       "[query...]",
-      mail
-        ? 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges'
-        : 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges; with --saved, more words AND-ed to it',
+      'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges; with --saved, more words AND-ed to it',
     )
-  if (mail)
-    command.option(
-      "--source <accounts>",
-      "only these mail accounts, separated by commas: email:<address> as a hit shows it, email, mail or " +
-        "group:<name>; every mail account when unset",
-    )
-  else
-    command.option(
+    .option(
       "--source <accounts>",
       "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; " +
-        "or a list: group:work,telegram:Alice,email:me@example.com",
+        "or a list: group:work,telegram:Alice",
     )
-  command
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
     .option("--newest", "newest first instead of best first")
@@ -64,29 +49,19 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
       "bare words and quotes match their exact form only, as exact:word does; text: still matches every form",
     )
     .option("--context <n>", "messages before and after each hit; 2 in the terminal, 0 otherwise", wholeCount)
-  if (!mail) {
-    command.option(
+    .option(
       "--discover",
       "find partial lexical matches and eligible replies in the local archive; results are evidence, not confirmed answers",
     )
-  }
-  command.option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
-  command.addHelpText("after", SAVE_HELP)
-  if (mail)
-    return command
-      .addHelpText(
-        "after",
-        `chat: narrows it to one mail thread, by id or subject; content: to the text of attachments, filename: to their
-names — \`${messenger.app.command} search mail 'content:invoice'\`. --json: the list is items; each email's reference is ref.`,
-      )
-      .action(searchAction(messenger, kind))
-  return command
+    .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
+    .addHelpText("after", SAVE_HELP)
     .addHelpText(
       "after",
       `Search reads the local archive: a chat never fetched is not searched. Prepare it once with
 \`${messenger.app.command} messages sync --all --background\` (the last 90 days of every chat); the answer's
-coverage says what was searched and coverage.next what would improve it. Mail is \`${messenger.app.command} search mail\`;
-everything at once is \`${messenger.app.command} search all\`.
+coverage says what was searched and coverage.next what would improve it. Notes are
+\`${messenger.app.command} search notes\`, messages and notes at once \`${messenger.app.command} search all\`; mail is memo's:
+\`memo search mail\`.
 A bare word looks in message text, voice transcripts, file names and file text. text:, transcript:,
 content: (the text of files) and filename: (their names) narrow it to one —
 \`${messenger.app.command} search messages 'content:invoice'\`. chat: narrows it to one chat; has:voice, has:file and
@@ -94,10 +69,10 @@ NOT has:attachment to voice messages, files or text alone. --json: the list is i
 Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md`,
     )
     .option("--saved <name|id>", "run a saved search or an earlier run; options typed here replace its own")
-    .action(searchAction(messenger, kind))
+    .action(searchAction(messenger))
 }
 
-const searchAction = (messenger: Messenger, kind: SearchKind) =>
+const searchAction = (messenger: Messenger) =>
   async function (this: Command, given: string[]) {
     const context = messengerContext(this, messenger)
     const words = given
@@ -138,51 +113,44 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       ...(typedLimit === undefined ? {} : { limit: typedLimit }),
     }
     let limit = context.settings.limit
-    const found: SearchFound = await context
-      .withServices(async (services) => {
-        if (saved === undefined) {
-          return services.messages.search({
-            kind,
-            ...syncRequest(this, context),
-            ...backendRequest(this),
-            ...threadRequest(this),
-            ...typed,
-            text: words.join(" "),
-            limit,
-            ...withOffset(page, limit),
-            signal,
-            newest: newest === true,
-            context: around ?? (context.format === "pretty" ? 2 : 0),
-          })
-        }
-        const { id, params } = await services.searches.resolve(saved, { ...typed, text: words.join(" ") })
-        limit = params.limit ?? limit
+    const found: SearchFound = await context.withServices(async (services) => {
+      if (saved === undefined) {
         return services.messages.search({
-          kind,
+          kind: "messages",
           ...syncRequest(this, context),
           ...backendRequest(this),
           ...threadRequest(this),
-          ...(params.text === undefined ? {} : { text: params.text }),
-          ...(params.ast === undefined ? {} : { ast: params.ast }),
-          ...(params.chat === undefined ? {} : { chat: params.chat }),
-          ...(params.source === undefined ? {} : { source: params.source }),
-          ...(params.timezone === undefined ? {} : { timezone: params.timezone }),
+          ...typed,
+          text: words.join(" "),
           limit,
           ...withOffset(page, limit),
           signal,
-          newest: params.newest === true,
-          ...(params.discover === undefined ? {} : { discover: params.discover }),
-          ...(params.exact ? { exact: true } : {}),
-          context: params.context ?? (context.format === "pretty" ? 2 : 0),
-          saved: id,
+          newest: newest === true,
+          context: around ?? (context.format === "pretty" ? 2 : 0),
         })
+      }
+      const { id, params } = await services.searches.resolve(saved, { ...typed, text: words.join(" ") })
+      limit = params.limit ?? limit
+      return services.messages.search({
+        kind: "messages",
+        ...syncRequest(this, context),
+        ...backendRequest(this),
+        ...threadRequest(this),
+        ...(params.text === undefined ? {} : { text: params.text }),
+        ...(params.ast === undefined ? {} : { ast: params.ast }),
+        ...(params.chat === undefined ? {} : { chat: params.chat }),
+        ...(params.source === undefined ? {} : { source: params.source }),
+        ...(params.timezone === undefined ? {} : { timezone: params.timezone }),
+        limit,
+        ...withOffset(page, limit),
+        signal,
+        newest: params.newest === true,
+        ...(params.discover === undefined ? {} : { discover: params.discover }),
+        ...(params.exact ? { exact: true } : {}),
+        context: params.context ?? (context.format === "pretty" ? 2 : 0),
+        saved: id,
       })
-      .catch((error: unknown) => {
-        // Nothing to search is an empty answer, as `search all` treats it, not a failure.
-        if (!(error instanceof CliError && error.details.reason === NO_MAIL)) throw error
-        context.renderer.note(error.message)
-        return { items: [], hasMore: false, corrections: [], completeness: [], wordsReady: true }
-      })
+    })
     for (const hit of found.items) {
       if (hit.thread?.fallback) context.renderer.note(`thread context uses time neighbours: ${hit.thread.fallback}`)
       if (hit.thread?.stale) context.renderer.note("thread graph may be stale; stale links were not followed")
@@ -212,17 +180,12 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       )
     }
     const incomplete = found.completeness.filter((chat) => chat.state !== "complete")
-    const chats = incomplete.filter((chat) => chat.provider !== "email").length
+    const chats = incomplete.length
     const summary = found.coverage ? archiveSummary(found.coverage, found.items.length) : undefined
     if (summary) context.renderer.note(summary)
     else if (!found.coverage && chats > 0) {
       context.renderer.note(
         `${chats} of the chats searched are not held in full — \`${command} messages sync <chat>\` syncs one`,
-      )
-    }
-    if (kind === "mail" || incomplete.some((chat) => chat.provider === "email")) {
-      context.renderer.note(
-        "mail search covers imported messages only; older or unimported mail may be missing — `memo sync --mail --since-time <time>` imports more",
       )
     }
     const view = () => {
@@ -278,7 +241,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     renderAnswer(
       this,
       context,
-      messagesAnswer(`search ${kind}`, found, { limit, page: page ?? 1, again }, given.join(" ")),
+      messagesAnswer("search messages", found, { limit, page: page ?? 1, again }, given.join(" ")),
       view,
     )
   }

@@ -832,7 +832,6 @@ describe("the MCP server", () => {
       "runs search",
       "search all",
       "search conversations",
-      "search mail",
       "search messages",
       "search notes",
       "search topics",
@@ -1118,7 +1117,7 @@ describe("the MCP server", () => {
     expect(telegram.opened()).toBe(1)
   })
 
-  it("search_all answers messages and notes together, typed; search_mail says when no mail is held", async () => {
+  it("search_all answers messages and notes together, typed, never mail; search_mail points to memo", async () => {
     const telegram = scripted()
     const { call } = await connect(telegram)
     await call("messages list", { chat: "7" })
@@ -1129,66 +1128,14 @@ describe("the MCP server", () => {
     expect(all.body.meta.accounts).toEqual(["chat:500", "notes:internal"])
     expect(all.body.meta).toMatchObject({
       complete: false,
-      issues: [
-        { code: "not_found", source: "mail" },
-        { code: "validation_error", source: "meetings" },
-      ],
+      issues: [{ code: "validation_error", source: "meetings" }],
     })
     const notes = await call("search notes", { text: "chapter" })
     expect(notes.body).toMatchObject({ items: [], page: { has_more: false } })
     const mail = await call("search mail", { text: "chapter" })
     expect(mail.isError).toBe(true)
-    expect(JSON.stringify(mail.body)).toContain("memo sync --mail")
+    expect(JSON.stringify(mail.body)).toContain("mail is memo's: install @wirecat/cli-memo, then `memo search mail …`")
     expect(telegram.opened()).toBe(1)
-  })
-
-  it("search_mail reads every mail account, and source narrows it to one", async () => {
-    const { call, env } = await connect(scripted())
-    await call("chats list")
-    const store = await openStore({ path: env.MESSAGING_STORE })
-    for (const address of ["alice@example.test", "bob@example.test"]) {
-      const accountId = await store.saveAccount({ provider: "email", account: address }, { name: null })
-      await store.mail.saveThread({
-        accountId,
-        externalId: "thread-1",
-        now: Date.UTC(2026, 0, 2),
-        emails: [
-          {
-            externalId: `<${address}>`,
-            subject: "Reading group",
-            from: { address, name: null },
-            sentAt: Date.UTC(2026, 0, 1),
-            bodyText: "Which chapter next?",
-          },
-        ],
-      })
-    }
-    await store.close()
-
-    const every = await call("search mail", { text: "chapter" })
-    const bob = "msg:email/bob%40example.test/thread-1/%3Cbob%40example.test%3E"
-    expect(every.body.items.map(({ ref }: { ref: string }) => ref).sort()).toEqual([
-      "msg:email/alice%40example.test/thread-1/%3Calice%40example.test%3E",
-      bob,
-    ])
-    const one = await call("search mail", { text: "chapter", source: "email:bob@example.test" })
-    expect(one.body.items.map(({ ref }: { ref: string }) => ref)).toEqual([bob])
-    expect(one.body.meta.accounts).toEqual(["email:bob@example.test"])
-    expect(one.body).not.toHaveProperty("missing")
-    expect(one.body.items[0]).toMatchObject({
-      excerpt: "Reading group Which chapter next?",
-      email: { from: { address: "bob@example.test" }, thread: "chat:email/bob%40example.test/thread-1" },
-    })
-    expect(one.body.items[0]).not.toHaveProperty("text")
-    const first = await call("search mail", { text: "chapter", limit: 1 })
-    expect(first.body.next[0]).toMatchObject({ step: "page.next", args: { query: "chapter", page: 2, limit: 1 } })
-    const rest = await call("search mail", { text: "chapter", limit: 1, page: first.body.next[0].args.page })
-    expect(rest.body.items[0].ref).not.toBe(first.body.items[0].ref)
-    expect(rest.body).not.toHaveProperty("next")
-    const opened = await call("messages context", { chat: one.body.items[0].ref })
-    expect(opened.body.items).toEqual([
-      expect.objectContaining({ id: "<bob@example.test>", anchor: true, text: "Reading group\n\nWhich chapter next?" }),
-    ])
   })
 
   it("search_all reads meetings only from a meeting account source names; never without asking", async () => {

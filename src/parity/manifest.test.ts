@@ -56,6 +56,15 @@ describe("manifestProblems", () => {
     expect(problems).toEqual(['topics list: under "topics", which is tg-only and covers it'])
   })
 
+  it("refuses a row for a command that moved to memo, so its pointer is never shadowed", () => {
+    const problems = manifestProblems({
+      ...manifest({ search: { in: "all" }, "search mail": { in: "all" } }),
+      options: {},
+    })
+
+    expect(problems).toEqual(["search mail: moved to memo (src/cli/moved.ts), so a source tool has no row for it"])
+  })
+
   it("allows explicit options under a provider-only resource", () => {
     const declared = {
       ...manifest({

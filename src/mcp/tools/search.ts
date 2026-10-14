@@ -89,30 +89,6 @@ export const messagesSearchInput = (messenger: Messenger) =>
     ),
   })
 
-/** `search_mail`: the mailboxes in the local store; no server, no fetching, no saved searches. */
-export const mailSearchInput = () =>
-  v.object({
-    page,
-    text: v.optional(v.pipe(v.string(), v.description("the query, in the strict Lucene language"))),
-    ast: v.optional(v.unknown()),
-    timezone: v.optional(v.string()),
-    source: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "only these mail accounts, comma-separated: email:<address>, or group:<name>; every one when unset",
-        ),
-      ),
-    ),
-    newest: v.optional(v.pipe(v.boolean(), v.description("newest first instead of best first"))),
-    exact: v.optional(v.pipe(v.boolean(), v.description(EXACT))),
-    context: v.optional(
-      v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(20), v.description("messages around each hit")),
-    ),
-    limit,
-  })
-
 export const syncArgs = (args: {
   sync_first?: boolean
   max_chats?: number

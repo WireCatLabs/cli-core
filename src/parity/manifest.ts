@@ -1,4 +1,5 @@
 import type { CommandInfo, OptionInfo } from "@wirecat/cli-base/commands"
+import { MOVED_TO_MEMO } from "../cli/moved.js"
 
 /** A name from the manifest's `clis`: `max`, `tg`, and whichever CLI joins next. */
 export type Cli = string
@@ -134,6 +135,10 @@ export const manifestProblems = (manifest: Manifest): string[] => {
     }
     optionEntries(path, row.options ?? {})
   }
+
+  for (const path of Object.keys(manifest.commands))
+    if (Object.keys(MOVED_TO_MEMO).some((moved) => path === moved || path.startsWith(`${moved} `)))
+      problems.push(`${path}: moved to memo (src/cli/moved.ts), so a source tool has no row for it`)
 
   for (const [name, option] of Object.entries(manifest.options)) {
     if (!option.meaning) problems.push(`options ${name}: no meaning`)
