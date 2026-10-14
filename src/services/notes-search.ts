@@ -15,7 +15,7 @@ import { createStemmer, DEFAULT_STEMMERS } from "../search/stem.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { openPictureEmbedderFor } from "./document-pictures.js"
-import { equalTitlesFirst, plainQueryWords } from "./notes-title-tier.js"
+import { plainQueryWords, titleQuery, titleTiers } from "./notes-title-tier.js"
 import { PICTURE_FLOOR, plainWords } from "./pictures.js"
 import { listContextOf } from "./search-kind.js"
 
@@ -419,11 +419,11 @@ export const searchNotes = async (
     titleWords === undefined
       ? { items: [], hasMore: false }
       : await searchNotesQuery(store, {
-          text: [`title:"${titleWords}"`, filter ?? ""].filter(Boolean).join(" AND "),
+          text: [titleQuery(titleWords), filter ?? ""].filter(Boolean).join(" AND "),
           limit: Math.max(window, CANDIDATES),
           ...scope,
         })
-  const tier = titleWords === undefined ? [] : equalTitlesFirst(titled.items, titleWords)
+  const tier = titleWords === undefined ? [] : titleTiers(titled.items, titleWords)
   const tierRefs = new Set(tier.map(({ ref }) => ref))
   const slice = meaning === undefined && tier.length === 0
   const words = await searchNotesQuery(store, {

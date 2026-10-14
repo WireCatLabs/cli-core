@@ -30,8 +30,18 @@ export const plainQueryWords = (query: string): string | undefined => {
   return words === "" || /["\\]/u.test(words) ? undefined : words
 }
 
-/** Titles equal to the words come before titles that only hold them; each keeps its order. */
-export const equalTitlesFirst = <T extends { note: Note }>(hits: T[], words: string): T[] => [
-  ...hits.filter(({ note }) => normalize(note.title ?? "") === words),
-  ...hits.filter(({ note }) => normalize(note.title ?? "") !== words),
-]
+/** The `title:` terms that find every title holding all the words, in any order, and so every phrase match too. */
+export const titleQuery = (words: string): string =>
+  words
+    .split(" ")
+    .map((word) => `title:"${word}"`)
+    .join(" AND ")
+
+/** Titles equal to the words, then titles holding them as a phrase, then titles holding them apart; each keeps its order. */
+export const titleTiers = <T extends { note: Note }>(hits: T[], words: string): T[] => {
+  const rank = ({ note }: T) => {
+    const title = normalize(note.title ?? "")
+    return title === words ? 0 : title.includes(words) ? 1 : 2
+  }
+  return [...hits].sort((a, b) => rank(a) - rank(b))
+}

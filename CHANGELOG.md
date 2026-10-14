@@ -10,7 +10,7 @@ shape of this file.
 ### Changed — may break callers
 
 - **A note or document whose title matches the query now comes first in `search notes`, `search all` and `drive search`.**
-  For a query of plain words, a title equal to the query ranks first, then a title containing it as a phrase; the rest
+  For a query of plain words, a title equal to the query ranks first, then a title containing it as a phrase, then a title holding all its words in any order; the rest
   keep the merged order. Result order changes, and these hits list `title` in `found_by` (a new value: a caller that
   accepts only `words` and `meaning` must accept it). A query with a field, `OR`, `NOT`, a wildcard or a regex is
   ordered as before.
