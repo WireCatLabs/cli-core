@@ -227,6 +227,46 @@ describe("a messenger whose history is read from the store", () => {
     expect(connects).toEqual([])
   })
 
+  it("**chats list answers its query from the stored chats**, and keeps the query on the next page", async () => {
+    const env = await filled()
+    const { connects, connect } = pushing()
+    const ids = async (...query: string[]) => {
+      const found = await call(["chats", "list", ...query, "--json"], env, connect, "store")
+      expect(found.code).toBe(0)
+      return JSON.parse(found.stdout).items.map((one: Chat) => one.id)
+    }
+
+    expect(await ids("kind:group")).toEqual(["7"])
+    expect(await ids("-kind:group")).toEqual(["20"])
+    expect(await ids("title:book", "participants_count>=3")).toEqual(["7"])
+    expect(await ids("unread_count>0")).toEqual([])
+    const paged = await call(["chats", "list", "-kind:channel", "--limit", "1", "--json"], env, connect, "store")
+    expect(JSON.parse(paged.stdout).next[0]).toMatchObject({ args: { query: "-kind:channel", page: 2 } })
+    const short = await call(["chats", "list", "title:bo", "--json"], env, connect, "store")
+    expect(short.code).toBe(2)
+    expect(connects).toEqual([])
+  })
+
+  it("**contacts list refuses notes: when the store keeps no contacts**, and when the profile denies notes", async () => {
+    const env = await filled()
+    const { connects, connect } = pushing()
+
+    const unkept = await call(["contacts", "list", "notes:valencia", "--json"], env, connect, "store")
+    expect(JSON.parse(unkept.stderr.split("\n").at(-1) ?? "").error).toMatchObject({
+      reason: "query.unsupported-field",
+    })
+
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ profiles: { default: { permissions: { "contacts.notes.list": "deny" } } } }),
+    )
+    const denied = await call(["contacts", "list", "notes:valencia", "--json"], env, connect, "store")
+    expect(JSON.parse(denied.stderr.split("\n").at(-1) ?? "").error).toMatchObject({ code: "permission_error" })
+    expect((await call(["contacts", "list", "--json"], env, connect, "store")).code).toBe(0)
+    expect(connects).toEqual([])
+  })
+
   it("show and ordinary time context refuse foreign account locators without connecting", async () => {
     const env = await filled()
     const { connects, connect } = pushing()

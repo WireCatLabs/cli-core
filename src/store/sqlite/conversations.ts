@@ -5,7 +5,7 @@ import type { ConversationBuild, ConversationSummary, StoredLink } from "../stor
 import { and, asc, desc, eq, isNull, type SQL, sql } from "./drizzle/core.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
-import type { ColumnMap, Where } from "./query-filter.js"
+import { bound, type ColumnMap, type Where } from "./query-filter.js"
 import { selectMessages, toMessages } from "./reads.js"
 import {
   accounts,
@@ -428,13 +428,6 @@ const toSummary = (row: {
   builtAt: toIso(row.builtAt) as string,
   algorithmVersion: row.algorithmVersion,
 })
-
-/** The SQL a list query compiled to, with its values bound, for a Drizzle `where`. */
-const bound = ({ sql: text, params }: Where): SQL =>
-  sql.join(
-    text.split("?").map((part, at) => (at < params.length ? sql`${sql.raw(part)}${params[at]}` : sql.raw(part))),
-    sql``,
-  )
 
 /** A list query's columns: the conversation's own, and how many people wrote in it. */
 export const CONVERSATION_COLUMNS = {

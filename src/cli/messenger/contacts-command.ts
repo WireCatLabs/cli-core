@@ -17,7 +17,7 @@ import { nextStep } from "../steps.js"
 import { contactWriteCommands } from "./admin-contacts-command.js"
 import { contactAnswer, lines, pageOf, snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { CONTACTS_QUERY } from "./people-queries.js"
+import { CONTACTS_QUERY, notesAllowed } from "./people-queries.js"
 import { privatePeopleCommands } from "./private-people-command.js"
 
 /** People this account has a one-to-one chat with, as the people service counts them. */
@@ -31,7 +31,8 @@ export const contactsCommand = (messenger: Messenger): Command => {
       annotate(
         withPaging(
           new Command("list").description(
-            "people you have a one-to-one chat with; name: matches the name, your local alias or the @username",
+            "people you have a one-to-one chat with; name: matches the name, your local alias or the @username, " +
+              "notes: your private notes about them",
           ),
         ).option("--order <recent|name>", "newest conversation first, or alphabetical", "recent"),
         { output: { entity: "contact" } },
@@ -42,14 +43,16 @@ export const contactsCommand = (messenger: Messenger): Command => {
       if (order !== "recent" && order !== "name") {
         throw new CliError("validation_error", `--order is recent or name, not "${order}"`)
       }
-      const search = searchText(
-        nativeTerms(listQuery(typedQuery(words), CONTACTS_QUERY, "contacts list"), "contacts list").get("name"),
-      )
+      const terms = nativeTerms(listQuery(typedQuery(words), CONTACTS_QUERY, "contacts list"), "contacts list")
+      const search = searchText(terms.get("name"))
+      const notes = terms.get("notes")
       const context = messengerContext(this, messenger)
+      notesAllowed(context.settings.permissions, notes)
       const { found, account } = await context.withServices(async (services) => ({
         found: await services.people.list({
           order,
           ...(search ? { search } : {}),
+          ...(notes ? { notes } : {}),
           ...window(context.settings),
         }),
         account: await services.chats.account(),

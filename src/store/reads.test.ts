@@ -1,9 +1,12 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import type { QueryAst } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
+import { listQuery } from "../cli/list-query.js"
+import { CHATS_QUERY } from "../cli/messenger/chat-queries.js"
 import type { Chat, Message } from "../domain/models.js"
-import { type AccountKey, openStore } from "./store.js"
+import { type AccountKey, CHAT_COLUMNS, openStore, queryFilter } from "./store.js"
 
 const fresh = () => join(mkdtempSync(join(tmpdir(), "reads-")), "messages.db")
 const OWNER: AccountKey = { provider: "max", account: "1" }
@@ -36,25 +39,32 @@ const message = (id: string, minute: number): Message => ({
 })
 
 describe("filtered chat lists", () => {
-  it("**filter by title, kind and unread, and count the same filter**", async () => {
+  it("**filter by a query over title, kind and unread_count, and count the same filter**", async () => {
     const store = await openStore({ path: fresh() })
     await store.saveChats(OWNER, [
       chat("-1", "Valencia expats", "group", 3, at(5)),
       chat("-2", "València runners", "group", 0, at(9)),
       chat("7", "Ana", "dialog", 1, at(7)),
+      chat("-4", "Книжный клуб", "channel", 0, at(1)),
     ])
     await store.saveChats(OTHER, [chat("-3", "Valencia market", "group", 2, at(1))])
-    const ids = async (filter: Parameters<typeof store.chats>[1]) =>
-      (await store.chats(OWNER, filter)).items.map(({ id }) => id)
+    const where = (text: string) =>
+      queryFilter(listQuery(text, CHATS_QUERY, "chats list") as QueryAst, CHAT_COLUMNS, { command: "chats list" })
+    const ids = async (text: string, limit?: number) =>
+      (await store.chats(OWNER, { where: where(text), ...(limit ? { limit } : {}) })).items.map(({ id }) => id)
 
-    expect(await ids({ query: "lencia" })).toEqual(["-1"])
-    expect(await ids({ kind: "group" })).toEqual(["-2", "-1"])
-    expect(await ids({ unread: true })).toEqual(["7", "-1"])
-    expect(await ids({ kind: "group", unread: true, limit: 5 })).toEqual(["-1"])
-    expect(await store.countChats(OWNER, { unread: true })).toBe(2)
-    expect(await store.countChats(OWNER)).toBe(3)
-    expect(await store.countChats(OTHER, { query: "lencia" })).toBe(1)
-    await expect(store.chats(OWNER, { query: "va" })).rejects.toMatchObject({ code: "validation_error" })
+    expect(await ids("title:lencia")).toEqual(["-1"])
+    expect(await ids("title:*LENCIA*")).toEqual(["-1"])
+    expect(await ids("title:книж")).toEqual(["-4"])
+    expect(await ids("title:КНИЖ")).toEqual(["-4"])
+    expect(await ids("kind:group")).toEqual(["-2", "-1"])
+    expect(await ids("unread_count>0")).toEqual(["7", "-1"])
+    expect(await ids("kind:group unread_count>0", 5)).toEqual(["-1"])
+    expect(await ids("-kind:group")).toEqual(["7", "-4"])
+    expect(await store.countChats(OWNER, { where: where("unread_count>0") })).toBe(2)
+    expect(await store.countChats(OWNER)).toBe(4)
+    expect(await store.countChats(OTHER, { where: where("title:lencia") })).toBe(1)
+    expect(() => where("title:va")).toThrow(/at least 3 characters/)
     await store.close()
   })
 })

@@ -83,6 +83,22 @@ describe("contacts", () => {
     await store.close()
   })
 
+  it("**find people by text in the owner's private notes**, Latin letters in any case", async () => {
+    const store = await seeded()
+    await store.addContactNote(OWNER, "7", "Met at the Valencia meetup")
+    await store.addContactNote(OWNER, "8", "Книжный клуб по средам")
+    const gone = await store.addContactNote(OWNER, "8", "valencia, once")
+    await store.removeContactNote(OWNER, "8", gone.id)
+    const found = async (notes: string) => ids(await store.contacts(OWNER, { order: "name", notes, limit: 10 }))
+
+    expect(await found("VALENCIA")).toEqual(["7"])
+    expect(await found("valencia meetup")).toEqual(["7"])
+    expect(await found("клуб")).toEqual(["8"])
+    expect(await found("")).toEqual(["8", "7"])
+    expect(await store.countContacts(OWNER, { notes: "valencia", query: "ann" })).toBe(0)
+    await store.close()
+  })
+
   it("keep a description a later, shorter record does not know", async () => {
     const store = await seeded()
     await store.savePeople(OWNER, [{ id: "7", name: "Vera P." }])

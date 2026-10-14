@@ -2,9 +2,10 @@ import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../../domain/channel-tags.js"
 import type { Chat, Id, Member, Page } from "../../domain/models.js"
 import type { AccountKey, StoredChatFilter } from "../store.js"
-import { and, eq, gt, inArray, or, sql } from "./drizzle/core.js"
+import { and, eq, inArray, or, sql } from "./drizzle/core.js"
 import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"
+import { bound, type ColumnMap } from "./query-filter.js"
 import {
   chatMembers,
   chats,
@@ -229,20 +230,32 @@ export const chatsWith = ({ orm }: StoreContext, accountKey: number, key: Accoun
   return toChats(orm, rows)
 }
 
-const chatsWhere = (accountKey: number, { query, kind, unread }: StoredChatFilter) => {
-  if (query !== undefined && query.trim().length < 3) {
-    throw new CliError("validation_error", `a chat search takes at least 3 characters, got "${query}"`)
-  }
-  return and(
-    eq(chats.accountId, accountKey),
-    notLeft,
-    query === undefined
-      ? undefined
-      : sql`${chats.id} IN (SELECT rowid FROM chats_fts WHERE chats_fts MATCH ${`"${query.trim().replaceAll('"', '""')}"`})`,
-    kind === undefined ? undefined : eq(chats.kind, kind),
-    unread ? gt(chats.unreadCount, 0) : undefined,
-  )
-}
+const chatsWhere = (accountKey: number, { where }: StoredChatFilter) =>
+  and(eq(chats.accountId, accountKey), notLeft, where === undefined ? undefined : bound(where))
+
+/**
+ * How the store answers a chat list's query. `title:` goes through the trigram index, so it matches part of a
+ * title, three characters or more, whatever the case.
+ */
+export const CHAT_COLUMNS = {
+  id: { type: "kw", sql: "chats.external_id" },
+  title: {
+    where: (node) =>
+      node.operator === "wildcard" && node.value === "*"
+        ? { sql: "chats.title IS NOT NULL AND chats.title <> ''", params: [] }
+        : {
+            sql: "chats.id IN (SELECT rowid FROM chats_fts WHERE chats_fts MATCH ?)",
+            params: [`"${titlePart(node.value).replaceAll('"', '""')}"`],
+          },
+  },
+  kind: { type: "enum", sql: "chats.kind" },
+  unread_count: { type: "num", sql: "chats.unread_count" },
+  last_message_at: { type: "time", sql: "chats.last_message_at" },
+  participants_count: { type: "num", sql: "chats.participants_count" },
+} as const satisfies ColumnMap
+
+/** `title:*book*` and `title:book` ask the same: the title holds "book". */
+export const titlePart = (value: string): string => value.replace(/^\*+|\*+$/g, "").trim()
 
 export const listChats = (
   { orm }: StoreContext,

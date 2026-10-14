@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { timezoneOf } from "@wirecat/cli-base/query"
+import { type QueryAst, queryError, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
 import type { RegistryOptions } from "../botcheck/registries.js"
 import { botCheckService } from "../botcheck/service.js"
 import { capability, type MessengerAdapter } from "../cli/messenger/port.js"
@@ -20,7 +20,14 @@ import type {
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { AccountStore } from "../store/account-store.js"
-import type { AccountKey, MemberCount, RosterChange, TrackedChat } from "../store/store.js"
+import {
+  type AccountKey,
+  CHAT_COLUMNS,
+  type MemberCount,
+  queryFilter,
+  type RosterChange,
+  type TrackedChat,
+} from "../store/store.js"
 import { type ChatStats, chatStats, type StatsPeriod } from "./chat-stats.js"
 import { accountStore, accountStoreIfOpen, fromStore, nothingStored, type ServiceDeps } from "./deps.js"
 import { type MemberEvent, memberEvents } from "./member-history.js"
@@ -71,8 +78,8 @@ export interface MarkedRead {
 }
 
 export interface ChatsService {
-  /** Newest first. Neither the messenger nor the store filters the list, so it takes no filter. */
-  list(window: PageWindow): Promise<Page<Chat>>
+  /** Newest first. The store answers a query; the messenger filters nothing, so online a query is refused. */
+  list(window: PageWindow, query?: QueryAst): Promise<Page<Chat>>
   /** The account these chats belong to, which names each one in a `chat:` reference. */
   account(): Promise<AccountKey>
   show(chat: string): Promise<ChatCard>
@@ -141,10 +148,22 @@ const deepChecks = async (
 }
 
 export const chatsService = (deps: ServiceDeps): ChatsService => ({
-  list: async (window) =>
-    fromStore(deps)
-      ? (await accountStore(deps)).chats(window)
-      : capability(await deps.connection(), "chats", "list chats")(window),
+  list: async (window, query) => {
+    if (fromStore(deps)) {
+      const where = query ? queryFilter(query, CHAT_COLUMNS, { command: "chats list" }) : undefined
+      return (await accountStore(deps)).chats({ ...window, ...(where ? { where } : {}) })
+    }
+    const [term] = query ? walkQuery(query.root) : []
+    if (term)
+      queryError(
+        "query.unsupported-field",
+        term.span,
+        "the messenger cannot filter its chat list; the fields answer from the local store, with --offline",
+        { command: "chats list" },
+        { supported: [] },
+      )
+    return capability(await deps.connection(), "chats", "list chats")(window)
+  },
 
   account: () => deps.account(),
 

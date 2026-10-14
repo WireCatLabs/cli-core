@@ -290,7 +290,14 @@ export const people = (
 }
 
 /** A contact: someone other than the account itself, in one of its one-to-one chats. */
-const contactsWhere = (accountKey: number, key: AccountKey, query: string | undefined) => {
+export interface ContactFilter {
+  /** Three letters or more of the name, the @username or the local alias. */
+  query?: string
+  /** Text in one of the owner's private notes about them; case folds for Latin letters only, as SQLite's lower(). */
+  notes?: string
+}
+
+const contactsWhere = (accountKey: number, key: AccountKey, { query, notes }: ContactFilter) => {
   if (query !== undefined && query.trim().length < 3) {
     throw new CliError("validation_error", `a contact search takes at least 3 characters, got "${query}"`)
   }
@@ -303,6 +310,9 @@ const contactsWhere = (accountKey: number, key: AccountKey, query: string | unde
     query === undefined
       ? undefined
       : sql`(${identities.id} IN (SELECT rowid FROM identities_fts WHERE identities_fts MATCH ${`"${query.trim().replaceAll('"', '""')}"`}) OR EXISTS (SELECT 1 FROM aliases ca WHERE ca.aliasable_type='identity' AND ca.display=1 AND ca.account_id=${accountKey} AND ca.aliasable_id=${identities.id} AND instr(ca.name_folded, ${fold(query.trim())}) > 0))`,
+    notes === undefined
+      ? undefined
+      : sql`EXISTS (SELECT 1 FROM notes n WHERE n.notable_type='identity' AND n.notable_id=${identities.id} AND n.deleted_at IS NULL AND instr(lower(n.body), lower(${notes})) > 0)`,
   )
 }
 
@@ -310,7 +320,7 @@ export const contacts = (
   { orm }: StoreContext,
   accountKey: number,
   key: AccountKey,
-  { order, query, limit, offset = 0 }: { order: "recent" | "name"; query?: string; limit: number; offset?: number },
+  { order, limit, offset = 0, ...filter }: { order: "recent" | "name"; limit: number; offset?: number } & ContactFilter,
 ): Page<Contact> => {
   const byName = [
     sql`coalesce(${aliases.name}, ${identities.name}) IS NULL`,
@@ -337,7 +347,7 @@ export const contacts = (
         eq(aliases.accountId, accountKey),
       ),
     )
-    .where(contactsWhere(accountKey, key, query))
+    .where(contactsWhere(accountKey, key, filter))
     .orderBy(...(order === "recent" ? [sql`${accountIdentities.lastMessagedAt} DESC NULLS LAST`] : []), ...byName)
     .limit(limit + 1)
     .offset(offset)
@@ -358,14 +368,14 @@ export const countContacts = (
   { orm }: StoreContext,
   accountKey: number,
   key: AccountKey,
-  query: string | undefined,
+  filter: ContactFilter,
 ): number =>
   Number(
     orm
       .select({ n: sql<number>`count(*)` })
       .from(accountIdentities)
       .innerJoin(identities, eq(identities.id, accountIdentities.identityId))
-      .where(contactsWhere(accountKey, key, query))
+      .where(contactsWhere(accountKey, key, filter))
       .get()?.n,
   )
 

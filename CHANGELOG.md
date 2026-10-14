@@ -22,6 +22,19 @@ shape of this file.
   with `matched_in: "picture"`, still ranked on their own; `chat:` in the query now narrows them as `--chat` did. A
   missing picture model is a `missing` entry `pictures` with a `models.download-image` step, in place of
   `picturesSkipped`.
+- `MessageStore.chats` and `countChats` take `{ where }` (a query compiled over the exported `CHAT_COLUMNS`) in place
+  of `{ query, kind, unread }`; `contacts`/`countContacts` take `notes` beside `query`.
+
+### Added
+
+- **`chats list` filters again, from the local store**: `kind:group`, `-kind:channel`, `unread_count>0`,
+  `title:book` (part of the title, 3 characters or more, any case), `participants_count>=3`, `last_message_at>=7d`,
+  `id:`, in any Lucene combination, compiled to SQL. With `--offline`, or a messenger whose history is the store; when
+  the list is read from the messenger, which filters nothing, any field is `query.unsupported-field`. MCP `chats_list`
+  takes the same `query`.
+- **`contacts list notes:<text>`** finds people by text in the owner's private notes (`--search-notes` before 0.265.0),
+  in SQL over the stored contacts. Latin letters match in any case, other letters as typed. It needs
+  `contacts.notes.list`, CLI and MCP alike, and is `query.unsupported-field` while the store keeps no contacts.
 
 ### Fixed
 
