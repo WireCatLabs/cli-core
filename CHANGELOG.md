@@ -59,6 +59,11 @@ shape of this file.
 - **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
   or address; `organization:<id>` and `document:<id>` too. Mentions now carry `target`.
 
+### Fixed
+
+- **`images models list|download` have a permission key** (none: housekeeping, like `models`). An app that registered
+  `imagesCommand` threw "unmapped permission path: images models list" in its permission check (max found it).
+
 ## 0.270.0 — 14.10.2026
 
 ### Changed — may break callers

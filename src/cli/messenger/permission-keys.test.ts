@@ -15,8 +15,10 @@ import type { Messenger } from "./context.js"
 import { conversationsCommand } from "./conversations-command.js"
 import { doctorCommand } from "./doctor-command.js"
 import { recipientsCommand, sendsCommand } from "./guard-commands.js"
+import { imagesCommand } from "./images-command.js"
 import { inboxCommand } from "./inbox.js"
 import { mcpCommand } from "./mcp-command.js"
+import { mentionsCommand } from "./mentions-command.js"
 import { messagesCommand } from "./messages-command.js"
 import { modelsCommand } from "./models-command.js"
 import { pollsCommand } from "./polls-command.js"
@@ -79,6 +81,8 @@ describe("the permission key of a command", () => {
       recipientsCommand(messenger),
       sendsCommand(messenger),
       modelsCommand(messenger),
+      imagesCommand(messenger),
+      mentionsCommand(messenger),
       mcpCommand(messenger),
       doctorCommand(messenger),
       completeCommand(messenger, settingsFor(app)),
@@ -96,6 +100,7 @@ describe("the permission key of a command", () => {
     expect(keyForCommand(["conversations", "embed"])).toBe("conversations.embed")
     expect(keyForCommand(["conversations", "embed", "clear"])).toBe("conversations.embed")
     expect(keyForCommand(["store", "backup"])).toBeNull()
+    expect(keyForCommand(["images", "models", "download"])).toBeNull()
     expect(keyForCommand(["chats", "members", "list"])).toBe("chats.members.list")
     expect(keyForCommand(["tags", "add"])).toBe("tags.add")
     expect(keyForCommand(["attachments", "extract"])).toBe("attachments.extract")
