@@ -66,8 +66,9 @@ shape of this file.
   (`Valery` finds «Валерию»); two in a row that one person shares are a full name. A name links by rule to the one
   person it fits who wrote in that chat; the rest wait as `found`, and `mentions show` lists the candidates. A name
   is confirmed (`mentions confirm <id> person:<uid>`) and rejected where it is written, not everywhere. Names of
-  people added or renamed later are found by `mentions rebuild --kind person-name`. Persons known only as an
-  e-mail sender are left out: on one store they were thousands of companies and newsletters.
+  people added or renamed later are found by `mentions rebuild person-name`. Persons known only as an
+  e-mail sender are left out: on one store they were about 3,300, by the look of them mostly companies and mailing
+  lists.
 - **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
   or address; `organization:<id>` and `document:<id>` too. Mentions now carry `target`.
 
