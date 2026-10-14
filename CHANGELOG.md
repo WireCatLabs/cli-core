@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.264.0 — 14.10.2026
+
 ### Fixed
 
 - The passage command declares a runnable cited-reference example and shares the existing `--bytes <bytes>` placeholder with other evidence reads.
