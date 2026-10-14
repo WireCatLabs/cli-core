@@ -54,7 +54,7 @@ jobs:
             packages/sqlite/build.sh ${{ matrix.target }}'
       - name: exports what Node imports
         run: packages/sqlite/check.sh packages/sqlite/lib/${{ matrix.target }}/libsqlite3.so.0 ${{ endsWith(matrix.target, 'gnu') && env.GLIBC_FLOOR || '' }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.target }}
           path: packages/sqlite/lib/${{ matrix.target }}
@@ -79,7 +79,7 @@ jobs:
           done
           codesign -v "$library"
       - run: packages/sqlite/check.sh packages/sqlite/lib/darwin/libsqlite3.dylib
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: darwin
           path: packages/sqlite/lib/darwin
@@ -98,7 +98,7 @@ jobs:
         with:
           path: packages/sqlite/lib
       - run: cd packages/sqlite && npm pack
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package
           path: packages/sqlite/wirecat-cli-core-sqlite-*.tgz
