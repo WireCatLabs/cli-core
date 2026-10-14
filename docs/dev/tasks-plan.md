@@ -31,9 +31,11 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
    `chore`, `src/store/sqlite/work-tasks.ts:14`). Fields: title, `title_folded`, description, priority 0–4,
    parent, status `open|done|dismissed`, `due_at`, `next_check_at`, `verdict` (useful / not useful), `source`
    (one message locator), assignments (assignee, reviewer, watcher) and an event history (`task_events`).
-2. **Keys exist only in projects:** `HRB-12`, the project key and a per-project counter taken in the same write
-   (`UPDATE projects SET tasks_count = tasks_count + 1 … RETURNING`, `work-tasks.ts:267`). A task found in a
-   message has a UUID (`src/tasks/service.ts`).
+2. **Every task has a key: the project key and a per-project counter** taken in the same write
+   (`UPDATE projects SET tasks_count = tasks_count + 1 … RETURNING`, `work-tasks.ts:267`): `HRB-12`. A task found
+   in a message goes to its account's inbox project, whose key is `IN` + 8 hex of the account's hash
+   (`src/store/sqlite/tasks.ts:42`), so its key reads `IN1A2B3C4D-17`; the task package also keeps a UUID
+   (`package_id`).
 3. **More messages can be linked to a task** — `tasks link <task> msg:…` writes `links` rows — and two tasks can
    be related: `blocked-by`, `follow-up-of`, `related-to` (`src/store/sqlite/task-relations.ts:10`); a `task:`
    target records a relation (0.274.0).
@@ -66,9 +68,10 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
 ## Ids
 
 - **Project tasks keep their key** (`HRB-12`).
-- **Tasks found in messages get a key per type:** `Q-15` question, `REQ-22` request, `M-7` mention, `PR-4`
-  promise. The number comes from a counter row per type, taken in the same `BEGIN IMMEDIATE` write as the insert,
-  as project keys are. The UUID stays as the internal id; `task:<key>` and `task:<uuid>` both resolve.
+- **Tasks found in messages get a readable key per type** in place of the inbox key: `Q-15` question, `REQ-22`
+  request, `M-7` mention, `PR-4` promise. The number comes from a counter row per type, taken in the same
+  `BEGIN IMMEDIATE` write as the insert, as project keys are. Tasks made before keep their `IN…-n` key; the UUID
+  and both keys resolve as `task:<…>`.
 - **A key never changes.** The category is a field, not part of the key, so correcting a category breaks no
   reference quoted in a chat or a note.
 - Why not hashes: they solve many writers on many copies that merge later (beads over git). This store has one
@@ -85,7 +88,9 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
   most hits wins, no hit is `other`. An agent reviewing after `sync` corrects it.
 - **Every correction is an event** (`task_events`, kind `category`), so a learned classifier can replace the
   trigger words later — naive Bayes over stems, local, no model download — only if the words prove weak.
-- **Labels** (`urgent`, `waiting-for-them`) are free, for filtering only; matching ignores them.
+- **Labels are tags.** `taggings` is polymorphic (`taggable_type`, `schema.ts:1489`); a task becomes one more
+  taggable type, so `tags` commands and filters work on tasks with no new concept. For filtering only; matching
+  ignores them.
 
 ## Claiming
 
