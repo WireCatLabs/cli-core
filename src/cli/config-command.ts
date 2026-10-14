@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
 import { type AppIdentity, envName } from "./app.js"
-import { loadSnakeCaseConfig } from "./config-keys.js"
+import { declaredSettingName, loadSnakeCaseConfig } from "./config-keys.js"
 import { baseContext } from "./context.js"
 import { LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
@@ -108,7 +108,9 @@ export const configCommand = (
         .description("save a setting to the configuration file")
     else sub.description("remove a setting from the configuration file")
 
-    sub.action(async function (this: Command, setting: string, given: unknown) {
+    sub.action(async function (this: Command, typed: string, given: unknown) {
+      const head = typed.split(".")[0] ?? typed
+      const setting = config.allSettings.includes(head) || isStoreSetting(typed) ? typed : declaredSettingName(typed)
       const {
         defaults: everyone,
         personal,
