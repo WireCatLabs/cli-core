@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`liftJson`, `checkJson` and `answerFields` from `./cli`**: an app without the messenger program (drive, memo, zoom)
+  reads `--json [fields]` the way tg and max do — `--json=a,b` or `--json a,b` keeps those fields of the answer's
+  items, and a field the answer does not have is refused with the ones it has.
+
 ## 0.276.0 — 14.10.2026
 
 ### Changed — may break callers

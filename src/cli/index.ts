@@ -201,6 +201,7 @@ export {
   MAX_SECRET_INPUT,
   provideInputPolicy,
 } from "./input-policy.js"
+export { answerFields, checkJson, type JsonRequest, liftJson } from "./json-fields.js"
 export { pagedList } from "./list-query.js"
 export { accountCommand } from "./messenger/account-command.js"
 export { accountFileFor, profilesHere, rememberAccount } from "./messenger/accounts.js"
