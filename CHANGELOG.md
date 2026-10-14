@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.273.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **A next step to a command that only changes this machine no longer runs unasked.** `server restart` and `store
