@@ -2,6 +2,7 @@ import { CHUNK_CHARS, chunkHash, splitSections, splitText } from "../../conversa
 import { analyzerIdentity, DEFAULT_STEMMERS, type Stemmer, type Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { normalize } from "../normalize.js"
+import { dropDocumentPicture } from "./document-pictures.js"
 import { int } from "./events.js"
 import { inBatch, indexRow } from "./search-index.js"
 import { savedStemmers } from "./stems.js"
@@ -148,6 +149,7 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
       })
     }
     for (const hash of before) if (!after.has(hash)) statements.purge.run(hash, hash)
+    if (!live && corpus.type === "document") dropDocumentPicture(database, id)
     statements.dequeue.run(corpus.type, id)
   }
 }

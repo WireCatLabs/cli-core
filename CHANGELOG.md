@@ -18,6 +18,14 @@ shape of this file.
   operation on stderr. MCP `messages_list` and `messages_context` no longer add `next_steps`; the server instructions
   carry the save hint.
 
+### Added
+
+- **Documents can be found by their picture.** `savePicture(store, { ref } | { documentId }, bytes, options)` (from
+  `@wirecat/cli-core/services`) keeps the CLIP vector of a document that is an image, skipping bytes it already holds
+  by their sha256, and `removePicture` drops it. `searchNotes(store, words, { pictures: true })` then adds
+  `pictures: [{ ref, score }]` beside `hits` (floor 0.25, same folder and source scope, never mixed into the hits), or
+  `picturesSkipped` when the model is not downloaded. No schema change: the vector is a `document-picture` chunk.
+
 ## 0.264.0 — 14.10.2026
 
 ### Changed — may break callers
@@ -133,7 +141,6 @@ shape of this file.
   with this package's by `failureContext` and kept by the CLI, MCP and meeting-tool error handlers alike.
 - Bounded transcript search hits carry reusable cue references. The shared context reader selects preceding and following cues in one read snapshot, preserves historical revisions and optional anchor fingerprints, and exposes explicit boundaries and byte clipping.
 - Shared passage formatting provides cited text or Markdown with timestamps, speaker labels, revision and coverage. Hosts can opt into the account-bound `meetings passage` CLI adapter and `meeting_passage` MCP tool; existing installed apps need a producer release and consumer integration.
-||||||| parent of 1376e689 (feat(images): picture search with CLIP, per account, as its own lane)
 
 ### Fixed
 

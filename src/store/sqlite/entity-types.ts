@@ -11,6 +11,7 @@ export const ENTITY_TABLES = {
   chat: "chats",
   conversation: "conversations",
   document: "documents",
+  "document-picture": "documents",
   email: "emails",
   email_thread: "email_threads",
   fact: "facts",

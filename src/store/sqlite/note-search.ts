@@ -13,6 +13,7 @@ import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.
 import type { Stemmer } from "../../search/stem.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
+import { type DocumentPictureStore, documentPicturesOver } from "./document-pictures.js"
 import { linkKind } from "./link-kinds.js"
 import { prefixOf } from "./lucene.js"
 import { drainNoteIndex, type NoteIndexState, noteIndexState, noteIndexText } from "./note-index.js"
@@ -415,7 +416,7 @@ export interface NearestNote {
   range: { start: number; end: number }
 }
 
-export interface NoteSearch {
+export interface NoteSearch extends DocumentPictureStore {
   /** Indexes what was written since, then searches; a note written a moment ago is found. */
   search(query: NoteQuery): Promise<{ items: NoteHit[]; hasMore: boolean }>
   indexState(): Promise<NoteIndexState | undefined>
@@ -459,6 +460,7 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
     }
   }
   return {
+    ...documentPicturesOver(context),
     search: async (query) => {
       drain()
       return searchNotes(context, query)

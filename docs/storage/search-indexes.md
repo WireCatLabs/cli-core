@@ -186,6 +186,10 @@ A photo's **picture** has a second chunk, `chunkable_type = 'image'` at `positio
 `saveImageChunks` replaces position 0 alone, and a picture search reads position 1 alone. The vector of a deleted
 message's picture is dropped on the next `images embed`.
 
+A document that is an image has one chunk, `chunkable_type = 'document-picture'` at `position = 0`, built the same way
+(hash = sha256 of the bytes, vector under `local:clip-b32:512`). The text index never reads it: it reads
+`document` and `note` chunks alone. Soft-deleting the document drops it with the document's text chunks.
+
 Why chunks and not whole conversations: e5-small reads at most 512 tokens (EmbeddingGemma 2,048), and
 one long conversation covers many subjects. Why not single messages: «ок» or «да, давай» mean nothing alone.
 

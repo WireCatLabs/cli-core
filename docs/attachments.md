@@ -129,6 +129,11 @@ needs the optional `@napi-rs/canvas` to decode the image.
 words, best first, each with `locator` and `score` (cosine, nothing under 0.22). The lane is ranked on its own and
 never changes the text hits. With picture search off there is no list. With it on and the model missing, `picturesSkipped` says so.
 
+A document that is an image (a Drive file) has a picture too: a caller with the file's bytes calls `savePicture` (from
+`services`; the same bytes are not embedded twice), and `searchNotes(store, words, { pictures: true })` adds `pictures`
+(`ref`, `score`, floor 0.25) beside the hits, in the same folders. Without the model, `picturesSkipped` says so;
+without `pictures: true` there is nothing. A deleted document leaves no picture hit.
+
 **Write the query in English.** The model's text side knows English only, so a query in another language finds
 little. An agent translates the user's words first: "чек из магазина" is searched as "a shop receipt". Searching by
 the conversation around a photo (above) keeps working in every language.
