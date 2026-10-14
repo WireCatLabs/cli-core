@@ -4,10 +4,11 @@ import * as v from "valibot"
 import { MAX_TEXT_CHARS } from "../../attachments/extract.js"
 import { gatewayOcr } from "../../attachments/gateway-ocr.js"
 import { pdfPreviewLimits } from "../../attachments/limits.js"
-import { listOf } from "../../cli/envelope.js"
+import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../../cli/execution.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { nextStep } from "../../cli/steps.js"
 import { levelFor } from "../../sends/permissions.js"
 import { refusedPlace } from "../../sends/upload.js"
 import { ATTACHMENT_QUERY } from "../../services/attachments.js"
@@ -55,7 +56,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
           ...(args.if_sha256 === undefined ? {} : { ifSha256: args.if_sha256 }),
           ...(defaults.signal === undefined ? {} : { signal: defaults.signal }),
         })
-        if (args.format === "base64") return done
+        if (args.format === "base64") return itemOf(snakeKeys(done))
         const { base64, ...about } = done
         if (done.complete && ["image/png", "image/jpeg", "image/webp"].includes(done.mimeType)) {
           const bytes = Buffer.from(base64, "base64")
@@ -130,7 +131,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
               ...(defaults.signal === undefined ? {} : { signal: defaults.signal }),
             })
           : undefined
-        return servicesFor({
+        const run = await servicesFor({
           ...storedDeps(messenger, store, account, defaults.guard),
           env: defaults.env,
         }).attachments.extract({
@@ -160,6 +161,17 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
                 },
               }
             : {}),
+        })
+        const { items, ...totals } = run
+        return itemOf(snakeKeys({ ...totals, files: items }), {
+          next:
+            run.cursor === undefined
+              ? []
+              : [
+                  nextStep("attachments.extract", {
+                    args: { cursor: run.cursor, ...(args.chat === undefined ? {} : { chat: args.chat }) },
+                  }),
+                ],
         })
       },
     }),
@@ -202,12 +214,13 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false, destructiveHint: false },
       stored: async (store, account, args, defaults) => {
         const located = args.chat === undefined
-        return servicesFor(storedDeps(messenger, store, account, defaults.guard)).attachments.setText({
+        const kept = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).attachments.setText({
           chat: located ? args.message : (args.chat as string),
           ...(located ? {} : { message: args.message }),
           ...(args.attachment === undefined ? {} : { attachment: args.attachment }),
           text: args.text,
         })
+        return itemOf(snakeKeys(kept))
       },
     }),
   }

@@ -16,6 +16,7 @@ import { isCliFailure } from "../failures.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
 import { parseDuration } from "../settings.js"
+import { nextStep } from "../steps.js"
 import {
   finishJob,
   type Job,
@@ -147,7 +148,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         const answer = await context.withServices((services) =>
           services.archive.estimate(named, { limit, pageSize, pauseMs }),
         )
-        context.renderer.result(answer)
+        renderAnswer(this, context, itemOf(snakeKeys(answer)))
         if (answer.missing === null) {
           context.renderer.note(
             `nothing held of this chat to measure by — \`${messenger.app.command} messages sync ${chat} --limit ${pageSize}\` gives the estimate something to go on`,
@@ -181,8 +182,11 @@ export const syncCommand = (messenger: Messenger): Command => {
           pageSize,
           ...(last === undefined ? {} : { last }),
         })
-        context.renderer.result(started)
-        context.renderer.note(`started — \`${messenger.app.command} store jobs show ${started.job}\` follows it`)
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys(started), { next: [nextStep("store.job", { args: { job: started.job } })] }),
+        )
         return
       }
       const jobs = jobsDir(messenger.app, context.env)
@@ -207,15 +211,20 @@ export const syncCommand = (messenger: Messenger): Command => {
             chat === undefined ? services.archive.fetchAll(options) : services.archive.fetch(chat, options),
         )
         if (jobId) finishJob(messenger.app, jobs, jobId, { finishedAt: new Date().toISOString(), result })
-        context.renderer.result(result)
         const prepared = "prepared" in result ? result.prepared : undefined
-        if (prepared && !prepared.complete && "chat" in result && result.chat !== null) {
-          const command = messenger.app.command
-          context.renderer.note(
-            `search is not fully prepared for this chat (${prepared.reason}) — ` +
-              `\`${command} conversations build --chat ${result.chat}\`, then \`${command} conversations embed --chat ${result.chat}\``,
-          )
-        }
+        const unprepared = prepared && !prepared.complete && "chat" in result && result.chat !== null
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys(result), {
+            next: unprepared
+              ? [
+                  nextStep("conversations.build", { args: { chat: result.chat } }),
+                  nextStep("conversations.embed", { args: { chat: result.chat } }),
+                ]
+              : [],
+          }),
+        )
       } catch (error) {
         if (jobId) {
           const code = isCliFailure(error) ? error.code : "generic_failure"

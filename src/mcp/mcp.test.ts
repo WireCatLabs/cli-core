@@ -1736,7 +1736,7 @@ describe("the MCP server", () => {
       page: { has_more: false },
     })
     const kept = await call("chat_attachments_text_set", { message: "msg:chat/500/9/108", text: "Квартальный отчёт" })
-    expect(kept.body).toEqual({
+    expect(kept.body.item).toEqual({
       locator: "msg:chat/500/9/108",
       attachment: 1,
       origin: "agent",
@@ -1789,9 +1789,9 @@ describe("the MCP server", () => {
       name: "chat_attachments_show",
       arguments: { message: "msg:chat/500/7/902", format: "base64", chunk_bytes: 5 },
     })
-    expect(fallback.structuredContent).toMatchObject({
+    expect((fallback.structuredContent as { item: unknown }).item).toMatchObject({
       base64: bytes.subarray(0, 5).toString("base64"),
-      nextOffsetBytes: 5,
+      next_offset_bytes: 5,
       complete: false,
     })
     writeFileSync(path, pdf("Synthetic page for an agent"))
@@ -1896,7 +1896,7 @@ describe("the MCP server", () => {
     await store.close()
     const answer = await call("chat_attachments_extract", { chat: "7", limit: 1 })
     expect(answer.isError).toBe(false)
-    expect(answer.body).toMatchObject({ extracted: 1 })
+    expect(answer.body.item).toMatchObject({ extracted: 1 })
     expect(JSON.stringify(answer.body)).not.toContain("extractionneedle")
     expect(
       (await call("chat_search_messages", { text: "content:extractionneedle" })).body.items.map(
@@ -1941,7 +1941,7 @@ describe("the MCP server", () => {
     try {
       const answer = await call("chat_attachments_extract", { chat: "7", ocr: true, concurrency: 2, limit: 1 })
       expect(answer.isError).toBe(false)
-      expect(answer.body).toMatchObject({ extracted: 1 })
+      expect(answer.body.item).toMatchObject({ extracted: 1 })
       expect(JSON.stringify(answer.body)).not.toContain("mcpocrneedle")
       expect(
         (await call("chat_search_messages", { text: "content:mcpocrneedle" })).body.items.map(
@@ -1963,11 +1963,11 @@ describe("the MCP server", () => {
     await store.markRange({ provider: "chat", account: "500" }, "7", 103, 104)
     await store.close()
     const plan = await call("chat_store_gaps_plan", { chat: "7" })
-    expect(plan.body.gaps).toEqual([{ from: 102, to: 102 }])
+    expect(plan.body.item.gaps).toEqual([{ from: 102, to: 102 }])
     expect(backend.opened()).toBe(0)
     const repaired = await call("chat_store_gaps_repair", {
       chat: "7",
-      fingerprint: plan.body.fingerprint,
+      fingerprint: plan.body.item.fingerprint,
       limit: 3,
       max_gaps: 1,
       page_size: 3,
@@ -1975,7 +1975,7 @@ describe("the MCP server", () => {
       repair_time: "1s",
     })
     expect(repaired.isError, JSON.stringify(repaired.body)).toBe(false)
-    expect(repaired.body).toHaveProperty("scope", "interior")
+    expect(repaired.body.item).toHaveProperty("scope", "interior")
     expect((await call("chat_store_jobs_list", {})).body).toMatchObject({ items: [], page: { has_more: false } })
     expect((await call("chat_store_jobs_show", { job: "missing" })).isError).toBe(true)
     const readonly = await connect(scripted(), { root, config: READ_ONLY })
@@ -2012,7 +2012,7 @@ describe("the MCP server", () => {
     expect(queued.isError, JSON.stringify(queued.body)).toBe(false)
     expect(spawnJob.mock.calls[0]?.[0]).toEqual(expect.arrayContaining(["--fingerprint", "--repair-time", "1s"]))
     expect(backend.opened()).toBe(0)
-    expect((await call("chat_store_jobs_show", { job: queued.body.job })).body.item).toMatchObject({
+    expect((await call("chat_store_jobs_show", { job: queued.body.item.job })).body.item).toMatchObject({
       profile: "default",
       chat: "7",
       pid: 999999,

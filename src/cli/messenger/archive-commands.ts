@@ -10,11 +10,12 @@ import { seal } from "../../sealed.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
-import { listed, renderList } from "../paging.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { admitPassword, linesOf, openFolder, runFileFor, saveManifest, sealRun, writeChanges } from "./export-folder.js"
 import { gapsCommand } from "./gaps-command.js"
+import { messageItems } from "./message-items.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
 import { storeMaintenanceCommands } from "./store-maintenance-command.js"
 
@@ -42,8 +43,13 @@ const statusCommand = (messenger: Messenger): Command =>
     .action(async function (this: Command, chat: string | undefined) {
       const context = messengerContext(this, messenger)
       const rows = await context.withServices((services) => services.archive.status(chat))
-      renderList(context.renderer, context.format, rows)
-      if (rows.length === 0) context.renderer.note("the store holds no messages for this profile yet")
+      renderAnswer(
+        this,
+        context,
+        listOf("store status", { items: rows.map(snakeKeys), limit: Math.max(1, rows.length), has_more: false }),
+      )
+      if (rows.length === 0 && context.format === "pretty")
+        context.renderer.note("the store holds no messages for this profile yet")
     })
 
 /**
@@ -75,7 +81,8 @@ const clearCommand = (messenger: Messenger): Command =>
       }
       const cleared =
         found.chats > 0 ? await context.withServices((services) => services.archive.left({ clear: true })) : found
-      context.renderer.result({ cleared: cleared.chats > 0, ...cleared })
+      renderAnswer(this, context, itemOf(snakeKeys({ cleared: cleared.chats > 0, ...cleared })))
+      if (context.format !== "pretty") return
       if (cleared.chats === 0) context.renderer.note("the store holds no chats this account has left")
       else context.renderer.success(`deleted ${cleared.chats} chat(s) and ${cleared.messages} message(s)`)
     })
@@ -88,7 +95,7 @@ const clearCommand = (messenger: Messenger): Command =>
 const exportCommand = (messenger: Messenger): Command =>
   new Command("export")
     .description(
-      "a chat's stored messages, oldest first: --jsonl one message per line, --json one { items, page, limit, hasMore } object; never asks the messenger",
+      "a chat's stored messages, oldest first: --jsonl one message per line, --json the list envelope of messages; never asks the messenger",
     )
     .argument("[chats...]", `${messenger.chatArgument}; several with --to`)
     .option(
@@ -139,46 +146,44 @@ const exportCommand = (messenger: Messenger): Command =>
         const kinds = kind === undefined ? undefined : kindsOf(kind)
         const dir = resolve(to)
         const password = encrypt ? await passwordOf(this, { twice: true }) : undefined
-        context.renderer.result(
-          await context.withServices(async (services) => {
-            const { account, chats: chosen } = await services.archive.exportable({
-              chats,
-              ...(kinds === undefined ? {} : { kinds }),
-            })
-            const manifest = openFolder(dir, account, password !== undefined)
-            if (password !== undefined) await admitPassword(manifest, password)
-            const run = runFileFor(new Date().toISOString())
-            const written: { id: Id; title: string | null; file: string | null; messages: number; deleted: number }[] =
-              []
-            const exportChat = async function* ({ id, title: named }: { id: Id; title: string | null }) {
-              const title = password === undefined ? named : null
-              const before = manifest.chats[id]
-              const changes = await services.archive.changes(id, before?.mark)
-              const empty = changes.messages.length === 0 && changes.deleted.length === 0
-              let file: string | null = null
-              if (password !== undefined) {
-                yield* linesOf(id, changes)
-                if (!empty) file = run
-              } else if (before === undefined || !empty) file = writeChanges(dir, id, changes.mark, changes)
-              manifest.chats[id] = {
-                title,
-                mark: changes.mark,
-                files: [...(before?.files ?? []), ...(file === null ? [] : [file])],
-                messages: (before?.messages ?? 0) + changes.messages.length,
-                deleted: (before?.deleted ?? 0) + changes.deleted.length,
-              }
-              written.push({ id, title, file, messages: changes.messages.length, deleted: changes.deleted.length })
+        const exported = await context.withServices(async (services) => {
+          const { account, chats: chosen } = await services.archive.exportable({
+            chats,
+            ...(kinds === undefined ? {} : { kinds }),
+          })
+          const manifest = openFolder(dir, account, password !== undefined)
+          if (password !== undefined) await admitPassword(manifest, password)
+          const run = runFileFor(new Date().toISOString())
+          const written: { id: Id; title: string | null; file: string | null; messages: number; deleted: number }[] = []
+          const exportChat = async function* ({ id, title: named }: { id: Id; title: string | null }) {
+            const title = password === undefined ? named : null
+            const before = manifest.chats[id]
+            const changes = await services.archive.changes(id, before?.mark)
+            const empty = changes.messages.length === 0 && changes.deleted.length === 0
+            let file: string | null = null
+            if (password !== undefined) {
+              yield* linesOf(id, changes)
+              if (!empty) file = run
+            } else if (before === undefined || !empty) file = writeChanges(dir, id, changes.mark, changes)
+            manifest.chats[id] = {
+              title,
+              mark: changes.mark,
+              files: [...(before?.files ?? []), ...(file === null ? [] : [file])],
+              messages: (before?.messages ?? 0) + changes.messages.length,
+              deleted: (before?.deleted ?? 0) + changes.deleted.length,
             }
-            const everyChat = async function* () {
-              for (const chat of chosen) yield* exportChat(chat)
-            }
-            if (password !== undefined) await sealRun(dir, run, everyChat(), password)
-            // Unsealed, each chat is written as it is read; nothing is yielded, the walk is the work.
-            else for await (const _ of everyChat()) void _
-            saveManifest(dir, manifest)
-            return { path: dir, ...(password === undefined ? {} : { encrypted: true }), chats: written }
-          }),
-        )
+            written.push({ id, title, file, messages: changes.messages.length, deleted: changes.deleted.length })
+          }
+          const everyChat = async function* () {
+            for (const chat of chosen) yield* exportChat(chat)
+          }
+          if (password !== undefined) await sealRun(dir, run, everyChat(), password)
+          // Unsealed, each chat is written as it is read; nothing is yielded, the walk is the work.
+          else for await (const _ of everyChat()) void _
+          saveManifest(dir, manifest)
+          return { path: dir, ...(password === undefined ? {} : { encrypted: true }), chats: written }
+        })
+        renderAnswer(this, context, itemOf(snakeKeys(exported)))
         return
       }
       if (chats.length !== 1 || kind !== undefined || all === true) {
@@ -190,7 +195,7 @@ const exportCommand = (messenger: Messenger): Command =>
       const password = encrypt ? await passwordOf(this, { twice: true }) : undefined
       const chat = chats[0] as string
       const from = since === undefined ? undefined : new Date(momentOf(since, "--since-time")).toISOString()
-      const { title, messages } = await context.withServices((services) =>
+      const { account, title, messages } = await context.withServices((services) =>
         services.archive.export(chat, from === undefined ? {} : { since: from }),
       )
       if (output !== undefined) {
@@ -207,18 +212,31 @@ const exportCommand = (messenger: Messenger): Command =>
             throw new CliError("validation_error", `${path} exists — an export never overwrites a file`)
           throw error
         }
-        context.renderer.result({
-          path,
-          format: format ?? "jsonl",
-          count: messages.length,
-          ...(password === undefined ? {} : { encrypted: true }),
-        })
+        renderAnswer(
+          this,
+          context,
+          itemOf({
+            path,
+            format: format ?? "jsonl",
+            count: messages.length,
+            ...(password === undefined ? {} : { encrypted: true }),
+          }),
+        )
         return
       }
       if (format === "markdown") context.streams.data(toMarkdown(title, messages).replace(/\n$/, ""))
       else if (format === "jsonl" || context.format === "jsonl")
         for (const message of messages) context.streams.data(JSON.stringify(message))
-      else if (context.format === "json") context.renderer.result(listed(messages))
+      else if (context.format === "json")
+        renderAnswer(
+          this,
+          context,
+          listOf("store export", {
+            items: messageItems(messages, account),
+            limit: Math.max(1, messages.length),
+            has_more: false,
+          }),
+        )
       else
         context.streams.data(
           renderMessages(messages, {

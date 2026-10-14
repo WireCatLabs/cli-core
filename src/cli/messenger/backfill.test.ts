@@ -13,6 +13,7 @@ import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
 import { jobsDir, listJobs, readJob, type SpawnJob, saveJob, updateJob } from "./backfill-jobs.js"
 import type { Fetching, Messenger } from "./context.js"
+import { conversationsCommand } from "./conversations-command.js"
 import { messagesCommand } from "./messages-command.js"
 import type { MessengerAdapter, ServerReads } from "./port.js"
 
@@ -78,7 +79,7 @@ const call = async (
   const streams = captureStreams()
   const code = await run(
     argv,
-    { app, commands: () => [storeCommand(messenger), messagesCommand(messenger)] },
+    { app, commands: () => [storeCommand(messenger), messagesCommand(messenger), conversationsCommand(messenger)] },
     {
       streams,
       tty: false,
@@ -86,9 +87,11 @@ const call = async (
       ...extra,
     },
   )
+  const body = streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined
   return {
     code,
-    answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined,
+    body,
+    answer: body?.item ?? body,
     stdout: streams.stdout,
     stderr: streams.stderr.join("\n"),
   }
@@ -290,7 +293,7 @@ describe("messages sync", () => {
       env,
     )
 
-    expect(answer).toMatchObject({ fetched: 200, complete: false, reachedLast: true, ranges: [{ from: 51, to: 250 }] })
+    expect(answer).toMatchObject({ fetched: 200, complete: false, reached_last: true, ranges: [{ from: 51, to: 250 }] })
     expect(both.code).toBe(2)
   })
 
@@ -337,7 +340,7 @@ describe("messages sync", () => {
       chat: "7",
       fetched: 100,
       complete: false,
-      reachedSince: true,
+      reached_since: true,
       ranges: [{ from: 151, to: 250 }],
     })
     expect(state.asked).toEqual([undefined])
@@ -463,7 +466,7 @@ describe("store fetch in the background", () => {
     const child = await call(calls[0]?.argv ?? [], chatOf(state), { ...env, ...calls[0]?.env })
     expect(child.code).toBe(0)
 
-    expect((await call(["store", "jobs", "show", "--json"], idle, env)).answer.item).toMatchObject({
+    expect((await call(["store", "jobs", "show", "--json"], idle, env)).answer).toMatchObject({
       job,
       state: "done",
       fetched: 150,
@@ -499,14 +502,14 @@ describe("store fetch in the background", () => {
     const wait = { newest: 10, asked: [] as (string | undefined)[], wait: 10 * 60_000 }
     await call(calls[0]?.argv ?? [], chatOf(wait), { ...env, ...calls[0]?.env })
 
-    expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer.item).toMatchObject({
+    expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({
       state: "partial",
       issue: { code: "rate_limited", retry_after_ms: 600000, actions: expect.any(Array) },
     })
 
     const gone = spawned(2 ** 22 + 12345)
     const other = (await call(["messages", "sync", "8", "--background", "--json"], idle, env, gone)).answer
-    expect((await call(["store", "jobs", "show", other.job, "--json"], idle, env)).answer.item).toMatchObject({
+    expect((await call(["store", "jobs", "show", other.job, "--json"], idle, env)).answer).toMatchObject({
       state: "died",
     })
     const refused = await call(["store", "jobs", "cancel", other.job], idle, env)
@@ -521,12 +524,12 @@ describe("store fetch in the background", () => {
     const { job } = (await call(["messages", "sync", "7", "--background", "--json"], idle, env, { spawnJob })).answer
 
     const signal = exited()
-    expect((await call(["store", "jobs", "cancel", job, "--json"], idle, env)).answer.item).toEqual({
+    expect((await call(["store", "jobs", "cancel", job, "--json"], idle, env)).answer).toEqual({
       job,
       cancelled: true,
     })
     expect(await signal).toBe("SIGTERM")
-    expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer.item).toMatchObject({
+    expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({
       state: "cancelled",
     })
   })
@@ -540,16 +543,16 @@ describe("store fetch in the background", () => {
 
     const retried = await call(["store", "jobs", "retry", first, "--json"], idle, env, dead)
 
-    expect(retried.answer.item).toMatchObject({ retried: first, chat: "7", pid: 2 ** 22 + 12345 })
+    expect(retried.answer).toMatchObject({ retried: first, chat: "7", pid: 2 ** 22 + 12345 })
     expect(dead.calls[1]?.argv).toEqual(dead.calls[0]?.argv)
-    expect(dead.calls[1]?.env.CHAT_BACKFILL_JOB).toBe(retried.answer.item.job)
-    expect(retried.answer.item.job).not.toBe(first)
+    expect(dead.calls[1]?.env.CHAT_BACKFILL_JOB).toBe(retried.answer.job)
+    expect(retried.answer.job).not.toBe(first)
 
-    updateJob(jobsDir(app, env), retried.answer.item.job, {
+    updateJob(jobsDir(app, env), retried.answer.job, {
       finishedAt: new Date().toISOString(),
       result: { fetched: 5 },
     })
-    const done = await call(["store", "jobs", "retry", retried.answer.item.job], idle, env, dead)
+    const done = await call(["store", "jobs", "retry", retried.answer.job], idle, env, dead)
     expect(done.stderr).toContain("did not fail — it is done")
     expect((await call(["store", "jobs", "retry"], idle, env, dead)).stderr).toContain("name a job, or --failed")
   })
@@ -665,7 +668,7 @@ describe("store fetch in the background", () => {
 
     const cleared = await call(["store", "jobs", "clear", "--json"], idle, env)
 
-    expect(cleared.answer.item).toEqual({ cleared: [died] })
+    expect(cleared.answer).toEqual({ cleared: [died] })
     expect(listJobs(dir).map((job) => job.id)).toEqual([running])
     expect(existsSync(log)).toBe(false)
   })
@@ -682,7 +685,7 @@ describe("store fetch in the background", () => {
         await call(["messages", "sync", "7", "--background", "--json"], idle, env, spawned(stranger.pid ?? 0))
       ).answer
 
-      expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer.item).toMatchObject({
+      expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({
         state: "died",
       })
       expect((await call(["store", "jobs", "cancel", job], idle, env)).code).not.toBe(0)
@@ -811,7 +814,7 @@ describe("post-fetch catch-up controls", () => {
     const state = { newest: 2, asked: [] as (string | undefined)[] }
     const enabled = await call(["messages", "sync", "7", "--json", "--pause", "1ms"], chatOf(state), env)
     expect(enabled.code).toBe(0)
-    expect(enabled.answer.prepared).toMatchObject({ prepared: { modelAvailable: false, built: [{ chat: "7" }] } })
+    expect(enabled.answer.prepared).toMatchObject({ prepared: { model_available: false, built: [{ chat: "7" }] } })
     state.newest = 3
     expect(
       (await call(["messages", "sync", "7", "--no-catch-up", "--json"], chatOf(state), env)).answer,
@@ -834,9 +837,10 @@ describe("post-fetch catch-up controls", () => {
       env,
     )
     expect(bounded.answer).toMatchObject({ prepared: { reason: "message_bound", complete: false } })
-    expect(bounded.stderr).toContain(
-      "search is not fully prepared for this chat (message_bound) — `chat conversations build --chat 7`, then `chat conversations embed --chat 7`",
-    )
+    expect(bounded.body.next).toMatchObject([
+      { step: "conversations.build", args: { chat: "7" } },
+      { step: "conversations.embed", args: { chat: "7" } },
+    ])
     expect(
       (await call(["messages", "sync", "7", "--catch-up", "--catch-up-chunks", "20001", "--json"], chatOf(state), env))
         .code,
