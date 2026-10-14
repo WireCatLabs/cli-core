@@ -130,9 +130,9 @@ middle of words — and brings noise.
 **Stems** — the store keeps the Snowball stems of every message (`message_stems`), built by
 `store migrate`, rebuilt by `store reindex`, and reported as `stemIndex` by `store info` and
 `store check`. The stemmers are chosen for the whole store, not per profile:
-`config set searchStemmers.cyrillic russian|none` and `config set searchStemmers.latin <list>|none`.
+`config set search_stemmers.cyrillic russian|none` and `config set search_stemmers.latin <list>|none`.
 
-`searchStemmers.latin` takes several stemmers, comma-separated; `english,spanish` is the default. Each gives its own stem sequence; distinct ones are stored apart
+`search_stemmers.latin` takes several stemmers, comma-separated; `english,spanish` is the default. Each gives its own stem sequence; distinct ones are stored apart
 by a separator token (`STEM_SEPARATOR`, `src/search/stem.ts`), and a query matches any of them as a
 phrase. A text with Latin words keeps about twice the stems (1.94× on a synthetic fixture). Notes have
 the same indexes since version 26: `note_words`, `note_stems` and `note_chunks` — see

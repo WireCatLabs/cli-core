@@ -510,11 +510,11 @@ describe("the stems", () => {
     ;(await seeded(env)).close()
     await call(["store", "migrate", "--json"], env)
 
-    const set = await call(["config", "set", "searchStemmers.latin", "english", "--json"], env)
+    const set = await call(["config", "set", "search_stemmers.latin", "english", "--json"], env)
     expect(set.answer).toEqual({
       store: env.MESSAGING_STORE,
       scope: "store",
-      setting: "searchStemmers.latin",
+      setting: "search_stemmers.latin",
       value: "english",
     })
     expect(set.stderr.join("\n")).toContain("store-wide")
@@ -530,12 +530,12 @@ describe("the stems", () => {
       built: "snowball-3.1.1 cyrillic=russian latin=english",
     })
     const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
-    expect(shown).toContainEqual({ setting: "searchStemmers.latin", value: "english", from: "store", scope: "store" })
+    expect(shown).toContainEqual({ setting: "search_stemmers.latin", value: "english", from: "store", scope: "store" })
   })
 
   it("**refuses to change the store-wide setting from a process locked to one profile**", async () => {
     const env = { ...envFor(), CHAT_PROFILE_LOCK: "work" }
-    const { code, stderr } = await call(["config", "set", "searchStemmers.latin", "english", "--json"], env)
+    const { code, stderr } = await call(["config", "set", "search_stemmers.latin", "english", "--json"], env)
     expect(code).not.toBe(0)
     expect(stderr.join("\n")).toContain("changes every profile")
   })
@@ -543,31 +543,45 @@ describe("the stems", () => {
   it("**saves an account group store-wide, shows it, and removes it**", async () => {
     const env = envFor()
     const set = await call(
-      ["config", "set", "accountGroups.work", "telegram:102, email:me@work.example", "--json"],
+      ["config", "set", "account_groups.work", "telegram:102, email:me@work.example", "--json"],
       env,
     )
     expect(set.answer).toMatchObject({
-      setting: "accountGroups.work",
+      setting: "account_groups.work",
       value: ["telegram:102", "email:me@work.example"],
     })
     const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
     expect(shown).toContainEqual({
-      setting: "accountGroups.work",
+      setting: "account_groups.work",
       value: "telegram:102,email:me@work.example",
       from: "store",
       scope: "store",
     })
-    await call(["config", "unset", "accountGroups.work", "--json"], env)
+    await call(["config", "unset", "account_groups.work", "--json"], env)
     const after = (await call(["config", "show", "--json"], env)).answer.store_settings
-    expect(after.map(({ setting }: { setting: string }) => setting)).not.toContain("accountGroups.work")
-    const nested = await call(["config", "set", "accountGroups.all-work", "group:work", "--json"], env)
+    expect(after.map(({ setting }: { setting: string }) => setting)).not.toContain("account_groups.work")
+    const nested = await call(["config", "set", "account_groups.all-work", "group:work", "--json"], env)
     expect(nested.code).not.toBe(0)
     expect(nested.stderr.join("\n")).toContain("not other groups")
   })
 
+  it("**refuses the camelCase store setting names**, naming the snake_case one", async () => {
+    const env = envFor()
+    for (const [typed, named] of [
+      ["searchStemmers.latin", "search_stemmers.latin"],
+      ["accountGroups.work", "account_groups.work"],
+    ]) {
+      const { code, stderr } = await call(["config", "set", typed as string, "english", "--json"], env)
+      expect(code).not.toBe(0)
+      expect(JSON.parse(stderr.join("\n")).error.message).toBe(
+        `no setting called "${typed}" — the store-wide one is ${named}`,
+      )
+    }
+  })
+
   it("**refuses a stemmer of the other script**, naming the allowed ones", async () => {
     const env = envFor()
-    const { code, stderr } = await call(["config", "set", "searchStemmers.cyrillic", "english", "--json"], env)
+    const { code, stderr } = await call(["config", "set", "search_stemmers.cyrillic", "english", "--json"], env)
     expect(code).not.toBe(0)
     expect(stderr.join("\n")).toContain("russian, none")
   })
@@ -576,7 +590,7 @@ describe("the stems", () => {
     const env = envFor()
     ;(await seeded(env)).close()
     await call(["store", "migrate", "--json"], env)
-    await call(["config", "set", "searchStemmers.cyrillic", "none", "--json"], env)
+    await call(["config", "set", "search_stemmers.cyrillic", "none", "--json"], env)
 
     const { answer, stderr } = await call(["store", "migrate", "--json"], env)
     expect(answer).toMatchObject({ stemmed: 2 })

@@ -252,7 +252,7 @@ before its `COMMIT`, and `fillStems` stems the messages up to the watermark and 
 open for a small file, in `store migrate`, `store reindex`, and inside the same 200 ms before a search.
 The `analyzer` column of the row records the Snowball version and stemmer choices that built it; the
 first fill claims an unbuilt row. The choices are store-wide (`store_settings`, written by
-`config set searchStemmers.cyrillic|latin`), since every profile, tg and MAX share one index. Ready
+`config set search_stemmers.cyrillic|latin`), since every profile, tg and MAX share one index. Ready
 means filled to the watermark, an empty queue, and the analyzer this binary would build — an older
 binary runs the triggers and never drains, so a flag alone would lie. Stems built by other choices are
 written by nobody and rebuilt only by `store migrate` or `store reindex`, never by a search, so two

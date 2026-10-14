@@ -41,7 +41,7 @@ export interface StemsFill {
 }
 
 /**
- * The choices `config set searchStemmers.*` saved; `undefined` while the defaults apply, `null` when a
+ * The choices `config set search_stemmers.*` saved; `undefined` while the defaults apply, `null` when a
  * newer tool saved one this build does not know. Never throws: every open and write reads it.
  */
 export const savedStemmers = (database: CacheDatabase): Stemmers | null | undefined => {

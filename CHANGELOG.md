@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **The store-wide settings are snake_case**: `config set|unset|show` take and answer `search_stemmers.cyrillic`,
+  `search_stemmers.latin` and `account_groups.<name>`. `searchStemmers.*` and `accountGroups.*` are refused, naming
+  the new name. What the store saved keeps its key, so no store migrates.
+
 ## 0.281.0 — 15.10.2026
 
 ### Changed — may break callers

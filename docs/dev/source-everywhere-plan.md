@@ -73,7 +73,7 @@ Anchors are on `origin/main`, 2026-10-13.
 5. **`search all`, `search mail` and `search notes` say which accounts they read** as
    `accounts: [{ resource, provider, account }]`, with or without `--source`; `search messages` answers
    `coverage.accounts`.
-6. **Groups exist.** `accountGroups` in `store_settings`, saved by `config set accountGroups.<name>`
+6. **Groups exist.** `accountGroups` in `store_settings`, saved by `config set account_groups.<name>`
    (`src/store/store.ts:1496-1505`), listed by `config show` (`src/cli/store-settings.ts:95`). A group
    lists entries, never another group (`account-list.ts:30-37`).
 
@@ -100,7 +100,7 @@ together stay an error.
 
 ## Groups link profiles
 
-- A group may hold accounts of any kind: `config set accountGroups.work
+- A group may hold accounts of any kind: `config set account_groups.work
   tg:work,max:work,email:me@work.example,drive:work,notes:4`.
 - **Linking is explicit**, never inferred from two profiles having the same name — the rule for
   `contacts link` ([STANDARD.md, Command names rule 3](STANDARD.md#command-names)).

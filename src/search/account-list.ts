@@ -15,6 +15,9 @@ import { isBotProvider } from "./query.js"
 /** Store-wide: every profile, tg, MAX and memo reads the same groups. */
 export const ACCOUNT_GROUPS = "accountGroups"
 
+/** The name `config` takes and shows; the store key above keeps its older spelling so no store migrates. */
+export const ACCOUNT_GROUPS_SETTING = "account_groups"
+
 export type AccountGroups = Record<string, string[]>
 
 const GROUP_NAME = /^[a-z0-9][a-z0-9_-]*$/i
@@ -35,7 +38,7 @@ const itemsOf = (value: string): string[] => {
 export const groupName = (name: string): string =>
   GROUP_NAME.test(name) ? name : fail(`a group name is letters, digits, - and _ — not "${name}"`)
 
-/** What `config set accountGroups.<name>` saves: the entries as written, so each app resolves its own profiles. */
+/** What `config set account_groups.<name>` saves: the entries as written, so each app resolves its own profiles. */
 export const groupMembers = (value: string): string[] =>
   itemsOf(value).map((item) =>
     item.toLowerCase().startsWith("group:")
@@ -170,7 +173,7 @@ export const entriesOfList = (value: string, context: ListContext): ListedEntry[
         const known = Object.keys(context.groups)
         fail(
           `no account group "${ref}" — ${known.length ? `there are ${known.join(", ")}` : "none saved yet"}; ` +
-            `\`config set ${ACCOUNT_GROUPS}.${ref} <accounts>\` saves one`,
+            `\`config set ${ACCOUNT_GROUPS_SETTING}.${ref} <accounts>\` saves one`,
         )
       }
       for (const member of members as string[]) entry(member, ref)

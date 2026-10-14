@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs"
-import { ACCOUNT_GROUPS, type AccountGroups, groupMembers, groupName } from "../search/account-list.js"
+import { ACCOUNT_GROUPS_SETTING, type AccountGroups, groupMembers, groupName } from "../search/account-list.js"
 import { DEFAULT_STEMMERS, parseStemmers, type Stemmers } from "../search/stem.js"
 import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
@@ -7,14 +7,14 @@ import { accountGroupsOf, openStore, savedStemmers, stemmersOrigin } from "../st
 import type { AppIdentity } from "./app.js"
 
 const SCRIPTS: Record<string, keyof Stemmers> = {
-  "searchStemmers.cyrillic": "cyrillic",
-  "searchStemmers.latin": "latin",
+  "search_stemmers.cyrillic": "cyrillic",
+  "search_stemmers.latin": "latin",
 }
 
 /** Settings of the store file, not of a profile: the store is one file for every profile, tg and MAX. */
 export const STORE_SETTINGS = Object.keys(SCRIPTS)
 
-const GROUP_PREFIX = `${ACCOUNT_GROUPS}.`
+const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
 
 export const isStoreSetting = (setting: string): boolean => setting in SCRIPTS || setting.startsWith(GROUP_PREFIX)
 

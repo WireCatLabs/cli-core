@@ -95,7 +95,10 @@ export const configCommand = (
 
   for (const action of ["set", "unset"] as const) {
     const sub = grantsAuthority(annotate(command.command(action), { effects: LOCAL_WRITE }))
-      .argument("<setting>", `one of: ${[...config.allSettings, ...STORE_SETTINGS, "accountGroups.<name>"].join(", ")}`)
+      .argument(
+        "<setting>",
+        `one of: ${[...config.allSettings, ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
+      )
       .option("--defaults", "change what every profile gets, rather than this profile")
       .option("--personal", "only for personal accounts — the personal section of the file")
       .option("--bot", "only for bots — the bot section of the file")
@@ -111,6 +114,8 @@ export const configCommand = (
     sub.action(async function (this: Command, typed: string, given: unknown) {
       const head = typed.split(".")[0] ?? typed
       const setting = config.allSettings.includes(head) || isStoreSetting(typed) ? typed : declaredSettingName(typed)
+      if (setting !== typed && isStoreSetting(setting))
+        throw new CliError("validation_error", `no setting called "${typed}" — the store-wide one is ${setting}`)
       const {
         defaults: everyone,
         personal,
