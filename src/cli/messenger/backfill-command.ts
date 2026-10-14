@@ -205,7 +205,7 @@ export const syncCommand = (messenger: Messenger): Command => {
           note: context.renderer.note,
           stop: stop.signal,
           onPage: (progress: { fetched: number; chatId: string; oldest: number }) => {
-            if (jobId) updateJob(jobs, jobId, { progress })
+            if (jobId) updateJob(jobs, jobId, { progress: { ...progress, at: new Date().toISOString() } })
           },
         }
         const result = await context.withServices(

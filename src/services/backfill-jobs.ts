@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto"
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
+import { progressOf } from "../background/checkpoints.js"
 import { carries } from "../background/processes.js"
 import type { AppIdentity } from "../cli/app.js"
 import { envName } from "../cli/app.js"
@@ -22,7 +23,8 @@ export interface Job {
   /** What it was started with, after `<cli>`; absent on a job started before `store jobs retry`. */
   argv?: string[]
   log: string
-  progress?: { fetched: number; chatId: string; oldest: number }
+  /** `at`: when the last page was saved; absent on a job started before it was kept. */
+  progress?: { fetched: number; chatId: string; oldest: number; at?: string }
   finishedAt?: string
   result?: Record<string, unknown>
   error?: { code: string; message: string }
@@ -147,6 +149,14 @@ export const jobDetails = (job: Job) => ({
       }
     : {}),
   ...(job.error ? { error: job.error } : {}),
+  progress: progressOf({
+    job: job.id,
+    profile: job.profile,
+    done: Number(job.result?.fetched ?? job.progress?.fetched ?? 0),
+    ...(job.limit === undefined ? {} : { total: job.limit }),
+    complete: job.result?.complete === true,
+    ...((job.progress?.at ?? job.finishedAt) ? { updatedAt: job.progress?.at ?? job.finishedAt } : {}),
+  }),
 })
 
 /** A job as `store jobs list` answers it. */

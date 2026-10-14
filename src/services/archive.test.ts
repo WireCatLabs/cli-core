@@ -134,6 +134,78 @@ describe("fetching every chat", () => {
     ])
     expect(JSON.stringify(all)).not.toContain("private provider detail")
   })
+  it("passes a chat already held to its newest message without asking for it again", async () => {
+    const store = await emptyStore()
+    const history = [1, 2, 3].map(messageAt)
+    let lastMessageAt = history[2]?.timestamp ?? null
+    const asked: string[] = []
+    const adapter = {
+      self: () => "500",
+      chats: async () => ({ items: [{ ...chat, lastMessageAt }], hasMore: false }),
+      history: async (reference: string, { limit, before }: { limit: number; before?: string }) => {
+        asked.push(before ?? "newest")
+        const older = history.filter((one) => before === undefined || Number(one.id) < Number(before))
+        const items = older.slice(-limit)
+        await store.saveMessages(account, reference, items, { via: "history" })
+        return { items, hasMore: older.length > items.length }
+      },
+    } as unknown as MessengerAdapter
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      connection: async () => adapter,
+    })
+    const run = () =>
+      service.fetchAll({
+        limit: 100,
+        pageSize: 100,
+        pauseMs: 0,
+        note: () => {},
+        stop: new AbortController().signal,
+        onPage: () => {},
+      })
+
+    expect((await run()).items).toEqual([{ chat: "7", title: "Book club", fetched: 3, complete: true }])
+    expect(await run()).toMatchObject({ complete: true, items: [{ chat: "7", fetched: 0, current: true }] })
+    expect(asked).toEqual(["newest"])
+
+    history.push(messageAt(4))
+    lastMessageAt = history[3]?.timestamp ?? null
+    expect((await run()).items).toEqual([{ chat: "7", title: "Book club", fetched: 4, complete: true }])
+    expect(asked).toEqual(["newest", "newest"])
+  })
+
+  it("still asks for a chat whose stored history does not reach back as far as the run wants", async () => {
+    const store = await emptyStore()
+    await store.saveMessages(account, "7", [messageAt(5)], { via: "history" })
+    await store.markRange(account, "7", 5, 5)
+    const asked: string[] = []
+    const adapter = {
+      self: () => "500",
+      chats: async () => ({ items: [{ ...chat, lastMessageAt: messageAt(5).timestamp }], hasMore: false }),
+      history: async (reference: string) => {
+        asked.push(reference)
+        return { items: [messageAt(5)], hasMore: false }
+      },
+    } as unknown as MessengerAdapter
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      connection: async () => adapter,
+    })
+
+    await service.fetchAll({
+      limit: 100,
+      pageSize: 100,
+      pauseMs: 0,
+      note: () => {},
+      stop: new AbortController().signal,
+      onPage: () => {},
+    })
+
+    expect(asked).toEqual(["7"])
+  })
+
   it("sits out a short wait the chat list asks for, then fetches", async () => {
     const store = await emptyStore()
     let listed = 0

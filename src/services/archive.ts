@@ -94,6 +94,8 @@ export type FetchedAll = {
     title: string | null
     fetched: number
     complete: boolean
+    /** Nothing was asked: the store already held this chat to its newest message and as far back as the run wanted. */
+    current?: true
     stopped?: true
     error?: string
     issue?: ActionableError
@@ -270,10 +272,19 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       const own = archiveService({ ...deps, withConnection: undefined, connection: async () => connection })
       const answer: FetchedAll = { chats: chats.length, fetched: 0, complete: false, items: [] }
       const batch = batchProgress(deps.env)
+      const catchingUp = Boolean(options.catchUp ?? deps.searchCatchUp)
+      const upToDate = heldToNewest(await deps.store(), await deps.account(), deps.messenger.fetching ?? FETCHING, {
+        ...options,
+        catchUp: catchingUp ? (options.catchUp ?? {}) : false,
+      })
       for (const chat of chats) {
         if (options.stop.aborted || batch.stopped) {
           answer.stopped = true
           break
+        }
+        if (await upToDate(chat)) {
+          answer.items.push({ chat: chat.id, title: chat.title, fetched: 0, complete: true, current: true })
+          continue
         }
         try {
           const one = await own.fetch(chat.id, options)
@@ -472,6 +483,33 @@ export const fetchInto = async ({
     ...(stop.aborted ? { stopped: true as const } : {}),
   }
 }
+
+/**
+ * Whether `--all` may pass a chat without asking for its newest page (PERF-37): the chat list says no message came
+ * after the newest stored one, that message is inside a held stretch, and the stretch already reaches as far back
+ * as this run would go — the chat's first message, or `--since`. Edits to old messages are not seen by a rerun
+ * either way; `serve` records those.
+ */
+const heldToNewest =
+  (store: MessageStore, account: AccountKey, fetching: Fetching, options: FetchOptions) =>
+  async (chat: Chat): Promise<boolean> => {
+    if (options.window || options.catchUp || options.last !== undefined) return false
+    const lastAt = Date.parse(chat.lastMessageAt ?? "")
+    if (Number.isNaN(lastAt)) return false
+    const [newest] = (await store.messages(account, chat.id, { limit: 1 }).catch(() => ({ items: [] }))).items
+    if (!newest || Date.parse(newest.timestamp) < lastAt) return false
+    const ranges = await store.ranges(account, chat.id)
+    const top = ranges.reduce<Range | undefined>(
+      (best, range) => (best && best.to >= range.to ? best : range),
+      undefined,
+    )
+    const key = keyOf(fetching)(newest)
+    if (!top || key > top.to || key < top.from) return false
+    if (ranges.length === 1 && (await store.syncState(account, historyStartKey(chat.id))) !== undefined) return true
+    if (options.sinceMs === undefined) return false
+    const startedAt = Date.parse(await timeOfKey(store, account, chat.id, top.from, fetching.orderBy === "time", ""))
+    return !Number.isNaN(startedAt) && startedAt < options.sinceMs
+  }
 
 /** When the message a held stretch starts at was sent: by time the key is the time; by id, the stored message says. */
 const timeOfKey = async (

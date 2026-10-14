@@ -1090,6 +1090,35 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 9. **A hit that has a page elsewhere answers its `url`** (planned, same plan): a Google Drive document's
    Google link. `url` is absent, not `null`, where there is none; meetings and attachments use the same key.
 
+## Resumable syncs
+
+A long sync — a mailbox, a chat history, a Drive folder, a recording archive — is stopped by a kill, a reboot or a
+provider's limit as often as it ends. Every CLI holds it to three rules:
+
+1. **A kill loses nothing saved.** Work is saved per item or per page, in its own transaction, never at the end.
+2. **A rerun goes on from where the last one stopped**, by default. It skips what is stored *and* does not redo
+   the listing or paging that got there. Starting over is an option the owner asks for. drive's `--rescan` is
+   the name in use; a second CLI that needs one takes the same word, added to cli-base's flag registry first.
+3. **The status command says how far it is**, as the progress shape below, and on one line in text.
+
+Where the position lives, in this order:
+
+- **The store, when it already says.** tg and max: the held stretches of each chat (`fetchedKey`,
+  `historyStartKey`), so `messages sync --all` passes a chat held to its newest message without asking for it;
+  background runs are `store jobs`. zm: the monthly checkpoints of `recordings sync`.
+- **Otherwise a checkpoint file**, `<state>/checkpoints/<profile>/<job>.json`, written with `saveCheckpoint` from
+  `@wirecat/cli-core/background` and read with `readCheckpoint`. Its `cursor` is the tool's own (an IMAP mailbox's
+  UIDVALIDITY and last UID, a page token); `done` and `total` count items. The write is atomic, and a torn file reads
+  as no checkpoint, which costs one run from the start and never fails one. drive's saved plan in its state file is
+  this checkpoint under another name.
+
+**Progress** (`progressOf`, printed by `progressLine`): `{ job, profile, done, total, remaining, state, updated_at,
+cursor_age_ms }`. `state` is `partial` or `complete`; `total` and `remaining` are `null` when the source does not
+say how much there is. `store jobs show` answers it as `progress`.
+
+Whether the last *scheduled* run failed is a different question: `recordRun` and `failingNotice` in
+[the schedules](../../src/background/schedules.ts) answer it.
+
 ## Permissions
 
 What a profile may do is one setting, `permissions`: a JSON object whose keys are command paths and
