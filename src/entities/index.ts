@@ -8,6 +8,7 @@ import { chart } from "./chart.js"
 import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
 import { contact } from "./contact.js"
+import { contactNote } from "./contact-note.js"
 import { conversation } from "./conversation.js"
 import { counterRefresh, counters } from "./counters.js"
 import { document } from "./document.js"
@@ -53,6 +54,7 @@ export {
   chat,
   chatEvent,
   contact,
+  contactNote,
   conversation,
   counterRefresh,
   counters,
@@ -116,6 +118,7 @@ export const ENTITIES = {
   person,
   identity,
   contact,
+  contact_note: contactNote,
   account,
   note,
   "note.hit": v.pick(note, [

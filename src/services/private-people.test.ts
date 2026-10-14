@@ -88,7 +88,7 @@ describe("private people metadata", () => {
       notes: [{ text: "Own assessment" }, { text: "Follow up Tuesday" }],
     })
     await f.store.savePeople(key, [{ id: "10", name: "Refreshed name" }])
-    expect((await f.services.privatePeople.show("10")).notes).toHaveLength(2)
+    expect(await f.services.privatePeople.notes("10")).toHaveLength(2)
     expect((await f.services.people.show("10")).name).toBe("Refreshed name")
     await expect(f.store.privateContact({ provider: "max", account: "500" }, "10")).rejects.toMatchObject({
       code: "not_found",
@@ -203,15 +203,18 @@ describe("private people metadata", () => {
     writeFileSync(file, "Own confidential fixture")
     const added = await f.call("--offline", "contacts", "notes", "add", "Local", "--file", file, "--json")
     expect(added.code).toBe(0)
-    const id = added.result.id
+    const id = added.result.item.id
+    expect(added.result.item.contact).toMatch(/^contact:/)
     expect((await f.call("contacts", "notes", "list", "10", "--json")).result.items).toHaveLength(1)
-    expect((await f.call("contacts", "notes", "show", "10", id, "--json")).result.text).toBe("Own confidential fixture")
+    expect((await f.call("contacts", "notes", "show", "10", id, "--json")).result.item.text).toBe(
+      "Own confidential fixture",
+    )
     expect(
-      (await f.call("contacts", "notes", "edit", "10", id, "--revision", "1", "--file", file, "--json")).result
+      (await f.call("contacts", "notes", "edit", "10", id, "--revision", "1", "--file", file, "--json")).result.item
         .revision,
     ).toBe(2)
-    expect((await f.call("contacts", "notes", "remove", "10", id, "--json")).result.removed).toBe(true)
-    expect((await f.call("contacts", "alias", "rm", "10", "--json")).result.alias).toBeNull()
+    expect((await f.call("contacts", "notes", "remove", "10", id, "--json")).result.item.removed).toBe(true)
+    expect((await f.call("contacts", "alias", "rm", "10", "--json")).result.item.alias).toBeNull()
     expect(
       (await f.call("--permission", "contacts=readonly", "contacts", "alias", "set", "10", "Blocked", "--json")).code,
     ).not.toBe(0)
@@ -311,9 +314,12 @@ describe("cached metadata and automatic tags", () => {
       "--only-missing",
       "--json",
     )
-    expect(named.result.items.map((item: { chatId: string }) => item.chatId)).toEqual(["30"])
+    expect(named.result.item.chats.map((item: { chat_id: string }) => item.chat_id)).toEqual(["30"])
     const every = await f.call("--offline", "metadata", "refresh", "--only-missing", "--limit", "1", "--json")
-    expect(every.result).toMatchObject({ items: [{ error: { code: "validation_error" } }], hasMore: all.length > 1 })
+    expect(every.result.item).toMatchObject({
+      chats: [{ error: { code: "validation_error" } }],
+      has_more: all.length > 1,
+    })
     const neither = await f.call("metadata", "refresh", "--json")
     expect(neither.stderr).toContain("--only-missing")
   })
@@ -335,12 +341,12 @@ describe("cached metadata and automatic tags", () => {
     await expect(f.services.metadata.auto({ dryRun: true, refresh: true })).rejects.toMatchObject({
       code: "validation_error",
     })
-    expect((await f.call("metadata", "get", "--chat", "7", "--json")).result.metadata.title).toBe("Crypto news")
+    expect((await f.call("metadata", "get", "--chat", "7", "--json")).result.item.metadata.title).toBe("Crypto news")
     expect(
-      (await f.call("--offline", "metadata", "refresh", "--chat", "7", "--limit", "1", "--json")).result.items[0],
+      (await f.call("--offline", "metadata", "refresh", "--chat", "7", "--limit", "1", "--json")).result.item.chats[0],
     ).toHaveProperty("error")
     expect((await f.call("metadata", "refresh", "--chat", "7", "--limit", "501", "--json")).code).not.toBe(0)
     const preview = await f.call("tags", "auto", "--chat", "7", "--dry-run", "--json")
-    expect(preview, preview.stderr).toMatchObject({ code: 0, result: { dryRun: true } })
+    expect(preview, preview.stderr).toMatchObject({ code: 0, result: { item: { dry_run: true } } })
   })
 })

@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { itemOf, listOf } from "../../cli/envelope.js"
+import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { listed } from "../../cli/paging.js"
@@ -14,12 +14,13 @@ import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.j
 
 const LOCAL = { readOnlyHint: false, openWorldHint: false }
 const ROW =
-  "{ id, source, sourceKind, account, group, kind, state, reason?, origin, createdAt, dueAt?, closedAt?, closedBy?, " +
-  "message: { senderName, text, timestamp } | null, note?: { id, title, text, updatedAt } | null }"
+  "{ item: { id, source, source_kind, account, group, kind, state, reason?, origin, created_at, due_at?, closed_at?, " +
+  "closed_by?, message: { sender_name, text, timestamp } | null, note?: { id, title, text, updated_at } | null } }"
 const type = v.picklist(TASK_KINDS)
 const CARD =
-  "{ id, ref, key, project, title, description, type, status, priority, parent, source, dueAt, nextCheckAt, closedAt, " +
-  "reason, verdict, assignments, createdAt, updatedAt, links: [{ id, from, to, kind, targetText, origin, … }] }"
+  "{ item: { id, ref, key, project, title, description, type, status, priority, parent, source, due_at, " +
+  "next_check_at, closed_at, reason, verdict, assignments, created_at, updated_at, " +
+  "links: [{ id, from, to, kind, target_text, origin, … }] } }"
 const text = (max: number, what: string) => v.pipe(v.string(), v.minLength(1), v.maxLength(max), v.description(what))
 const ahead = (what: string) =>
   v.optional(
@@ -96,7 +97,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           "agent",
           planOf(args),
         )
-        return { ...task, created, ...(card ? { card } : {}) }
+        return itemOf(snakeKeys({ ...task, created, ...(card ? { card } : {}) }))
       },
     }),
 
@@ -112,11 +113,15 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: false },
       stored: async (store, account, args, defaults) => {
-        return tasks(store, account, defaults.guard).close(args.task, {
-          as: args.as,
-          by: "agent",
-          ...(args.reason === undefined ? {} : { reason: args.reason }),
-        })
+        return itemOf(
+          snakeKeys(
+            await tasks(store, account, defaults.guard).close(args.task, {
+              as: args.as,
+              by: "agent",
+              ...(args.reason === undefined ? {} : { reason: args.reason }),
+            }),
+          ),
+        )
       },
     }),
 
@@ -129,7 +134,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ task: text(200, "the task's id or key, from tasks_list or tasks_agenda"), ...PLAN }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
       stored: async (store, account, args, defaults) =>
-        tasks(store, account, defaults.guard).plan(args.task, planOf(args), "agent"),
+        itemOf(snakeKeys(await tasks(store, account, defaults.guard).plan(args.task, planOf(args), "agent"))),
     }),
 
     tasks_link: tool({
@@ -146,10 +151,14 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
       stored: async (store, account, args, defaults) =>
-        tasks(store, account, defaults.guard).link(
-          args.task,
-          { references: args.targets ?? [], chats: args.chats ?? [] },
-          { kind: args.kind ?? "related-to", by: "agent" },
+        itemOf(
+          snakeKeys(
+            await tasks(store, account, defaults.guard).link(
+              args.task,
+              { references: args.targets ?? [], chats: args.chats ?? [] },
+              { kind: args.kind ?? "related-to", by: "agent" },
+            ),
+          ),
         ),
     }),
 
@@ -158,7 +167,8 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       description: `One task with its plan and everything linked to it. Returns ${CARD}.`,
       input: v.object({ task: text(200, "the task's id or key") }),
       annotations: { ...READ, openWorldHint: false },
-      stored: async (store, account, args, defaults) => tasks(store, account, defaults.guard).show(args.task),
+      stored: async (store, account, args, defaults) =>
+        itemOf(snakeKeys(await tasks(store, account, defaults.guard).show(args.task))),
     }),
 
     tasks_agenda: tool({

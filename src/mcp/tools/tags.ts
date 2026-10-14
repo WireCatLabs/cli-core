@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { listOf } from "../../cli/envelope.js"
+import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
@@ -52,24 +52,35 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
 
     tags_add: tool({
       title: "Tag a chat, person or message",
-      description: `Puts tags on one chat, person or message. ${TARGET} Returns { target, added, unchanged }.`,
+      description: `Puts tags on one chat, person or message. ${TARGET} Returns { item: { target, added, unchanged } }.`,
       input,
       annotations: { ...LOCAL, destructiveHint: false },
       stored: async (store, account, args, defaults) => {
-        return servicesFor(storedDeps(messenger, store, account, defaults.guard)).tags.add(targetOf(args), args.tags)
+        return itemOf(
+          snakeKeys(
+            await servicesFor(storedDeps(messenger, store, account, defaults.guard)).tags.add(
+              targetOf(args),
+              args.tags,
+            ),
+          ),
+        )
       },
     }),
 
     tags_remove: tool({
       title: "Untag a chat, person or message",
-      description: `Takes tags off one chat, person or message. ${TARGET} Returns { target, removed, unchanged }.`,
+      description: `Takes tags off one chat, person or message. ${TARGET} Returns { item: { target, removed, unchanged } }.`,
       input: v.object({ ...input.entries, source: v.optional(v.picklist(["manual", "auto"])) }),
       annotations: { ...LOCAL, destructiveHint: true },
       stored: async (store, account, args, defaults) => {
-        return servicesFor(storedDeps(messenger, store, account, defaults.guard)).tags.remove(
-          targetOf(args),
-          args.tags,
-          args.source,
+        return itemOf(
+          snakeKeys(
+            await servicesFor(storedDeps(messenger, store, account, defaults.guard)).tags.remove(
+              targetOf(args),
+              args.tags,
+              args.source,
+            ),
+          ),
         )
       },
     }),

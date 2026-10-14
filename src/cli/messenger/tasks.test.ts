@@ -83,15 +83,16 @@ const setup = async (config?: object) => {
 }
 
 const json = (result: { stdout: string[] }) => JSON.parse(result.stdout[0] ?? "null")
+const item = (result: { stdout: string[] }) => json(result).item
 const PROMISE = "msg:chat/500/7/1"
 
 describe("tasks", () => {
   it("**adds a task by locator and lists it with the message it points at**, once however often it is added", async () => {
     const call = await setup()
-    const added = json(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
+    const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
     expect(added).toMatchObject({ source: PROMISE, kind: "promise", state: "open", origin: "owner", created: true })
 
-    expect(json(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))).toMatchObject({
+    expect(item(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))).toMatchObject({
       id: added.id,
       created: false,
     })
@@ -103,10 +104,10 @@ describe("tasks", () => {
 
   it("**closes a task, keeps the reason, and refuses to close it twice**", async () => {
     const call = await setup()
-    const { id } = json(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
+    const { id } = item(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
 
-    const closed = json(await call("tasks", "close", id, "--as", "dismissed", "--reason", "no-reply-needed", "--json"))
-    expect(closed).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closedBy: "owner" })
+    const closed = item(await call("tasks", "close", id, "--as", "dismissed", "--reason", "no-reply-needed", "--json"))
+    expect(closed).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closed_by: "owner" })
     const again = await call("tasks", "close", id, "--as", "done", "--json")
     expect([again.code, again.stderr]).toEqual([2, expect.stringContaining("a closed task stays closed")])
     expect(json(await call("tasks", "list", "state:open", "--json")).items).toEqual([])
@@ -135,7 +136,7 @@ describe("tasks", () => {
 
   it("**a backup keeps the tasks**: restored, a closed one is open again", async () => {
     const call = await setup()
-    const { id } = json(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
+    const { id } = item(await call("tasks", "add", PROMISE, "--type", "promise", "--json"))
     const file = join(call.root, "backup.db")
     expect((await call("store", "backup", file, "--json")).code).toBe(0)
     await call("tasks", "close", id, "--as", "done", "--json")
@@ -175,7 +176,7 @@ describe("tasks", () => {
 
   it("**plans, links and shows a task, and lists it on the agenda**, from flags as typed", async () => {
     const call = await setup()
-    const added = json(
+    const added = item(
       await call(
         "tasks",
         "add",
@@ -193,16 +194,16 @@ describe("tasks", () => {
     )
     expect(added.card).toMatchObject({
       title: "Send the invoice",
-      dueAt: expect.any(String),
-      nextCheckAt: expect.any(String),
+      due_at: expect.any(String),
+      next_check_at: expect.any(String),
     })
 
-    const planned = json(await call("tasks", "plan", added.id, "--due", "none", "--check", "2026-01-01", "--json"))
-    expect(planned).toMatchObject({ dueAt: null, nextCheckAt: "2026-01-01T00:00:00.000Z" })
+    const planned = item(await call("tasks", "plan", added.id, "--due", "none", "--check", "2026-01-01", "--json"))
+    expect(planned).toMatchObject({ due_at: null, next_check_at: "2026-01-01T00:00:00.000Z" })
     expect((await call("tasks", "plan", added.id)).code).not.toBe(0)
     expect((await call("tasks", "plan", added.id, "--due", "soon")).stderr).toContain("--due takes")
 
-    const linked = json(
+    const linked = item(
       await call(
         "tasks",
         "link",
@@ -216,9 +217,9 @@ describe("tasks", () => {
       ),
     )
     expect(
-      linked.links.map(({ to, targetText }: { to: string | null; targetText: string | null }) => to ?? targetText),
+      linked.links.map(({ to, target_text }: { to: string | null; target_text: string | null }) => to ?? target_text),
     ).toEqual(["https://example.com/invoice", "chat:chat/500/7"])
-    expect(json(await call("tasks", "show", planned.key, "--json")).links).toHaveLength(2)
+    expect(item(await call("tasks", "show", planned.key, "--json")).links).toHaveLength(2)
 
     const agenda = json(await call("tasks", "agenda", "--due", "1d", "--within", "3650d", "--json"))
     expect(agenda.item.tasks).toMatchObject([{ id: added.id, reasons: ["check"] }])

@@ -147,8 +147,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "searches.clear")
       const cleared = await context.withServices((services) => services.searches.clear())
-      if (context.format !== "pretty") context.renderer.result(cleared)
-      else context.streams.data(`${cleared.cleared} runs cleared\n`)
+      renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} runs cleared\n`)
     })
 
   return searches

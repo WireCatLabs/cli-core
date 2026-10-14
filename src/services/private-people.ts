@@ -1,5 +1,20 @@
+import type * as v from "valibot"
+import { formatReference } from "../domain/references.js"
+import type { contactNote } from "../entities/contact-note.js"
 import { pickPerson } from "../resolve.js"
+import type { PrivateContactNote } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
+
+export type ContactNoteItem = v.InferOutput<typeof contactNote>
+
+const noteItem = (provider: string, note: PrivateContactNote): ContactNoteItem => ({
+  id: note.id,
+  contact: formatReference({ type: "contact", provider, id: note.personId }),
+  text: note.text,
+  revision: note.revision,
+  created_at: note.createdAt,
+  updated_at: note.updatedAt,
+})
 
 export const privatePeopleService = (deps: ServiceDeps) => {
   const target = async (reference: string) => {
@@ -9,9 +24,9 @@ export const privatePeopleService = (deps: ServiceDeps) => {
     return { store, account, person }
   }
   return {
-    show: async (reference: string) => {
+    notes: async (reference: string) => {
       const { store, account, person } = await target(reference)
-      return store.privateContact(account, person.id)
+      return (await store.privateContact(account, person.id)).notes.map((note) => noteItem(account.provider, note))
     },
     alias: async (reference: string, alias: string | null) => {
       const { store, account, person } = await target(reference)
@@ -19,15 +34,15 @@ export const privatePeopleService = (deps: ServiceDeps) => {
     },
     add: async (reference: string, text: string) => {
       const { store, account, person } = await target(reference)
-      return store.addContactNote(account, person.id, text)
+      return noteItem(account.provider, await store.addContactNote(account, person.id, text))
     },
     note: async (reference: string, id: string) => {
       const { store, account, person } = await target(reference)
-      return store.contactNote(account, person.id, id)
+      return noteItem(account.provider, await store.contactNote(account, person.id, id))
     },
     edit: async (reference: string, id: string, text: string, revision: number) => {
       const { store, account, person } = await target(reference)
-      return store.editContactNote(account, person.id, id, text, revision)
+      return noteItem(account.provider, await store.editContactNote(account, person.id, id, text, revision))
     },
     remove: async (reference: string, id: string) => {
       const { store, account, person } = await target(reference)

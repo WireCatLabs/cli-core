@@ -82,25 +82,25 @@ const json = (result: { stdout: string[] }) => JSON.parse(result.stdout[0] ?? "n
 describe("tags", () => {
   it("**tags a chat, a person and a message, and tag: finds what they label**", async () => {
     const call = await setup()
-    expect(json(await call("tags", "add", "Work", "--chat", "Private fixture", "--json"))).toEqual({
-      target: { type: "chat", chatId: "9" },
+    expect(json(await call("tags", "add", "Work", "--chat", "Private fixture", "--json")).item).toEqual({
+      target: { type: "chat", chat_id: "9" },
       added: ["work"],
       unchanged: [],
     })
-    expect(json(await call("tags", "add", "work", "vip", "--contact", "Bob Synthetic", "--json"))).toMatchObject({
-      target: { type: "contact", personId: "11" },
+    expect(json(await call("tags", "add", "work", "vip", "--contact", "Bob Synthetic", "--json")).item).toMatchObject({
+      target: { type: "contact", person_id: "11" },
       added: ["work", "vip"],
     })
-    expect(json(await call("tags", "add", "--message", "msg:chat/500/7/101", "work", "--json"))).toMatchObject({
-      target: { type: "message", chatId: "7", messageId: "101", locator: "msg:chat/500/7/101" },
+    expect(json(await call("tags", "add", "--message", "msg:chat/500/7/101", "work", "--json")).item).toMatchObject({
+      target: { type: "message", chat_id: "7", message_id: "101", locator: "msg:chat/500/7/101" },
     })
-    expect(json(await call("tags", "add", "work", "--chat", "7", "--message", "102", "--json")).target).toEqual({
+    expect(json(await call("tags", "add", "work", "--chat", "7", "--message", "102", "--json")).item.target).toEqual({
       type: "message",
-      chatId: "7",
-      messageId: "102",
+      chat_id: "7",
+      message_id: "102",
       locator: "msg:chat/500/7/102",
     })
-    expect(json(await call("tags", "add", "work", "--chat", "9", "--json"))).toMatchObject({
+    expect(json(await call("tags", "add", "work", "--chat", "9", "--json")).item).toMatchObject({
       added: [],
       unchanged: ["work"],
     })
@@ -123,7 +123,7 @@ describe("tags", () => {
       "108",
     ])
 
-    expect(json(await call("tags", "remove", "vip", "gone", "--contact", "11", "--json"))).toMatchObject({
+    expect(json(await call("tags", "remove", "vip", "gone", "--contact", "11", "--json")).item).toMatchObject({
       removed: ["vip"],
       unchanged: ["gone"],
     })
