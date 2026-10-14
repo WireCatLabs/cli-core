@@ -17,6 +17,8 @@ production adapter; the providers below are invented fixtures, not available Mee
 | `MeetingContextPorts` | validates notes, tags, memories and explicit event/person changes; previews by default | shared knowledge records, account ownership and durable evidence checks |
 | `MeetingContextStore` | typed event and participant link receipts | atomic scoped ownership, compare-and-set and identity association audit |
 | `MeetingReadCapabilities` / `MeetingContextReadCapabilities` | bounded metadata, transcript pages and atomic cue-centered snapshots | account ownership, read-byte preflight and revision-aware reads |
+| `MeetingPreparationContextStore` | bounded context for a selected occurrence, without accepting findings | shared stored person/project links, accepted facts and directly sourced tasks |
+| `createMeetingPreparationService` | selected upcoming proof, exact-series history and cited local context | bind the authorized numeric account, shared store and account-bound upcoming reader |
 | `MeetingParticipantSearchStore` | shared CLI/MCP participant discovery and continuation steps | account/query-bound candidate pages, Unicode literal matching and read budgets |
 | `readMeetingProjectDiscovery` | one bounded canonical/key/alias page with cited unconfirmed evidence | the existing vocabulary resolver and account-scoped `MeetingSearchStore`; no provider-specific project catalog |
 | Project-evidence CLI/MCP adapters | query validation, complete registered entity and frozen continuation | an account-bound `MeetingProjectDiscoveryReader`; host owns lifetime and final output limits |
@@ -263,6 +265,7 @@ counts candidates at the earliest eligible instant: zero for no candidate, one n
 than one for an ambiguous selection. Late cancellation
 refuses the result. Importing this SDK never opens a provider, database or model.
 
-The SDK currently has normalized synthetic provider proofs. Provider calendar adapters and a cited
-preparation entity with shared CLI/MCP adapters remain separate work; there is no new preparation
-command or automatic findings intake in this slice.
+The SDK has normalized synthetic provider proofs. The
+[preparation SDK](MEETING-PREPARATION.md) composes a selected upcoming series with bounded stored
+context. A cited public answer entity, shared CLI/MCP adapters, broad calendar discovery and
+reviewed findings intake remain separate work; these SDKs add no preparation command.
