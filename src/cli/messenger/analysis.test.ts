@@ -126,7 +126,10 @@ const setup = async () => {
   }
   return { call, add, calls: () => calls, configure, baseUrl }
 }
-const json = (result: { stdout: string[] }) => JSON.parse(result.stdout[0] ?? "null")
+const json = (result: { stdout: string[] }) => {
+  const body = JSON.parse(result.stdout[0] ?? "null")
+  return body?.item ?? body
+}
 
 describe("analysis CLI consent and configuration", () => {
   it("asks once per chat/provider, remembers explicit yes, and asks again after revocation", async () => {

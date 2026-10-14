@@ -9,6 +9,17 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`conversations *`, `search conversations` and `messages links` answer in the envelope**, snake_case, CLI and
+  MCP alike. `conversations build|embed|batches status|batches next|links add|links clear|embed status|embed
+  clear|consents revoke` and `messages links` answer `{item}` (`batches next` with nothing left is
+  `{item: {batch: null}}`); `conversations show` answers the `conversation` fields with `messages` as `message`
+  items (`--jsonl` streams those messages); `conversations status` and `consents list` answer lists, each status
+  item with its `model`. `search conversations` and `conversations related` answer `{items, page, next?,
+  missing?}`: `model`, `meaning`, `readiness`, `embeddedOnlyElsewhere`, `refreshed`, `coverage` and related's
+  `source` leave the answer; what the search could not see is a `missing` entry with its step
+  (`models.download`, `conversations.embed`, `conversations.build`, `messages.sync`), the accounts are
+  `meta.accounts`. A run over many chats names `models.download` when the model is missing; `links add` names
+  `conversations.build`, `embed` names it when chunks changed since the build.
 - **Meeting reads answer in the envelope** (without `meta`, which the host adds). `meetings show` and MCP
   `meeting_show` answer `{item}` with the new `meeting_details` entity (the `meeting` fields, `event_id`, `series_id`,
   participants, chat, current transcripts by `ref` with `lines_count`, summaries, attachments; provider `metadata`
