@@ -23,7 +23,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     examples: [`${tool} mentions list kind:phone`, `${tool} mentions list domain:google.com`],
   })
     .description("this account's mentions matching the query, newest first; local store only")
-    .argument("[query...]", "fields below; a bare word is a value, so 89001234567 finds +79001234567")
+    .argument("[query...]", "fields below; a bare word is a value, so a phone typed with 8 finds it written with +7")
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
     .addHelpText("after", queryHelp(MENTION_QUERY))

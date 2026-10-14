@@ -45,6 +45,12 @@ shape of this file.
 - **`recordRun`, `failingNotice`, `reasonOf` and `scheduledRuns` from `@wirecat/cli-core/background`,** so a CLI with
   its own timer (memo, zoom) records its runs in the same shape and prints the same line.
 
+### Fixed
+
+- **`mentions list --help` no longer prints a phone-shaped example.** The query argument said `89001234567` finds
+  `+79001234567`; the second matched the leak scanner's phone rule, so `commands --json` failed tg's and max's
+  `discovery` contract. It now says it in words.
+
 ## 0.268.0 — 14.10.2026
 
 ### Changed — may break callers
