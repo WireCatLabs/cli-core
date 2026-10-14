@@ -27,7 +27,7 @@ write. A messenger plugs in as one adapter and gets all of it.
 | [Write an adapter](docs/dev/ADAPTERS.md) | How to add a messenger: the port, the `Messenger` description, the contract cases |
 | [CLI standard](docs/dev/STANDARD.md) | The rules every WireCat CLI follows: command shape, output, exit codes, permissions, MCP |
 | [Glossary](docs/dev/GLOSSARY.md) | One word, one meaning across the tools |
-| [Query language](docs/search/query-language.md) · [spec](docs/search/query-language-spec.md) | The search syntax and its exact grammar |
+| [Query language](docs/search/query-language.md) · [spec](docs/search/query-language-spec.md) · [Image search](docs/search/images.md) | The search syntax and its exact grammar; finding pictures by context and by what they show |
 | [Storage](docs/storage/README.md) | The schema, the search indexes and the decisions behind them |
 | [Knowledge](docs/dev/KNOWLEDGE.md) · [Meetings](docs/dev/MEETINGS.md) | Labels, links and proposals across sources; the meetings module and its providers |
 | [Testing](docs/dev/TESTING.md) · [Parity audit](docs/dev/PARITY-AUDIT.md) | The sandbox, the coverage floor, the checks across tg and max |
