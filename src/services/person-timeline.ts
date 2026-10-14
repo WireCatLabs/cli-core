@@ -28,6 +28,8 @@ export interface PersonTimeline {
   items: TimelineItem[]
   limits: { items: number }
   hasMore: boolean
+  /** Where the next page starts; set when `hasMore`. */
+  cursor?: string
   /** Changes a large write left queued; the items leave them out until the next write recomputes them. */
   pending: number
 }
@@ -39,6 +41,19 @@ export interface TimelineOptions {
   /** ms, inclusive. */
   until?: number
   limit?: number
+  /** What a previous answer's `cursor` said; the filters are the caller's to repeat. */
+  cursor?: string
+}
+
+/** `before:<ms>:<row id>` — the last item's time and the store's row id, which breaks ties between equal times. */
+const cursorOf = (row: { occurredAt: number; id: number }) => `before:${row.occurredAt}:${row.id}`
+
+const boundOf = (cursor: string): { at: number; id: number } => {
+  const [way, at, id, ...rest] = cursor.split(":")
+  const bound = { at: Number(at), id: Number(id) }
+  if (way !== "before" || rest.length > 0 || !Number.isSafeInteger(bound.at) || !Number.isSafeInteger(bound.id))
+    throw new CliError("validation_error", `--cursor takes what page.next gave, before:<time>:<id> — not "${cursor}"`)
+  return bound
 }
 
 /**
@@ -49,7 +64,7 @@ export const personTimeline = async (
   store: MessageStore,
   asked: AccountKey,
   reference: string,
-  { scope, since, until, limit = TIMELINE_ITEMS }: TimelineOptions = {},
+  { scope, since, until, cursor, limit = TIMELINE_ITEMS }: TimelineOptions = {},
 ): Promise<PersonTimeline> => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > TIMELINE_MAX)
     throw new CliError("validation_error", `the limit takes 1–${TIMELINE_MAX}`)
@@ -65,11 +80,15 @@ export const personTimeline = async (
     ...(since === undefined ? {} : { since }),
     ...(until === undefined ? {} : { until }),
     only: asked,
+    ...(cursor === undefined ? {} : { before: boundOf(cursor) }),
     limit: limit + 1,
   })
+  const shown = rows.slice(0, limit)
+  const last = shown.at(-1)
+  const hasMore = rows.length > limit
   return {
     person: { uid: record.uid, name: record.name },
-    items: rows.slice(0, limit).map((row) => ({
+    items: shown.map((row) => ({
       at: new Date(row.occurredAt).toISOString(),
       subject: row.subjectType,
       subjectId: row.subjectId,
@@ -85,7 +104,8 @@ export const personTimeline = async (
       projectId: row.projectId,
     })),
     limits: { items: limit },
-    hasMore: rows.length > limit,
+    hasMore,
+    ...(hasMore && last ? { cursor: cursorOf(last) } : {}),
     pending,
   }
 }

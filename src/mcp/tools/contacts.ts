@@ -163,8 +163,9 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
       description:
         "Everything one person took part in, in every messenger linked to them, newest first: items [{ at, subject " +
         "(message, chat, email, meeting, task, document…), subject_id, role (sender, mentioned, participant, " +
-        "recipient, assignee, author…), scope, provider, account, chat_id, locator, project_id }]; meta.truncated " +
-        "when cut at limit. A message carries a locator other tools take. Reads the store only.",
+        "recipient, assignee, author…), scope, provider, account, chat_id, locator, project_id }]; page.has_more " +
+        "and page.cursor when cut at limit (pass the cursor back with the same filters); meta.truncated when " +
+        "changes still queued are left out. A message carries a locator other tools take. Reads the store only.",
       input: v.object({
         person: v.pipe(v.string(), v.minLength(1), v.description("person id, @username, or part of a name")),
         scope: v.optional(v.pipe(v.picklist(SCOPES), v.description("only personal or only work"))),
@@ -179,6 +180,9 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
             v.description(`at most this many; ${TIMELINE_ITEMS} if not given`),
           ),
         ),
+        cursor: v.optional(
+          v.pipe(v.string(), v.description("page.cursor of the previous answer, with the same filters")),
+        ),
       }),
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account, args, defaults) => {
@@ -189,13 +193,15 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
             ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
             ...(args.until_time === undefined ? {} : { until: momentOf(args.until_time, "until_time") }),
             ...(args.limit === undefined ? {} : { limit: args.limit }),
+            ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
           },
         )
         return listOf("contacts timeline", {
           items: found.items.map(snakeKeys),
           limit: found.limits.items,
-          has_more: false,
-          ...(found.hasMore || found.pending > 0 ? { meta: { truncated: true } } : {}),
+          has_more: found.hasMore,
+          ...(found.cursor === undefined ? {} : { cursor: found.cursor }),
+          ...(found.pending > 0 ? { meta: { truncated: true } } : {}),
         })
       },
     }),

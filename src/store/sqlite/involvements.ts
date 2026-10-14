@@ -5,6 +5,7 @@ import type { StoreContext } from "./open.js"
 import { inBatch } from "./search-index.js"
 
 export interface Involvement {
+  id: number
   personId: number
   identityId: number | null
   subjectType: string
@@ -39,6 +40,8 @@ export interface InvolvementStore {
       since?: number
       until?: number
       only?: { provider: string; account: string }
+      /** Rows strictly after this one in the newest-first order: older, or the same time with a smaller id. */
+      before?: { at: number; id: number }
       limit?: number
     },
   ): Involvement[]
@@ -66,7 +69,7 @@ export const involvementStoreOver = ({ database, now }: Pick<StoreContext, "data
     return { recomputed, pending: pendingInvolvements(database) }
   },
   pending: () => pendingInvolvements(database),
-  forPerson: (personId, { scope, since, until, only, limit = 100 } = {}) => {
+  forPerson: (personId, { scope, since, until, only, before, limit = 100 } = {}) => {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
       throw new CliError("validation_error", "involvement limit takes 1–1000")
     const filters = [
@@ -74,6 +77,7 @@ export const involvementStoreOver = ({ database, now }: Pick<StoreContext, "data
       ...(since === undefined ? [] : [["AND i.occurred_at>=?", since] as const]),
       ...(until === undefined ? [] : [["AND i.occurred_at<=?", until] as const]),
     ]
+    const bound = before === undefined ? [] : [before.at, before.at, before.id]
     const account = only === undefined ? [] : [only.provider, only.account]
     return database
       .prepare(
@@ -82,10 +86,12 @@ export const involvementStoreOver = ({ database, now }: Pick<StoreContext, "data
           LEFT JOIN messages m ON i.subject_type='message' AND m.id=i.subject_id
           LEFT JOIN chats c ON c.id=CASE WHEN i.subject_type='chat' THEN i.subject_id ELSE m.chat_id END
           WHERE i.person_id=? ${filters.map(([sql]) => sql).join(" ")}
+          ${before === undefined ? "" : "AND (i.occurred_at<? OR (i.occurred_at=? AND i.id<?))"}
           ${only === undefined ? "" : "AND (a.provider IS NULL OR a.provider<>? OR a.external_id=?)"} ORDER BY i.occurred_at DESC, i.id DESC LIMIT ?`,
       )
-      .all(personId, ...filters.map(([, value]) => value), ...account, limit)
+      .all(personId, ...filters.map(([, value]) => value), ...bound, ...account, limit)
       .map((row) => ({
+        id: Number(row.id),
         personId: Number(row.person_id),
         identityId: row.identity_id == null ? null : Number(row.identity_id),
         subjectType: String(row.subject_type),

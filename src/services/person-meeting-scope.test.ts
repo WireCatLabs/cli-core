@@ -66,6 +66,7 @@ describe("person meeting account authorization", () => {
     })
     const forPerson = vi.fn(() => [
       {
+        id: 1,
         personId: Number(ownPerson.uid),
         identityId: null,
         subjectType: "meeting",
