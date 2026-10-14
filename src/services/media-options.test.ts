@@ -7,7 +7,9 @@ import type { SendGuard } from "../sends/guard.js"
 import { onlineDeps } from "./deps.js"
 import { messagesService } from "./messages.js"
 
-const photo = [{ kind: "photo" as const, name: "synthetic.jpg", bytes: new Uint8Array([1]) }]
+const photo = [
+  { kind: "photo" as const, name: "synthetic.jpg", source: { kind: "bytes" as const, bytes: new Uint8Array([1]) } },
+]
 
 const setup = (mediaOptions?: readonly MediaOption[]) => {
   const messenger = { provider: "test", chatArgument: "a chat", ...(mediaOptions ? { mediaOptions } : {}) } as Messenger

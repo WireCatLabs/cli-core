@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync } from
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { readAttachments, readUpload } from "./upload.js"
+import { readAttachments, readUpload, uploadBlob, uploadBytes } from "./upload.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 
@@ -26,7 +26,10 @@ describe("readUpload", () => {
       kind: "file",
       name: "plan.pdf",
     })
-    expect((await readUpload("photo", put("pics/cat.JPG"), { app, env })).bytes.byteLength).toBe(5)
+    expect((await readUpload("photo", put("pics/cat.JPG"), { app, env })).source).toMatchObject({
+      kind: "file",
+      size: 5,
+    })
     await expect(readUpload("photo", put("pics/cat.gif"), { app, env })).rejects.toThrow(/send .* as a file/)
   })
 
@@ -57,12 +60,39 @@ describe("readUpload", () => {
   })
 
   // Windows would write the 2 GiB out; elsewhere the file is sparse.
-  it.skipIf(process.platform === "win32")("says a file of 2 GiB or more is too large to send", async () => {
-    const { env, put } = setUp()
-    const huge = put("huge.bin")
-    truncateSync(huge, 2 ** 31)
+  it.skipIf(process.platform === "win32")(
+    "checks a file of 2 GiB without reading it: it streams, and only a send from memory refuses it",
+    async () => {
+      const { env, put } = setUp()
+      const huge = put("huge.bin")
+      truncateSync(huge, 2 ** 31)
 
-    await expect(readUpload("file", huge, { app, env })).rejects.toThrow(/2 GiB or more/)
+      const { source } = await readUpload("file", huge, { app, env })
+
+      expect(source).toEqual({ kind: "file", path: huge, size: 2 ** 31 })
+      expect((await uploadBlob(source)).size).toBe(2 ** 31)
+      await expect(uploadBytes(source)).rejects.toThrow(/at most 256 MiB from memory — nothing was sent/)
+    },
+  )
+})
+
+describe("uploadBytes and uploadBlob", () => {
+  it("read the file when it is sent, and refuse one that changed after it was checked", async () => {
+    const { env, put } = setUp()
+    const path = put("notes.txt")
+    const { source } = await readUpload("file", path, { app, env })
+
+    expect(new TextDecoder().decode(await uploadBytes(source))).toBe("bytes")
+    writeFileSync(path, "longer bytes")
+    await expect(uploadBytes(source)).rejects.toThrow(/changed after it was checked/)
+    await expect(uploadBlob(source)).rejects.toThrow(/changed after it was checked/)
+  })
+
+  it("hand bytes made in memory over as they are", async () => {
+    const bytes = new Uint8Array([1, 2, 3])
+
+    expect(await uploadBytes({ kind: "bytes", bytes })).toBe(bytes)
+    expect(new Uint8Array(await (await uploadBlob({ kind: "bytes", bytes })).arrayBuffer())).toEqual(bytes)
   })
 })
 

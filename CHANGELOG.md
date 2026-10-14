@@ -35,6 +35,13 @@ shape of this file.
 - **`--operation-id` replaces `--send-id`** (`messages send|forward`, `polls create`, `topics create`), and the MCP
   argument `operation_id` replaces `send_id`. A write's answer and an unknown outcome's error carry one
   `operation_id`; `send_id` is gone.
+- **An `Upload` carries a `source`, not `bytes`**: `{ kind, name, source, asFile? }`, where `source` is
+  `{ kind: "file", path, size }` or `{ kind: "bytes", bytes }`. `readUpload` and `readAttachments` check the file
+  and record its size; nothing is read until an adapter sends it, so a file of any size is accepted here and a
+  send no longer holds every attachment in memory first. Adapters read it with `uploadBlob(source)`, which reads
+  the file as it goes, or `uploadBytes(source)`, which refuses more than `MAX_BUFFERED_UPLOAD_BYTES` (256 MiB);
+  both refuse a file whose size changed after the check. `uploadSize` gives the size. All are exported from
+  `@wirecat/cli-core/sends`. The "2 GiB or more" refusal is gone: each messenger's own limit applies.
 
 ### Added
 

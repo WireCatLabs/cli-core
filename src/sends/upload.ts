@@ -1,5 +1,5 @@
-import { realpathSync } from "node:fs"
-import { readFile } from "node:fs/promises"
+import { openAsBlob, realpathSync } from "node:fs"
+import { stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
@@ -7,13 +7,46 @@ import { storePath } from "../store/path.js"
 
 export type UploadKind = "photo" | "file" | "voice"
 
-/** A file read for sending. Its name goes to the messenger and never to the journal. */
+/** Where an upload's bytes are: a file read only when it is sent, or bytes made in memory (a converted voice). */
+export type UploadSource = { kind: "file"; path: string; size: number } | { kind: "bytes"; bytes: Uint8Array }
+
+/** A file checked for sending. Its name goes to the messenger and never to the journal. */
 export interface Upload {
   kind: UploadKind
   name: string
-  bytes: Uint8Array
+  source: UploadSource
   /** A `file` that goes as a file to download even where the messenger would play it — a video. */
   asFile?: true
+}
+
+/** The most `uploadBytes` holds in memory; an adapter that can stream uses `uploadBlob` and has no such cap. */
+export const MAX_BUFFERED_UPLOAD_BYTES = 256 * 1024 * 1024
+
+export const uploadSize = (source: UploadSource): number =>
+  source.kind === "file" ? source.size : source.bytes.byteLength
+
+const changed = () => new CliError("validation_error", "the file changed after it was checked — nothing was sent")
+
+/** The upload as a Blob that reads the file as it is sent. */
+export const uploadBlob = async (source: UploadSource, type?: string): Promise<Blob> => {
+  if (source.kind === "bytes") return new Blob([source.bytes], type === undefined ? {} : { type })
+  const blob = await openAsBlob(source.path, type === undefined ? {} : { type })
+  if (blob.size !== source.size) throw changed()
+  return blob
+}
+
+/** The upload's bytes in memory, for a messenger library that takes nothing else. */
+export const uploadBytes = async (source: UploadSource): Promise<Uint8Array> => {
+  if (source.kind === "bytes") return source.bytes
+  if (source.size > MAX_BUFFERED_UPLOAD_BYTES)
+    throw new CliError(
+      "validation_error",
+      `the file is ${Math.ceil(source.size / 1024 / 1024)} MiB, and this messenger sends at most ` +
+        `${MAX_BUFFERED_UPLOAD_BYTES / 1024 / 1024} MiB from memory — nothing was sent`,
+    )
+  const bytes = new Uint8Array(await (await uploadBlob(source)).arrayBuffer())
+  if (bytes.byteLength !== source.size) throw changed()
+  return bytes
 }
 
 const PHOTO = new Set([".jpg", ".jpeg", ".png", ".webp"])
@@ -79,17 +112,12 @@ export const readUpload = async (
     )
   }
   try {
-    return { kind, name: basename(path), bytes: await readFile(path) }
+    const info = await stat(path)
+    if (!info.isFile()) throw Object.assign(new Error("not a file"), { code: "EISDIR" })
+    return { kind, name: basename(path), source: { kind: "file", path: resolve(path), size: info.size } }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
-    const reason =
-      code === "ENOENT"
-        ? "no such file"
-        : code === "EISDIR"
-          ? "it is a folder"
-          : code === "ERR_FS_FILE_TOO_LARGE"
-            ? "it is 2 GiB or more, and files are sent only under 2 GiB"
-            : "it cannot be read"
+    const reason = code === "ENOENT" ? "no such file" : code === "EISDIR" ? "it is a folder" : "it cannot be read"
     throw new CliError("validation_error", `cannot send ${path}: ${reason}`)
   }
 }

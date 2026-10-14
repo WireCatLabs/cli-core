@@ -39,6 +39,7 @@ import type {
   ServerReads,
 } from "../ports/messenger.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
+import { uploadSize } from "../sends/upload.js"
 import { contractSeed, type Seed } from "./seed.js"
 
 /** Every group of the port, over memory. */
@@ -241,10 +242,10 @@ export const fakeAdapter = (seed: Seed = contractSeed(), options: { feed?: boole
     send: async (chatId, text, options) =>
       once(options.sendId, () => {
         const chat = chatOf(chatId)
-        const attachments = (options.attachments ?? []).map(({ kind, name, bytes }) => ({
+        const attachments = (options.attachments ?? []).map(({ kind, name, source }) => ({
           kind,
           name,
-          size: bytes.length,
+          size: uploadSize(source),
         }))
         const extra = { attachments, ...(options.replyTo === undefined ? {} : { replyToId: options.replyTo }) }
         if (options.at === undefined) return { message: post(chat, text, extra), sendId: options.sendId }

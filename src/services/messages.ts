@@ -13,7 +13,7 @@ import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import type { PermissionKey } from "../sends/permissions.js"
 import { sendAsCheck } from "../sends/send-as.js"
 import { newOperationId, newSendId } from "../sends/send-id.js"
-import type { Upload } from "../sends/upload.js"
+import { type Upload, uploadSize } from "../sends/upload.js"
 import type {
   AccountKey,
   ChatCompleteness,
@@ -587,7 +587,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         ...(origin === undefined ? {} : { origin }),
         ...(attachments.length === 0
           ? {}
-          : { attachments: attachments.map(({ kind, bytes }) => ({ kind, bytes: bytes.byteLength })) }),
+          : { attachments: attachments.map(({ kind, source }) => ({ kind, bytes: uploadSize(source) })) }),
       }
       try {
         const done = await guardedWrite(
