@@ -5,7 +5,7 @@ import type { StoreContext } from "./open.js"
 import { dot } from "./vectors.js"
 
 /** A document's picture is one chunk of this type at position 0; its vector is the picture's, not text's. */
-export const DOCUMENT_PICTURE = "document-picture"
+export const DOCUMENT_PICTURE = "document_picture"
 
 const SCAN_PAGE = 5_000
 

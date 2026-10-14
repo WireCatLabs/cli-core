@@ -24,7 +24,7 @@ shape of this file.
   `@wirecat/cli-core/services`) keeps the CLIP vector of a document that is an image, skipping bytes it already holds
   by their sha256, and `removePicture` drops it. `searchNotes(store, words, { pictures: true })` then adds
   `pictures: [{ ref, score }]` beside `hits` (floor 0.25, same folder and source scope, never mixed into the hits), or
-  `picturesSkipped` when the model is not downloaded. No schema change: the vector is a `document-picture` chunk.
+  `picturesSkipped` when the model is not downloaded. No schema change: the vector is a `document_picture` chunk.
 
 ## 0.264.0 — 14.10.2026
 
