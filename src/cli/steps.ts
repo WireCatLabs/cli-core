@@ -181,6 +181,12 @@ export const STEPS = defineSteps([
     why: "the entry names one Node version's path; after switching or upgrading Node, print it again",
   },
   {
+    id: "bot.mcp-config",
+    command: "bot mcp config",
+    args: [],
+    why: "the entry names one Node version's path; after switching or upgrading Node, print it again",
+  },
+  {
     id: "server.restart",
     command: "server restart",
     args: [],

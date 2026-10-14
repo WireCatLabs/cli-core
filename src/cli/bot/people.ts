@@ -1,11 +1,13 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
 import { Command } from "commander"
-import { parseLocator } from "../../domain/locator.js"
+import { formatLocator, parseLocator } from "../../domain/locator.js"
 import type { ChatKind, Contact, Message, PersonCard } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
 import { pickPerson } from "../../resolve.js"
 import { type SearchFound, searchStore } from "../../services/messages.js"
 import type { AccountKey, MessageStore, StoredHit } from "../../store/store.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { messageItem } from "../messenger/message-items.js"
 import { positiveCount } from "../paging.js"
 import { asFirstWord } from "../profile.js"
 import { type BotContext, botContext } from "./context.js"
@@ -140,12 +142,17 @@ const cardOf = async (
   const kindOf = bot.chatKindOf ?? kindByNumber
   const dialogs = latest.filter((hit) => kindOf(hit) === "dialog")
   const pages = await Promise.all(
-    dialogs.map((hit) =>
-      store.messages({ provider: bot.provider, account: parseLocator(hit.locator).account }, hit.chatId, { limit }),
-    ),
+    dialogs.map(async (hit) => {
+      const { account } = parseLocator(hit.locator)
+      const page = await store.messages({ provider: bot.provider, account }, hit.chatId, { limit })
+      return page.items.map((message) => ({
+        ...message,
+        locator: formatLocator({ provider: bot.provider, account, chat: message.chatId, message: message.id }),
+      }))
+    }),
   )
-  const messages = pages.flatMap((page) => page.items).toSorted(byTime)
-  const card: PersonCard & { messages: Message[] } = {
+  const messages = pages.flat().toSorted(byTime)
+  const card: PersonCard & { messages: (Message & { locator: string })[] } = {
     ...person,
     chats: latest.map((hit) => ({
       id: hit.chatId,
@@ -193,14 +200,19 @@ export const botContactsCommand = (bot: BotMessenger): Command => {
             ;({ card } = await read())
           }
         }
-        if (context.format !== "pretty") {
-          context.renderer.result(card)
-          return
-        }
+        const { messages, ...person } = card
         const chats = card.chats.map(
           (chat) => `  ${chat.id}  ${chat.kind}  ${singleLine(chat.title ?? "")}  ${chat.lastMessageAt ?? ""}`,
         )
-        context.streams.data([nameLine(card), ...chats, "", messagesText(context, bot, card.messages)].join("\n"))
+        renderAnswer(
+          this,
+          context,
+          itemOf({
+            ...(snakeKeys(person) as object),
+            messages: messages.map((message) => messageItem(message, context.copy.accountOf(""))),
+          }),
+          () => [nameLine(card), ...chats, "", messagesText(context, bot, card.messages)].join("\n"),
+        )
       })
     })
   return command
@@ -211,7 +223,7 @@ const search = (
   bot: BotMessenger,
   text: string,
   from: string[],
-  options: Across & { newest?: boolean; limit?: number },
+  options: Across & { newest?: boolean; limit?: number; offset?: number },
 ): Promise<SearchFound> => {
   if (text.trim() === "" && from.length === 0) {
     throw new CliError("validation_error", "say what to find: some text, or who wrote it with --from")
@@ -225,6 +237,7 @@ const search = (
       accounts,
       ...(senders.length > 0 ? { senders } : {}),
       limit: options.limit ?? context.settings.limit,
+      ...(options.offset ? { offset: options.offset } : {}),
       newest: options.newest === true,
     })
   })
@@ -236,6 +249,7 @@ export const botSearchCommand = (bot: BotMessenger): Command => {
   acrossOptions(group.command("messages"))
     .argument("[query...]", "the words to find")
     .option("--limit <n>", "how many", positiveCount("--limit"))
+    .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
     .option("--newest", "newest first instead of best first")
     .option(
       "--from <who>",
@@ -250,20 +264,39 @@ export const botSearchCommand = (bot: BotMessenger): Command => {
     .action(async function (
       this: Command,
       query: string[],
-      options: Across & { from?: string[]; newest?: boolean; limit?: number },
+      options: Across & { from?: string[]; newest?: boolean; limit?: number; page?: number },
     ) {
       const context = botContext(this, bot)
+      const limit = options.limit ?? context.settings.limit
+      const page = options.page ?? 1
       await context.run(async () => {
-        const found = await search(context, bot, query.join(" "), options.from ?? [], options)
+        const found = await search(context, bot, query.join(" "), options.from ?? [], {
+          ...options,
+          limit,
+          offset: (page - 1) * limit,
+        })
         for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
         if (!found.wordsReady) {
           context.renderer.note(
             `the word index is still being built, so a search by words reads pieces of words until \`${bot.app.command} store migrate\` finishes it`,
           )
         }
-        if (context.format === "pretty") context.streams.data(messagesText(context, bot, found.items))
-        else if (context.format === "jsonl") context.renderer.stream(found.items)
-        else context.renderer.result({ items: found.items, page: 1, limit: found.items.length, hasMore: found.hasMore })
+        renderAnswer(
+          this,
+          context,
+          listOf("bot search messages", {
+            items: found.items.map((hit) => messageItem(hit, context.copy.accountOf(""))),
+            limit,
+            page,
+            has_more: found.hasMore,
+            args: {
+              query: query.join(" "),
+              ...(options.from ? { from: options.from } : {}),
+              ...(options.newest ? { newest: true } : {}),
+            },
+          }),
+          () => messagesText(context, bot, found.items),
+        )
       })
     })
   return group
@@ -299,14 +332,25 @@ export const addBotCopyReads = (messages: Command, bot: BotMessenger): void => {
           ...chat,
           messages: chat.messages.toSorted(byTime).slice(-limit),
         }))
-        if (context.format !== "pretty") {
-          context.renderer.result({ basis: BASIS, chats: grouped, hasMore: page.hasMore })
-          return
-        }
         const blocks = grouped.map(
           (chat) => `${chat.id}  ${singleLine(chat.title ?? "")}\n${messagesText(context, bot, chat.messages)}`,
         )
-        context.streams.data(blocks.join("\n\n"))
+        renderAnswer(
+          this,
+          context,
+          itemOf(
+            {
+              basis: BASIS,
+              chats: grouped.map(({ id, title, messages }) => ({
+                id,
+                title,
+                messages: messages.map((hit) => messageItem(hit, context.copy.accountOf(""))),
+              })),
+            },
+            page.hasMore ? { meta: { truncated: true } } : {},
+          ),
+          () => blocks.join("\n\n"),
+        )
       })
     })
 }

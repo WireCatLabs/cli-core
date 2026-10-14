@@ -4,8 +4,9 @@ import { CliError, captureStreams, isCliError, type Streams } from "@wirecat/cli
 import { skillResource } from "@wirecat/cli-base/skill"
 import * as v from "valibot"
 import type { BotMessenger } from "../../cli/bot/port.js"
+import { itemOf } from "../../cli/envelope.js"
 import { skipFlagFor } from "../../cli/messenger/ask.js"
-import { listed } from "../../cli/paging.js"
+import { wholeList } from "../../cli/messenger/chat-answers.js"
 import type { Settings } from "../../cli/settings.js"
 import { keyForCommand, type Level, levelFor, type PermissionKey } from "../../sends/permissions.js"
 import { type McpCommand, registerCommands } from "../surface.js"
@@ -54,8 +55,13 @@ const parsed = (text: string): unknown => {
   }
 }
 
-const body = (value: unknown): object =>
-  Array.isArray(value) ? listed(value) : value !== null && typeof value === "object" ? value : { value }
+/** A command's `--json` answer is already an envelope; anything else — a CLI's own tool — is wrapped as one. */
+const body = (words: readonly string[], value: unknown): object =>
+  Array.isArray(value)
+    ? wholeList(["bot", ...words].join(" "), value)
+    : value !== null && typeof value === "object" && ("item" in value || "items" in value)
+      ? value
+      : itemOf(value !== null && typeof value === "object" ? value : { value })
 
 /**
  * Runs bot commands in this process and returns their `--json` answers. A command never sees a
@@ -148,9 +154,11 @@ export const createBotServer = (options: BotServerOptions) => {
           input: tool.input,
           run: async (args, ctx) => {
             if (tool.handle)
-              return answered(body(await tool.handle(args, { ...kit, answerFlags: answerFlag(tool) }, ctx)))
+              return answered(body(tool.words, await tool.handle(args, { ...kit, answerFlags: answerFlag(tool) }, ctx)))
             const { options: own = [], positionals = [] } = tool.invocation?.(args) ?? {}
-            return answered(body(await invoke(tool.words, { options: [...own, ...answerFlag(tool)], positionals })))
+            return answered(
+              body(tool.words, await invoke(tool.words, { options: [...own, ...answerFlag(tool)], positionals })),
+            )
           },
         },
       ]),
@@ -166,7 +174,10 @@ export const createBotServer = (options: BotServerOptions) => {
         const auth = await invoke(["auth", "show"], {}).catch((error: unknown) =>
           isCliError(error) ? { error: { code: error.code, message: error.message } } : { error: String(error) },
         )
-        return answered({ profile: settings.profile, kind: "bot", auth, writes, permissions: settings.permissions })
+        const shown = (auth as { item?: unknown }).item ?? auth
+        return answered(
+          itemOf({ profile: settings.profile, kind: "bot", auth: shown, writes, permissions: settings.permissions }),
+        )
       },
     }
     registerCommands(server, `${command}_bot`, commands)

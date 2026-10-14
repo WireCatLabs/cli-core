@@ -3,9 +3,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Readable } from "node:stream"
 import { captureStreams, memoryKeyring } from "@wirecat/cli-base"
+import { itemEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { beforeEach, describe, expect, it } from "vitest"
 import { parseMarkdown } from "../../domain/markdown.js"
 import type { Message } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import { SendJournal } from "../../sends/journal.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -146,12 +149,15 @@ describe("bot messages send", () => {
     const done = await call(["sales", "bot", "messages", "send", "Team", "Hello", "--json"])
 
     expect(done.code).toBe(0)
-    expect(done.answer).toMatchObject({ operationId: expect.any(String), message: { chatId: "-100", text: "Hello" } })
+    expect(done.answer.item).toMatchObject({
+      operation_id: expect.any(String),
+      message: { chat_id: "-100", text: "Hello" },
+    })
     expect(sent).toMatchObject([{ chat: "-100", text: "Hello" }])
     expect(journal()).toMatchObject([{ chatId: "-100", kind: "message", outcome: "sent", messageId: "100", length: 5 }])
     expect(JSON.stringify(journal())).not.toContain("Hello")
     const kept = await call(["sales", "bot", "messages", "show", "Team", "100", "--offline", "--json"])
-    expect(kept.answer).toMatchObject({ id: "100", text: "Hello" })
+    expect(v.parse(itemEnvelopeSchema(ENTITIES.message), kept.answer).item).toMatchObject({ id: "100", text: "Hello" })
   })
 
   it("reads the text from stdin, marks it up with --md, and refuses --md with --html", async () => {
@@ -191,7 +197,7 @@ describe("bot messages list and show", () => {
       store.senderHandles({ provider: "chat-bot", account: botId }, "-100"),
     )
     expect(handles.get("sales_bot")).toBe(botId)
-    expect((await call(["sales", "bot", "messages", "show", "Team", "2", "--json"])).answer.text).toBe(
+    expect((await call(["sales", "bot", "messages", "show", "Team", "2", "--json"])).answer.item.text).toBe(
       "from the messenger",
     )
   })
@@ -221,7 +227,7 @@ describe("bot messages edit, delete, pin", () => {
     expect((await call(["sales", "bot", "messages", "delete", "Team", "100", "--json"])).code).toBe(7)
     expect(calls).toEqual([])
     const deleted = await call(["sales", "bot", "messages", "delete", "Team", "100", "--allow-dangerous", "--json"])
-    expect(deleted.answer).toMatchObject({ deleted: ["100"] })
+    expect(deleted.answer.item).toMatchObject({ chat_id: "-100", deleted: ["100"] })
     expect(calls).toEqual(["delete -100 100"])
     expect((await call(["sales", "bot", "messages", "show", "Team", "100", "--offline", "--json"])).code).toBe(6)
   })
@@ -240,7 +246,7 @@ describe("bot messages edit, delete, pin", () => {
 
 describe("bot chats show, leave, action", () => {
   it("**remembers a chat it was shown**, leaves one, and shows an action", async () => {
-    expect((await call(["sales", "bot", "chats", "show", "-200", "--json"])).answer).toMatchObject({ id: "-200" })
+    expect((await call(["sales", "bot", "chats", "show", "-200", "--json"])).answer.item).toMatchObject({ id: "-200" })
     expect(
       (await call(["sales", "bot", "chats", "list", "--json"])).answer.items.map((chat: { id: string }) => chat.id),
     ).toContain("-200")
@@ -275,7 +281,12 @@ describe("bot chats admins and members", () => {
     ])
     await call(["sales", "bot", "chats", "admins", "remove", "Team", "91"])
 
-    expect(made.answer).toMatchObject({ chatId: "-100", personId: "91", rights: ["pin", "members"], title: "Mod" })
+    expect(made.answer.item).toMatchObject({
+      chat_id: "-100",
+      person_id: "91",
+      rights: ["pin", "members"],
+      title: "Mod",
+    })
     expect(calls).toEqual(['admin -100 91 pin,members "Mod"', "unadmin -100 91"])
     expect(journal()).toMatchObject([
       { chatId: "-100", kind: "chat", action: "admins.add", outcome: "sent" },
@@ -302,7 +313,7 @@ describe("bot chats admins and members", () => {
     const removed = await call(["sales", "bot", "chats", "members", "remove", "Team", "91", "--json"])
     await call(["sales", "bot", "chats", "members", "remove", "Team", "92", "--block"])
 
-    expect(removed.answer).toMatchObject({ chatId: "-100", removed: ["91"], blocked: false })
+    expect(removed.answer.item).toMatchObject({ chat_id: "-100", removed: ["91"], blocked: false })
     expect(calls).toEqual(["remove -100 91", "remove -100 92 block"])
   })
 

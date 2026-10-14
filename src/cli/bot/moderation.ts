@@ -10,6 +10,7 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { momentOf } from "../../services/moment.js"
 import { environmentOf } from "../context.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "../messenger/ask.js"
 import { type BotContext, botContext, online } from "./context.js"
 import { botCan, botIdOf } from "./messages.js"
@@ -28,7 +29,14 @@ const titleOf = (context: BotContext, chatId: Id) =>
 const shown = (context: BotContext, chatId: Id, rules: ModerationRules) => {
   const saved = rules.read(chatId)
   const title = titleOf(context, chatId)
-  return { chatId, title, file: rules.path, saved: saved !== undefined, rules: saved ?? defaultRules(title) }
+  // `rules` keeps the keys `rules set` takes.
+  return itemOf({
+    chat_id: chatId,
+    title,
+    file: rules.path,
+    saved: saved !== undefined,
+    rules: saved ?? defaultRules(title),
+  })
 }
 
 /** `bot chats rules show|set|unset`: kept on this machine, the chat named the bot's way. */
@@ -40,7 +48,7 @@ export const botRulesCommand = (bot: BotMessenger): Command => {
     .argument("<chat>", CHAT)
     .action(function (this: Command, chat: string) {
       const context = botContext(this, bot)
-      context.renderer.result(shown(context, context.chatRef(chat), rulesOf(context, bot)))
+      renderAnswer(this, context, shown(context, context.chatRef(chat), rulesOf(context, bot)))
     })
   annotate(command.command("set"), { mutates: true, local: true })
     .description(`change one rule — ${RULE_KEYS.join(", ")}`)
@@ -55,7 +63,7 @@ export const botRulesCommand = (bot: BotMessenger): Command => {
       const chatId = context.chatRef(chat)
       const rules = rulesOf(context, bot)
       rules.set(chatId, titleOf(context, chatId), key, value)
-      context.renderer.result(shown(context, chatId, rules))
+      renderAnswer(this, context, shown(context, chatId, rules))
     })
   annotate(command.command("unset"), { mutates: true, local: true })
     .description("put one rule back to its default")
@@ -66,7 +74,7 @@ export const botRulesCommand = (bot: BotMessenger): Command => {
       const chatId = context.chatRef(chat)
       const rules = rulesOf(context, bot)
       rules.unset(chatId, titleOf(context, chatId), key)
-      context.renderer.result(shown(context, chatId, rules))
+      renderAnswer(this, context, shown(context, chatId, rules))
     })
   return command
 }
@@ -214,18 +222,18 @@ export const botModerateCommand = (bot: BotMessenger): Command =>
             return answer === null ? undefined : yes(answer)
           },
         })
-        context.renderer.result(
-          context.format === "pretty"
-            ? rows.map((row) => ({
-                what: row.kind,
-                who: row.personName ?? row.personId,
-                rule: row.rule,
-                action: row.action,
-                outcome: row.outcome,
-                ...(row.reason ? { why: row.reason } : {}),
-              }))
-            : { chatId, rows },
-        )
+        if (context.format === "pretty")
+          context.renderer.result(
+            rows.map((row) => ({
+              what: row.kind,
+              who: row.personName ?? row.personId,
+              rule: row.rule,
+              action: row.action,
+              outcome: row.outcome,
+              ...(row.reason ? { why: row.reason } : {}),
+            })),
+          )
+        else renderAnswer(this, context, itemOf({ chat_id: chatId, rows: snakeKeys(rows) }))
         for (const note of notes) context.renderer.note(note)
       })
     })

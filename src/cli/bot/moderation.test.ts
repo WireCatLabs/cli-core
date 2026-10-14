@@ -82,7 +82,7 @@ const call = async (argv: string[], answer?: (question: string) => string) => {
   return { code, answer: out ? JSON.parse(out) : undefined, stderr: streams.stderr.join("\n") }
 }
 const rules = () => new ModerationRules(moderationPathFor(app, "sales", env))
-const rows = (answer: { rows: { rule: string; action: string; outcome: string }[] }) => answer.rows
+const rows = (answer: { item: { rows: { rule: string; action: string; outcome: string }[] } }) => answer.item.rows
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "bot-moderate-"))
@@ -169,7 +169,7 @@ describe("bot chats moderate", () => {
 
     const { answer, stderr } = await call(["moderate", "-100", "--json"])
 
-    expect(rows(answer)).toContainEqual(expect.objectContaining({ kind: "member", rule: "blocked", personId: "55" }))
+    expect(rows(answer)).toContainEqual(expect.objectContaining({ kind: "member", rule: "blocked", person_id: "55" }))
     expect(stderr).not.toContain("no joins kept")
   })
 
@@ -179,7 +179,7 @@ describe("bot chats moderate", () => {
 
     const { answer, stderr } = await call(["moderate", "-100", "--json"])
 
-    expect(rows(answer)).toEqual([expect.objectContaining({ rule: "invites", messageId: "7" })])
+    expect(rows(answer)).toEqual([expect.objectContaining({ rule: "invites", message_id: "7" })])
     expect(stderr).toContain("gives a bot no history")
   })
 
@@ -200,18 +200,18 @@ describe("bot chats rules", () => {
     const shown = await call(["rules", "show", "-100", "--json"])
 
     expect(set.code).toBe(0)
-    expect(shown.answer).toMatchObject({ chatId: "-100", title: "Team", saved: true, rules: { links: "delete" } })
-    expect(shown.answer.file).toBe(join(root, "state", "profiles", "sales.moderation.json"))
+    expect(shown.answer.item).toMatchObject({ chat_id: "-100", title: "Team", saved: true, rules: { links: "delete" } })
+    expect(shown.answer.item.file).toBe(join(root, "state", "profiles", "sales.moderation.json"))
   })
 
   it("puts one rule back to its default with unset, leaving the others", async () => {
     await call(["rules", "set", "-100", "links", "delete"])
     await call(["rules", "set", "-100", "invites", "remove"])
-    const defaults = (await call(["rules", "show", "-200", "--json"])).answer.rules
+    const defaults = (await call(["rules", "show", "-200", "--json"])).answer.item.rules
 
     const unset = await call(["rules", "unset", "-100", "links", "--json"])
 
-    expect(unset.answer.rules).toMatchObject({ links: defaults.links, invites: "remove" })
+    expect(unset.answer.item.rules).toMatchObject({ links: defaults.links, invites: "remove" })
     expect(defaults.links).not.toBe("delete")
     expect(calls).toEqual([])
   })
