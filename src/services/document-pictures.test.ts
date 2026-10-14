@@ -89,7 +89,7 @@ describe("searchNotes with pictures", () => {
     const off = await searchNotes(store, "cat", { pictureEmbedder: embedder, folderIds: [folder.id] })
     expect(found.hits).toEqual(off.hits)
     expect(off).not.toHaveProperty("pictures")
-    expect(off).not.toHaveProperty("picturesSkipped")
+    expect(off).not.toHaveProperty("pictures_skipped")
   })
 
   it("notes why when the model is missing", async () => {
@@ -98,7 +98,7 @@ describe("searchNotes with pictures", () => {
       pictures: true,
       env: { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) },
     })
-    expect(found.picturesSkipped).toContain("models image download clip-b32")
+    expect(found.pictures_skipped).toContain("models image download clip-b32")
     expect(found.pictures).toBeUndefined()
   })
 

@@ -1,3 +1,4 @@
+export { type AppErrors, DETAILS as CORE_DETAILS, failureContext, REASONS as CORE_REASONS } from "./cli/reasons.js"
 export type { CounterField, CounterObservation, CounterObservations, CounterState } from "./domain/counters.js"
 export { COUNTER_FIELDS, counterValue, observedCounters } from "./domain/counters.js"
 export {

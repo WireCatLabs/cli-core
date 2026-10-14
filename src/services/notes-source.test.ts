@@ -17,7 +17,7 @@ const twinStore = async () => {
   return twin
 }
 
-const accountOf = (hit: { folderId: string | null }) => hit.folderId ?? "internal"
+const accountOf = (hit: { folder_id: string | null }) => hit.folder_id ?? "internal"
 
 describe("search notes --source", () => {
   it("reads memo's notes beside one folder in one store query, and pages it as one list", async () => {
@@ -75,7 +75,7 @@ describe("search notes --source", () => {
     const nearest = (options: { folderIds: string[]; withInternal?: boolean }) =>
       store.notes
         .nearest("test:model:2", new Float32Array([1, 0]), { limit: 100, ...options })
-        .then((found) => new Set(found.map(({ note }) => accountOf(note))))
+        .then((found) => new Set(found.map(({ note }) => note.folderId ?? "internal")))
     expect(await nearest({ folderIds: [twins.alpha.folderId] })).toEqual(new Set([twins.alpha.folderId]))
     expect(await nearest({ folderIds: [twins.alpha.folderId], withInternal: true })).toEqual(
       new Set(["internal", twins.alpha.folderId]),

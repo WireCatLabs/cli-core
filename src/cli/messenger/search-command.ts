@@ -203,7 +203,7 @@ const notesCommand = (messenger: Messenger): Command =>
       if (context.format === "pretty")
         context.renderer.note(`searched: ${found.accounts.map(({ account }) => `notes:${account}`).join(", ")}`)
       for (const { source, reason } of found.skipped) context.renderer.note(`${source} not searched: ${reason}`)
-      if (found.meaningSkipped) context.renderer.note(`by words only: ${found.meaningSkipped}`)
+      if (found.meaning_skipped) context.renderer.note(`by words only: ${found.meaning_skipped}`)
       const again = {
         query: words.join(" "),
         ...(options.type === undefined ? {} : { type: options.type }),
@@ -217,7 +217,7 @@ const notesCommand = (messenger: Messenger): Command =>
         return found.hits
           .map(
             (hit) =>
-              `${singleLine(hit.title ?? hit.path ?? hit.ref)}  ${hit.ref}  (${hit.foundBy.join(", ")})\n  ${singleLine(hit.line)}\n`,
+              `${singleLine(hit.title ?? hit.path ?? hit.ref)}  ${hit.ref}  (${hit.found_by.join(", ")})\n  ${singleLine(hit.excerpt)}\n`,
           )
           .join("")
       })

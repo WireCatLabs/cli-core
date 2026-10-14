@@ -169,18 +169,7 @@ export const messagesAnswer = (
   })
 }
 
-export const noteHitItem = (hit: FoundNote): NoteHitItem =>
-  defined({
-    ref: hit.ref,
-    source: hit.source,
-    folder_id: hit.folderId,
-    path: hit.path,
-    title: hit.title,
-    updated_at: hit.modifiedAt,
-    excerpt: hit.line,
-    found_by: hit.foundBy,
-    links: hit.links.map(({ to, targetText, kind, anchor }) => ({ to, target_text: targetText, kind, anchor })),
-  })
+export const noteHitItem = (hit: FoundNote): NoteHitItem => defined({ ...hit })
 
 export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
   item.kind === "meeting"
@@ -226,10 +215,10 @@ export const notesAnswer = (
   listOf(command, {
     items: found.hits.map(noteHitItem),
     limit,
-    has_more: found.hasMore && found.nextOffset !== undefined,
+    has_more: found.has_more && found.next_offset !== undefined,
     page: page ?? 1,
     ...(again ? { args: again } : {}),
-    ...meaningGap(found.meaningSkipped, exact),
+    ...meaningGap(found.meaning_skipped, exact),
     meta: metaOf(
       found.accounts,
       found.skipped.map(({ source, reason }) => ({ source, reason })),

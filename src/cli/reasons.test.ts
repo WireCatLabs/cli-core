@@ -4,6 +4,7 @@ import { CliError, captureStreams, errorObjectOf } from "@wirecat/cli-base"
 import { BASE_REASONS, defineReasons } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { CORE_DETAILS, CORE_REASONS } from "../index.js"
 import { failed } from "../mcp/tool.js"
 import { run } from "./program.js"
 import { DETAILS, failureContext, REASONS } from "./reasons.js"
@@ -98,6 +99,23 @@ describe("error reasons", () => {
     })
     expect(failed(error, errors).structuredContent).toEqual(printed)
     expect(failed(error).structuredContent).toMatchObject({ error: { reason: "item.not-found" } })
+  })
+
+  it("keeps cli-core's reasons and details for an app that registers only its own", () => {
+    const own = defineReasons([
+      { reason: "sign-in.expired", code: "authentication_error", message: "sign in again", details: [] },
+    ])
+    const error = new CliError("validation_error", "a memory needs its scope", {
+      reason: "memory.scope-required",
+      candidates: ["project:a"],
+    })
+    expect(errorObjectOf(error, { reasons: own }).error).not.toMatchObject({ reason: "memory.scope-required" })
+    expect(errorObjectOf(error, failureContext({ reasons: own })).error).toMatchObject({
+      reason: "memory.scope-required",
+      details: { candidates: ["project:a"] },
+    })
+    expect(CORE_REASONS).toBe(REASONS)
+    expect(CORE_DETAILS).toBe(DETAILS)
   })
 
   it("refuses an app detail key that is not snake_case", () => {
