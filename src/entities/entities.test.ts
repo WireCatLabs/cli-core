@@ -145,6 +145,16 @@ const samples: Record<EntityName, unknown> = {
     updated_at: at,
   },
   reference: "note:42",
+  model: {
+    id: "e5-small",
+    kind: "text",
+    title: "multilingual-e5-small",
+    languages: "100 languages",
+    licence: "MIT",
+    size_bytes: 120_000_000,
+    downloaded: false,
+    default: true,
+  },
   job: {
     id: "a1b2c3",
     chat: "Work",

@@ -1,7 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
+import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command, Option } from "commander"
+import type * as v from "valibot"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, TEXT_MODELS, textModel } from "../../embeddings/models.js"
+import type { model } from "../../entities/model.js"
 import {
   DEFAULT_IMAGE_MODEL,
   IMAGE_MODELS,
@@ -25,7 +29,8 @@ import { choose } from "../../speech/transcribe.js"
 import { readSecret } from "../../terminal/prompt.js"
 import { baseContext, environmentOf } from "../context.js"
 import { embeddingKeys } from "../embedding-keys.js"
-import { listed } from "../paging.js"
+import { listOf, renderAnswer } from "../envelope.js"
+import { nextStep } from "../steps.js"
 import type { Messenger } from "./context.js"
 
 /**
@@ -33,32 +38,40 @@ import type { Messenger } from "./context.js"
  * `messages transcribe --local`, `text` the embedding models behind `conversations embed`. Nothing here talks to the messenger. The folder is shared by every
  * messenger CLI, so a model downloaded once serves them all.
  */
+type ModelItem = v.InferOutput<typeof model>
+
+/** Every model this version knows: a short, fixed list, never paged. */
+const everyModel = (command: string, items: ModelItem[], next: NextStep[] = []) =>
+  listOf(command, { items, limit: Math.max(1, items.length), has_more: false, next })
+
+const modelLine = (item: ModelItem, width: number) =>
+  `${item.default ? "*" : " "} ${item.id.padEnd(width)} ${megabytes(item.size_bytes).padStart(7)}  ` +
+  (item.downloaded ? "downloaded" : "—".padEnd(10))
+
 export const modelsCommand = (messenger: Messenger): Command => {
   const models = new Command("models").description("models that run on this machine")
   const audio = models.command("audio").description("speech models for transcribing voice messages")
 
-  audio
-    .command("list")
+  annotate(audio.command("list"), { output: { entity: "model" } })
     .description("the speech models, most suitable first, which are downloaded, and which one is the default")
     .action(async function (this: Command) {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(async () => {
         const directory = modelsDirectory(context.env)
         const chosen = choose(messenger, context.settings, {}, context.env).model.id
-        const items = orderedModels(messenger.speechModels).map((model) => ({
+        const items: ModelItem[] = orderedModels(messenger.speechModels).map((model) => ({
           id: model.id,
+          kind: "audio",
           title: model.title,
           languages: model.languages,
-          size: megabytes(installedBytes(model)),
+          size_bytes: installedBytes(model),
           downloaded: isInstalled(model, directory),
           default: model.id === chosen,
         }))
-        if (context.format === "pretty") {
-          const line = (item: (typeof items)[number]) =>
-            `${item.default ? "*" : " "} ${item.id.padEnd(14)} ${item.size.padStart(7)}  ${item.downloaded ? "downloaded" : "—".padEnd(10)}  ${item.languages}`
-          context.streams.data(`${items.map(line).join("\n")}\n`)
-        } else if (context.format === "jsonl") context.renderer.stream(items)
-        else context.renderer.result({ ...listed(items), directory })
+        renderAnswer(this, context, everyModel("models audio list", items), () =>
+          items.map((item) => `${modelLine(item, 14)}  ${item.languages}\n`).join(""),
+        )
+        if (context.format === "pretty") context.renderer.note(`kept in ${directory}`)
       })
     })
 
@@ -96,28 +109,34 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   const text = models.command("text").description("embedding models for searching conversations by meaning")
 
-  text
-    .command("list")
+  annotate(text.command("list"), { output: { entity: "model" } })
     .description("the embedding models, most suitable first, which are downloaded, and which one is the default")
     .action(async function (this: Command) {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(async () => {
         const directory = textModelsDirectory(context.env)
-        const items = TEXT_MODELS.map((model) => ({
+        const items: ModelItem[] = TEXT_MODELS.map((model) => ({
           id: model.id,
+          kind: "text",
           title: model.title,
           languages: model.languages,
           licence: model.licence,
-          size: megabytes(model.files.reduce((sum, file) => sum + file.bytes, 0)),
+          size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
           downloaded: isTextModelInstalled(model, directory),
           default: model.id === DEFAULT_TEXT_MODEL,
         }))
-        if (context.format === "pretty") {
-          const line = (item: (typeof items)[number]) =>
-            `${item.default ? "*" : " "} ${item.id.padEnd(16)} ${item.size.padStart(7)}  ${item.downloaded ? "downloaded" : "—".padEnd(10)}  ${item.licence}`
-          context.streams.data(`${items.map(line).join("\n")}\n`)
-        } else if (context.format === "jsonl") context.renderer.stream(items)
-        else context.renderer.result({ ...listed(items), directory })
+        const missing = items.find((item) => item.default && !item.downloaded)
+        renderAnswer(
+          this,
+          context,
+          everyModel(
+            "models text list",
+            items,
+            missing ? [nextStep("models.download", { args: { model: missing.id } })] : [],
+          ),
+          () => items.map((item) => `${modelLine(item, 16)}  ${item.licence}\n`).join(""),
+        )
+        if (context.format === "pretty") context.renderer.note(`kept in ${directory}`)
       })
     })
 
@@ -164,28 +183,34 @@ export const modelsCommand = (messenger: Messenger): Command => {
     .command("image")
     .description("models that read pictures, for `images embed` and search by what a picture shows")
 
-  image
-    .command("list")
+  annotate(image.command("list"), { output: { entity: "model" } })
     .description("the picture models, which are downloaded, and which one is the default")
     .action(async function (this: Command) {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(async () => {
         const directory = imageModelsDirectory(context.env)
-        const items = IMAGE_MODELS.map((model) => ({
+        const items: ModelItem[] = IMAGE_MODELS.map((model) => ({
           id: model.id,
+          kind: "image",
           title: model.title,
           languages: model.languages,
           licence: model.licence,
-          size: megabytes(model.files.reduce((sum, file) => sum + file.bytes, 0)),
+          size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
           downloaded: isImageModelInstalled(model, directory),
           default: model.id === DEFAULT_IMAGE_MODEL,
         }))
-        if (context.format === "pretty") {
-          const line = (item: (typeof items)[number]) =>
-            `${item.default ? "*" : " "} ${item.id.padEnd(16)} ${item.size.padStart(7)}  ${item.downloaded ? "downloaded" : "—".padEnd(10)}  ${item.licence}  ${item.languages}`
-          context.streams.data(`${items.map(line).join("\n")}\n`)
-        } else if (context.format === "jsonl") context.renderer.stream(items)
-        else context.renderer.result({ ...listed(items), directory })
+        const missing = items.find((item) => item.default && !item.downloaded)
+        renderAnswer(
+          this,
+          context,
+          everyModel(
+            "models image list",
+            items,
+            missing ? [nextStep("models.download-image", { args: { model: missing.id } })] : [],
+          ),
+          () => items.map((item) => `${modelLine(item, 16)}  ${item.licence}  ${item.languages}\n`).join(""),
+        )
+        if (context.format === "pretty") context.renderer.note(`kept in ${directory}`)
       })
     })
 
