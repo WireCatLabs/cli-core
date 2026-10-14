@@ -1,5 +1,5 @@
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command, Option } from "commander"
+import { Argument, Command } from "commander"
 import { MENTION_KINDS, type MentionKind } from "../../domain/mentions.js"
 import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
@@ -19,7 +19,7 @@ const line = ({ id, kind, value, domain, status, sentAt, locator, field }: Menti
 export const mentionsCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
   const mentions = new Command("mentions").description(
-    "phones, e-mail, links, documents and known people's names found in stored messages",
+    "phones, e-mail, links, documents and people's names found in stored messages",
   )
 
   annotate(mentions.command("list"), {
@@ -108,18 +108,15 @@ export const mentionsCommand = (messenger: Messenger): Command => {
 
   annotate(mentions.command("rebuild"), {
     effects: LOCAL_WRITE,
-    examples: [`${tool} mentions rebuild`, `${tool} mentions rebuild --kind person-name`],
+    examples: [`${tool} mentions rebuild`, `${tool} mentions rebuild person-name`],
   })
     .description("find the mentions of every stored message again; decisions are kept")
-    .addOption(
-      new Option("--kind <kind>", "only this kind: person-name after people were added or renamed").choices(
-        MENTION_KINDS,
-      ),
+    .addArgument(
+      new Argument("[kind]", "only this kind: person-name after people were added or renamed").choices(MENTION_KINDS),
     )
-    .action(async function (this: Command) {
+    .action(async function (this: Command, kind?: MentionKind) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, tool, "mentions.rebuild")
-      const { kind } = this.opts<{ kind?: MentionKind }>()
       const done = await context.withServices((services) =>
         services.mentions.rebuild({
           ...(kind ? { kinds: [kind] } : {}),
