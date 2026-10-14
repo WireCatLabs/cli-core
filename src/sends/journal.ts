@@ -144,8 +144,7 @@ export class SendJournal {
     const { runId, command, traceId } = currentRun()
     const record = logRecordOf({
       severity: entry.outcome === "sent" || entry.outcome === "reserved" ? "info" : "warn",
-      event: logAttributes(attributes),
-      message: entry.kind ?? "message",
+      event: logAttributes({ event: "send.recorded", ...attributes }),
       time: at,
       runId,
       ...(traceId === undefined ? {} : { traceId }),
@@ -194,8 +193,11 @@ export class SendJournal {
  * The guard counts every line toward the hourly limit, so a line written before the journal held
  * records — flat, with `at` — still counts.
  */
-const entryOf = (line: SendEntry | LogRecord): SendEntry =>
-  "attributes" in line ? ({ at: line.time, ...fromLogAttributes(line.attributes) } as SendEntry) : line
+const entryOf = (line: SendEntry | LogRecord): SendEntry => {
+  if (!("attributes" in line)) return line
+  const { event: _, ...attributes } = line.attributes
+  return { at: line.time, ...fromLogAttributes(attributes) } as SendEntry
+}
 
 /** max-cli wrote the send identity as a number called `cid` before it was shared; read both. */
 const withSendId = (entry: SendEntry & { cid?: number }): SendEntry => {

@@ -103,7 +103,7 @@ describe("parityProblems", () => {
     const native: CommandInfo = {
       ...command("bot api provider-operation", ["--native-field <value>"]),
       origin: "generated",
-      operation_id: "providerOperation",
+      api_operation: "providerOperation",
     }
     const tree = (child: CommandInfo, flags = ["--all"]) =>
       program(command("bot", [], [command("bot api", flags, [child])]))

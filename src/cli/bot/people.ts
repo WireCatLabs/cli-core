@@ -1,4 +1,5 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
 import type { ChatKind, Contact, Message, PersonCard } from "../../domain/models.js"
@@ -7,6 +8,7 @@ import { pickPerson } from "../../resolve.js"
 import type { SearchFound } from "../../services/messages.js"
 import { searchStore } from "../../services/messages-archive-search.js"
 import type { AccountKey, MessageStore, StoredHit } from "../../store/store.js"
+import { REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { messageItem } from "../messenger/message-items.js"
 import { positiveCount } from "../paging.js"
@@ -171,7 +173,7 @@ export const botContactsCommand = (bot: BotMessenger): Command => {
   const command = new Command("contacts").description(
     `people this bot has seen write — from the local copy on this machine, never asking ${bot.name ?? "the messenger"} unless told to`,
   )
-  acrossOptions(command.command("show"))
+  acrossOptions(annotate(command.command("show"), { effects: REMOTE_READ }))
     .argument("<who>", "an id, @username or part of a name")
     .option("--limit <n>", "how many messages from the private chat", positiveCount("--limit"))
     .option("--refresh", "read the private chat with them again from the messenger first — one request")
@@ -247,7 +249,7 @@ const search = (
 /** `bot search messages`: the messages this bot's local copy holds. */
 export const botSearchCommand = (bot: BotMessenger): Command => {
   const group = new Command("search").description("find what this bot's local copy holds, by text")
-  acrossOptions(group.command("messages"))
+  acrossOptions(annotate(group.command("messages"), { effects: REMOTE_READ }))
     .argument("[query...]", "the words to find")
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
@@ -305,7 +307,7 @@ export const botSearchCommand = (bot: BotMessenger): Command => {
 
 /** `bot messages between`, over the local copy, added to the shared `messages` group. */
 export const addBotCopyReads = (messages: Command, bot: BotMessenger): void => {
-  acrossOptions(messages.command("between"))
+  acrossOptions(annotate(messages.command("between"), { effects: REMOTE_READ }))
     .argument("<people...>", "two or more people — an id, @username or part of a name each")
     .option("--limit <n>", "how many of the latest messages from each chat", positiveCount("--limit"))
     .description(

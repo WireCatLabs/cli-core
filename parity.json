@@ -714,6 +714,10 @@
       "value": "<name>",
       "meaning": "filter diagnostic events by operation"
     },
+    "--operation-id": {
+      "value": "<id>",
+      "meaning": "identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated"
+    },
     "--order": {
       "value": "<recent|name>",
       "meaning": "newest conversation first, or alphabetical"
@@ -900,10 +904,6 @@
     "--send-as": {
       "value": "<id>",
       "meaning": "send as one of the identities `chats send-as` lists for the chat; required where the chat posts as someone else by default, refused where the messenger has none"
-    },
-    "--send-id": {
-      "value": "<id>",
-      "meaning": "identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated"
     },
     "--serve": {
       "meaning": "start `serve` in the background if it is not running (the default)"
@@ -2762,8 +2762,8 @@
     "messages forward": {
       "in": "all",
       "options": {
+        "--operation-id": "all",
         "--send-as": "all",
-        "--send-id": "all",
         "--silent": "all",
         "--to": "all",
         "--topic": {
@@ -2828,10 +2828,10 @@
         },
         "--md": "all",
         "--no-preview": "all",
+        "--operation-id": "all",
         "--photo": "all",
         "--reply-to": "all",
         "--send-as": "all",
-        "--send-id": "all",
         "--silent": "all",
         "--spoiler": {
           "in": ["tg"],
@@ -2952,13 +2952,13 @@
           "reason": "max-cli creates no quizzes"
         },
         "--multiple": "all",
+        "--operation-id": "all",
         "--quiz": {
           "in": ["tg"],
           "reason": "max-cli creates no quizzes"
         },
         "--revote": "all",
         "--send-as": "all",
-        "--send-id": "all",
         "--silent": "all",
         "--solution": {
           "in": ["tg"],
@@ -4040,7 +4040,7 @@
       "in": ["tg"],
       "reason": "MAX has no forum topics",
       "options": {
-        "--send-id": {
+        "--operation-id": {
           "in": ["tg"],
           "reason": "MAX has no forum topics"
         }

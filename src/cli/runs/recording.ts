@@ -2,6 +2,7 @@ import { processStreams, type RenderFormat, type Streams } from "@wirecat/cli-ba
 import type { AppIdentity } from "../app.js"
 import { isCliFailure } from "../failures.js"
 import { type DiagnosticEvent, type EventSink, providerErrorKey, renderEvent } from "./events.js"
+import { DIAGNOSTIC_LOG_EVENTS } from "./log-events.js"
 import { logAttributes } from "./log-keys.js"
 import { newRunId, type Run, runsDirFor, startRun } from "./run.js"
 import { enclosingTraceId, inRun, traceOf } from "./scope.js"
@@ -144,9 +145,10 @@ const keep = (run: Run, events: DiagnosticEvent[]): Run => {
 }
 
 const logEvent = (run: Run, event: DiagnosticEvent): void => {
-  if (event.event === "warning") run.logger.warn(event)
-  else if (event.event !== "cache" && event.outcome === "error") run.logger.error(event)
-  else run.logger.info(event)
+  const record = { ...event, event: DIAGNOSTIC_LOG_EVENTS[event.event] }
+  if (event.event === "warning") run.logger.warn(record)
+  else if (event.event !== "cache" && event.outcome === "error") run.logger.error(record)
+  else run.logger.info(record)
 }
 
 const outcomeOf = (error: unknown): { errorCode: string; providerError?: string } => {
@@ -160,7 +162,7 @@ const outcomeOf = (error: unknown): { errorCode: string; providerError?: string 
  * paths cut to what follows `dist/` or `src/`. **Never `message`** — it can hold whatever the
  * failing line was handling.
  */
-export const crashOf = (error: unknown): { event: "crash"; errorClass: string; frames: string[] } => {
+export const crashOf = (error: unknown): { event: "command.crashed"; errorClass: string; frames: string[] } => {
   const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : ""
   const frames = stack
     .split("\n")
@@ -173,7 +175,7 @@ export const crashOf = (error: unknown): { event: "crash"; errorClass: string; f
       const file = /(?:^|\/)(?:dist|src)\/(.+)$/.exec(path)?.[1] ?? path.split("/").at(-1)
       return `${fn ?? "<anonymous>"} ${file}:${lineNumber}`
     })
-  return { event: "crash", errorClass: error instanceof Error ? error.name : typeof error, frames }
+  return { event: "command.crashed", errorClass: error instanceof Error ? error.name : typeof error, frames }
 }
 
 export const partialOutcome = (answer: unknown): import("./run.js").RunMetadata["partial"] => {

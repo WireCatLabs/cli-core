@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { renderMessages } from "../../render/messages.js"
+import { REMOTE_READ } from "../effects.js"
 import { listOf, renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -10,7 +11,7 @@ import { COMMENTS_QUERY, cursorOf, historyWindow } from "./history-query.js"
 import { messageItems, viewOf } from "./message-items.js"
 
 export const commentsCommand = (messenger: Messenger): Command => {
-  const command = new Command("comments")
+  const command = annotate(new Command("comments"), { effects: REMOTE_READ })
     .description("the comments under a channel post, oldest to newest; they live in its discussion group")
     .addHelpText("after", queryHelp(COMMENTS_QUERY))
     .argument("<chat>", `the channel: ${messenger.chatArgument}`)
@@ -40,6 +41,7 @@ export const commentsCommand = (messenger: Messenger): Command => {
           items: messageItems(found.items, reader),
           limit,
           has_more: found.hasMore,
+          paging: "cursor",
           ...(next === undefined ? {} : { cursor: next }),
           args: { chat, post, ...(query.length > 0 ? { query: query.join(" ") } : {}) },
         }),

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
@@ -41,9 +41,10 @@ export interface SearchedAccount {
 }
 
 /** A resource not read, or a `--source` entry naming no account the search reads. */
-export type Skipped<R extends string> =
-  | { resource: R; reason: string; source?: undefined }
-  | { source: string; reason: string; resource?: undefined }
+export type Skipped<R extends string> = { code: ErrorCode; reason: string } & (
+  | { resource: R; source?: undefined }
+  | { source: string; resource?: undefined }
+)
 
 export interface SearchAllFound {
   query: string
@@ -197,7 +198,7 @@ export const searchAll = async (
       searched.push(resource)
     } catch (error) {
       if (!skippable(error)) throw error
-      skipped.push({ resource, reason: error.message })
+      skipped.push({ resource, code: error.code, reason: error.message })
     }
   }
 

@@ -618,7 +618,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
           throw new CliError(
             "outcome_unknown",
             "no answer — the message may have been scheduled. Look in `messages scheduled` before anything else; " +
-              "never send it again with --send-id",
+              "never send it again with --operation-id",
             { scheduled_for: at },
           )
         }

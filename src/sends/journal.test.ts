@@ -2,8 +2,10 @@ import { appendFileSync, mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
+import { expectRegisteredEvents } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { expect, it } from "vitest"
+import { CORE_LOG_EVENTS } from "../cli/runs/log-events.js"
 import { inRun } from "../cli/runs/scope.js"
 import { SendJournal } from "./journal.js"
 
@@ -19,13 +21,14 @@ it("writes each entry as a log record of the run that sent it", () => {
 
   const lines = readFileSync(path, "utf8").trimEnd().split("\n")
   for (const line of lines) v.parse(logRecordSchema, JSON.parse(line))
+  expectRegisteredEvents(lines, CORE_LOG_EVENTS)
   expect(JSON.parse(lines[0] as string)).toEqual({
     time: "2026-10-13T08:00:00.000Z",
     severity: "info",
-    body: "message",
+    body: "send.recorded",
     run_id: "20261013T080000Z-messages-send-a81f2c",
     command: "messages send",
-    attributes: { profile: "default", chat_id: "1", outcome: "sent", length: 5 },
+    attributes: { event: "send.recorded", profile: "default", chat_id: "1", outcome: "sent", length: 5 },
     resource: { service: "tg", version: "1.0.0" },
   })
   expect(JSON.parse(lines[1] as string)).toMatchObject({ severity: "warn" })

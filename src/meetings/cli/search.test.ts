@@ -82,7 +82,7 @@ it("forwards combined context, dates and continuation to an injected provider-ne
         offset_ms: 1500,
       },
     ],
-    page: { limit: 10, has_more: true, cursor: "next-page" },
+    page: { mode: "cursor", limit: 10, has_more: true, next_cursor: "next-page" },
     next: [
       expect.objectContaining({
         step: "page.next",

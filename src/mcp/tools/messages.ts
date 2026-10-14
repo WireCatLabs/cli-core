@@ -100,6 +100,7 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
           items: messageItems(heard(found.items, hearing), await services.messages.reader()),
           limit: size,
           has_more: found.hasMore,
+          paging: "cursor",
           ...(cursor === undefined ? {} : { cursor }),
           args: { chat: args.chat, ...(args.query === undefined ? {} : { query: args.query }) },
           missing: hearingMissing(hearing, args.transcribe === true),
@@ -134,6 +135,7 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
           items: messageItems(found.items, await services.messages.reader()),
           limit: size,
           has_more: found.hasMore,
+          paging: "cursor",
           ...(cursor === undefined ? {} : { cursor }),
           args: { chat: args.chat, post: args.post, ...(args.query === undefined ? {} : { query: args.query }) },
         })

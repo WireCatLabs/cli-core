@@ -1,12 +1,13 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { typedSendAs } from "../../sends/send-as.js"
+import { REMOTE_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { afterWrite, writtenAnswer } from "./message-writes.js"
 
 export const forwardCommand = (messenger: Messenger): Command => {
-  const forward = annotate(new Command("forward"), { mutates: true })
+  const forward = annotate(new Command("forward"), { effects: REMOTE_WRITE })
     .description("forward one message to another chat")
     .argument("<chat>", `the chat the message is in: ${messenger.chatArgument}`)
     .argument("<message>", "the message id")
@@ -16,20 +17,20 @@ export const forwardCommand = (messenger: Messenger): Command => {
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists for the --to chat; required where the chat posts as someone else by default",
     )
-    .option("--send-id <id>", "repeat a forward whose outcome was unknown, without risking a second copy")
+    .option("--operation-id <id>", "repeat a forward whose outcome was unknown, without risking a second copy")
   if (messenger.forwardTopic) forward.option("--topic <id>", "forward into this forum topic of the --to chat")
   return forward.action(async function (this: Command, chat: string, message: string) {
     const context = messengerContext(this, messenger)
     const {
       to,
       silent,
-      sendId,
+      operationId: sendId,
       sendAs: given,
       topic,
     } = this.opts<{
       to: string
       silent?: boolean
-      sendId?: string
+      operationId?: string
       sendAs?: string
       topic?: string
     }>()

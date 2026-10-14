@@ -5,6 +5,7 @@ import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
 import { authorOf } from "../author.js"
 import { environmentOf } from "../context.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList, queryHelp } from "../list-query.js"
 import { positiveCount, window } from "../paging.js"
@@ -22,6 +23,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
   )
 
   annotate(mentions.command("list"), {
+    effects: LOCAL_READ,
     query: MENTION_QUERY,
     examples: [`${tool} mentions list kind:phone`, `${tool} mentions list domain:google.com`],
   })
@@ -51,7 +53,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(mentions.command("show"), { examples: [`${tool} mentions show 12`] })
+  annotate(mentions.command("show"), { effects: LOCAL_READ, examples: [`${tool} mentions show 12`] })
     .description("one mention, the text around it, and how many other places hold its value")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
     .action(async function (this: Command, id: number) {
@@ -69,8 +71,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(mentions.command("confirm"), {
-    mutates: true,
-    local: true,
+    effects: LOCAL_WRITE,
     examples: [`${tool} mentions confirm 12 person:7`, `${tool} mentions confirm 15`],
   })
     .summary("say what a mention is, everywhere its value is written")
@@ -90,7 +91,10 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       context.renderer.result(await context.withServices((services) => services.mentions.confirm(id, person, by)))
     })
 
-  annotate(mentions.command("reject"), { mutates: true, local: true, examples: [`${tool} mentions reject 12`] })
+  annotate(mentions.command("reject"), {
+    effects: LOCAL_WRITE,
+    examples: [`${tool} mentions reject 12`],
+  })
     .summary("dismiss a mention's value everywhere, and on later syncs")
     .description("not a real mention: dismiss its value everywhere and on later syncs; a name only where it is")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
@@ -103,8 +107,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(mentions.command("rebuild"), {
-    mutates: true,
-    local: true,
+    effects: LOCAL_WRITE,
     examples: [`${tool} mentions rebuild`, `${tool} mentions rebuild --kind person-name`],
   })
     .description("find the mentions of every stored message again; decisions are kept")

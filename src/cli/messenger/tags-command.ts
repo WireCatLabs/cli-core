@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { TAGGING_QUERY, type TaggingItem, type TagTargetInput, type TagTargetView } from "../../services/tags.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -34,7 +35,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
     "your own labels on chats, people and messages, kept in the local store and never sent; tag: in a search finds them",
   )
 
-  annotate(tags.command("auto"), { mutates: true, local: true })
+  annotate(tags.command("auto"), { effects: LOCAL_WRITE })
     .description("derive local group/channel tags from cached metadata using keyword rules")
     .option(
       "--chat <chat>",
@@ -61,9 +62,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
     })
 
   targetOptions(
-    annotate(tags.command("add"), { mutates: true, local: true }).description(
-      "put tags on one chat, person or message",
-    ),
+    annotate(tags.command("add"), { effects: LOCAL_WRITE }).description("put tags on one chat, person or message"),
     messenger,
     "tag",
   ).action(async function (this: Command, given: string[]) {
@@ -79,9 +78,7 @@ export const tagsCommand = (messenger: Messenger): Command => {
   })
 
   targetOptions(
-    annotate(tags.command("remove"), { mutates: true, local: true }).description(
-      "take tags off one chat, person or message",
-    ),
+    annotate(tags.command("remove"), { effects: LOCAL_WRITE }).description("take tags off one chat, person or message"),
     messenger,
     "untag",
   )
@@ -101,9 +98,9 @@ export const tagsCommand = (messenger: Messenger): Command => {
     })
 
   withQuery(
-    tags
-      .command("list")
-      .description("what is tagged: this account's chats and messages, and the people of its messenger"),
+    annotate(tags.command("list"), { effects: LOCAL_READ }).description(
+      "what is tagged: this account's chats and messages, and the people of its messenger",
+    ),
     TAGGING_QUERY,
   ).action(async function (this: Command, words: string[]) {
     const context = messengerContext(this, messenger)

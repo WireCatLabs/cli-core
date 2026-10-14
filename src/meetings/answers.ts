@@ -201,7 +201,7 @@ export const meetingDetailsItem = (details: MeetingDetails, owner: MeetingOwner)
 /** A list read whole: every item on one page. */
 export const wholeList = <T>(items: T[]): MeetingListBody<T> => ({
   items,
-  page: { limit: Math.max(1, items.length), has_more: false },
+  page: { mode: "page", limit: Math.max(1, items.length), has_more: false },
 })
 
 const PAGE_NEXT = STEPS.find((step) => step.id === "page.next") as StepDefinition
@@ -251,7 +251,12 @@ export const meetingHitsList = (
   ]
   return {
     items,
-    page: { limit, has_more: cursor !== undefined, ...(cursor === undefined ? {} : { cursor }) },
+    page: {
+      mode: "cursor",
+      limit,
+      has_more: cursor !== undefined,
+      ...(cursor === undefined ? {} : { next_cursor: cursor }),
+    },
     ...(next.length > 0 ? { next } : {}),
     ...(pending
       ? {

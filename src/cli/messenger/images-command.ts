@@ -1,4 +1,6 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { LOCAL_WRITE } from "../effects.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { imageModelsCommand } from "./models-command.js"
@@ -12,8 +14,7 @@ const DEFAULT_LIMIT = 100
 export const imagesCommand = (messenger: Messenger): Command => {
   const images = new Command("images").description("search pictures by what they show, with a model on this machine")
 
-  images
-    .command("embed")
+  annotate(images.command("embed"), { effects: LOCAL_WRITE })
     .description(
       "compute a vector for each picture the store knows and has none for — downloading it through the messenger, " +
         "keeping only the vector; needs `picture_search` on in the profile and `images models download clip-b32`; " +

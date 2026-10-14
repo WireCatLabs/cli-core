@@ -1,12 +1,13 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { guardedPress } from "../../sends/buttons.js"
+import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `messages press` — one of a bot's callback buttons; the bot sees who pressed it. */
 export const pressCommand = (messenger: Messenger): Command =>
-  annotate(new Command("press"), { mutates: true })
+  annotate(new Command("press"), { effects: REMOTE_WRITE })
     .description("press a bot's button under a message; the bot sees that you pressed it")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of the message with the buttons")

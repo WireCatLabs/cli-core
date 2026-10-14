@@ -197,7 +197,7 @@ describe("polls voters", () => {
       (await call(["polls", "voters", "7", "5", "--limit", "2", "--page", "2", "--json"])).stdout,
     )
     expect(second.items.map((one: { person_id: string }) => one.person_id)).toEqual(["13"])
-    expect(second.page).toEqual({ limit: 2, has_more: false })
+    expect(second.page).toEqual({ mode: "page", limit: 2, has_more: false })
   })
 })
 

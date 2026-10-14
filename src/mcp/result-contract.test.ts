@@ -9,6 +9,8 @@ import { findRun, listRuns, runsDirFor } from "../cli/runs/run.js"
 import { answered, BinaryResource, entryRunner, failed, Picture, type Registration } from "./tool.js"
 import { attachmentsTools } from "./tools/attachments.js"
 
+const READ_EFFECTS = { remote: "read", local: "read" } as const
+
 describe("MCP result contract", () => {
   it("makes nested hidden text and object keys visible in both result formats, including error and image metadata", () => {
     const hidden = "a\u{e0041}\u0085\u202e\ufeffb"
@@ -47,14 +49,26 @@ describe("MCP result contract", () => {
   })
   it("keeps explicit retry guidance and never shows the text of an unexpected failure", () => {
     expect(failed(new Error("synthetic private text")).structuredContent).toEqual({
-      error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
+      error: {
+        code: "internal_error",
+        reason: "command.crashed",
+        message: "the command failed; this is a bug",
+        retry: { safe: false },
+      },
     })
     expect(
       failed(new CliError("outcome_unknown", "synthetic", { operation_id: "op-synthetic" })).structuredContent,
     ).toMatchObject({ error: { code: "outcome_unknown", details: { operation_id: "op-synthetic" } } })
-    expect(
-      failed(new CliError("rate_limited", "synthetic", { retryable: true, retry_after_ms: 1000 })).structuredContent,
-    ).toMatchObject({ error: { details: { retryable: true, retry_after_ms: 1000 } } })
+    const limited = new CliError("rate_limited", "synthetic", { retryable: true, retry_after_ms: 1000 })
+    expect(failed(limited, undefined, READ_EFFECTS).structuredContent).toMatchObject({
+      error: { retry: { safe: true, after_ms: 1000 } },
+    })
+    expect(failed(limited, undefined, { remote: "write", local: "none" }).structuredContent).toMatchObject({
+      error: { retry: { safe: false } },
+    })
+    expect(failed(limited, undefined, { remote: "read", local: "write" }).structuredContent).toMatchObject({
+      error: { retry: { safe: true } },
+    })
   })
 })
 

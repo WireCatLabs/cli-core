@@ -91,7 +91,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
       title: "Create a poll",
       description:
         "Send a poll as the owner: public unless anonymous is true. Only when the owner asked for this exact poll " +
-        "in this exact chat. On outcome_unknown, retry with the send_id it returns, never a new one.",
+        "in this exact chat. On outcome_unknown, retry with the operation_id it returns, never a new one.",
       input: v.object({
         chat,
         text: v.pipe(v.string(), v.minLength(1), v.description("the question")),
@@ -111,7 +111,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
             ),
           ),
         ),
-        send_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
+        operation_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
         quiz: v.optional(
           v.pipe(
             v.boolean(),
@@ -161,7 +161,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
             ...(closeAfter === undefined ? {} : { closeAfter }),
           },
           silent: false,
-          ...(args.send_id === undefined ? {} : { sendId: args.send_id }),
+          ...(args.operation_id === undefined ? {} : { sendId: args.operation_id }),
           ...(args.topic === undefined ? {} : { threadId: args.topic }),
           ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
         })

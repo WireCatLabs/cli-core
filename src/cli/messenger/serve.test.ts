@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
+import { expectRegisteredEvents } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
@@ -11,6 +12,7 @@ import { defaultRule } from "../../replies/rules.js"
 import { NOT_ALLOWED } from "../../replies/serve.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { run } from "../program.js"
+import { CORE_LOG_EVENTS } from "../runs/log-events.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import type { ConnectOptions, Messenger } from "./context.js"
@@ -110,8 +112,13 @@ describe("serve", () => {
 
     const records = stderr.map((line) => v.parse(logRecordSchema, JSON.parse(line)))
     expect(records).toContainEqual(
-      expect.objectContaining({ severity: "info", body: "note", attributes: { event: "note", code: "listening" } }),
+      expect.objectContaining({
+        severity: "info",
+        body: "serve.note",
+        attributes: { event: "serve.note", code: "listening" },
+      }),
     )
+    expectRegisteredEvents(stderr, CORE_LOG_EVENTS)
     expect(stderr.join("\n")).not.toContain("listening for profile")
     expect(records[0]?.resource).toEqual({ service: app.command, version: app.version })
   })

@@ -204,7 +204,7 @@ const samples: Record<EntityName, unknown> = {
     vocabulary_fingerprint: "sample",
     selection: { identity_id: "12", since: at },
     limits: { limit: 100, max_read_bytes: 4194304, max_vocabulary_read_bytes: 1048576, max_terms: 32 },
-    page: { limit: 100, has_more: true, cursor: "next" },
+    page: { mode: "cursor", limit: 100, has_more: true, next_cursor: "next" },
     coverage: {
       archive_completeness: "unknown",
       current_revisions: true,

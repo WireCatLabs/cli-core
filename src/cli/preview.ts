@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
+import { writes as writesAnything } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import {
   assertStatsPermissionsCurrent,
@@ -23,7 +24,9 @@ export const preview = (command: Command, permissions: Readonly<Record<string, L
       throw new CliError("permission_error", `this profile does not permit ${source}`, { permission: source })
   }
   const meta = metaOf(command)
-  const writes = meta.mutates === true || (key !== null && key !== undefined && WRITE_KEYS.includes(key))
+  const writes =
+    (meta.effects !== undefined && writesAnything(meta.effects)) ||
+    (key !== null && key !== undefined && WRITE_KEYS.includes(key))
   if (level === "deny" || (writes && level === "readonly"))
     throw new CliError("permission_error", `this profile does not permit ${path.join(" ")}`, { permission: key })
   const targets = new Set(["chat", "message", "person", "profile"])

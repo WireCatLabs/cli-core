@@ -139,7 +139,7 @@ guessable from the others.
    **No two commands overlap** (owner, 2026-10-08). If one command's results are a subset of
    another's, one of them goes: an agent that learns the narrow path never finds the wide one. A
    narrower scope is an option or a resource of the same command, never a sibling elsewhere in the tree.
-5. **Options are plain words, never a wire field** (`--send-id`, not `--cid`). One meaning, one
+5. **Options are plain words, never a wire field** (`--operation-id`, not `--cid`). One meaning, one
    name, in every command of both tools. **A length of time is a `<duration>`** (`500ms`,
    `30s`, `2m`, `4h`, `1d`) — a number and a unit, never a bare number — parsed as `--timeout`
    is; `--since-time` takes a duration or a time.
@@ -171,7 +171,7 @@ guessable from the others.
     `bot chats members remove`, `bot chats moderate`, `bot contacts show`, `bot watch`. What only a
     bot has: `bot auth`, `bot list`, `bot callbacks`, `bot commands` (the menu people see on `/`),
     `bot webhooks`, `bot uploads`, `bot api`. A bot's send is never repeated — neither Bot API makes
-    a repeat safe — so `bot messages send` has no `--send-id`. A bot command may add an option only a
+    a repeat safe — so `bot messages send` has no `--operation-id`. A bot command may add an option only a
     bot has, as `bot watch --types` does.
 
 `bot api` is exempt: its names mirror each messenger's official Bot API operations.
@@ -524,6 +524,9 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `option-role` | high | option | every option has a role in the vocabulary; a filter has none, it is a query field |
 | `list-without-query` | medium | command | a list that answers with an entity takes a query over that entity's fields |
 | `query-example` | high | command | every query field's example, and every default term, parses and validates |
+| `nullable-list` | medium | key | a list in a registered JSON Schema is never null: known empty is `[]`, not known is absent |
+| `flag-synonym` | medium | option | an option is not another name for a vocabulary flag: `--max` and `--take` are `--limit` |
+| `identifier-name` | high | key | an identifier key is one from the glossary: `run_id`, never `execution_id` or `log_id` |
 | `log-attribute-key` | high | key | no log attribute key on the allow-list names message text, a token or a phone number |
 
 <!-- lint rules: end -->
@@ -652,14 +655,17 @@ The shared shell adds these conventions; the manifest tracks adoption:
 - `--json=id,text` keeps only those fields of each item; the envelope (`page`, `next`, `meta`) stays. A bare
   `--json` at a terminal names the fields of a command that declares its answer, instead of printing them all.
   `--max-output-bytes` bounds serialized machine data (4 MiB; zero explicitly disables the bound).
-  Exceeding a bound fails visibly with retryable:false, never a malformed or silently cropped JSON
+  Exceeding a bound fails visibly with `retry.safe: false`, never a malformed or silently cropped JSON
   response. File exports retain their streaming contract.
 - A global `--dry-run` validates parsed arguments and permission policy, then reports a preview
   without invoking the action, reading credentials or reserving a write. Local command-specific
   previews keep their richer behaviour. A preview declares unresolved targets and preparatory
   effects; it is never a guarantee that a subsequent write will succeed.
-- Errors expose safe retry metadata. Unknown remote write outcomes remain non-retryable unless a
-  provider confirms replay safety with the same caller-owned id. operationId is correlation only.
+- Every error has `retry: { safe, after_ms? }`, derived from its code, the command's `effects` and whether the
+  write left: a transient failure (`timeout`, `rate_limited`, `network_error`, `provider_unavailable`) is safe
+  for a command that writes nothing on the messenger, or for a write that never left (`sent: false`).
+  `outcome_unknown` never is — repeat that write only with its `--operation-id`. Every command declares
+  `effects: { remote, local }` (`none | read | write`) in `commands --json`; one without counts as a write.
 - Installed skills are checked against binary discovery. Synthetic task evaluations cover command
   selection, bounded paging, validation recovery and refusing replay after an unknown write outcome.
 
@@ -862,6 +868,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--only-missing` |  | only chats with no metadata yet; without --chat, every stored group/channel |  | `metadata refresh` |
 | `--only-owner-edits-info` | `<on\|off>` | only the owner may change the name and photo |  | `chats update` (max-only) |
 | `--operation` | `<name>` | filter diagnostic events by operation |  | `runs search` |
+| `--operation-id` | `<id>` | identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated |  | `messages forward`, `messages send`, `polls create`, `topics create` (tg-only) |
 | `--order` | `<recent\|name>` | newest conversation first, or alphabetical |  | `contacts list` |
 | `--others` |  | every session but this one. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `account sessions end` |
 | `--output` |  | where to write: a directory for `messages download`, a file for `store export`. **MAX `messages download --output <dir>` remains a compatibility alias for `--output-dir`; other commands use --output for a file — e10** | `.` | `doctor report create`, `messages download` (max-only), `stats charts`, `store decrypt`, `store export` |
@@ -910,7 +917,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--secret-stdin` |  | a secret MAX sends back in X-Max-Bot-Api-Secret — asked for, or read from a pipe |  | `bot webhooks set` |
 | `--selection` | `<json>` | the versioned resolved ranking selection returned by drilldown; authorisation is checked again |  | `searches create`, `stats contacts evidence`, `stats messages counters refresh`, `stats messages counters show`, `stats messages evidence` |
 | `--send-as` | `<id>` | send as one of the identities `chats send-as` lists for the chat; required where the chat posts as someone else by default, refused where the messenger has none |  | `messages forward`, `messages send`, `polls create` |
-| `--send-id` | `<id>` | identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated |  | `messages forward`, `messages send`, `polls create`, `topics create` (tg-only) |
 | `--serve` |  | start `serve` in the background if it is not running (the default) |  | every command (planned) |
 | `--server-time` | `<duration>` | stop waiting for the server after this long (default: 5s) |  | `search all` (planned), `search messages` |
 | `--set` | `<id>` | the stickers in this set |  | `stickers list` (planned) |
@@ -979,15 +985,29 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
      `directory`).
    - Commands are moving to the answer envelope built by `listOf` in
      [`src/cli/envelope.ts`](../../src/cli/envelope.ts) (so far `admin folders`):
-     `{ items, page: { limit, has_more, cursor? }, next?, missing?, meta? }`, with `page.next` first in
-     `next` when more rows exist. A command that moves says so in the changelog.
+     `{ items, page, next?, missing?, meta }`, with `page.next` first in `next` when more rows exist. A
+     command that moves says so in the changelog.
+   - `page` says how the source pages: `{ mode: "page", limit, has_more, next_page? }`, or
+     `{ mode: "cursor", limit, has_more, next_cursor? }` for a source with its own position (`messages
+     list`) — never a page number there. `--jsonl` prints `{"type":"item","data":…}` per item, then
+     `{"type":"end","complete","issues"?,"page"}`, so a reader tells a whole stream from a cut one.
+   - `meta` is `{ run_id, duration_ms, accounts?, complete, issues?, truncated? }`. `complete: false` with
+     `issues: [{ code, source }]` (an error code each) says a source failed or was skipped; `truncated` says
+     a size cap cut it; `page.has_more` says another page exists. A command that may answer partially
+     declares `partial` (the searches) and exits 0; any other exits with the first issue's code, after
+     printing what it read.
+   - `next` holds at most two steps: the one to take, then one alternative. Each has `kind` (`command`,
+     or `user_action` with no command) and `safe_to_auto_execute`, true only when its command writes
+     nothing on the messenger (`effects.remote` is `none` or `read`; a local write such as a sync into the
+     store does not count, NEED-1073). Steps are built from ids, counts and cursors this CLI holds, never
+     from text a message, mail or document carried.
    - `inbox` and `review` are not lists: they answer one view grouped by chat, `{ chats: [{ …,
      messages }] }`, in both tools.
 2. **A write answers what it did**: `{ operationId, … }`, the ids it touched after it. The same
    id is in the send journal.
 3. **A one-thing view answers the object itself** (`account show`, `store info`).
 4. **An error is one JSON object on stderr** in the machine modes —
-   `{ "error": { "code", "reason", "message", "param"?, "details"?, "next"?, "run_id"? } }`, the same
+   `{ "error": { "code", "reason", "message", "param"?, "details"?, "next"?, "retry", "run_id"? } }`, the same
    object MCP answers with `isError` — stdout stays empty, and the exit code says which kind of
    failure it was. `reason` is a registered id (`query.too-large`, `src/cli/reasons.ts`, or the code's
    own from cli-base); branch on `code` and `reason`, never on `message`. `details` holds only
@@ -1065,7 +1085,8 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
    `group:<name>`, and a positive `in:` a bare provider or kind. `search all`, `search mail` and `search notes` answer
    `accounts: [{ resource, provider, account }]` beside `searched` and `skipped`; `search messages`
    answers the same list as `coverage.accounts`. A `--source` entry a search cannot use is named in
-   `skipped` as `{ source, reason }`. A hit's `provider:account` is a valid `--source` entry.
+   `meta.issues` as `{ code, source }`, its reason on stderr. A hit's `provider:account` is a valid
+   `--source` entry.
 9. **A hit that has a page elsewhere answers its `url`** (planned, same plan): a Google Drive document's
    Google link. `url` is absent, not `null`, where there is none; meetings and attachments use the same key.
 
@@ -1166,8 +1187,8 @@ it writes no file and uses the same `messages` read permission.
    `<tool>_bot_write`, and its commands are the path under `bot`. `status` answers what the server is.
    `conversations refresh` runs what `search conversations --refresh` runs before it searches
    (NEED-551 A). The list never changes during a connection.
-2. **Arguments are the command's options in snake_case**, with the option's name: `--send-id` is
-   `send_id`, `--since-time` is `since_time`, `--before-n` is `before_n`.
+2. **Arguments are the command's options in snake_case**, with the option's name: `--operation-id` is
+   `operation_id`, `--since-time` is `since_time`, `--before-n` is `before_n`.
 3. **Every command says whether it writes**; `read` refuses a writing one and `write` a reading one.
 4. **A command is found and run by its [permission](#permissions)**, never by a flag of its own:
    `deny` hides it, `readonly` hides the writing ones, `ask` and `allow` act — no form, since nobody

@@ -24,7 +24,7 @@ const call = async (path: string[], pretty = false) => {
           .addCommand(
             new Command("messages").option("--scope <chat>", "inherited scope").addCommand(
               annotate(new Command("send").alias("post").argument("<text>").option("--silent").action(action), {
-                mutates: true,
+                effects: { remote: "write", local: "write" },
               }),
             ),
           ),
@@ -71,7 +71,7 @@ describe("scoped command discovery", () => {
     expect(packet.commands[0]).toMatchObject({
       path: ["bot", "messages", "send"],
       usage: "app bot messages send <text> [options]",
-      mutates: true,
+      effects: { remote: "write", local: "write" },
       arguments: [{ name: "text", required: true }],
       options: [{ flags: "--silent", takes_value: false }],
     })
@@ -87,7 +87,9 @@ describe("scoped command discovery", () => {
 
   it("includes a group's descendants and their metadata", async () => {
     const packet = JSON.parse((await call(["bot", "messages"])).stdout)
-    expect(packet.commands[0].commands).toMatchObject([{ path: ["bot", "messages", "send"], mutates: true }])
+    expect(packet.commands[0].commands).toMatchObject([
+      { path: ["bot", "messages", "send"], effects: { remote: "write" } },
+    ])
     expect(packet.inherited_options).toMatchObject([{ path: ["bot"] }])
   })
 

@@ -64,7 +64,11 @@ export const createMeetingSearchCommand = (program: Command): Command => {
     .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
     .option("--cursor <cursor>", "continue from the previous page's page.cursor, with the same query and filters")
     .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
-  annotate(command, { origin: "handwritten", mutates: false, output: { entity: "meeting_hit" } })
+  annotate(command, {
+    origin: "handwritten",
+    effects: { remote: "none", local: "read" },
+    output: { entity: "meeting_hit" },
+  })
   return command
 }
 

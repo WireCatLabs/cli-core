@@ -292,7 +292,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
           throw new CliError(
             error.code,
             `${error.message} — ${sent} of ${entries.length} numbers were sent before this; importing again is safe`,
-            { ...error.details, operation_id: operationId, sent },
+            { ...error.details, operation_id: operationId, sent_count: sent },
           )
         }
       }

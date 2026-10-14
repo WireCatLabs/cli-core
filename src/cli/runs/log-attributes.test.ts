@@ -51,7 +51,7 @@ describe("the log allow-list", () => {
     expect(records.every((record) => record.trace_id === "4bf92f3577b34da6a3ce929d0e0e4736")).toBe(true)
     expect(text).not.toContain(NOT_ALLOWED)
     expect(text).not.toContain("private words")
-    expect(records[2]?.attributes).toMatchObject({ event: "crash", error_class: "TypeError" })
+    expect(records[2]?.attributes).toMatchObject({ event: "command.crashed", error_class: "TypeError" })
   })
 
   it("maps an agent's audit row to a record with ids and codes only", () => {

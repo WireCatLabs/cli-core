@@ -200,6 +200,7 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
           items: found.items.map(snakeKeys),
           limit: found.limits.items,
           has_more: found.hasMore,
+          paging: "cursor",
           ...(found.cursor === undefined ? {} : { cursor: found.cursor }),
           ...(found.pending > 0 ? { meta: { truncated: true } } : {}),
         })

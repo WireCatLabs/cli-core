@@ -150,7 +150,7 @@ describe("ranking command views", () => {
     expect(first.code, first.stderr).toBe(0)
     const page = v.parse(listEnvelopeSchema(ENTITIES.evidence), JSON.parse(first.stdout))
     expect(page.next?.[0]).toMatchObject({ step: "page.next", args: { person: "11", component: "messages" } })
-    const second = await call([...args, "--cursor", page.page.cursor as string])
+    const second = await call([...args, "--cursor", (page.page as { next_cursor: string }).next_cursor])
     expect(second.code, second.stderr).toBe(0)
     expect(JSON.parse(second.stdout).page.has_more).toBe(false)
   })

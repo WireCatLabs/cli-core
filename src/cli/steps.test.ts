@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import type { StepDefinition } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { botCommand } from "./bot/command.js"
@@ -19,7 +20,7 @@ import { serverCommand } from "./messenger/server-command.js"
 import { createProgram } from "./program.js"
 import { REASONS } from "./reasons.js"
 import { settingsFor } from "./settings.js"
-import { commandAt, nextStep, runnable, STEPS, stepLine } from "./steps.js"
+import { type CommandStep, commandAt, nextStep, runnable, STEPS, stepLine } from "./steps.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "synthetic", version: "1.0.0" }
 const messenger: Messenger = {
@@ -76,7 +77,9 @@ const sample = (command: Command, name: string): unknown =>
     : true
 
 describe("the next-step registry", () => {
-  const named = STEPS.filter((step) => step.command !== "*")
+  const named = STEPS.filter(
+    (step): step is Extract<StepDefinition, { kind: "command" }> => step.kind === "command" && step.command !== "*",
+  )
 
   it.each(named.map((step) => [step.id, step]))("%s names a command tg and max both have or both plan", (_, step) => {
     const row = parity.commands[step.command]
@@ -87,7 +90,7 @@ describe("the next-step registry", () => {
   it.each(named.map((step) => [step.id, step]))("%s parses as a person types it", (_, step) => {
     const command = commandAt(program, step.command) as Command
     const args = Object.fromEntries(step.args.map((arg) => [arg.name, sample(command, arg.name)]))
-    const line = stepLine(program, nextStep(step.id, { args, values: { shown: 1 } }))
+    const line = stepLine(program, nextStep(step.id, { args, values: { shown: 1 } }) as CommandStep)
     const words = line.split(" ").slice(1 + step.command.split(" ").length)
     const { operands, unknown } = command.parseOptions(words)
     expect(unknown).toEqual([])
@@ -96,8 +99,8 @@ describe("the next-step registry", () => {
 
   it("puts no positional argument in a step an error names: the error line prints every argument as an option", () => {
     const positional = REASONS.flatMap((reason) => {
-      const step = STEPS.find((one) => one.id === reason.step)
-      const command = step && step.command !== "*" ? commandAt(program, step.command) : undefined
+      const step = named.find((one) => one.id === reason.step)
+      const command = step ? commandAt(program, step.command) : undefined
       return (step?.args ?? [])
         .filter((arg) => command?.registeredArguments.some((argument) => argument.name() === arg.name))
         .map((arg) => `${reason.reason} → ${step?.id}: ${arg.name}`)
@@ -105,12 +108,20 @@ describe("the next-step registry", () => {
     expect(positional).toEqual([])
   })
 
-  it("drops a step whose command this CLI does not have, and keeps at most three", () => {
+  it("drops a step whose command this CLI does not have, and keeps at most two", () => {
     const bare = createProgram({ app, commands: () => [messagesCommand(messenger)] })
-    const download = nextStep("models.download", { args: { model: "e5-small" } })
+    const download = nextStep("models.download", { args: { model: "e5-small" } }) as CommandStep
     expect(runnable(bare, [download])).toEqual([])
-    expect(runnable(program, [download])).toEqual([download])
-    expect(runnable(program, [download, download, download, download])).toHaveLength(3)
+    expect(runnable(program, [download, download, download])).toHaveLength(2)
     expect(stepLine(program, download)).toBe("chat models text download e5-small")
+  })
+
+  it("lets a step run unasked only when its command writes nothing to the messenger", () => {
+    const sync = nextStep("messages.sync", { args: { chat: "7" } })
+    const scheduled = nextStep("messages.scheduled", { args: { chat: "7" } })
+    expect([sync, scheduled].map((step) => step.safe_to_auto_execute)).toEqual([false, false])
+    expect(runnable(program, [sync, scheduled]).map((step) => step.safe_to_auto_execute)).toEqual([true, true])
+    const send: CommandStep = { ...sync, command: "messages send", args: { chat: "7" } } as CommandStep
+    expect(runnable(program, [send])[0]?.safe_to_auto_execute).toBe(false)
   })
 })

@@ -12,6 +12,7 @@ import {
   quizOf,
 } from "../../sends/polls.js"
 import { typedSendAs } from "../../sends/send-as.js"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -29,8 +30,7 @@ import { threadIdOf } from "./thread.js"
 export const pollsCommand = (messenger: Messenger): Command => {
   const polls = new Command("polls").description("read a poll, vote in it, close your own, create one")
 
-  polls
-    .command("show")
+  annotate(polls.command("show"), { effects: REMOTE_READ })
     .description("a poll and its answer ids, as the message carries it now")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of the message that carries the poll")
@@ -47,7 +47,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
     polls.addCommand(
       withQuery(
         annotate(
-          new Command("voters")
+          annotate(new Command("voters"), { effects: REMOTE_READ })
             .description("who voted for what, newest first; not in an anonymous poll")
             .argument("<chat>", messenger.chatArgument)
             .argument("<message>", "the id of the message that carries the poll")
@@ -87,7 +87,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       }),
     )
 
-  annotate(polls.command("vote"), { mutates: true })
+  annotate(polls.command("vote"), { effects: REMOTE_WRITE })
     .description("vote in a poll, or take your vote back; the others see it unless the poll is anonymous")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of the message that carries the poll")
@@ -115,7 +115,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(voted)))
     })
 
-  annotate(polls.command("close"), { mutates: true })
+  annotate(polls.command("close"), { effects: REMOTE_WRITE })
     .description("close your own poll; nobody can vote after that, and it cannot be reopened")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of your own message that carries the poll")
@@ -127,7 +127,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(closed)))
     })
 
-  const create = annotate(polls.command("create"), { mutates: true })
+  const create = annotate(polls.command("create"), { effects: REMOTE_WRITE })
     .description("send a poll to a chat, as a message of its own; public unless --anonymous")
     .argument("<chat>", messenger.chatArgument)
     .argument("<question>", "the question")
@@ -141,7 +141,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists; required where the chat posts as someone else by default",
     )
-    .option("--send-id <id>", "repeat a create whose outcome was unknown, without risking a second poll")
+    .option("--operation-id <id>", "repeat a create whose outcome was unknown, without risking a second poll")
   if (messenger.pollQuiz)
     create
       .option("--quiz", "a quiz: one answer is right, and a vote is final")
@@ -159,7 +159,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       anonymous,
       revote,
       silent,
-      sendId,
+      operationId: sendId,
       topic,
       sendAs: given,
       quiz,
@@ -177,7 +177,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       anonymous?: boolean
       revote?: boolean
       silent?: boolean
-      sendId?: string
+      operationId?: string
     }>()
     const threadId = threadIdOf(topic)
     const sendAs = typedSendAs(given)

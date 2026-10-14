@@ -4,6 +4,7 @@ import { Command } from "commander"
 import { sendTime } from "../../domain/send-time.js"
 import { typedSendAs } from "../../sends/send-as.js"
 import { readAttachments } from "../../sends/upload.js"
+import { REMOTE_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { afterWrite, writtenAnswer } from "./message-writes.js"
@@ -17,7 +18,7 @@ import { threadIdOf } from "./thread.js"
 export const HTML_HELP = "the text is HTML: <b>, <i>, <a href>, <code>"
 
 export const sendCommand = (messenger: Messenger): Command => {
-  const send = annotate(new Command("send"), { mutates: true })
+  const send = annotate(new Command("send"), { effects: REMOTE_WRITE })
     .description("send a text message; without [text], the text is read from stdin")
     .argument("<chat>", messenger.chatArgument)
     .argument("[text]", "the message")
@@ -28,7 +29,7 @@ export const sendCommand = (messenger: Messenger): Command => {
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists; required where the chat posts as someone else by default",
     )
-    .option("--send-id <id>", "repeat a send whose outcome was unknown, without risking a second copy")
+    .option("--operation-id <id>", "repeat a send whose outcome was unknown, without risking a second copy")
     .option("--silent", "deliver without a notification")
     .option("--no-preview", "no preview card for a link in the text")
     .option("--md", "read this messenger's Markdown; see its formatting guide for supported syntax")
@@ -64,7 +65,7 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
     replyTo: typedReplyTo,
     commentTo: typedCommentTo,
     sendAs: givenSendAs,
-    sendId,
+    operationId: sendId,
     silent,
     preview,
     md: markdown,
@@ -84,7 +85,7 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
     replyTo?: string
     commentTo?: string
     sendAs?: string
-    sendId?: string
+    operationId?: string
     silent?: boolean
     preview?: boolean
     md?: boolean

@@ -1,12 +1,13 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { guardedApp, guardedStart } from "../../sends/buttons.js"
+import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `chats start` and `chats app` — a bot in a one-to-one chat with the personal account. */
 export const botChatCommands = (messenger: Messenger): Command[] => [
-  annotate(new Command("start"), { mutates: true })
+  annotate(new Command("start"), { effects: REMOTE_WRITE })
     .description("start a bot, as its Start button does; the bot sees that you started it")
     .argument("<bot>", "the chat with the bot — its id or its name — or the bot's link, even one never opened")
     .option("--payload <text>", "the start parameter the bot reads; a link's own ?start= when not given")
@@ -25,7 +26,7 @@ export const botChatCommands = (messenger: Messenger): Command[] => [
         ),
       )
     }),
-  annotate(new Command("app"), { mutates: true })
+  annotate(new Command("app"), { effects: REMOTE_WRITE })
     .description("the address that opens a bot's mini app, signed in as you — keep it to yourself")
     .argument("<bot>", "the chat with the bot: its id or its name")
     .option("--start <param>", "the start parameter the app reads")

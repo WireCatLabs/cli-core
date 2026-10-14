@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import type { SendGuard } from "./guard.js"
 import type { SendEntry } from "./journal.js"
@@ -97,7 +97,7 @@ export const guardedWrite = async <T>(
   for (const scope of scopes) scope.add(flight)
   try {
     if (prepare !== undefined) await prepare()
-    if (cancelled) throw new CliError("timeout", "the command ended before sending; nothing was sent")
+    if (cancelled) throw new CliError("timeout", "the command ended before sending; nothing was sent", { sent: false })
     flight.preparing = false
     const done = await current.run(attempt.operationId, act)
     if (cancelled)
@@ -117,6 +117,9 @@ export const guardedWrite = async <T>(
         operation_id: attempt.operationId,
         retryable: false,
       })
+    // A failure while preparing (an upload, a lookup) is before the write left, so retrying it cannot send twice.
+    if (flight.preparing && isCliError(error) && error.details.sent === undefined)
+      throw new CliError(error.code, error.message, { ...error.details, sent: false })
     throw error
   } finally {
     for (const scope of scopes) scope.delete(flight)

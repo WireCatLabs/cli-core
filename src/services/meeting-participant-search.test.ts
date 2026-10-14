@@ -156,7 +156,7 @@ it("exposes equivalent bounded CLI and MCP reads while retaining older adapter c
   const page = output.mock.calls[0]?.[0]
   expect(page).toMatchObject({
     kind: "meeting_participants",
-    page: { limit: 1, has_more: true, cursor: expect.any(String) },
+    page: { mode: "cursor", limit: 1, has_more: true, next_cursor: expect.any(String) },
     next: [
       {
         step: "page.next",

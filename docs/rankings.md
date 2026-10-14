@@ -68,7 +68,7 @@ show measured messages, not lists of viewers or reactors. Author `messages` evid
 all selected messages even when ranking by a score. Active-day evidence lists underlying
 messages; its one-per-message contributions are not summed into distinct days.
 
-Evidence is a list: `page.has_more` and `page.cursor` say whether more remain, and `next` repeats
+Evidence is a list: `page.has_more` and `page.next_cursor` say whether more remain, and `next` repeats
 the call with `--cursor`. A changed contributing row rejects the cursor; restart without it.
 Each page retains complete rows within a 64 KiB items budget. An oversized single row directs
 you to `messages show`. Fingerprinting is bounded to 50,000 rows and 8 MiB of stored inputs;
@@ -110,7 +110,7 @@ link metadata and its group's history. Missing counters or graph links are not z
 
 Each row carries its `id` and `selection`, and `next` names the top row's evidence command. Run the
 messages/contacts `evidence` command with `--component report`, the row's `id` and its selection.
-Follow `page.cursor` with the same arguments. The captured cutoff remains fixed; changed evidence requires a fresh report.
+Follow `page.next_cursor` with the same arguments. The captured cutoff remains fixed; changed evidence requires a fresh report.
 Evidence items fit within 64 KiB. Narrow the chat/date scope if the 50,000-node or 8 MiB budget is
 exceeded. Look at `quality.archives` and `quality.graph` before drawing conclusions, then open the
 returned message locator with `messages show` to check the original context.

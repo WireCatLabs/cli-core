@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import { script } from "@bomb.sh/tab"
 import { CliError, singleLine } from "@wirecat/cli-base"
-import { describeOptions, describeProgram } from "@wirecat/cli-base/commands"
+import { annotate, describeOptions, describeProgram } from "@wirecat/cli-base/commands"
 import { type CompletionSources, formatSuggestions, type Suggestion, suggest } from "@wirecat/cli-base/completion"
 import { Command } from "commander"
 import type { Chat } from "../../domain/models.js"
@@ -9,6 +9,7 @@ import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
 import { envName } from "../app.js"
 import { environmentOf, outputFor } from "../context.js"
+import { LOCAL_READ } from "../effects.js"
 import { commandWords, liftProfile, rootOf, usableProfileName } from "../profile.js"
 import type { Configuration } from "../settings.js"
 import { recalledAccount } from "./accounts.js"
@@ -33,7 +34,7 @@ export const completeCommand = (
   config: Pick<Configuration, "configuredProfiles">,
   options: CompletionOptions = {},
 ): Command =>
-  new Command("complete")
+  annotate(new Command("complete"), { effects: LOCAL_READ })
     .description(`shell completion: \`${messenger.app.command} complete zsh\` prints the script to source`)
     .argument("[words...]")
     .allowUnknownOption()

@@ -1,7 +1,9 @@
 import { realpathSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { environmentOf } from "../context.js"
+import { LOCAL_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { type McpEnvironment, serverEntry } from "../messenger/mcp-command.js"
 import { nextStep } from "../steps.js"
@@ -53,7 +55,7 @@ export const commandLookup = (group: Command) => (words: readonly string[]) => {
 export const botMcpCommand = (bot: BotMessenger): Command => {
   const { app } = bot
   const command = withFlags(
-    new Command("mcp").description(
+    annotate(new Command("mcp"), { effects: REMOTE_WRITE }).description(
       `serve this bot to an agent over MCP, on stdin and stdout — \`claude mcp add sales-bot -- ${app.command} sales bot mcp\``,
     ),
   ).action(async function (this: Command) {
@@ -87,7 +89,7 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
 
   command.addCommand(
     withFlags(
-      new Command("config").description(
+      annotate(new Command("config"), { effects: LOCAL_READ }).description(
         "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
       ),
     ).action(function (this: Command) {

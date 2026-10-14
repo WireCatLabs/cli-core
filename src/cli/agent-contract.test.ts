@@ -49,7 +49,7 @@ const invoke = async (
           new Command("messages").addCommand(
             new Command("send").argument("<chat>").argument("[text]").action(performed),
           ),
-          { mutates: true },
+          { effects: { remote: "write", local: "write" } },
         ),
         new Command("setup").option("--agent <agent>").action(performed),
         new Command("session").addCommand(
@@ -204,7 +204,7 @@ describe("agent CLI contract", () => {
     expect(bounded.stdout).toEqual([])
     expect(JSON.parse(bounded.stderr[0] ?? "").error).toMatchObject({
       reason: "output.too-large",
-      details: { retryable: false },
+      retry: { safe: false },
     })
   })
 

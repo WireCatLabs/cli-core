@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { FETCHING } from "../../services/archive.js"
 import { GAP_BOUNDS } from "../../services/archive-gaps.js"
@@ -6,6 +7,7 @@ import { finishJob, jobsDir, startArchiveJob, updateJob } from "../../services/b
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
+import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
 import { nextStep } from "../steps.js"
@@ -21,8 +23,7 @@ const count = (value: string) => {
 }
 export const gapsCommand = (messenger: Messenger) => {
   const group = new Command("gaps").description("inspect recorded interior coverage gaps and explicitly fetch them")
-  group
-    .command("plan")
+  annotate(group.command("plan"), { effects: LOCAL_READ })
     .description("local coverage plan; missing message ids alone do not imply missing history")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -30,8 +31,7 @@ export const gapsCommand = (messenger: Messenger) => {
       renderAnswer(this, context, itemOf(snakeKeys(await context.withServices((services) => services.gaps.plan(chat)))))
     })
   const fetching = messenger.fetching ?? FETCHING
-  group
-    .command("repair")
+  annotate(group.command("repair"), { effects: REMOTE_READ })
     .description("fetch bounded interior gaps and recheck coverage; never delete unseen messages")
     .argument("<chat>", messenger.chatArgument)
     .option("--limit <n>", "total messages in this repair, 500 by default", count)

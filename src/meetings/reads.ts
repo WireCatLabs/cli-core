@@ -67,7 +67,7 @@ export const meetingPeople = async (
     })
     return {
       ...packet,
-      page: { limit, has_more, ...(next_cursor ? { cursor: next_cursor } : {}) },
+      page: { mode: "cursor", limit, has_more, ...(next_cursor ? { next_cursor } : {}) },
       ...(next_cursor
         ? {
             next: [
@@ -120,7 +120,7 @@ export const meetingsList = async (store: MeetingStore, filter: MeetingFilter = 
   const has_more = rows.length > limit
   return {
     items: shown.map((row) => meetingItem(row, owners.get(row.accountId) as MeetingOwner)),
-    page: { limit, has_more },
+    page: { mode: "page", limit, has_more, ...(has_more ? { next_page: page + 1 } : {}) },
     ...(has_more
       ? {
           next: [

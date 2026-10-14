@@ -15,6 +15,7 @@ import { isRetentionSelection, type RetentionService } from "../../services/rete
 import type { SearchParams } from "../../services/search-record.js"
 import type { RankedEvidence } from "../../store/store.js"
 import { environmentOf } from "../context.js"
+import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -31,7 +32,7 @@ const selectionOf = (value: string): unknown => {
   }
 }
 export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget): Command => {
-  const command = syncOptions(annotate(new Command("top"), { output: { entity: "ranking" } }))
+  const command = syncOptions(annotate(new Command("top"), { effects: REMOTE_READ, output: { entity: "ranking" } }))
     .description(
       `rank ${target === "messages" ? "stored messages" : "the human authors of stored messages"} by a measure or explainable score; counters are snapshots with per-field observation freshness`,
     )
@@ -117,7 +118,7 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
 }
 
 export const rankingEvidenceCommand = (messenger: Messenger, target: RankingTarget): Command =>
-  annotate(new Command("evidence"), { output: { entity: "evidence" } })
+  annotate(new Command("evidence"), { effects: LOCAL_READ, output: { entity: "evidence" } })
     .description("bounded messages, answer pairs or retention members from an exact drilldown selection")
     .argument(
       target === "messages" ? "<message>" : "<person>",

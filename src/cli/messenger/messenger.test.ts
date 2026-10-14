@@ -39,6 +39,13 @@ import { searchCommand } from "./search-command.js"
 import { statsCommand } from "./stats-command.js"
 import { topicsCommand } from "./topics-command.js"
 
+/** JSON lines: each item's data, once the stream is known to end with its end line. */
+const jsonlData = (lines: readonly string[]) => {
+  const records = lines.map((line) => JSON.parse(line))
+  expect(records.at(-1)).toMatchObject({ type: "end" })
+  return records.slice(0, -1).map((record) => record.data)
+}
+
 const app = {
   command: "chat",
   appName: "chat-cli",
@@ -232,13 +239,13 @@ describe("forum setup commands", () => {
     expect(enableForum).toHaveBeenCalledTimes(1)
     ready = true
     const made = await call(
-      ["topics", "create", "8", "synthetic", "--send-id", "42", "--json"],
+      ["topics", "create", "8", "synthetic", "--operation-id", "42", "--json"],
       async () => connection,
       env,
     )
     expect(made.code).toBe(0)
     expect(createTopic).toHaveBeenCalledWith("8", "synthetic", { sendId: "42" })
-    expect(JSON.parse(made.stdout[0] ?? "").item).toMatchObject({ send_id: "42", topic: { id: "12" } })
+    expect(JSON.parse(made.stdout[0] ?? "").item).toMatchObject({ operation_id: "42", topic: { id: "12" } })
   })
 })
 
@@ -262,19 +269,19 @@ describe("explicit topic addressing", () => {
     }))
     const connection = { ...fake, validateThread, send, createPoll }
     const sent = await call(
-      ["messages", "send", "Book", "hello", "--topic", "12", "--reply-to", "14", "--send-id", "42", "--json"],
+      ["messages", "send", "Book", "hello", "--topic", "12", "--reply-to", "14", "--operation-id", "42", "--json"],
       async () => connection,
       env,
     )
     const poll = await call(
-      ["polls", "create", "Book", "Friday?", "yes", "no", "--topic", "12", "--send-id", "43", "--json"],
+      ["polls", "create", "Book", "Friday?", "yes", "no", "--topic", "12", "--operation-id", "43", "--json"],
       async () => connection,
       env,
     )
     expect(sent.code).toBe(0)
     expect(poll.code).toBe(0)
     expect(sent.stdout).toHaveLength(1)
-    expect(JSON.parse(sent.stdout[0] ?? "").item).toMatchObject({ send_id: "42", operation_id: "42" })
+    expect(JSON.parse(sent.stdout[0] ?? "").item).toMatchObject({ operation_id: "42" })
     expect(validateThread.mock.calls).toEqual([
       ["7", "12", { replyTo: "14" }],
       ["7", "12", {}],
@@ -295,16 +302,14 @@ describe("explicit topic addressing", () => {
       sendId: options.sendId,
     }))
     const lost = await call(
-      ["messages", "send", "Book", "hello", "--send-id", "44", "--json"],
+      ["messages", "send", "Book", "hello", "--operation-id", "44", "--json"],
       async () => ({ ...connection, send: sentUnreadable }),
       env,
     )
     expect(sentUnreadable).toHaveBeenCalledTimes(1)
     expect(lost.code).not.toBe(0)
     expect(JSON.parse(lost.stderr.at(-1) ?? "").error.details).toMatchObject({
-      send_id: "44",
       operation_id: "44",
-      retryable: false,
     })
     expect((await call(["messages", "send", "Book", "hi", "--topic", " "], async () => connection, env)).code).not.toBe(
       0,
@@ -537,19 +542,22 @@ describe("the shared read commands", () => {
       send: async (_chatId, text, { sendId }) => ({ message: { ...message, text }, sendId }),
     }
 
-    const whole = await call(["messages", "send", "Book", "hi", "--send-id", "77", "--json"], async () => sending, env)
+    const whole = await call(
+      ["messages", "send", "Book", "hi", "--operation-id", "77", "--json"],
+      async () => sending,
+      env,
+    )
     const cut = await call(
-      ["messages", "send", "Book", "hi", "--send-id", "78", "--json=message"],
+      ["messages", "send", "Book", "hi", "--operation-id", "78", "--json=message"],
       async () => sending,
       env,
     )
 
     const answer = v.parse(itemEnvelopeSchema(v.unknown()), JSON.parse(whole.stdout[0] ?? ""))
-    expect(answer.item).toMatchObject({ operation_id: "77", send_id: "77" })
+    expect(answer.item).toMatchObject({ operation_id: "77" })
     expect(() => v.parse(ENTITIES.message, (answer.item as { message: unknown }).message)).not.toThrow()
     expect(JSON.parse(cut.stdout[0] ?? "").item).toEqual({
       operation_id: "78",
-      send_id: "78",
       message: expect.objectContaining({ ref: expect.stringMatching(/^msg:/), text: "hi" }),
     })
   })
@@ -573,7 +581,7 @@ describe("the shared read commands", () => {
       env,
     )
     const repeated = await call(
-      ["messages", "send", "Book", "x", "--at-time", "1h", "--send-id", "5"],
+      ["messages", "send", "Book", "x", "--at-time", "1h", "--operation-id", "5"],
       async () => later,
       env,
     )
@@ -599,7 +607,7 @@ describe("the shared read commands", () => {
     const lost: MessengerAdapter = {
       ...fake,
       send: async () => {
-        throw new CliError("outcome_unknown", "no answer — repeat with --send-id 1", { sendId: "1" })
+        throw new CliError("outcome_unknown", "no answer — repeat with --operation-id 1", { sendId: "1" })
       },
     }
 
@@ -804,7 +812,7 @@ describe("the shared read commands", () => {
     expect(journal.find((entry) => entry.outcome === "sent")).toMatchObject({ kind: "forward", threadId: "5" })
   })
 
-  it("**a forward repeated with its --send-id after an unknown outcome leaves one copy**", async () => {
+  it("**a forward repeated with its --operation-id after an unknown outcome leaves one copy**", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const copies = new Map<string, Message>()
@@ -822,13 +830,13 @@ describe("the shared read commands", () => {
         return copy
       },
     }
-    const forward = ["messages", "forward", "Book", "3", "--to", "Zoe", "--send-id", "9001", "--json"]
+    const forward = ["messages", "forward", "Book", "3", "--to", "Zoe", "--operation-id", "9001", "--json"]
 
     expect((await call(forward, async () => deduplicating, env)).code).toBe(14)
     const repeated = await call(forward, async () => deduplicating, env)
 
     expect(repeated.code).toBe(0)
-    expect(JSON.parse(repeated.stdout[0] ?? "").item).toMatchObject({ send_id: "9001", message: { id: "50" } })
+    expect(JSON.parse(repeated.stdout[0] ?? "").item).toMatchObject({ operation_id: "9001", message: { id: "50" } })
     expect(copies.size).toBe(1)
     const journal = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(journal.filter((entry) => entry.outcome !== "reserved")).toMatchObject([
@@ -1193,7 +1201,19 @@ describe("the shared read commands", () => {
     await call(["polls", "vote", "Book", "3", "--retract"], async () => polling, env)
     const closed = await call(["polls", "close", "Book", "3", "--json"], async () => polling, env)
     const created = await call(
-      ["polls", "create", "Book", "Where?", "here", "there", "--multiple", "--revote", "--send-id", "42", "--json"],
+      [
+        "polls",
+        "create",
+        "Book",
+        "Where?",
+        "here",
+        "there",
+        "--multiple",
+        "--revote",
+        "--operation-id",
+        "42",
+        "--json",
+      ],
       async () => polling,
       env,
     )
@@ -1202,7 +1222,6 @@ describe("the shared read commands", () => {
     expect(none.stderr.join("\n")).toContain("polls show")
     expect(JSON.parse(closed.stdout[0] ?? "").item.poll.closed).toBe(true)
     expect(JSON.parse(created.stdout[0] ?? "").item).toMatchObject({
-      send_id: "42",
       operation_id: "42",
       message: { id: "9" },
     })
@@ -1484,18 +1503,18 @@ describe("the shared read commands", () => {
     const flat = (list: CommandInfo[]): CommandInfo[] => list.flatMap((one) => [one, ...flat([...one.commands])])
     const find = (path: string[]) => flat(described.commands).find((one) => one.path.join(" ") === path.join(" "))
 
-    expect(described).toMatchObject({ cli: "chat", contract: 2 })
-    expect(find(["messages", "send"])?.mutates).toBe(true)
-    expect(find(["messages", "edit"])?.mutates).toBe(true)
-    expect(find(["messages", "forward"])?.mutates).toBe(true)
-    expect(find(["messages", "pin"])?.mutates).toBe(true)
-    expect(find(["messages", "unpin"])?.mutates).toBe(true)
-    expect(find(["reactions", "add"])?.mutates).toBe(true)
-    expect(find(["messages", "delete"])?.mutates).toBe(true)
-    expect(find(["polls", "vote"])?.mutates).toBe(true)
-    expect(find(["polls", "show"])?.mutates).toBeFalsy()
-    expect(find(["recipients", "add"])?.mutates).toBe(true)
-    expect(find(["messages", "list"])?.mutates).toBeFalsy()
+    expect(described).toMatchObject({ cli: "chat", contract: 3 })
+    expect(find(["messages", "send"])?.effects?.remote).toBe("write")
+    expect(find(["messages", "edit"])?.effects?.remote).toBe("write")
+    expect(find(["messages", "forward"])?.effects?.remote).toBe("write")
+    expect(find(["messages", "pin"])?.effects?.remote).toBe("write")
+    expect(find(["messages", "unpin"])?.effects?.remote).toBe("write")
+    expect(find(["reactions", "add"])?.effects?.remote).toBe("write")
+    expect(find(["messages", "delete"])?.effects?.remote).toBe("write")
+    expect(find(["polls", "vote"])?.effects?.remote).toBe("write")
+    expect(find(["polls", "show"])?.effects?.remote).toBe("read")
+    expect(find(["recipients", "add"])?.effects).toEqual({ remote: "none", local: "write" })
+    expect(find(["messages", "list"])?.effects?.remote).toBe("read")
   })
 
   it("**complete a chat from the store** — its id as the word, its title as the description", async () => {
@@ -1721,8 +1740,7 @@ describe("the shared read commands", () => {
       env,
     )
     expect(capped.code).toBe(0)
-    expect(capped.stdout).toHaveLength(1)
-    expect(JSON.parse(capped.stdout[0] ?? "")).toMatchObject({ items: [{ id: "3" }], stopped: ["hops"] })
+    expect(jsonlData(capped.stdout)).toMatchObject([{ items: [{ id: "3" }], stopped: ["hops"] }])
     expect(capped.stderr.join("\n")).toContain("thread context stopped")
     const pretty = await call(["messages", "context", "7", "3", "--thread"], never, env, { tty: true })
     expect(pretty.stdout.join("\n")).toContain("provider/reply")
@@ -1958,7 +1976,10 @@ describe("the shared read commands", () => {
     const kinds = JSON.parse(
       (await call(["search", "all", "chapter kind:group", "--json"], never, env)).stdout[0] ?? "",
     )
-    expect(kinds.meta.skipped.map(({ account }: { account: string }) => account)).toContain("mail")
+    expect(kinds.meta).toMatchObject({
+      complete: false,
+      issues: expect.arrayContaining([{ code: "validation_error", source: "mail" }]),
+    })
 
     const withContext = await call(["search", "mail", "chapter", "--context", "1", "--json"], never, env)
     expect(withContext.code).toBe(0)
@@ -2180,7 +2201,7 @@ describe("the shared read commands", () => {
     const fromField = JSON.parse(
       (await call(["search", "all", "from:me AND chapter", "--json"], never, env)).stdout[0] ?? "",
     )
-    expect(fromField.meta.skipped.map(({ account }: { account: string }) => account)).toContain("notes")
+    expect(fromField.meta.issues.map(({ source }: { source: string }) => source)).toContain("notes")
 
     const notes = JSON.parse(
       (await call(["search", "notes", "chapter", "--type", "internal", "--json"], never, env)).stdout[0] ?? "",
@@ -2197,7 +2218,7 @@ describe("the shared read commands", () => {
     )
     expect(written.items).toHaveLength(1)
     expect(written.meta.accounts).toEqual(["notes:internal"])
-    expect(written.meta.skipped).toEqual([{ account: "email", why: "a mailbox — search mail reads it" }])
+    expect(written.meta.issues).toEqual([{ code: "validation_error", source: "email" }])
     expect(never).not.toHaveBeenCalled()
   })
 
@@ -2258,10 +2279,7 @@ describe("the shared read commands", () => {
     expect(messageIds(unasked)).toContain("40")
 
     const offline = await search(never, "--backend", "server", "--offline")
-    expect(offline.meta.skipped).toContainEqual({
-      account: "messages",
-      why: expect.stringContaining("not with --offline"),
-    })
+    expect(offline.meta.issues).toContainEqual({ code: "validation_error", source: "messages" })
     expect(never).not.toHaveBeenCalled()
 
     const plain = await call(["search", "all", "chapter", "--backend", "archive"], never, env)
@@ -2301,7 +2319,7 @@ describe("the shared read commands", () => {
     const plain = JSON.parse((await call(["search", "all", "chapter", "--json"], never, env)).stdout[0] ?? "")
     expect(kinds(plain)).toEqual(new Set(["message"]))
     expect(plain.missing?.map(({ field }: { field: string }) => field) ?? []).not.toContain("items")
-    expect(plain.meta.skipped).toContainEqual({ account: "meetings", why: MEETINGS_UNNAMED })
+    expect(plain.meta.issues).toContainEqual({ code: "validation_error", source: "meetings" })
 
     const named = await call(["search", "all", "chapter", "--source", "all", "--json"], never, env)
     expect(named.code).toBe(0)
@@ -2392,7 +2410,7 @@ describe("the shared read commands", () => {
     expect(found.code).toBe(0)
     const answer = JSON.parse(found.stdout[0] ?? "")
     expect(answer.items.length).toBeGreaterThan(0)
-    expect(answer.meta.skipped).toContainEqual({ account: "meetings", why: "--source names no meetings account" })
+    expect(answer.meta.issues).toContainEqual({ code: "not_found", source: "meetings" })
     const alone = await call(["search", "all", "chapter", "--source", "meetings", "--json"], never, env)
     expect(alone.code).toBe(2)
     expect(alone.stderr.join("\n")).toContain("--source names nothing search all reads: meetings")
@@ -2409,7 +2427,7 @@ describe("the shared read commands", () => {
       (await call(["search", "all", "chapter", "--source", "chat:500", "--json"], never, env)).stdout[0] ?? "",
     )
     expect(answer.meta.accounts).toEqual(["chat:500"])
-    expect(answer.meta.skipped).toContainEqual({ account: "notes", why: "--source names no notes account" })
+    expect(answer.meta.issues).toContainEqual({ code: "not_found", source: "notes" })
     const pretty = await call(["search", "all", "chapter", "--source", "chat:500"], never, env, { tty: true })
     expect(pretty.stderr.join("\n")).toContain("searched: chat:500")
     expect(pretty.stdout.join("\n")).not.toContain("searched:")
@@ -2464,7 +2482,7 @@ describe("the shared read commands", () => {
     )
     expect(answer.items.length).toBeGreaterThan(0)
     expect(answer.meta.accounts).toEqual(["chat:500"])
-    expect(answer.meta.skipped).toEqual([{ account: "zoom:z1", why: "meetings — search all reads them" }])
+    expect(answer.meta.issues).toEqual([{ code: "validation_error", source: "zoom:z1" }])
     const pretty = await call(["search", "messages", "chapter", "--source", "chat:500,zoom:z1"], never, env, {
       tty: true,
     })
@@ -2858,10 +2876,12 @@ describe("the shared read commands", () => {
     const ranged = await timeline("--since-time", "2026-09-02T00:00:00Z", "--until-time", "2026-09-30T00:00:00Z")
     expect(ranged.items.map((item: { locator: string }) => item.locator)).toEqual(["msg:telegram/500/31/2"])
     const cut = await timeline("--limit", "1")
-    expect(cut).toMatchObject({ page: { limit: 1, has_more: true, cursor: expect.stringMatching(/^before:\d+:\d+$/) } })
+    expect(cut).toMatchObject({
+      page: { mode: "cursor", limit: 1, has_more: true, next_cursor: expect.stringMatching(/^before:\d+:\d+$/) },
+    })
     expect(cut.meta?.truncated).toBeUndefined()
     expect(cut.next[0]).toMatchObject({ step: "page.next", command: "contacts timeline", args: { person: "21" } })
-    const rest = await timeline("--limit", "1", "--cursor", cut.page.cursor)
+    const rest = await timeline("--limit", "1", "--cursor", cut.page.next_cursor)
     expect(rest.items.map((item: { locator: string }) => item.locator)).toEqual(["msg:telegram/500/31/1"])
     expect(rest.page.has_more).toBe(false)
     expect((await timeline("--scope", "work")).items).toEqual([])
@@ -4382,7 +4402,7 @@ describe("the guard, account and mcp config commands", () => {
     })
 
     const lines = await call(["chats", "list", "--limit", "1", "--jsonl"], online, env)
-    expect(lines.stdout.map((line) => JSON.parse(line).id)).toEqual(["7"])
+    expect(jsonlData(lines.stdout).map((one) => one.id)).toEqual(["7"])
     expect(lines.stderr.join("\n")).toContain("--page 2")
 
     const all = await call(["chats", "list", "--all", "--json"], online, env)
@@ -4523,7 +4543,7 @@ describe("the guard, account and mcp config commands", () => {
     expect(Date.now() - (asked[1] ?? 0)).toBeLessThan(86_400_000 + 5000)
     expect(json(all.stdout)).toMatchObject({ meta: { truncated: true } })
     expect(json(all.stdout).items).toHaveLength(2)
-    expect(day.stdout.map((line) => JSON.parse(line).type)).toEqual(["join", "pin"])
+    expect(jsonlData(day.stdout).map((one) => one.type)).toEqual(["join", "pin"])
     expect(day.stderr.join("\n")).toContain("more history")
     expect(typed.code).toBe(2)
     expect((await call(["chats", "events", "7"], async () => fake, env)).code).toBe(2)
@@ -4608,7 +4628,7 @@ describe("the guard, account and mcp config commands", () => {
     expect(v.parse(listEnvelopeSchema(ENTITIES.account_session), json(listed.stdout)).items[0]).toMatchObject({
       last_active_at: null,
     })
-    expect(lines.stdout).toHaveLength(2)
+    expect(jsonlData(lines.stdout)).toHaveLength(2)
     expect((await call(["account", "sessions", "list"], async () => fake, env)).code).toBe(2)
   })
 
@@ -4722,11 +4742,11 @@ describe("the guard, account and mcp config commands", () => {
     })
 
     const listed = await call(["messages", "list", "7", "--jsonl"], online, env)
-    expect(listed.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2", "3"])
+    expect(jsonlData(listed.stdout).map((one) => one.id)).toEqual(["1", "2", "3"])
     expect(listed.stderr.join("\n")).toContain("--cursor before:1")
 
     const found = await call(["search", "messages", "chapter", "--jsonl"], online, env)
-    expect(found.stdout.map((line) => JSON.parse(line).ref.split("/").at(-1))).toEqual(["3", "2", "1"])
+    expect(jsonlData(found.stdout).map((one) => one.ref.split("/").at(-1))).toEqual(["3", "2", "1"])
   })
 })
 
@@ -4811,9 +4831,9 @@ describe("message link command", () => {
     for (const flag of ["--json", "--jsonl"]) {
       const result = await call(["messages", "link", "msg:chat/500/7/1", flag], connect, env)
       expect(result.code).toBe(0)
-      expect(result.stdout.join("").trim().split("\n")).toHaveLength(1)
-      const answer = JSON.parse(result.stdout.join(""))
-      expect(flag === "--json" ? answer.item : answer).toEqual({
+      expect(result.stdout).toHaveLength(flag === "--json" ? 1 : 2)
+      const answer = flag === "--json" ? JSON.parse(result.stdout.join("")).item : jsonlData(result.stdout)[0]
+      expect(answer).toEqual({
         ref: "msg:chat/500/7/1",
         url: "https://provider.example/1",
         access: "restricted",
@@ -4962,7 +4982,7 @@ describe("messages comments", () => {
     expect(json.code).toBe(0)
     const answer = JSON.parse(json.stdout.join(""))
     expect(answer.items).toMatchObject([{ id: "901", chat_id: "-1002", ref: "msg:chat/500/-1002/901" }])
-    expect(answer.page).toEqual({ limit: 5, has_more: true, cursor: "before:901" })
+    expect(answer.page).toEqual({ mode: "cursor", limit: 5, has_more: true, next_cursor: "before:901" })
     expect(answer.next[0]).toMatchObject({
       step: "page.next",
       args: { chat: "7", post: "42", query: "id<950", cursor: "before:901" },
@@ -4970,7 +4990,7 @@ describe("messages comments", () => {
     expect(comments).toHaveBeenCalledWith("7", "42", { limit: 5, before: "950" })
 
     const jsonl = await call(["messages", "comments", "7", "42", "--jsonl"], connect, env)
-    expect(JSON.parse(jsonl.stdout.join("").trim())).toMatchObject({ id: "901" })
+    expect(jsonlData(jsonl.stdout)[0]).toMatchObject({ id: "901" })
 
     const pretty = await call(["messages", "comments", "7", "42"], connect, env)
     expect(pretty.code).toBe(0)

@@ -4,6 +4,7 @@ import { Command } from "commander"
 import type { ChatStats, StatsPeriod } from "../../services/chat-stats.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { momentOf } from "../../services/moment.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { chatStatsAnswer, refuseJsonl } from "./stats-answers.js"
@@ -11,7 +12,7 @@ import { chatStatsAnswer, refuseJsonl } from "./stats-answers.js"
 const PERIODS: StatsPeriod[] = ["day", "week"]
 
 export const statsCommand = (messenger: Messenger): Command =>
-  annotate(new Command("show"), { output: { entity: "chat_stats" } })
+  annotate(new Command("show"), { effects: REMOTE_READ, output: { entity: "chat_stats" } })
     .description(
       "a group's or channel's numbers for a period: messages, active members, replies, reactions, questions answered, " +
         "joins and leaves — counted from the local store; joins and leaves are asked of the messenger",

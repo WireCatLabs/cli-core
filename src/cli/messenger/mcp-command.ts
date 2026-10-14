@@ -8,6 +8,7 @@ import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
 import { type AppIdentity, envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
+import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -101,7 +102,7 @@ const retiredNote = (app: AppIdentity, flags: McpFlags): string | undefined => {
 export const mcpCommand = (messenger: Messenger): Command => {
   const { app } = messenger
   const command = withFlags(
-    new Command("mcp").description(
+    annotate(new Command("mcp"), { effects: REMOTE_WRITE }).description(
       `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} mcp\``,
     ),
   )
@@ -147,7 +148,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
 
   command.addCommand(
     withFlags(
-      new Command("config").description(
+      annotate(new Command("config"), { effects: LOCAL_READ }).description(
         "print the mcpServers entry for Claude Desktop, Cursor and others, with full paths; writes nothing",
       ),
     ).action(async function (this: Command) {
@@ -175,7 +176,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
   )
   command.addCommand(
     withFlags(
-      annotate(new Command("setup"), { mutates: true, local: true })
+      annotate(new Command("setup"), { effects: LOCAL_WRITE })
         .description("add this profile's local MCP server to Codex or Claude Code")
         .argument("<client>", "codex or claude-code")
         .option("--allow-writes", "acknowledge that this profile offers writing tools"),
@@ -213,46 +214,48 @@ export const mcpCommand = (messenger: Messenger): Command => {
     }),
   )
   command.addCommand(
-    withFlags(new Command("doctor").description("check this profile's local MCP handshake and tool list")).action(
-      async function (this: Command) {
-        const context = messengerContext(this, messenger)
-        const { settings, env } = context
-        const given = environmentOf<McpEnvironment>(this).mcp ?? {}
-        const configuration = serverEntry(app, {
-          profile: settings.profile,
-          flags: this.optsWithGlobals<McpFlags>(),
-          execPath: given.execPath ?? process.execPath,
-          scriptPath: given.scriptPath ?? realpathSync(process.argv[1] ?? ""),
-          env,
+    withFlags(
+      annotate(new Command("doctor"), { effects: LOCAL_READ }).description(
+        "check this profile's local MCP handshake and tool list",
+      ),
+    ).action(async function (this: Command) {
+      const context = messengerContext(this, messenger)
+      const { settings, env } = context
+      const given = environmentOf<McpEnvironment>(this).mcp ?? {}
+      const configuration = serverEntry(app, {
+        profile: settings.profile,
+        flags: this.optsWithGlobals<McpFlags>(),
+        execPath: given.execPath ?? process.execPath,
+        scriptPath: given.scriptPath ?? realpathSync(process.argv[1] ?? ""),
+        env,
+      })
+      const entry = Object.values(configuration.config.mcpServers)[0]
+      if (!entry) throw new CliError("validation_error", "the MCP entry is empty")
+      const { probeStdio } = await import("@wirecat/cli-base/mcp")
+      const stderr = stderrTail()
+      try {
+        const { tools, potentialWrites } = await probeStdio(entry as Parameters<typeof probeStdio>[0], {
+          start: stderr.start,
         })
-        const entry = Object.values(configuration.config.mcpServers)[0]
-        if (!entry) throw new CliError("validation_error", "the MCP entry is empty")
-        const { probeStdio } = await import("@wirecat/cli-base/mcp")
-        const stderr = stderrTail()
-        try {
-          const { tools, potentialWrites } = await probeStdio(entry as Parameters<typeof probeStdio>[0], {
-            start: stderr.start,
-          })
-          renderAnswer(
-            this,
-            context,
-            itemOf({
-              healthy: true,
-              profile: settings.profile,
-              tools: tools.length,
-              potential_writes: potentialWrites.length,
-            }),
-          )
-        } catch (error) {
-          const tail = await stderr.tail()
-          throw new CliError(
-            "validation_error",
-            `${error instanceof Error ? error.message : "MCP doctor failed"}${tail ? ` — its last words on stderr:\n${tail}` : ""}`,
-            tail ? { stderr: tail } : undefined,
-          )
-        }
-      },
-    ),
+        renderAnswer(
+          this,
+          context,
+          itemOf({
+            healthy: true,
+            profile: settings.profile,
+            tools: tools.length,
+            potential_writes: potentialWrites.length,
+          }),
+        )
+      } catch (error) {
+        const tail = await stderr.tail()
+        throw new CliError(
+          "validation_error",
+          `${error instanceof Error ? error.message : "MCP doctor failed"}${tail ? ` — its last words on stderr:\n${tail}` : ""}`,
+          tail ? { stderr: tail } : undefined,
+        )
+      }
+    }),
   )
   return command
 }

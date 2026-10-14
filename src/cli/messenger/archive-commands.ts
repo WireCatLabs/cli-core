@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { Readable } from "node:stream"
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { Id } from "../../domain/models.js"
 import { toMarkdown } from "../../render/markdown.js"
@@ -10,6 +11,7 @@ import { seal } from "../../sealed.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -37,7 +39,7 @@ export const storeCommand = (messenger: Messenger): Command => {
  * chat's very first message is not recorded, so it is not claimed: the stretches held are shown.
  */
 const statusCommand = (messenger: Messenger): Command =>
-  new Command("status")
+  annotate(new Command("status"), { effects: LOCAL_READ })
     .description("per chat: messages stored, the oldest and newest, and the stretches held completely")
     .argument("[chat]", messenger.chatArgument)
     .action(async function (this: Command, chat: string | undefined) {
@@ -58,7 +60,7 @@ const statusCommand = (messenger: Messenger): Command =>
  * store is not offered.
  */
 const clearCommand = (messenger: Messenger): Command =>
-  new Command("clear")
+  annotate(new Command("clear"), { effects: LOCAL_WRITE })
     .description("delete from the store the chats this account has left, with their messages")
     .option("--left", "the chats this account has left — the only thing this clears")
     .option("--allow-dangerous", "yes, delete — it cannot be undone, and a chat you left cannot be fetched again")
@@ -93,7 +95,7 @@ const clearCommand = (messenger: Messenger): Command =>
  * folder, and each later run into the same folder adds only what changed.
  */
 const exportCommand = (messenger: Messenger): Command =>
-  new Command("export")
+  annotate(new Command("export"), { effects: LOCAL_WRITE })
     .description(
       "a chat's stored messages, oldest first: --jsonl one message per line, --json the list envelope of messages; never asks the messenger",
     )

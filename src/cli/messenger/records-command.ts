@@ -4,6 +4,7 @@ import { Command } from "commander"
 import { type Audience, MEDIA_KINDS, type MediaKind, type PrivacySettings } from "../../domain/models.js"
 import { sendTime } from "../../domain/send-time.js"
 import { capability } from "../../ports/messenger.js"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -19,7 +20,7 @@ const kindsOf = (typed: string | undefined): MediaKind[] => {
 
 /** `chats media` — what a chat's gallery shows, asked of the server, so it finds what was never fetched. */
 export const mediaCommand = (messenger: Messenger): Command =>
-  new Command("media")
+  annotate(new Command("media"), { effects: REMOTE_READ })
     .description("a chat's photos, videos, files, audio and links, from the messenger's server; reading marks nothing")
     .argument("<chat>", messenger.chatArgument)
     .option("--type <names>", `only these kinds, comma-separated: ${MEDIA_KINDS.join(", ")}`)
@@ -50,6 +51,7 @@ export const mediaCommand = (messenger: Messenger): Command =>
           items: page.items.map(snakeKeys),
           limit,
           has_more: page.hasMore && oldest !== undefined,
+          paging: "cursor",
           ...(oldest === undefined ? {} : { cursor: oldest }),
           args: { chat, ...(type === undefined ? {} : { type }) },
         }),
@@ -59,8 +61,7 @@ export const mediaCommand = (messenger: Messenger): Command =>
 /** `stickers list` — the sets the account added, or one set's stickers with the ids `messages send --sticker` takes. */
 export const stickersCommand = (messenger: Messenger): Command => {
   const stickers = new Command("stickers").description("the stickers the account has added")
-  stickers
-    .command("list")
+  annotate(stickers.command("list"), { effects: REMOTE_READ })
     .description("sticker sets, or with --set the stickers in one; reading changes nothing")
     .option("--set <id>", "the stickers in this set")
     .action(async function (this: Command) {
@@ -88,8 +89,7 @@ export const stickersCommand = (messenger: Messenger): Command => {
 /** `calls list` — the account's call history, newest first. */
 export const callsCommand = (messenger: Messenger): Command => {
   const calls = new Command("calls").description("the account's calls")
-  calls
-    .command("list")
+  annotate(calls.command("list"), { effects: REMOTE_READ })
     .description("calls made and received, newest first; reading changes nothing")
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
     .action(async function (this: Command) {
@@ -107,7 +107,7 @@ export const callsCommand = (messenger: Messenger): Command => {
 
 /** `chats delete` and `chats clear` — for this account only; at the default level they ask first. */
 export const chatDeletionCommands = (messenger: Messenger): Command[] => [
-  annotate(new Command("delete"), { mutates: true })
+  annotate(new Command("delete"), { effects: REMOTE_WRITE })
     .description("delete a chat from this account; the others in it keep it and its messages")
     .argument("<chat>", messenger.chatArgument)
     .option("--allow-dangerous", "go ahead without the question an ask level puts before a deletion")
@@ -119,7 +119,7 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
         itemOf(snakeKeys(await context.withServices((services) => services.admin.deleteChat(chat)))),
       )
     }),
-  annotate(new Command("clear"), { mutates: true })
+  annotate(new Command("clear"), { effects: REMOTE_WRITE })
     .description("delete every message in a chat for this account; the others in it keep theirs")
     .argument("<chat>", messenger.chatArgument)
     .option("--allow-dangerous", "go ahead without the question an ask level puts before a deletion")
@@ -135,7 +135,7 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
 
 /** `chats mute` and `unmute` — the owner's own notifications for one chat; nobody in it is told. */
 export const muteCommands = (messenger: Messenger): Command[] => [
-  annotate(new Command("mute"), { mutates: true })
+  annotate(new Command("mute"), { effects: REMOTE_WRITE })
     .description("stop notifications from a chat, for good or until a time; nobody in it is told")
     .argument("<chat>", messenger.chatArgument)
     .option("--until <time>", "only until then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now")
@@ -149,7 +149,7 @@ export const muteCommands = (messenger: Messenger): Command[] => [
         itemOf(snakeKeys(await context.withServices((services) => services.account.mute(chat, when)))),
       )
     }),
-  annotate(new Command("unmute"), { mutates: true })
+  annotate(new Command("unmute"), { effects: REMOTE_WRITE })
     .description("hear a muted chat again")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -174,8 +174,7 @@ const audienceOf = (flag: string, value: string | undefined): Audience | undefin
 /** `account privacy` — who may find, call or invite the account, as the messenger reports it. */
 export const privacyCommand = (messenger: Messenger): Command => {
   const privacy = new Command("privacy").description("who may find, call or add the account")
-  privacy
-    .command("show")
+  annotate(privacy.command("show"), { effects: REMOTE_READ })
     .description("the account's privacy settings; reading changes nothing")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -185,7 +184,7 @@ export const privacyCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(privacy)))
     })
   privacy.addCommand(
-    annotate(new Command("set"), { mutates: true })
+    annotate(new Command("set"), { effects: REMOTE_WRITE })
       .description("change who may find, call or add the account; the settings not named stay")
       .option("--find-by-phone <who>", "who finds the account by its number: everyone, contacts or nobody")
       .option("--phone-number <who>", "who sees the number: everyone, contacts or nobody")

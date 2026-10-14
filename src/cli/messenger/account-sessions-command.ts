@@ -3,6 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { accountSession } from "../../entities/index.js"
 import { capability } from "../../ports/messenger.js"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { sessionAnswer, wholeList } from "./chat-answers.js"
@@ -16,7 +17,7 @@ export const accountSessionsCommand = (messenger: Messenger): Command => {
     `where else this account is logged in — not \`${messenger.app.command} session\`, which is this tool's own login`,
   )
 
-  withQuery(sessions.command("list"), SESSIONS_QUERY)
+  withQuery(annotate(sessions.command("list"), { effects: REMOTE_READ }), SESSIONS_QUERY)
     .description("every device and app logged in to this account; nothing is ended")
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
@@ -29,7 +30,7 @@ export const accountSessionsCommand = (messenger: Messenger): Command => {
 
   // No MCP tool, at any permission level: it logs the owner out of the phone.
   sessions.addCommand(
-    annotate(new Command("end"), { mutates: true })
+    annotate(new Command("end"), { effects: REMOTE_WRITE })
       .description("log out every other device, your phone included; this one stays")
       .option("--others", "every session but this one")
       .action(async function (this: Command) {

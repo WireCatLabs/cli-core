@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { analysisConsents } from "../../analysis/consents.js"
 import { openAnalysis, providerIdentity } from "../../analysis/provider.js"
@@ -18,6 +19,7 @@ import { servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { embeddingChoice, type ModelOptions } from "../embedding-choice.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
@@ -40,8 +42,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   )
 
   boundOptions(
-    conversations
-      .command("build")
+    annotate(conversations.command("build"), { effects: LOCAL_WRITE })
       .description(
         "find a chat's conversations in what the store holds, replacing the last build; without --chat, every " +
           "chat that changed since its build and every group never built; never asks the messenger",
@@ -152,8 +153,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   })
 
   withQuery(
-    conversations
-      .command("list")
+    annotate(conversations.command("list"), { effects: LOCAL_READ })
       .description("a chat's conversations, the newest first: when, how many messages, how many people")
       .argument("<chat>", messenger.chatArgument),
     CONVERSATION_QUERY,
@@ -171,8 +171,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       if (found.items.length === 0 && context.format === "pretty") context.renderer.note("no conversations match")
     })
 
-  conversations
-    .command("show")
+  annotate(conversations.command("show"), { effects: LOCAL_READ })
     .description("one conversation's messages, oldest first — by its id, or the one a message is in")
     .argument(
       "<conversation>",
@@ -206,8 +205,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     })
 
   withModelOptions(
-    conversations
-      .command("related")
+    annotate(conversations.command("related"), { effects: LOCAL_READ })
       .description(
         "the conversations nearest in meaning to the one a message is in, in every built chat, best first — " +
           "from the vectors `conversations embed` stored; runs no model",
@@ -232,8 +230,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   })
 
   withModelOptions(
-    conversations
-      .command("status")
+    annotate(conversations.command("status"), { effects: LOCAL_READ })
       .description(
         "how fresh each built chat's conversations and vectors are: messages the build has not seen, chunks " +
           "with a current, stale or missing vector",
@@ -271,8 +268,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     )
 
   sizeOption(
-    batches
-      .command("status")
+    annotate(batches.command("status"), { effects: LOCAL_READ })
       .description("how many messages still wait for an answer, in how many batches, and how much text")
       .requiredOption("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
@@ -290,8 +286,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   })
 
   sizeOption(
-    batches
-      .command("next")
+    annotate(batches.command("next"), { effects: LOCAL_READ })
       .description("the next window to answer, with the messages before it; message text goes to stdout only")
       .requiredOption("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
@@ -323,8 +318,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     .command("links")
     .description("your agent's answers: which earlier message each message of a batch answers")
 
-  links
-    .command("add")
+  annotate(links.command("add"), { effects: LOCAL_WRITE })
     .description(
       'store your agent\'s answer to a batch, read as JSON from stdin: { "model", "answers": [{ "message", ' +
         '"parent", "confidence" }] }; all or nothing',
@@ -344,8 +338,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  links
-    .command("clear")
+  annotate(links.command("clear"), { effects: LOCAL_WRITE })
     .description("drop your agent's answers for a chat, or only one model's; messages are never touched")
     .requiredOption("--chat <chat>", messenger.chatArgument)
     .option("--model <model>", "only the answers this model gave")
@@ -358,7 +351,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     })
 
   const embed = withModelOptions(
-    new Command("embed")
+    annotate(new Command("embed"), { effects: LOCAL_WRITE })
       .description(
         "compute a vector for each chunk of a chat's conversations for search by meaning — on this machine, or " +
           "with --provider through a service and your key; resumes where it stopped; without --chat, every " +
@@ -437,8 +430,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   })
 
   withModelOptions(
-    embed
-      .command("status")
+    annotate(embed.command("status"), { effects: LOCAL_READ })
       .description("how many chunks of a chat have a vector of the model, how many are left, and what is left costs")
       .option("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
@@ -460,8 +452,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   })
 
   withModelOptions(
-    embed
-      .command("clear")
+    annotate(embed.command("clear"), { effects: LOCAL_WRITE })
       .description("drop a chat's vectors, or only one model's; messages and conversations are never touched")
       .option("--chat <chat>", messenger.chatArgument),
   ).action(async function (this: Command) {
@@ -478,7 +469,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   const consents = conversations
     .command("consents")
     .description("remembered analysis permissions for this account's chats and provider endpoints")
-  consents.command("list").action(async function (this: Command) {
+  annotate(consents.command("list"), { effects: LOCAL_READ }).action(async function (this: Command) {
     const context = messengerContext(this, messenger)
     const items = await context.withStore((store, account) => analysisConsents(store, account).list())
     renderAnswer(
@@ -491,8 +482,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       }),
     )
   })
-  consents
-    .command("revoke")
+  annotate(consents.command("revoke"), { effects: LOCAL_WRITE })
     .option("--chat <chat>", "revoke only this chat's consents; defaults to every chat")
     .option("--provider <identity>", "exact provider identity from consents list; defaults to every provider")
     .action(async function (this: Command) {
@@ -607,7 +597,7 @@ const renderRefreshed = (command: Command, context: MessengerContext, refreshed:
 /** Names the download only where this CLI has the command; a host without `models` gets the fact alone. */
 const notDownloaded = (root: Command, model: string, lead: string): string => {
   const [step] = runnable(root, [nextStep("models.download", { args: { model } })])
-  return `${lead}: ${model} is not downloaded${step ? ` — \`${stepLine(root, step)}\`` : ""}`
+  return `${lead}: ${model} is not downloaded${step?.kind === "command" ? ` — \`${stepLine(root, step)}\`` : ""}`
 }
 
 const leftNotes = ({ model, modelAvailable, embedded, left }: Refreshed, root: Command) => {
@@ -685,7 +675,7 @@ const answerOf = (text: string): AgentAnswer => {
 
 /** `messages links`: why a message sits where it does in its conversation. */
 export const linksCommand = (messenger: Messenger): Command =>
-  new Command("links")
+  annotate(new Command("links"), { effects: LOCAL_READ })
     .description("why a message is in its conversation: each link it has, and the chain of answers back to the start")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the message id")
@@ -732,7 +722,7 @@ const readinessLine = ({ chat, state, graph, pending, vectors }: ChatReadiness, 
 
 /** `search conversations`: the conversations nearest to a query, in meaning and in words. */
 export const conversationsSearchCommand = (messenger: Messenger): Command =>
-  syncOptions(boundOptions(withModelOptions(new Command("conversations"))))
+  syncOptions(boundOptions(withModelOptions(annotate(new Command("conversations"), { effects: LOCAL_READ }))))
     .description(
       "the conversations nearest to a query in meaning and in words, best first, in one chat or every one — " +
         "meaning after `conversations embed`; runs on this machine",

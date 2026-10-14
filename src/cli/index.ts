@@ -165,6 +165,7 @@ export {
 } from "./context.js"
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
+export { LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_READ, REMOTE_WRITE } from "./effects.js"
 export {
   type AnswerOutput,
   answerSchema,
@@ -276,6 +277,7 @@ export {
   renderEvent,
   type WarningEvent,
 } from "./runs/events.js"
+export { CORE_LOG_EVENTS } from "./runs/log-events.js"
 export {
   crashOf,
   type Recording,

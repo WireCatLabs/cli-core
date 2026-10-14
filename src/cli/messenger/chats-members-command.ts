@@ -2,6 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { registriesCover } from "../../botcheck/registries.js"
 import { AUDIT_BUDGET, AUDIT_PAGE } from "../../services/members-audit.js"
+import { LOCAL_READ, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, withPaging } from "../paging.js"
@@ -19,7 +20,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     annotate(
       withQuery(
         withPaging(
-          new Command("list")
+          annotate(new Command("list"), { effects: REMOTE_READ })
             .description("everyone in a group, a page at a time, with their role and when they were last seen")
             .argument("<chat>", messenger.chatArgument),
         ),
@@ -44,7 +45,7 @@ export const membersCommand = (messenger: Messenger): Command => {
   members.addCommand(
     withQuery(
       annotate(
-        new Command("audit")
+        annotate(new Command("audit"), { effects: REMOTE_READ })
           .description(
             "members that look like bots, each with its reasons — read from the member list and the local store; " +
               "never one request per person, and it removes nobody",
@@ -103,7 +104,7 @@ export const membersCommand = (messenger: Messenger): Command => {
   members.addCommand(
     withQuery(
       annotate(
-        new Command("history")
+        annotate(new Command("history"), { effects: LOCAL_READ })
           .description(
             "who joined, who left and whose profile changed, oldest first — what chats members fetch recorded in the " +
               "local store; never asks the messenger",
@@ -135,7 +136,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  const fetch = new Command("fetch")
+  const fetch = annotate(new Command("fetch"), { effects: REMOTE_READ })
     .description(
       "read a group's whole member list into the local store's member history: who joined, who left, daily " +
         "counts and profile changes; someone is recorded as gone only when every member was read",
@@ -179,7 +180,7 @@ export const membersCommand = (messenger: Messenger): Command => {
       }),
   )
 
-  const add = annotate(new Command("add"), { mutates: true })
+  const add = annotate(new Command("add"), { effects: REMOTE_WRITE })
     .description("add people; they are told")
     .argument("<chat>", messenger.chatArgument)
     .argument("<person...>", "an id, or part of a name")
@@ -198,7 +199,7 @@ export const membersCommand = (messenger: Messenger): Command => {
   )
 
   members.addCommand(
-    annotate(new Command("remove"), { mutates: true })
+    annotate(new Command("remove"), { effects: REMOTE_WRITE })
       .description("remove people; their messages stay")
       .argument("<chat>", messenger.chatArgument)
       .argument("<person...>", "an id, or part of a name")

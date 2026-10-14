@@ -52,6 +52,6 @@ export const callMeetingPassageTool = async (
   } catch (error) {
     const cause =
       !isCliError(error) && signal?.aborted ? new CliError("cancelled", "meeting passage was cancelled") : error
-    return mcpErrorResult(errorObjectOf(cause, failure))
+    return mcpErrorResult(errorObjectOf(cause, { ...failure, effects: { remote: "none", local: "read" } }))
   }
 }

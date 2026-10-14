@@ -1,8 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { Message, MessageHit } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
 import { environmentOf } from "../context.js"
+import { REMOTE_WRITE } from "../effects.js"
 import { type BotContext, botContext, online } from "./context.js"
 import { botCan, botIdOf } from "./messages.js"
 import type { BotEvent, BotMessenger, BotNotice } from "./port.js"
@@ -100,7 +102,7 @@ const keep = async (
  * comes again after being handled; one without an id may print twice. A read: it changes nothing anyone sees.
  */
 export const botWatchCommand = (bot: BotMessenger): Command =>
-  new Command("watch")
+  annotate(new Command("watch"), { effects: REMOTE_WRITE })
     .description("print new messages as they arrive and keep them, until Ctrl-C or --timeout (either ends it normally)")
     .option(
       "--events",

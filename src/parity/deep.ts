@@ -108,7 +108,7 @@ export const comparePrograms = (left: CommandsJson, right: CommandsJson): Progra
     const contract = (one: CommandInfo) => ({
       arguments: canonical(one.arguments, false),
       options: optionContracts(one.options),
-      mutates: one.mutates,
+      effects: one.effects,
       state: one.state,
       origin: one.origin,
     })

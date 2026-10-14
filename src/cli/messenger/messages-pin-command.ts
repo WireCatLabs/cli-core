@@ -1,10 +1,11 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const pinCommand = (messenger: Messenger): Command =>
-  annotate(new Command("pin"), { mutates: true })
+  annotate(new Command("pin"), { effects: REMOTE_WRITE })
     .description("pin a message in a chat, quietly unless --notify")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the message id")
@@ -19,7 +20,7 @@ export const pinCommand = (messenger: Messenger): Command =>
     })
 
 export const unpinCommand = (messenger: Messenger): Command =>
-  annotate(new Command("unpin"), { mutates: true })
+  annotate(new Command("unpin"), { effects: REMOTE_WRITE })
     .description("unpin a message in a chat")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the message id")

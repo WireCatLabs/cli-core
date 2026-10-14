@@ -30,7 +30,7 @@ describe("search all --source", () => {
     const found = await search(store, { source: "synthetic:500,email:500" })
     expect(found.searched).toEqual(["messages", "mail"])
     expect(keys(found.accounts)).toEqual(["messages synthetic:500", "mail email:500"])
-    expect(found.skipped).toEqual([{ resource: "notes", reason: "--source names no notes account" }])
+    expect(found.skipped).toEqual([{ resource: "notes", code: "not_found", reason: "--source names no notes account" }])
     expect(found.items.length).toBeGreaterThan(0)
     expect(found.items.every(({ account }) => account === "500")).toBe(true)
   })
@@ -66,8 +66,8 @@ describe("search all --source", () => {
     ])
     const narrowed = await search(store, { only: ["messages"], source: "group:work" })
     expect(narrowed.skipped).toEqual([
-      { source: "email:500", reason: "--only leaves mail out" },
-      { source: `notes:${twins.alpha.folderId}`, reason: "--only leaves notes out" },
+      { source: "email:500", code: "validation_error", reason: "--only leaves mail out" },
+      { source: `notes:${twins.alpha.folderId}`, code: "validation_error", reason: "--only leaves notes out" },
     ])
     await expect(search(store, { only: ["messages"], source: "email:500" })).rejects.toThrow(
       "--source names nothing search all reads: email:500 (--only leaves mail out)",
@@ -90,7 +90,11 @@ describe("search all --source", () => {
     other.meeting.accountId = await store.saveAccount({ provider: "zoom", account: "z2" }, { name: null })
     const narrowed = await search(store, { only: undefined, source: "zoom" })
     expect(keys(narrowed.accounts)).toEqual(["meetings zoom:z1"])
-    expect(narrowed.skipped).toContainEqual({ source: "zoom:z2", reason: "no meetings stored for it" })
+    expect(narrowed.skipped).toContainEqual({
+      source: "zoom:z2",
+      code: "not_found",
+      reason: "no meetings stored for it",
+    })
     await store.meetings.saveMeeting(other)
     await expect(search(store, { only: undefined, source: "zoom" })).rejects.toThrow(
       "--source names several meeting accounts; search all reads one: zoom:z1, zoom:z2",

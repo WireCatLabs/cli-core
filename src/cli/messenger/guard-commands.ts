@@ -3,6 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList } from "../list-query.js"
 import { withPaging } from "../paging.js"
@@ -19,8 +20,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
 
   const command = new Command("recipients").description("the chats this profile may send to, when the list is on")
 
-  command
-    .command("list")
+  annotate(command.command("list"), { effects: LOCAL_READ })
     .description("the chats on the list; empty and off until the first add")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -31,7 +31,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       else if (chats.length === 0) renderer.note("the recipient list is on and empty — this profile may send nowhere")
     })
 
-  annotate(command.command("add"), { mutates: true, local: true })
+  annotate(command.command("add"), { effects: LOCAL_WRITE })
     .argument("<chat>", messenger.chatArgument)
     .description("allow sending to this chat; the first add turns the list on")
     .action(async function (this: Command, chat: string) {
@@ -47,7 +47,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ id: found.id, title: found.title, added }))
     })
 
-  annotate(command.command("remove"), { mutates: true, local: true })
+  annotate(command.command("remove"), { effects: LOCAL_WRITE })
     .argument("<chat>", "chat id, or the title as the list shows it")
     .description("stop allowing this chat; the list stays on")
     .action(async function (this: Command, chat: string) {
@@ -58,7 +58,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ id: gone.id, title: gone.title, removed: true }))
     })
 
-  annotate(command.command("clear"), { mutates: true, local: true })
+  annotate(command.command("clear"), { effects: LOCAL_WRITE })
     .description("delete the list, which turns it off: this profile may send to any chat again")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -73,7 +73,9 @@ export const recipientsCommand = (messenger: Messenger): Command => {
 export const sendsCommand = (messenger: Messenger): Command =>
   new Command("sends").description("every attempt to send from this profile — never the text").addCommand(
     withPaging(
-      new Command("list").description("attempts to send, newest first: sent, refused, failed, or not known"),
+      annotate(new Command("list"), { effects: LOCAL_READ }).description(
+        "attempts to send, newest first: sent, refused, failed, or not known",
+      ),
     ).action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const { settings, renderer, env } = context

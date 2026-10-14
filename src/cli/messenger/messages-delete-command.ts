@@ -1,6 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { DELETE_AT_ONCE } from "../../services/index.js"
+import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -9,7 +10,7 @@ import { type Messenger, messengerContext } from "./context.js"
  * with `--for-everyone` (max-cli `NEED-239`).
  */
 export const deleteCommand = (messenger: Messenger): Command =>
-  annotate(new Command("delete"), { mutates: true })
+  annotate(new Command("delete"), { effects: REMOTE_WRITE })
     .description("delete messages for you only; with --for-everyone, for everyone in the chat")
     .argument("<chat>", messenger.chatArgument)
     .argument("<messages...>", `the message ids, at most ${DELETE_AT_ONCE}`)

@@ -345,6 +345,7 @@ export const evidenceAnswer = (
     items,
     limit,
     has_more: found.hasMore && cursor !== undefined,
+    paging: "cursor",
     ...(cursor === undefined ? {} : { cursor }),
     args,
   })

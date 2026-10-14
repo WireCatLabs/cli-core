@@ -1,10 +1,11 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const messageLinkCommand = (messenger: Messenger): Command => {
-  const command = new Command("link")
+  const command = annotate(new Command("link"), { effects: REMOTE_READ })
     .description("a message permalink when supported, and its account-scoped locator")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")

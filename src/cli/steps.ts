@@ -5,8 +5,10 @@ import {
   type NextStep,
   type StepInput,
   stepOf,
+  writes,
 } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import { judgedTargets } from "./effects.js"
 
 /**
  * Every step an answer or an error may name. A step's command must exist in tg and max alike, and its
@@ -200,10 +202,12 @@ export const STEPS = defineSteps([
   },
 ])
 
+/** A step from its registered definition; an argument left undefined is left out, as the command line would. */
 export const nextStep = (id: string, input: StepInput): NextStep => {
   const definition = STEPS.find((step) => step.id === id)
   if (!definition) throw new Error(`no step "${id}"`)
-  return stepOf(definition, input)
+  const args = Object.fromEntries(Object.entries(input.args ?? {}).filter(([, value]) => value !== undefined))
+  return stepOf(definition, { ...input, args })
 }
 
 export const rootOf = (command: Command): Command => {
@@ -220,9 +224,29 @@ export const commandAt = (root: Command, path: string): Command | undefined => {
   return at === root ? undefined : at
 }
 
-/** The steps this CLI can run, at most three: a step naming a command it lacks is dropped, never printed. */
+export type CommandStep = Extract<NextStep, { kind: "command" }>
+type Targets = NonNullable<StepInput["targets"]>
+
+/**
+ * The steps this CLI can run, at most two: a step naming a command it lacks is dropped, never printed. Whether a
+ * step may run unasked is judged here, where the command tree is known: only when its command writes nothing
+ * remotely.
+ */
 export const runnable = (root: Command, steps: readonly NextStep[] | undefined): NextStep[] =>
-  (steps ?? []).filter((step) => commandAt(root, step.command) !== undefined).slice(0, MAX_NEXT_STEPS)
+  withSafety(
+    (steps ?? [])
+      .filter((step) => step.kind === "user_action" || commandAt(root, step.command) !== undefined)
+      .slice(0, MAX_NEXT_STEPS),
+    judgedTargets(root),
+  )
+
+/** Each command step judged by its command's effects: safe to run unasked only when it writes nothing remotely. */
+export const withSafety = (steps: readonly NextStep[], targets: Targets): NextStep[] =>
+  steps.map((step) => {
+    if (step.kind === "user_action") return step
+    const effects = targets(step.command)?.effects
+    return { ...step, safe_to_auto_execute: effects !== undefined && !writes(effects) }
+  })
 
 const kebab = (name: string) => name.replaceAll("_", "-")
 const quoted = (value: unknown) => {
@@ -231,7 +255,7 @@ const quoted = (value: unknown) => {
 }
 
 /** The step as a person types it: positional arguments in their place, then the options. */
-export const stepLine = (root: Command, step: NextStep): string => {
+export const stepLine = (root: Command, step: CommandStep): string => {
   const command = commandAt(root, step.command)
   const positional = new Set(command?.registeredArguments.map((argument) => argument.name()) ?? [])
   const args = Object.entries(step.args).filter(([, value]) => value !== undefined && value !== false)

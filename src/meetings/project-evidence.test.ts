@@ -82,7 +82,7 @@ it("CLI and MCP retain the complete registered evidence entity and replay every 
     association: "unconfirmed-word-evidence",
     coverage: { indexing: "pending", archive_completeness: "unknown" },
     hits: [{ ref: "meeting:1/2/3/0", meeting: "meeting:1/2", excerpt: "launch" }],
-    page: { has_more: true, cursor: "next-name" },
+    page: { mode: "cursor", has_more: true, next_cursor: "next-name" },
   })
   const next = answer.next[0]
   expect(next).toMatchObject({

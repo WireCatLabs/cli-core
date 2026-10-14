@@ -1,4 +1,5 @@
-import type { Missing, NextStep } from "@wirecat/cli-base/standards"
+import type { ErrorCode } from "@wirecat/cli-base"
+import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { InferOutput } from "valibot"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
 import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
@@ -69,13 +70,15 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
 
 const accountName = ({ provider, account }: { provider: string; account: string }) => `${provider}:${account}`
 
+/** A source left out is an issue by its code; the sentence saying why goes to a person as a note, never here. */
 const metaOf = (
   accounts: readonly { provider: string; account: string }[],
-  skipped: readonly { source?: string; resource?: string; reason: string }[] = [],
-) => ({
+  skipped: readonly { source?: string; resource?: string; code: ErrorCode }[] = [],
+): Partial<Meta> => ({
   accounts: accounts.map(accountName),
+  complete: skipped.length === 0,
   ...(skipped.length
-    ? { skipped: skipped.map(({ source, resource, reason }) => ({ account: source ?? resource ?? "", why: reason })) }
+    ? { issues: skipped.map(({ source, resource, code }) => ({ code, source: source ?? resource ?? "" })) }
     : {}),
 })
 
@@ -220,10 +223,7 @@ export const notesAnswer = (
     page: page ?? 1,
     ...(again ? { args: again } : {}),
     ...meaningGap(found.meaning_skipped, exact),
-    meta: metaOf(
-      found.accounts,
-      found.skipped.map(({ source, reason }) => ({ source, reason })),
-    ),
+    meta: metaOf(found.accounts, found.skipped),
   })
 
 /** `search all`, CLI and MCP alike. A bounded meeting scan that could not tell whether more match says so. */

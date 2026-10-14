@@ -1,7 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import type { AppIdentity } from "../app.js"
 import { environmentOf, outputFor } from "../context.js"
+import { LOCAL_READ, NO_EFFECTS } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { findRun, listRuns, readEvents, runsDirFor } from "./run.js"
@@ -17,8 +19,7 @@ export const runsCommand = (app: AppIdentity): Command => {
     return found
   }
 
-  command
-    .command("list")
+  annotate(command.command("list"), { effects: LOCAL_READ })
     .description("recorded runs, newest first")
     .option("--limit <n>", "how many to show", positiveCount("--limit"), 20)
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"), 1)
@@ -36,8 +37,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       if (runs.length === 0) renderer.note("nothing recorded — a run is kept with `--record`, or when it fails")
     })
 
-  command
-    .command("show")
+  annotate(command.command("show"), { effects: LOCAL_READ })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("one run: what it was, how it ended, and every event it logged")
     .option("--problems", "only failed responses, warnings and crashes")
@@ -65,8 +65,7 @@ export const runsCommand = (app: AppIdentity): Command => {
         )
     })
 
-  command
-    .command("search")
+  annotate(command.command("search"), { effects: LOCAL_READ })
     .description("search recorded diagnostic metadata and events; no message contents")
     .argument("[query]", "case-insensitive literal diagnostic text")
     .addOption(new Option("--status <status>", "run outcome").choices(["success", "failed", "partial", "running"]))
@@ -105,8 +104,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       )
     })
 
-  command
-    .command("path")
+  annotate(command.command("path"), { effects: NO_EFFECTS })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("the directory holding one run")
     .action(function (this: Command, id: string) {
@@ -118,7 +116,7 @@ export const runsCommand = (app: AppIdentity): Command => {
 
 /** What went wrong, and nothing that went right. */
 const notable = (event: Record<string, unknown>): boolean =>
-  event.outcome === "error" || event.event === "warning" || event.event === "crash"
+  event.outcome === "error" || event.event === "client.warning" || event.event === "command.crashed"
 
 /** Drops what the logger puts on every line and `show` already prints once above the events. */
 const readable = ({ level, run_id, runId, command, profile, ...event }: Record<string, unknown>) => event

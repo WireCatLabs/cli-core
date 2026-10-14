@@ -36,13 +36,13 @@ describe.each(["max", "tg"])("recorded run truncation for %s", (command) => {
     const stderr = streams.stderr.join("\n")
     if (format === "json") {
       expect(JSON.parse(streams.stdout[0] ?? "")).toMatchObject({
-        page: { limit: 1, has_more: true },
+        page: { mode: "page", limit: 1, has_more: true, next_page: 2 },
         next: [{ step: "page.next", command: "runs list", args: { page: 2, limit: 1 } }],
       })
       expect(stderr).toBe("")
     } else {
       expect(stderr).toContain(`${command} runs list --page 2 --limit 1`)
-      expect(streams.stdout).toHaveLength(1)
+      expect(streams.stdout).toHaveLength(format === "jsonl" ? 2 : 1)
     }
   })
 })
@@ -58,9 +58,9 @@ it("shows every event of a run, and only its problems with --problems", async ()
     service: "tg",
     cliVersion: "1",
   })
-  item.logger.info({ event: "request", operation: "chats.list" })
-  item.logger.info({ event: "response", operation: "chats.list", outcome: "error", errorCode: "timeout" })
-  item.logger.info({ event: "warning", code: "slow_answer" })
+  item.logger.info({ event: "provider.request", operation: "chats.list" })
+  item.logger.info({ event: "provider.response", operation: "chats.list", outcome: "error", errorCode: "timeout" })
+  item.logger.info({ event: "client.warning", code: "slow_answer" })
   await item.finish("failed", { errorCode: "timeout" })
 
   const show = async (...flags: string[]) => {
@@ -75,9 +75,13 @@ it("shows every event of a run, and only its problems with --problems", async ()
 
   const all = await show()
   expect(all).toMatchObject({ status: "failed", error_code: "timeout", event_count: 3 })
-  expect(all.events.map((event: { event: string }) => event.event)).toEqual(["request", "response", "warning"])
+  expect(all.events.map((event: { event: string }) => event.event)).toEqual([
+    "provider.request",
+    "provider.response",
+    "client.warning",
+  ])
   expect((await show("--problems")).events).toMatchObject([
-    { event: "response", error_code: "timeout" },
-    { event: "warning", code: "slow_answer" },
+    { event: "provider.response", error_code: "timeout" },
+    { event: "client.warning", code: "slow_answer" },
   ])
 })

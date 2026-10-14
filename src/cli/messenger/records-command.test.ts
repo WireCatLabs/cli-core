@@ -125,7 +125,7 @@ describe("reads only the server answers", () => {
 
     expect(JSON.parse(shown.stdout)).toMatchObject({
       items: [{ id: "41" }, { id: "42" }],
-      page: { has_more: true, limit: 2, cursor: "41" },
+      page: { mode: "cursor", has_more: true, limit: 2, next_cursor: "41" },
       next: [{ step: "page.next", args: { chat: "Book club", type: "photo,link", cursor: "41", limit: 2 } }],
     })
     expect(asked).toEqual([["7", { kinds: ["photo", "link"], limit: 2, before: "50" }]])
