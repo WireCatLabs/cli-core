@@ -189,6 +189,17 @@ Providers mount `addMeetingSearchCommand` from the meetings CLI export: it adds 
 
 Search coverage remains explicit: an empty page does not prove the archive is complete, and pending indexing can hide matches. Discover participant identity candidates through bounded people lookup before selecting an identity filter. The separate `readMeetingProjectDiscovery` SDK reader supports word evidence before membership exists; mounting it in a host CLI/MCP remains separate work.
 
+Hosts with alternate search sources can use `createMeetingSearchCommand` and
+`meetingHitSearchRequest` from `/meetings/cli` to reuse the grammar and validated word-request
+mapping, then route their source reports explicitly. Only a word `MeetingSearchPage` is passed
+to `meetingHitsList`; an archive or meaning report has its own presentation contract. This avoids
+casting an unrelated result into a word page. `addMeetingSearchCommand` remains the complete
+word-only adapter. Both paths validate and observe cancellation before invoking the host read.
+Pass `meetingSearchArguments(query, flags)` as the fourth `meetingHitsList` argument when composing
+a CLI source router. Common CLI and MCP continuation repeats query, selection and read budget;
+CLI dates are ISO timestamps and MCP dates remain epoch milliseconds. A pending-index retry
+retains that selection but drops the old cursor to restart the search.
+
 ## Project-word discovery SDK
 
 `readMeetingProjectDiscovery` from the services export resolves one existing project through

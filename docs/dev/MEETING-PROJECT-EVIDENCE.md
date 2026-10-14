@@ -41,7 +41,11 @@ The aggregate item preserves one coherent discovery page:
 - `coverage` with archive/index completeness explicitly unknown, current revisions, indexing
   state, name index/count/remaining names and possible duplicate refs between names.
 
-The host adds standard run metadata. A `page.next` action repeats the project, frozen query,
+The host adds standard run metadata before returning a successful MCP response; the tool's
+`outputSchema` declares the complete registered item envelope, including that metadata, or the
+standard error object. Both branches stay strict because some MCP clients validate structured
+error content as well as successful answers.
+A `page.next` action repeats the project, frozen query,
 cursor, limit and word-read budget. CLI and MCP map the same semantic arguments to their transport
 spelling. A relative date is resolved once per request and serialized as absolute bounds in the
 next query; it cannot silently move the cursor's selection on a later day.

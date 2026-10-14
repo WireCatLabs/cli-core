@@ -126,6 +126,14 @@ shape of this file.
 
 ### Added
 
+- **Hosts can share meeting-search grammar while routing separate source reports.**
+  `createMeetingSearchCommand` and `meetingHitSearchRequest` from `/meetings/cli` register and
+  validate the common word options without forcing an alternate archive or meaning report
+  through the `meeting_hit` formatter. The existing word adapter keeps its strict page contract.
+  Project-evidence MCP discovery also supplies its complete output schema; hosts must attach
+  standard run metadata to successful answers.
+  Word-search continuation now retains the original query, selectors and byte budget; the
+  pending-index retry preserves the selection while restarting without its old cursor.
 - **Shared project-evidence CLI and MCP adapters preserve cited alias discovery.** Hosts can mount
   `meetings projects evidence <project> [query...]` and `meeting_project_evidence` with an account-bound reader.
   The registered item entity retains canonical project, matched name, limits, selection and unknown

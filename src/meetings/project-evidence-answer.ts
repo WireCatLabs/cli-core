@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { isoTime, STEPS, type StepDefinition, stepOf } from "@wirecat/cli-base/standards"
+import { isoTime, pageSchema, STEPS, type StepDefinition, stepOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { type MeetingItemBody, meetingHit, meetingHitItem } from "./answers.js"
 import type { MeetingProjectDiscoveryPage } from "./project-discovery.js"
@@ -32,7 +32,7 @@ export const meetingProjectEvidence = v.strictObject({
     until: v.optional(isoTime),
   }),
   limits: v.strictObject({ limit: count, max_read_bytes: count, max_vocabulary_read_bytes: count, max_terms: count }),
-  page: v.strictObject({ limit: count, has_more: v.boolean(), cursor: v.optional(id) }),
+  page: pageSchema,
   coverage: v.strictObject({
     archive_completeness: v.literal("unknown"),
     current_revisions: v.literal(true),

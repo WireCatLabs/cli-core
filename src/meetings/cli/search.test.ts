@@ -1,6 +1,11 @@
 import { Command } from "commander"
 import { expect, it, vi } from "vitest"
-import { addMeetingSearchCommand, validateMeetingHitSearch } from "./search.js"
+import {
+  addMeetingSearchCommand,
+  createMeetingSearchCommand,
+  meetingHitSearchRequest,
+  validateMeetingHitSearch,
+} from "./search.js"
 
 it("forwards combined context, dates and continuation to an injected provider-neutral search", async () => {
   const program = new Command("example")
@@ -82,7 +87,20 @@ it("forwards combined context, dates and continuation to an injected provider-ne
       expect.objectContaining({
         step: "page.next",
         command: "search meetings",
-        args: { cursor: "next-page", limit: 10 },
+        args: expect.objectContaining({
+          query: "budget",
+          cursor: "next-page",
+          limit: 10,
+          identity_id: 12,
+          person_id: 34,
+          event_id: 56,
+          series_id: 78,
+          project: "RES",
+          topic: "costs",
+          since_time: "2026-09-12T00:00:00.000Z",
+          until_time: "2026-10-12T00:00:00.000Z",
+          max_read_bytes: 4194304,
+        }),
       }),
     ],
   })
@@ -120,4 +138,24 @@ it("joins a search group the host already has", () => {
     "all",
     "meetings",
   ])
+})
+
+it("shares grammar and validation without interpreting a host's alternate source report as word hits", async () => {
+  const program = new Command("example")
+  const output = vi.fn()
+  createMeetingSearchCommand(program)
+    .option("--archive <directory>")
+    .action((query, flags) => {
+      const request = meetingHitSearchRequest(query, flags)
+      output({ folder: flags.archive, requested: request.limit, matches: [] })
+    })
+  await program.parseAsync(["search", "meetings", "plan", "--archive", "./invented", "--limit", "2"], { from: "user" })
+  expect(output).toHaveBeenCalledWith({ folder: "./invented", requested: 2, matches: [] })
+  const aborted = new AbortController()
+  aborted.abort()
+  const search = vi.fn()
+  const cancelled = new Command("example")
+  addMeetingSearchCommand(cancelled, { search, output, signal: () => aborted.signal })
+  await expect(cancelled.parseAsync(["search", "meetings", "plan"], { from: "user" })).rejects.toThrow()
+  expect(search).not.toHaveBeenCalled()
 })

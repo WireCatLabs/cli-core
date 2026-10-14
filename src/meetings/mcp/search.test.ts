@@ -12,6 +12,63 @@ const page = {
     indexCompleteness: "unknown" as const,
   },
 }
+
+it("replays every numeric date and selector in continuation and restarts pending indexes without a stale cursor", async () => {
+  const search = vi.fn(async () => ({ ...page, hasMore: true, nextCursor: "next" }))
+  const response = await callMeetingSearchTool(search, {
+    query: "budget",
+    identity_id: 12,
+    project: "RES",
+    since_time: 1000,
+    until_time: 2000,
+    cursor: "previous",
+    limit: 1,
+    max_read_bytes: 1024,
+  })
+  expect(response).not.toHaveProperty("isError")
+  expect(response.structuredContent).toMatchObject({
+    next: [
+      {
+        step: "page.next",
+        args: {
+          query: "budget",
+          identity_id: 12,
+          project: "RES",
+          since_time: 1000,
+          until_time: 2000,
+          cursor: "next",
+          limit: 1,
+          max_read_bytes: 1024,
+        },
+      },
+      {
+        step: "meetings.search-again",
+        args: {
+          query: "budget",
+          identity_id: 12,
+          project: "RES",
+          since_time: 1000,
+          until_time: 2000,
+          limit: 1,
+          max_read_bytes: 1024,
+        },
+      },
+    ],
+  })
+  const next = (response.structuredContent as { next: { args: Record<string, unknown> }[] }).next
+  expect(next[1]?.args).not.toHaveProperty("cursor")
+  await callMeetingSearchTool(search, next[0]?.args)
+  expect(search).toHaveBeenLastCalledWith(
+    "budget",
+    expect.objectContaining({
+      after: "next",
+      participantIdentityId: 12,
+      project: "RES",
+      since: 1000,
+      until: 2000,
+    }),
+  )
+})
 it("offers the same bounded search without letting a tool caller choose an account", async () => {
   expect(meetingSearchTool.inputSchema.additionalProperties).toBe(false)
   expect(meetingSearchTool.inputSchema.properties).not.toHaveProperty("account_id")

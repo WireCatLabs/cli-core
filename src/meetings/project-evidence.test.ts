@@ -105,6 +105,13 @@ it("CLI and MCP retain the complete registered evidence entity and replay every 
   expect(JSON.stringify(describeProgram(program))).toContain("meeting_project_evidence")
   expect(program.commands[0]?.commands.map((command) => command.name())).toEqual(["evidence", "projects"])
   expect(meetingProjectEvidenceTool.inputSchema.properties).not.toHaveProperty("account_id")
+  expect(meetingProjectEvidenceTool.outputSchema).toMatchObject({
+    type: "object",
+    anyOf: expect.arrayContaining([
+      expect.objectContaining({ required: ["item", "meta"] }),
+      expect.objectContaining({ required: ["error"] }),
+    ]),
+  })
 })
 
 it("empty name pages keep continuation and exhausted pages omit it", async () => {
