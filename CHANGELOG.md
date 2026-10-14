@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.264.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **`tasks list` and `tags list` narrow by one query and answer in the envelope.** The query comes last, in the
@@ -31,6 +33,10 @@ shape of this file.
   any other warning, the send guard's included, is a `warning` record without its text. At a terminal nothing changes.
 - **The send guard's "not in the send journal" warning names the file system's code** (`EACCES`), not its message.
 
+- **The native add-ons are `@wirecat/cli-core-sqlite` and `@wirecat/cli-core-onnx`** 1.0.1, the same builds as
+  `@wirecat/cli-messaging-sqlite`/`-onnx` 1.0.1, which are deprecated later. Only a caller that imports an add-on
+  directly needs the new name.
+
 ### Added
 
 - **`withQuery`, `listQuery` and `queryArgument` (`src/cli/list-query.ts`)**: a list's positional `[query...]`, its
@@ -44,22 +50,6 @@ shape of this file.
   `TRACEPARENT`, so the runs it makes share one trace id (`last.json` and the job record name it).
 - **`agentActionRecord`** maps an agent audit row to a log record, for an export of the agent log.
 - Every schedule keeps its newest 30 runs, counted by run, not by file; a command schedule kept 60 before.
-
-### Fixed
-
-- The parity manifest includes the shared `models image`, `models image download` and `models image list` commands already mounted by Telegram and MAX, so release checks accept their command discovery.
-
-## 0.264.0 — 14.10.2026
-
-### Fixed
-
-- The passage command declares a runnable cited-reference example and shares the existing `--bytes <bytes>` placeholder with other evidence reads.
-
-- Bounded meeting context reports `invalid_response` when an adapter returns absent parent/revision metadata or a null cue, rather than failing with an unclassified exception.
-
-- Retired catalog records leave shared note listings, word/meaning search and embedding preparation without deleting their indexed content or owner annotations. Re-entry restores their visibility with the same reference.
-
-### Added
 
 - **Pictures are found by what they show, per profile, in their own lane.** Set `pictureSearch: true` in a profile
   (off by default), run `models image download clip-b32` (CLIP ViT-B/32 8-bit, ~155 MB, MIT, in the shared WireCat
@@ -85,11 +75,15 @@ shape of this file.
   that stores them; messages stored before version 7 need one `mentions rebuild`. New dependency `psl` (0.7 MB),
   for a link's site.
 
-### Changed — may break callers
+### Fixed
 
-- **The native add-ons are `@wirecat/cli-core-sqlite` and `@wirecat/cli-core-onnx`** 1.0.1, the same builds as
-  `@wirecat/cli-messaging-sqlite`/`-onnx` 1.0.1, which are deprecated later. Only a caller that imports an add-on
-  directly needs the new name.
+- The parity manifest includes the shared `models image`, `models image download` and `models image list` commands already mounted by Telegram and MAX, so release checks accept their command discovery.
+
+- The passage command declares a runnable cited-reference example and shares the existing `--bytes <bytes>` placeholder with other evidence reads.
+
+- Bounded meeting context reports `invalid_response` when an adapter returns absent parent/revision metadata or a null cue, rather than failing with an unclassified exception.
+
+- Retired catalog records leave shared note listings, word/meaning search and embedding preparation without deleting their indexed content or owner annotations. Re-entry restores their visibility with the same reference.
 
 ## 0.263.0 — 14.10.2026
 
