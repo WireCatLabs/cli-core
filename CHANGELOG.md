@@ -60,6 +60,12 @@ shape of this file.
   `first_message` is the message's locator, `started_at`/`ended_at`, `messages_count`, `senders_count`, `built_at`
   and `rules_version` replace `firstMessageId`, `firstAt`, `lastAt`, `messageCount`, `senders`, `builtAt` and
   `algorithmVersion`. The list pages with `--limit` and `--page`, in SQL.
+- **`attachments list [query...]` narrows by one query and answers in the envelope.** `--chat` and `--needs-text`
+  are gone (`chat:7`, `is:needs_text`), and so are the MCP `attachments_list` arguments `chat` and `needs_text`, which
+  take `query`. Fields: `kind`, `name`, `mime`, `size`, `position`, `local_path`, `chat:` and `is:needs_text`. Items
+  are the `attachment` entity: `message` is the message's locator, `position` counts from 1 (as `--attachment` does,
+  and the entity now says so), `extraction` replaces `text`, and `local_path` replaces `localPath`; `mime` and `size`
+  are new.
 
 - **Needs `@wirecat/cli-base` 0.27.** The peer range is `>=0.27.0 <0.28.0`; consumers must update their exact framework pin together with Core.
 - **Every log writer passes only allow-listed attribute keys** (`LOG_ATTRIBUTES`, from `src/cli/runs/log-attributes.ts`),

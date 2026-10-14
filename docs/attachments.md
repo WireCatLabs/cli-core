@@ -2,10 +2,10 @@
 
 An agent connected by MCP can receive a retained file's bytes, read it with its own tools
 and save literal extracted text so local content search finds the message. A server-local
-`localPath` is useful only to agents that share that filesystem.
+`local_path` is useful only to agents that share that filesystem.
 
 First download the message's files with the existing message-download workflow.
-Use `attachments list --needs-text` to find its locator and attachment position.
+Use `attachments list is:needs_text` to find its `message` locator and `position`.
 Then request `attachments show`:
 
 ```sh

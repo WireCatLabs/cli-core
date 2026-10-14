@@ -3,11 +3,14 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Readable } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
+import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import { PNG } from "pngjs"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import type { LoadEngine } from "../../attachments/extract.js"
 import { importEngine } from "../../attachments/extract.js"
 import type { Attachment, Chat, Message } from "../../domain/models.js"
+import { attachment } from "../../entities/attachment.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { docx, pdf } from "../../testing/files.js"
@@ -177,8 +180,8 @@ describe("attachments extract", () => {
     expect(answer.pdf.sourceSha256).not.toBe(answer.sha256)
     expect(Buffer.from(answer.base64, "base64").subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
     expect(
-      json(await fixture.call("attachments", "list", "--chat", "7", "--needs-text", "--json")).items.some(
-        (item: { locator: string }) => item.locator.endsWith("/3"),
+      json(await fixture.call("attachments", "list", "chat:7", "is:needs_text", "--json")).items.some(
+        (item: { message: string }) => item.message.endsWith("/3"),
       ),
     ).toBe(true)
     for (const extra of [
@@ -435,9 +438,12 @@ describe("attachments extract", () => {
       seen.push(...items.map(({ locator }: { locator: string }) => locator))
     }
     expect(seen).toEqual(["msg:chat/500/7/9", "msg:chat/500/7/8", "msg:chat/500/7/5"])
-    const needs = json(await call("attachments", "list", "--needs-text", "--json")).items
+    const needs = json(await call("attachments", "list", "is:needs_text", "--json")).items
     expect(needs.slice(0, 3)).toMatchObject(
-      ["9", "8", "5"].map((id) => ({ locator: `msg:chat/500/7/${id}`, text: { extractor: "none", error: "no_text" } })),
+      ["9", "8", "5"].map((id) => ({
+        message: `msg:chat/500/7/${id}`,
+        extraction: { extractor: "none", error: "no_text" },
+      })),
     )
   })
 
@@ -603,17 +609,19 @@ describe("an agent's text for a file", () => {
   it("**lists what needs reading, keeps what the agent read, and content: finds it**", async () => {
     const { call, piped, root } = await setup()
     await call("attachments", "extract")
-    const needs = json(await call("attachments", "list", "--needs-text", "--json"))
-    expect(needs).toMatchObject({ page: 1, hasMore: false })
-    expect(needs.items.map(({ locator }: { locator: string }) => locator)).toEqual([
-      "msg:chat/500/7/5",
-      "msg:chat/500/7/4",
-    ])
+    const needs = v.parse(
+      listEnvelopeSchema(attachment),
+      json(await call("attachments", "list", "is:needs_text", "--json")),
+    )
+    expect(needs.page).toMatchObject({ has_more: false })
+    expect(needs.items.map(({ message }) => message)).toEqual(["msg:chat/500/7/5", "msg:chat/500/7/4"])
     expect(needs.items[1]).toMatchObject({
-      attachment: 1,
+      position: 1,
       name: "blank.pdf",
-      text: { origin: "extracted", chars: 0, error: "no_text" },
+      extraction: { origin: "extracted", chars: 0, error: "no_text" },
     })
+    expect(json(await call("attachments", "list", "is:needs_text", "name:blank*", "--json")).items).toHaveLength(1)
+    expect(json(await call("attachments", "list", "-is:needs_text", "name:blank*", "--json")).items).toEqual([])
 
     const textFile = join(root, "read.txt")
     writeFileSync(textFile, "Акт сверки за март")
@@ -631,9 +639,9 @@ describe("an agent's text for a file", () => {
 
     expect(await hits(call, "content:сверки")).toEqual(["4"])
     expect(await hits(call, 'content:"план релиза"')).toEqual(["5"])
-    expect(json(await call("attachments", "list", "--needs-text", "--json")).items).toEqual([])
-    expect(json(await call("attachments", "list", "--chat", "7", "--limit", "2", "--json"))).toMatchObject({
-      hasMore: true,
+    expect(json(await call("attachments", "list", "is:needs_text", "--json")).items).toEqual([])
+    expect(json(await call("attachments", "list", 'chat:"Work fixture"', "--limit", "2", "--json"))).toMatchObject({
+      page: { limit: 2, has_more: true },
     })
 
     await call("attachments", "extract")

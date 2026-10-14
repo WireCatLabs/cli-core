@@ -1,10 +1,12 @@
 import * as v from "valibot"
-import { count, text } from "./fields.js"
+import { count, reference, text } from "./fields.js"
 
 export const attachment = v.strictObject({
+  /** The message it came with, as a locator; absent inside that message. */
+  message: v.optional(reference),
   /** Lower-cased: `photo`, `video`, `file`, `voice`… */
   kind: text,
-  /** Its place among the message's attachments, from 0. */
+  /** Its place among the message's attachments, from 1, as `attachments show --attachment` takes it. */
   position: v.optional(count),
   url: v.optional(text),
   name: v.optional(text),

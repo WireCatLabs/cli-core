@@ -305,10 +305,13 @@ export interface MessageStore {
     key: AccountKey,
     page: { chatId?: Id; messageId?: Id; beforePk?: number; limit: number },
   ): Promise<FileAttachment[]>
-  /** File attachments of live messages and what is held of their text, newest first; never the text. */
+  /**
+   * File attachments of live messages and what is held of their text, newest first; never the text. `where` is a
+   * list query compiled over `attachmentColumns`.
+   */
   attachments(
     key: AccountKey,
-    filter: { chatId?: Id; messageId?: Id; needsText?: boolean; offset?: number; limit: number },
+    filter: { chatId?: Id; messageId?: Id; where?: Where; offset?: number; limit: number },
   ): Promise<AttachmentView[]>
   /** Where the file of one attachment was saved, when that is recorded. */
   localPathOf(attachmentPk: number): Promise<string | null>
@@ -1920,6 +1923,7 @@ export type { AdminStoreRequest, AdminStoreResult } from "./sqlite/admin-statist
 export {
   type AttachmentTextEntry,
   type AttachmentView,
+  attachmentColumns,
   type FileAttachment,
   resetAttachmentWords,
   type TextOrigin,

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { listQuery } from "../cli/list-query.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { MessengerAdapter } from "../cli/messenger/port.js"
 import type { Chat, MessageHit } from "../domain/models.js"
@@ -16,6 +17,7 @@ import {
   twinMail,
   twinMeetings,
 } from "../testing/twin-accounts.js"
+import { ATTACHMENT_QUERY } from "./attachments.js"
 import { servicesFor, storedDeps } from "./index.js"
 import { searchNotesQuery } from "./notes-search.js"
 import { personTimeline } from "./person-timeline.js"
@@ -105,7 +107,14 @@ const BOUND: [string, Read][] = [
   ],
   ["search stats by chat", ({ store }) => asAlpha(store).messages.stats({ ...search, by: "chat" })],
   ["chats list", ({ store }) => asAlpha(store).chats.list({ limit: 10, offset: 0 })],
-  ["attachments list", ({ store }) => asAlpha(store).attachments.list({ chat: CHAT, limit: 10 })],
+  [
+    "attachments list",
+    ({ store }) =>
+      asAlpha(store).attachments.list({
+        limit: 10,
+        query: listQuery(`chat:${CHAT}`, ATTACHMENT_QUERY, "attachments list"),
+      }),
+  ],
   ["store messages", ({ store }) => store.messages(alpha, CHAT, { limit: 10 })],
   ["store message by id", ({ store }) => store.message(alpha, "1", { chatId: CHAT })],
   ["store transcript", ({ store }) => store.transcript(alpha, CHAT, "1")],

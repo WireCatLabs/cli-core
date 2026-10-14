@@ -3,10 +3,12 @@ import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { engineHint } from "../../attachments/extract.js"
 import { gatewayOcr } from "../../attachments/gateway-ocr.js"
-import type { AttachmentItem, ExtractItem, ExtractRun } from "../../services/attachments.js"
+import { ATTACHMENT_QUERY, type AttachmentItem, type ExtractItem, type ExtractRun } from "../../services/attachments.js"
 import { downloadMessage } from "../../services/file-download.js"
 import { environmentOf } from "../context.js"
-import { renderPage, window, withPaging } from "../paging.js"
+import { renderAnswer } from "../envelope.js"
+import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
+import { withPaging } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { stopOnSignal } from "./patience.js"
 import { readAll } from "./stdin.js"
@@ -117,30 +119,26 @@ const extractCommand = (messenger: Messenger): Command =>
       }
     })
 
-const row = ({ locator, attachment, name, localPath, text }: AttachmentItem) =>
-  `${locator} #${attachment}  ${name ?? ""}  ${text ? `${text.origin} ${text.chars}` : "no text"}  ${localPath ?? "not downloaded"}`
+const row = ({ message, position, name, local_path, extraction }: AttachmentItem) =>
+  `${message} #${position}  ${name ?? ""}  ${extraction ? `${extraction.origin} ${extraction.chars}` : "no text"}  ` +
+  (local_path ?? "not downloaded")
 
 const listCommand = (messenger: Messenger): Command =>
-  withPaging(
-    new Command("list")
-      .description("files of stored messages, where each was saved and whether its text is held — never the text")
-      .option("--chat <chat>", `only this chat's files; ${messenger.chatArgument}`)
-      .option("--needs-text", "only files saved here whose text nobody has yet: what an agent reads and writes back"),
-  ).action(async function (this: Command) {
+  withQuery(
+    withPaging(
+      new Command("list").description(
+        "files of stored messages, newest first: where each was saved and whether its text is held — never the text",
+      ),
+    ),
+    ATTACHMENT_QUERY,
+  ).action(async function (this: Command, words: string[]) {
     const context = messengerContext(this, messenger)
-    const { chat, needsText } = this.opts<{ chat?: string; needsText?: boolean }>()
-    const { limit = Number.MAX_SAFE_INTEGER - 1, offset } = window(context.settings)
-    const page = context.settings.all ? 1 : offset / limit + 1
+    const query = listQuery(typedQuery(words), ATTACHMENT_QUERY, "attachments list")
     const found = await context.withServices((services) =>
-      services.attachments.list({
-        ...(chat === undefined ? {} : { chat }),
-        ...(needsText ? { needsText } : {}),
-        limit,
-        page,
-      }),
+      services.attachments.list({ ...pageOf(context.settings), ...(query ? { query } : {}) }),
     )
-    renderPage(context, { items: found.slice(0, limit), hasMore: found.length > limit }, (items) =>
-      items.length === 0 ? "" : `${items.map(row).join("\n")}\n`,
+    renderAnswer(this, context, pagedList("attachments list", context.settings, found), () =>
+      found.items.length === 0 ? "" : `${found.items.map(row).join("\n")}\n`,
     )
   })
 

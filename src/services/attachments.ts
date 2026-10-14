@@ -2,6 +2,8 @@ import { createHash } from "node:crypto"
 import { constants } from "node:fs"
 import { open, readFile, stat } from "node:fs/promises"
 import { CliError } from "@wirecat/cli-base"
+import { type QueryAst, type QueryRegistry, queryFieldsOf, walkQuery } from "@wirecat/cli-base/query"
+import type * as v from "valibot"
 import { directoryPaths } from "../attachments/directory.js"
 import { documentExtractor, documentKind } from "../attachments/documents.js"
 import {
@@ -22,9 +24,17 @@ import { type ActionableError, withRecovery } from "../cli/recovery.js"
 import { NOT_FILES } from "../domain/attachments.js"
 import { formatLocator, isLocator, parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
+import { attachment as attachmentEntity } from "../entities/attachment.js"
 import { refusedPlace } from "../sends/upload.js"
 import type { AccountStore } from "../store/account-store.js"
-import type { AccountKey, AttachmentView, FileAttachment, TextOrigin } from "../store/store.js"
+import {
+  type AccountKey,
+  type AttachmentView,
+  attachmentColumns,
+  type FileAttachment,
+  queryFilter,
+  type TextOrigin,
+} from "../store/store.js"
 import { batchProgress } from "./batch.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
 import { chatIdIn } from "./messages.js"
@@ -86,15 +96,25 @@ export interface ExtractOptions {
 }
 
 /** One file attachment as `attachments list` shows it; never its text. */
-export interface AttachmentItem {
-  locator: string
-  /** The attachment's place in the message, from 1. */
-  attachment: number
-  kind: string
-  name: string | null
-  localPath: string | null
-  text: { origin: TextOrigin; extractor: string; chars: number; error: string | null } | null
-}
+export type AttachmentItem = v.InferOutput<typeof attachmentEntity>
+
+export const ATTACHMENT_QUERY = {
+  entity: "attachment",
+  backend: "sql",
+  fields: queryFieldsOf(attachmentEntity, {
+    exclude: ["message", "url", "title", "width", "height", "duration", "text"],
+    relations: { chat: { type: "kw", example: "chat:12345", relation: "the chat its message is in" } },
+    states: { needs_text: "saved here, of a kind text is read from, and nobody has its text yet" },
+    examples: {
+      kind: "kind:file",
+      name: "name:*.pdf",
+      mime: 'mime:"application/pdf"',
+      size: "size>1000000",
+      position: "position:1",
+      local_path: "local_path:*",
+    },
+  }),
+} as const satisfies QueryRegistry
 
 export interface AttachmentTextSet {
   locator: string
@@ -126,8 +146,12 @@ export interface AttachmentsService {
   ): Promise<AttachmentBytes>
   /** Reads the text layer of saved files into the local store; prints and sends nothing. */
   extract(options?: ExtractOptions): Promise<ExtractRun>
-  /** File attachments of stored messages and what is held of their text; one page more tells `hasMore`. */
-  list(filter: { chat?: string; needsText?: boolean; limit: number; page?: number }): Promise<AttachmentItem[]>
+  /** File attachments of stored messages and what is held of their text, newest first. */
+  list(window: {
+    limit: number
+    offset?: number
+    query?: QueryAst
+  }): Promise<{ items: AttachmentItem[]; has_more: boolean }>
   /** Keeps text an agent read from a file — a scan, a photo — replacing whatever was there. Sends nothing. */
   setText(target: { chat: string; message?: string; attachment?: number; text: string }): Promise<AttachmentTextSet>
 }
@@ -223,12 +247,23 @@ const keep = async (
 }
 
 const itemOf = (account: AccountKey, view: AttachmentView): AttachmentItem => ({
-  locator: formatLocator({ ...account, chat: view.chatId, message: view.messageId }),
-  attachment: view.position + 1,
+  message: formatLocator({ ...account, chat: view.chatId, message: view.messageId }),
   kind: view.kind,
-  name: view.name,
-  localPath: view.localPath,
-  text: view.text,
+  position: view.position + 1,
+  ...(view.name === null ? {} : { name: view.name }),
+  ...(view.mime === null ? {} : { mime: view.mime }),
+  ...(view.size === null ? {} : { size: view.size }),
+  ...(view.text === null
+    ? {}
+    : {
+        extraction: {
+          origin: view.text.origin,
+          extractor: view.text.extractor,
+          chars: view.text.chars,
+          ...(view.text.error === null ? {} : { error: view.text.error }),
+        },
+      }),
+  ...(view.localPath === null ? {} : { local_path: view.localPath }),
 })
 
 /** A chat and a message id, or a msg: locator alone — of this account. */
@@ -469,17 +504,17 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
     return run
   },
 
-  list: async ({ chat, needsText, limit, page = 1 }) => {
+  list: async ({ limit, offset = 0, query }) => {
     const store = await accountStore(deps)
     const { account } = store
-    const chatId = chat === undefined ? undefined : await chatIdIn(deps.messenger, chat, store)
-    const views = await store.attachments({
-      ...(chatId === undefined ? {} : { chatId }),
-      ...(needsText ? { needsText } : {}),
-      offset: (page - 1) * limit,
-      limit: limit + 1,
-    })
-    return views.map((view) => itemOf(account, view))
+    const chats = new Map<string, string>()
+    if (query)
+      for (const node of walkQuery(query.root))
+        if (node.field === "chat" && node.operator !== "wildcard" && !chats.has(node.value))
+          chats.set(node.value, await chatIdIn(deps.messenger, node.value, store))
+    const where = query ? queryFilter(query, attachmentColumns(chats), { command: "attachments list" }) : undefined
+    const views = await store.attachments({ ...(where ? { where } : {}), offset, limit: limit + 1 })
+    return { items: views.slice(0, limit).map((view) => itemOf(account, view)), has_more: views.length > limit }
   },
 
   show: async ({ chat, message, attachment, page, load, ...window }) => {

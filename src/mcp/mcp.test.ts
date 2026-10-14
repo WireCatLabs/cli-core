@@ -1705,20 +1705,17 @@ describe("the MCP server", () => {
     ])
     await store.close()
 
-    expect((await call("chat_attachments_list", { needs_text: true })).body).toEqual({
+    expect((await call("chat_attachments_list", { query: "is:needs_text" })).body).toMatchObject({
       items: [
         {
-          locator: "msg:chat/500/9/108",
-          attachment: 1,
+          message: "msg:chat/500/9/108",
+          position: 1,
           kind: "file",
           name: "Отчёт.PDF",
-          localPath: "/saved/report.pdf",
-          text: null,
+          local_path: "/saved/report.pdf",
         },
       ],
-      page: 1,
-      limit: expect.any(Number),
-      hasMore: false,
+      page: { has_more: false },
     })
     const kept = await call("chat_attachments_text_set", { message: "msg:chat/500/9/108", text: "Квартальный отчёт" })
     expect(kept.body).toEqual({
@@ -1730,7 +1727,7 @@ describe("the MCP server", () => {
     })
     const found = await call("chat_search_messages", { text: "content:квартальный", language: "lucene" })
     expect(found.body.items.map(({ ref }: { ref: string }) => ref.split("/").at(-1))).toEqual(["108"])
-    expect((await call("chat_attachments_list", { needs_text: true })).body.items).toEqual([])
+    expect((await call("chat_attachments_list", { query: "is:needs_text" })).body.items).toEqual([])
 
     const readOnly = await connect(scripted(), { config: levels({ attachments: "readonly" }) })
     const names = (await readOnly.client.listTools()).tools.map(({ name }) => name)

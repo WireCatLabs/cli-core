@@ -158,7 +158,7 @@ ORs those sets in (`elsewhere`), the query is driven by the union of the sets an
 joined LEFT, with hits outside the message text tiered transcript → file name → file text (`lucene.ts`). No
 foreign key, so the purges of older builds still work; triggers erase the text when its message is tombstoned
 or deleted, or its attachment deleted (NEED-393 A, tested against 0.49.0). `store reindex` rebuilds the index.
-`attachments list --needs-text` and `attachments text set` (MCP `attachments_list`, `attachments_text_set`) are
+`attachments list is:needs_text` and `attachments text set` (MCP `attachments_list`, `attachments_text_set`) are
 how an agent finds a scan, reads it itself and writes the text back, all through `services.attachments`.
 
 Remote agents receive retained bytes through bounded `attachments show` / `attachments_show`,
