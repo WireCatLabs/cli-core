@@ -3060,7 +3060,8 @@
     "runs list": {
       "in": "all",
       "options": {
-        "--limit": "all"
+        "--limit": "all",
+        "--page": "all"
       }
     },
     "runs path": {
@@ -3360,7 +3361,9 @@
     "sends list": {
       "in": "all",
       "options": {
-        "--limit": "all"
+        "--all": "all",
+        "--limit": "all",
+        "--page": "all"
       }
     },
     "serve": {
