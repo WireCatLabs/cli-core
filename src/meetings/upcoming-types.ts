@@ -54,6 +54,7 @@ export interface UpcomingMeetingResult {
     undated: number
     unverified: number
     cancelled: number
+    simultaneous: number
     missing: readonly ("schedule-details" | "occurrence-details")[]
   }
 }

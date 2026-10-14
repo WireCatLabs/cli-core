@@ -194,7 +194,15 @@ it("retains an empty complete window without inventing a date or timezone", asyn
     candidate: null,
     timezone: null,
     verifiedNext: false,
-    coverage: { scheduleComplete: true, inspected: 0 },
+    coverage: { scheduleComplete: true, inspected: 0, simultaneous: 0 },
+  })
+})
+
+it("explains a simultaneous-occurrence ambiguity even when every date is verified", async () => {
+  const { sdk } = reader(schedule({ occurrences: [occurrence("first"), occurrence("second")] }))
+  expect(await sdk.next("example-series", { after, until })).toMatchObject({
+    verifiedNext: false,
+    coverage: { scheduleComplete: true, unverified: 0, undated: 0, simultaneous: 2 },
   })
 })
 

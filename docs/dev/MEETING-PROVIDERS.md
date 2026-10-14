@@ -235,7 +235,9 @@ verified candidate, a complete schedule for this selected series/window, no acti
 and no simultaneous candidate ambiguity. Cancelled entries are excluded. Missing detail access is
 represented by an incomplete schedule and `missing` capabilities; do not start login or change app
 settings. Completeness here does not establish full calendar coverage or identify attendees.
-The result retains inspection, cancellation, undated and unverified counts. Late cancellation
+The result retains inspection, cancellation, undated and unverified counts. `coverage.simultaneous`
+counts candidates at the earliest eligible instant: zero for no candidate, one normally, and more
+than one for an ambiguous selection. Late cancellation
 refuses the result. Importing this SDK never opens a provider, database or model.
 
 The SDK currently has normalized synthetic provider proofs. Provider calendar adapters and a cited
