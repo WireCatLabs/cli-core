@@ -44,3 +44,4 @@
 - 2026-10-14: `../cli-core-wt-account-from-command`, branch `feat/account-from-command` — Messenger.accountOf for memo; remove after its PR merges.
 - 2026-10-14: `../cli-core-wt-task-link`, branch `feat/task-link-relations` — task: target is a task relation; remove after its PR merges.
 - 2026-10-14: `../cli-core-wt-tasks-plan`, branch `docs/tasks-plan` — tasks design plan; remove after its PR merges.
+- 2026-10-14: `../cli-core-wt-task-similarity`, branch `feat/task-similarity` — task similarity scoring module; remove after its PR merges.
