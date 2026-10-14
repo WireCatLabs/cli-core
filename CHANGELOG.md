@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+## 0.280.0 — 14.10.2026
+
+### Changed — may break callers
+
+- The opt-in preparation command uses the shared time vocabulary: `--since-time` for its inclusive
+  upcoming start, `--before-time` for its exclusive end and `--history-since-time` for the stored
+  history start. Replace `--after`, `--until` and `--history-after` in host CLI invocations; the MCP
+  arguments and SDK request fields are unchanged. Its discovery includes a complete example.
+
 ## 0.279.0 — 14.10.2026
 
 ### Added

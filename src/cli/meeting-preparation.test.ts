@@ -37,6 +37,34 @@ const cli = (read: MeetingPreparationReader) => {
 const args = { series_id: "example-series" }
 
 describe("meeting preparation adapters", () => {
+  it("uses canonical inclusive-start and exclusive-end time flags with the same MCP windows", async () => {
+    const f = await fixture()
+    const { program, output } = cli(f.read)
+    await program.parseAsync(
+      [
+        "meetings",
+        "prepare",
+        "example-series",
+        "--since-time",
+        "1970-01-01T00:00:10Z",
+        "--before-time",
+        "1970-01-01T00:00:20Z",
+        "--history-since-time",
+        "1970-01-01T00:00:00Z",
+      ],
+      { from: "user" },
+    )
+    expect(f.read.mock.calls[0]?.[1]).toMatchObject({ after: 10000, until: 20000, historyAfter: 0 })
+    const mcp = await callMeetingPreparationTool(
+      f.read,
+      { ...args, after: "1970-01-01T00:00:10Z", until: "1970-01-01T00:00:20Z", history_after: "1970-01-01T00:00:00Z" },
+      undefined,
+      {},
+      now,
+    )
+    expect(mcp.structuredContent).toMatchObject({ item: output.mock.calls[0]?.[0].item })
+    expect(JSON.stringify(describeProgram(program))).toContain("example meetings prepare 123 --json")
+  })
   it("reports skipped sources through common metadata and rejects a changed reader selection", async () => {
     const f = await fixture()
     const read: MeetingPreparationReader = async (...params) => {

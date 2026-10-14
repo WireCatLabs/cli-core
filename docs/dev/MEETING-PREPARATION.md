@@ -76,7 +76,7 @@ because a participant, project alias or meeting title looks similar.
 ## Shared CLI and MCP adapters
 
 `addMeetingPreparationCommand(program, { read, output, signal, now? })` mounts `meetings prepare
-<series-id>` under an existing meetings group. Options are `--after`, `--until`, `--history-after`,
+<series-id>` under an existing meetings group. Options are `--since-time`, `--before-time`, `--history-since-time`,
 `--meetings`, `--cues`, `--context-limit`, `--max-read-bytes` and `--bytes`. Time options take valid ISO
 instants with an explicit zone. The default window starts at the injected clock, ends seven days
 later and reads thirty days of history before its start. The answer retains absolute normalized
