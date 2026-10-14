@@ -155,7 +155,7 @@ export type Similarity = {
   score: number
   band: SimilarityBand
   levels: SimilarityLevels
-  /** What a candidate list shows, strongest identity first: `same person`, `same amount`, `3 of 4 stems shared`. */
+  /** What says the two are one job, as a candidate list shows it; category and age stay in `levels`. */
   reasons: string[]
   text: { sharedStems: number; allStems: number; stems: number; trigrams: number }
 }
@@ -167,12 +167,10 @@ const overlap = (a: ReadonlySet<string>, b: ReadonlySet<string>) => {
   return { shared, all, jaccard: a.size && b.size ? shared / all : 0 }
 }
 
-const LEVEL_REASONS: { [Field in "person" | "amount" | "category"]: Partial<Record<SimilarityLevels[Field], string>> } =
-  {
-    person: { same: "same person", different: "different person" },
-    amount: { equal: "same amount", different: "different amount" },
-    category: { same: "same category", different: "different category" },
-  }
+const LEVEL_REASONS: { [Field in "person" | "amount"]: Partial<Record<SimilarityLevels[Field], string>> } = {
+  person: { same: "same person", different: "different person" },
+  amount: { equal: "same amount", different: "different amount" },
+}
 
 const weightOf = <Field extends keyof Weights>(field: Field, level: SimilarityLevels[Field]): number =>
   (TASK_SIMILARITY_WEIGHTS[field][level] as Weighted).weight
@@ -226,8 +224,6 @@ export const compareTasks = (
     dueApart === null ? undefined : dueApart === 0 ? "same due date" : `due ${plural(dueApart, "day")} apart`,
     replyChain ? "in one reply chain" : undefined,
     textReason,
-    LEVEL_REASONS.category[levels.category],
-    Math.round(days) === 0 ? "created the same day" : `created ${plural(Math.round(days), "day")} apart`,
   ].filter((reason): reason is string => reason !== undefined)
   return {
     score,

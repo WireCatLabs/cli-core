@@ -71,7 +71,7 @@ describe("compareTasks levels", () => {
     const b = bare({ stems: stems("y"), trigrams: stems("abc", "bcd", "cde") })
     expect(compareTasks(a, b)).toMatchObject({
       levels: { text: "high" },
-      reasons: ["titles 67% alike letter by letter", "created the same day"],
+      reasons: ["titles 67% alike letter by letter"],
     })
   })
 
@@ -181,13 +181,7 @@ describe("the worked example on the tasks architecture page", () => {
     expect(result.text).toMatchObject({ sharedStems: 3, allStems: 4, stems: 0.75 })
     expect(result.text.trigrams).toBeLessThan(result.text.stems)
     expect(result).toMatchObject({ score: 15, band: "likely" })
-    expect(result.reasons).toEqual([
-      "same person",
-      "same amount",
-      "3 of 4 stems shared",
-      "same category",
-      "created 1 day apart",
-    ])
+    expect(result.reasons.join(", ")).toBe("same person, same amount, 3 of 4 stems shared")
   })
 
   it("scores REQ-19 1, different, on 2 of 6 stems and another amount", () => {
@@ -293,13 +287,7 @@ describe("pairs from the cli-testing duplicate set", () => {
     expect(compareTasks(table, contract, { replyChain: true })).toMatchObject({
       score: 6,
       band: "maybe",
-      reasons: [
-        "same person",
-        "in one reply chain",
-        "0 of 10 stems shared",
-        "different category",
-        "created the same day",
-      ],
+      reasons: ["same person", "in one reply chain", "0 of 10 stems shared"],
     })
   })
 })
