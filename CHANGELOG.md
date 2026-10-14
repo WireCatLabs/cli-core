@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.268.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **Log record keys are snake_case, in one step:** every attribute cli-core writes — run events (`duration_ms`,
