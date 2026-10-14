@@ -184,7 +184,40 @@ Providers mount `addMeetingSearchCommand` from the meetings CLI export: it adds 
 
 `meetings show` answers one `meeting_details` item; `meetings transcript` and `meetings summary` answer lists of `meeting_transcript` and `meeting_summary` (a cue's `offset_ms`, ISO times, `meeting:` references). No answer carries `next_steps`: `SAVE_INSTRUCTION` is the line for the host's MCP server instructions.
 
-Search coverage remains explicit: an empty page does not prove the archive is complete, and pending indexing can hide matches. Discover participant identity candidates through bounded people lookup before selecting an identity filter. Discovery by project words without explicit membership remains separate work.
+Search coverage remains explicit: an empty page does not prove the archive is complete, and pending indexing can hide matches. Discover participant identity candidates through bounded people lookup before selecting an identity filter. The separate `readMeetingProjectDiscovery` SDK reader supports word evidence before membership exists; mounting it in a host CLI/MCP remains separate work.
+
+## Project-word discovery SDK
+
+`readMeetingProjectDiscovery` from the services export resolves one existing project through
+`knowledge.resolveVocabulary` and reads canonical-name, key and explicit-alias word evidence.
+Pass `{ vocabulary: store.knowledge, search: store.meetings }`, a project name/key/alias and
+`MeetingProjectDiscoveryOptions` from the meetings export. It never selects confirmed membership,
+creates aliases/links or attributes transcript speech. Missing or ambiguous names fail before word reads.
+
+One call reads one bounded word-search page for one name. `limit` and `maxReadBytes` keep the raw
+search defaults (100 hits, 4 MiB); the separate `maxVocabularyReadBytes` defaults to 1 MiB, with
+at most 10000 catalog entries. `maxTerms` defaults to 32 and cannot exceed 128. Names deduplicate
+by the existing vocabulary normalizer, retaining their original labels and alias IDs. An excessive
+catalog or name set fails visibly rather than silently dropping aliases.
+
+The SDK packet records the selected account, canonical project, current name and source references,
+plus `association: "unconfirmed-word-evidence"`. The key may be an incidental word prefix; a match
+is not proof of project membership. Repeated refs across names are the same evidence, explicitly
+reported as possible duplicates. Person/participant/date/event/series/tag-ID constraints are
+forwarded unchanged; project-ID membership filters and raw source cursors are refused here.
+
+Resume with `cursor: page.nextCursor` even after an empty page while `hasMore` is true.
+The opaque cursor retains within-name continuation before advancing to another name. It binds the
+normalized project query, vocabulary fingerprint, term set, account and every evidence constraint.
+Changing vocabulary or selection requires restarting; it is not an immutable multi-page snapshot.
+Read budgets and result limits may change between pages. A missing source cursor or a foreign,
+uncited or non-cue transcript reference fails instead of returning incomplete provenance as success.
+
+This reader does not refresh indexes. Pending indexing and unknown archive/index completeness
+remain explicit. Hosts may use the existing index-maintenance service through their injected
+search port, and retain connection lifetime, cancellation and serialized-output limits. The packet
+is a domain SDK result, not a new CLI answer: consumer adapters must preserve its context/coverage
+in a registered entity and standard envelope. No new CLI flag or MCP tool is mounted by this export.
 
 ## Bounded participant lookup
 

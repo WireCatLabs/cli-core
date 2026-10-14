@@ -95,6 +95,7 @@ export {
   meetingHitContextLimits,
   validateMeetingPassage,
 } from "./passage.js"
+export type { MeetingProjectDiscoveryOptions, MeetingProjectDiscoveryPage } from "./project-discovery.js"
 export { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
 export { type PullOptions, pull, type RunReport } from "./pull.js"
 export type {
@@ -176,6 +177,7 @@ export type {
   MeetingSearchPage,
   MeetingSearchStore,
 } from "./search-store.js"
+export { validateMeetingHitSearch } from "./search-validation.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export type {
   ChatInput,
