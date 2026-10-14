@@ -3,7 +3,8 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
-import { renderList } from "../paging.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { wholeList } from "../messenger/chat-answers.js"
 import { type BotContext, botContext, online } from "./context.js"
 import { botCan } from "./messages.js"
 import type { BotMenuEntry, BotMessenger } from "./port.js"
@@ -41,7 +42,11 @@ export const botMenuCommand = (bot: BotMessenger): Command => {
       const context = online(botContext(this, bot), this)
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })
-        renderList(context.renderer, context.format, await botCan(adapter, "menu", bot, "read its menu")())
+        renderAnswer(
+          this,
+          context,
+          wholeList("bot commands list", await botCan(adapter, "menu", bot, "read its menu")()),
+        )
       })
     })
 
@@ -51,7 +56,7 @@ export const botMenuCommand = (bot: BotMessenger): Command => {
       const adapter = await context.authenticated({ events })
       const set = botCan(adapter, "setMenu", bot, "change its menu")
       await botWrite(context, key, () => set(entries))
-      renderList(context.renderer, context.format, entries)
+      renderAnswer(command, context, wholeList("bot commands list", entries))
     })
   }
 
@@ -112,7 +117,7 @@ export const botCallbacksCommand = (bot: BotMessenger): Command =>
                 ...(press ? { press } : {}),
               }),
           )
-          context.renderer.result({ operationId, callbackId, answered: true })
+          renderAnswer(this, context, itemOf({ operation_id: operationId, callback_id: callbackId, answered: true }))
         })
       }),
   )
@@ -130,7 +135,14 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
       const context = online(botContext(this, bot), this)
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })
-        renderList(context.renderer, context.format, await botCan(adapter, "webhooks", bot, "list its webhooks")())
+        renderAnswer(
+          this,
+          context,
+          wholeList(
+            "bot webhooks list",
+            (await botCan(adapter, "webhooks", bot, "list its webhooks")()).map(snakeKeys),
+          ),
+        )
       })
     })
 
@@ -163,7 +175,7 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
         if (options.secretStdin && !secret) throw new CliError("validation_error", "no secret given")
         await setWebhook(url, { ...(types ? { types } : {}), ...(secret ? { secret } : {}) })
       })
-      renderList(context.renderer, context.format, await list())
+      renderAnswer(this, context, wholeList("bot webhooks list", (await list()).map(snakeKeys)))
     })
   })
 
@@ -176,7 +188,14 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
         const adapter = await context.authenticated({ events })
         const remove = botCan(adapter, "deleteWebhook", bot, "delete a webhook")
         await botWrite(context, "bot.webhooks.delete", () => remove(url))
-        renderList(context.renderer, context.format, await botCan(adapter, "webhooks", bot, "list its webhooks")())
+        renderAnswer(
+          this,
+          context,
+          wholeList(
+            "bot webhooks list",
+            (await botCan(adapter, "webhooks", bot, "list its webhooks")()).map(snakeKeys),
+          ),
+        )
       })
     })
 

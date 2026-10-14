@@ -248,7 +248,7 @@ describe("bot mcp writes", () => {
     const sent = await call(client, "chat_bot_messages_send", { chat: "Team", text: "Hello" })
 
     expect(sent.isError).toBe(false)
-    expect(sent.body).toMatchObject({ message: { id: "100", chatId: "-100" } })
+    expect(sent.body).toMatchObject({ item: { message: { id: "100", chat_id: "-100" } } })
     expect(calls).toEqual(["send -100 Hello"])
   })
 
@@ -285,12 +285,13 @@ describe("a tool of the CLI's own that is more than one command", () => {
 
     const done = await call(client, "chat_bot_chats_leave", { chat: "Team" })
 
-    expect(done.body).toMatchObject({ left: "Team", seen: { items: [{ id: "-100", title: "Team" }] } })
+    expect(done.body).toMatchObject({ item: { left: "Team", seen: { items: [{ id: "-100", title: "Team" }] } } })
   })
 
   it("**is handed the flag that answers its command's question at level ask**, and none otherwise", async () => {
     const flags = async () =>
-      (await call((await connect()).client, "chat_bot_chats_admins_add")).body.answerFlags as string[]
+      ((await call((await connect()).client, "chat_bot_chats_admins_add")).body as { item: { answerFlags: string[] } })
+        .item.answerFlags
 
     expect(await flags()).toEqual([])
     configure({ bot: { profiles: { sales: { permissions: { "bot.chats.admins": "ask" } } } } })
@@ -320,14 +321,14 @@ describe("chat_bot_chats_moderate", () => {
 
     const done = await call(client, "chat_bot_chats_moderate", { chat: "-100" })
 
-    expect(done.body).toMatchObject({ rows: [{ action: "delete", outcome: "done" }] })
+    expect(done.body).toMatchObject({ item: { rows: [{ action: "delete", outcome: "done" }] } })
     expect(calls).toEqual(["delete -100 2"])
   })
 
   it("acts at level allow", async () => {
     deleting("allow")
     expect((await call((await connect()).client, "chat_bot_chats_moderate", { chat: "-100" })).body).toMatchObject({
-      rows: [{ outcome: "done" }],
+      item: { rows: [{ outcome: "done" }] },
     })
   })
 })
@@ -343,7 +344,7 @@ describe("bot mcp config", () => {
     })
 
     expect(code).toBe(0)
-    expect(JSON.parse(streams.stdout[0] ?? "")).toEqual({
+    expect(JSON.parse(streams.stdout[0] ?? "").item.config).toEqual({
       mcpServers: {
         "chat-bot-sales": {
           type: "stdio",
@@ -369,6 +370,6 @@ it("reads bot identity through MCP under read-only permissions without a write",
   const { client } = await connect()
   const result = await call(client, "chat_bot_me")
   expect(result.isError).toBe(false)
-  expect(result.body).toEqual({ id: "42", name: "Sales", username: "sales_bot" })
+  expect(result.body.item).toEqual({ id: "42", name: "Sales", username: "sales_bot" })
   expect(calls).toEqual([])
 })

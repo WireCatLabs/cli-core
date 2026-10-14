@@ -199,7 +199,7 @@ describe("bot watch", () => {
     expect(polled).toEqual([undefined, "c-1"])
     expect(JSON.parse(readFileSync(cursorFile(), "utf8"))).toEqual({ marker: "c-1" })
     const kept = await call(["sales", "bot", "messages", "show", "Team", "7", "--offline", "--json"])
-    expect(JSON.parse(kept.stdout[0] ?? "")).toMatchObject({ text: "hello" })
+    expect(JSON.parse(kept.stdout[0] ?? "").item).toMatchObject({ text: "hello" })
   })
 
   it("**fetches a batch again with the same cursor when it was not kept**, and prints it once", async () => {

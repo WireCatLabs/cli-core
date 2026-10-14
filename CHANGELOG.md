@@ -20,6 +20,14 @@ shape of this file.
   `details.operation_id`, `details.send_id` and `retryable: false`, so the send is not repeated.
 - **A missing model is `reason: "model.not-downloaded"`** with `details.model` (text, picture and speech models), so
   a caller branches on the reason, not on the message text.
+- **Every `bot *` command answers in the envelope**, snake_case: writes `{item: {operation_id, chat_id, …}}`;
+  `bot messages send|edit` carry the `message` entity, `bot messages list|show`, `bot search messages` (now paged
+  with `--page`), `bot messages between` and `bot contacts show` answer `message` items; `bot list`, `bot chats
+  list`, `bot recipients *`, `bot sends list`, `bot commands *`, `bot webhooks *`, `bot chats admins list` answer
+  lists; `bot chats rules *` keep the rule keys `rules set` takes; `bot chats moderate --json` answers `{item:
+  {chat_id, rows}}`; `bot mcp config` answers `{item: {config}}` with the `bot.mcp-config` step. The bot MCP server
+  wraps a CLI's own tool answer that is not an envelope in `{item}`, and `status` answers `{item}`. `bot watch` and
+  `bot api` are unchanged.
 - **Account, runtime and diagnostic commands answer in the envelope**, snake_case, CLI and MCP alike:
   `account list|show|update`, `account sessions list|end` (new `account_session` entity; `account show` and MCP
   `account_show` answer the `account` entity with `provider`), `flood clear`, `recipients *`, `sends list` (now

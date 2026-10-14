@@ -69,7 +69,7 @@ describe("bot auth", () => {
     expect(keyring.entries.size).toBe(0)
 
     typed = "good"
-    expect((await call(["sales", "bot", "auth", "set", "--json"])).answer).toEqual({
+    expect((await call(["sales", "bot", "auth", "set", "--json"])).answer.item).toEqual({
       profile: "sales",
       stored: "keyring",
       bot: "Sales",
@@ -77,7 +77,7 @@ describe("bot auth", () => {
       username: "sales_bot",
     })
     expect([...keyring.entries.keys()]).toEqual(["chat-cli:bot:sales"])
-    expect((await call(["sales", "bot", "auth", "show", "--json"])).answer).toMatchObject({
+    expect((await call(["sales", "bot", "auth", "show", "--json"])).answer.item).toMatchObject({
       source: "keyring",
       id: "42",
     })
@@ -131,7 +131,7 @@ describe("bot recipients", () => {
       { id: "-100", title: "Team" },
       { id: "user:7", title: null },
     ])
-    expect((await call(["sales", "bot", "recipients", "remove", "-100", "--json"])).answer.removed).toMatchObject({
+    expect((await call(["sales", "bot", "recipients", "remove", "-100", "--json"])).answer.item.removed).toMatchObject({
       id: "-100",
     })
     await call(["sales", "bot", "recipients", "clear"])
@@ -156,11 +156,11 @@ describe("bot me", () => {
     const before = await call(["sales", "bot", "sends", "list", "--json"])
     const result = await call(["sales", "bot", "me", "--trace", "--json"])
     expect(result.code).toBe(0)
-    expect(result.answer).toEqual(SALES)
+    expect(result.answer.item).toEqual(SALES)
     expect(result.stderr).toContain("me")
     expect(connected).toEqual(["good"])
     expect(closed).toBe(1)
-    expect((await call(["sales", "bot", "sends", "list", "--json"])).answer).toEqual(before.answer)
+    expect((await call(["sales", "bot", "sends", "list", "--json"])).answer.items).toEqual(before.answer.items)
   })
 
   it("refuses missing tokens and offline reads before connecting, and closes an unsuccessful read", async () => {

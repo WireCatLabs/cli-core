@@ -1562,7 +1562,8 @@
         "--bots": "all",
         "--from": "all",
         "--limit": "all",
-        "--newest": "all"
+        "--newest": "all",
+        "--page": "all"
       }
     },
     "bot sends": {

@@ -95,7 +95,8 @@ beforeEach(async () => {
 
 describe("bot contacts show", () => {
   it("**shows a person by @username from the local copy**: where they wrote, and the private chat", async () => {
-    const { code, answer } = await call(["first", "bot", "contacts", "show", "@ann", "--json"])
+    const { code, answer: body } = await call(["first", "bot", "contacts", "show", "@ann", "--json"])
+    const answer = body.item
 
     expect(code).toBe(0)
     expect(answer).toMatchObject({ id: "42", name: "Ann" })
@@ -113,7 +114,7 @@ describe("bot contacts show", () => {
 
     configure({ bot: { profiles: { first: { readOtherBots: ["second"] } } } })
     const allowed = await call(["first", "bot", "contacts", "show", "@ann", "--all-bots", "--json"])
-    expect(allowed.answer.chats.map((chat: { id: string }) => chat.id)).toContain("-200")
+    expect(allowed.answer.item.chats.map((chat: { id: string }) => chat.id)).toContain("-200")
   })
 
   it("refuses --refresh for a bot that cannot read a chat back", async () => {
@@ -162,9 +163,9 @@ describe("bot search messages and messages between", () => {
       "--json",
     ])
 
-    expect(own.answer.chats.map((chat: { id: string }) => chat.id)).toEqual(["-100"])
-    expect(both.answer.chats.map((chat: { id: string }) => chat.id).sort()).toEqual(["-100", "-200"])
-    expect(both.answer.chats.every((chat: { messages: unknown[] }) => chat.messages.length === 1)).toBe(true)
+    expect(own.answer.item.chats.map((chat: { id: string }) => chat.id)).toEqual(["-100"])
+    expect(both.answer.item.chats.map((chat: { id: string }) => chat.id).sort()).toEqual(["-100", "-200"])
+    expect(both.answer.item.chats.every((chat: { messages: unknown[] }) => chat.messages.length === 1)).toBe(true)
     expect((await call(["first", "bot", "messages", "between", "@ann"])).code).toBe(2)
   })
 })

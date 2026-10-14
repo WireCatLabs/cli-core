@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { fetchInto } from "../../services/archive.js"
 import { momentOf } from "../../services/moment.js"
+import { renderItem } from "../messenger/chat-answers.js"
 import { stopOnSignal } from "../messenger/patience.js"
 import { parseDuration } from "../settings.js"
 import { botContext, online } from "./context.js"
@@ -85,7 +86,7 @@ export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMess
               onPage: () => {},
             }),
           )
-          context.renderer.result(result)
+          renderItem(this, context, result)
         } finally {
           await adapter.close()
         }

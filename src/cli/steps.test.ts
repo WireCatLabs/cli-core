@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { botCommand } from "./bot/command.js"
 import { storeCommand } from "./messenger/archive-commands.js"
 import { attachmentsCommand } from "./messenger/attachments-command.js"
 import { chatsCommand } from "./messenger/chats-command.js"
@@ -43,6 +44,19 @@ const program = createProgram({
     doctorCommand(messenger),
     mcpCommand(messenger),
     serverCommand(messenger),
+    botCommand({
+      app,
+      provider: "chat",
+      resolveSettings: settingsFor(app).resolveSettings,
+      connect: async () => {
+        throw new Error("no connection in this test")
+      },
+      mcp: {
+        program: async () => {
+          throw new Error("no server in this test")
+        },
+      },
+    }),
   ],
 })
 const parity = JSON.parse(readFileSync(join(import.meta.dirname, "../../parity.json"), "utf8")) as {

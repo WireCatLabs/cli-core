@@ -76,12 +76,12 @@ beforeEach(() => {
 describe("bot store fetch", () => {
   it("**fetches newest first, stops at --limit, and the next run carries on to the start**", async () => {
     const first = await call(["store", "fetch", "-100", "--limit", "150", "--page-size", "100", "--json"])
-    expect(first.answer).toMatchObject({ chat: "-100", complete: false })
+    expect(first.answer.item).toMatchObject({ chat: "-100", complete: false })
     // By time each page repeats the message the last one ended at; a repeat does not count.
-    expect(first.answer.fetched).toBeGreaterThanOrEqual(149)
+    expect(first.answer.item.fetched).toBeGreaterThanOrEqual(149)
 
     const second = await call(["store", "fetch", "-100", "--json"])
-    expect(second.answer).toMatchObject({ complete: true })
+    expect(second.answer.item).toMatchObject({ complete: true })
 
     const kept = await call(["messages", "list", "-100", "--limit", "300", "--offline", "--json"])
     expect(kept.answer.items).toHaveLength(250)
@@ -89,13 +89,13 @@ describe("bot store fetch", () => {
 
   it("stops at --last and at --since-time, and refuses both together", async () => {
     expect(
-      (await call(["store", "fetch", "-100", "--last", "50", "--page-size", "20", "--json"])).answer,
+      (await call(["store", "fetch", "-100", "--last", "50", "--page-size", "20", "--json"])).answer.item,
     ).toMatchObject({
-      reachedLast: true,
+      reached_last: true,
     })
     const since = new Date(START + 200 * 60_000).toISOString()
-    expect((await call(["store", "fetch", "-100", "--since-time", since, "--json"])).answer).toMatchObject({
-      reachedSince: true,
+    expect((await call(["store", "fetch", "-100", "--since-time", since, "--json"])).answer.item).toMatchObject({
+      reached_since: true,
     })
     expect((await call(["store", "fetch", "-100", "--last", "5", "--since-time", since])).code).toBe(2)
   })

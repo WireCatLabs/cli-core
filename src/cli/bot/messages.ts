@@ -8,8 +8,11 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { readAttachments } from "../../sends/upload.js"
 import { environmentOf } from "../context.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { wholeList } from "../messenger/chat-answers.js"
+import { messageItem } from "../messenger/message-items.js"
 import { readAll } from "../messenger/stdin.js"
-import { listed, positiveCount } from "../paging.js"
+import { positiveCount } from "../paging.js"
 import { type BotContext, botContext } from "./context.js"
 import type { BotAdapter, BotMessenger } from "./port.js"
 
@@ -36,21 +39,34 @@ export const botIdOf = async (context: BotContext, adapter: BotAdapter): Promise
   return id
 }
 
-const show = (context: BotContext, bot: BotMessenger, messages: Message[], one = false) => {
-  if (context.format === "pretty") {
-    context.streams.data(
-      renderMessages(messages, {
-        color: context.color,
-        verbosity: context.settings.detail,
-        senderColors: context.settings.senderColors,
-        profile: context.profile,
-        provider: bot.provider,
-        locale: bot.app.locale,
-      }),
-    )
-  } else if (context.format === "jsonl") context.renderer.stream(messages)
-  else context.renderer.result(one ? messages[0] : listed(messages))
+const show = (
+  command: Command,
+  context: BotContext,
+  bot: BotMessenger,
+  botId: string,
+  messages: Message[],
+  one = false,
+) => {
+  const reader = context.copy.accountOf(botId)
+  const items = messages.map((message) => messageItem(message, reader))
+  renderAnswer(command, context, one && items[0] ? itemOf(items[0]) : wholeList("bot messages list", items), () =>
+    renderMessages(messages, {
+      color: context.color,
+      verbosity: context.settings.detail,
+      senderColors: context.settings.senderColors,
+      profile: context.profile,
+      provider: bot.provider,
+      locale: bot.app.locale,
+    }),
+  )
 }
+
+/** A write's receipt: its ids snake_case, the message it left as the `message` entity. */
+const written = (context: BotContext, botId: string, receipt: Record<string, unknown>, message?: Message) =>
+  itemOf({
+    ...(snakeKeys(receipt) as object),
+    ...(message ? { message: messageItem(message, context.copy.accountOf(botId)) } : {}),
+  })
 
 /** Says what fills the copy, rather than printing an empty list. */
 const nothingKept = (context: BotContext) =>
@@ -145,7 +161,7 @@ const sendCommand = (bot: BotMessenger): Command =>
         if (message.senderId) context.registry.rememberBot(message.senderId)
         const botId = message.senderId ?? (await botIdOf(context, adapter))
         await context.copy.keep(botId, [message], "send", context.renderer.warn, adapter.senders?.())
-        context.renderer.result({ operationId, message })
+        renderAnswer(this, context, written(context, botId, { operationId }, message))
       })
     })
 
@@ -169,20 +185,20 @@ const listCommand = (bot: BotMessenger): Command =>
         if (context.settings.offline) {
           const botId = context.registry.botId()
           if (!botId) throw nothingKept(context)
-          show(context, bot, await fromCopy(botId))
+          show(this, context, bot, botId, await fromCopy(botId))
           return
         }
         const adapter = await context.authenticated({ events })
         const botId = await botIdOf(context, adapter)
         if (!adapter.history) {
           context.renderer.note(`${bot.name ?? "the messenger"} gives a bot no history: these are the messages it kept`)
-          show(context, bot, await fromCopy(botId))
+          show(this, context, bot, botId, await fromCopy(botId))
           return
         }
         const messages = await adapter.history(ref, { limit })
         await context.copy.keep(botId, messages, "history", context.renderer.warn, adapter.senders?.())
         if (/^-?\d+$/.test(ref)) context.registry.observe([{ id: ref }])
-        show(context, bot, messages)
+        show(this, context, bot, botId, messages)
       })
     })
 
@@ -205,18 +221,18 @@ const showCommand = (bot: BotMessenger): Command =>
         if (context.settings.offline) {
           const botId = context.registry.botId()
           if (!botId) throw nothingKept(context)
-          show(context, bot, [await fromCopy(botId)], true)
+          show(this, context, bot, botId, [await fromCopy(botId)], true)
           return
         }
         const adapter = await context.authenticated({ events })
         const botId = await botIdOf(context, adapter)
         if (!adapter.message) {
-          show(context, bot, [await fromCopy(botId)], true)
+          show(this, context, bot, botId, [await fromCopy(botId)], true)
           return
         }
         const found = await adapter.message(ref, messageId)
         await context.copy.keep(botId, [found], "history", context.renderer.warn, adapter.senders?.())
-        show(context, bot, [found], true)
+        show(this, context, bot, botId, [found], true)
       })
     })
 
@@ -250,14 +266,9 @@ const editCommand = (bot: BotMessenger): Command =>
               ...(options.html ? { html: true } : {}),
             }),
         )
-        await context.copy.keep(
-          await botIdOf(context, adapter),
-          [message],
-          "send",
-          context.renderer.warn,
-          adapter.senders?.(),
-        )
-        context.renderer.result({ operationId, message })
+        const botId = await botIdOf(context, adapter)
+        await context.copy.keep(botId, [message], "send", context.renderer.warn, adapter.senders?.())
+        renderAnswer(this, context, written(context, botId, { operationId }, message))
       })
     })
 
@@ -280,7 +291,7 @@ const deleteCommand = (bot: BotMessenger): Command =>
           () => remove(ref, messageIds),
         )
         await context.copy.forget(await botIdOf(context, adapter), ref, messageIds, context.renderer.warn)
-        context.renderer.result({ operationId, deleted: messageIds })
+        renderAnswer(this, context, itemOf({ operation_id: operationId, chat_id: ref, deleted: messageIds }))
       })
     })
 
@@ -303,7 +314,11 @@ const pinCommand = (bot: BotMessenger, pin: boolean): Command => {
           ? botCan(adapter, "pin", bot, "pin messages")(ref, messageId, { notify })
           : botCan(adapter, "unpin", bot, "unpin messages")(ref, messageId),
       )
-      context.renderer.result({ operationId, chatId: ref, messageId, pinned: pin })
+      renderAnswer(
+        this,
+        context,
+        itemOf({ operation_id: operationId, chat_id: ref, message_id: messageId, pinned: pin }),
+      )
     })
   })
 }

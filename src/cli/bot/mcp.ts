@@ -2,7 +2,9 @@ import { realpathSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { environmentOf } from "../context.js"
+import { itemOf, renderAnswer } from "../envelope.js"
 import { type McpEnvironment, serverEntry } from "../messenger/mcp-command.js"
+import { nextStep } from "../steps.js"
 import { botContext } from "./context.js"
 import type { BotMessenger } from "./port.js"
 
@@ -90,7 +92,8 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
       ),
     ).action(function (this: Command) {
       const flags = this.optsWithGlobals<Flags>()
-      const { renderer, settings, format, streams, env } = botContext(this, bot)
+      const context = botContext(this, bot)
+      const { renderer, settings, env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
       const entry = serverEntry(app, {
         profile: settings.profile,
@@ -103,10 +106,12 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
       const config = {
         mcpServers: { [name.replace(new RegExp(`^${app.command}`), `${app.command}-bot`)]: { ...server, args } },
       }
-      if (format === "pretty") streams.data(JSON.stringify(config, null, 2))
-      else renderer.result(config)
-      if (entry.nodeBound)
-        renderer.note("the entry names one Node version's path — after switching or upgrading Node, print it again")
+      renderAnswer(
+        this,
+        context,
+        itemOf({ config }, { next: entry.nodeBound ? [nextStep("bot.mcp-config", { args: {} })] : [] }),
+        () => JSON.stringify(config, null, 2),
+      )
       const note = retiredNote(flags)
       if (note) renderer.warn(note)
     }),

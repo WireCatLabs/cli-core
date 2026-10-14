@@ -4,8 +4,9 @@ import { Command } from "commander"
 import { ADMIN_RIGHTS } from "../../domain/models.js"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
+import { renderAnswer, snakeKeys } from "../envelope.js"
 import { rightsOf } from "../messenger/admin-commands.js"
-import { renderList } from "../paging.js"
+import { renderItem, wholeList } from "../messenger/chat-answers.js"
 import { botContext, online } from "./context.js"
 import { botCan } from "./messages.js"
 import type { BotMessenger } from "./port.js"
@@ -35,7 +36,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })
         const admins = await botCan(adapter, "admins", bot, "list a chat's admins")(ref)
-        renderList(context.renderer, context.format, admins)
+        renderAnswer(this, context, wholeList("bot chats admins list", admins.map(snakeKeys)))
       })
     })
 
@@ -60,7 +61,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
           { operationId, chatId: ref, kind: "chat", action: "admins.add", key: "bot.chats.admins.add" },
           () => add(ref, personId, rights, title === undefined ? {} : { title }),
         )
-        context.renderer.result({
+        renderItem(this, context, {
           operationId,
           chatId: ref,
           personId,
@@ -87,7 +88,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
           { operationId, chatId: ref, kind: "chat", action: "admins.remove", key: "bot.chats.admins.remove" },
           () => remove(ref, personId),
         )
-        context.renderer.result({ operationId, chatId: ref, personId })
+        renderItem(this, context, { operationId, chatId: ref, personId })
       })
     })
 
@@ -127,7 +128,7 @@ export const botMembersCommand = (bot: BotMessenger): Command => {
           },
           () => remove(ref, personId, { block }),
         )
-        context.renderer.result({ operationId, chatId: ref, removed: [personId], blocked: block })
+        renderItem(this, context, { operationId, chatId: ref, removed: [personId], blocked: block })
       })
     })
 

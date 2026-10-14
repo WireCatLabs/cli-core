@@ -4,7 +4,8 @@ import { Argument, Command } from "commander"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { envName } from "../app.js"
-import { renderList } from "../paging.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { renderItem, wholeList } from "../messenger/chat-answers.js"
 import { botAdminsCommand, botMembersCommand } from "./admins.js"
 import { botContext, online } from "./context.js"
 import { botMcpCommand } from "./mcp.js"
@@ -36,7 +37,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
         if (context.env[tokenVariable]) {
           context.streams.diagnostic(`${tokenVariable} is set, and it wins over the token just kept until it is unset`)
         }
-        context.renderer.result({
+        renderItem(this, context, {
           profile: context.profile,
           stored,
           bot: account.name,
@@ -54,7 +55,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
       await context.run(async (events) => {
         const source = context.tokens.read()?.source
         const account = await (await context.authenticated({ events })).me()
-        context.renderer.result({
+        renderItem(this, context, {
           profile: context.profile,
           source,
           bot: account.name,
@@ -69,7 +70,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
     .action(async function (this: Command) {
       const context = botContext(this, bot)
       await context.run(async () =>
-        context.renderer.result({ profile: context.profile, removed: context.tokens.remove() }),
+        renderAnswer(this, context, itemOf({ profile: context.profile, removed: context.tokens.remove() })),
       )
     })
 
@@ -84,7 +85,7 @@ const meCommand = (bot: BotMessenger): Command =>
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })
         try {
-          context.renderer.result(await adapter.me())
+          renderItem(this, context, await adapter.me())
         } finally {
           await adapter.close()
         }
@@ -125,7 +126,7 @@ const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
           }
           rows.push(row)
         }
-        renderList(context.renderer, context.format, rows)
+        renderAnswer(this, context, wholeList("bot list", rows))
       })
     })
 
@@ -138,7 +139,13 @@ const recipientsCommand = (bot: BotMessenger): Command => {
     .description("the chats on the list, or nothing when there is no list")
     .action(async function (this: Command) {
       const context = botContext(this, bot)
-      await context.run(async () => renderList(context.renderer, context.format, context.recipients().read() ?? []))
+      await context.run(async () =>
+        renderAnswer(
+          this,
+          context,
+          wholeList("bot recipients list", (context.recipients().read() ?? []).map(snakeKeys)),
+        ),
+      )
     })
   annotate(command.command("add <chat>"), { mutates: true, local: true })
     .description("allow a chat: its id, `user:<id>`, or the title of a chat this bot has seen")
@@ -148,20 +155,24 @@ const recipientsCommand = (bot: BotMessenger): Command => {
         const id = context.chatRef(chat)
         const title = context.registry.list().find((seen) => seen.id === id)?.title ?? null
         context.recipients().add({ id, title, addedAt: new Date().toISOString() })
-        renderList(context.renderer, context.format, context.recipients().read() ?? [])
+        renderAnswer(
+          this,
+          context,
+          wholeList("bot recipients list", (context.recipients().read() ?? []).map(snakeKeys)),
+        )
       })
     })
   annotate(command.command("remove <chat>"), { mutates: true, local: true })
     .description("take a chat off the list")
     .action(async function (this: Command, chat: string) {
       const context = botContext(this, bot)
-      await context.run(async () => context.renderer.result({ removed: context.recipients().remove(chat) ?? null }))
+      await context.run(async () => renderItem(this, context, { removed: context.recipients().remove(chat) ?? null }))
     })
   annotate(command.command("clear"), { mutates: true, local: true })
     .description("remove the list: the bot may write to any chat again")
     .action(async function (this: Command) {
       const context = botContext(this, bot)
-      await context.run(async () => context.renderer.result({ removed: context.recipients().off() }))
+      await context.run(async () => renderAnswer(this, context, itemOf({ removed: context.recipients().off() })))
     })
   return command
 }
@@ -172,7 +183,9 @@ const sendsCommand = (bot: BotMessenger): Command =>
     .addCommand(
       new Command("list").action(async function (this: Command) {
         const context = botContext(this, bot)
-        await context.run(async () => renderList(context.renderer, context.format, context.journal().entries()))
+        await context.run(async () =>
+          renderAnswer(this, context, wholeList("bot sends list", context.journal().entries().map(snakeKeys))),
+        )
       }),
     )
 
@@ -185,7 +198,9 @@ const chatsCommand = (bot: BotMessenger): Command => {
     .description(`chats this bot has seen on this machine — not a complete list from ${bot.name ?? "the messenger"}`)
     .action(async function (this: Command) {
       const context = botContext(this, bot)
-      await context.run(async () => renderList(context.renderer, context.format, context.registry.list()))
+      await context.run(async () =>
+        renderAnswer(this, context, wholeList("bot chats list", context.registry.list().map(snakeKeys))),
+      )
     })
 
   command
@@ -200,7 +215,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
         const found = await botCan(adapter, "chat", bot, "describe a chat")(ref)
         context.registry.observe([found])
         await context.copy.keepChat(await botIdOf(context, adapter), found, context.renderer.warn)
-        context.renderer.result(found)
+        renderItem(this, context, found)
       })
     })
 
@@ -219,7 +234,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
           { operationId, chatId: ref, kind: "chat", action: "leave", key: "bot.chats.leave" },
           () => leave(ref),
         )
-        context.renderer.result({ operationId, chatId: ref, left: true })
+        renderAnswer(this, context, itemOf({ operation_id: operationId, chat_id: ref, left: true }))
       })
     })
 
@@ -237,7 +252,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
         await guardedWrite(context.guard(), { operationId, chatId: ref, kind: "chat", key: "bot.chats.action" }, () =>
           act(ref, action),
         )
-        context.renderer.result({ operationId, chatId: ref, action })
+        renderAnswer(this, context, itemOf({ operation_id: operationId, chat_id: ref, action }))
       })
     })
   command.addCommand(botAdminsCommand(bot))
