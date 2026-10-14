@@ -2454,6 +2454,20 @@
     "flood clear": {
       "in": "all"
     },
+    "images": {
+      "in": [],
+      "planned": {
+        "max": "max's bump that registers imagesCommand",
+        "tg": "tg's bump that registers imagesCommand"
+      }
+    },
+    "images embed": {
+      "in": [],
+      "planned": {
+        "max": "max's bump that registers imagesCommand",
+        "tg": "tg's bump that registers imagesCommand"
+      }
+    },
     "inbox": {
       "in": "all",
       "options": {
