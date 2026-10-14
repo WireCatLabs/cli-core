@@ -76,7 +76,7 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, asked: ConnectOption
       ...(signal ? { signal } : {}),
     },
   )
-  return { code, answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined, stderr: streams.stderr }
+  return { code, answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined, stderr: streams.stderr }
 }
 
 const lockOf = (root: string) => join(root, "state", "serve", "default.lock")
@@ -193,7 +193,7 @@ describe("serve with reply rules", () => {
         signal: stop.signal,
       },
     )
-    return { sent, answer: JSON.parse(streams.stdout[0] ?? "{}") }
+    return { sent, answer: JSON.parse(streams.stdout[0] ?? "{}").item }
   }
 
   it("**answers only the allowed person, and the send journal names the rule**", async () => {

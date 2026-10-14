@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { defaultRule, readReplies, readRepliesFile } from "../../replies/rules.js"
+import { snakeKeys } from "../envelope.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
@@ -56,7 +57,7 @@ describe("reply editors", () => {
     for (const command of ["on", "on", "off", "off"]) {
       const answer = await invoke(command, "away")
       expect(answer.code).toBe(0)
-      expect(JSON.parse(answer.data).on).toBe(command === "on")
+      expect(JSON.parse(answer.data).item.on).toBe(command === "on")
     }
     expect(existsSync(join(env.CHAT_STATE_DIR, "default.replies-state.json"))).toBe(false)
     expect(existsSync(env.MESSAGING_STORE)).toBe(false)
@@ -115,20 +116,22 @@ describe("reply editors", () => {
       "Europe/Madrid",
     )
     expect(answer.code).toBe(0)
-    expect(JSON.parse(answer.data)).toEqual({
-      ...defaultRule("away"),
-      do: ["reply", "task"],
-      where: { kinds: ["dialog", "group"], chats: ["900719925474099399", "20"], notChats: ["21"] },
-      when: {
-        hours: { outside: "22:00-02:00", days: "fri-mon", timezone: "Europe/Madrid" },
-        words: ["price", "help"],
-        question: true,
-        mentionsMe: true,
-        from: { people: ["900719925474099398"], notPeople: ["22"], contactsOnly: true },
-      },
-      reply: { template: "Hi {name}", model: "may-reword", asReply: false },
-      limits: { perChat: "2/12h", perPerson: "3/1d" },
-    })
+    expect(JSON.parse(answer.data).item).toEqual(
+      snakeKeys({
+        ...defaultRule("away"),
+        do: ["reply", "task"],
+        where: { kinds: ["dialog", "group"], chats: ["900719925474099399", "20"], notChats: ["21"] },
+        when: {
+          hours: { outside: "22:00-02:00", days: "fri-mon", timezone: "Europe/Madrid" },
+          words: ["price", "help"],
+          question: true,
+          mentionsMe: true,
+          from: { people: ["900719925474099398"], notPeople: ["22"], contactsOnly: true },
+        },
+        reply: { template: "Hi {name}", model: "may-reword", asReply: false },
+        limits: { perChat: "2/12h", perPerson: "3/1d" },
+      }),
+    )
     const written = JSON.parse(readFileSync(path, "utf8"))
     expect(written).not.toHaveProperty("testers")
     expect(written.audience).toEqual({
@@ -225,7 +228,7 @@ describe("reply editors", () => {
   it("shows audience without creating a file, replaces all audience fields and sends warnings only to stderr", async () => {
     const { path, invoke } = setup()
     const shown = await invoke("audience")
-    expect(JSON.parse(shown.data).reply).toBe("all")
+    expect(JSON.parse(shown.data).item.reply).toBe("all")
     expect(shown.diagnostics).toBe("")
     expect(existsSync(path)).toBe(false)
     const answer = await invoke(
@@ -242,7 +245,7 @@ describe("reply editors", () => {
       "21",
     )
     expect(answer.code).toBe(0)
-    expect(JSON.parse(answer.data)).toEqual({
+    expect(JSON.parse(answer.data).item).toEqual({
       reply: "listed",
       allow: { people: ["11"], chats: ["20"] },
       deny: { people: ["11"], chats: ["21"] },
@@ -261,12 +264,12 @@ describe("reply editors", () => {
       "",
     )
     expect(cleared.diagnostics).toContain("nobody is answered")
-    expect(JSON.parse(cleared.data)).toEqual({
+    expect(JSON.parse(cleared.data).item).toEqual({
       reply: "listed",
       allow: { people: [], chats: [] },
       deny: { people: [], chats: [] },
     })
     const other = setup()
-    expect(JSON.parse((await other.invoke("audience")).data).reply).toBe("all")
+    expect(JSON.parse((await other.invoke("audience")).data).item.reply).toBe("all")
   })
 })

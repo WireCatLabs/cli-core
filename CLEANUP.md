@@ -25,3 +25,4 @@
 
 - 2026-10-14: `.worktrees/meeting-project-discovery`, branch `feat/meeting-project-discovery`, and `/tmp/meeting-test-project-words-*` — retained SDK discovery implementation and invented fixtures; remove in the owner-approved cleanup batch.
 - 2026-10-14: `../cli-base/.worktrees/meeting-project-aliases`, branch `feat/meeting-project-aliases` — unused clean vocabulary-design checkout; retained pending the owner-approved cleanup batch.
+- 2026-10-14: `../cli-messaging-wt-a2-s5a`, branches `feat/a2-s5a-*` — wave 2 slice S5a (account, runtime, bot onto the envelope; removals); remove once merged.

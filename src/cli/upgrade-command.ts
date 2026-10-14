@@ -1,11 +1,13 @@
-import type { Renderer, RenderFormat } from "@wirecat/cli-base"
+import type { Renderer, RenderFormat, Streams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { type PackageUpgradePorts, type PackageUpgradeResult, upgradePackage } from "../services/package-upgrade.js"
 import type { AppIdentity } from "./app.js"
+import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 
 export interface UpgradeContext extends Omit<PackageUpgradePorts, "onInstall"> {
   renderer: Renderer
   format: RenderFormat
+  streams: Streams
 }
 
 export const upgradeCommand = (
@@ -18,7 +20,7 @@ export const upgradeCommand = (
     .option("--check", "say whether a newer version exists, and install nothing")
     .action(async function (this: Command, { check }: { check?: boolean }) {
       const context = contextFor(this)
-      const { renderer, format } = context
+      const { renderer } = context
       const { result, reason, left } = await upgradePackage(
         { current: app.version, command: app.command, packageName, check: check === true },
         { ...context, onInstall: (argv) => renderer.note(`running: ${argv.join(" ")}`) },
@@ -41,7 +43,7 @@ export const upgradeCommand = (
             `\`${app.command} ${profile} server restart\``,
         )
       }
-      renderer.result(format === "pretty" ? summary(app.command, result) : result)
+      renderAnswer(this, context, itemOf(snakeKeys(result)), () => summary(app.command, result))
     })
 
 const heldBackAdvice = (

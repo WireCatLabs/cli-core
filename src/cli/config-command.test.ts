@@ -14,7 +14,7 @@ const config = settingsFor(app, { profile: { region: v.optional(v.string()) } })
 const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
   const streams = captureStreams()
   const code = await run(argv, { app, commands: () => [configCommand(app, config)] }, { streams, tty: false, env })
-  return { code, answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined }
+  return { code, answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined }
 }
 
 describe("config", () => {

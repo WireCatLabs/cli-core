@@ -20,6 +20,18 @@ shape of this file.
   `details.operation_id`, `details.send_id` and `retryable: false`, so the send is not repeated.
 - **A missing model is `reason: "model.not-downloaded"`** with `details.model` (text, picture and speech models), so
   a caller branches on the reason, not on the message text.
+- **Account, runtime and diagnostic commands answer in the envelope**, snake_case, CLI and MCP alike:
+  `account list|show|update`, `account sessions list|end` (new `account_session` entity; `account show` and MCP
+  `account_show` answer the `account` entity with `provider`), `flood clear`, `recipients *`, `sends list` (now
+  paged with `--limit`/`--page`/`--all`), `doctor`, `doctor report|report create`, `config migrate|show|set|unset`,
+  `upgrade`, `runs list|show|search|path` (`runs list` gains `--page`; MCP `runs_search` answers the list
+  envelope), `mcp --revoke|config|setup|doctor`, the summary `serve` prints when it stops, `server *` (`server logs`
+  is a list of lines) and `replies *`. What-next hints became registered steps: `doctor.online` (in place of
+  `login.hint`), `doctor.report-create` (in place of `create`), `mcp.config` (in place of the Node version manager
+  warning; `serverEntry` returns `nodeBound`), `server.restart` (an outdated serve), `store.reindex` (a store-wide
+  stemmer setting). `doctor`'s `files.problems` lose `fix`: the `chmod` line is a stderr note, not a step this CLI
+  runs. `mcp config --json` answers `{item: {config}}`; a person still gets the client's JSON. The messenger's own
+  block in `doctor` keeps the keys its messenger gives.
 - **Follow-ups to the S3 envelope moves:** `store export --jsonl` on stdout streams `message` items (files keep
   their format); `conversations status` names group chats never built as a `missing` entry with the
   `conversations.build` step, whose `chat` is now optional; MCP `store_jobs_show` answers what `store jobs show`

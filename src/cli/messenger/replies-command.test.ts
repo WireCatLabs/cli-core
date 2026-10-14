@@ -111,14 +111,14 @@ describe("replies test", () => {
     vi.stubGlobal("fetch", fetcher)
     expect((await replies(["replies", "consents", "grant", "--json"], env)).code).toBe(0)
     const preview = await replies(["replies", "test", "--since-time", "1d", "--json"], env)
-    expect(JSON.parse(preview.stdout.join("")).rules[0].would[0]).toMatchObject({
+    expect(JSON.parse(preview.stdout.join("")).item.rules[0].would[0]).toMatchObject({
       text: "Later",
       blocks: [{ instruction: "Greet Ana", fallback: "Later" }],
     })
     expect(fetcher).not.toHaveBeenCalled()
     const modeled = await replies(["replies", "test", "--ai", "--json"], env)
     expect(modeled.code).toBe(0)
-    expect(JSON.parse(modeled.stdout.join("")).rules[0].would[0].text).toBe("Hello Ana")
+    expect(JSON.parse(modeled.stdout.join("")).item.rules[0].would[0].text).toBe("Hello Ana")
     expect(fetcher).toHaveBeenCalledTimes(1)
     const configPath = join(env.CHAT_CONFIG_DIR, "config.json")
     const config = JSON.parse(readFileSync(configPath, "utf8"))
@@ -132,22 +132,22 @@ describe("replies test", () => {
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect((await replies(["replies", "consents", "deny", "11", "--json"], env)).code).toBe(0)
     const denied = await replies(["replies", "test", "--ai", "--json"], env)
-    expect(JSON.parse(denied.stdout.join("")).rules[0].would[0].text).toBe("Later")
+    expect(JSON.parse(denied.stdout.join("")).item.rules[0].would[0].text).toBe("Later")
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
   it("shows, grants, revokes and manages profile chat opt-outs without a connection", async () => {
     const { env } = await setUp()
     const invoke = (args: string[]) => replies(["replies", "consents", ...args, "--json"], env)
-    expect(JSON.parse((await invoke(["show"])).stdout.join(""))).toEqual({ provider: null, deniedChats: [] })
+    expect(JSON.parse((await invoke(["show"])).stdout.join("")).item).toEqual({ provider: null, denied_chats: [] })
     expect((await invoke(["grant"])).code).toBe(3)
     expect((await invoke(["deny", ""])).code).toBe(2)
     for (const command of ["deny", "deny", "allow", "allow"]) {
       const result = await invoke([command, "900719925474099399"])
       expect(result.code).toBe(0)
-      expect(JSON.parse(result.stdout.join(""))).toEqual({
+      expect(JSON.parse(result.stdout.join("")).item).toEqual({
         provider: null,
-        deniedChats: command === "deny" ? ["900719925474099399"] : [],
+        denied_chats: command === "deny" ? ["900719925474099399"] : [],
       })
     }
     writeFileSync(
@@ -157,9 +157,9 @@ describe("replies test", () => {
       }),
     )
     const granted = await invoke(["grant"])
-    expect(JSON.parse(granted.stdout.join("")).provider).toBe("anthropic:https://api.anthropic.com")
+    expect(JSON.parse(granted.stdout.join("")).item.provider).toBe("anthropic:https://api.anthropic.com")
     expect((await invoke(["revoke"])).code).toBe(0)
-    expect(JSON.parse((await invoke(["show"])).stdout.join("")).provider).toBeNull()
+    expect(JSON.parse((await invoke(["show"])).stdout.join("")).item.provider).toBeNull()
   })
   it("**says what a rule would answer, counting its limits, and sends, connects and saves nothing**", async () => {
     const { env } = await setUp()
@@ -168,7 +168,7 @@ describe("replies test", () => {
     const { code, stdout } = await replies(["replies", "test", "--json"], env)
 
     expect(code).toBe(0)
-    const answer = JSON.parse(stdout.join(""))
+    const answer = JSON.parse(stdout.join("")).item
     const [away] = answer.rules
     expect(away.would).toEqual([
       expect.objectContaining({
@@ -178,7 +178,7 @@ describe("replies test", () => {
       }),
     ])
     expect(away.skipped).toEqual({ "the person's limit is reached": 1 })
-    expect(answer.botUnknown).toBe(1)
+    expect(answer.bot_unknown).toBe(1)
     expect(readdirSync(env.CHAT_STATE_DIR).sort()).toEqual(before)
   })
 

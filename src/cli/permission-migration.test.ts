@@ -96,7 +96,7 @@ const call = async (args: string[], env: NodeJS.ProcessEnv) => {
     { app, commands: () => [configCommand(app, configuration)] },
     { env, tty: false, streams },
   )
-  return { code, data: JSON.parse(streams.stdout.join("\n") || "null"), error: streams.stderr.join("\n") }
+  return { code, data: JSON.parse(streams.stdout.join("\n") || "null")?.item, error: streams.stderr.join("\n") }
 }
 const names = ["default", "new-user", "alice", "bob", "constructor"]
 const keys = [
@@ -204,11 +204,11 @@ describe("permission configuration migration", () => {
     const original = readFileSync(path, "utf8")
     const dry = await call(["config", "migrate", "--dry-run", "--json"], env)
     expect(dry.code, dry.error).toBe(0)
-    expect(dry.data).toMatchObject({ configFile: path, changed: true, dryRun: true, changes: expect.any(Array) })
+    expect(dry.data).toMatchObject({ config_file: path, changed: true, dry_run: true, changes: expect.any(Array) })
     expect(readFileSync(path, "utf8")).toBe(original)
     const applied = await call(["config", "migrate", "--json"], env)
     expect(applied.code, applied.error).toBe(0)
-    expect(applied.data).toMatchObject({ changed: true, dryRun: false })
+    expect(applied.data).toMatchObject({ changed: true, dry_run: false })
     const written = readFileSync(path, "utf8")
     expect(JSON.parse(written).defaults.region).toBe("eu")
     expect((await call(["config", "migrate", "--json"], env)).data).toMatchObject({ changed: false, changes: [] })

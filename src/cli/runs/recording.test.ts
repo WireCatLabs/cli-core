@@ -175,15 +175,15 @@ describe("the runs command", () => {
     }
 
     expect((await read(["runs", "list", "--json"])).answer).toMatchObject({
-      items: [{ runId: metadata?.runId }],
-      hasMore: false,
+      items: [{ run_id: metadata?.runId }],
+      page: { has_more: false },
     })
-    const short = (await read(["runs", "show", metadata?.runId ?? "", "--json"])).answer
-    expect(short).toMatchObject({ runId: metadata?.runId, eventCount: 2, events: [] })
-    const shown = (await read(["runs", "show", metadata?.runId ?? "", "-v", "--json"])).answer
+    const short = (await read(["runs", "show", metadata?.runId ?? "", "--json"])).answer.item
+    expect(short).toMatchObject({ run_id: metadata?.runId, event_count: 2, events: [] })
+    const shown = (await read(["runs", "show", metadata?.runId ?? "", "-v", "--json"])).answer.item
     expect(shown.events.map((event: { event: string }) => event.event)).toEqual(["request", "response"])
     expect(shown.events[0]).not.toHaveProperty("runId")
-    expect((await read(["runs", "path", metadata?.runId ?? "", "--json"])).answer.path).toContain(runsDir)
+    expect((await read(["runs", "path", metadata?.runId ?? "", "--json"])).answer.item.path).toContain(runsDir)
     expect(listRuns(runsDir)).toHaveLength(1)
     expect((await read(["runs", "path", "no-such-run"])).code).toBe(6)
     expect(listRuns(runsDir).map((one) => one.command)).toContain("runs path")

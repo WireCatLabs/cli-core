@@ -34,13 +34,14 @@ describe.each(["max", "tg"])("recorded run truncation for %s", (command) => {
     expect(code).toBe(0)
     expect(listRuns(dir).map((item) => item.runId)).toEqual(before)
     const stderr = streams.stderr.join("\n")
-    expect(stderr).not.toContain("--page")
     if (format === "json") {
-      expect(JSON.parse(streams.stdout[0] ?? "")).toMatchObject({ page: 1, limit: 1, hasMore: true })
+      expect(JSON.parse(streams.stdout[0] ?? "")).toMatchObject({
+        page: { limit: 1, has_more: true },
+        next: [{ step: "page.next", command: "runs list", args: { page: 2, limit: 1 } }],
+      })
       expect(stderr).toBe("")
     } else {
-      expect(stderr).toContain("--limit")
-      expect(stderr).toContain("more recorded runs")
+      expect(stderr).toContain(`${command} runs list --page 2 --limit 1`)
       expect(streams.stdout).toHaveLength(1)
     }
   })
@@ -65,10 +66,10 @@ it("shows a run's failures and leaves the rest to -v", async () => {
   const streams = captureStreams()
   await run(["runs", "show", item.id, "--json"], { app, commands: () => [runsCommand(app)] }, { streams, env })
 
-  expect(JSON.parse(streams.stdout[0] ?? "")).toMatchObject({
+  expect(JSON.parse(streams.stdout[0] ?? "").item).toMatchObject({
     status: "failed",
-    errorCode: "timeout",
-    eventCount: 3,
+    error_code: "timeout",
+    event_count: 3,
     events: [
       { event: "response", errorCode: "timeout" },
       { event: "warning", code: "slow_answer" },

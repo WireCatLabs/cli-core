@@ -33,7 +33,8 @@ export const changeStoreSetting = async (
     await store.saveStemmers(next)
     return {
       result: { store: storePath(env), scope: "store", setting, value: next[script] },
-      note: `store-wide — every profile, tg and MAX; stemmed search waits for \`${app.command} store reindex\``,
+      note: "store-wide — every profile, tg and MAX",
+      reindex: true,
     }
   } finally {
     await store.close()

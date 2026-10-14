@@ -26,6 +26,9 @@ it("exposes diagnostic search through MCP for the selected profile only", async 
     env,
     settings: { profile: "work" },
   } as unknown as Defaults)
-  expect(result).toMatchObject({ items: [{ profile: "work", errorCode: "rate_limited" }], hasMore: false })
+  expect(result).toMatchObject({
+    items: [{ profile: "work", error_code: "rate_limited" }],
+    page: { has_more: false },
+  })
   expect((result as { items: unknown[] }).items).toHaveLength(1)
 })

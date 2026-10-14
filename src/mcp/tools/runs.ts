@@ -1,14 +1,14 @@
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { runsDirFor } from "../../cli/runs/run.js"
-import { searchRuns } from "../../cli/runs/search.js"
+import { runsFound, searchRuns } from "../../cli/runs/search.js"
 import { type AnyTool, READ, tool } from "../tool.js"
 
 export const runsTools = (messenger: Messenger): Record<string, AnyTool> => ({
   runs_search: tool({
     title: "Search recorded diagnostic logs",
     description:
-      "Search this profile's run metadata and safe diagnostic events, including partial batches and failed IDs. No message contents, tokens or raw job logs. Literal query plus status, error_code, operation and since_time filters; paged results. Does not connect or record its own search. Returns items, page, limit, hasMore; each run has at most100 matched events with eventsTruncated.",
+      "Search this profile's run metadata and safe diagnostic events, including partial batches and failed IDs. No message contents, tokens or raw job logs. Literal query plus status, error_code, operation and since_time filters; paged results. Does not connect or record its own search. Each run has at most 100 matched events, with events_truncated.",
     key: null,
     annotations: { ...READ, openWorldHint: false },
     input: v.object({
@@ -21,11 +21,14 @@ export const runsTools = (messenger: Messenger): Record<string, AnyTool> => ({
       page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
     }),
     local: async (args, defaults) =>
-      searchRuns(runsDirFor(messenger.app, defaults.env), {
-        ...args,
-        errorCode: args.error_code,
-        since: args.since_time,
-        profile: defaults.settings.profile ?? "default",
-      }),
+      runsFound(
+        searchRuns(runsDirFor(messenger.app, defaults.env), {
+          ...args,
+          errorCode: args.error_code,
+          since: args.since_time,
+          profile: defaults.settings.profile ?? "default",
+        }),
+        { ...args },
+      ),
   }),
 })

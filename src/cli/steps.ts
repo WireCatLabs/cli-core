@@ -163,6 +163,30 @@ export const STEPS = defineSteps([
     why: "the messages around it",
   },
   {
+    id: "doctor.online",
+    command: "doctor",
+    args: [{ name: "online", required: true }],
+    why: "the login was not checked; --online logs in once and sends nothing",
+  },
+  {
+    id: "doctor.report-create",
+    command: "doctor report create",
+    args: [{ name: "run", required: false }],
+    why: "writes the report to a file to read and send; it holds no message text",
+  },
+  {
+    id: "mcp.config",
+    command: "mcp config",
+    args: [],
+    why: "the entry names one Node version's path; after switching or upgrading Node, print it again",
+  },
+  {
+    id: "server.restart",
+    command: "server restart",
+    args: [],
+    why: "serve still runs an older version; a restart runs the one installed now",
+  },
+  {
     id: "search.meetings",
     command: "*",
     args: [{ name: "max_meetings", required: true }],

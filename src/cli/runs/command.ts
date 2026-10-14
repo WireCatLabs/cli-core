@@ -2,9 +2,10 @@ import { CliError } from "@wirecat/cli-base"
 import { Command, Option } from "commander"
 import type { AppIdentity } from "../app.js"
 import { environmentOf, outputFor } from "../context.js"
-import { positiveCount, renderPage } from "../paging.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { positiveCount } from "../paging.js"
 import { findRun, listRuns, readEvents, runsDirFor } from "./run.js"
-import { searchRuns } from "./search.js"
+import { type RunSearch, runsFound, searchRuns } from "./search.js"
 
 /** Reading the log is not itself worth recording, so **nothing here starts a run**. */
 export const runsCommand = (app: AppIdentity): Command => {
@@ -20,16 +21,17 @@ export const runsCommand = (app: AppIdentity): Command => {
     .command("list")
     .description("recorded runs, newest first")
     .option("--limit <n>", "how many to show", positiveCount("--limit"), 20)
+    .option("--page <n>", "which page, starting at 1", positiveCount("--page"), 1)
     .action(function (this: Command) {
-      const { limit } = this.opts<{ limit: number }>()
+      const { limit, page } = this.opts<{ limit: number; page: number }>()
       const output = outputFor(this)
       const { renderer } = output
-      const runs = listRuns(dir(this), { atLeast: limit + 1 })
-      renderPage(
-        { ...output, settings: { page: 1, limit, all: false } },
-        { items: runs.slice(0, limit), hasMore: runs.length > limit },
-        undefined,
-        () => "more recorded runs — increase `--limit` to show them",
+      const runs = listRuns(dir(this), { atLeast: page * limit + 1 })
+      const shown = runs.slice((page - 1) * limit, page * limit)
+      renderAnswer(
+        this,
+        output,
+        listOf("runs list", { items: shown.map(snakeKeys), limit, page, has_more: runs.length > page * limit }),
       )
       if (runs.length === 0) renderer.note("nothing recorded — a run is kept with `--record`, or when it fails")
     })
@@ -39,12 +41,23 @@ export const runsCommand = (app: AppIdentity): Command => {
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("one run: what it was, how it ended and what went wrong; -v for every event")
     .action(function (this: Command, id: string) {
-      const { renderer } = outputFor(this)
+      const output = outputFor(this)
+      const { renderer } = output
       const found = runOrRefuse(this, id)
       const events = readEvents(found.dir).map(readable)
       const all = (this.optsWithGlobals<{ verbose?: number }>().verbose ?? 0) > 0
       const shown = all ? events : events.filter(notable)
-      renderer.result({ ...found.metadata, directory: found.dir, eventCount: events.length, events: shown })
+      // Events are log records as written; only the run's own fields are renamed here.
+      renderAnswer(
+        this,
+        output,
+        itemOf({
+          ...(snakeKeys(found.metadata) as object),
+          directory: found.dir,
+          event_count: events.length,
+          events: shown,
+        }),
+      )
       if (shown.length < events.length)
         renderer.note(
           `${events.length - shown.length} more events — \`${app.command} runs show ${id} -v\` shows them all`,
@@ -63,11 +76,30 @@ export const runsCommand = (app: AppIdentity): Command => {
     .option("--limit <n>", "matches per page, at most 100", positiveCount("--limit"), 20)
     .option("--page <n>", "result page", positiveCount("--page"), 1)
     .action(function (this: Command, query?: string) {
-      outputFor(this).renderer.result(
-        searchRuns(dir(this), {
-          ...this.opts(),
-          since: this.opts().sinceTime,
-          ...(query === undefined ? {} : { query }),
+      const options = this.opts<{
+        status?: RunSearch["status"]
+        errorCode?: string
+        operation?: string
+        profile?: string
+        sinceTime?: string
+        limit: number
+        page: number
+      }>()
+      const found = searchRuns(dir(this), {
+        ...options,
+        since: options.sinceTime,
+        ...(query === undefined ? {} : { query }),
+      })
+      renderAnswer(
+        this,
+        outputFor(this),
+        runsFound(found, {
+          query,
+          status: options.status,
+          error_code: options.errorCode,
+          operation: options.operation,
+          profile: options.profile,
+          since_time: options.sinceTime,
         }),
       )
     })
@@ -77,7 +109,7 @@ export const runsCommand = (app: AppIdentity): Command => {
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("the directory holding one run")
     .action(function (this: Command, id: string) {
-      outputFor(this).renderer.result({ path: runOrRefuse(this, id).dir })
+      renderAnswer(this, outputFor(this), itemOf({ path: runOrRefuse(this, id).dir }))
     })
 
   return command

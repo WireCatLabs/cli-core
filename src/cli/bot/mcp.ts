@@ -105,7 +105,8 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
       }
       if (format === "pretty") streams.data(JSON.stringify(config, null, 2))
       else renderer.result(config)
-      if (entry.warning) renderer.note(entry.warning)
+      if (entry.nodeBound)
+        renderer.note("the entry names one Node version's path — after switching or upgrading Node, print it again")
       const note = retiredNote(flags)
       if (note) renderer.warn(note)
     }),

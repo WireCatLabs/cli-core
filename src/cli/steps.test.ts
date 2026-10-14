@@ -7,10 +7,13 @@ import { attachmentsCommand } from "./messenger/attachments-command.js"
 import { chatsCommand } from "./messenger/chats-command.js"
 import type { Messenger } from "./messenger/context.js"
 import { conversationsCommand } from "./messenger/conversations-command.js"
+import { doctorCommand } from "./messenger/doctor-command.js"
 import { inboxCommand } from "./messenger/inbox.js"
+import { mcpCommand } from "./messenger/mcp-command.js"
 import { messagesCommand } from "./messenger/messages-command.js"
 import { modelsCommand } from "./messenger/models-command.js"
 import { reviewCommand } from "./messenger/review.js"
+import { serverCommand } from "./messenger/server-command.js"
 import { createProgram } from "./program.js"
 import { REASONS } from "./reasons.js"
 import { settingsFor } from "./settings.js"
@@ -37,6 +40,9 @@ const program = createProgram({
     storeCommand(messenger),
     attachmentsCommand(messenger),
     conversationsCommand(messenger),
+    doctorCommand(messenger),
+    mcpCommand(messenger),
+    serverCommand(messenger),
   ],
 })
 const parity = JSON.parse(readFileSync(join(import.meta.dirname, "../../parity.json"), "utf8")) as {

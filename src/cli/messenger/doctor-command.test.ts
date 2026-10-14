@@ -67,9 +67,11 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, connect: Messenger["
       env,
     },
   )
+  const body = streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined
   return {
     code,
-    answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]) : undefined,
+    answer: body?.item,
+    next: body?.next,
     stdout: streams.stdout,
     stderr: streams.stderr,
   }
@@ -105,9 +107,12 @@ describe("doctor", () => {
 
   it("**never calls the login ok without --online**", async () => {
     const { env } = setup()
-    const { answer } = await call(["doctor", "--json"], env, refused)
+    const { answer, next } = await call(["doctor", "--json"], env, refused)
 
-    expect(answer.login).toEqual({ state: "not checked", hint: expect.stringContaining("chat doctor --online") })
+    expect(answer.login).toEqual({ state: "not checked" })
+    expect(next).toEqual([
+      expect.objectContaining({ step: "doctor.online", command: "doctor", args: { online: true } }),
+    ])
     expect(answer.online).toBeUndefined()
   })
 
@@ -126,13 +131,15 @@ describe("doctor", () => {
       mkdirSync(runs, { recursive: true })
       chmodSync(env.MESSAGING_STORE, 0o644)
       chmodSync(runs, 0o755)
-      const { answer } = await call(["doctor", "--json"], env, refused)
+      const { answer, stderr } = await call(["doctor", "--json"], env, refused)
 
       expect(answer.files.ok).toBe(false)
       expect(answer.files.problems).toEqual([
-        { path: env.MESSAGING_STORE, mode: "0644", want: "0600", fix: `chmod 600 '${env.MESSAGING_STORE}'` },
-        { path: runs, mode: "0755", want: "0700", fix: `chmod 700 '${runs}'` },
+        { path: env.MESSAGING_STORE, mode: "0644", want: "0600" },
+        { path: runs, mode: "0755", want: "0700" },
       ])
+      expect(stderr.join("\n")).toContain(`to make it private: chmod 600 '${env.MESSAGING_STORE}'`)
+      expect(stderr.join("\n")).toContain(`to make it private: chmod 700 '${runs}'`)
       expect(statSync(env.MESSAGING_STORE).mode & 0o777).toBe(0o644)
     },
   )
@@ -185,11 +192,11 @@ describe("doctor", () => {
 
     expect((await call(["doctor", "--online", "--json"], env, async () => connection)).answer.online).toMatchObject({
       ok: true,
-      matchesRemembered: true,
+      matches_remembered: true,
     })
     const failed = await call(["doctor", "--online", "--json"], env, refused)
     expect(failed.code).toBe(0)
-    expect(failed.answer.online).toMatchObject({ ok: false, errorCode: "authentication_error" })
+    expect(failed.answer.online).toMatchObject({ ok: false, error_code: "authentication_error" })
   })
 })
 
@@ -202,15 +209,15 @@ describe("doctor --online", () => {
       withHealth(async () => ({ standingChecked: true, serverTime: Date.now(), serverTimeResolutionMs: 1000 })),
     )
     expect(fine.answer.online).toMatchObject({ ok: true, standing: { state: "active" }, clock: { ok: true } })
-    expect(Math.abs(fine.answer.online.clock.skewMs)).toBeLessThan(1000)
-    expect(fine.answer.online.clock.uncertaintyMs).toBeGreaterThanOrEqual(1000)
+    expect(Math.abs(fine.answer.online.clock.skew_ms)).toBeLessThan(1000)
+    expect(fine.answer.online.clock.uncertainty_ms).toBeGreaterThanOrEqual(1000)
     expect(fine.answer.login).toEqual({ state: "ok" })
 
     const ahead = await call(["doctor", "--online", "--json"], env, async () =>
       withHealth(async () => ({ standingChecked: true, serverTime: Date.now() - 2 * CLOCK_SKEW_WARN_MS })),
     )
-    expect(ahead.answer.online.clock).toMatchObject({ ok: false, warnAboveMs: CLOCK_SKEW_WARN_MS })
-    expect(ahead.answer.online.clock.skewMs).toBeGreaterThanOrEqual(2 * CLOCK_SKEW_WARN_MS - 100)
+    expect(ahead.answer.online.clock).toMatchObject({ ok: false, warn_above_ms: CLOCK_SKEW_WARN_MS })
+    expect(ahead.answer.online.clock.skew_ms).toBeGreaterThanOrEqual(2 * CLOCK_SKEW_WARN_MS - 100)
   })
 
   it("says nothing about the clock for a messenger that cannot tell", async () => {
@@ -232,8 +239,9 @@ describe("doctor --online", () => {
       withHealth(async () => ({ standingChecked: true, serverTime: Date.now(), standing: frozen })),
     )
     expect(code).toBe(0)
-    expect(answer.online).toMatchObject({ ok: true, standing: frozen, hint: frozen.hint })
-    expect(answer.login).toEqual({ state: "ok", hint: frozen.hint })
+    const { appealUrl, ...rest } = frozen
+    expect(answer.online).toMatchObject({ ok: true, standing: { ...rest, appeal_url: appealUrl } })
+    expect(answer.login).toEqual({ state: "ok" })
   })
 
   it("**holds writes once it sees the account frozen, and lifts only that hold once it sees it active**", async () => {
@@ -243,16 +251,16 @@ describe("doctor --online", () => {
     const first = await call(["doctor", "--online", "--json"], env, async () =>
       withHealth(async () => ({ standingChecked: true, serverTime: Date.now(), standing: frozen })),
     )
-    expect(first.answer.flood).toMatchObject({ deadlines: [], sendBlock: { state: "frozen", until } })
+    expect(first.answer.flood).toMatchObject({ deadlines: [], send_block: { state: "frozen", until } })
 
     const active = async () => withHealth(async () => ({ standingChecked: true, serverTime: Date.now() }))
-    expect((await call(["doctor", "--online", "--json"], env, active)).answer.flood.sendBlock).toBeNull()
+    expect((await call(["doctor", "--online", "--json"], env, active)).answer.flood.send_block).toBeNull()
 
     new FloodMemory(join(env.CHAT_STATE_DIR, "flood", "default.json")).block({ state: "limited", hint: "spam" })
-    expect((await call(["doctor", "--online", "--json"], env, active)).answer.flood.sendBlock).toMatchObject({
+    expect((await call(["doctor", "--online", "--json"], env, active)).answer.flood.send_block).toMatchObject({
       state: "limited",
     })
-    expect((await call(["doctor", "--json"], env, refused)).answer.flood.sendBlock).toMatchObject({ state: "limited" })
+    expect((await call(["doctor", "--json"], env, refused)).answer.flood.send_block).toMatchObject({ state: "limited" })
   })
 
   it("reports a banned account as a state, from the refusal, and still reads the clock", async () => {
@@ -272,12 +280,12 @@ describe("doctor --online", () => {
     expect(code).toBe(0)
     expect(answer.online).toMatchObject({
       ok: false,
-      errorCode: "authentication_error",
-      providerError: "USER_DEACTIVATED_BAN",
+      error_code: "authentication_error",
+      provider_error: "USER_DEACTIVATED_BAN",
       standing: { state: "banned" },
       clock: { ok: true },
     })
-    expect(answer.login).toEqual({ state: "failed", hint: "only the messenger can restore it" })
+    expect(answer.login).toEqual({ state: "failed" })
   })
 
   it("keeps answering when the health request itself fails", async () => {
@@ -290,7 +298,7 @@ describe("doctor --online", () => {
     expect(answer.online).toMatchObject({
       ok: true,
       clock: null,
-      healthError: "network_error",
+      health_error: "network_error",
       standing: { state: "unknown" },
     })
   })
@@ -419,6 +427,9 @@ describe("doctor report", () => {
     expect(missing.stderr.join("\n")).toContain("chat runs list")
 
     const explained = await call(["doctor", "report", "--json"], env, refused)
-    expect(explained.answer).toMatchObject({ create: "chat doctor report create" })
+    expect(explained.answer).not.toHaveProperty("create")
+    expect(explained.next).toEqual([
+      expect.objectContaining({ step: "doctor.report-create", command: "doctor report create" }),
+    ])
   })
 })

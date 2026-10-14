@@ -114,9 +114,11 @@ const call = async (
     { streams, tty, env, system },
   )
   const first = streams.stdout[0]
+  const body = !tty && first ? JSON.parse(first) : undefined
   return {
     code,
-    answer: !tty && first ? JSON.parse(first) : undefined,
+    body,
+    answer: body?.item ?? body,
     text: streams.stdout.join("\n"),
     stderr: streams.stderr.join("\n"),
   }
@@ -204,8 +206,8 @@ describe("server without a unit", () => {
     const json = await call(["status", "--json"], env, machine("linux").system)
     expect(json.answer).toMatchObject({
       running: false,
-      cliVersion: "1.0.0",
-      stale: { pid: 2 ** 22 + 12345, startedAt: "2026-09-29T10:00:00.000Z" },
+      cli_version: "1.0.0",
+      stale: { pid: 2 ** 22 + 12345, started_at: "2026-09-29T10:00:00.000Z" },
     })
     expect(json.answer).toHaveProperty("log", expect.stringMatching(/serve\/default\.log$/))
     expect((await call(["status"], env, machine("linux").system, true)).text).toContain("is gone and left its lock")
@@ -223,8 +225,8 @@ describe("server without a unit", () => {
 
     const json = await call(["status", "--json"], env, machine("linux").system)
     expect(json.answer).toMatchObject({ running: true, version: "0.9.9" })
-    expect(json.stderr).toContain("It runs chat 0.9.9, and chat is now 1.0.0 — `chat server restart`.")
-    expect((await call(["status"], env, machine("linux").system, true)).text).toContain("chat is now 1.0.0")
+    expect(json.body.next).toMatchObject([{ step: "server.restart", command: "server restart" }])
+    expect((await call(["status"], env, machine("linux").system, true)).stderr).toContain("chat server restart")
 
     expect(servingProfiles(app, env)).toEqual(["default"])
     stale.kill()
@@ -241,8 +243,8 @@ describe("server without a unit", () => {
 
     const json = await call(["status", "--json"], env, machine("linux").system)
     expect(json.answer.flood).toMatchObject({
-      deadlines: [{ operation: "history", chatId: "42", providerError: "FLOOD_WAIT" }],
-      sendBlock: { state: "limited", hint: "limited as spam" },
+      deadlines: [{ operation: "history", chat_id: "42", provider_error: "FLOOD_WAIT" }],
+      send_block: { state: "limited", hint: "limited as spam" },
     })
     const text = (await call(["status"], env, machine("linux").system, true)).text
     expect(text).toContain("Writes are held until ")
@@ -568,8 +570,8 @@ describe("a CLI's own server process", () => {
 
     expect((await call(["status", "--json"], env, system, false, options)).answer).toMatchObject({
       running: false,
-      stopped: { exitCode: 4, reason: "authentication_error", restarts: false },
-      unit: { active: false, exitCode: 4 },
+      stopped: { exit_code: 4, reason: "authentication_error", restarts: false },
+      unit: { active: false, exit_code: 4 },
     })
     const said = (await call(["status"], env, system, true, options)).text
     expect(said).toContain("the login is no longer valid")
@@ -595,7 +597,7 @@ describe("a CLI's own server process", () => {
 
     const status = await call(["status", "--json"], env, system, false, options)
     expect(status.answer.stopped).toBeUndefined()
-    expect(status.answer.unit.exitCode).toBeUndefined()
+    expect(status.answer.unit.exit_code).toBeUndefined()
   })
 
   it("status says nothing of the kind for an exit a restart may fix", async () => {

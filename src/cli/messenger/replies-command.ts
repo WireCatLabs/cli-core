@@ -6,6 +6,7 @@ import { audienceWarnings, readReplies, repliesPathFor } from "../../replies/rul
 import { paused, readRepliesState, repliesStatePathFor, writeRepliesState } from "../../replies/state.js"
 import { levelFor } from "../../sends/permissions.js"
 import { momentOf } from "../../services/moment.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { replyConsentsCommand } from "./replies-consents-command.js"
 import { addReplyEditors } from "./replies-edit-command.js"
@@ -33,7 +34,7 @@ export const repliesCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, rule: string | undefined) {
       const { sinceTime, ai } = this.opts<{ sinceTime?: string; ai?: boolean }>()
       const context = messengerContext(this, messenger)
-      const { settings, renderer, format, streams, env } = context
+      const { settings, renderer, env } = context
       const controller = new AbortController()
       context.track({ close: async () => controller.abort() })
       if (ai && settings.offline)
@@ -71,9 +72,16 @@ export const repliesCommand = (messenger: Messenger): Command => {
         renderer.note(`${found.botUnknown} sender(s) not known as bot or person; taken as people`)
       }
       renderer.note(`only what this machine has stored from ${found.since} to ${found.until} was read`)
-      if (format !== "pretty") {
-        renderer.result(found)
-        return
+      const answer = {
+        since: found.since,
+        until: found.until,
+        bot_unknown: found.botUnknown,
+        // `skipped` is keyed by the reason, as written.
+        rules: found.rules.map(({ would, skipped, ...rest }) => ({
+          ...(snakeKeys(rest) as object),
+          would: snakeKeys(would),
+          skipped,
+        })),
       }
       const lines = found.rules.flatMap(({ id, would, skipped }) => [
         `${id}: would act on ${would.length}`,
@@ -95,16 +103,17 @@ export const repliesCommand = (messenger: Messenger): Command => {
           .sort(([, a], [, b]) => b - a)
           .map(([why, count]) => `  passed over ${count}: ${why}`),
       ])
-      streams.data(`${lines.join("\n")}\n`)
+      renderAnswer(this, context, itemOf(answer), () => `${lines.join("\n")}\n`)
     })
 
   const switched = (on: boolean) =>
     async function (this: Command) {
-      const { settings, renderer, env } = messengerContext(this, messenger)
+      const context = messengerContext(this, messenger)
+      const { settings, renderer, env } = context
       const path = repliesStatePathFor(messenger.app, settings.profile, env)
       writeRepliesState(path, paused(readRepliesState(path), on))
       renderer.note(on ? "reply rules paused — a running serve stops answering now" : "reply rules on again")
-      renderer.result({ paused: on })
+      renderAnswer(this, context, itemOf({ paused: on }))
     }
 
   replies
@@ -118,24 +127,29 @@ export const repliesCommand = (messenger: Messenger): Command => {
     .command("status")
     .description("whether the rules may send, which are on, and who they may answer")
     .action(async function (this: Command) {
-      const { settings, renderer, env } = messengerContext(this, messenger)
+      const context = messengerContext(this, messenger)
+      const { settings, renderer, env } = context
       const { rules, audience } = readReplies(repliesPathFor(messenger.app, settings.profile, env), messenger.provider)
       const warnings = audienceWarnings(audience)
       for (const warning of warnings) renderer.warn(warning)
       const state = readRepliesState(repliesStatePathFor(messenger.app, settings.profile, env))
       const level = levelFor(settings.permissions ?? {}, "replies.send").level
       if (level !== "allow") renderer.note(`replies.send is ${level}: serve sends nothing until it is allow`)
-      renderer.result({
-        paused: state.paused,
-        send: level,
-        audience: {
-          reply: audience.reply,
-          allow: audience.allow.people.length + audience.allow.chats.length,
-          deny: audience.deny.people.length + audience.deny.chats.length,
-        },
-        warnings,
-        rules: rules.map(({ id, on }) => ({ id, on })),
-      })
+      renderAnswer(
+        this,
+        context,
+        itemOf({
+          paused: state.paused,
+          send: level,
+          audience: {
+            reply: audience.reply,
+            allow: audience.allow.people.length + audience.allow.chats.length,
+            deny: audience.deny.people.length + audience.deny.chats.length,
+          },
+          warnings,
+          rules: rules.map(({ id, on }) => ({ id, on })),
+        }),
+      )
     })
 
   return replies

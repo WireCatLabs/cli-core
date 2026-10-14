@@ -1,6 +1,7 @@
 import { existsSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, EXIT_CODES, exitCodeFor, resolvePaths, writeSecurely } from "@wirecat/cli-base"
+import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { lockPath, readLock } from "../../background/lock.js"
 import { alive, carries } from "../../background/processes.js"
@@ -9,8 +10,10 @@ import { locationVariables, platformFor, readableLog, tail, type Unit } from "..
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import type { AppIdentity } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { listed } from "../paging.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
+import { nextStep } from "../steps.js"
+import { wholeList } from "./chat-answers.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 
 export type { Ran, ServerSystem } from "../../background/system.js"
@@ -134,10 +137,8 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
         if (ran.code !== 0) throw new CliError("configuration_error", `${argv.join(" ")} failed: ${ran.stderr.trim()}`)
       }
     }
-    const say = (value: object, lines: string[]) => {
-      if (context.format === "pretty") context.streams.data(lines.join("\n"))
-      else context.renderer.result(value)
-    }
+    const say = (value: object, lines: string[], next: NextStep[] = []) =>
+      renderAnswer(self, context, itemOf(snakeKeys(value), { next }), () => lines.join("\n"))
     return { context, system, platform, unit, server, each, say }
   }
   type Prepared = ReturnType<typeof prepare>
@@ -284,11 +285,7 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       const by = held ? await byOf(prepared, held) : null
       const left = held ? undefined : readLock(lockPath(app, unit.profile, context.env))
       // An update leaves a running serve on the old code.
-      const outdated =
-        held?.version && held.version !== app.version
-          ? `It runs ${app.command} ${held.version}, and ${app.command} is now ${app.version} — \`${app.command} server restart\`.`
-          : undefined
-      if (outdated && context.format !== "pretty") context.renderer.note(outdated)
+      const outdated = held?.version !== undefined && held.version !== app.version
       const gaveUp =
         !held && !state.active && state.exitCode !== undefined && unit.noRestartOn?.includes(state.exitCode)
           ? state.exitCode
@@ -350,8 +347,8 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
             (one) =>
               `Asked to wait before ${one.operation}${one.chatId ? ` in chat ${one.chatId}` : ""} until ${clock(one.until)}.`,
           ),
-          ...(outdated ? [outdated] : []),
         ],
+        outdated ? [nextStep("server.restart", { args: {} })] : [],
       )
     })
 
@@ -364,10 +361,9 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
       const { context, platform, unit } = prepare(this)
       const text = existsSync(unit.path) ? await platform.logs(unit, lines) : tail(unit.logPath, lines)
       if (!text) context.renderer.note(`no log yet for profile ${unit.profile}`)
-      if (context.format === "pretty") {
-        if (text) context.streams.data(readableLog(text.replace(/\n$/, "")))
-      } else
-        context.renderer.result({ ...listed(text.split("\n").filter(Boolean)), profile: unit.profile, unit: unit.name })
+      renderAnswer(this, context, wholeList("server logs", text.split("\n").filter(Boolean)), () =>
+        text ? readableLog(text.replace(/\n$/, "")) : "",
+      )
     })
 
   command

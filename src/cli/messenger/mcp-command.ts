@@ -8,6 +8,8 @@ import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
 import { type AppIdentity, envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { nextStep } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** Where the running CLI really lives; a test hands in its own. */
@@ -119,7 +121,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
     if (flags.revoke) {
       const { revokeAll } = await import("../../mcp/http/oauth.js")
       revokeAll(httpTokenFile(app, context.settings.profile, context.env))
-      context.renderer.result({ revoked: true, profile: context.settings.profile })
+      renderAnswer(this, context, itemOf({ revoked: true, profile: context.settings.profile }))
       return
     }
     if (flags.http) {
@@ -150,7 +152,8 @@ export const mcpCommand = (messenger: Messenger): Command => {
       ),
     ).action(async function (this: Command) {
       const flags = this.optsWithGlobals<McpFlags>()
-      const { renderer, settings, format, streams, env } = messengerContext(this, messenger)
+      const context = messengerContext(this, messenger)
+      const { renderer, settings, env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
       const entry = serverEntry(app, {
         profile: settings.profile,
@@ -159,10 +162,13 @@ export const mcpCommand = (messenger: Messenger): Command => {
         scriptPath: given.scriptPath ?? realpathSync(process.argv[1] ?? ""),
         env,
       })
-      // Pasted into a file, so a person gets the same JSON a script does, only indented.
-      if (format === "pretty") streams.data(JSON.stringify(entry.config, null, 2))
-      else renderer.result(entry.config)
-      if (entry.warning) renderer.note(entry.warning)
+      // Pasted into a file, so a person gets the client's own JSON, indented; a script finds it under `config`.
+      renderAnswer(
+        this,
+        context,
+        itemOf({ config: entry.config }, { next: entry.nodeBound ? [nextStep("mcp.config", { args: {} })] : [] }),
+        () => JSON.stringify(entry.config, null, 2),
+      )
       const note = retiredNote(app, flags)
       if (note) renderer.warn(note)
     }),
@@ -176,7 +182,8 @@ export const mcpCommand = (messenger: Messenger): Command => {
     ).action(async function (this: Command, client: string) {
       if (client !== "codex" && client !== "claude-code")
         throw new CliError("validation_error", "choose codex or claude-code")
-      const { renderer, settings, env } = messengerContext(this, messenger)
+      const context = messengerContext(this, messenger)
+      const { settings, env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
       const configuration = serverEntry(app, {
         profile: settings.profile,
@@ -195,10 +202,11 @@ export const mcpCommand = (messenger: Messenger): Command => {
           throw new Error(
             `this profile offers ${potentialWrites.length} tools that may write; review its permissions, then pass --allow-writes to install it`,
           )
-        renderer.result({
-          ...installStdioEntry(client, name, server),
-          potentialWrites: potentialWrites.length,
-        })
+        renderAnswer(
+          this,
+          context,
+          itemOf({ ...installStdioEntry(client, name, server), potential_writes: potentialWrites.length }),
+        )
       } catch (error) {
         throw new CliError("validation_error", error instanceof Error ? error.message : "MCP setup failed")
       }
@@ -207,7 +215,8 @@ export const mcpCommand = (messenger: Messenger): Command => {
   command.addCommand(
     withFlags(new Command("doctor").description("check this profile's local MCP handshake and tool list")).action(
       async function (this: Command) {
-        const { renderer, settings, env } = messengerContext(this, messenger)
+        const context = messengerContext(this, messenger)
+        const { settings, env } = context
         const given = environmentOf<McpEnvironment>(this).mcp ?? {}
         const configuration = serverEntry(app, {
           profile: settings.profile,
@@ -224,12 +233,16 @@ export const mcpCommand = (messenger: Messenger): Command => {
           const { tools, potentialWrites } = await probeStdio(entry as Parameters<typeof probeStdio>[0], {
             start: stderr.start,
           })
-          renderer.result({
-            healthy: true,
-            profile: settings.profile,
-            tools: tools.length,
-            potentialWrites: potentialWrites.length,
-          })
+          renderAnswer(
+            this,
+            context,
+            itemOf({
+              healthy: true,
+              profile: settings.profile,
+              tools: tools.length,
+              potential_writes: potentialWrites.length,
+            }),
+          )
         } catch (error) {
           const tail = await stderr.tail()
           throw new CliError(
@@ -306,7 +319,7 @@ export const serverEntry = (
     scriptPath,
     env,
   }: { profile: string; flags?: McpFlags; execPath: string; scriptPath: string; env: NodeJS.ProcessEnv },
-): { config: { mcpServers: Record<string, object> }; warning?: string } => {
+): { config: { mcpServers: Record<string, object> }; nodeBound: boolean } => {
   if (installerOf(scriptPath) === "npx") {
     throw new CliError(
       "validation_error",
@@ -329,8 +342,7 @@ export const serverEntry = (
   }
   return {
     config: { mcpServers: { [profile === "default" ? app.command : `${app.command}-${profile}`]: server } },
-    ...(VERSION_MANAGER.test(execPath)
-      ? { warning: `${execPath} belongs to one Node version — after switching or upgrading Node, run this again` }
-      : {}),
+    /** The path belongs to one Node version of a version manager; switching Node breaks the entry. */
+    nodeBound: VERSION_MANAGER.test(execPath),
   }
 }

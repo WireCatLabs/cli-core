@@ -3,6 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { modelTarget } from "../../models/index.js"
 import { readReplyConsent, replyConsentPathFor, replyModelIdentity, writeReplyConsent } from "../../replies/consents.js"
+import { renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const replyConsentsCommand = (messenger: Messenger): Command => {
@@ -13,8 +14,9 @@ export const replyConsentsCommand = (messenger: Messenger): Command => {
     .command("show")
     .description("show the reply model consent and chat opt-outs; never calls a model")
     .action(function (this: Command) {
-      const { settings, renderer, env } = messengerContext(this, messenger)
-      renderer.result(readReplyConsent(replyConsentPathFor(messenger.app, settings.profile, env)))
+      const context = messengerContext(this, messenger)
+      const { settings, env } = context
+      renderItem(this, context, readReplyConsent(replyConsentPathFor(messenger.app, settings.profile, env)))
     })
   for (const grant of [true, false])
     consents.addCommand(
@@ -25,7 +27,8 @@ export const replyConsentsCommand = (messenger: Messenger): Command => {
             : "revoke the profile's reply model consent immediately; chat opt-outs remain",
         )
         .action(function (this: Command) {
-          const { settings, renderer, env } = messengerContext(this, messenger)
+          const context = messengerContext(this, messenger)
+          const { settings, env } = context
           const path = replyConsentPathFor(messenger.app, settings.profile, env)
           const consent = readReplyConsent(path)
           if (grant) {
@@ -42,7 +45,7 @@ export const replyConsentsCommand = (messenger: Messenger): Command => {
             )
           } else consent.provider = null
           writeReplyConsent(path, consent)
-          renderer.result(consent)
+          renderItem(this, context, consent)
         }),
     )
   for (const deny of [true, false])
@@ -56,13 +59,14 @@ export const replyConsentsCommand = (messenger: Messenger): Command => {
         .argument("<chat>", "the native chat id, used as written; never resolved over the network")
         .action(function (this: Command, chat: string) {
           if (!chat.trim()) throw new CliError("validation_error", "a chat id cannot be empty")
-          const { settings, renderer, env } = messengerContext(this, messenger)
+          const context = messengerContext(this, messenger)
+          const { settings, env } = context
           const path = replyConsentPathFor(messenger.app, settings.profile, env)
           const consent = readReplyConsent(path)
           consent.deniedChats = consent.deniedChats.filter((id) => id !== chat)
           if (deny) consent.deniedChats.push(chat)
           writeReplyConsent(path, consent)
-          renderer.result(consent)
+          renderItem(this, context, consent)
         }),
     )
   return consents

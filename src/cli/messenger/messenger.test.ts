@@ -4226,10 +4226,10 @@ describe("the guard, account and mcp config commands", () => {
     const online = async () => fake
 
     const off = await call(["recipients", "list", "--json"], online, env)
-    expect(json(off.stdout)).toEqual({ items: [], page: 1, limit: 0, hasMore: false })
+    expect(json(off.stdout)).toMatchObject({ items: [], page: { limit: 1, has_more: false } })
     expect(off.stderr.join("\n")).toContain("is off")
 
-    expect(json((await call(["recipients", "add", "Book", "--json"], online, env)).stdout)).toEqual({
+    expect(json((await call(["recipients", "add", "Book", "--json"], online, env)).stdout).item).toEqual({
       id: "7",
       title: "Book club",
       added: true,
@@ -4242,15 +4242,15 @@ describe("the guard, account and mcp config commands", () => {
     expect(stranger.code).not.toBe(0)
     expect(stranger.stderr.join("\n")).toContain("99 is not on the recipient list")
 
-    expect(json((await call(["recipients", "remove", "7", "--json"], online, env)).stdout)).toMatchObject({
+    expect(json((await call(["recipients", "remove", "7", "--json"], online, env)).stdout).item).toMatchObject({
       removed: true,
     })
     const empty = await call(["recipients", "list", "--json"], online, env)
     expect(empty.stderr.join("\n")).toContain("on and empty")
 
-    expect(json((await call(["recipients", "clear", "--json"], online, env)).stdout)).toEqual({
+    expect(json((await call(["recipients", "clear", "--json"], online, env)).stdout).item).toEqual({
       off: true,
-      wasOn: true,
+      was_on: true,
     })
     expect((await call(["recipients", "off"], online, env)).code).not.toBe(0)
   })
@@ -4264,13 +4264,18 @@ describe("the guard, account and mcp config commands", () => {
     await call(["messages", "send", "Book", "two", "--reply-to", "1"], async () => fake, env)
     const listed = await call(["sends", "list", "--limit", "1", "--json"], async () => fake, env)
     const page = json(listed.stdout)
-    expect(page.items.map((entry: { replyTo?: string }) => entry.replyTo)).toEqual(["1"])
-    expect(page.hasMore).toBe(true)
+    expect(page.items.map((entry: { reply_to?: string }) => entry.reply_to)).toEqual(["1"])
+    expect(page.page.has_more).toBe(true)
   })
 
   it("show who the profile is logged in as", async () => {
     const { stdout } = await call(["account", "show", "--json"], async () => fake, sandbox())
-    expect(json(stdout)).toEqual({ id: "500", name: "Owner", username: null })
+    expect(v.parse(itemEnvelopeSchema(ENTITIES.account), json(stdout)).item).toEqual({
+      provider: "chat",
+      id: "500",
+      name: "Owner",
+      username: null,
+    })
   })
 
   it("**show the phone's last four digits, the whole number only with --show-phone**", async () => {
@@ -4282,8 +4287,8 @@ describe("the guard, account and mcp config commands", () => {
     const masked = await call(["account", "show", "--json"], async () => withPhone, sandbox())
     const whole = await call(["account", "show", "--show-phone", "--json"], async () => withPhone, sandbox())
 
-    expect(json(masked.stdout).phone).toBe("***1234")
-    expect(json(whole.stdout).phone).toBe("+00 000 000-1234")
+    expect(json(masked.stdout).item.phone).toBe("***1234")
+    expect(json(whole.stdout).item.phone).toBe("+00 000 000-1234")
   })
 
   it("**refuses mcp --http without an https tunnel address**, before connecting", async () => {
@@ -4314,7 +4319,7 @@ describe("the guard, account and mcp config commands", () => {
     const { code, stdout } = await call(["mcp", "--revoke", "--json"], async () => fake, env)
 
     expect(code).toBe(0)
-    expect(json(stdout)).toEqual({ revoked: true, profile: "default" })
+    expect(json(stdout).item).toEqual({ revoked: true, profile: "default" })
     expect(existsSync(file)).toBe(false)
   })
 
@@ -4331,12 +4336,12 @@ describe("the guard, account and mcp config commands", () => {
     )
 
     expect(code).toBe(0)
-    expect(json(stdout).mcpServers["chat-work"]).toMatchObject({
+    expect(json(stdout).item.config.mcpServers["chat-work"]).toMatchObject({
       command: mcp.execPath,
       args: [mcp.scriptPath, "work", "mcp"],
       env: { MESSAGING_STORE: env.MESSAGING_STORE },
     })
-    expect(stderr.join("\n")).toContain("belongs to one Node version")
+    expect(json(stdout).next).toEqual([expect.objectContaining({ step: "mcp.config", command: "mcp config" })])
     expect(stderr.join("\n")).toContain(
       "--allow-send, --confirm-send, --allow-dangerous no longer decide anything: the profile's permissions do",
     )
@@ -4590,6 +4595,9 @@ describe("the guard, account and mcp config commands", () => {
     const lines = await call(["account", "sessions", "list", "--jsonl"], async () => devices, env)
 
     expect(json(listed.stdout).items.map((one: { current: boolean }) => one.current)).toEqual([true, false])
+    expect(v.parse(listEnvelopeSchema(ENTITIES.account_session), json(listed.stdout)).items[0]).toMatchObject({
+      last_active_at: null,
+    })
     expect(lines.stdout).toHaveLength(2)
     expect((await call(["account", "sessions", "list"], async () => fake, env)).code).toBe(2)
   })

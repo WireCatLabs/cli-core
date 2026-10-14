@@ -69,6 +69,7 @@ const samples: Record<EntityName, unknown> = {
     last_messaged_at: null,
   },
   account: { provider: "telegram", id: "1", name: null, username: null },
+  account_session: { current: true, client: "app 1.0", device: null, location: null, last_active_at: at },
   note: {
     ref: "note:1",
     id: "1",

@@ -12,6 +12,7 @@ import { newSendId } from "../../sends/send-id.js"
 import { onlineDeps } from "../../services/deps.js"
 import { servicesFor } from "../../services/index.js"
 import { applyTaskRulesOnArrival, openRequestTask } from "../../services/task-rules.js"
+import { itemOf, renderAnswer } from "../envelope.js"
 import { failureKey } from "../failures.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
@@ -104,16 +105,21 @@ export const serveCommand = (messenger: Messenger): Command => {
       await tasks.settled()
       releaseLock(path)
     }
-    context.renderer.result({
-      profile: context.profile,
-      startedAt,
-      stoppedAt: new Date().toISOString(),
-      kept: counts,
-      ...rules.summary(),
-      ...(members.summary().fetched + members.summary().failed > 0 ? { members: members.summary() } : {}),
-      ...(stems.summary().stemmed > 0 ? { stems: stems.summary() } : {}),
-      ...tasks.summary(),
-    })
+    // `kept` and the reply counts are keyed by event names and rule ids, never camelCased.
+    renderAnswer(
+      this,
+      context,
+      itemOf({
+        profile: context.profile,
+        started_at: startedAt,
+        stopped_at: new Date().toISOString(),
+        kept: counts,
+        ...rules.summary(),
+        ...(members.summary().fetched + members.summary().failed > 0 ? { members: members.summary() } : {}),
+        ...(stems.summary().stemmed > 0 ? { stems: stems.summary() } : {}),
+        ...tasks.summary(),
+      }),
+    )
   })
 
   return command
