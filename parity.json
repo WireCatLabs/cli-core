@@ -2241,6 +2241,7 @@
     "contacts timeline": {
       "in": "all",
       "options": {
+        "--cursor": "all",
         "--limit": "all",
         "--scope": "all",
         "--since-time": "all",
