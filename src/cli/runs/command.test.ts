@@ -47,7 +47,7 @@ describe.each(["max", "tg"])("recorded run truncation for %s", (command) => {
   })
 })
 
-it("shows a run's failures and leaves the rest to -v", async () => {
+it("shows every event of a run, and only its problems with --problems", async () => {
   const state = mkdtempSync(join(tmpdir(), "runs-command-"))
   const env = { ...process.env, APP_STATE_DIR: state }
   const app = { command: "tg", appName: "app-cli", envPrefix: "APP", description: "Synthetic CLI", version: "1.0.0" }
@@ -63,16 +63,21 @@ it("shows a run's failures and leaves the rest to -v", async () => {
   item.logger.info({ event: "warning", code: "slow_answer" })
   await item.finish("failed", { errorCode: "timeout" })
 
-  const streams = captureStreams()
-  await run(["runs", "show", item.id, "--json"], { app, commands: () => [runsCommand(app)] }, { streams, env })
+  const show = async (...flags: string[]) => {
+    const streams = captureStreams()
+    await run(
+      ["runs", "show", item.id, "--json", ...flags],
+      { app, commands: () => [runsCommand(app)] },
+      { streams, env },
+    )
+    return JSON.parse(streams.stdout[0] ?? "").item
+  }
 
-  expect(JSON.parse(streams.stdout[0] ?? "").item).toMatchObject({
-    status: "failed",
-    error_code: "timeout",
-    event_count: 3,
-    events: [
-      { event: "response", error_code: "timeout" },
-      { event: "warning", code: "slow_answer" },
-    ],
-  })
+  const all = await show()
+  expect(all).toMatchObject({ status: "failed", error_code: "timeout", event_count: 3 })
+  expect(all.events.map((event: { event: string }) => event.event)).toEqual(["request", "response", "warning"])
+  expect((await show("--problems")).events).toMatchObject([
+    { event: "response", error_code: "timeout" },
+    { event: "warning", code: "slow_answer" },
+  ])
 })

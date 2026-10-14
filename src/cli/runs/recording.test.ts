@@ -178,11 +178,11 @@ describe("the runs command", () => {
       items: [{ run_id: metadata?.runId }],
       page: { has_more: false },
     })
-    const short = (await read(["runs", "show", metadata?.runId ?? "", "--json"])).answer.item
-    expect(short).toMatchObject({ run_id: metadata?.runId, event_count: 2, events: [] })
-    const shown = (await read(["runs", "show", metadata?.runId ?? "", "-v", "--json"])).answer.item
+    const problems = (await read(["runs", "show", metadata?.runId ?? "", "--problems", "--json"])).answer.item
+    expect(problems).toMatchObject({ run_id: metadata?.runId, event_count: 2, events: [] })
+    const shown = (await read(["runs", "show", metadata?.runId ?? "", "--json"])).answer.item
     expect(shown.events.map((event: { event: string }) => event.event)).toEqual(["request", "response"])
-    expect(shown.events[0]).not.toHaveProperty("runId")
+    expect(shown.events[0]).not.toHaveProperty("run_id")
     expect((await read(["runs", "path", metadata?.runId ?? "", "--json"])).answer.item.path).toContain(runsDir)
     expect(listRuns(runsDir)).toHaveLength(1)
     expect((await read(["runs", "path", "no-such-run"])).code).toBe(6)

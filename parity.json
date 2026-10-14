@@ -3121,7 +3121,10 @@
       }
     },
     "runs show": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--problems": "all"
+      }
     },
     "schedule": {
       "in": "all"
