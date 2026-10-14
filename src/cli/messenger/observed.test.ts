@@ -1,0 +1,51 @@
+import { mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { describe, expect, it } from "vitest"
+import type { Message } from "../../domain/models.js"
+import { startRun } from "../runs/run.js"
+import { searchRuns } from "../runs/search.js"
+import { observed } from "./observed.js"
+import type { MessengerAdapter } from "./port.js"
+
+const message: Message = {
+  id: "50123456",
+  chatId: "7",
+  senderId: "9",
+  senderName: "Private synthetic name",
+  timestamp: "2026-01-01T00:00:00.000Z",
+  editedAt: null,
+  text: "private synthetic body",
+  outgoing: false,
+  attachments: [],
+  replyTo: null,
+  forwardedFrom: null,
+  reactions: null,
+}
+
+describe("observed message IDs in recorded runs", () => {
+  for (const operation of ["messages.around", "messages.send"] as const) {
+    it(`finds ${operation} by message ID after real log redaction, without its content`, async () => {
+      const runsDir = mkdtempSync(join(tmpdir(), "observed-id-"))
+      const run = startRun({ runsDir, profile: "synthetic", command: operation, service: "chat", cliVersion: "1.0.0" })
+      const adapter = {
+        self: () => "9",
+        close: async () => {},
+        around: async () => [message],
+        send: async () => ({ message, sendId: "90" }),
+      } as unknown as MessengerAdapter
+      const wrapped = observed(adapter, (event) => run.logger.info(event))
+      if (operation === "messages.around") await wrapped.around?.("7", message.id, { before: 0, after: 0 })
+      else await wrapped.send("7", message.text, { sendId: "90" })
+      await run.finish("success")
+      const result = searchRuns(runsDir, { query: message.id, profile: "synthetic", operation })
+      expect(result.items).toHaveLength(1)
+      expect(result.items[0]?.events.some((event) => Object.values(event.ids ?? {}).includes(message.id))).toBe(true)
+      const output = readFileSync(join(run.dir, "events.jsonl"), "utf8")
+      expect(output).toContain(message.id)
+      expect(output).not.toContain(message.text)
+      expect(output).not.toContain(message.senderName)
+      expect(searchRuns(runsDir, { query: message.id, profile: "other" }).items).toHaveLength(0)
+    })
+  }
+})

@@ -100,10 +100,10 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
             around: (reference, messageId, window) =>
               timed(
                 "messages.around",
-                { ids: { message: messageId } },
+                { ids: { message_id: messageId } },
                 () => around.call(messenger, reference, messageId, window),
                 (items) => ({
-                  ...(items[0] ? { ids: { chat: items[0].chatId, message: messageId } } : {}),
+                  ...(items[0] ? { ids: { chat: items[0].chatId, message_id: messageId } } : {}),
                   counts: { messages: items.length },
                 }),
               ),
@@ -121,7 +121,7 @@ export const observed = (messenger: MessengerAdapter, events: EventSink): Messen
             },
           },
           () => messenger.send(chatId, text, options),
-          (sent) => ({ ids: { message: sent.message.id } }),
+          (sent) => ({ ids: { message_id: sent.message.id } }),
         ),
       ...(messenger.watch
         ? {
