@@ -541,6 +541,14 @@
       "value": "<n>",
       "meaning": "maximum observed discussion replies"
     },
+    "--max-subscriber-buffer-bytes": {
+      "value": "<bytes>",
+      "meaning": "buffer per watcher before disconnecting it; 0 is unlimited"
+    },
+    "--max-subscriber-total-buffer-bytes": {
+      "value": "<bytes>",
+      "meaning": "combined watcher buffer budget; 0 is unlimited"
+    },
     "--max-tokens": {
       "value": "<n>",
       "meaning": "remote embeddings: bound input tokens; analysis: reserve input and output tokens across this run"
@@ -3415,6 +3423,14 @@
         "--idle": {
           "in": ["max"],
           "reason": "max's server stops when no command has used it for this long; tg's serve has no commands connected to it (NEED-495 A)"
+        },
+        "--max-subscriber-buffer-bytes": {
+          "in": ["max"],
+          "reason": "max's server holds what it streams to each watching command; tg's serve has no commands connected to it (NEED-495 A)"
+        },
+        "--max-subscriber-total-buffer-bytes": {
+          "in": ["max"],
+          "reason": "max's server holds what it streams to each watching command; tg's serve has no commands connected to it (NEED-495 A)"
         }
       }
     },
