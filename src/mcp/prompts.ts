@@ -12,6 +12,16 @@ const asked = (text: string): GetPromptResult => ({
 })
 
 /**
+ * A call as the tool takes it, `{ command, arguments }`, so the arguments a prompt names are the ones a test checks
+ * against the command's input. A value in angle brackets is the agent's to fill in.
+ */
+const call = (tool: string, command: string, args: Record<string, unknown> = {}): string =>
+  `${tool} with ${JSON.stringify(Object.keys(args).length > 0 ? { command, arguments: args } : { command })}`
+
+/** The owner's time as a query term: an ISO time or `1d ago` is quoted, `2h` is not. */
+const after = (time: string): string => (/[:\s]/.test(time) ? `date>${JSON.stringify(time)}` : `date>${time}`)
+
+/**
  * Slash commands in Claude Code, copied from max-cli's. Each names tools and steps only — fetching
  * is the tools' job, so no message text is ever part of a prompt. The owner's own argument goes in
  * quoted, as data.
@@ -67,20 +77,16 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
         ?.split(",")
         .map((one) => one.trim())
         .filter((one) => one.length > 0)
-      const how = [
-        ...(kinds?.length ? [`kinds ${JSON.stringify(kinds)}`] : []),
-        ...(mode === undefined || mode === "unread"
-          ? []
-          : mode === "new"
-            ? ["new true"]
-            : [`query ${JSON.stringify(mode.includes(":") ? `date>"${mode}"` : `date>${mode}`)}`]),
-      ]
+      const args = {
+        ...(kinds?.length ? { kinds } : {}),
+        ...(mode === undefined || mode === "unread" ? {} : mode === "new" ? { new: true } : { query: after(mode) }),
+      }
       return asked(
         [
-          `Catch me up on ${name}. Call ${command}_read with command "inbox" once${how.length ? ` with ${how.join(" and ")}` : ""}.`,
+          `Catch me up on ${name}. Call ${call(`${command}_read`, "inbox", args)} once.`,
           "Summarise per chat, busiest first: who wrote, what they want, and whether it needs my answer.",
           "Do not send, react or forward anything. Mark nothing read unless I ask; then, for each chat shown, call",
-          `${command}_write with command "chats mark-read" and until set to the newest message shown in it — never further.`,
+          `${call(`${command}_write`, "chats mark-read", { chat: "<the chat's id>", until: "<the newest message shown in it>" })} — never further.`,
           DATA,
         ].join(" "),
       )
@@ -102,12 +108,12 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
       asked(
         [
           `Tell me what waits on me in ${name}. Do not send, react, forward or mark anything read.`,
-          `1. Call ${command}_read with command "review" once, new true: it opens tasks for what came in and closes what I answered.`,
-          `2. Call ${command}_read with command "tasks list", query ${JSON.stringify(`state:open${chat ? ` chat:${JSON.stringify(chat)}` : ""}`)}.`,
+          `1. Call ${call(`${command}_read`, "review", { new: true })} once: it opens tasks for what came in and closes what I answered.`,
+          `2. Call ${call(`${command}_read`, "tasks list", { query: `state:open${chat ? ` chat:${JSON.stringify(chat)}` : ""}` })}.`,
           "3. Digest per chat, oldest task first: who, what they want — from the message its source_message names, read",
           "with messages show — and how long it has been open. A message no longer in the store: say so.",
           "4. For each, suggest one: I answer it (offer a draft), it is done, or it needs no answer.",
-          `5. Only after I approve, close each with ${command}_write, command "tasks close" — as done, or dismissed with a reason.`,
+          `5. Only after I approve, close each with ${call(`${command}_write`, "tasks close")} — as done, or dismissed with a reason.`,
           DATA,
         ].join("\n"),
       ),
@@ -126,10 +132,10 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
       asked(
         [
           `Help me reply in the ${name} chat ${JSON.stringify(chat)}.`,
-          `1. If that is not an id, find it with ${command}_read, command "chats list"; if several chats match, ask me which.`,
-          `2. Read the recent messages with ${command}_read, command "messages list".`,
+          `1. If that is not an id, find it with ${call(`${command}_read`, "chats list")}; if several chats match, ask me which.`,
+          `2. Read the recent messages with ${call(`${command}_read`, "messages list", { chat: "<the chat's id>" })}.`,
           "3. Draft a reply and show it to me.",
-          `4. Only after I approve that exact text, send it with ${command}_write, command "messages send", with reply_to when it answers one message.`,
+          `4. Only after I approve that exact text, send it with ${call(`${command}_write`, "messages send", { chat: "<the chat's id>", text: "<the approved text>", reply_to: "<the message it answers, if one>" })}.`,
           DATA,
         ].join("\n"),
       ),
@@ -158,17 +164,17 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
         [
           `Review my commitments in ${name}. Do not send, react, forward or mark anything read, except as step 4 allows.`,
           "If I gave you the open items of the previous review, check each of those first.",
-          `1. Call ${command}_read with command "review" once${since ? ` with since ${JSON.stringify(since)}` : ""}. It returns every message in`,
+          `1. Call ${call(`${command}_read`, "review", since ? { query: after(since) } : {})} once. It returns every message in`,
           "each chat that changed, mine included (outgoing: true — most of what I owe is there).",
           "2. Sort what you find into three lists: I owe · Waiting on others · Needs clarifying. Each item: chat",
           "title and id, date, the ids of the messages it rests on, and a deadline only if one was stated. When a",
-          `message answers one from before the review, read around that one with ${command}_read, command "messages context".`,
+          `message answers one from before the review, read around that one with ${call(`${command}_read`, "messages context")}.`,
           "3. Before calling anything overdue, look for it being done: later in the review, in " +
             (groups ? `these group chats: ${JSON.stringify(groups)}` : "the group chats in the review") +
             ` ("messages list" for anything older), and with "search messages" — which sees only what` +
             " this machine has kept, so no hit is not proof.",
           "4. Draft at most five reminders, each with its chat and text. Send one only after I approve that exact",
-          `text and recipient, with ${command}_write, command "messages send", and reply_to. Without that command, show the drafts only.`,
+          `text and recipient, with ${call(`${command}_write`, "messages send", { chat: "<the chat's id>", text: "<the approved text>", reply_to: "<the message it answers>" })}. Without that command, show the drafts only.`,
           "5. If complete is false, say the review is incomplete, say why, and give no new boundary. Otherwise end",
           "with «Next review: since = <until>» and the open items, for the next review to check first.",
           DATA,

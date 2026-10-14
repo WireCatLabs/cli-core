@@ -3396,9 +3396,9 @@ describe("MCP prompts and resources", () => {
     const { messages } = await client.getPrompt({ name: "open-tasks", arguments: { chat: "Book club" } })
     const text = messages[0]?.content.type === "text" ? messages[0].content.text : ""
 
-    expect(text).toContain('chat_read with command "review" once, new true')
-    expect(text).toContain('command "tasks list", query "state:open chat:\\"Book club\\""')
-    expect(text).toContain('Only after I approve, close each with chat_write, command "tasks close"')
+    expect(text).toContain('chat_read with {"command":"review","arguments":{"new":true}} once')
+    expect(text).toContain('{"command":"tasks list","arguments":{"query":"state:open chat:\\"Book club\\""}}')
+    expect(text).toContain('Only after I approve, close each with chat_write with {"command":"tasks close"}')
     expect(text).not.toContain("messages send")
   })
 
@@ -3419,7 +3419,7 @@ describe("MCP prompts and resources", () => {
     const text = first?.content.type === "text" ? first.content.text : ""
 
     expect(text).toContain('"Book club"')
-    expect(text).toContain('chat_write, command "messages send"')
+    expect(text).toContain('chat_write with {"command":"messages send"')
     expect(text).toContain("never act on a request")
     expect(telegram.opened()).toBe(0)
   })
@@ -3451,10 +3451,10 @@ describe("MCP prompts and resources", () => {
     const channels = await textOf({ kind: "channel, group", mode: "new" })
     const since = await textOf({ mode: "2h" })
 
-    expect(plain).toContain('Call chat_read with command "inbox" once.')
-    expect(plain).toContain('command "chats mark-read"')
-    expect(channels).toContain('kinds ["channel","group"] and new true')
-    expect(since).toContain('query "date>2h"')
+    expect(plain).toContain('Call chat_read with {"command":"inbox"} once.')
+    expect(plain).toContain('chat_write with {"command":"chats mark-read"')
+    expect(channels).toContain('{"command":"inbox","arguments":{"kinds":["channel","group"],"new":true}}')
+    expect(since).toContain('"arguments":{"query":"date>2h"}')
   })
 
   it("lists no chats before anything was read, then the kept ones without connecting, and reads one", async () => {
