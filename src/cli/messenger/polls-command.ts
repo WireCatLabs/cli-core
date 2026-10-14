@@ -17,7 +17,7 @@ import { positiveCount } from "../paging.js"
 import { lines, pollVoteAnswer } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { selfOf } from "./message-items.js"
-import { writtenAnswer } from "./message-writes.js"
+import { afterWrite, writtenAnswer } from "./message-writes.js"
 import { VOTERS_QUERY } from "./people-queries.js"
 import { capability } from "./port.js"
 import { threadIdOf } from "./thread.js"
@@ -205,7 +205,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
         reader,
       }
     })
-    renderAnswer(this, context, writtenAnswer(sent, reader))
+    await afterWrite(sent, () => renderAnswer(this, context, writtenAnswer(sent, reader)))
   })
 
   return polls

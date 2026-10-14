@@ -12,6 +12,14 @@ shape of this file.
 - **`searchNotes` answers in snake_case**, as an app prints it: `NotesFound` has `has_more`, `next_offset`,
   `meaning_skipped`, `pictures_skipped`; each `FoundNote` has `folder_id`, `updated_at` (was `modifiedAt`), `excerpt`
   (was `line`), `found_by` and `links[].target_text` — the `note` entity's names.
+- **MCP tools refuse an argument they do not take** (strict inputs), on per-command tools and through
+  `<cli>_read`/`<cli>_write` alike. A wrong or unknown argument is answered as this CLI's `validation_error` naming
+  the field (`details.arguments` holds the tool's input schema) and is recorded as a failed call — the SDK no longer
+  checks the input before the handler runs. Before, `review` with `since_time` silently ran over everything.
+- **A write whose answer fails to build keeps its ids:** `messages send|forward|edit` and `polls create` fail with
+  `details.operation_id`, `details.send_id` and `retryable: false`, so the send is not repeated.
+- **A missing model is `reason: "model.not-downloaded"`** with `details.model` (text, picture and speech models), so
+  a caller branches on the reason, not on the message text.
 - **Follow-ups to the S3 envelope moves:** `store export --jsonl` on stdout streams `message` items (files keep
   their format); `conversations status` names group chats never built as a `missing` entry with the
   `conversations.build` step, whose `chat` is now optional; MCP `store_jobs_show` answers what `store jobs show`

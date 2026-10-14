@@ -1,5 +1,5 @@
 import type { CallToolResult, McpServer, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
-import { toStandardJsonSchema } from "@valibot/to-json-schema"
+import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError, errorCodes, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
 import { type ErrorObject, itemEnvelopeSchema, listEnvelopeSchema, traceIdOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
@@ -215,17 +215,20 @@ const outcomeOf = (result: CallToolResult): Pick<ToolCall, "status" | "error"> =
 export const toolKey = (name: string, definition: Pick<AnyTool, "key">): PermissionKey | null | undefined =>
   definition.key !== undefined ? definition.key : keyForCommand(name.split("_"))
 
-/** The arguments an entry takes: without the sync options when the profile does not allow syncing first. */
+/**
+ * The arguments an entry takes, refusing any other: a loose object drops an argument it does not know, so a
+ * misspelled filter runs unfiltered. Without the sync options when the profile does not allow syncing first.
+ */
 export const inputOf = (definition: AnyTool, syncAllowed: boolean): Input =>
-  syncAllowed || !("sync_first" in definition.input.entries)
-    ? definition.input
-    : v.strictObject(
-        Object.fromEntries(
+  v.strictObject(
+    syncAllowed || !("sync_first" in definition.input.entries)
+      ? definition.input.entries
+      : Object.fromEntries(
           Object.entries(definition.input.entries).filter(
             ([name]) => !["sync_first", "sync_time", "max_chats", "max_messages"].includes(name),
           ),
         ),
-      )
+  )
 
 /** Runs one definition with arguments already checked against its input, as its tool would. */
 export type RunEntry = (
@@ -273,7 +276,18 @@ export const entryRunner = (registration: Registration): RunEntry => {
       startedAt,
       ...(traceId === undefined ? {} : { traceId }),
     }
-    const result = await inRun(scope, () => run(key, definition, args, ctx))
+    const result = await inRun(scope, () => {
+      const input = inputOf(definition, syncAllowedFor(key, registration.defaults))
+      const parsed = v.safeParse(input, args)
+      return parsed.success
+        ? run(key, definition, parsed.output, ctx)
+        : failed(
+            new CliError("validation_error", `${key.replaceAll("_", " ")}: ${v.summarize(parsed.issues)}`, {
+              arguments: toJsonSchema(input),
+            }),
+            app?.errors,
+          )
+    })
     if (recording && (result.isError || partialOutcome(result.structuredContent))) {
       if (result.isError) {
         const error = (result.structuredContent as { error?: { code?: string; message?: string } } | undefined)?.error
@@ -404,6 +418,17 @@ export const outputSchemaOf = (definition: Pick<AnyTool, "output">): v.GenericSc
 }
 
 /**
+ * The input a client is shown, which the SDK then lets through: `entryRunner` checks it, so a wrong argument is
+ * answered as this CLI's `validation_error` and recorded, not as the SDK's own text before any handler runs.
+ */
+const describedOnly = (input: Input) => ({
+  "~standard": {
+    ...toStandardJsonSchema(input)["~standard"],
+    validate: (value: unknown) => ({ value }),
+  },
+})
+
+/**
  * Registers each tool as `<cli>_<name>`, in name order so a client sees the same list every time; every tool's
  * description ends with the warning about data.
  */
@@ -417,7 +442,7 @@ export const registerTools = (server: McpServer, tools: Record<string, AnyTool>,
         outputSchema: toStandardJsonSchema(outputSchemaOf(definition)),
         title: definition.title,
         description: `${definition.description} ${UNTRUSTED}`,
-        inputSchema: toStandardJsonSchema(inputOf(definition, syncAllowed)),
+        inputSchema: describedOnly(inputOf(definition, syncAllowed)),
         annotations: {
           ...definition.annotations,
           ...("sync_first" in definition.input.entries

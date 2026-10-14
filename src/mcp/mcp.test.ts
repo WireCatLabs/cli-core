@@ -10,6 +10,7 @@ import { parseLucene } from "@wirecat/cli-base/query"
 import { skillResource } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
 import { PNG } from "pngjs"
+import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { provide } from "../cli/context.js"
 import { type Messenger, messengerContext } from "../cli/messenger/context.js"
@@ -45,6 +46,7 @@ import {
   registerPersonalMcpTools,
 } from "./personal.js"
 import { createServer, type ServerOptions } from "./server.js"
+import { type AnyTool, inputOf, type ToolCall } from "./tool.js"
 
 describe("public personal MCP mounting", () => {
   it("encloses online, stored and host-service reads in the host's permission scope", async () => {
@@ -82,6 +84,7 @@ describe("public personal MCP mounting", () => {
         await store.close()
       }
     }
+    const calls: ToolCall[] = []
     registerPersonalMcpTools(
       server,
       {
@@ -121,6 +124,9 @@ describe("public personal MCP mounting", () => {
           env,
           settings: { profile: "default", configured: {}, shared: {} },
         },
+        log: async (call) => {
+          calls.push(call)
+        },
         around: async (name, definition, work) => {
           keys.push(personalMcpToolKey(name, definition))
           if (!allowed) throw new CliError("permission_error", "host denies this operation")
@@ -155,6 +161,15 @@ describe("public personal MCP mounting", () => {
       })
       expect(invalid.isError).toBe(true)
       expect(backend.opened()).toBe(0)
+      calls.length = 0
+      const unknown = await client.callTool({
+        name: "host_messages_context",
+        arguments: { chat: "7", message: "1", since_time: "2026-10-01" },
+      })
+      expect(unknown.structuredContent).toMatchObject({
+        error: { code: "validation_error", message: expect.stringContaining("since_time") },
+      })
+      expect(calls).toMatchObject([{ tool: "messages_context", status: "failed", error: "validation_error" }])
     } finally {
       await client.close()
       await server.close()
@@ -2378,6 +2393,21 @@ describe("three tools in place of one per command", () => {
         },
       },
     )
+  })
+
+  it("refuses an argument a command does not take instead of running without it", async () => {
+    const { raw } = await connect(scripted())
+    const answer = async (name: string, args: Record<string, unknown>) => {
+      const result = await raw.callTool({ name, arguments: args })
+      return { isError: result.isError === true, text: (result.content as { text: string }[])[0]?.text ?? "" }
+    }
+
+    const routed = await answer("chat_read", { command: "review", arguments: { since_time: "2026-10-01" } })
+    expect(routed.isError).toBe(true)
+    expect(JSON.parse(routed.text)).toMatchObject({ error: { code: "validation_error" } })
+    expect(routed.text).toContain("since_time")
+    const tool = { input: v.object({ query: v.optional(v.string()) }) } as unknown as AnyTool
+    expect(v.safeParse(inputOf(tool, true), { since_time: "2026-10-01" }).success).toBe(false)
   })
 
   it("has no write tool on a read-only profile, and finds no writing command there", async () => {

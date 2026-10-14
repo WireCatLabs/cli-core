@@ -106,7 +106,10 @@ const localModel = (choice: string | undefined, env: NodeJS.ProcessEnv | undefin
   const model = textModel(choice ?? DEFAULT_TEXT_MODEL)
   const directory = textModelsDirectory(env)
   if (!isTextModelInstalled(model, directory))
-    throw new CliError("not_found", `${model.id} is not downloaded — \`${command} models text download ${model.id}\``)
+    throw new CliError("not_found", `${model.id} is not downloaded — \`${command} models text download ${model.id}\``, {
+      reason: "model.not-downloaded",
+      model: model.id,
+    })
   return { model, directory, key: vectorModelKey(model) }
 }
 

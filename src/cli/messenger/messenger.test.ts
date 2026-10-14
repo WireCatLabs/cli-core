@@ -289,6 +289,23 @@ describe("explicit topic addressing", () => {
       "12",
       "12",
     ])
+    const unreadable = { ...message, attachments: null } as unknown as Message
+    const sentUnreadable = vi.fn(async (_chat: string, _text: string, options: SendOptions) => ({
+      message: unreadable,
+      sendId: options.sendId,
+    }))
+    const lost = await call(
+      ["messages", "send", "Book", "hello", "--send-id", "44", "--json"],
+      async () => ({ ...connection, send: sentUnreadable }),
+      env,
+    )
+    expect(sentUnreadable).toHaveBeenCalledTimes(1)
+    expect(lost.code).not.toBe(0)
+    expect(JSON.parse(lost.stderr.at(-1) ?? "").error.details).toMatchObject({
+      send_id: "44",
+      operation_id: "44",
+      retryable: false,
+    })
     expect((await call(["messages", "send", "Book", "hi", "--topic", " "], async () => connection, env)).code).not.toBe(
       0,
     )

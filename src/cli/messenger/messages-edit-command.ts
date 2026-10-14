@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { writtenAnswer } from "./message-writes.js"
+import { afterWrite, writtenAnswer } from "./message-writes.js"
 import { HTML_HELP } from "./messages-send-command.js"
 import { readAll } from "./stdin.js"
 
@@ -19,17 +19,17 @@ export const editCommand = (messenger: Messenger): Command => {
       const { md: markdown, html } = this.opts<{ md?: boolean; html?: boolean }>()
       const body = text ?? (await readAll(context.stdin))
       if (body.trim() === "") throw new CliError("validation_error", "no new text — give it or pipe it in")
-      const { edited, reader } = await context.withServices(async (services) => ({
-        edited: await services.messages.edit({
+      const { edited, reader } = await context.withServices(async (services) => {
+        const edited = await services.messages.edit({
           chat,
           message: message.trim(),
           text: body,
           markdown: markdown === true,
           ...(html === true ? { html } : {}),
-        }),
-        reader: await services.messages.reader(),
-      }))
-      renderAnswer(this, context, writtenAnswer(edited, reader))
+        })
+        return afterWrite(edited, async () => ({ edited, reader: await services.messages.reader() }))
+      })
+      await afterWrite(edited, () => renderAnswer(this, context, writtenAnswer(edited, reader)))
     })
   if (messenger.html) edit.option("--html", HTML_HELP)
   return edit
