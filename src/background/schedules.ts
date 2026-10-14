@@ -5,7 +5,6 @@ import { CliError, writeSecurely } from "@wirecat/cli-base"
 import { type AppIdentity, readOnlyLockOf } from "../cli/app.js"
 import { recordLogFor } from "../cli/runs/record-log.js"
 import { childTrace } from "../cli/runs/scope.js"
-import { currentArgv } from "./renamed-paths.js"
 import type { ServerSystem } from "./system.js"
 
 /** Minutes between runs, a daily local time, or one local moment. */
@@ -432,7 +431,7 @@ export const runSchedule = async (
   const agent = schedule.kind === "agent"
   const output = join(runs, `${stamp}.${agent ? "md" : "log"}`)
   const errors = agent ? join(runs, `${stamp}.log`) : output
-  const [program = "", ...args] = agent ? schedule.argv : [...system.entry, ...currentArgv(schedule.argv)]
+  const [program = "", ...args] = agent ? schedule.argv : [...system.entry, ...schedule.argv]
   const trace = childTrace()
   const childEnv = {
     ...env,

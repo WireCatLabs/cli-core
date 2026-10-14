@@ -542,8 +542,6 @@ it("checks an explicit unpin denial separately from allowed pinning", async () =
   const dir = mkdtempSync(join(tmpdir(), "unpin-policy-"))
   const guard = sendGuard({
     profile: "p",
-    readOnly: false,
-    readOnlyFrom: "default",
     permissions: { "messages.pin": "allow", "messages.unpin": "deny" },
     sendsPerHour: 30,
     journal: new SendJournal(join(dir, "sends.jsonl")),

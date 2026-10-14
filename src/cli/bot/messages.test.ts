@@ -178,7 +178,7 @@ describe("bot messages send", () => {
   })
 
   it("**refuses when the bot is read-only**, and leaves the personal account writing", async () => {
-    configure({ bot: { profiles: { sales: { readOnly: true } } } })
+    configure({ bot: { profiles: { sales: { permissions: { bot: "readonly" } } } } })
     const refused = await call(["sales", "bot", "messages", "send", "Team", "Hello", "--json"])
 
     expect(refused.code).toBe(5)

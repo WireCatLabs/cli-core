@@ -57,7 +57,7 @@ conformance or imply that planned command paths are already implemented.
 |---|---|---|
 | `.` | `src/domain/`, `src/render/`, `src/resolve.ts`, `src/terminal/` | the domain model (`models.ts`, types only), message locators, message rendering, name resolution that refuses rather than guesses, the secret prompt, the terminal QR code |
 | `./store` | `src/store/` | the SQLite seam and the shared message store |
-| `./sends` | `src/sends/` | the send guard: read-only, the allow-list, the recipient list, the hourly limit, the journal (never the text), the send id |
+| `./sends` | `src/sends/` | the send guard: the permission levels, the read-only lock, the recipient list, the hourly limit, the journal (never the text), the send id |
 | `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer and installed-only bounded PCM recognizer; import alone loads no engine |
 | `./charts` | `src/charts/` | neutral chart data and a replaceable renderer interface; SVG rendering loads ECharts only on demand; a separate lazy PNG encoder uses resvg and bundled fonts |
 | `./models` | `src/models/` | purpose-specific text generation with typed image inputs, OpenAI-compatible and Anthropic adapters, strict options, injected key/consent resolvers; no configured provider means no call |
@@ -98,7 +98,7 @@ Where the runtime's SQLite can be swapped, ours from `@wirecat/cli-core-sqlite` 
 
 `openStore` (`src/store/store.ts`) is the **one file for every messenger and account** — tg's
 profiles and max-cli's bots write the same database, keyed by provider and account. Its path comes
-from `storePath` (`src/store/path.ts`), the only place that turns `MESSAGING_STORE` into a path. Without it the file is `wirecat.db` in the WireCat folder (`~/.local/share/WireCat/`, `%LOCALAPPDATA%\WireCat\Data\`; `WIRECAT_STATE_DIR` moves the folder, the models live in its `models/`). `migrateToWirecatFolder` (`src/background/folders.ts`) moves an older store and the models there once;
+from `storePath` (`src/store/path.ts`), the only place that turns `MESSAGING_STORE` into a path. Without it the file is `wirecat.db` in the WireCat folder (`~/.local/share/WireCat/`, `%LOCALAPPDATA%\WireCat\Data\`; `WIRECAT_STATE_DIR` moves the folder, the models live in its `models/`).
 `mcp config` copies the variable into the entry it prints, so the server it starts opens the same file.
 
 Every `MessageStore` method is async and is **one whole operation**: inside the SQLite store each

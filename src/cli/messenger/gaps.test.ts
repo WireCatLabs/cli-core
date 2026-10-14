@@ -120,7 +120,7 @@ describe("gap plan and repair commands", () => {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
-      JSON.stringify({ defaults: { readOnly: true }, profiles: {} }),
+      JSON.stringify({ defaults: { permissions: { store: "readonly" } }, profiles: {} }),
     )
     const denied = await call(["store", "gaps", "repair", "7", "--json"])
     expect(denied.code, denied.stderr).toBe(5)

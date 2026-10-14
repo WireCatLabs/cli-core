@@ -187,7 +187,7 @@ describe("tasks", () => {
     ).toContain("--category takes money, documents, meeting, delivery, access, personal, other")
     expect((await call("tasks", "close", "nope", "--as", "done", "--json")).code).toBe(6)
 
-    const readOnly = await setup({ profiles: { default: { readOnly: true } } })
+    const readOnly = await setup({ profiles: { default: { permissions: { tasks: "readonly" } } } })
     const refused = await readOnly("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
     expect([refused.code === 0, refused.stderr]).toEqual([false, expect.stringContaining("tasks.add")])
   })

@@ -105,7 +105,7 @@ describe("the skill hint", () => {
   })
 
   it("says nothing when the configuration turns skillHint off", async () => {
-    const { go } = agent({ defaults: { skillHint: false } })
+    const { go } = agent({ defaults: { skill_hint: false } })
 
     expect((await go(["probe"])).stderr).toEqual([])
   })

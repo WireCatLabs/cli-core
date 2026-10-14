@@ -565,17 +565,12 @@ describe("the stems", () => {
     expect(nested.stderr.join("\n")).toContain("not other groups")
   })
 
-  it("**refuses the camelCase store setting names**, naming the snake_case one", async () => {
+  it("**refuses the camelCase store setting names** as unknown settings", async () => {
     const env = envFor()
-    for (const [typed, named] of [
-      ["searchStemmers.latin", "search_stemmers.latin"],
-      ["accountGroups.work", "account_groups.work"],
-    ]) {
-      const { code, stderr } = await call(["config", "set", typed as string, "english", "--json"], env)
-      expect(code).not.toBe(0)
-      expect(JSON.parse(stderr.join("\n")).error.message).toBe(
-        `no setting called "${typed}" — the store-wide one is ${named}`,
-      )
+    for (const typed of ["searchStemmers.latin", "accountGroups.work"]) {
+      const { code, stderr } = await call(["work", "config", "set", typed, "english", "--json"], env)
+      expect(code).toBe(2)
+      expect(JSON.parse(stderr.join("\n")).error.message).toContain(`no setting called "${typed}"`)
     }
   })
 

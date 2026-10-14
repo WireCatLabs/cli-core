@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import * as v from "valibot"
@@ -37,7 +37,7 @@ describe("where a setting came from", () => {
   })
 
   it("credits the file when the file is what decided it", () => {
-    withConfig(JSON.stringify({ defaultProfile: "work" }))
+    withConfig(JSON.stringify({ default_profile: "work" }))
     expect(settings().profile).toBe("work")
     expect(settings().sources.profile).toBe("config file")
   })
@@ -98,7 +98,7 @@ describe("--timeout", () => {
   })
 
   it("**is not `timeoutMs`**, which stays one request's wait and comes only from the file", () => {
-    withConfig(JSON.stringify({ profiles: { default: { timeoutMs: 5000 } } }))
+    withConfig(JSON.stringify({ profiles: { default: { timeout_ms: 5000 } } }))
     const resolved = settings({ timeout: "30s" })
 
     expect(resolved.timeoutMs).toBe(5000)
@@ -134,17 +134,17 @@ describe("paging", () => {
 
 describe("the order a setting is decided in", () => {
   it("prefers the command line to everything else", () => {
-    withConfig(JSON.stringify({ defaultProfile: "fromFile" }))
+    withConfig(JSON.stringify({ default_profile: "fromFile" }))
     expect(settings({ profile: "fromFlag" }, { APP_PROFILE: "fromEnv" }).profile).toBe("fromFlag")
   })
 
   it("prefers the environment to the file", () => {
-    withConfig(JSON.stringify({ defaultProfile: "fromFile" }))
+    withConfig(JSON.stringify({ default_profile: "fromFile" }))
     expect(settings({}, { APP_PROFILE: "fromEnv" }).profile).toBe("fromEnv")
   })
 
   it("prefers the file to the built-in default", () => {
-    withConfig(JSON.stringify({ defaultProfile: "fromFile" }))
+    withConfig(JSON.stringify({ default_profile: "fromFile" }))
     expect(settings().profile).toBe("fromFile")
   })
 
@@ -181,7 +181,7 @@ describe("the order a setting is decided in", () => {
     expect(strict({}, { ...env, APP_PROFILE: "personal" }).profile).toBe("personal")
     expect(settings({}, env)).toMatchObject({ profile: "default", sources: { profile: "none named" } })
 
-    withConfig(JSON.stringify({ defaultProfile: "work", profiles: { work: {}, personal: {} } }))
+    withConfig(JSON.stringify({ default_profile: "work", profiles: { work: {}, personal: {} } }))
     expect(strict({}, env).profile).toBe("work")
   })
 
@@ -246,14 +246,6 @@ describe("permissions across sections", () => {
     expect(levelsOf(file, ["messages.delete"])).toEqual({ "messages.delete": "ask" })
   })
 
-  it("reads an old `readOnly` in the profile as nearer than `defaults.permissions`", () => {
-    const file = {
-      defaults: { permissions: { "messages.send": "allow" } },
-      profiles: { agent: { readOnly: true } },
-    }
-    expect(levelsOf(file, ["messages.send"])).toEqual({ "messages.send": "readonly" })
-  })
-
   it("puts a bot profile's own section before the bot defaults", () => {
     const file = {
       bot: {
@@ -267,7 +259,7 @@ describe("permissions across sections", () => {
 
 describe("a process locked to one profile", () => {
   it("uses the locked profile when nothing names one, and refuses any other a first word or APP_PROFILE names", () => {
-    withConfig(JSON.stringify({ defaultProfile: "personal", profiles: {} }))
+    withConfig(JSON.stringify({ default_profile: "personal", profiles: {} }))
     const lock = { APP_PROFILE_LOCK: "agent" }
 
     expect(settings({}, lock)).toMatchObject({ profile: "agent", sources: { profile: "APP_PROFILE_LOCK" } })
@@ -307,7 +299,7 @@ describe("the configuration file", () => {
     withConfig(JSON.stringify({ profiles: { default: { limitt: 5 } } }))
     expect(() => settings()).toThrowError(
       "profiles.default.limitt: unknown setting — the known ones are limit, timeout_ms, color, sender_colors, record, " +
-        "keep_runs_for_days, read_only, allow, permissions, sends_per_hour",
+        "keep_runs_for_days, permissions, sends_per_hour",
     )
 
     withConfig(JSON.stringify({ profiles: { default: { limit: 0, color: "yes" } } }))
@@ -358,7 +350,7 @@ describe("where each setting came from", () => {
   })
 
   it("names what chose the profile: the first word, then APP_PROFILE, then the file", () => {
-    withConfig(JSON.stringify({ defaultProfile: "home", profiles: { home: {}, work: {} } }))
+    withConfig(JSON.stringify({ default_profile: "home", profiles: { home: {}, work: {} } }))
 
     expect(settings({ profile: "work" }, { APP_PROFILE: "home" }).sources.profile).toBe("first word")
     expect(settings({}, { APP_PROFILE: "work" }).sources.profile).toBe("APP_PROFILE")
@@ -401,20 +393,7 @@ describe("changing a setting", () => {
     expect(file()).toEqual({ profiles: {} })
   })
 
-  it("takes a setting's camelCase name too and writes it in snake_case", () => {
-    changeSetting(path(), { profile: "work", setting: "keepRunsForDays", value: "7" })
-    changeSetting(path(), { profile: "work", setting: "permissions.messages.delete", value: "allow" })
-    expect(file()).toEqual({
-      profiles: { work: { keep_runs_for_days: 7, permissions: { "messages.delete": "allow" } } },
-    })
-    changeSetting(path(), { profile: "work", setting: "keepRunsForDays", value: undefined })
-    expect(file().profiles.work).toEqual({ permissions: { "messages.delete": "allow" } })
-    expect(() => changeSetting(path(), { profile: "work", setting: "keepRunsFor", value: "7" })).toThrow(
-      /no setting called/,
-    )
-  })
-
-  it("**writes one permission key at a time**, refuses a level that is not one, and reads `readOnly` as levels", () => {
+  it("**writes one permission key at a time**, and refuses a level that is not one", () => {
     changeSetting(path(), { profile: "work", setting: "permissions.messages.delete", value: "allow" })
     changeSetting(path(), { profile: "work", setting: "permissions.contacts", value: "readonly" })
     expect(file()).toEqual({
@@ -426,11 +405,6 @@ describe("changing a setting", () => {
     expect(() => changeSetting(path(), { profile: "work", setting: "permissions.mesages", value: "deny" })).toThrow(
       /starts with one of messages/,
     )
-
-    changeSetting(path(), { profile: "work", setting: "read_only", value: "true" })
-    const work = settings({ profile: "work" })
-    expect(work.permissions).toMatchObject({ messages: "readonly", contacts: "readonly", "messages.delete": "allow" })
-    expect(work.permissionSources).toMatchObject({ messages: "read_only", contacts: "config file" })
   })
 
   it("writes to `defaults` when no profile is named", () => {
@@ -456,7 +430,7 @@ describe("a bot's settings", () => {
       JSON.stringify({
         defaults: { limit: 10 },
         profiles: { sales: { limit: 20, record: true } },
-        bot: { defaults: { limit: 30, keepRunsForDays: 3 }, profiles: { sales: { limit: 40 } } },
+        bot: { defaults: { limit: 30, keep_runs_for_days: 3 }, profiles: { sales: { limit: 40 } } },
       }),
     )
     const sales = bot({ profile: "sales" })
@@ -469,26 +443,22 @@ describe("a bot's settings", () => {
   })
 
   it("**has no hourly limit** unless the bot section gives it one", () => {
-    withConfig(JSON.stringify({ defaults: { sendsPerHour: 10 }, bot: { profiles: { sales: { sendsPerHour: 200 } } } }))
+    withConfig(
+      JSON.stringify({ defaults: { sends_per_hour: 10 }, bot: { profiles: { sales: { sends_per_hour: 200 } } } }),
+    )
     expect(bot({ profile: "news" }).sendsPerHour).toBe(Number.POSITIVE_INFINITY)
     expect(bot({ profile: "sales" }).sendsPerHour).toBe(200)
     expect(settings({ profile: "news" }).sendsPerHour).toBe(10)
   })
 
   it("**reads other bots only when the bot section allows it**", () => {
-    withConfig(JSON.stringify({ bot: { profiles: { shop: { readOtherBots: ["news"] } } } }))
+    withConfig(JSON.stringify({ bot: { profiles: { shop: { read_other_bots: ["news"] } } } }))
     expect(bot({ profile: "shop" }).readOtherBots).toEqual(["news"])
     expect(bot({ profile: "news" }).readOtherBots).toBe(false)
     expect(settings({ profile: "shop" }).readOtherBots).toBe(false)
     expect(() =>
       changeSetting(join(configDir, "config.json"), { profile: "shop", setting: "read_other_bots", value: "true" }),
     ).toThrow(/--bot/)
-  })
-
-  it("**turns a bot's `readOnly` into `bot: readonly`**, which leaves the personal account writing", () => {
-    withConfig(JSON.stringify({ bot: { defaults: { readOnly: true } } }))
-    expect(bot().permissions).toMatchObject({ bot: "readonly" })
-    expect(settings().permissions).toEqual({})
   })
 
   it("**writes into the bot section** and tidies it when emptied", () => {
@@ -527,7 +497,7 @@ describe("settings extensions", () => {
   it("resolves adapter fields from every kind/profile layer and keeps their provenance", () => {
     withConfig(
       JSON.stringify({
-        defaultProfile: "work",
+        default_profile: "work",
         defaults: { autoStart: false, audioModel: "large" },
         profiles: { work: { autoStart: true } },
         personal: { defaults: { autoStart: false }, profiles: { work: { autoStart: false } } },
@@ -558,11 +528,11 @@ describe("settings extensions", () => {
     })
   })
 
-  it("preserves detailed shared/AI and legacy permission sources without changing default callers", () => {
+  it("preserves detailed shared/AI and permission sources without changing default callers", () => {
     withConfig(
       JSON.stringify({
-        defaults: { limit: 7, updateCheck: false, skillHint: false },
-        profiles: { work: { allow: ["send"], embeddingModel: "test-model" } },
+        defaults: { limit: 7, update_check: false, skill_hint: false },
+        profiles: { work: { permissions: { messages: "readonly" }, embedding_model: "test-model" } },
       }),
     )
     const result = adapted.resolveSettings({ profile: "work" }, { env: NAMED, configDir })
@@ -574,7 +544,7 @@ describe("settings extensions", () => {
     })
     expect(Object.values(result.permissionSources)).toContain("config file: profiles.work")
     expect(settings({ profile: "work" }).sources.limit).toBe("config defaults")
-    expect(Object.values(settings({ profile: "work" }).permissionSources)).toContain("allow")
+    expect(Object.values(settings({ profile: "work" }).permissionSources)).toContain("config file")
   })
 
   it("uses an adapter schema for reads and accepts an adapter duration parser", () => {
@@ -619,142 +589,5 @@ describe("settings extensions", () => {
       }),
     ).toBe(true)
     expect(adapter.resolveSettings({}, { env: NAMED, configDir }).shared.autoStart).toBe(true)
-  })
-})
-
-describe("a config file written before setting names were snake_case", () => {
-  const OLD = {
-    defaultProfile: "workPhone",
-    defaults: {
-      timeoutMs: 9000,
-      keepRunsForDays: 7,
-      sendsPerHour: 12,
-      updateCheck: false,
-      skillHint: false,
-      embeddingProvider: "local",
-      analysisBaseUrl: "https://example.test/v1",
-      models: { "replies-draft": { provider: "openai", model: "m", baseUrl: "https://example.test/v1" } },
-      permissions: { "messages.delete": "ask" },
-    },
-    profiles: { workPhone: { senderColors: true, catchUpMarksRead: true, requestsPerMinute: 0 } },
-    personal: { defaults: { searchCatchUp: true }, profiles: { workPhone: { pictureSearch: true } } },
-    bot: { defaults: { readOtherBots: ["newsBot"] }, profiles: { newsBot: { readOnly: true } } },
-  }
-  const NEW = {
-    default_profile: "workPhone",
-    defaults: {
-      timeout_ms: 9000,
-      keep_runs_for_days: 7,
-      sends_per_hour: 12,
-      update_check: false,
-      skill_hint: false,
-      embedding_provider: "local",
-      analysis_base_url: "https://example.test/v1",
-      models: { "replies-draft": { provider: "openai", model: "m", base_url: "https://example.test/v1" } },
-      permissions: { "messages.delete": "ask" },
-    },
-    profiles: { workPhone: { sender_colors: true, catch_up_marks_read: true, requests_per_minute: 0 } },
-    personal: { defaults: { search_catch_up: true }, profiles: { workPhone: { picture_search: true } } },
-    bot: { defaults: { read_other_bots: ["newsBot"] }, profiles: { newsBot: { read_only: true } } },
-  }
-  const path = () => join(configDir, "config.json")
-
-  it("**moves every setting name to snake_case on read, and writes the file back once**", () => {
-    writeFileSync(path(), JSON.stringify(OLD), { mode: 0o600 })
-    const read = settings()
-    expect(read).toMatchObject({ profile: "workPhone", timeoutMs: 9000, keepRunsForDays: 7, pictureSearch: true })
-    expect(read.models?.["replies-draft"]).toEqual({
-      provider: "openai",
-      model: "m",
-      base_url: "https://example.test/v1",
-    })
-    expect(JSON.parse(readFileSync(path(), "utf8"))).toEqual(NEW)
-    expect(statSync(path()).mode & 0o777).toBe(0o600)
-
-    const written = readFileSync(path(), "utf8")
-    settings()
-    expect(readFileSync(path(), "utf8")).toBe(written)
-  })
-
-  it("refuses one setting under both names with different values, and leaves the file", () => {
-    const both = JSON.stringify({ defaults: { timeoutMs: 1000, timeout_ms: 2000 } })
-    withConfig(both)
-    expect(() => settings()).toThrow("defaults.timeoutMs and defaults.timeout_ms are the same setting")
-    expect(readFileSync(path(), "utf8")).toBe(both)
-  })
-
-  it("leaves a file the schema refuses as it was, so the error names what is wrong", () => {
-    const broken = JSON.stringify({ defaults: { timeoutMs: 1000, colour: true } })
-    withConfig(broken)
-    expect(() => settings()).toThrow("defaults.colour: unknown setting")
-    expect(readFileSync(path(), "utf8")).toBe(broken)
-  })
-
-  it("**still reads a setting an app's own schema declares in camelCase**, a read-only profile included", () => {
-    const camelSchema = v.strictObject({
-      defaults: v.optional(v.strictObject({ readOnly: v.optional(v.boolean()), timeoutMs: v.optional(v.number()) })),
-      profiles: v.optional(v.record(v.string(), v.strictObject({})), {}),
-    })
-    const own = settingsFor(
-      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
-      { schema: camelSchema },
-    )
-    const file = JSON.stringify({ defaults: { readOnly: true, timeoutMs: 5 } })
-    withConfig(file)
-    const read = own.resolveSettings({}, { env: {}, configDir, needsProfile: false })
-    expect(read.readOnly).toBe(true)
-    expect(read.timeoutMs).toBe(5)
-    expect(levelFor(read.permissions, "messages.send").level).toBe("readonly")
-    expect(readFileSync(path(), "utf8")).toBe(file)
-  })
-
-  it("**starts a missing file in the spelling the app's own schema declares**", () => {
-    const camelDefaults = v.strictObject({
-      limit: v.optional(v.number()),
-      keepRunsForDays: v.optional(v.number()),
-      sendsPerHour: v.optional(v.number()),
-      updateCheck: v.optional(v.boolean()),
-      skillHint: v.optional(v.boolean()),
-    })
-    const own = settingsFor(
-      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
-      {
-        schema: v.strictObject({
-          defaults: v.optional(camelDefaults),
-          profiles: v.optional(v.record(v.string(), v.strictObject({})), {}),
-        }),
-      },
-    )
-    const fresh = mkdtempSync(join(tmpdir(), "app-fresh-"))
-    const read = own.resolveSettings({}, { env: {}, configDir: fresh, needsProfile: false })
-    expect(read.keepRunsForDays).toBe(30)
-    expect(JSON.parse(readFileSync(join(fresh, "config.json"), "utf8")).defaults).toEqual({
-      limit: 20,
-      keepRunsForDays: 30,
-      sendsPerHour: 30,
-      updateCheck: true,
-      skillHint: true,
-    })
-    const ours = mkdtempSync(join(tmpdir(), "app-fresh-"))
-    settingsFor({
-      command: "app",
-      appName: "app-cli",
-      envPrefix: "APP",
-      description: "",
-      version: "0.0.0",
-    }).resolveSettings({}, { env: {}, configDir: ours, needsProfile: false })
-    expect(JSON.parse(readFileSync(join(ours, "config.json"), "utf8")).defaults).toMatchObject({
-      keep_runs_for_days: 30,
-    })
-  })
-
-  it("keeps a name an app still declares in camelCase", () => {
-    const own = settingsFor(
-      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
-      { profile: { autoStart: v.optional(v.boolean()) } },
-    )
-    withConfig(JSON.stringify({ defaults: { autoStart: true, timeoutMs: 5 } }))
-    own.resolveSettings({}, { env: {}, configDir, needsProfile: false })
-    expect(JSON.parse(readFileSync(path(), "utf8"))).toEqual({ defaults: { autoStart: true, timeout_ms: 5 } })
   })
 })

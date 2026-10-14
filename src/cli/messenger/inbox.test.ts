@@ -506,7 +506,7 @@ describe("inbox --new", () => {
     expect(chatIds(asked.answer)).toEqual(["d"])
     expect(asked.stderr).toContain("marked 1 chat(s) read up to the newest message shown")
 
-    configure({ catchUpMarksRead: true })
+    configure({ catch_up_marks_read: true })
     await review(["date>1d", "--kind", "group"])
     await inbox(["date>1d", "--no-mark-read"])
     expect(marks).toEqual([

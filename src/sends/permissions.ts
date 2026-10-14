@@ -141,7 +141,6 @@ const OLD_WORDS: Record<Permission, PermissionKey[]> = {
 /** The command path an old `allow` word stood for, as one key — what an MCP tool's `permission` is checked against. */
 export const keyOfWord = (word: Permission): PermissionKey => OLD_WORDS[word][0] as PermissionKey
 
-/** `readOnly` and `allow` as levels, so a file written before `permissions` keeps meaning what it meant. */
 /**
  * A bot's old words meant its own writes: `profile` was its command menu, and `read` was taking
  * updates, which every level but `deny` allows now.
@@ -150,24 +149,6 @@ const botKeysOf = (word: Permission): PermissionKey[] => {
   if (word === "profile") return ["bot.commands"]
   if (word === "read") return []
   return OLD_WORDS[word].map((key) => `bot.${key}`)
-}
-
-/** `bot` translates a bot's `readOnly` and `allow`, which only ever covered the bot. */
-export const fromOldSettings = (
-  readOnly: boolean,
-  allow: readonly Permission[] | undefined,
-  { bot = false }: { bot?: boolean } = {},
-): Record<PermissionKey, Level> => {
-  if (!readOnly && allow === undefined) return {}
-  const levels: Record<PermissionKey, Level> = bot
-    ? { bot: "readonly" }
-    : Object.fromEntries(RESOURCES.filter((resource) => resource !== "bot").map((resource) => [resource, "readonly"]))
-  if (readOnly) return levels
-  // A deletion needed its flag whatever `allow` said, so it keeps asking.
-  for (const word of allow ?? []) {
-    for (const key of bot ? botKeysOf(word) : OLD_WORDS[word]) levels[key] = DEFAULT_PERMISSIONS[key] ?? "allow"
-  }
-  return levels
 }
 
 /**
@@ -370,10 +351,10 @@ const STORE_MAINTENANCE = new Set(["info", "check", "migrate", "backup", "restor
 /** Commands outside `messages` that print what people wrote, so `deny messages` reaches them too. */
 const SHOW_MESSAGES = new Set(["inbox", "review", "watch", "serve", "store", "conversations"])
 
-/** Before every search moved under `search` (2026-10-09): `config migrate` rewrites these. */
+/** Before every search moved under `search` (2026-10-09). */
 const OLD_SEARCH_KEY = /^(bot\.)?(messages|conversations|topics)\.search(?:\.|$)/
 
-/** Statistics and searches moved; a profile still naming the old paths must be migrated before they run. */
+/** Statistics and searches moved; a deny under an old path would stop applying unseen, so the command refuses. */
 export const assertStatsPermissionsCurrent = (
   path: readonly string[],
   permissions: Readonly<Record<string, Level>>,
@@ -385,14 +366,14 @@ export const assertStatsPermissionsCurrent = (
   if (path[0] === "search" && Object.keys(permissions).some((key) => OLD_SEARCH_KEY.test(key)))
     throw new CliError(
       "configuration_error",
-      "search permission paths have moved — run config migrate before searching",
+      "search permission paths have moved — rename messages.search, conversations.search and topics.search to search.messages, search.conversations and search.topics",
       { retryable: false },
     )
   if (path[0] !== "stats") return
   if (Object.keys(permissions).some((key) => /^(bot\.)?(messages|chats|tasks)\.stats(?:\.|$)/.test(key)))
     throw new CliError(
       "configuration_error",
-      "statistics permission paths have moved — run config migrate before reading statistics",
+      "statistics permission paths have moved — rename messages.stats, chats.stats and tasks.stats to stats.messages.show, stats.chats.show and stats.tasks.show",
       { retryable: false },
     )
 }

@@ -112,7 +112,7 @@ describe("bot contacts show", () => {
     expect(refused.code).toBe(5)
     expect(refused.stderr).toContain("read_other_bots")
 
-    configure({ bot: { profiles: { first: { readOtherBots: ["second"] } } } })
+    configure({ bot: { profiles: { first: { read_other_bots: ["second"] } } } })
     const allowed = await call(["first", "bot", "contacts", "show", "@ann", "--all-bots", "--json"])
     expect(allowed.answer.item.chats.map((chat: { id: string }) => chat.id)).toContain("-200")
   })
@@ -147,7 +147,7 @@ describe("bot search messages and messages between", () => {
   })
 
   it("**reads every copy --bots names**, a hit held only in the other bot's copy included", async () => {
-    configure({ bot: { profiles: { first: { readOtherBots: true } } } })
+    configure({ bot: { profiles: { first: { read_other_bots: true } } } })
     const own = await call(["first", "bot", "search", "messages", "ann", "elsewhere", "--json"])
     const both = await call(["first", "bot", "search", "messages", "ann", "elsewhere", "--bots", "second", "--json"])
 
@@ -156,7 +156,7 @@ describe("bot search messages and messages between", () => {
   })
 
   it("**keeps the chats every one of them wrote in**, and with --bots reads the other copy too", async () => {
-    configure({ bot: { profiles: { first: { readOtherBots: true } } } })
+    configure({ bot: { profiles: { first: { read_other_bots: true } } } })
     const own = await call(["first", "bot", "messages", "between", "@ann", "Bob", "--json"])
     const both = await call([
       "first",

@@ -94,7 +94,7 @@ describe("replies test", () => {
       JSON.stringify({
         profiles: {
           default: {
-            models: { replies: { provider: "openai", model: "test-model", baseUrl: "https://example.test/v1" } },
+            models: { replies: { provider: "openai", model: "test-model", base_url: "https://example.test/v1" } },
           },
         },
       }),

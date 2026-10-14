@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
   assertStatsPermissionsCurrent,
-  fromOldSettings,
   keyForCommand,
   layerPermissions,
   levelFor,
@@ -32,15 +31,6 @@ describe("the level of a command path", () => {
     expect(levelFor({ messages: "allow" }, "messages.delete").level).toBe("ask")
     expect(levelFor({ "messages.delete": "allow" }, "messages.delete").level).toBe("allow")
   })
-
-  it("**reads `allow` as before**: the rest read-only, and a deletion still asking", () => {
-    const levels = fromOldSettings(false, ["send", "delete"])
-
-    expect(levelFor(levels, "messages.send").level).toBe("allow")
-    expect(levelFor(levels, "messages.delete").level).toBe("ask")
-    expect(levelFor(levels, "contacts.add").level).toBe("readonly")
-    expect(fromOldSettings(false, undefined)).toEqual({})
-  })
 })
 
 describe("a bot's permissions", () => {
@@ -57,34 +47,9 @@ describe("a bot's permissions", () => {
     expect(keyForCommand(["bot", "recipients", "add"])).toBeNull()
   })
 
-  it("**reads a bot's old `allow` as the bot's own keys**, leaving the personal account alone", () => {
-    const levels = fromOldSettings(false, ["send", "profile", "delete"], { bot: true })
-
-    expect(levelFor(levels, "bot.messages.send").level).toBe("allow")
-    expect(levelFor(levels, "bot.commands.set").level).toBe("allow")
-    expect(levelFor(levels, "bot.messages.delete").level).toBe("ask")
-    expect(levelFor(levels, "bot.webhooks.set").level).toBe("readonly")
-    expect(levelFor(levels, "messages.send").level).toBe("allow")
-    expect(fromOldSettings(true, undefined, { bot: true })).toEqual({ bot: "readonly" })
-  })
-
   it("**asks before a bot deletes**, as the personal account does", () => {
     expect(levelFor({}, "bot.messages.delete").level).toBe("ask")
   })
-})
-
-it("maps legacy groups to forum configuration and creation", () => {
-  const result = fromOldSettings(false, ["groups"])
-  expect(result["topics.enable"]).toBe("ask")
-  expect(result["topics.create"]).toBe("allow")
-})
-
-it("preserves old pin permission for unpin and keeps an explicit unpin override", () => {
-  const personal = fromOldSettings(false, ["pin"])
-  const bot = fromOldSettings(false, ["pin"], { bot: true })
-  expect(levelFor(personal, "messages.unpin").level).toBe("allow")
-  expect(levelFor(bot, "bot.messages.unpin").level).toBe("allow")
-  expect(levelFor({ ...personal, "messages.unpin": "deny" }, "messages.unpin").level).toBe("deny")
 })
 
 describe("startup permission overrides", () => {
@@ -110,12 +75,12 @@ describe("startup permission overrides", () => {
   })
 })
 
-it("refuses old statistics permission keys until they are explicitly migrated", () => {
+it("refuses old statistics permission keys and names the paths that replace them", () => {
   expect(() => assertStatsPermissionsCurrent(["stats", "messages", "show"], { "messages.stats": "deny" })).toThrow(
-    "config migrate",
+    "stats.messages.show",
   )
   expect(() => assertStatsPermissionsCurrent(["stats", "tasks", "show"], { "tasks.stats": "readonly" })).toThrow(
-    "config migrate",
+    "stats.tasks.show",
   )
   expect(() => assertStatsPermissionsCurrent(["messages", "list"], { "messages.stats": "deny" })).not.toThrow()
 })

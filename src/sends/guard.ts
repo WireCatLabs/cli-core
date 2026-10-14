@@ -12,15 +12,7 @@ import {
   type SendKind,
   sendsPathFor,
 } from "./journal.js"
-import {
-  keyForWrite,
-  type Level,
-  levelFor,
-  type Permission,
-  type PermissionKey,
-  permissionFor,
-  skipFlagFor,
-} from "./permissions.js"
+import { keyForWrite, type Level, levelFor, type PermissionKey, skipFlagFor } from "./permissions.js"
 import { RecipientList, recipientsPathFor } from "./recipients.js"
 
 const HOUR_MS = 60 * 60 * 1000
@@ -69,20 +61,9 @@ export interface SendGuardOptions {
   profile: string
   /** The program's word, for the hints that say what to type; the recipient list's when not given. */
   command?: string
-  readOnly: boolean
-  /** Named in the refusal, so the owner can find what decided it. */
-  readOnlyFrom: string
   /** A variable that refuses every write, whatever `permissions` or a flag say (a scheduled agent's). */
   readOnlyLock?: string
-  /** `undefined` allows every action; a list only those (`CLI-37`). */
-  allow?: readonly Permission[]
-  allowFrom?: string
-  /** The command that changes `allow`, when the CLI's configuration has more places than profiles and defaults. */
-  allowFix?: string
-  /**
-   * The levels by command path, defaults included. Without it, `readOnly` and `allow` alone decide
-   * and nothing asks — the guard a CLI built before levels existed.
-   */
+  /** The levels by command path, defaults included. Without it no level refuses and nothing asks. */
   permissions?: Readonly<Record<PermissionKey, Level>> | (() => Readonly<Record<PermissionKey, Level>>)
   permissionSources?: Readonly<Record<PermissionKey, string>>
   permissionDefaults?: Readonly<Record<PermissionKey, Level>>
@@ -141,12 +122,7 @@ export const sendGuard = ({
   profile,
   recipients,
   command = recipients.command,
-  readOnly,
-  readOnlyFrom,
   readOnlyLock,
-  allow,
-  allowFrom = "default",
-  allowFix,
   permissions,
   permissionSources = {},
   permissionDefaults,
@@ -171,28 +147,7 @@ export const sendGuard = ({
       )
     }
     const levels = currentPermissions()
-    if (levels === undefined) {
-      if (readOnly) {
-        throw new CliError(
-          "permission_error",
-          `profile ${profile} is read-only (readOnly, from the ${readOnlyFrom}) — it cannot send, react, change chats or change the account`,
-        )
-      }
-      const permission = permissionFor(kind, action)
-      if (allow && !allow.includes(permission)) {
-        const fix =
-          allowFix ??
-          (allowFrom === "config defaults"
-            ? `${command} config set --defaults allow`
-            : `${command} ${profile} config set allow`)
-        throw new CliError(
-          "permission_error",
-          `profile ${profile} does not allow ${permission} (allow: ${allow.join(", ") || "nothing"} — from the ${allowFrom}); ` +
-            `to allow it: ${fix} ${[...allow, permission].join(",")}`,
-          { permission },
-        )
-      }
-    } else {
+    if (levels !== undefined) {
       const key = request.key ?? keyForWrite(kind, action)
       const { level, key: named } = levelFor(levels, key, permissionDefaults)
       if (level === "deny" || level === "readonly") {
@@ -386,7 +341,7 @@ const refuseToAsk: Asker = async (key) => {
 
 /**
  * The guard a profile's configuration asks for — the command's, and a background server's for every
- * write it forwards. Built per request there, so `config set readOnly true` needs no restart.
+ * write it forwards. Built per request there, so `config set permissions.messages readonly` needs no restart.
  */
 export const guardFor = (
   app: AppIdentity,
@@ -398,10 +353,7 @@ export const guardFor = (
   sendGuard({
     profile: settings.profile,
     command: app.command,
-    readOnly: settings.readOnly,
-    readOnlyFrom: settings.sources.readOnly ?? "default",
     ...(settings.readOnlyLock ? { readOnlyLock: settings.readOnlyLock } : {}),
-    ...(settings.allow ? { allow: settings.allow, allowFrom: settings.sources.allow ?? "default" } : {}),
     permissions: () => settings.permissions,
     permissionSources: settings.permissionSources,
     ...(ask ? { ask } : {}),

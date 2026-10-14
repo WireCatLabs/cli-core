@@ -21,8 +21,6 @@ describe("the send guard", () => {
   const guardAt = (profile: string, time: string, sendsPerHour: number) =>
     sendGuard({
       profile,
-      readOnly: false,
-      readOnlyFrom: "default",
       sendsPerHour,
       journal: new SendJournal(sendsPathFor(profile)),
       recipients: new RecipientList(recipientsPathFor(profile), app.command),
@@ -34,8 +32,6 @@ describe("the send guard", () => {
     const make = (permissions: Record<string, "allow" | "readonly">) =>
       sendGuard({
         profile: "api-defaults",
-        readOnly: false,
-        readOnlyFrom: "default",
         permissions,
         permissionDefaults: { "bot.api.rotate": "ask" },
         sendsPerHour: Infinity,
@@ -70,8 +66,6 @@ describe("two senders at once", () => {
   const guard = (profile: string, sendsPerHour: number, time = "2026-09-24T09:00:00Z") =>
     sendGuard({
       profile,
-      readOnly: false,
-      readOnlyFrom: "default",
       sendsPerHour,
       journal: new SendJournal(sendsPathFor(profile)),
       recipients: new RecipientList(recipientsPathFor(profile), app.command),
@@ -171,8 +165,7 @@ describe("a reaction", () => {
   const guardFor = (profile: string, options: { readOnly?: boolean; sendsPerHour?: number } = {}) =>
     sendGuard({
       profile,
-      readOnly: options.readOnly ?? false,
-      readOnlyFrom: "config file",
+      ...(options.readOnly ? { permissions: { messages: "readonly", reactions: "readonly" } } : {}),
       sendsPerHour: options.sendsPerHour ?? 1,
       journal: new SendJournal(sendsPathFor(profile)),
       recipients: new RecipientList(recipientsPathFor(profile), app.command),
@@ -181,7 +174,7 @@ describe("a reaction", () => {
 
   it("is refused by a read-only profile and by the recipient list, but not counted by the limit", () => {
     expect(() => guardFor("g-react-ro", { readOnly: true }).check({ chatId: "111", kind: "reaction" })).toThrow(
-      "cannot send, react, change chats or change the account",
+      "does not let reactions write",
     )
 
     new RecipientList(recipientsPathFor("g-react-list"), app.command).add({
@@ -214,8 +207,6 @@ describe("a retry of a send whose outcome was unknown", () => {
   const guard = (profile: string) =>
     sendGuard({
       profile,
-      readOnly: false,
-      readOnlyFrom: "default",
       sendsPerHour: 1,
       journal: new SendJournal(sendsPathFor(profile)),
       recipients: new RecipientList(recipientsPathFor(profile), app.command),
@@ -270,37 +261,11 @@ describe("a retry of a send whose outcome was unknown", () => {
   })
 })
 
-describe("an allow-list refusal", () => {
-  const refused = (allowFix?: string) =>
-    sendGuard({
-      profile: "work",
-      command: "max",
-      readOnly: false,
-      readOnlyFrom: "default",
-      allow: ["reaction"],
-      allowFrom: "config file: personal.defaults",
-      ...(allowFix ? { allowFix } : {}),
-      sendsPerHour: 10,
-      journal: new SendJournal(sendsPathFor("g-allow")),
-      recipients: new RecipientList(recipientsPathFor("g-allow"), app.command),
-      warn: () => {},
-    })
-
-  it("names the command that allows it, the CLI's own when it gives one", () => {
-    expect(() => refused().check({ chatId: "1" })).toThrow("to allow it: max work config set allow reaction,send")
-    expect(() => refused("max config set --personal --defaults allow").check({ chatId: "1" })).toThrow(
-      "to allow it: max config set --personal --defaults allow reaction,send",
-    )
-  })
-})
-
 describe("a permission-level refusal", () => {
   it("uses the caller's fix with the write request, and keeps the personal hint by default", () => {
     const options = {
       profile: "sales",
       command: "tg",
-      readOnly: false,
-      readOnlyFrom: "default",
       permissions: { "bot.messages.edit": "readonly" as const },
       sendsPerHour: 10,
       journal: new SendJournal(sendsPathFor("g-level-fix")),
@@ -350,8 +315,6 @@ describe("topic creation identities", () => {
     sendGuard({
       profile,
       command: "app",
-      readOnly: false,
-      readOnlyFrom: "default",
       sendsPerHour: 100,
       journal: new SendJournal(sendsPathFor(profile)),
       recipients: new RecipientList(recipientsPathFor(profile), app.command),
@@ -399,8 +362,6 @@ describe("a profile whose writes are held", () => {
     const guard = sendGuard({
       profile,
       command: "app",
-      readOnly: false,
-      readOnlyFrom: "default",
       sendsPerHour: 30,
       journal,
       recipients: new RecipientList(recipientsPathFor(profile), app.command),
@@ -432,8 +393,6 @@ describe("a send the messenger asked to hold off on", () => {
     const journal = new SendJournal(sendsPathFor(profile))
     const guard = sendGuard({
       profile,
-      readOnly: false,
-      readOnlyFrom: "default",
       sendsPerHour: 30,
       journal,
       recipients: new RecipientList(recipientsPathFor(profile), app.command),
@@ -464,7 +423,7 @@ describe("a read-only lock", () => {
       { permission: ["messages.send=allow"] },
       { env: { ...env, APP_READ_ONLY: "1" }, configDir },
     )
-    expect(settings).toMatchObject({ readOnly: true, readOnlyLock: "APP_READ_ONLY" })
+    expect(settings.readOnlyLock).toBe("APP_READ_ONLY")
     const guard = guardFor(app, settings, () => {}, env)
     expect(() => guard.check({ chatId: "1" })).toThrow("this process is read-only (APP_READ_ONLY)")
     expect(() => guard.check({ chatId: "1", kind: "reaction" })).toThrow("read-only")

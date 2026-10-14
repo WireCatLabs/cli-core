@@ -254,7 +254,7 @@ it("refuses preview of denied source data and write paths before exposing target
   root.addCommand(stats)
   const leaf = findCommand(root, ["stats", "messages", "show"])
   expect(() => preview(leaf, { messages: "deny" })).toThrow("messages")
-  expect(() => preview(leaf, { "messages.stats": "deny" })).toThrow("config migrate")
+  expect(() => preview(leaf, { "messages.stats": "deny" })).toThrow("stats.messages.show")
   root.addCommand(new Command("messages").addCommand(new Command("send")))
   expect(() => preview(findCommand(root, ["messages", "send"]), { messages: "readonly" })).toThrow("does not permit")
 })

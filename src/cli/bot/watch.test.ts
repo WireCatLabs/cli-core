@@ -158,7 +158,7 @@ describe("bot webhooks", () => {
     mkdirSync(join(root, "config"), { recursive: true })
     writeFileSync(
       join(root, "config", "config.json"),
-      JSON.stringify({ bot: { profiles: { sales: { readOnly: true } } } }),
+      JSON.stringify({ bot: { profiles: { sales: { permissions: { bot: "readonly" } } } } }),
     )
     let asked = false
     const secretive = botWith({
