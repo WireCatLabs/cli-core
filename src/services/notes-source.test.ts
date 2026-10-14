@@ -20,12 +20,12 @@ const twinStore = async () => {
 const accountOf = (hit: { folder_id: string | null }) => hit.folder_id ?? "internal"
 
 describe("search notes --source", () => {
-  it("reads memo's notes beside one folder in one store query, and pages it as one list", async () => {
+  it("reads memo's notes beside one folder in one store query per lane (words, title), and pages it as one list", async () => {
     const { store, twins } = await twinStore()
     const source = `notes:internal,notes:${twins.alpha.folderId}`
     const spy = vi.spyOn(store.notes, "search")
     const whole = await searchNotesOf(store, alpha, SHARED_WORD, { accounts: source, limit: 50 })
-    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(2)
     expect(new Set(whole.hits.map(accountOf))).toEqual(new Set(["internal", twins.alpha.folderId]))
     expect(whole.accounts.map(({ account }) => account)).toEqual(["internal", twins.alpha.folderId])
     expect(whole.skipped).toEqual([])

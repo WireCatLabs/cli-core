@@ -15,6 +15,7 @@ import { createStemmer, DEFAULT_STEMMERS } from "../search/stem.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { openPictureEmbedderFor } from "./document-pictures.js"
+import { equalTitlesFirst, plainQueryWords } from "./notes-title-tier.js"
 import { PICTURE_FLOOR, plainWords } from "./pictures.js"
 import { listContextOf } from "./search-kind.js"
 
@@ -234,7 +235,7 @@ export interface FoundNote {
   excerpt: string
   links: { to: Link["to"]; target_text: Link["targetText"]; kind: Link["kind"]; anchor: Link["anchor"] }[]
   /** Which halves of the search found it. */
-  found_by: ("words" | "meaning")[]
+  found_by: ("title" | "words" | "meaning")[]
 }
 
 export interface LinkedRecord {
@@ -285,6 +286,8 @@ export interface NotesQuery {
   /** An open picture embedder, for tests and callers that keep one; opened and closed here when absent. */
   pictureEmbedder?: PictureEmbedder
 }
+
+type Held = { note: Note; score: number; foundBy: ("title" | "words" | "meaning")[] }
 
 const MAX_LINE = 200
 const MAX_NOTES_OFFSET = 1000
@@ -411,16 +414,29 @@ export const searchNotes = async (
       meaningSkipped = error.message
     }
   }
+  const titleWords = plainQueryWords(query)
+  const titled =
+    titleWords === undefined
+      ? { items: [], hasMore: false }
+      : await searchNotesQuery(store, {
+          text: [`title:"${titleWords}"`, filter ?? ""].filter(Boolean).join(" AND "),
+          limit: Math.max(window, CANDIDATES),
+          ...scope,
+        })
+  const tier = titleWords === undefined ? [] : equalTitlesFirst(titled.items, titleWords)
+  const tierRefs = new Set(tier.map(({ ref }) => ref))
+  const slice = meaning === undefined && tier.length === 0
   const words = await searchNotesQuery(store, {
     text,
-    limit: meaning === undefined ? limit : Math.max(window, CANDIDATES),
-    offset: meaning === undefined ? offset : 0,
+    limit: slice ? limit : Math.max(window, CANDIDATES) + tier.length,
+    offset: slice ? offset : 0,
     exact,
     ...scope,
   })
-  const ranked = new Map<string, { note: Note; score: number; foundBy: ("words" | "meaning")[] }>()
+  const ranked = new Map<string, Held>()
   const add = (list: { ref: string; note: Note }[], by: "words" | "meaning") =>
     list.forEach(({ ref, note }, rank) => {
+      if (tierRefs.has(ref)) return
       const held = ranked.get(ref) ?? { note, score: 0, foundBy: [] }
       held.score += 1 / (RRF_K + rank + 1)
       held.foundBy.push(by)
@@ -428,9 +444,12 @@ export const searchNotes = async (
     })
   add(words.items, "words")
   if (meaning !== undefined) add(meaning, "meaning")
-  const ordered = [...ranked.entries()].sort(([, a], [, b]) => b.score - a.score)
-  const page = meaning === undefined ? ordered : ordered.slice(offset, window)
-  const hasMore = meaning === undefined ? words.hasMore : ordered.length > window || words.hasMore
+  const ordered = [
+    ...tier.map(({ ref, note }): [string, Held] => [ref, { note, score: 0, foundBy: ["title"] }]),
+    ...[...ranked.entries()].sort(([, a], [, b]) => b.score - a.score),
+  ]
+  const page = slice ? ordered : ordered.slice(offset, window)
+  const hasMore = slice ? words.hasMore : ordered.length > window || words.hasMore || titled.hasMore
   const hits: FoundNote[] = []
   const counts = new Map<string, LinkedRecord>()
   for (const [ref, { note, foundBy }] of page) {
