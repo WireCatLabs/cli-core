@@ -19,7 +19,7 @@ import { locationVariables } from "../../background/units.js"
 import { aheadOf } from "../../services/moment.js"
 import { storePath } from "../../store/path.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { listed } from "../paging.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -64,6 +64,14 @@ const whenOf = ({ every, at, once }: WhenOptions, minimum: number): When => {
   return { every: minutes }
 }
 
+/** A schedule as answered: snake_case, but its environment keeps the variables' own names. */
+const scheduleAnswer = ({ environment, createdAt, ...schedule }: Schedule, extra: object) => ({
+  ...(snakeKeys(schedule) as object),
+  environment,
+  created_at: createdAt,
+  ...(snakeKeys(extra) as object),
+})
+
 const withWhen = (command: Command) =>
   command
     .option("--every <duration>", "repeat: 30m, 2h, 1d")
@@ -85,10 +93,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
     const context = messengerContext(self, messenger)
     const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(self).system ?? thisMachine()
     const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env: context.env }).state
-    const say = (value: object, lines: string[]) => {
-      if (context.format === "pretty") context.streams.data(lines.join("\n"))
-      else context.renderer.result(value)
-    }
+    const say = (value: object, lines: string[]) => renderAnswer(self, context, itemOf(value), () => lines.join("\n"))
     const timer = () => timerFor(app, system, context.env)
     const environment = (): Record<string, string> => ({
       [`${app.envPrefix}_PROFILE`]: context.profile,
@@ -101,7 +106,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       const replaced = existsSync(file)
       writeSecurely(file, `${JSON.stringify(schedule, null, 2)}\n`, 0o600)
       await timer().install(schedule, [...system.entry, "schedule", "exec", file])
-      say({ ...schedule, file, timer: timer().where(schedule.name), replaced }, [
+      say(scheduleAnswer(schedule, { file, timer: timer().where(schedule.name), replaced }), [
         `${replaced ? "Replaced" : "Added"} ${schedule.name}: ${describeWhen(schedule.when)}.`,
         `It runs: ${schedule.kind === "agent" ? schedule.argv.join(" ") : `${app.command} ${schedule.argv.join(" ")}`}`,
         `Output: ${join(dirname(file), "runs")} · now: ${app.command} schedule run ${schedule.name} · stop: ${app.command} schedule remove ${schedule.name}`,
@@ -202,11 +207,17 @@ export const scheduleCommand = (messenger: Messenger): Command => {
         when: describeWhen(schedule.when),
         last: lastRun(scheduleFile(state, schedule.name)) ?? null,
       }))
-      if (context.format !== "pretty") return context.renderer.result(listed(rows))
-      if (rows.length === 0)
-        return context.renderer.note(`no schedules — \`${app.command} schedule command|agent\` adds one`)
-      context.streams.data(
-        rows
+      const answer = listOf("schedule list", {
+        items: rows.map((row) => snakeKeys(row)),
+        limit: Math.max(1, rows.length),
+        has_more: false,
+      })
+      renderAnswer(this, context, answer, () => {
+        if (rows.length === 0) {
+          context.renderer.note(`no schedules — \`${app.command} schedule command|agent\` adds one`)
+          return ""
+        }
+        return rows
           .map(({ name, kind, when, last }) =>
             [
               name,
@@ -215,8 +226,8 @@ export const scheduleCommand = (messenger: Messenger): Command => {
               last ? `last ${last.at.slice(0, 16).replace("T", " ")} exit ${last.exitCode}` : "not run yet",
             ].join("  "),
           )
-          .join("\n"),
-      )
+          .join("\n")
+      })
     })
 
   command
@@ -228,7 +239,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       const last = await runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
         timer: timer(),
       })
-      say({ name, ...last }, [`${name}: exit ${last.exitCode} — ${last.output}`])
+      say(snakeKeys({ name, ...last }) as object, [`${name}: exit ${last.exitCode} — ${last.output}`])
       if (last.exitCode !== 0) process.exitCode = 1
     })
 

@@ -105,6 +105,18 @@ describe.runIf(posix)("schedule on Linux", () => {
       "systemctl --user enable --now chat-schedule-sync.timer",
     ])
 
+    const replaced = await call(
+      ["command", "sync", "--every", "15m", "--json", "--", "messages", "list", "42", "--limit", "50"],
+      env,
+      system,
+    )
+    expect(JSON.parse(replaced.out).item).toMatchObject({
+      name: "sync",
+      created_at: expect.any(String),
+      replaced: true,
+      environment: { CHAT_PROFILE: "default" },
+    })
+
     const listed = JSON.parse((await call(["list", "--json"], env, system)).out)
     expect(listed.items).toEqual([{ name: "sync", kind: "command", when: "every 15m", last: null }])
 

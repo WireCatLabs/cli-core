@@ -3,7 +3,8 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type Audience, MEDIA_KINDS, type MediaKind, type PrivacySettings } from "../../domain/models.js"
 import { sendTime } from "../../domain/send-time.js"
-import { positiveCount, renderPage } from "../paging.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { capability } from "./port.js"
 
@@ -23,10 +24,10 @@ export const mediaCommand = (messenger: Messenger): Command =>
     .argument("<chat>", messenger.chatArgument)
     .option("--type <names>", `only these kinds, comma-separated: ${MEDIA_KINDS.join(", ")}`)
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
-    .option("--before-id <id>", "read what came before this message id")
+    .option("--cursor <id>", "go on from where page.next says the last page stopped")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      const { type, beforeId } = this.opts<{ type?: string; beforeId?: string }>()
+      const { type, cursor } = this.opts<{ type?: string; cursor?: string }>()
       const kinds = kindsOf(type)
       const limit = context.settings.limit
       const page = await context.withMessenger(async (adapter) => {
@@ -38,14 +39,20 @@ export const mediaCommand = (messenger: Messenger): Command =>
         )(id, {
           kinds,
           limit,
-          ...(beforeId === undefined ? {} : { before: beforeId }),
+          ...(cursor === undefined ? {} : { before: cursor }),
         })
       })
-      renderPage(
-        { ...context, settings: { page: 1, limit, all: false } },
-        page,
-        undefined,
-        (items) => `more — \`--before-id ${items[0]?.id ?? ""}\` for older`,
+      const oldest = page.items[0]?.id
+      renderAnswer(
+        this,
+        context,
+        listOf("chats media", {
+          items: page.items.map(snakeKeys),
+          limit,
+          has_more: page.hasMore && oldest !== undefined,
+          ...(oldest === undefined ? {} : { cursor: oldest }),
+          args: { chat, ...(type === undefined ? {} : { type }) },
+        }),
       )
     })
 
@@ -65,9 +72,14 @@ export const stickersCommand = (messenger: Messenger): Command => {
             ? capability(adapter, "stickerSets", "list sticker sets")()
             : capability(adapter, "stickers", "list stickers")(set),
       )
-      renderPage(
-        { ...context, settings: { page: 1, limit: items.length, all: true } },
-        { items: [...items], hasMore: false },
+      renderAnswer(
+        this,
+        context,
+        listOf("stickers list", {
+          items: items.map(snakeKeys),
+          limit: Math.max(1, items.length),
+          has_more: false,
+        }),
       )
     })
   return stickers
@@ -84,7 +96,11 @@ export const callsCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       const limit = context.settings.limit
       const page = await context.withMessenger((adapter) => capability(adapter, "calls", "list calls")({ limit }))
-      renderPage({ ...context, settings: { page: 1, limit, all: false } }, page)
+      renderAnswer(
+        this,
+        context,
+        listOf("calls list", { items: page.items.map(snakeKeys), limit, has_more: page.hasMore }),
+      )
     })
   return calls
 }
@@ -97,7 +113,11 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
     .option("--allow-dangerous", "go ahead without the question an ask level puts before a deletion")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.admin.deleteChat(chat)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.admin.deleteChat(chat)))),
+      )
     }),
   annotate(new Command("clear"), { mutates: true })
     .description("delete every message in a chat for this account; the others in it keep theirs")
@@ -105,7 +125,11 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
     .option("--allow-dangerous", "go ahead without the question an ask level puts before a deletion")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.admin.clearHistory(chat)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.admin.clearHistory(chat)))),
+      )
     }),
 ]
 
@@ -119,14 +143,22 @@ export const muteCommands = (messenger: Messenger): Command[] => [
       const context = messengerContext(this, messenger)
       const { until } = this.opts<{ until?: string }>()
       const when = until === undefined ? "forever" : sendTime(until, Date.now(), "--until")
-      context.renderer.result(await context.withServices((services) => services.account.mute(chat, when)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.account.mute(chat, when)))),
+      )
     }),
   annotate(new Command("unmute"), { mutates: true })
     .description("hear a muted chat again")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.account.mute(chat, null)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.account.mute(chat, null)))),
+      )
     }),
 ]
 
@@ -147,9 +179,10 @@ export const privacyCommand = (messenger: Messenger): Command => {
     .description("the account's privacy settings; reading changes nothing")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withMessenger((adapter) => capability(adapter, "privacy", "read privacy settings")()),
+      const privacy = await context.withMessenger((adapter) =>
+        capability(adapter, "privacy", "read privacy settings")(),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(privacy)))
     })
   privacy.addCommand(
     annotate(new Command("set"), { mutates: true })
@@ -179,7 +212,11 @@ export const privacyCommand = (messenger: Messenger): Command => {
             hideOnline: typed.hideOnline === undefined ? undefined : typed.hideOnline === "on",
           }).filter(([, value]) => value !== undefined),
         )
-        context.renderer.result(await context.withServices((services) => services.account.updatePrivacy(change)))
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys(await context.withServices((services) => services.account.updatePrivacy(change)))),
+        )
       }),
   )
   return privacy

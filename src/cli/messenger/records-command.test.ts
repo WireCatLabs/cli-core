@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { CallRecord, Chat, Message } from "../../domain/models.js"
+import { snakeKeys } from "../envelope.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { accountCommand } from "./account-command.js"
@@ -115,14 +116,18 @@ describe("reads only the server answers", () => {
       },
     }
     const shown = await invoke(
-      ["chats", "media", "Book club", "--type", "photo,link", "--limit", "2", "--before-id", "50", "--json"],
+      ["chats", "media", "Book club", "--type", "photo,link", "--limit", "2", "--cursor", "50", "--json"],
       adapter,
       { chatMedia: true },
     )
     const wrong = await invoke(["chats", "media", "Book club", "--type", "gif"], adapter, { chatMedia: true })
     const elsewhere = await invoke(["chats", "media", "Book club"], adapter)
 
-    expect(JSON.parse(shown.stdout)).toMatchObject({ items: [{ id: "41" }, { id: "42" }], hasMore: true, limit: 2 })
+    expect(JSON.parse(shown.stdout)).toMatchObject({
+      items: [{ id: "41" }, { id: "42" }],
+      page: { has_more: true, limit: 2, cursor: "41" },
+      next: [{ step: "page.next", args: { chat: "Book club", type: "photo,link", cursor: "41", limit: 2 } }],
+    })
     expect(asked).toEqual([["7", { kinds: ["photo", "link"], limit: 2, before: "50" }]])
     expect(wrong.code).toBe(2)
     expect(elsewhere.code).not.toBe(0)
@@ -135,7 +140,7 @@ describe("reads only the server answers", () => {
     })
     const cannot = await invoke(["calls", "list"], base)
 
-    expect(JSON.parse(listed.stdout)).toMatchObject({ items: [call], hasMore: false })
+    expect(JSON.parse(listed.stdout)).toMatchObject({ items: [snakeKeys(call)], page: { has_more: false } })
     expect(cannot.stderr).toContain("cannot list calls")
   })
 
@@ -144,7 +149,7 @@ describe("reads only the server answers", () => {
     const shown = await invoke(["account", "privacy", "show", "--json"], adapter, { privacy: true })
     const elsewhere = await invoke(["account", "privacy", "show"], adapter)
 
-    expect(JSON.parse(shown.stdout)).toEqual({ findByPhone: "contacts", hideOnline: false })
+    expect(JSON.parse(shown.stdout).item).toEqual({ find_by_phone: "contacts", hide_online: false })
     expect(elsewhere.code).not.toBe(0)
   })
 
@@ -163,8 +168,8 @@ describe("reads only the server answers", () => {
       chatMute: true,
     })
 
-    expect(JSON.parse(forever.stdout)).toMatchObject({ chatId: "7", mutedUntil: "forever" })
-    expect(JSON.parse(lifted.stdout)).toMatchObject({ chatId: "7", mutedUntil: null })
+    expect(JSON.parse(forever.stdout).item).toMatchObject({ chat_id: "7", muted_until: "forever" })
+    expect(JSON.parse(lifted.stdout).item).toMatchObject({ chat_id: "7", muted_until: null })
     expect(muted[0]).toEqual(["7", "forever"])
     expect(Date.parse(String((muted[1] as unknown[])[1])) - Date.now()).toBeGreaterThan(7_000_000)
     expect(muted[2]).toEqual(["7", null])
@@ -198,7 +203,7 @@ describe("reads only the server answers", () => {
       },
     )
 
-    expect(JSON.parse(set.stdout)).toMatchObject({ privacy: { findByPhone: "contacts", hideOnline: true } })
+    expect(JSON.parse(set.stdout).item).toMatchObject({ privacy: { find_by_phone: "contacts", hide_online: true } })
     expect(changes).toEqual([{ findByPhone: "contacts", hideOnline: true }])
     expect([wrong.code, empty.code, readOnly.code]).toEqual([2, 2, 5])
   })
@@ -212,8 +217,8 @@ describe("reads only the server answers", () => {
     const sets = await invoke(["stickers", "list", "--json"], adapter)
     const one = await invoke(["stickers", "list", "--set", "5", "--json"], adapter)
 
-    expect(JSON.parse(sets.stdout)).toMatchObject({ items: [{ id: "5", title: "Cats" }], hasMore: false })
-    expect(JSON.parse(one.stdout).items).toEqual([{ id: "51", setId: "5", emoji: ["🐱"], url: null }])
+    expect(JSON.parse(sets.stdout)).toMatchObject({ items: [{ id: "5", title: "Cats" }], page: { has_more: false } })
+    expect(JSON.parse(one.stdout).items).toEqual([{ id: "51", set_id: "5", emoji: ["🐱"], url: null }])
   })
 
   it("`messages send --sticker` sends it alone, refuses text beside it, and exists only where the messenger offers it", async () => {
@@ -259,8 +264,8 @@ describe("reads only the server answers", () => {
     const elsewhere = await invoke(["chats", "delete", "Book club", "--allow-dangerous"], adapter)
 
     expect(unasked.stderr).toContain("--allow-dangerous")
-    expect(JSON.parse(deleted.stdout)).toMatchObject({ chatId: "7" })
-    expect(JSON.parse(cleared.stdout)).toMatchObject({ chatId: "7" })
+    expect(JSON.parse(deleted.stdout).item).toMatchObject({ chat_id: "7" })
+    expect(JSON.parse(cleared.stdout).item).toMatchObject({ chat_id: "7" })
     expect(done).toEqual([
       ["delete", "7"],
       ["clear", "7"],
