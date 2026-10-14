@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- Shared `meetings prepare <series-id>` and `meeting_prepare` adapters from `./cli` validate windows
+  and limits before invoking an account-bound preparation reader. The registered `meeting_preparation`
+  entity keeps cited cues, observed people, stored projects/facts/tasks, coverage and normalized ISO
+  times together in the standard envelope. Provider hosts opt in to the remote schedule read.
+
 ### Fixed
 
 - **`config set` and `config unset` take a setting's camelCase name too** and write it in snake_case:

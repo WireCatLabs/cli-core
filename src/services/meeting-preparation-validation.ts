@@ -2,6 +2,14 @@ import { CliError } from "@wirecat/cli-base"
 import { validateMeetingSeriesHistory } from "../meetings/index.js"
 import type { MeetingPreparationRequest } from "./meeting-preparation-types.js"
 
+export const MEETING_PREPARATION_LIMITS = {
+  meetings: { min: 1, max: 20, default: 5 },
+  cues: { min: 1, max: 100, default: 10 },
+  contextLimit: { min: 1, max: 100, default: 20 },
+  bytes: { min: 4096, max: 4194304, default: 65536 },
+  maxReadBytes: { min: 1, max: 4194304, default: 262144 },
+} as const
+
 export const preparationCancelled = (signal?: AbortSignal): void => {
   if (!signal?.aborted) return
   if (signal.reason instanceof CliError) throw signal.reason
@@ -10,7 +18,7 @@ export const preparationCancelled = (signal?: AbortSignal): void => {
     "Meeting preparation was interrupted",
   )
 }
-export const preparationRequest = (accountId: number, externalId: string, original: MeetingPreparationRequest) => {
+export const validateMeetingPreparationRequest = (externalId: string, original: MeetingPreparationRequest) => {
   if (!original || typeof original !== "object" || Array.isArray(original))
     throw new CliError("validation_error", "meeting preparation request is required")
   const input = { ...original }
@@ -32,28 +40,41 @@ export const preparationRequest = (accountId: number, externalId: string, origin
   if (input.signal !== undefined && !(input.signal instanceof AbortSignal))
     throw new CliError("validation_error", "signal must be an AbortSignal")
   preparationCancelled(input.signal)
-  const bounded = (value: number | undefined, fallback: number, max: number, name: string) => {
-    const result = value === undefined ? fallback : value
-    if (!Number.isSafeInteger(result) || result < 1 || result > max)
-      throw new CliError("validation_error", `${name} must be an integer from 1 to ${max}`)
+  const bounded = (key: keyof typeof MEETING_PREPARATION_LIMITS) => {
+    const limits = MEETING_PREPARATION_LIMITS[key]
+    const result = input[key] === undefined ? limits.default : input[key]
+    if (!Number.isSafeInteger(result) || result < limits.min || result > limits.max)
+      throw new CliError("validation_error", `${key} must be an integer from ${limits.min} to ${limits.max}`)
     return result
   }
-  const meetings = bounded(input.meetings, 5, 20, "meetings")
-  const cues = bounded(input.cues, 10, 100, "cues")
-  const contextLimit = bounded(input.contextLimit, 20, 100, "contextLimit")
-  const bytes = bounded(input.bytes, 65536, 4194304, "bytes")
-  if (bytes < 4096) throw new CliError("validation_error", "bytes must be at least 4096")
+  const meetings = bounded("meetings")
+  const cues = bounded("cues")
+  const contextLimit = bounded("contextLimit")
+  const bytes = bounded("bytes")
+  if (typeof externalId !== "string" || !externalId.trim() || externalId.length > 1000 || /[\0\r\n]/.test(externalId))
+    throw new CliError("validation_error", "series_id must be a bounded nonempty identifier")
+  for (const key of ["after", "historyAfter"] as const)
+    if (!Number.isSafeInteger(input[key]) || Math.abs(input[key]) > 8640000000000000)
+      throw new CliError("validation_error", `${key} must be an absolute timestamp`)
+  if (input.historyAfter >= input.after)
+    throw new CliError("validation_error", "historyAfter must be earlier than after")
+  const maxReadBytes = bounded("maxReadBytes")
+  if (!Number.isSafeInteger(input.until) || Math.abs(input.until) > 8640000000000000 || input.until <= input.after)
+    throw new CliError("validation_error", "until must be an absolute timestamp later than after")
+  preparationCancelled(input.signal)
+  return { ...input, meetings, cues, contextLimit, bytes, maxReadBytes }
+}
+
+export const preparationRequest = (accountId: number, externalId: string, original: MeetingPreparationRequest) => {
+  const input = validateMeetingPreparationRequest(externalId, original)
   const history = validateMeetingSeriesHistory({
     accountId,
     externalId,
     after: input.historyAfter,
     before: input.after,
-    limit: meetings,
+    limit: input.meetings,
     maxReadBytes: input.maxReadBytes,
     signal: input.signal,
   })
-  if (!Number.isSafeInteger(input.until) || Math.abs(input.until) > 8640000000000000 || input.until <= input.after)
-    throw new CliError("validation_error", "until must be an absolute timestamp later than after")
-  preparationCancelled(input.signal)
-  return { ...input, meetings, cues, contextLimit, bytes, maxReadBytes: history.maxReadBytes, history }
+  return { ...input, history }
 }

@@ -228,6 +228,7 @@ export type {
   MeetingPreparationPorts,
   MeetingPreparationRequest,
 } from "./meeting-preparation-types.js"
+export { MEETING_PREPARATION_LIMITS, validateMeetingPreparationRequest } from "./meeting-preparation-validation.js"
 export {
   type MeetingReadStore,
   type MeetingReferenceReadOptions,
