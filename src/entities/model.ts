@@ -14,4 +14,6 @@ export const model = v.strictObject({
   downloaded: v.boolean(),
   /** The one used when no model is named. */
   default: v.boolean(),
+  /** The folder its files are in once downloaded, so an agent can place them by hand. */
+  path: text,
 })

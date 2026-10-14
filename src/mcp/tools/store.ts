@@ -1,13 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { listOf } from "../../cli/envelope.js"
+import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { parseDuration } from "../../cli/settings.js"
 import { levelFor } from "../../sends/permissions.js"
 import { FETCHING } from "../../services/archive.js"
 import { GAP_BOUNDS, gapsService, validateRepair } from "../../services/archive-gaps.js"
-import { jobItem, jobsDir, listJobs, readJob, startArchiveJob, stateOf } from "../../services/backfill-jobs.js"
+import { jobsDir, readJob, startArchiveJob, stateOf } from "../../services/backfill-jobs.js"
 import { storedDeps } from "../../services/deps.js"
+import { JOBS_QUERY, jobItems } from "../../services/job-query.js"
 import { validateCatchUp } from "../../services/search-catchup.js"
 import { type AnyTool, chatOf, READ, tool } from "../tool.js"
 
@@ -148,17 +150,16 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
   store_jobs_list: tool({
     title: "List store jobs",
     description: "The selected profile's own sync/repair jobs, newest first.",
-    input: v.object({ limit: count(100), page: count(10_000) }),
+    input: v.object({ query: queryArgument(JOBS_QUERY), limit: count(100), page: count(10_000) }),
     annotations: { ...READ, openWorldHint: false },
     output: { entity: "job", list: true },
     local: async (args, defaults) => {
       const limit = args.limit ?? 20
       const page = args.page ?? 1
-      const rows = listJobs(jobsDir(messenger.app, defaults.env)).filter(
-        (job) => job.profile === defaults.settings.profile,
-      )
+      const query = listQuery(args.query ?? "", JOBS_QUERY, "store jobs list")
+      const rows = jobItems(jobsDir(messenger.app, defaults.env), defaults.settings.profile, query)
       return listOf("store jobs list", {
-        items: rows.slice((page - 1) * limit, page * limit).map(jobItem),
+        items: rows.slice((page - 1) * limit, page * limit),
         limit,
         page,
         has_more: rows.length > page * limit,

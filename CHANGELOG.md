@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`store jobs list [query...]` filters by query; `--state` is gone** (`state:failed`, `chat:7`,
+  `started_at>=7d`, every field of the `job` entity). The job folder is the list's own source, so each job file is
+  checked as it is read. MCP `store_jobs_list` takes `query` too.
+- **Each model in `models audio|text|image list` carries `path`**, the folder its files go in, downloaded or not.
+  `models * download` answers that same `model` item (`{item}`; `works` and `directory` are gone — a failed check
+  still fails the command), and `models text key set|remove` answer `{item}`.
+
 ## 0.266.0 — 14.10.2026
 
 ### Changed — may break callers

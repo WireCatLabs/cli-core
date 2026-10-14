@@ -1,14 +1,16 @@
+import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command, Option } from "commander"
 import type * as v from "valibot"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../../embeddings/embed.js"
-import { DEFAULT_TEXT_MODEL, TEXT_MODELS, textModel } from "../../embeddings/models.js"
+import { DEFAULT_TEXT_MODEL, TEXT_MODELS, type TextModel, textModel } from "../../embeddings/models.js"
 import type { model } from "../../entities/model.js"
 import {
   DEFAULT_IMAGE_MODEL,
   IMAGE_MODELS,
+  type ImageModel,
   imageModel,
   imageModelsDirectory,
   isImageModelInstalled,
@@ -24,12 +26,12 @@ import {
   modelsDirectory,
   vadPath,
 } from "../../speech/install.js"
-import { orderedModels, speechModel, VAD } from "../../speech/models.js"
+import { orderedModels, type SpeechModel, speechModel, VAD } from "../../speech/models.js"
 import { choose } from "../../speech/transcribe.js"
 import { readSecret } from "../../terminal/prompt.js"
 import { baseContext, environmentOf } from "../context.js"
 import { embeddingKeys } from "../embedding-keys.js"
-import { listOf, renderAnswer } from "../envelope.js"
+import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import type { Messenger } from "./context.js"
 
@@ -43,6 +45,44 @@ type ModelItem = v.InferOutput<typeof model>
 /** Every model this version knows: a short, fixed list, never paged. */
 const everyModel = (command: string, items: ModelItem[], next: NextStep[] = []) =>
   listOf(command, { items, limit: Math.max(1, items.length), has_more: false, next })
+
+const audioItem = (model: SpeechModel, directory: string, chosen: string): ModelItem => ({
+  id: model.id,
+  kind: "audio",
+  title: model.title,
+  languages: model.languages,
+  size_bytes: installedBytes(model),
+  downloaded: isInstalled(model, directory),
+  default: model.id === chosen,
+  path: join(directory, model.id),
+})
+
+const textItem = (model: TextModel, directory: string): ModelItem => ({
+  id: model.id,
+  kind: "text",
+  title: model.title,
+  languages: model.languages,
+  licence: model.licence,
+  size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
+  downloaded: isTextModelInstalled(model, directory),
+  default: model.id === DEFAULT_TEXT_MODEL,
+  path: join(directory, model.id),
+})
+
+const imageItem = (model: ImageModel, directory: string): ModelItem => ({
+  id: model.id,
+  kind: "image",
+  title: model.title,
+  languages: model.languages,
+  licence: model.licence,
+  size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
+  downloaded: isImageModelInstalled(model, directory),
+  default: model.id === DEFAULT_IMAGE_MODEL,
+  path: join(directory, model.id),
+})
+
+const downloaded = (body: Body<ModelItem>) =>
+  "item" in body ? `${body.item.id}: downloaded and works, in ${body.item.path}\n` : ""
 
 const modelLine = (item: ModelItem, width: number) =>
   `${item.default ? "*" : " "} ${item.id.padEnd(width)} ${megabytes(item.size_bytes).padStart(7)}  ` +
@@ -59,15 +99,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       await context.run(async () => {
         const directory = modelsDirectory(context.env)
         const chosen = choose(messenger, context.settings, {}, context.env).model.id
-        const items: ModelItem[] = orderedModels(messenger.speechModels).map((model) => ({
-          id: model.id,
-          kind: "audio",
-          title: model.title,
-          languages: model.languages,
-          size_bytes: installedBytes(model),
-          downloaded: isInstalled(model, directory),
-          default: model.id === chosen,
-        }))
+        const items = orderedModels(messenger.speechModels).map((model) => audioItem(model, directory, chosen))
         renderAnswer(this, context, everyModel("models audio list", items), () =>
           items.map((item) => `${modelLine(item, 14)}  ${item.languages}\n`).join(""),
         )
@@ -75,8 +107,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  audio
-    .command("download")
+  annotate(audio.command("download"), { output: { entity: "model" } })
     .argument("<model>", "a model id from `models audio list`")
     .description("download a speech model once, checked against the sha256 this version expects")
     .action(async function (this: Command, id: string) {
@@ -101,7 +132,8 @@ export const modelsCommand = (messenger: Messenger): Command => {
           } finally {
             recognizer.free()
           }
-          context.renderer.result({ id: model.id, downloaded: true, works: true, directory })
+          const chosen = choose(messenger, context.settings, {}, context.env).model.id
+          renderAnswer(this, context, itemOf(audioItem(model, directory, chosen)), downloaded)
         },
         { unbounded: true },
       )
@@ -115,16 +147,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(async () => {
         const directory = textModelsDirectory(context.env)
-        const items: ModelItem[] = TEXT_MODELS.map((model) => ({
-          id: model.id,
-          kind: "text",
-          title: model.title,
-          languages: model.languages,
-          licence: model.licence,
-          size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
-          downloaded: isTextModelInstalled(model, directory),
-          default: model.id === DEFAULT_TEXT_MODEL,
-        }))
+        const items = TEXT_MODELS.map((model) => textItem(model, directory))
         const missing = items.find((item) => item.default && !item.downloaded)
         renderAnswer(
           this,
@@ -140,8 +163,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  text
-    .command("download")
+  annotate(text.command("download"), { output: { entity: "model" } })
     .argument("<model>", "a model id from `models text list`")
     .addOption(new Option("--accept-terms", "accept the model's licence terms, for a model that has its own"))
     .description("download an embedding model once, checked against the sha256 this version expects")
@@ -173,7 +195,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
           } finally {
             await embedder.close()
           }
-          context.renderer.result({ id: model.id, downloaded: true, works: true, directory })
+          renderAnswer(this, context, itemOf(textItem(model, directory)), downloaded)
         },
         { unbounded: true },
       )
@@ -189,16 +211,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(async () => {
         const directory = imageModelsDirectory(context.env)
-        const items: ModelItem[] = IMAGE_MODELS.map((model) => ({
-          id: model.id,
-          kind: "image",
-          title: model.title,
-          languages: model.languages,
-          licence: model.licence,
-          size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
-          downloaded: isImageModelInstalled(model, directory),
-          default: model.id === DEFAULT_IMAGE_MODEL,
-        }))
+        const items = IMAGE_MODELS.map((model) => imageItem(model, directory))
         const missing = items.find((item) => item.default && !item.downloaded)
         renderAnswer(
           this,
@@ -214,8 +227,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  image
-    .command("download")
+  annotate(image.command("download"), { output: { entity: "model" } })
     .argument("<model>", "a model id from `models image list`")
     .description("download a picture model once, checked against the sha256 this version expects")
     .action(async function (this: Command, id: string) {
@@ -240,7 +252,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
           } finally {
             await embedder.close()
           }
-          context.renderer.result({ id: model.id, downloaded: true, works: true, directory })
+          renderAnswer(this, context, itemOf(imageItem(model, directory)), downloaded)
         },
         { unbounded: true },
       )
@@ -259,7 +271,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
         const secret = (await readSecret(`API key for ${provider}: `, stdin ? { input: stdin } : {})).trim()
         if (!secret) throw new CliError("validation_error", "no key was given — nothing was stored")
         const source = embeddingKeys(messenger.app, context.env).write(provider, secret)
-        context.renderer.result({ provider, stored: source })
+        renderAnswer(this, context, itemOf({ provider, stored: source }))
       })
     })
 
@@ -270,7 +282,11 @@ export const modelsCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, provider: string) {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(async () => {
-        context.renderer.result({ provider, removed: embeddingKeys(messenger.app, context.env).remove(provider) })
+        renderAnswer(
+          this,
+          context,
+          itemOf({ provider, removed: embeddingKeys(messenger.app, context.env).remove(provider) }),
+        )
       })
     })
 

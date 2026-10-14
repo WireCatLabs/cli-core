@@ -163,6 +163,7 @@ const samples: Record<EntityName, unknown> = {
     size_bytes: 120_000_000,
     downloaded: false,
     default: true,
+    path: "/home/someone/.local/share/WireCat/models/text/e5-small",
   },
   saved_search: {
     id: "3",

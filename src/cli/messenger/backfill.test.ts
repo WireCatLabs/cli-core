@@ -625,22 +625,24 @@ describe("store fetch in the background", () => {
     expect(dead.calls).toHaveLength(5)
   })
 
-  it("**list --state** answers only the jobs in that state", async () => {
+  it("**list state:** answers only the jobs in that state, read from the job folder", async () => {
     const env = setup()
     const dead = spawned(2 ** 22 + 12345)
     const died = (await call(["messages", "sync", "8", "--background", "--json"], idle, env, dead)).answer.job
     const done = (await call(["messages", "sync", "9", "--background", "--json"], idle, env, dead)).answer.job
     updateJob(jobsDir(app, env), done, { finishedAt: new Date().toISOString(), result: { fetched: 1 } })
 
-    const listed = async (state: string) =>
-      (await call(["store", "jobs", "list", "--state", state, "--json"], idle, env)).answer.items.map(
+    const listed = async (...query: string[]) =>
+      (await call(["store", "jobs", "list", ...query, "--json"], idle, env)).answer.items.map(
         (item: { id: string }) => item.id,
       )
 
-    expect(await listed("died")).toEqual([died])
-    expect(await listed("done")).toEqual([done])
-    expect(await listed("running")).toEqual([])
-    expect((await call(["store", "jobs", "list", "--state", "lost"], idle, env)).code).toBe(2)
+    expect(await listed("state:died")).toEqual([died])
+    expect(await listed("state:done")).toEqual([done])
+    expect(await listed("state:running")).toEqual([])
+    expect(await listed("-state:done", "chat:8")).toEqual([died])
+    expect((await call(["store", "jobs", "list", "state:lost"], idle, env)).code).toBe(2)
+    expect((await call(["store", "jobs", "list", "--state", "died"], idle, env)).code).toBe(2)
   })
 
   it("**clear** forgets finished jobs and their logs, and keeps a running one", async () => {
