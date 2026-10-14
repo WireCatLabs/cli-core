@@ -2527,6 +2527,20 @@
     "flood clear": {
       "in": "all"
     },
+    "images": {
+      "in": [],
+      "planned": {
+        "max": "max's next cli-core bump registers imagesCommand",
+        "tg": "tg's next cli-core bump registers imagesCommand"
+      }
+    },
+    "images embed": {
+      "in": [],
+      "planned": {
+        "max": "max's next cli-core bump registers imagesCommand",
+        "tg": "tg's next cli-core bump registers imagesCommand"
+      }
+    },
     "inbox": {
       "in": "all",
       "options": {
@@ -2875,6 +2889,24 @@
     },
     "models audio list": {
       "in": "all"
+    },
+    "models image": {
+      "in": ["tg"],
+      "planned": {
+        "max": "max's next cli-core bump"
+      }
+    },
+    "models image download": {
+      "in": ["tg"],
+      "planned": {
+        "max": "max's next cli-core bump"
+      }
+    },
+    "models image list": {
+      "in": ["tg"],
+      "planned": {
+        "max": "max's next cli-core bump"
+      }
     },
     "models text": {
       "in": "all"

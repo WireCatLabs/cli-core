@@ -9,12 +9,6 @@ shape of this file.
 
 ## 0.264.0 — 14.10.2026
 
-### Fixed
-
-- The passage command declares a runnable cited-reference example and shares the existing `--bytes <bytes>` placeholder with other evidence reads.
-
-- Bounded meeting context reports `invalid_response` when an adapter returns absent parent/revision metadata or a null cue, rather than failing with an unclassified exception.
-
 ### Added
 
 - **Pictures are found by what they show, per profile, in their own lane.** Set `pictureSearch: true` in a profile
@@ -46,6 +40,10 @@ shape of this file.
   directly needs the new name.
 
 ### Fixed
+
+- The passage command declares a runnable cited-reference example and shares the existing `--bytes <bytes>` placeholder with other evidence reads.
+
+- Bounded meeting context reports `invalid_response` when an adapter returns absent parent/revision metadata or a null cue, rather than failing with an unclassified exception.
 
 - Retired catalog records leave shared note listings, word/meaning search and embedding preparation without deleting their indexed content or owner annotations. Re-entry restores their visibility with the same reference.
 
