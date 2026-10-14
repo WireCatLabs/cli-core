@@ -187,7 +187,7 @@
     "--chat": {
       "value": "<chat>",
       "meaning": "a chat, by id or name; repeat it for more",
-      "note": "chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4); both message searches resolve stored names without networking"
+      "note": "chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4)"
     },
     "--chat-invites": {
       "value": "<who>",
@@ -670,10 +670,6 @@
     "--offline": {
       "meaning": "answer from what was recorded and never connect; fails if nothing was"
     },
-    "--offset": {
-      "value": "<n>",
-      "meaning": "skip this many, for the next page"
-    },
     "--offset-bytes": {
       "value": "<n>",
       "meaning": "start byte offset in a retained attachment",
@@ -978,10 +974,6 @@
       "value": "<duration>",
       "meaning": "stop fetching after this long (default: 30s)"
     },
-    "--tag": {
-      "value": "<tag>",
-      "meaning": "only this tag"
-    },
     "--template": {
       "meaning": "the reply template",
       "value": "<text>"
@@ -1057,7 +1049,7 @@
     "--type": {
       "value": "<names>",
       "meaning": "only these types",
-      "note": "each command names its own types — tasks add gives the new task question, request, mention or promise — search messages text, voice or file, and search notes internal or file — so it differs on purpose (Help text rule 4)"
+      "note": "each command names its own types — tasks add gives the new task question, request, mention or promise — and search notes internal or file — so it differs on purpose (Help text rule 4)"
     },
     "--types": {
       "value": "<value>",
@@ -3153,14 +3145,8 @@
             "tg": "each CLI’s next cli-core bump"
           }
         },
-        "--offset": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-core bump",
-            "tg": "each CLI’s next cli-core bump"
-          }
-        },
         "--only": "all",
+        "--page": "all",
         "--server-time": {
           "in": [],
           "planned": {
@@ -3220,18 +3206,11 @@
     "search mail": {
       "in": "all",
       "options": {
-        "--chat": "all",
         "--context": "all",
         "--exact": "all",
         "--limit": "all",
         "--newest": "all",
-        "--offset": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-core bump",
-            "tg": "each CLI’s next cli-core bump"
-          }
-        },
+        "--page": "all",
         "--source": {
           "in": [],
           "planned": {
@@ -3248,7 +3227,6 @@
         "--backend": {
           "in": "all"
         },
-        "--chat": "all",
         "--context": "all",
         "--discover": "all",
         "--exact": "all",
@@ -3261,13 +3239,7 @@
           "in": "all"
         },
         "--newest": "all",
-        "--offset": {
-          "in": [],
-          "planned": {
-            "max": "each CLI’s next cli-core bump",
-            "tg": "each CLI’s next cli-core bump"
-          }
-        },
+        "--page": "all",
         "--regex": "all",
         "--saved": {
           "in": "all"
@@ -3297,8 +3269,7 @@
         "--thread-within": {
           "in": "all"
         },
-        "--timezone": "all",
-        "--type": "all"
+        "--timezone": "all"
       }
     },
     "search notes": {
@@ -3307,7 +3278,7 @@
         "--exact": "all",
         "--filter": "all",
         "--limit": "all",
-        "--offset": "all",
+        "--page": "all",
         "--source": {
           "in": [],
           "planned": {
@@ -3315,7 +3286,6 @@
             "tg": "each CLI’s next cli-core bump"
           }
         },
-        "--tag": "all",
         "--timezone": "all",
         "--type": "all"
       }
