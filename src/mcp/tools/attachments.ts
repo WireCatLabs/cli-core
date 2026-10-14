@@ -4,16 +4,17 @@ import * as v from "valibot"
 import { MAX_TEXT_CHARS } from "../../attachments/extract.js"
 import { gatewayOcr } from "../../attachments/gateway-ocr.js"
 import { pdfPreviewLimits } from "../../attachments/limits.js"
+import { listOf } from "../../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../../cli/execution.js"
+import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { levelFor } from "../../sends/permissions.js"
 import { refusedPlace } from "../../sends/upload.js"
+import { ATTACHMENT_QUERY } from "../../services/attachments.js"
 import { onlineDeps } from "../../services/deps.js"
 import { downloadMessage } from "../../services/file-download.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
-import { type AnyTool, BinaryResource, chatOf, Picture, paging, READ, tool } from "../tool.js"
-
-const ITEM = "{ locator, attachment, kind, name, localPath, text: { origin, extractor, chars, error } | null }"
+import { type AnyTool, BinaryResource, chatOf, limit, Picture, page, paging, READ, tool } from "../tool.js"
 
 export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> => {
   const command = messenger.app.command
@@ -167,26 +168,21 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
       title: "List files of stored messages",
       description:
         "Files of this account's stored messages, newest first: where each was saved on this machine and whether " +
-        "its text is held — never the text. With `needs_text`, only files saved here that nobody has text for yet, " +
-        "such as a scan or a photo: use attachments_show to receive bytes remotely, or read `localPath` on the server, then write the text with " +
-        `attachments_text_set, and content:<word> in search_messages finds it. \`${command} attachments extract\` ` +
-        `reads text layers (plain text, Word, PDF). Returns { items: [${ITEM}], page, limit, hasMore }.`,
-      input: v.object({
-        chat: v.optional(chatOf(messenger)),
-        needs_text: v.optional(v.pipe(v.boolean(), v.description("only files still without text"))),
-        limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(500))),
-        page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
-      }),
+        "its text is held — never the text. With `is:needs_text`, only files saved here that nobody has text for " +
+        "yet, such as a scan or a photo: use attachments_show to receive bytes remotely, or read `local_path` on the " +
+        "server, then write the text with attachments_text_set (`message`, `position`), and content:<word> in " +
+        `search_messages finds it. \`${command} attachments extract\` reads text layers (plain text, Word, PDF).`,
+      input: v.object({ query: queryArgument(ATTACHMENT_QUERY), limit, page }),
       annotations: { ...READ, openWorldHint: false },
+      output: { entity: "attachment", list: true },
       stored: async (store, account, args, defaults) => {
-        const { size, number } = paging(args, defaults)
+        const { size, number, window } = paging(args, defaults)
+        const query = listQuery(args.query ?? "", ATTACHMENT_QUERY, "attachments list")
         const found = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).attachments.list({
-          ...(args.chat === undefined ? {} : { chat: args.chat }),
-          ...(args.needs_text ? { needsText: true } : {}),
-          limit: size,
-          page: number,
+          ...window,
+          ...(query ? { query } : {}),
         })
-        return { items: found.slice(0, size), page: number, limit: size, hasMore: found.length > size }
+        return listOf("attachments list", { items: found.items, limit: size, has_more: found.has_more, page: number })
       },
     }),
 

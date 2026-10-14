@@ -3,6 +3,7 @@ import type { Id } from "../../domain/models.js"
 import type { CacheDatabase } from "../driver.js"
 import { normalize } from "../normalize.js"
 import type { StoreContext } from "./open.js"
+import type { ColumnMap, Where } from "./query-filter.js"
 import { inBatch } from "./search-index.js"
 
 export type TextOrigin = "extracted" | "agent"
@@ -183,6 +184,8 @@ export interface AttachmentView {
   position: number
   kind: string
   name: string | null
+  mime: string | null
+  size: number | null
   localPath: string | null
   text: { origin: TextOrigin; extractor: string; chars: number; error: string | null } | null
 }
@@ -191,6 +194,30 @@ export interface AttachmentView {
 const NO_TEXT_LIST = ["voice", "audio", "video", "video_note", "sticker", "animation", "gif"]
   .map((kind) => `'${kind}'`)
   .join(",")
+
+const NEEDS_TEXT =
+  `att.local_path IS NOT NULL AND att.kind NOT IN (${NO_TEXT_LIST}) AND ` +
+  "(att.extracted_at IS NULL OR (att.extraction <> 'agent' AND coalesce(att.normalized_text, '') = ''))"
+
+/**
+ * `attachments list` fields over `attachmentViews`. `chat:` takes the chat's stored id, which `chats` maps each
+ * typed name to, so the store needs no messenger.
+ */
+export const attachmentColumns = (chats: ReadonlyMap<string, string>): ColumnMap => ({
+  position: { type: "num", sql: "(att.position + 1)" },
+  kind: { type: "kw", sql: "att.kind" },
+  name: { type: "kw", sql: "att.name" },
+  mime: { type: "kw", sql: "att.mime" },
+  size: { type: "num", sql: "att.size" },
+  local_path: { type: "kw", sql: "att.local_path" },
+  chat: {
+    where: (node) =>
+      node.operator === "wildcard"
+        ? { sql: "1", params: [] }
+        : { sql: "c.external_id = ?", params: [chats.get(node.value) ?? node.value] },
+  },
+  is: { where: () => ({ sql: NEEDS_TEXT, params: [] }) },
+})
 
 /**
  * This account's file attachments of live messages, newest first. `needsText`: saved on this machine and
@@ -202,10 +229,10 @@ export const attachmentViews = (
   {
     chatKey,
     messageId,
-    needsText = false,
+    where: query,
     offset = 0,
     limit,
-  }: { chatKey?: number; messageId?: Id; needsText?: boolean; offset?: number; limit: number },
+  }: { chatKey?: number; messageId?: Id; where?: Where; offset?: number; limit: number },
 ): AttachmentView[] => {
   const where = [
     "m.account_id = ?",
@@ -213,18 +240,13 @@ export const attachmentViews = (
     `att.kind NOT IN (${NOT_FILE_LIST})`,
     ...(chatKey === undefined ? [] : ["m.chat_id = ?"]),
     ...(messageId === undefined ? [] : ["m.external_id = ?"]),
-    ...(needsText
-      ? [
-          "att.local_path IS NOT NULL",
-          `att.kind NOT IN (${NO_TEXT_LIST})`,
-          "(att.extracted_at IS NULL OR (att.extraction <> 'agent' AND coalesce(att.normalized_text, '') = ''))",
-        ]
-      : []),
+    ...(query === undefined ? [] : [`(${query.sql})`]),
   ]
   return database
     .prepare(
       `SELECT att.id AS pk, c.external_id AS chat_id, m.external_id AS message_id, att.position, att.kind, att.name,
-         att.local_path, att.extraction AS origin, att.extractor, length(att.text) AS chars, att.extraction_error AS error
+         att.mime, att.size, att.local_path, att.extraction AS origin, att.extractor, length(att.text) AS chars,
+         att.extraction_error AS error
        FROM attachments att
        JOIN messages m ON m.id = att.attachable_id AND att.attachable_type = 'message'
        JOIN chats c ON c.id = m.chat_id
@@ -236,6 +258,7 @@ export const attachmentViews = (
       accountKey,
       ...(chatKey === undefined ? [] : [chatKey]),
       ...(messageId === undefined ? [] : [messageId]),
+      ...(query?.params ?? []),
       limit,
       offset,
     )
@@ -246,6 +269,8 @@ export const attachmentViews = (
       position: Number(row.position),
       kind: String(row.kind),
       name: row.name == null ? null : String(row.name),
+      mime: row.mime == null ? null : String(row.mime),
+      size: row.size == null ? null : Number(row.size),
       localPath: row.local_path == null ? null : String(row.local_path),
       text:
         row.origin == null

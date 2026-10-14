@@ -594,9 +594,6 @@
     "--multiple": {
       "meaning": "people may pick several answers"
     },
-    "--needs-text": {
-      "meaning": "only files saved here whose text nobody has yet: what an agent reads and writes back"
-    },
     "--new": {
       "meaning": "what arrived since the last check, each message once — for scheduled runs"
     },
@@ -1282,13 +1279,7 @@
         "--all": {
           "in": "all"
         },
-        "--chat": {
-          "in": "all"
-        },
         "--limit": {
-          "in": "all"
-        },
-        "--needs-text": {
           "in": "all"
         },
         "--page": {
