@@ -674,9 +674,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 |---|---|---|---|---|
 | `--accept-terms` |  | accept the model's licence terms, for a model that has its own |  | `models text download` |
 | `--add` | `<chat>` | put a chat into a folder; repeat it for more |  | `bot webhooks set` (max-only), `chats folders update` |
-| `--after-id` | `<id>` | read what came after this message id; not with --after-time or the --before pair |  | `messages list` |
 | `--after-n` | `<n>` | how many messages after it |  | `messages context` |
-| `--after-time` | `<time>` | read what came after this ISO 8601 time, or 2h / 1d ago; not with --after-id or the --before pair |  | `messages list` |
 | `--agent` | `<agent>` | install the skill for this agent; asks at a terminal, otherwise none |  | `setup` |
 | `--ai` |  | call the configured reply model with stored message data; requires reply consent, otherwise uses fallback |  | `replies test` |
 | `--all` |  | every row, no paging. **chats requests accept and decline take every pending request instead — Telegram counts them against its hourly limit first; MAX has no way to answer them all at once and refuses it, naming chats requests list — so it differs on purpose (Help text rule 4)** |  | `attachments list`, `chats list`, `chats members list`, `chats requests accept`, `chats requests decline`, `contacts list`, `inbox`, `messages download`, `messages sync`, `review`, `store export` |
@@ -707,9 +705,9 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--background` |  | run as a job that outlives this command; `store jobs show` follows it |  | `messages sync`, `store gaps repair` |
 | `--base-url` | `<url>` | a server with OpenAI's /v1/embeddings: Gemini, Jina, or Ollama and LM Studio on this machine |  | `conversations build`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `search conversations` |
 | `--batch` | `<id>` | the batch id `conversations batches next` printed |  | `conversations links add` |
-| `--before-id` | `<id>` | read what came before this message id; not with --before-time |  | `chats media` (planned), `messages comments` (tg-only), `messages evidence`, `messages list` |
+| `--before-id` | `<id>` | read what came before this message id; not with --before-time |  | `chats media` (planned), `messages evidence` |
 | `--before-n` | `<n>` | how many messages before it |  | `messages context` |
-| `--before-time` | `<time>` | read what came before this ISO 8601 time, or 2h / 1d ago; not with --before-id |  | `messages list` |
+| `--before-time` | `<time>` | read what came before this ISO 8601 time, or 2h / 1d ago; not with --before-id |  |  |
 | `--block` | `<value>` | Set to `true` if user should be blocked in chat. |  | `bot chats members remove` |
 | `--bot` |  | the bot section of the profile's settings, rather than the personal account's |  | `config set`, `config show`, `config unset` |
 | `--bots` | `<profiles>` | also read these bots' copies, comma separated — each allowed by readOtherBots |  | `bot contacts show`, `bot messages between`, `bot search messages` |
@@ -742,7 +740,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--context` | `<n>` | messages before and after each hit |  | `search mail`, `search messages`, `searches create` |
 | `--correct` | `<n>` | with --quiz: the right answer's position, from 1 |  | `polls create` (tg-only) |
 | `--counters` | `<names>` | the counter fields: views,reactions,comments |  | `stats messages counters refresh`, `stats messages counters show` |
-| `--cursor` | `<cursor>` | continue from the extraction or ranking-evidence cursor |  | `attachments extract`, `stats contacts evidence`, `stats messages evidence` |
+| `--cursor` | `<cursor>` | continue from the extraction or ranking-evidence cursor |  | `attachments extract`, `messages comments` (tg-only), `messages list`, `stats contacts evidence`, `stats messages evidence` |
 | `--days` | `<days>` | days of the working window, such as mon-fri or sat,sun |  | `replies edit` |
 | `--debug` |  | on a failure, its whole record — cause and stack — in place of the short line |  | every command |
 | `--deep` | `<n>` | also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second. **TG specializes the SDK help with the bounded Telegram audit; MAX retains the generic SDK wording. Align the shared help with provider capabilities separately; SDK adoption alone does not remove the difference.** |  | `chats members audit` |
@@ -948,7 +946,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--timezone` | `<zone>` | the IANA timezone for calendar date boundaries. **replies edit uses this option for the IANA timezone for the working window** | `system IANA timezone` | `replies edit`, `search all`, `search conversations`, `search mail`, `search messages`, `search notes`, `searches create`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
 | `--title` | `<title>` | the new name — of a chat, a folder or a forum topic. **tasks add and tasks plan use this for the action and its object, in one line** |  | `bot chats admins add`, `chats folders update`, `chats update`, `tasks add`, `tasks plan`, `topics edit` (tg-only) |
 | `--to` | `<chat>` | the chat to forward it to: an id, or part of a chat name. **the sentence says how to name a chat the messenger's way, so it differs on purpose (Help text rule 4)** |  | `messages forward`, `store export` |
-| `--topic` | `<id>` | address this forum topic: send or forward to it, read only it, or mark only it read. **Telegram group forums only; MAX explicitly refuses this option before sending** |  | `chats mark-read`, `messages forward` (tg-only), `messages list` (planned), `messages send`, `polls create` |
+| `--topic` | `<id>` | address this forum topic: send or forward to it, read only it, or mark only it read. **Telegram group forums only; MAX explicitly refuses this option before sending** |  | `chats mark-read`, `messages forward` (tg-only), `messages send`, `polls create` |
 | `--trace` |  | one line per request on stderr: ids and timings, never message content. **max logs one line per request, tg the connection's own lines: the same option, a different mechanism (Help text rule 4)** |  | every command |
 | `--track` |  | also do it daily while serve runs |  | `chats members fetch` |
 | `--transcribe` |  | hear voice messages not heard yet, on this machine; slow, the model must be downloaded. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `inbox`, `messages list`, `review` |
