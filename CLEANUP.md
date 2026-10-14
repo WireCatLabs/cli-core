@@ -1,5 +1,7 @@
 # Cleanup
 
+- 2026-10-14: `.worktrees/meeting-participant-discovery` and `/tmp/meeting-test-people-*` — isolated bounded participant lookup implementation and invented SQLite fixtures; retain until the owner's cleanup batch.
+
 - `scripts/parity-convert.ts` — the one-off rewrite of `parity.json` into the N-CLI shape; delete once no open branch edits the old shape (feat/parity-n-clis). 2026-10-01
 - 2026-10-10: the `/.worktrees/` line in this checkout's `.git/info/exclude` — added so worktrees under `.worktrees/` do not show as untracked; drop it if `.worktrees/` goes into `.gitignore` or stops being used.
 - `bench/message-search-quality/`, `docs/dev/combined-search-evaluation.md`, `docs/dev/combined-search-model-research.md` — owner requested transfer to cli-testing/performance/search; copied and hash-verified before removal in this batch. 2026-10-09

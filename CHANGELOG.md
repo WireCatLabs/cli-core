@@ -21,6 +21,11 @@ shape of this file.
   remove`, `metadata get`, `metadata refresh` (`{chats, has_more}` in place of `{items, hasMore}`), `store jobs
   show|cancel|retry|clear`. `store jobs retry --failed` answers a list. `contacts notes list|show|add|edit` answer the
   new `contact_note` entity (`contact` as a `contact:` reference, `revision`, `created_at`, `updated_at`).
+- Account-scoped `meetings people` and MCP `meeting_people` use bounded observation pages when the store supports `participantCandidates`. Items now contain `participant_id`, `meeting_id`, `identity_id`, `display_name` and `email`, without session history or metadata. CLI/MCP answers use `page.limit`, `page.has_more`, `page.cursor` and a `page.next` step; follow it even after an empty page; page-local ambiguity never establishes a person link or speaker attribution. Older store adapters retain their existing unpaged result only when no paging options are requested.
+
+### Added
+
+- Shared meeting read-budget, metadata, transcript-page and cue-context contracts are available from the meetings entry point, alongside participant lookup. Existing store-entry imports remain compatible aliases.
 
 ## 0.266.0 — 14.10.2026
 

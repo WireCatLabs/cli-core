@@ -25,6 +25,7 @@ import type {
 import type { RetentionOptions } from "../domain/retention.js"
 import type {
   MeetingContextStore,
+  MeetingParticipantSearchStore,
   MeetingSearchIndexStore,
   MeetingSearchStore,
   MeetingStore,
@@ -706,6 +707,7 @@ export interface MessageStore {
     MeetingTranscriptStore &
     MeetingReadCapabilities &
     MeetingContextReadCapabilities &
+    MeetingParticipantSearchStore &
     MeetingSearchStore &
     MeetingTranscriptReceiptStore &
     MeetingContextStore &

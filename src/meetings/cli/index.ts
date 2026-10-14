@@ -4,11 +4,13 @@ import { type Command, InvalidArgumentError, Option } from "commander"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
 import { MEETING_QUERY } from "../item.js"
+import type { MeetingParticipantSearchOptions } from "../participant-search.js"
 import { pull } from "../pull.js"
 import {
   listed,
   MEETING_QUERY_GUIDE,
   MeetingError,
+  meetingPeople,
   meetingShow,
   meetingSummary,
   meetingsList,
@@ -138,9 +140,22 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       .command("people")
       .description("find meeting participants by name or email")
       .argument("<query>", "a name or an email address"),
-  ).action(async (query: string, _opts: unknown, command: Command) => {
-    print(listed(await deps.store.participants(query, deps.accountId)), command)
-  })
+  )
+    .option("--limit <n>", "most matching observations per page, 1–1000 (default 50)", integer)
+    .option("--scan-limit <n>", "most participant observations to inspect, 1–10000 (default 1000)", integer)
+    .option("--max-read-bytes <bytes>", "most stored name and email bytes to read (default 1048576)", integer)
+    .option("--cursor <cursor>", "continue with the same name query and selected account")
+    .action(async (query: string, opts: Omit<MeetingParticipantSearchOptions, "accountId">, command: Command) => {
+      print(
+        await meetingPeople(deps.store, query, deps.accountId, {
+          limit: opts.limit,
+          scanLimit: opts.scanLimit,
+          maxReadBytes: opts.maxReadBytes,
+          cursor: opts.cursor,
+        }),
+        command,
+      )
+    })
   output(group.command("sync").description("bring the stored meetings up to date from the connected account"))
     .option("--since-time <time>", "fetch meetings starting at or after this ISO 8601 date or time", date)
     .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays, 0)

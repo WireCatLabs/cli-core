@@ -5,6 +5,7 @@ import type {
   MeetingContextStore,
   MeetingDetails,
   MeetingFilter,
+  MeetingParticipantSearchStore,
   MeetingSave,
   MeetingSearchIndexStore,
   MeetingSearchStore,
@@ -28,6 +29,7 @@ import { meetingIdentityPk } from "./identities.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
+import { meetingParticipantSearchOver } from "./meeting-participant-search.js"
 import {
   type MeetingContextReadCapabilities,
   type MeetingReadCapabilities,
@@ -698,6 +700,7 @@ export const meetingStoreOver = (
   MeetingTranscriptStore &
   MeetingReadCapabilities &
   MeetingContextReadCapabilities &
+  MeetingParticipantSearchStore &
   MeetingSearchStore &
   MeetingTranscriptReceiptStore &
   MeetingContextStore &
@@ -706,6 +709,7 @@ export const meetingStoreOver = (
   return {
     ...meetingReadsOver(context),
     ...meetingHitSearchOver(context),
+    ...meetingParticipantSearchOver(context),
     ...meetingHitIndexOver(context),
     ...meetingContextLinksOver(context),
     async appendTranscriptsWithReceipt(input) {

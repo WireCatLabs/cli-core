@@ -182,9 +182,41 @@ is added.
 
 Providers mount `addMeetingSearchCommand` from the meetings CLI export: it adds `search meetings` under the host's `search` group (creating it when missing) and returns the command, so a host can add options and pick another source from them. Its `search` closure is fixed to the selected account and receives the request and every parsed option. The optional `meetingSearchTool` (`search_meetings`) and `callMeetingSearchTool` from the meetings MCP export accept the same selectors; tool callers cannot override that account. Hosts retain permission checks, connection lifecycle and output limits.
 
-Search coverage remains explicit: an empty page does not prove the archive is complete, and pending indexing can hide matches. Human-name participant disambiguation and discovery by project words without explicit membership remain separate work.
+Search coverage remains explicit: an empty page does not prove the archive is complete, and pending indexing can hide matches. Discover participant identity candidates through bounded people lookup before selecting an identity filter. Discovery by project words without explicit membership remains separate work.
+
+## Bounded participant lookup
+
+The optional `MeetingParticipantSearchStore.participantCandidates` capability searches observed
+participant names and emails in one selected account. SQLite scans names in stable ID order with
+literal Unicode NFKC/case-insensitive matching; a query is not a wildcard or a person identity.
+It reads only IDs, names and emails, checking their UTF-8 byte sizes before hydration. Session
+history, metadata and transcript text are excluded. Deleted meetings are excluded.
+
+`limit` bounds matches (default 50, maximum 1000), `scanLimit` bounds observations examined (default
+1000, maximum 10000), and `maxReadBytes` bounds name/email bytes (default 1 MiB, maximum 64 MiB).
+The store packet may be empty and still have `has_more: true`. Resume with `next_cursor`, bound to the
+selected account and normalized query. Its initial participant-ID upper bound prevents later
+insertions from extending the same scan. Concurrent edits/deletions can still affect later pages;
+the cursor is not a retained historical snapshot. Archive completeness remains unknown.
+
+`ambiguity.identity_ids` and `multiple_identities` describe the current page only. Collect every
+page before treating one name as a single candidate, inspect conflicting observations, and then
+pass the chosen `identity_id` to meeting search. Repeated observations of one identity do not
+constitute distinct people. A name match neither links a person nor identifies a transcript speaker.
+
+The shared `meetings people <query>` CLI adds `--limit`, `--scan-limit`, `--max-read-bytes` and
+`--cursor`; MCP `meeting_people` has equivalent `limit`, `scan_limit`, `max_read_bytes` and `cursor`.
+Both use `meetingPeople` and the same store capability. Hosts retain output limits and connection
+lifetime. Capable stores require a selected account instead of falling back to an unbounded global
+lookup. Legacy adapters without the capability keep their old default result; explicitly
+requesting paging fails instead of silently doing an unbounded read. Consumers need a published
+SDK adoption before these new options become available.
 
 ## Cue context and compact passages
+
+Read-budget, metadata, transcript-page and atomic cue-context contracts are exported from
+`@wirecat/cli-core/meetings`, alongside participant lookup. Providers can implement these shared
+interfaces through the meeting-module entry point. Existing store-entry type imports remain aliases.
 
 Transcript hits from `searchHits` include `ref`, a retained `meeting:<account>/<meeting>/<transcript>/<position>` reference. Summary/chat hits reference the parent meeting and cannot serve as cue anchors. IDs and search cursors keep their existing meaning.
 
@@ -205,3 +237,7 @@ example meetings passage meeting:1/2/3/9 --before-n 0 --after-n 0 --json
 ```
 
 The selected account is passed separately from the reference; a foreign reference fails before a read. CLI and MCP use one reader and formatter. A second synthetic provider needs no provider-specific branch.
+
+Shared CLI/MCP participant reads adapt this store packet to the standard list envelope: `page.limit`,
+`page.has_more`, optional `page.cursor` and a `page.next` step retaining the query and read budgets.
+The host adds run metadata. Coverage and page-local ambiguity stay alongside the envelope.

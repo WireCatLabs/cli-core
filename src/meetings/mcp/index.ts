@@ -2,8 +2,8 @@ import { errorObjectOf, type FailureContext, mcpErrorResult } from "@wirecat/cli
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { MEETING_QUERY } from "../item.js"
 import {
-  listed,
   MeetingError,
+  meetingPeople,
   meetingShow,
   meetingSummary,
   meetingsList,
@@ -64,7 +64,14 @@ export const meetingTools = [
   {
     name: "meeting_people",
     description: "find meeting participants by name or email",
-    properties: { query: text, account_id: integer },
+    properties: {
+      query: text,
+      account_id: integer,
+      limit: { ...integer, maximum: 1000 },
+      scan_limit: { ...integer, maximum: 10000 },
+      max_read_bytes: { ...integer, maximum: 67108864 },
+      cursor: text,
+    },
     required: ["query"],
   },
 ].map(({ properties, required, ...tool }) => ({
@@ -86,7 +93,19 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
   for (const key of tool.inputSchema.required)
     if (!Object.hasOwn(args, key)) throw new MeetingError("validation_error", `missing argument: ${key}`)
   for (const [key, value] of Object.entries(args)) {
-    if (["account_id", "event_id", "series_id", "transcript_id", "meeting", "limit", "page"].includes(key))
+    if (
+      [
+        "account_id",
+        "event_id",
+        "series_id",
+        "transcript_id",
+        "meeting",
+        "limit",
+        "page",
+        "scan_limit",
+        "max_read_bytes",
+      ].includes(key)
+    )
       positiveInteger(value)
     else if (key === "history" && typeof value !== "boolean")
       throw new MeetingError("validation_error", "history must be a boolean")
@@ -94,6 +113,8 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
       throw new MeetingError("validation_error", "export format must be markdown or vtt")
     else if (key === "query" && (typeof value !== "string" || !value.trim()))
       throw new MeetingError("validation_error", "query must not be empty")
+    else if (key === "cursor" && (typeof value !== "string" || !value))
+      throw new MeetingError("validation_error", "cursor must not be empty")
   }
   return args
 }
@@ -143,7 +164,12 @@ export const callMeetingTool = async (
         })
         break
       default:
-        result = listed(await store.participants(args.query as string, filter.accountId))
+        result = await meetingPeople(store, args.query as string, filter.accountId, {
+          limit: args.limit as number | undefined,
+          scanLimit: args.scan_limit as number | undefined,
+          maxReadBytes: args.max_read_bytes as number | undefined,
+          cursor: args.cursor as string | undefined,
+        })
     }
     if (CONTENT_READS.has(name)) result = { ...result, next_steps: SAVE_NEXT_STEPS }
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
