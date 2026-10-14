@@ -233,15 +233,16 @@ fast as sqlite-vec, which would need a native extension per platform
 (research).
 
 A chat embedded only with another model cannot be searched by meaning with this one: the search names
-it on stderr and in `embeddedOnlyElsewhere`, instead of leaving it out silently.
+it on stderr and in a `missing` entry with the `conversations.embed` step, instead of leaving it out silently.
 
 **Freshness.** Both indexes change only when the owner runs `conversations build` and `conversations embed`
 — nothing runs on sync.
 `conversations status` (MCP `conversations_status`) shows, per built chat, the messages the build has not seen
 — new and deleted ones by the build's membership, edited ones by their revision's time — and the chunks whose
 vector is current, stale (a message in it changed after the build) or missing. A changed sender name leaves no
-trace there. The search answers the same in `readiness`: chat ids `searchedByMeaning`, `wordsOnly`, `partial`,
-`stale` and `notBuilt`, and a note on stderr with the command that fixes each.
+trace there. The search answers the same as `missing` entries — chats searched by words only or in part, chats
+changed since the build or never built — each with the step that fixes it (`conversations.embed`,
+`conversations.build`), and `models.download` when the model is not downloaded.
 
 **Catching up** (NEED-551 A). Without `--chat`, `conversations build` rebuilds every built chat that changed
 since its build (or whose rules are older), the oldest build first, then builds the group chats never built,

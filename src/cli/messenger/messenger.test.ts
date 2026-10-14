@@ -1540,7 +1540,11 @@ describe("the shared read commands", () => {
             }
           : path[0] === "stats"
             ? { missing: [{ field: "coverage", step: "messages.sync" }] }
-            : { refreshed: { complete: false }, coverage: { state: "stale" } },
+            : {
+                missing: expect.arrayContaining([
+                  expect.objectContaining({ field: "coverage", step: "messages.sync" }),
+                ]),
+              },
       )
       expect(result.stderr.join("\n")).toContain("refresh incomplete")
       expect(result.stderr.join("\n")).not.toContain("private detail")
@@ -3083,7 +3087,7 @@ describe("the shared read commands", () => {
       "conversations build --chat 7",
     )
     const built = await call(["conversations", "build", "--chat", "7", "--json"], never, env)
-    expect(JSON.parse(built.stdout[0] ?? "")).toMatchObject({ chat: "7", messages: 3, conversations: 1 })
+    expect(JSON.parse(built.stdout[0] ?? "").item).toMatchObject({ chat: "7", messages: 3, conversations: 1 })
     const listed = v.parse(
       listEnvelopeSchema(conversation),
       JSON.parse((await call(["conversations", "list", "7", "--json"], never, env)).stdout[0] ?? ""),
@@ -3100,27 +3104,43 @@ describe("the shared read commands", () => {
     const shown = await call(["conversations", "show", listed.items[0]?.id ?? "", "--jsonl"], never, env)
     expect(shown.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2", "3"])
     const links = JSON.parse((await call(["messages", "links", "7", "3", "--json"], never, env)).stdout[0] ?? "")
-    expect(links).toMatchObject({ links: [{ parentId: "2", kind: "same_sender", chosen: true }], chain: ["2", "1"] })
+    expect(links.item).toMatchObject({
+      links: [{ parent_id: "2", kind: "same_sender", chosen: true }],
+      chain: ["2", "1"],
+    })
+    const whole = JSON.parse(
+      (await call(["conversations", "show", listed.items[0]?.id ?? "", "--json"], never, env)).stdout[0] ?? "",
+    )
+    expect(whole.item).toMatchObject({
+      first_message: "msg:chat/500/7/1",
+      messages: [{ ref: "msg:chat/500/7/1" }, {}, {}],
+    })
     expect((await call(["conversations", "show", "Book"], never, env)).code).toBe(2)
 
     const status = await call(["conversations", "embed", "status", "--chat", "7", "--json"], never, env)
     expect(status.stderr.join("\n")).toBe("")
-    expect(JSON.parse(status.stdout[0] ?? "")).toMatchObject({ embedded: 0 })
+    expect(JSON.parse(status.stdout[0] ?? "").item).toMatchObject({ embedded: 0 })
     const cleared = await call(
       ["conversations", "embed", "clear", "--chat", "7", "--model", "e5-small", "--json"],
       never,
       env,
     )
-    expect(JSON.parse(cleared.stdout[0] ?? "")).toMatchObject({ cleared: 0 })
+    expect(JSON.parse(cleared.stdout[0] ?? "").item).toMatchObject({ cleared: 0 })
     expect((await call(["conversations", "embed", "status"], never, env)).code).toBe(2)
 
     const readiness = await call(["conversations", "status", "--json"], never, env)
     expect(readiness.stderr).toEqual([])
     expect(JSON.parse(readiness.stdout[0] ?? "")).toMatchObject({
-      items: [{ chat: "7", state: "words-only", graph: { outdatedRules: false }, vectors: { current: 0 } }],
-      page: 1,
-      hasMore: false,
-      model: "e5-small",
+      items: [
+        {
+          chat: "7",
+          state: "words-only",
+          graph: { outdated_rules: false },
+          vectors: { current: 0 },
+          model: "e5-small",
+        },
+      ],
+      page: { has_more: false },
     })
     const pretty = await call(["conversations", "status", "--chat", "7"], never, env, { tty: true })
     expect(pretty.stdout.join("")).toContain("7  words-only  built ")
@@ -3128,10 +3148,9 @@ describe("the shared read commands", () => {
     const words = await call(["search", "conversations", "message", "--json"], never, env)
     expect([words.code, words.stdout.length]).toEqual([0, 1])
     expect(JSON.parse(words.stdout[0] ?? "")).toMatchObject({
-      meaning: "unavailable",
-      readiness: { wordsOnly: ["7"], searchedByMeaning: [] },
+      next: [{ step: "models.download", args: { model: "e5-small" } }],
+      missing: [{ field: "by", step: "models.download" }],
     })
-    expect(words.stderr.join("\n")).toContain("models text download e5-small")
 
     const related = await call(["conversations", "related", "7", "3", "--json"], never, env)
     expect([related.code, related.stdout]).toEqual([6, []])
@@ -3161,7 +3180,7 @@ describe("the shared read commands", () => {
     try {
       const built = await call(["conversations", "build", "--max-chats", "5", "--json"], never, env)
       expect(built.stdout).toHaveLength(1)
-      expect(JSON.parse(built.stdout[0] ?? "")).toMatchObject({
+      expect(JSON.parse(built.stdout[0] ?? "").item).toMatchObject({
         built: [{ chat: "7", messages: 3 }],
         embedded: [],
         left: [],
@@ -3191,14 +3210,7 @@ describe("the shared read commands", () => {
       )
       expect([found.code, found.stdout.length]).toEqual([0, 1])
       expect(JSON.parse(found.stdout[0] ?? "")).toMatchObject({
-        meaning: "unavailable",
-        refreshed: {
-          model: "e5-small",
-          modelAvailable: false,
-          built: [],
-          embedded: [],
-          left: [{ chat: "7", needs: "embed" }],
-        },
+        missing: [{ field: "by", step: "models.download" }],
       })
       expect(found.stderr.join("\n")).toContain("nothing embedded: e5-small is not downloaded")
       expect(sent).toEqual([])
@@ -3230,13 +3242,13 @@ describe("the shared read commands", () => {
     }
 
     const status = await call(["conversations", "batches", "status", "--chat", "7", "--json"], never, env)
-    expect(JSON.parse(status.stdout[0] ?? "")).toMatchObject({ chat: "7", messages: 3, batches: 1 })
+    expect(JSON.parse(status.stdout[0] ?? "").item).toMatchObject({ chat: "7", messages: 3, batches: 1 })
     const next = await call(
       ["conversations", "batches", "next", "--chat", "7", "--size", "10", "--json", "--record"],
       never,
       env,
     )
-    const batch = JSON.parse(next.stdout[0] ?? "")
+    const batch = JSON.parse(next.stdout[0] ?? "").item
     expect(batch.messages.map((one: { id: string; answer: boolean }) => [one.id, one.answer])).toEqual([
       ["1", true],
       ["2", true],
@@ -3307,7 +3319,10 @@ describe("the shared read commands", () => {
         env,
       )
       expect(agreed.code).toBe(0)
-      expect(JSON.parse(agreed.stdout[0] ?? "")).toMatchObject({ model: "openai:text-embedding-3-small", skipped: 0 })
+      expect(JSON.parse(agreed.stdout[0] ?? "").item).toMatchObject({
+        model: "openai:text-embedding-3-small",
+        skipped: 0,
+      })
       expect(sent[0]).toEqual({ url: "https://api.openai.com/v1/embeddings", auth: "Bearer sk-test" })
       expect(agreed.stderr.join("\n")).not.toContain("sk-test")
 
@@ -3316,7 +3331,7 @@ describe("the shared read commands", () => {
       expect((await call(["conversations", "embed", "--chat", "7", ...local, "--json"], never, env)).code).toBe(0)
       expect(sent[0]?.url).toBe("http://127.0.0.1:11434/v1/embeddings")
       const status = await call(["conversations", "embed", "status", "--chat", "7", ...local, "--json"], never, env)
-      expect(JSON.parse(status.stdout[0] ?? "")).toMatchObject({ model: "url:127.0.0.1:11434:m", left: 0 })
+      expect(JSON.parse(status.stdout[0] ?? "").item).toMatchObject({ model: "url:127.0.0.1:11434:m", left: 0 })
       const found = await call(["search", "conversations", "anything", ...local, "--json"], never, env)
       expect(JSON.parse(found.stdout[0] ?? "").items.length).toBeGreaterThan(0)
     } finally {
@@ -3353,10 +3368,10 @@ describe("the shared read commands", () => {
       )
     const batch = JSON.parse(
       (await call(["conversations", "batches", "next", "--chat", "7", "--json"], never, env)).stdout[0] ?? "",
-    ).batch
+    ).item.batch
 
     permissions({ messages: "readonly" })
-    expect(JSON.parse((await answer(batch)).stdout[0] ?? "")).toEqual({ chat: "7", stored: 1 })
+    expect(JSON.parse((await answer(batch)).stdout[0] ?? "").item).toEqual({ chat: "7", stored: 1 })
     expect((await call(["conversations", "links", "add", "--batch", batch], never, env, piped("not json"))).code).toBe(
       2,
     )
@@ -3368,7 +3383,7 @@ describe("the shared read commands", () => {
 
     permissions({})
     const cleared = await call(["conversations", "links", "clear", "--chat", "7", "--json"], never, env)
-    expect(JSON.parse(cleared.stdout[0] ?? "")).toEqual({ chat: "7", cleared: 1 })
+    expect(JSON.parse(cleared.stdout[0] ?? "").item).toEqual({ chat: "7", cleared: 1 })
   })
 
   it("**report and export what the store holds**, without connecting", async () => {

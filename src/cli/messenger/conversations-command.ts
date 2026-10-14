@@ -10,7 +10,6 @@ import {
   type ChatReadiness,
   type EmbedStatus,
   type FoundConversation,
-  type FoundConversations,
   type ModelChoice,
   REFRESH_BOUNDS,
   type Refreshed,
@@ -20,12 +19,14 @@ import { momentOf } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
 import { embeddingChoice, type ModelOptions } from "../embedding-choice.js"
-import { renderAnswer } from "../envelope.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
-import { positiveCount, renderList } from "../paging.js"
+import { positiveCount } from "../paging.js"
 import { nextStep, rootOf, runnable, stepLine } from "../steps.js"
 import { answerOf as askOwner } from "./ask.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
+import { conversationShown, foundConversations, refreshedAnswer } from "./conversation-answers.js"
+import { messageItems } from "./message-items.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
 import { readAll } from "./stdin.js"
 
@@ -118,7 +119,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
           },
         )
       })
-      context.renderer.result(result)
+      renderAnswer(this, context, itemOf(snakeKeys(result)))
       return
     }
     if (
@@ -137,15 +138,17 @@ export const conversationsCommand = (messenger: Messenger): Command => {
           progress: (note) => context.renderer.note(note),
         }),
       )
-      renderRefreshed(context, refreshed, rootOf(this))
+      renderRefreshed(this, context, refreshed)
       return
     }
     const built = await context.withServices((services) => services.conversations.build(chat))
-    if (context.format === "pretty") {
-      context.streams.data(
+    renderAnswer(
+      this,
+      context,
+      itemOf(snakeKeys(built)),
+      () =>
         `${built.messages} messages → ${built.conversations} conversations, ${built.links} links (rules v${built.rulesVersion})\n`,
-      )
-    } else context.renderer.result(built)
+    )
   })
 
   withQuery(
@@ -181,9 +184,12 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       if (message === undefined && !/^\d+$/.test(first)) {
         throw new CliError("validation_error", "a conversation id is a number; for a chat, name a message too")
       }
-      const { summary, messages } = await context.withServices((services) =>
-        services.conversations.show(message === undefined ? { id: first } : { chat: first, message }),
-      )
+      const { account, summary, messages } = await context.withStore(async (store, account) => ({
+        account,
+        ...(await servicesFor(storedDeps(messenger, store, account, context.guard)).conversations.show(
+          message === undefined ? { id: first } : { chat: first, message },
+        )),
+      }))
       if (context.format === "pretty") {
         context.streams.data(
           `${line(summary)}\n\n${renderMessages(messages, {
@@ -195,8 +201,8 @@ export const conversationsCommand = (messenger: Messenger): Command => {
             locale: messenger.app.locale,
           })}`,
         )
-      } else if (context.format === "jsonl") context.renderer.stream(messages)
-      else context.renderer.result({ ...summary, messages })
+      } else if (context.format === "jsonl") context.renderer.stream(messageItems(messages, account))
+      else renderAnswer(this, context, conversationShown(account, { summary, messages }))
     })
 
   withModelOptions(
@@ -215,25 +221,14 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     const model = choiceOf(options, messenger, context, { needKey: false })
     const { limit } = context.settings
     const found = await context.withServices((services) => services.embeddings.related(chat, message, { model, limit }))
-    if (context.format === "pretty") {
-      context.streams.data(`like ${line(found.source)}\n\n${found.hits.map((hit) => `${hitLine(hit)}\n`).join("")}`)
-      if (found.hits.length === 0) context.renderer.note(`no other conversation has vectors of ${found.model}`)
-    } else if (context.format === "jsonl") context.renderer.stream(found.hits)
-    else {
-      const { model: id, source, hits, readiness } = found
-      context.renderer.result({ model: id, source, items: hits, limit, readiness })
-    }
-    const command = messenger.app.command
-    const unseen = found.readiness.wordsOnly
-    if (unseen.length > 0) {
-      context.renderer.note(
-        `not searched, no vector of ${found.model}: chat ${unseen.join(", ")} — \`${command} conversations embed --chat <chat>\``,
-      )
-    }
-    // `unavailable` keeps out the note about word matches: related searches no words.
-    for (const note of readinessNotes({ ...found, meaning: "unavailable", embeddedOnlyElsewhere: [] }, command)) {
-      context.renderer.note(note)
-    }
+    renderAnswer(
+      this,
+      context,
+      foundConversations("conversations related", { ...found, meaning: "searched" }, limit),
+      () => `like ${line(found.source)}\n\n${found.hits.map((hit) => `${hitLine(hit)}\n`).join("")}`,
+    )
+    if (found.hits.length === 0 && context.format === "pretty")
+      context.renderer.note(`no other conversation has vectors of ${found.model}`)
   })
 
   withModelOptions(
@@ -260,10 +255,15 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         `${unbuiltGroups} group chat${unbuiltGroups === 1 ? " was" : "s were"} never built — \`${messenger.app.command} conversations build\` builds them`,
       )
     if (context.format !== "pretty") {
-      renderList(context.renderer, context.format, chats, {
-        model: id,
-        ...(unbuiltGroups === undefined ? {} : { unbuiltGroups }),
-      })
+      renderAnswer(
+        this,
+        context,
+        listOf("conversations status", {
+          items: chats.map((one) => snakeKeys({ ...one, model: id })),
+          limit: Math.max(1, chats.length),
+          has_more: false,
+        }),
+      )
       return
     }
     context.streams.data(chats.map((one) => `${readinessLine(one, id)}\n`).join(""))
@@ -290,12 +290,14 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     const { chat, size = BATCH_SIZE.default } = this.opts<{ chat: string; size?: number }>()
     const context = messengerContext(this, messenger)
     const status = await context.withServices((services) => services.conversations.batchStatus(chat, size))
-    if (context.format === "pretty") {
-      context.streams.data(
+    renderAnswer(
+      this,
+      context,
+      itemOf(snakeKeys(status)),
+      () =>
         `${status.messages} messages to answer, about ${status.batches} batches, ` +
-          `${status.characters} characters (about ${status.tokensEstimate} tokens)\n`,
-      )
-    } else context.renderer.result(status)
+        `${status.characters} characters (about ${status.tokensEstimate} tokens)\n`,
+    )
   })
 
   sizeOption(
@@ -309,11 +311,11 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     const batch = await context.withServices((services) => services.conversations.nextBatch(chat, size))
     if (!batch) {
       if (context.format === "pretty") context.renderer.note("every message of this chat has an answer")
-      else context.renderer.result(null)
+      else renderAnswer(this, context, itemOf({ batch: null }))
       return
     }
     if (context.format !== "pretty") {
-      context.renderer.result(batch)
+      renderAnswer(this, context, itemOf(snakeKeys(batch)))
       return
     }
     context.streams.data(
@@ -345,11 +347,12 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
       const answer = answerOf(await readAll(context.stdin))
       const stored = await context.withServices((services) => services.conversations.addAnswers(batch, answer))
-      if (context.format === "pretty") {
-        context.streams.data(
-          `${stored.stored} answers stored — \`conversations build --chat ${stored.chat}\` uses them\n`,
-        )
-      } else context.renderer.result(stored)
+      renderAnswer(
+        this,
+        context,
+        itemOf(stored, { next: [nextStep("conversations.build", { args: { chat: stored.chat } })] }),
+        () => `${stored.stored} answers stored\n`,
+      )
     })
 
   links
@@ -362,8 +365,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
       const cleared = await context.withServices((services) => services.conversations.clearAnswers(chat, model))
-      if (context.format === "pretty") context.streams.data(`${cleared.cleared} answers dropped\n`)
-      else context.renderer.result(cleared)
+      renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} answers dropped\n`)
     })
 
   const embed = withModelOptions(
@@ -413,7 +415,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
           progress: (note) => context.renderer.note(note),
         }),
       )
-      renderRefreshed(context, refreshed, rootOf(this))
+      renderRefreshed(this, context, refreshed)
       return
     }
     const chat = options.chat
@@ -434,11 +436,15 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         progress: (embedded, left) => context.renderer.note(`${embedded} embedded, ${left} left`),
       })
     })
-    if (context.format === "pretty") {
-      context.streams.data(
-        `${done.embedded} chunks embedded with ${done.model}${done.skipped ? `, ${done.skipped} changed since the build — run \`conversations build\` again` : ""}\n`,
-      )
-    } else context.renderer.result(done)
+    renderAnswer(
+      this,
+      context,
+      itemOf(snakeKeys(done), {
+        next: done.skipped ? [nextStep("conversations.build", { args: { chat } })] : [],
+      }),
+      () =>
+        `${done.embedded} chunks embedded with ${done.model}${done.skipped ? `, ${done.skipped} changed since the build` : ""}\n`,
+    )
   })
 
   withModelOptions(
@@ -452,14 +458,16 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     const context = messengerContext(this, messenger)
     const model = choiceOf(options, messenger, context, { needKey: false })
     const status = await context.withServices((services) => services.embeddings.status(chat, model))
-    if (context.format === "pretty") {
-      context.streams.data(
+    renderAnswer(
+      this,
+      context,
+      itemOf(snakeKeys(status)),
+      () =>
         `${status.embedded} of ${status.chunks} chunks embedded with ${status.model}; ${status.left} left` +
-          (status.estimateSeconds === null ? "" : `, ${minutes(status.estimateSeconds)}`) +
-          (status.priceAtMost ? `, at most ${dollars(status.priceAtMost.usd)}` : "") +
-          "\n",
-      )
-    } else context.renderer.result(status)
+        (status.estimateSeconds === null ? "" : `, ${minutes(status.estimateSeconds)}`) +
+        (status.priceAtMost ? `, at most ${dollars(status.priceAtMost.usd)}` : "") +
+        "\n",
+    )
   })
 
   withModelOptions(
@@ -475,8 +483,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     const given = options.model !== undefined || options.provider !== undefined || options.baseUrl !== undefined
     const model = given ? choiceOf(options, messenger, context, { needKey: false }) : undefined
     const cleared = await context.withServices((services) => services.embeddings.clear(chat, model))
-    if (context.format === "pretty") context.streams.data(`${cleared.cleared} vectors dropped\n`)
-    else context.renderer.result(cleared)
+    renderAnswer(this, context, itemOf(cleared), () => `${cleared.cleared} vectors dropped\n`)
   })
 
   const consents = conversations
@@ -485,7 +492,15 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   consents.command("list").action(async function (this: Command) {
     const context = messengerContext(this, messenger)
     const items = await context.withStore((store, account) => analysisConsents(store, account).list())
-    context.renderer.result({ items })
+    renderAnswer(
+      this,
+      context,
+      listOf("conversations consents list", {
+        items: items.map(snakeKeys),
+        limit: Math.max(1, items.length),
+        has_more: false,
+      }),
+    )
   })
   consents
     .command("revoke")
@@ -507,7 +522,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
               ).chat
         await analysisConsents(store, account).revoke(chatId, provider)
       })
-      context.renderer.result({ revoked: true })
+      renderAnswer(this, context, itemOf({ revoked: true }))
     })
 
   conversations.addCommand(embed)
@@ -582,7 +597,8 @@ const localOnly = (model: ModelChoice, what: string) => {
   }
 }
 
-const renderRefreshed = (context: MessengerContext, refreshed: Refreshed, root: Command) => {
+const renderRefreshed = (command: Command, context: MessengerContext, refreshed: Refreshed) => {
+  const root = rootOf(command)
   if (context.format === "pretty") {
     context.streams.data(
       [
@@ -595,7 +611,7 @@ const renderRefreshed = (context: MessengerContext, refreshed: Refreshed, root: 
     if (refreshed.built.length + refreshed.embedded.length === 0 && refreshed.left.length === 0) {
       context.renderer.note("every chat is up to date")
     }
-  } else context.renderer.result(refreshed)
+  } else renderAnswer(command, context, refreshedAnswer(refreshed))
   for (const note of leftNotes(refreshed, root)) context.renderer.note(note)
 }
 
@@ -688,7 +704,7 @@ export const linksCommand = (messenger: Messenger): Command =>
       const context = messengerContext(this, messenger)
       const found = await context.withServices((services) => services.conversations.links(chat, message))
       if (context.format !== "pretty") {
-        context.renderer.result(found)
+        renderAnswer(this, context, itemOf(snakeKeys(found)))
         return
       }
       if (found.links.length === 0) {
@@ -724,40 +740,6 @@ const readinessLine = ({ chat, state, graph, pending, vectors }: ChatReadiness, 
       `${graph.outdatedRules ? " (outdated)" : ""} · not in the build: ${pending.new} new, ${pending.edited} edited, ` +
       `${pending.deleted} deleted · ${model}: ${vectors.current} current, ${vectors.stale} stale, ` +
       `${vectors.missing} missing of ${vectors.chunks} chunks`
-
-/** What the search could not see, and the command that fixes each. */
-const readinessNotes = (
-  {
-    meaning,
-    model,
-    readiness,
-    embeddedOnlyElsewhere,
-  }: Pick<FoundConversations, "meaning" | "model" | "readiness" | "embeddedOnlyElsewhere">,
-  command: string,
-) => {
-  const chats = (ids: string[]) => `chat ${ids.join(", ")}`
-  const elsewhere = new Set(embeddedOnlyElsewhere)
-  const neverEmbedded = readiness.wordsOnly.filter((id) => !elsewhere.has(id))
-  return [
-    embeddedOnlyElsewhere.length > 0
-      ? `not searched by meaning, embedded only with another model: ${chats(embeddedOnlyElsewhere)} — ` +
-        "give that model with --model, or `conversations embed` them with this one"
-      : "",
-    meaning === "searched" && neverEmbedded.length > 0
-      ? `searched by words only, no vector of ${model}: ${chats(neverEmbedded)} — \`${command} conversations embed --chat <chat>\``
-      : "",
-    readiness.partial.length > 0
-      ? `some chunks have no vector yet: ${chats(readiness.partial)} — \`${command} conversations embed --chat <chat>\``
-      : "",
-    readiness.stale.length > 0
-      ? `changed since the last build: ${chats(readiness.stale)} — \`${command} conversations build --chat <chat>\``
-      : "",
-    readiness.notBuilt.length > 0
-      ? `never built, so their matches are not shown: ${chats(readiness.notBuilt)} — ` +
-        `\`${command} conversations build --chat <chat>\``
-      : "",
-  ].filter(Boolean)
-}
 
 /** `search conversations`: the conversations nearest to a query, in meaning and in words. */
 export const conversationsSearchCommand = (messenger: Messenger): Command =>
@@ -834,39 +816,17 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         return { found, refreshed: found.prepared }
       })
       if (refreshed) for (const note of leftNotes(refreshed, rootOf(this))) context.renderer.note(note)
-      if (context.format === "pretty") {
-        context.streams.data(found.hits.map((hit) => `${hitLine(hit)}\n`).join(""))
-        if (found.hits.length === 0) {
-          context.renderer.note(
-            found.meaning === "unavailable"
-              ? "nothing matches in words"
-              : `nothing matches in words, nor in meaning among the chats embedded with ${found.model} — ` +
-                  "`conversations embed --chat <chat>` for meaning",
-          )
-        }
-      } else if (context.format === "jsonl") context.renderer.stream(found.hits)
-      else {
-        const { accounts, model, meaning, hits, readiness, embeddedOnlyElsewhere } = found
-        context.renderer.result({
-          model,
-          meaning,
-          items: hits,
-          accounts,
-          limit,
-          readiness,
-          embeddedOnlyElsewhere,
-          ...(refreshed ? { refreshed } : {}),
-          ...(found.refreshed
-            ? {
-                ...(refreshed ? { networkRefreshed: found.refreshed } : { refreshed: found.refreshed }),
-                coverage: found.coverage,
-              }
-            : {}),
-        })
-      }
-      const command = messenger.app.command
-      if (found.meaning === "unavailable") {
-        context.renderer.note(notDownloaded(rootOf(this), found.model, "searched by words only"))
-      }
-      for (const note of readinessNotes(found, command)) context.renderer.note(note)
+      renderAnswer(this, context, foundConversations("search conversations", found, limit, chat), () =>
+        found.hits.map((hit) => `${hitLine(hit)}\n`).join(""),
+      )
+      if (found.hits.length === 0 && context.format === "pretty")
+        context.renderer.note(
+          found.meaning === "unavailable"
+            ? "nothing matches in words"
+            : `nothing matches in words, nor in meaning among the chats embedded with ${found.model}`,
+        )
+      if (found.embeddedOnlyElsewhere.length > 0 && context.format === "pretty")
+        context.renderer.note(
+          `embedded only with another model: chat ${found.embeddedOnlyElsewhere.join(", ")} — give that model with --model`,
+        )
     })
