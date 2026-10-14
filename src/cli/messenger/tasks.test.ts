@@ -258,3 +258,49 @@ it("removes resource-local statistics without aliases and retains independent da
   const old = await setup({ profiles: { default: { permissions: { "tasks.stats": "deny" } } } })
   expect((await old("stats", "tasks", "show", "--json")).code).toBe(3)
 })
+
+it("**takes the account from the command** where the program has no messenger profile, as memo mounts it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "tasks-flags-"))
+  const env = {
+    ...process.env,
+    MESSAGING_STORE: join(root, "m.db"),
+    CHAT_STATE_DIR: join(root, "state"),
+    NO_COLOR: "1",
+  }
+  const store = await openStore({ path: env.MESSAGING_STORE })
+  await store.saveMessages(account, "7", [said("1", "I'll send the invoice tomorrow")], { via: "test" })
+  await store.close()
+  const flagged: Messenger = {
+    ...messenger,
+    accountOf: (command) => {
+      const { provider, account: id } = command.opts<{ provider?: string; account?: string }>()
+      return provider && id ? { provider, account: id } : undefined
+    },
+  }
+  const program = () => {
+    const tasks = tasksCommand(flagged)
+    for (const one of tasks.commands) one.option("--provider <provider>").option("--account <account>")
+    return [tasks]
+  }
+  const call = async (...argv: string[]) => {
+    const streams = captureStreams()
+    const code = await run(argv, { app, commands: program }, { streams, tty: false, env })
+    return { code, body: JSON.parse(streams.stdout[0] ?? "null") }
+  }
+
+  const added = await call(
+    "tasks",
+    "add",
+    PROMISE,
+    "--type",
+    "promise",
+    "--provider",
+    "chat",
+    "--account",
+    "500",
+    "--json",
+  )
+  expect(added.code).toBe(0)
+  expect((await call("tasks", "list", "--provider", "chat", "--account", "500", "--json")).body.items).toHaveLength(1)
+  expect((await call("tasks", "list", "--json")).code).not.toBe(0)
+})

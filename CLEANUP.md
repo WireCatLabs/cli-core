@@ -41,3 +41,4 @@
 - 2026-10-14: retain `feat/meeting-occurrence-foundation`, its worktree and isolated `/var/tmp/core-occurrence-*` states and `/tmp/core-occurrence-*` logs until owner-approved cleanup; normalized synthetic providers only.
 
 - 2026-10-14: retain `feat/public-answer-policy` and its worktree plus isolated validation artifacts until owner-approved cleanup; public exports for standalone CLI/MCP consumers.
+- 2026-10-14: `../cli-core-wt-account-from-command`, branch `feat/account-from-command` — Messenger.accountOf for memo; remove after its PR merges.
