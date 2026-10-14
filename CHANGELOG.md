@@ -44,6 +44,8 @@ shape of this file.
   - **Log records name a registered event** (`CORE_LOG_EVENTS`): `request`, `response`, `warning` and `cache`
     are written as `provider.request`, `provider.response`, `client.warning` and `cache.answered`; a crash as
     `command.crashed`; a send-journal line as `send.recorded`; serve's lines as `serve.note|success|warning|failure`.
+- **`sealed`, `metaNow` and `jsonlRecords` from `@wirecat/cli-core/cli`**: an app's own answer gets the same `meta`
+  and JSON lines (with the end line) as cli-core's.
 - **`--operation-id` replaces `--send-id`** (`messages send|forward`, `polls create`, `topics create`), and the MCP
   argument `operation_id` replaces `send_id`. A write's answer and an unknown outcome's error carry one
   `operation_id`; `send_id` is gone.

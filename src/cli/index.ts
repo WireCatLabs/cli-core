@@ -172,10 +172,13 @@ export {
   type Body,
   type ItemBody,
   itemOf,
+  jsonlRecords,
   type ListBody,
   type ListInput,
   listOf,
+  metaNow,
   renderAnswer,
+  sealed,
   snakeKeys,
 } from "./envelope.js"
 export { withAbort } from "./execution.js"

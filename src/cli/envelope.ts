@@ -144,6 +144,12 @@ const linesOf = <T>(body: ListEnvelope<T> | ItemEnvelope<T>): string =>
     "items" in body ? body : { items: [body.item], page: { mode: "page", limit: 1, has_more: false }, meta: body.meta },
   )
 
+/** An answer as JSON-lines records, for a writer that streams objects: one per item, then the end record. */
+export const jsonlRecords = <T>(body: Body<T>): object[] =>
+  linesOf(sealed(body) as ListEnvelope<T> | ItemEnvelope<T>)
+    .split("\n")
+    .map((line) => JSON.parse(line) as object)
+
 /**
  * Prints an answer. Machine output gets the whole envelope (`--jsonl` the items and an end line); a person gets
  * the items — `view` draws them — and each next step this CLI has, as a line on stderr. A partial answer the
