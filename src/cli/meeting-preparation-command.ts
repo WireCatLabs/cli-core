@@ -24,10 +24,10 @@ export const addMeetingPreparationCommand = (
     group
       .command("prepare")
       .argument("<series-id>", "exact provider series ID")
-      .description("prepare cited context for one selected upcoming series; reads remote schedule and stored meetings")
-      .option("--after <instant>", "window start as ISO timestamp with zone (default now)")
-      .option("--until <instant>", "exclusive window end as ISO timestamp (default seven days after start)")
-      .option("--history-after <instant>", "history start as ISO timestamp (default thirty days before start)")
+      .description("prepare cited context for one upcoming series")
+      .option("--since-time <time>", "window start as ISO timestamp with zone (default now)")
+      .option("--before-time <time>", "exclusive window end as ISO timestamp (default seven days after start)")
+      .option("--history-since-time <time>", "history start as ISO timestamp (default thirty days before start)")
       .option("--meetings <n>", "prior occurrences, 1–20 (default 5)", integer)
       .option("--cues <n>", "cues per occurrence, 1–100 (default 10)", integer)
       .option("--context-limit <n>", "entries per context category, 1–100 (default 20)", integer)
@@ -39,9 +39,9 @@ export const addMeetingPreparationCommand = (
             deps.read,
             {
               series_id: seriesId,
-              after: options.after,
-              until: options.until,
-              history_after: options.historyAfter,
+              after: options.sinceTime,
+              until: options.beforeTime,
+              history_after: options.historySinceTime,
               meetings: options.meetings,
               cues: options.cues,
               context_limit: options.contextLimit,
@@ -53,6 +53,11 @@ export const addMeetingPreparationCommand = (
           ),
         ),
       ),
-    { origin: "handwritten", effects: REMOTE_READ, output: { entity: "meeting_preparation" } },
+    {
+      origin: "handwritten",
+      effects: REMOTE_READ,
+      output: { entity: "meeting_preparation" },
+      examples: [`${program.name()} meetings prepare 123 --json`],
+    },
   )
 }
