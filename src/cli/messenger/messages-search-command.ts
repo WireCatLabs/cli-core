@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { parseLocator } from "../../domain/locator.js"
 import { SAVE_HELP } from "../../meetings/index.js"
@@ -7,28 +8,24 @@ import { renderThreadLinks } from "../../render/thread-context.js"
 import type { SearchFound } from "../../services/messages.js"
 import { NO_MAIL, type SearchKind } from "../../services/search-kind.js"
 import { environmentOf } from "../context.js"
+import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { archiveSummary } from "./archive-summary.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { messagesAnswer, offsetOf } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
 
 const PLACES = { transcript: "transcript", filename: "file name", file: "file text" } as const
 
-const TYPES = { text: "NOT has:attachment", voice: "has:voice", file: "has:file" } as const
-type MessageType = keyof typeof TYPES
-
-const typeOf = (value: string): MessageType => {
-  if (!Object.hasOwn(TYPES, value)) throw new CliError("validation_error", "--type takes text, voice or file")
-  return value as MessageType
-}
-
 /** `search messages`, or with `mail` the same leaf over the mailboxes only — never both, so they do not overlap. */
 export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "messages"): Command => {
   const mail = kind === "mail"
   const base = new Command(kind)
-  const command = mail ? base : backendOptions(threadOptions(syncOptions(base)), messenger)
+  const command = annotate(mail ? base : backendOptions(threadOptions(syncOptions(base)), messenger), {
+    output: { entity: "message", view: "hit" },
+  })
   command
     .description(
       mail
@@ -43,12 +40,6 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
         ? 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges'
         : 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges; --language legacy keeps discovery; with --saved, more words AND-ed to it',
     )
-    .option(
-      "--chat <chat>",
-      mail
-        ? "only this mail thread, by id or subject"
-        : `only this chat — the same as chat: in the query; ${messenger.chatArgument}`,
-    )
   if (mail)
     command.option(
       "--source <accounts>",
@@ -56,16 +47,14 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
         "group:<name>; every mail account when unset",
     )
   else
-    command
-      .option(
-        "--source <accounts>",
-        "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; " +
-          "or a list: group:work,telegram:Alice,email:me@example.com",
-      )
-      .option("--type <text|voice|file>", "only messages of this type: text alone, a voice message, or a file", typeOf)
+    command.option(
+      "--source <accounts>",
+      "every account of this messenger held in the store; personal, bots or all — the same as in: in the query; " +
+        "or a list: group:work,telegram:Alice,email:me@example.com",
+    )
   command
     .option("--limit <n>", "how many", positiveCount("--limit"))
-    .option("--offset <n>", "skip this many, for the next page", wholeCount)
+    .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
     .option("--newest", "newest first instead of best first")
     .option(
       "--exact",
@@ -85,8 +74,8 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
     return command
       .addHelpText(
         "after",
-        `content: narrows a search to the text of attachments, filename: to their names —
-\`${messenger.app.command} search mail 'content:invoice'\`. --json: the list is items; each email's reference is locator.`,
+        `chat: narrows it to one mail thread, by id or subject; content: to the text of attachments, filename: to their
+names — \`${messenger.app.command} search mail 'content:invoice'\`. --json: the list is items; each email's reference is ref.`,
       )
       .action(searchAction(messenger, kind))
   return command
@@ -98,7 +87,8 @@ coverage says what was searched and coverage.next what would improve it. Mail is
 everything at once is \`${messenger.app.command} search all\`.
 A bare word looks in message text, voice transcripts, file names and file text. text:, transcript:,
 content: (the text of files) and filename: (their names) narrow it to one —
-\`${messenger.app.command} search messages 'content:invoice'\`. --json: the list is items; each hit's reference is locator.
+\`${messenger.app.command} search messages 'content:invoice'\`. chat: narrows it to one chat; has:voice, has:file and
+NOT has:attachment to voice messages, files or text alone. --json: the list is items; each hit's reference is ref.
 Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md`,
     )
     .option("--regex", "the words are one regular expression, case-insensitive, tested against every stored text")
@@ -109,11 +99,8 @@ Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/quer
 const searchAction = (messenger: Messenger, kind: SearchKind) =>
   async function (this: Command, given: string[]) {
     const context = messengerContext(this, messenger)
-    const type = this.opts<{ type?: MessageType }>().type
-    const words =
-      type === undefined ? given : given.length === 0 ? [TYPES[type]] : [`(${given.join(" ")}) AND ${TYPES[type]}`]
+    const words = given
     const {
-      chat,
       source,
       regex,
       language,
@@ -123,10 +110,9 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       exact,
       context: around,
       limit: typedLimit,
-      offset,
+      page,
       saved,
     } = this.opts<{
-      chat?: string
       source?: string
       regex?: boolean
       discover?: boolean
@@ -136,7 +122,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       exact?: boolean
       context?: number
       limit?: number
-      offset?: number
+      page?: number
       saved?: string
     }>()
     if (saved === undefined && words.length === 0)
@@ -148,7 +134,6 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
     const external = environmentOf(this).signal
     const signal = external ? AbortSignal.any([external, controller.signal]) : controller.signal
     const typed = {
-      ...(chat === undefined ? {} : { chat }),
       ...(source === undefined ? {} : { source }),
       ...(discover === undefined ? {} : { discover }),
       ...(language === undefined ? {} : { language }),
@@ -171,7 +156,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
             ...typed,
             ...(pattern ? { pattern } : { text: words.join(" ") }),
             limit,
-            ...(offset === undefined ? {} : { offset }),
+            ...withOffset(page, limit),
             signal,
             language: language ?? (pattern ? "legacy" : "lucene"),
             newest: newest === true,
@@ -191,7 +176,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
           ...(params.source === undefined ? {} : { source: params.source }),
           ...(params.timezone === undefined ? {} : { timezone: params.timezone }),
           limit,
-          ...(offset === undefined ? {} : { offset }),
+          ...withOffset(page, limit),
           signal,
           language: params.language ?? (pattern ? "legacy" : "lucene"),
           newest: params.newest === true,
@@ -250,7 +235,7 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
         "mail search covers imported messages only; older or unimported mail may be missing — `memo sync --mail --since-time <time>` imports more",
       )
     }
-    if (context.format === "pretty") {
+    const view = () => {
       const options = {
         color: context.color,
         verbosity: context.settings.detail,
@@ -261,19 +246,17 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
       }
       const hits = found.items.map((hit) => ({ hit, at: parseLocator(hit.locator) }))
       const spans = new Set(hits.map(({ at }) => `${at.provider}/${at.account}`)).size > 1
-      context.streams.data(
-        hits
-          .map(({ hit, at }) => {
-            const title = hit.chatTitle ?? hit.chatId
-            const links = hit.thread ? renderThreadLinks(hit.thread) : ""
-            const place =
-              hit.matchedIn && hit.matchedIn !== "text" && "excerpt" in hit
-                ? `\n  found in the ${PLACES[hit.matchedIn]}: ${String(hit.excerpt)}`
-                : ""
-            return `${spans ? `${at.provider} · ${title}` : title}  ${hit.locator}\n${renderMessages(hit.thread?.items ?? hit.context ?? [hit], options)}${place}${links ? `\n${links}` : ""}`
-          })
-          .join("\n\n"),
-      )
+      const lines = hits
+        .map(({ hit, at }) => {
+          const title = hit.chatTitle ?? hit.chatId
+          const links = hit.thread ? renderThreadLinks(hit.thread) : ""
+          const place =
+            hit.matchedIn && hit.matchedIn !== "text" && "excerpt" in hit
+              ? `\n  found in the ${PLACES[hit.matchedIn]}: ${String(hit.excerpt)}`
+              : ""
+          return `${spans ? `${at.provider} · ${title}` : title}  ${hit.locator}\n${renderMessages(hit.thread?.items ?? hit.context ?? [hit], options)}${place}${links ? `\n${links}` : ""}`
+        })
+        .join("\n\n")
       const elsewhere = [...new Set(hits.map(({ at }) => at.provider))].filter((one) => one !== messenger.provider)
       if (elsewhere.length > 0) {
         context.renderer.note(
@@ -292,11 +275,31 @@ const searchAction = (messenger: Messenger, kind: SearchKind) =>
             ? "nothing found in the local store or on the messenger's server"
             : "nothing found — only what is in the local store is searched",
         )
-      return
+      return lines
     }
-    if (context.format === "jsonl") context.renderer.stream(found.items)
-    else context.renderer.result({ ...found, page: 1, limit })
+    const again = {
+      ...(given.length ? { query: given.join(" ") } : {}),
+      ...(saved === undefined ? {} : { saved }),
+      ...(source === undefined ? {} : { source }),
+      ...(regex ? { regex: true } : {}),
+      ...(discover ? { discover: true } : {}),
+      ...(language === undefined ? {} : { language }),
+      ...(exact ? { exact: true } : {}),
+      ...(newest ? { newest: true } : {}),
+      ...(timezone === undefined ? {} : { timezone }),
+    }
+    renderAnswer(
+      this,
+      context,
+      messagesAnswer(`search ${kind}`, found, { limit, page: page ?? 1, again }, given.join(" ")),
+      view,
+    )
   }
+
+const withOffset = (page: number | undefined, limit: number) => {
+  const offset = offsetOf(page, limit)
+  return offset === undefined ? {} : { offset }
+}
 
 const patternOf = (source: string): RegExp => {
   try {

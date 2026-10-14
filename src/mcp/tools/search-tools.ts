@@ -1,7 +1,6 @@
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { SAVE_NEXT_STEPS } from "../../meetings/index.js"
-import { atDetail } from "../../output-detail.js"
+import { allAnswer, notesAnswer, offsetOf } from "../../cli/messenger/search-answers.js"
 import { searchNotesOf } from "../../services/notes-search.js"
 import { RESOURCES_SEARCHED_WITH_MEETINGS } from "../../services/search-all-meetings.js"
 import { searchServices } from "../search-sync.js"
@@ -14,7 +13,7 @@ import {
   type MessagesSearchArgs,
   mailSearchInput,
   messagesSearchInput,
-  offset,
+  page,
 } from "./search.js"
 
 const text = v.pipe(v.string(), v.minLength(1), v.description("the query, in the strict Lucene language"))
@@ -26,7 +25,6 @@ const timezone = v.optional(v.pipe(v.string(), v.description("the IANA timezone 
 /** One tool per `search` leaf; `search_all` is the one an agent reaches for first. */
 export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
   search_all: tool({
-    nextSteps: SAVE_NEXT_STEPS,
     title: "Search messages, mail and notes",
     description:
       "Messenger messages, mail and notes held in the local store, merged best first — only these three kinds, and " +
@@ -37,19 +35,19 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "tool, looser words or search by meaning before you conclude it was never written. Where the messenger's server can search, it is asked for messages too, as search_messages asks it " +
       "(backend=both by default; archive for the local store only; server for the server's hits only) — mail and " +
       "notes are local only. Each item says its kind (message, mail, note), ref (msg:… or note:…), provider and account. A query " +
-      "field one kind lacks skips that kind and `skipped` says why; `only` narrows the kinds. `source` names the " +
+      "field one kind lacks skips that kind and meta.skipped says why; `only` narrows the kinds. `source` names the " +
       "accounts: provider:account as an item shows it, a provider, a kind or group:<name>; each kind reads its own of " +
-      "them, and `skipped` names an entry no kind reads. Meetings are read only when `source` names one meeting " +
+      "them, and meta.skipped names an entry no kind reads. Meetings are read only when `source` names one meeting " +
       "account (zoom:<account>, zoom, meetings, or all when one account holds meetings): its transcripts, chat and " +
-      "summaries join in as kind meeting, with meetingId, scope, id and startMs instead of a ref, and a null timestamp " +
-      "when the start is unknown; otherwise `skipped` says meetings were not searched. Returns { query, items, hasMore, searched, accounts, skipped, notes?, " +
-      "meetings?, server? }; accounts lists every account read as { resource, provider, account }; " +
-      "hasMore is null when a bounded meeting scan could not tell.",
+      "summaries join in as kind meeting, with offset_ms into the meeting, and a null timestamp " +
+      "when the start is unknown; otherwise meta.skipped says meetings were not searched. Returns { items, page, next?, " +
+      "missing?, meta }; meta.accounts lists every account read as provider:account; a missing entry says when a " +
+      "bounded meeting scan stopped before it could tell whether more match.",
     input: v.object({
       // Typed as present so the answer code reads them; offered only where the server can search.
       ...((messenger.serverSearch ? backendInputs : {}) as typeof backendInputs),
       text,
-      offset,
+      page,
       only: v.optional(
         v.pipe(
           v.array(v.picklist(RESOURCES_SEARCHED_WITH_MEETINGS)),
@@ -79,70 +77,77 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       limit,
     }),
     annotations: { ...READ, openWorldHint: Boolean(messenger.serverSearch) },
-    stored: (store, account, args, defaults, connect) => {
+    output: { entity: "hit", list: true },
+    stored: async (store, account, args, defaults, connect) => {
       const network = Boolean(messenger.serverSearch) && args.backend !== "archive"
       const services = searchServices(messenger, store, account, defaults, network ? connect : undefined)
+      const size = args.limit ?? defaults.limit
+      const offset = offsetOf(args.page, size)
       const request = {
         text: args.text,
-        limit: args.limit ?? defaults.limit,
-        ...(args.offset === undefined ? {} : { offset: args.offset }),
+        limit: size,
+        ...(offset === undefined ? {} : { offset }),
         ...(args.exact ? { exact: true } : {}),
         ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
         ...backendArgs(args),
         env: defaults.env,
         ...(defaults.signal === undefined ? {} : { signal: defaults.signal }),
       }
-      return services.messages.searchAllWithMeetings({
+      const found = await services.messages.searchAllWithMeetings({
         ...request,
         ...(args.only === undefined ? {} : { only: args.only }),
         ...(args.source === undefined ? {} : { source: args.source }),
         ...(args.max_meetings === undefined ? {} : { maxMeetings: args.max_meetings }),
       })
+      const again = {
+        query: args.text,
+        ...(args.only === undefined ? {} : { only: args.only.join(",") }),
+        ...(args.source === undefined ? {} : { source: args.source }),
+        ...(args.max_meetings === undefined ? {} : { max_meetings: args.max_meetings }),
+        ...(args.exact ? { exact: true } : {}),
+        ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
+      }
+      return allAnswer("search all", found, { limit: size, page: args.page ?? 1, again }, args.exact === true)
     },
   }),
 
   search_messages: tool({
-    nextSteps: SAVE_NEXT_STEPS,
     title: "Search messenger messages",
     description: MESSAGES_SEARCH_DESCRIPTION,
     input: messagesSearchInput(messenger),
     annotations: { ...READ, openWorldHint: Boolean(messenger.serverSearch) },
+    output: { entity: "message.hit", list: true },
     stored: (store, account, args, defaults, connect) => {
       const network = args.sync_first || (Boolean(messenger.serverSearch) && args.backend !== "archive")
       const services = searchServices(messenger, store, account, defaults, network ? connect : undefined)
-      return answerMessagesSearch(services.messages, args, defaults, services.searches).then((found) =>
-        atDetail(found, args.detail),
-      )
+      return answerMessagesSearch(services.messages, args, defaults, services.searches)
     },
   }),
 
   search_mail: tool({
-    nextSteps: SAVE_NEXT_STEPS,
     title: "Search mail",
     description:
       "Search the mail imported into the local store (memo sync --mail), in the same query language as " +
       "search_messages; one mail thread is one chat. It reads every mail account; `source` narrows it: email:<address>, " +
-      "or a list with group:<name>; an entry naming no mailbox is in `skipped`. Returns { items, page, limit, hasMore, " +
-      "completeness, query, accounts, skipped? }; accounts lists the mailboxes read as { resource, provider, account }.",
+      "or a list with group:<name>; an entry naming no mailbox is in meta.skipped. chat: narrows to one thread, by id or " +
+      "subject. Returns { items, page, next?, missing?, meta }; meta.accounts lists the mailboxes read.",
     input: mailSearchInput(messenger),
     annotations: { ...READ, openWorldHint: false },
+    output: { entity: "message.hit", list: true },
     stored: (store, account, args, defaults) => {
       const services = searchServices(messenger, store, account, defaults)
-      return answerMessagesSearch(services.messages, args as MessagesSearchArgs, defaults, undefined, "mail").then(
-        (found) => atDetail(found, args.detail),
-      )
+      return answerMessagesSearch(services.messages, args as MessagesSearchArgs, defaults, undefined, "mail")
     },
   }),
 
   search_notes: tool({
-    nextSteps: SAVE_NEXT_STEPS,
     title: "Search notes",
     description:
       "Search the notes — written in memo, or imported from a notes folder — by words and, with the local text " +
-      "model, by meaning. Each hit says which found it (foundBy) and what it links to; `linked` lists the people, " +
-      "entities and notes the hits link most. `source` narrows which: notes:internal for notes written in memo, " +
-      "notes:<folder id> as a hit's folderId shows it, or a list with group:<name>; an entry naming none is in " +
-      "`skipped`. Returns { query, by, meaningSkipped?, hits, hasMore, nextOffset?, linked, accounts, skipped }.",
+      "model, by meaning. Each item says which found it (found_by) and what it links to (links). `source` narrows " +
+      "which: notes:internal for notes written in memo, notes:<folder id> as an item's folder_id shows it, or a list " +
+      "with group:<name>; an entry naming none is in meta.skipped. `filter` is a query every item must also match, " +
+      "tag:work among them, and leaves the search by meaning as it is. Returns { items, page, next?, missing?, meta }.",
     input: v.object({
       text,
       type: v.optional(
@@ -157,27 +162,38 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
           ),
         ),
       ),
-      tag: v.optional(v.pipe(v.string(), v.description("only notes with this tag"))),
       filter: v.optional(v.pipe(v.string(), v.description("a query every hit must also match"))),
-      offset: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1000))),
+      page,
       exact,
       timezone,
       limit,
     }),
     annotations: { ...READ, openWorldHint: false },
-    stored: (store, account, args, defaults) =>
-      searchNotesOf(store, account, args.text, {
-        limit: args.limit ?? defaults.limit,
+    output: { entity: "note.hit", list: true },
+    stored: async (store, account, args, defaults) => {
+      const size = args.limit ?? defaults.limit
+      const offset = offsetOf(args.page, size)
+      const found = await searchNotesOf(store, account, args.text, {
+        limit: size,
         command: messenger.app.command,
         env: defaults.env,
-        ...(args.offset === undefined ? {} : { offset: args.offset }),
+        ...(offset === undefined ? {} : { offset }),
         ...(args.type === undefined ? {} : { source: args.type }),
         ...(args.source === undefined ? {} : { accounts: args.source }),
         app: messenger.app,
-        ...(args.tag === undefined ? {} : { tag: args.tag }),
         ...(args.filter === undefined ? {} : { filter: args.filter }),
         ...(args.exact ? { exact: true } : {}),
         ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
-      }),
+      })
+      const again = {
+        query: args.text,
+        ...(args.type === undefined ? {} : { type: args.type }),
+        ...(args.source === undefined ? {} : { source: args.source }),
+        ...(args.filter === undefined ? {} : { filter: args.filter }),
+        ...(args.exact ? { exact: true } : {}),
+        ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
+      }
+      return notesAnswer("search notes", found, { limit: size, page: args.page ?? 1, again }, args.exact === true)
+    },
   }),
 })

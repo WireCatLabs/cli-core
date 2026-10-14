@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { Command } from "commander"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { chatsCommand } from "./messenger/chats-command.js"
 import type { Messenger } from "./messenger/context.js"
 import { messagesCommand } from "./messenger/messages-command.js"
 import { modelsCommand } from "./messenger/models-command.js"
+import { storeMaintenanceCommands } from "./messenger/store-maintenance-command.js"
 import { createProgram } from "./program.js"
 import { REASONS } from "./reasons.js"
 import { settingsFor } from "./settings.js"
@@ -21,9 +22,14 @@ const messenger: Messenger = {
     throw new Error("no connection in this test")
   },
 }
+const store = () => {
+  const command = new Command("store")
+  for (const one of storeMaintenanceCommands(messenger)) command.addCommand(one)
+  return command
+}
 const program = createProgram({
   app,
-  commands: () => [chatsCommand(messenger), messagesCommand(messenger), modelsCommand(messenger)],
+  commands: () => [chatsCommand(messenger), messagesCommand(messenger), modelsCommand(messenger), store()],
 })
 const parity = JSON.parse(readFileSync(join(import.meta.dirname, "../../parity.json"), "utf8")) as {
   commands: Record<string, { in: unknown }>

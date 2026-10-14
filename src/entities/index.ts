@@ -73,6 +73,7 @@ export const ENTITIES = {
     "found_in",
     "discovery",
     "context",
+    "email",
   ]),
   "message.summary": v.pick(message, ["ref", "timestamp", "sender_name", "text"]),
   message_link: messageLink,
