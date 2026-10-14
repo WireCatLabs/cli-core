@@ -1,9 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { itemOf, listOf } from "../../cli/envelope.js"
+import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, nativeTerms, queryArgument } from "../../cli/list-query.js"
-import { pollVoteAnswer, snakeKeys } from "../../cli/messenger/chat-answers.js"
+import { pollVoteAnswer } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { selfOf } from "../../cli/messenger/message-items.js"
+import { writtenAnswer } from "../../cli/messenger/message-writes.js"
 import { VOTERS_QUERY } from "../../cli/messenger/people-queries.js"
 import { capability } from "../../cli/messenger/port.js"
 import { closeAfterOf, guardedClose, guardedCreatePoll, guardedVote, pollVoters, quizOf } from "../../sends/polls.js"
@@ -162,7 +164,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
           ...(args.topic === undefined ? {} : { threadId: args.topic }),
           ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
         })
-        return itemOf(snakeKeys({ sendId: sent.sendId, operationId: sent.operationId, message: sent.message }))
+        return writtenAnswer(sent, selfOf(messenger, adapter))
       },
     }),
   }

@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { selfOf } from "../../cli/messenger/message-items.js"
+import { writtenAnswer } from "../../cli/messenger/message-writes.js"
 import { sendTime } from "../../domain/send-time.js"
 import { readAttachments } from "../../sends/upload.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
@@ -23,7 +25,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
         `~/.ssh and ${messenger.app.command}'s own folders are refused, with no way around it here. ` +
         "A name that matches several chats is refused with the candidates — pick an id, never guess. " +
         `On outcome_unknown, retry with the send_id it returns and ${name} drops the duplicate; never with a new one. ` +
-        `With \`at\`, ${name} sends it later and the answer carries scheduledFor; never retry a scheduled send — ` +
+        `With \`at\`, ${name} sends it later and the answer carries scheduled_for; never retry a scheduled send — ` +
         "read messages_scheduled instead.",
       input: v.object({
         chat,
@@ -114,12 +116,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
           ...(args.html === true ? { html: true } : {}),
           ...(at === undefined ? {} : { at }),
         })
-        return {
-          sendId: sent.sendId,
-          operationId: sent.operationId,
-          message: sent.message,
-          ...(at === undefined ? {} : { scheduledFor: at }),
-        }
+        return writtenAnswer({ ...sent, ...(at === undefined ? {} : { scheduledFor: at }) }, selfOf(messenger, adapter))
       },
     }),
   }

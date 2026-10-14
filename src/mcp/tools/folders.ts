@@ -1,6 +1,6 @@
 import * as v from "valibot"
-import { itemOf } from "../../cli/envelope.js"
-import { folderAnswer, snakeKeys, wholeList } from "../../cli/messenger/chat-answers.js"
+import { itemOf, snakeKeys } from "../../cli/envelope.js"
+import { folderAnswer, wholeList } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
 import { FOLDER_KINDS, FOLDER_SKIPS, type FolderKind, type FolderSkip } from "../../domain/models.js"

@@ -4,9 +4,9 @@ import { Command } from "commander"
 import { describe, MAX_ACTIONS } from "../../moderation/check.js"
 import { RULE_KEYS } from "../../moderation/rules.js"
 import { momentOf } from "../../services/moment.js"
-import { itemOf, renderAnswer } from "../envelope.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "./ask.js"
-import { renderItem, snakeKeys } from "./chat-answers.js"
+import { renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `chats rules show|set|unset`: the rules live in a file of this profile, and only the chat's id is asked of the messenger. */

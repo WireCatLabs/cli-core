@@ -1,9 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { itemOf, listOf, renderAnswer } from "../envelope.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { window, withPaging } from "../paging.js"
-import { lines, pageOf, snakeKeys, topicAnswer } from "./chat-answers.js"
+import { lines, pageOf, topicAnswer } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { capability } from "./port.js"
 

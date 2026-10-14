@@ -11,11 +11,13 @@ import {
   quizOf,
 } from "../../sends/polls.js"
 import { typedSendAs } from "../../sends/send-as.js"
-import { itemOf, listOf, renderAnswer } from "../envelope.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
-import { lines, pollVoteAnswer, snakeKeys } from "./chat-answers.js"
+import { lines, pollVoteAnswer } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { selfOf } from "./message-items.js"
+import { writtenAnswer } from "./message-writes.js"
 import { VOTERS_QUERY } from "./people-queries.js"
 import { capability } from "./port.js"
 import { threadIdOf } from "./thread.js"
@@ -181,8 +183,8 @@ export const pollsCommand = (messenger: Messenger): Command => {
     const sendAs = typedSendAs(given)
     const asQuiz = quizOf({ quiz, correct, solution })
     const closeAfter = closeAfterOf(closeTime, messenger.pollCloseSeconds)
-    const sent = await context.withMessenger((connection) =>
-      guardedCreatePoll(context.guard, connection, {
+    const { sent, reader } = await context.withMessenger(async (connection) => ({
+      sent: await guardedCreatePoll(context.guard, connection, {
         chat,
         ...(threadId === undefined ? {} : { threadId }),
         poll: {
@@ -198,12 +200,9 @@ export const pollsCommand = (messenger: Messenger): Command => {
         ...(sendId === undefined ? {} : { sendId }),
         ...(sendAs === undefined ? {} : { sendAs }),
       }),
-    )
-    renderAnswer(
-      this,
-      context,
-      itemOf(snakeKeys({ sendId: sent.sendId, operationId: sent.operationId, message: sent.message })),
-    )
+      reader: selfOf(messenger, connection),
+    }))
+    renderAnswer(this, context, writtenAnswer(sent, reader))
   })
 
   return polls

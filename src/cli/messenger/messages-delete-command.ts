@@ -1,6 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { DELETE_AT_ONCE } from "../../services/index.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /**
@@ -17,13 +18,8 @@ export const deleteCommand = (messenger: Messenger): Command =>
     .action(async function (this: Command, chat: string, messages: string[]) {
       const context = messengerContext(this, messenger)
       const everyone = this.opts<{ forEveryone?: boolean }>().forEveryone === true
-      context.renderer.result(
-        await context.withServices((services) =>
-          services.messages.delete({
-            chat,
-            messages: messages.map((one) => one.trim()),
-            forEveryone: everyone,
-          }),
-        ),
+      const deleted = await context.withServices((services) =>
+        services.messages.delete({ chat, messages: messages.map((one) => one.trim()), forEveryone: everyone }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(deleted)))
     })

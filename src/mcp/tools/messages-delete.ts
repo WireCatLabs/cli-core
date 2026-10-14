@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { itemOf, snakeKeys } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { DELETE_AT_ONCE, onlineDeps, servicesFor } from "../../services/index.js"
 import { type AnyTool, chatOf, message, tool, WRITE } from "../tool.js"
@@ -15,11 +16,15 @@ export const messageDeleteTools = (messenger: Messenger): Record<string, AnyTool
     }),
     annotations: WRITE,
     permission: "delete",
-    online: (adapter, args, { guard }) =>
-      servicesFor(onlineDeps(messenger, adapter, guard)).messages.delete({
-        chat: args.chat,
-        messages: args.messages,
-        forEveryone: false,
-      }),
+    online: async (adapter, args, { guard }) =>
+      itemOf(
+        snakeKeys(
+          await servicesFor(onlineDeps(messenger, adapter, guard)).messages.delete({
+            chat: args.chat,
+            messages: args.messages,
+            forEveryone: false,
+          }),
+        ),
+      ),
   }),
 })

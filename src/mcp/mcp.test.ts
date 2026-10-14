@@ -2387,7 +2387,7 @@ describe("sending over MCP", () => {
     const { isError, body } = await call("chat_messages_send", { chat: "Book club", text: "see you", reply_to: "1" })
 
     expect(isError).toBe(false)
-    expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.sendId, replyTo: "1" }])
+    expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.item.send_id, replyTo: "1" }])
     const [entry] = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entry).toMatchObject({ outcome: "sent", chatId: "7", replyTo: "1", messageId: "99" })
     expect(JSON.stringify(entry)).not.toContain("see you")
@@ -2626,7 +2626,7 @@ describe("sending over MCP", () => {
     })
   })
 
-  it("schedules with `at`, answers scheduledFor, and lists the queue", async () => {
+  it("schedules with `at`, answers scheduled_for with the queue as its next step, and lists the queue", async () => {
     const sent: SendOptions[] = []
     const telegram = scripted({
       send: async (_chatId, text, options) => {
@@ -2640,7 +2640,8 @@ describe("sending over MCP", () => {
     const { body } = await call("chat_messages_send", { chat: "7", text: "later", at_time: "30m" })
     const queue = await call("chat_messages_scheduled", { chat: "7" })
 
-    expect(body.scheduledFor).toBe(sent[0]?.at)
+    expect(body.item.scheduled_for).toBe(sent[0]?.at)
+    expect(body.next).toMatchObject([{ command: "messages scheduled", args: { chat: "7" } }])
     expect(queue.body.items[0].scheduled_for).toBe("2030-01-01T09:00:00.000Z")
   })
 
@@ -2684,7 +2685,7 @@ describe("sending over MCP", () => {
     const { isError, body } = await call("chat_messages_edit", { chat: "Book club", message: "1", text: "fixed" })
 
     expect(isError).toBe(false)
-    expect(body.message).toMatchObject({ id: "1", text: "fixed" })
+    expect(body.item.message).toMatchObject({ id: "1", text: "fixed" })
     expect(edits).toEqual([["7", "1", "fixed"]])
     const entries = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entries.at(-1)).toMatchObject({ kind: "edit", outcome: "sent", messageId: "1", length: 5 })
@@ -2720,7 +2721,7 @@ describe("sending over MCP", () => {
     })
 
     expect(isError).toBe(false)
-    expect(body).toMatchObject({ sendId: "9001", message: { id: "51" } })
+    expect(body.item).toMatchObject({ send_id: "9001", message: { id: "51" } })
     expect(forwards).toEqual([["7", "1", "7", { sendId: "9001" }]])
     const entries = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entries.at(-1)).toMatchObject({ kind: "forward", outcome: "sent", messageId: "51", sendId: "9001" })
@@ -2795,7 +2796,7 @@ describe("sending over MCP", () => {
     const pinned = await call("chat_messages_pin", { chat: "7", message: "1" })
     await call("chat_messages_unpin", { chat: "7", message: "1" })
 
-    expect(pinned.body).toEqual({ operationId: expect.any(String), chatId: "7", messageId: "1", pinned: true })
+    expect(pinned.body.item).toEqual({ operation_id: expect.any(String), chat_id: "7", message_id: "1", pinned: true })
     expect(pins).toEqual([
       ["pin", "7", "1", { notify: false }],
       ["unpin", "7", "1"],
@@ -2871,7 +2872,12 @@ describe("sending over MCP", () => {
     const { body } = await call("chat_messages_delete", { chat: "7", messages: ["1", "2"] })
 
     expect(readonly).not.toContain("chat_messages_delete")
-    expect(body).toEqual({ operationId: expect.any(String), chatId: "7", deleted: ["1", "2"], forEveryone: false })
+    expect(body.item).toEqual({
+      operation_id: expect.any(String),
+      chat_id: "7",
+      deleted: ["1", "2"],
+      for_everyone: false,
+    })
     expect(deletions).toEqual([["7", ["1", "2"], { forEveryone: false }]])
   })
 
@@ -3515,7 +3521,7 @@ describe("MCP tools for a messenger whose history is kept in the store", () => {
 
     expect(isError).toBe(false)
     expect(telegram.opened()).toBe(1)
-    expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.sendId }])
+    expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.item.send_id }])
     const [entry] = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entry).toMatchObject({ outcome: "sent", chatId: "7" })
   })

@@ -3,9 +3,8 @@ import { Command } from "commander"
 import type { ChatStats, StatsPeriod } from "../../services/chat-stats.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { momentOf } from "../../services/moment.js"
-import { itemOf, renderAnswer } from "../envelope.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { nextStep } from "../steps.js"
-import { snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 const PERIODS: StatsPeriod[] = ["day", "week"]

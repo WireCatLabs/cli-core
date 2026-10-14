@@ -1,6 +1,6 @@
 import * as v from "valibot"
-import { itemOf, listOf } from "../../cli/envelope.js"
-import { snakeKeys, topicAnswer } from "../../cli/messenger/chat-answers.js"
+import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
+import { topicAnswer } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { capability } from "../../cli/messenger/port.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
