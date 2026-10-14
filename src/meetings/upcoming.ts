@@ -54,7 +54,8 @@ export const createUpcomingMeetingReader = (scope: MeetingProviderScope, port: M
       const candidate = eligible[0] ?? null
       const undated = active.filter((entry) => entry.startAt === null).length
       const unverified = active.filter((entry) => !entry.verified).length
-      const tied = candidate !== null && eligible.filter((entry) => entry.startAt === candidate.startAt).length > 1
+      const simultaneous =
+        candidate === null ? 0 : eligible.filter((entry) => entry.startAt === candidate.startAt).length
       return {
         scope: fixed,
         meetingId,
@@ -63,13 +64,14 @@ export const createUpcomingMeetingReader = (scope: MeetingProviderScope, port: M
         until,
         timezone: schedule.timezone,
         candidate,
-        verifiedNext: Boolean(candidate?.verified && schedule.complete && unverified === 0 && !tied),
+        verifiedNext: Boolean(candidate?.verified && schedule.complete && unverified === 0 && simultaneous === 1),
         coverage: {
           scheduleComplete: schedule.complete,
           inspected: schedule.occurrences.length,
           undated,
           unverified,
           cancelled: schedule.occurrences.length - active.length,
+          simultaneous,
           missing: schedule.missing,
         },
       }

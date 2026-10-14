@@ -47,7 +47,7 @@ shape of this file.
 
 - **`sealed`, `metaNow` and `jsonlRecords` from `@wirecat/cli-core/cli`**: an app's own answer gets the same `meta`
   and JSON lines (with the end line) as cli-core's.
-- A provider-neutral upcoming-occurrence SDK reader for one selected meeting/series and an absolute time window. It distinguishes verified occurrences from series dates, retains missing capabilities and incomplete coverage, and checks row/byte bounds and cancellation without opening a calendar or store.
+- A provider-neutral upcoming-occurrence SDK reader for one selected meeting/series and an absolute time window. Its coverage reports simultaneous candidates so callers can explain an ambiguous next occurrence. It distinguishes verified occurrences from series dates, retains missing capabilities and incomplete coverage, and checks row/byte bounds and cancellation without opening a calendar or store.
 
 - **Known people's names in stored messages** (`kind:person-name`, no migration). A capitalized word that is a name
   of someone met in a messenger, a meeting or through a confirmed phone, in any case and from a Latin profile too
