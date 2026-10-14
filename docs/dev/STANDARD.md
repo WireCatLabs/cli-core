@@ -1341,9 +1341,8 @@ drop. Flipped early, the row fails that CLI's `parity:check` on its next upgrade
 blocks the upgrade.
 
 **This repository checks every tool's `main` against its own manifest** (`.github/workflows/parity.yml`):
-on a pull request that touches `parity.json`, `src/parity/` or the workflow, by hand, and inside full
-validation (`ci.yml`), which the release and the monthly run start. There is no run on a push to
-`main` and no daily run. It
+by hand, and inside full validation (`ci.yml`), which each push to `main`, the release and the monthly
+run start. It does not run on pull requests, and there is no daily run. It
 builds tg-cli and max-cli from their `main` and runs the same check, so a row flipped early fails
 here, before the release that would carry it — not weeks later, when a CLI upgrades. The published
 CLIs are not the reference: a release always trails `main`, so they lag every row that gains a CLI.
