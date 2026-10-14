@@ -4,6 +4,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { contactNote } from "../../entities/index.js"
 import type { ContactNoteItem } from "../../services/private-people.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -17,7 +18,7 @@ const everyNote = (command: string, items: ContactNoteItem[]) =>
 
 export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   const alias = new Command("alias").description("a private local display name in the selected account")
-  annotate(alias.command("set"), { mutates: true, local: true })
+  annotate(alias.command("set"), { effects: LOCAL_WRITE })
     .argument("<person>")
     .argument("<alias>")
     .action(async function (this: Command, person: string, value: string) {
@@ -29,7 +30,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
         itemOf(snakeKeys(await context.withServices((services) => services.privatePeople.alias(person, value)))),
       )
     })
-  annotate(alias.command("rm"), { mutates: true, local: true })
+  annotate(alias.command("rm"), { effects: LOCAL_WRITE })
     .argument("<person>")
     .action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)
@@ -43,17 +44,15 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
   const notes = new Command("notes").description(
     "your private notes on a stored contact, the same in every account that sees them",
   )
-  withQuery(notes.command("list").argument("<person>"), NOTES_QUERY).action(async function (
-    this: Command,
-    person: string,
-    words: string[],
-  ) {
-    const context = messengerContext(this, messenger)
-    listQuery(typedQuery(words), NOTES_QUERY, "contacts notes list")
-    const items = await context.withServices((services) => services.privatePeople.notes(person))
-    renderAnswer(this, context, everyNote("contacts notes list", items))
-  })
-  annotate(notes.command("show"), { output: { entity: "contact_note" } })
+  withQuery(annotate(notes.command("list"), { effects: LOCAL_READ }).argument("<person>"), NOTES_QUERY).action(
+    async function (this: Command, person: string, words: string[]) {
+      const context = messengerContext(this, messenger)
+      listQuery(typedQuery(words), NOTES_QUERY, "contacts notes list")
+      const items = await context.withServices((services) => services.privatePeople.notes(person))
+      renderAnswer(this, context, everyNote("contacts notes list", items))
+    },
+  )
+  annotate(notes.command("show"), { effects: LOCAL_READ, output: { entity: "contact_note" } })
     .argument("<person>")
     .argument("<id>")
     .action(async function (this: Command, person: string, id: string) {
@@ -65,7 +64,10 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
       )
     })
   for (const name of ["add", "edit"] as const) {
-    const command = annotate(notes.command(name), { mutates: true, local: true, output: { entity: "contact_note" } })
+    const command = annotate(notes.command(name), {
+      effects: LOCAL_WRITE,
+      output: { entity: "contact_note" },
+    })
       .argument("<person>")
       .option("--file <path>", "read note text from a file; omitted or - reads stdin")
     if (name === "edit")
@@ -86,7 +88,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
       renderAnswer(this, context, itemOf(saved))
     })
   }
-  annotate(notes.command("remove"), { mutates: true, local: true })
+  annotate(notes.command("remove"), { effects: LOCAL_WRITE })
     .argument("<person>")
     .argument("<id>")
     .action(async function (this: Command, person: string, id: string) {

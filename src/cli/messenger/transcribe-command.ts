@@ -1,15 +1,16 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import { type Kept, openKept } from "../../speech/hearing.js"
 import { isInstalled } from "../../speech/install.js"
 import { choose, type Heard, hearLocally, hearOnline, notDownloaded } from "../../speech/transcribe.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { heardAnswer } from "./message-answers.js"
 
 /** `messages transcribe`: a voice message as text, by the messenger or by a model on this machine. */
 export const transcribeSubcommand = (messages: Command, messenger: Messenger): Command =>
-  messages
-    .command("transcribe")
+  annotate(messages.command("transcribe"), { effects: REMOTE_READ })
     .description(
       `a voice message as text — by ${messenger.name ?? messenger.app.command} where it can, else by a model on this machine`,
     )

@@ -3,6 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { wholeList } from "../messenger/chat-answers.js"
 import { type BotContext, botContext, online } from "./context.js"
@@ -35,8 +36,7 @@ const botWrite = (context: BotContext, key: string, write: () => Promise<void>) 
 export const botMenuCommand = (bot: BotMessenger): Command => {
   const command = new Command("commands").description("the bot's command menu — what people see after /")
 
-  command
-    .command("list")
+  annotate(command.command("list"), { effects: REMOTE_READ })
     .description("the commands in the menu now")
     .action(async function (this: Command) {
       const context = online(botContext(this, bot), this)
@@ -60,14 +60,14 @@ export const botMenuCommand = (bot: BotMessenger): Command => {
     })
   }
 
-  annotate(command.command("set"), { mutates: true })
+  annotate(command.command("set"), { effects: REMOTE_WRITE })
     .description("replace the whole menu: each command as name=description, e.g. start=Begin")
     .argument("<commands...>", "name=description, one per command")
     .action(async function (this: Command, typed: string[]) {
       await replace(this, typed.map(entryOf), "bot.commands.set")
     })
 
-  annotate(command.command("clear"), { mutates: true })
+  annotate(command.command("clear"), { effects: REMOTE_WRITE })
     .description("empty the menu")
     .action(async function (this: Command) {
       await replace(this, [], "bot.commands.clear")
@@ -79,7 +79,7 @@ export const botMenuCommand = (bot: BotMessenger): Command => {
 /** `bot callbacks`: answers to the buttons people press under the bot's messages. */
 export const botCallbacksCommand = (bot: BotMessenger): Command =>
   new Command("callbacks").description("answers to the buttons people press under the bot's messages").addCommand(
-    annotate(new Command("answer"), { mutates: true })
+    annotate(new Command("answer"), { effects: REMOTE_WRITE })
       .description(
         "answer a pressed button by its callback id: --notification shows the person a one-time note, " +
           "--text replaces the message the button was on",
@@ -128,8 +128,7 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
     "where the messenger pushes this bot's updates — while one is set, `bot watch` gets nothing",
   )
 
-  command
-    .command("list")
+  annotate(command.command("list"), { effects: REMOTE_READ })
     .description("the webhooks this bot has")
     .action(async function (this: Command) {
       const context = online(botContext(this, bot), this)
@@ -146,7 +145,7 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  const set = annotate(command.command("set"), { mutates: true })
+  const set = annotate(command.command("set"), { effects: REMOTE_WRITE })
     .description("send this bot's updates to an HTTPS address; refused while another is set")
     .argument("<url>", "the HTTPS address")
     .option("--types <types>", "only these update types, comma-separated, in the messenger's words")
@@ -179,7 +178,7 @@ export const botWebhooksCommand = (bot: BotMessenger): Command => {
     })
   })
 
-  annotate(command.command("delete"), { mutates: true })
+  annotate(command.command("delete"), { effects: REMOTE_WRITE })
     .description("stop sending updates to this address; with none left, `bot watch` works again")
     .argument("<url>", "the address")
     .action(async function (this: Command, url: string) {

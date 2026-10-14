@@ -48,11 +48,11 @@ describe("direct parity evidence", () => {
     })
     const changed = node(["list"], {
       options: [{ flags: "--limit <n>", default: 30, takes_value: true, mandatory: false, description: "show" }],
-      mutates: false,
+      effects: { remote: "none", local: "read" },
     })
     const result = comparePrograms(side("a", command), side("b", changed))
     expect(result.commands[0]?.contracts.map((one) => one.path)).toEqual([
-      "mutates",
+      "effects",
       "options.--limit.default",
       "options.--limit.flags",
     ])

@@ -75,7 +75,7 @@ export const addMeetingPassageCommand = (
       ),
     {
       origin: "handwritten",
-      mutates: false,
+      effects: { remote: "none", local: "read" },
       examples: [`${program.name()} meetings passage meeting:1/1/1/0 --json`],
     },
   )

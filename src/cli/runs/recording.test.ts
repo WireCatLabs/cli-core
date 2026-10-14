@@ -2,12 +2,14 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
+import { expectRegisteredEvents } from "@wirecat/cli-base/testing"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { type BaseContext, baseContext } from "../context.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { runsCommand } from "./command.js"
+import { CORE_LOG_EVENTS } from "./log-events.js"
 import { listRuns, runsDirFor } from "./run.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "A test CLI", version: "1.2.3" }
@@ -181,9 +183,14 @@ describe("the runs command", () => {
     const problems = (await read(["runs", "show", metadata?.runId ?? "", "--problems", "--json"])).answer.item
     expect(problems).toMatchObject({ run_id: metadata?.runId, event_count: 2, events: [] })
     const shown = (await read(["runs", "show", metadata?.runId ?? "", "--json"])).answer.item
-    expect(shown.events.map((event: { event: string }) => event.event)).toEqual(["request", "response"])
+    expect(shown.events.map((event: { event: string }) => event.event)).toEqual([
+      "provider.request",
+      "provider.response",
+    ])
     expect(shown.events[0]).not.toHaveProperty("run_id")
-    expect((await read(["runs", "path", metadata?.runId ?? "", "--json"])).answer.item.path).toContain(runsDir)
+    const { path } = (await read(["runs", "path", metadata?.runId ?? "", "--json"])).answer.item
+    expect(path).toContain(runsDir)
+    expectRegisteredEvents(readFileSync(join(path, "events.jsonl"), "utf8").trim().split("\n"), CORE_LOG_EVENTS)
     expect(listRuns(runsDir)).toHaveLength(1)
     expect((await read(["runs", "path", "no-such-run"])).code).toBe(6)
     expect(listRuns(runsDir).map((one) => one.command)).toContain("runs path")

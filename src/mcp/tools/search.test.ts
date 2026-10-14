@@ -45,7 +45,11 @@ describe.each(["max", "tg"])("the shared MCP search bridge for %s", (command) =>
     expect(search).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'x chat:"Synthetic Chat"', language: "lucene" }),
     )
-    expect(result).toEqual({ items: [], page: { limit: 20, has_more: false }, meta: { accounts: ["max:synthetic"] } })
+    expect(result).toEqual({
+      items: [],
+      page: { mode: "page", limit: 20, has_more: false },
+      meta: { accounts: ["max:synthetic"], complete: true },
+    })
   })
 
   it("**forwards exact**, so bare words match their exact form only", async () => {

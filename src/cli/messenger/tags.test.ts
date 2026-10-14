@@ -106,7 +106,7 @@ describe("tags", () => {
     })
 
     const listed = v.parse(listEnvelopeSchema(tagging), json(await call("tags", "list", "tag:work", "--json")))
-    expect(listed.page).toEqual({ limit: 20, has_more: false })
+    expect(listed.page).toEqual({ mode: "page", limit: 20, has_more: false })
     expect(listed.items.map(({ type }: { type: string }) => type)).toEqual(["chat", "contact", "message", "message"])
     expect(json(await call("tags", "list", "type:contact", "--json")).items).toHaveLength(2)
     expect(json(await call("tags", "list", "tag:work sources:auto", "--json")).items).toEqual([])

@@ -3,6 +3,7 @@ import { Command } from "commander"
 import type { AdminReport } from "../../domain/admin-statistics.js"
 import type { AdminQuery } from "../../services/admin-statistics.js"
 import { environmentOf } from "../context.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -16,9 +17,10 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
     newcomers: "known-join members and their help within a join window",
     discussion: "viewed posts with little recorded discussion",
   }
-  const command = annotate(new Command(report), { output: { entity: "admin_report" } }).description(
-    descriptions[report],
-  )
+  const command = annotate(new Command(report), {
+    effects: REMOTE_READ,
+    output: { entity: "admin_report" },
+  }).description(descriptions[report])
   if (report === "newcomers")
     command
       .argument("<chat>", messenger.chatArgument)

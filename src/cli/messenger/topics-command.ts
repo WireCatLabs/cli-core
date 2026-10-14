@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { capability } from "../../ports/messenger.js"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { window, withPaging } from "../paging.js"
 import { lines, pageOf, topicAnswer } from "./chat-answers.js"
@@ -38,7 +39,7 @@ const listed = (messenger: Messenger) =>
 /** `search topics`: a forum group's topics whose title matches, asked of the messenger. */
 export const topicsSearchCommand = (messenger: Messenger): Command =>
   withPaging(
-    new Command("topics")
+    annotate(new Command("topics"), { effects: REMOTE_READ })
       .description("a forum group's topics whose title matches")
       .argument("<chat>", messenger.chatArgument)
       .argument("<text>", "words from the topic's title"),
@@ -50,15 +51,14 @@ export const topicsCommand = (messenger: Messenger): Command => {
 
   topics.addCommand(
     withPaging(
-      new Command("list")
+      annotate(new Command("list"), { effects: REMOTE_READ })
         .description("a forum group's topics, newest activity first")
         .argument("<chat>", messenger.chatArgument),
     ).action(listed(messenger)),
   )
 
   if (messenger.topicShow)
-    topics
-      .command("show")
+    annotate(topics.command("show"), { effects: REMOTE_READ })
       .description("one forum topic: its title, state and last activity")
       .argument("<chat>", messenger.chatArgument)
       .argument("<topic>", "the topic id, from `topics list`")
@@ -68,7 +68,7 @@ export const topicsCommand = (messenger: Messenger): Command => {
         renderAnswer(this, context, itemOf(topicAnswer(shown)))
       })
 
-  annotate(topics.command("enable"), { mutates: true })
+  annotate(topics.command("enable"), { effects: REMOTE_WRITE })
     .description("enable forum topics; only the owner, with an explicit upgrade for a basic group")
     .argument("<chat>", messenger.chatArgument)
     .option("--upgrade", "upgrade a basic group to a supergroup first; its chat id changes")
@@ -79,19 +79,19 @@ export const topicsCommand = (messenger: Messenger): Command => {
       )
       renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
-  annotate(topics.command("create"), { mutates: true })
+  annotate(topics.command("create"), { effects: REMOTE_WRITE })
     .description("create a named topic in an existing forum; never enable or upgrade a group implicitly")
     .argument("<chat>", messenger.chatArgument)
     .argument("<title>", "the topic title, at most 128 UTF-8 bytes")
-    .option("--send-id <id>", "identify this creation attempt; an already sent or unknown id is refused")
+    .option("--operation-id <id>", "identify this creation attempt; an already sent or unknown id is refused")
     .action(async function (this: Command, chat: string, title: string) {
       const context = messengerContext(this, messenger)
       const created = await context.withServices((services) =>
-        services.topics.create(chat, title, this.opts<{ sendId?: string }>()),
+        services.topics.create(chat, title, { sendId: this.opts<{ operationId?: string }>().operationId }),
       )
       renderAnswer(this, context, itemOf(snakeKeys(created)))
     })
-  annotate(topics.command("edit"), { mutates: true })
+  annotate(topics.command("edit"), { effects: REMOTE_WRITE })
     .description("rename, close or reopen a forum topic")
     .argument("<chat>", messenger.chatArgument)
     .argument("<topic>", "the topic id, from `topics list`")
@@ -120,7 +120,7 @@ export const topicsCommand = (messenger: Messenger): Command => {
       )
       renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
-  annotate(topics.command("delete"), { mutates: true })
+  annotate(topics.command("delete"), { effects: REMOTE_WRITE })
     .description("delete a forum topic and every message in it, for everyone; it cannot be undone")
     .argument("<chat>", messenger.chatArgument)
     .argument("<topic>", "the topic id, from `topics list`")
@@ -133,7 +133,7 @@ export const topicsCommand = (messenger: Messenger): Command => {
         itemOf(snakeKeys(await context.withServices((services) => services.topics.delete(chat, topic)))),
       )
     })
-  annotate(topics.command("order"), { mutates: true })
+  annotate(topics.command("order"), { effects: REMOTE_WRITE })
     .description("put the pinned topics in this order; it pins and unpins nothing")
     .argument("<chat>", messenger.chatArgument)
     .argument("<topic...>", "the pinned topics' ids, first to last")

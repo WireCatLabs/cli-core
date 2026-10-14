@@ -12,7 +12,12 @@ it("does not expose arbitrary store exception text through MCP", async () => {
   }
   const result = await callMeetingTool(store, "meetings_list", {})
   expect(result.structuredContent).toEqual({
-    error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
+    error: {
+      code: "internal_error",
+      reason: "command.crashed",
+      message: "the command failed; this is a bug",
+      retry: { safe: false },
+    },
   })
   expect(JSON.stringify(result)).not.toContain("confidential")
 })

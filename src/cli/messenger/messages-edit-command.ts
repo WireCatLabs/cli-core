@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { REMOTE_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { afterWrite, writtenAnswer } from "./message-writes.js"
@@ -8,7 +9,7 @@ import { HTML_HELP } from "./messages-send-command.js"
 import { readAll } from "./stdin.js"
 
 export const editCommand = (messenger: Messenger): Command => {
-  const edit = annotate(new Command("edit"), { mutates: true })
+  const edit = annotate(new Command("edit"), { effects: REMOTE_WRITE })
     .description("change the text of your own message; the other side may have read it already")
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of your own message")

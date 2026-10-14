@@ -6,6 +6,7 @@ import { renderMessages } from "../../render/messages.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf, REVIEW_DAYS, reviewStart, UNANSWERED_HOURS } from "../../services/inbox.js"
 import { type Hearing, modelWith } from "../../speech/hearing.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { parseDuration } from "../settings.js"
@@ -28,7 +29,11 @@ export const unansweredHours = (value: unknown, flag = "--unanswered"): number =
  * tasks in the local store from what it read (`../../services/task-rules.ts`); nothing reaches the messenger.
  */
 export const reviewCommand = (messenger: Messenger): Command =>
-  annotate(new Command("review"), { output: { entity: "message", view: "message.summary" }, query: REVIEW_QUERY })
+  annotate(new Command("review"), {
+    effects: REMOTE_READ,
+    output: { entity: "message", view: "message.summary" },
+    query: REVIEW_QUERY,
+  })
     .description("every message, yours too, in chats that changed since a point — for reviewing who owes what")
     .addHelpText("after", queryHelp(REVIEW_QUERY))
     .argument(

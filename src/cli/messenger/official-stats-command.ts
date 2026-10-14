@@ -2,6 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { OfficialChatStats, OfficialPerson, OfficialValue } from "../../domain/models.js"
 import { capability } from "../../ports/messenger.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { officialAnswer, refuseJsonl } from "./stats-answers.js"
@@ -9,7 +10,7 @@ import { officialAnswer, refuseJsonl } from "./stats-answers.js"
 const TOP = 5
 
 export const officialStatsCommand = (messenger: Messenger): Command =>
-  annotate(new Command("official"), { output: { entity: "official_stats" } })
+  annotate(new Command("official"), { effects: REMOTE_READ, output: { entity: "official_stats" } })
     .description(
       `what ${messenger.name ?? messenger.app.command} itself computed for a group or channel you administer: ` +
         "totals against the previous period, top people and every graph as JSON series; the messenger picks the period",

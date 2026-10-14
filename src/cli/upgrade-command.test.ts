@@ -20,7 +20,7 @@ const call = async (command: string, argv: string[], ports: PackageUpgradePorts,
 }
 const itemOf = (line: string | undefined, format = "json") => {
   const parsed = JSON.parse(line ?? "")
-  return format === "json" ? parsed.item : parsed
+  return format === "json" ? parsed.item : parsed.data
 }
 const fake = (): PackageUpgradePorts => ({
   installer: () => "npm",
@@ -54,7 +54,7 @@ describe.each(["max", "tg"])("the shared upgrade command for %s", (command) => {
     ports.afterUpdate = async () => ({ restarted: ["synthetic"], left: ["manual"] })
     const result = await call(command, ["upgrade", `--${format}`], ports)
     expect(result.code).toBe(0)
-    expect(result.stdout).toHaveLength(1)
+    expect(result.stdout).toHaveLength(format === "json" ? 1 : 2)
     expect(itemOf(result.stdout[0], format)).toMatchObject({ updated: true, restarted: ["synthetic"] })
     expect(result.stderr.join("\n")).toContain("running: npm install")
     expect(result.stderr.join("\n")).toContain(`${command} manual server restart`)

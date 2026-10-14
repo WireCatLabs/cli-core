@@ -124,9 +124,9 @@ describe("--source as a list of accounts and groups", () => {
     const found = await prepared(store, "group:work", "messages")
     expect(found.scopeAccounts).toEqual([tg2])
     expect(found.skipped).toEqual([
-      { source: "email:me@work.example", reason: "a mailbox — search mail reads it" },
-      { source: `notes:${folder.id}`, reason: "notes — search notes reads them" },
-      { source: "zoom:z1", reason: "meetings — search all reads them" },
+      { source: "email:me@work.example", code: "validation_error", reason: "a mailbox — search mail reads it" },
+      { source: `notes:${folder.id}`, code: "validation_error", reason: "notes — search notes reads them" },
+      { source: "zoom:z1", code: "validation_error", reason: "meetings — search all reads them" },
     ])
     expect((await prepared(store, "group:work", "mail")).scopeAccounts).toEqual([work])
   })
@@ -135,7 +135,7 @@ describe("--source as a list of accounts and groups", () => {
     const store = await seeded()
     await store.saveAccount(zoom, { name: null })
     expect((await prepared(store, "tg:101,zoom:z1", "messages")).skipped).toEqual([
-      { source: "zoom:z1", reason: "meetings — search all reads them" },
+      { source: "zoom:z1", code: "validation_error", reason: "meetings — search all reads them" },
     ])
     expect(await scope(store, "all", "messages")).toEqual([max1, max2, tg1, tg2])
     await expect(scope(store, "zoom:z1", "messages")).rejects.toThrow(

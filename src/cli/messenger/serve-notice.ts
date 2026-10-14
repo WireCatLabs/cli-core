@@ -28,7 +28,7 @@ export const noticeFor =
       return
     }
     if (context.settings.quiet && severity === "info") return
-    record(context, app, severity, { event: severity === "info" ? "note" : "warning", ...attributes })
+    record(context, app, severity, { event: severity === "info" ? "serve.note" : "serve.warning", ...attributes })
   }
 
 /**
@@ -46,9 +46,9 @@ export const recordDiagnostics = (context: MessengerContext, app: AppIdentity): 
       record(context, app, severity, { event })
     }
   const renderer: Renderer = context.renderer
-  renderer.note = say("info", "note")
-  renderer.success = say("info", "success")
-  renderer.warn = say("warn", "warning")
-  renderer.failure = say("error", "failure", true)
+  renderer.note = say("info", "serve.note")
+  renderer.success = say("info", "serve.success")
+  renderer.warn = say("warn", "serve.warning")
+  renderer.failure = say("error", "serve.failure", true)
   return context
 }

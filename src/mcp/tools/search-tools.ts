@@ -35,12 +35,12 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "tool, looser words or search by meaning before you conclude it was never written. Where the messenger's server can search, it is asked for messages too, as search_messages asks it " +
       "(backend=both by default; archive for the local store only; server for the server's hits only) — mail and " +
       "notes are local only. Each item says its kind (message, mail, note), ref (msg:… or note:…), provider and account. A query " +
-      "field one kind lacks skips that kind and meta.skipped says why; `only` narrows the kinds. `source` names the " +
+      "field one kind lacks skips that kind and meta.issues names it; `only` narrows the kinds. `source` names the " +
       "accounts: provider:account as an item shows it, a provider, a kind or group:<name>; each kind reads its own of " +
-      "them, and meta.skipped names an entry no kind reads. Meetings are read only when `source` names one meeting " +
+      "them, and meta.issues names an entry no kind reads. Meetings are read only when `source` names one meeting " +
       "account (zoom:<account>, zoom, meetings, or all when one account holds meetings): its transcripts, chat and " +
       "summaries join in as kind meeting, with offset_ms into the meeting, and a null timestamp " +
-      "when the start is unknown; otherwise meta.skipped says meetings were not searched. Returns { items, page, next?, " +
+      "when the start is unknown; otherwise meta.issues says meetings were not searched. Returns { items, page, next?, " +
       "missing?, meta }; meta.accounts lists every account read as provider:account; a missing entry says when a " +
       "bounded meeting scan stopped before it could tell whether more match.",
     input: v.object({
@@ -129,7 +129,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
     description:
       "Search the mail imported into the local store (memo sync --mail), in the same query language as " +
       "search_messages; one mail thread is one chat. It reads every mail account; `source` narrows it: email:<address>, " +
-      "or a list with group:<name>; an entry naming no mailbox is in meta.skipped. chat: narrows to one thread, by id or " +
+      "or a list with group:<name>; an entry naming no mailbox is in meta.issues. chat: narrows to one thread, by id or " +
       "subject. Returns { items, page, next?, missing?, meta }; meta.accounts lists the mailboxes read.",
     input: mailSearchInput(),
     annotations: { ...READ, openWorldHint: false },
@@ -146,7 +146,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "Search the notes — written in memo, or imported from a notes folder — by words and, with the local text " +
       "model, by meaning. Each item says which found it (found_by) and what it links to (links). `source` narrows " +
       "which: notes:internal for notes written in memo, notes:<folder id> as an item's folder_id shows it, or a list " +
-      "with group:<name>; an entry naming none is in meta.skipped. `filter` is a query every item must also match, " +
+      "with group:<name>; an entry naming none is in meta.issues. `filter` is a query every item must also match, " +
       "tag:work among them, and leaves the search by meaning as it is. Returns { items, page, next?, missing?, meta }.",
     input: v.object({
       text,

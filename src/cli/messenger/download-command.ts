@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import { NOT_FILES } from "../../domain/attachments.js"
 import type { Id } from "../../domain/models.js"
@@ -15,6 +16,7 @@ export { downloadMessage, type Saved, safeName, save } from "../../services/file
 import { OFFLINE } from "../../services/deps.js"
 import type { MessagesService } from "../../services/messages.js"
 import { patiently } from "../../services/patience.js"
+import { FETCH } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
 import { nextStep } from "../steps.js"
@@ -23,8 +25,7 @@ import { stopOnSignal } from "./patience.js"
 
 /** `messages download`: every file of one message, or with `--all` of a whole chat, never over a file already there. */
 export const downloadSubcommand = (messages: Command, messenger: Messenger): Command =>
-  messages
-    .command("download")
+  annotate(messages.command("download"), { effects: FETCH })
     .description("save a message's photos, files, videos and voice notes to a folder — or a whole chat's with --all")
     .argument("<chat>", messenger.chatArgument)
     .argument("[message]", "the message id; left out with --all")

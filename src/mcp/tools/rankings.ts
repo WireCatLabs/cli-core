@@ -103,7 +103,7 @@ export const rankingTools = (messenger: Messenger): Record<string, AnyTool> => {
     definitions[`stats_${target}_evidence`] = tool({
       title: `Inspect ${target} ranking evidence`,
       description:
-        "Page through contributing messages, question/answer pairs or retention cohort members from a row's selection. Never fetches, sends, marks read or records evidence bodies. A cursor binds the component, selection and contributing stored rows; changed evidence requires a restart. JSON items are bounded to 64 KiB; page.cursor continues, and next has the call for the next page.",
+        "Page through contributing messages, question/answer pairs or retention cohort members from a row's selection. Never fetches, sends, marks read or records evidence bodies. A cursor binds the component, selection and contributing stored rows; changed evidence requires a restart. JSON items are bounded to 64 KiB; page.next_cursor continues, and next has the call for the next page.",
       input: evidenceInput(target),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "evidence", list: true },

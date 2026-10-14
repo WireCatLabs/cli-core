@@ -163,8 +163,8 @@ describe("chats documents list", () => {
           sender,
         },
       ],
-      page: { limit: 20, has_more: false },
-      meta: { run_id: expect.any(String), duration_ms: expect.any(Number) },
+      page: { mode: "page", limit: 20, has_more: false },
+      meta: { run_id: expect.any(String), duration_ms: expect.any(Number), complete: true },
     })
   })
 

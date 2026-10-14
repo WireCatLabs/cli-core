@@ -1,5 +1,7 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { TRACKED_DAYS } from "../../services/chats.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { lines, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -17,8 +19,7 @@ export const trackingCommand = (messenger: Messenger): Command => {
     "the chats whose member lists serve fetches daily into the local store — chats members fetch --track adds one",
   )
 
-  tracking
-    .command("list")
+  annotate(tracking.command("list"), { effects: LOCAL_READ })
     .description("every tracked chat: since when, and its last member count")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -42,8 +43,7 @@ export const trackingCommand = (messenger: Messenger): Command => {
       )
     })
 
-  tracking
-    .command("show")
+  annotate(tracking.command("show"), { effects: LOCAL_READ })
     .description(`one chat: whether it is tracked, and its member count per day for the last ${TRACKED_DAYS} days`)
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -59,8 +59,7 @@ export const trackingCommand = (messenger: Messenger): Command => {
     ["add", true, "fetch this chat's member list daily while serve runs, from its next run"],
     ["remove", false, "stop fetching it daily; the history already kept stays"],
   ] as const) {
-    tracking
-      .command(verb)
+    annotate(tracking.command(verb), { effects: LOCAL_WRITE })
       .description(description)
       .argument("<chat>", messenger.chatArgument)
       .action(async function (this: Command, chat: string) {

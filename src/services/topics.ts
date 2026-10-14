@@ -12,11 +12,7 @@ export interface TopicsService {
     chat: string,
     options: { upgrade: boolean },
   ): Promise<Operated<{ previousChatId: string; chat: Chat; upgraded: boolean; forum: true }>>
-  create(
-    chat: string,
-    title: string,
-    options: { sendId?: string },
-  ): Promise<Operated<{ chatId: string; topic: Topic; sendId: string }>>
+  create(chat: string, title: string, options: { sendId?: string }): Promise<Operated<{ chatId: string; topic: Topic }>>
   edit(chat: string, topic: string, change: TopicChange): Promise<Operated<{ chatId: string; topic: Topic }>>
   order(chat: string, topics: string[]): Promise<Operated<{ chatId: string; order: string[] }>>
   /** Every message in it goes too, for everyone; asks first by default (`topics.delete` is `ask`). */
@@ -177,7 +173,7 @@ export const topicsService = (deps: ServiceDeps): TopicsService => {
             deps.guard.check({ chatId: target, kind: "chat", key: "topics.create" }, { reserve: false })
         },
       )
-      return { operationId: id, sendId: id, chatId: target, topic }
+      return { operationId: id, chatId: target, topic }
     },
     edit: async (chat, typedTopic, change) => {
       const { title, closed, pinned, hidden } = change

@@ -5,6 +5,7 @@ import * as v from "valibot"
 import { type AppIdentity, envName } from "./app.js"
 import { loadSnakeCaseConfig } from "./config-keys.js"
 import { baseContext } from "./context.js"
+import { LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { knownBeside, knownPermissionKeys, type PermissionKeyOf } from "./permission-keys.js"
 import { hasPermissionConfig, migratePermissionConfig } from "./permission-migration.js"
@@ -24,7 +25,7 @@ export const configCommand = (
   const command = new Command("config").description("the settings in force, and where each one came from")
 
   command.addCommand(
-    annotate(new Command("migrate"), { mutates: true, local: true })
+    annotate(new Command("migrate"), { effects: LOCAL_WRITE })
       .description("replace legacy access settings with permissions, preserving this file's effective levels")
       .option("--dry-run", "show the migration without writing the file")
       .action(function () {
@@ -56,8 +57,7 @@ export const configCommand = (
       }),
   )
 
-  command
-    .command("show")
+  annotate(command.command("show"), { effects: LOCAL_READ })
     .description("the profile, the profiles that exist, and each setting with where it came from")
     .option("--bot", "the settings a bot command on this profile gets, rather than the personal account's")
     .action(async function (this: Command) {
@@ -94,7 +94,7 @@ export const configCommand = (
     })
 
   for (const action of ["set", "unset"] as const) {
-    const sub = annotate(command.command(action), { mutates: true, local: true })
+    const sub = annotate(command.command(action), { effects: LOCAL_WRITE })
       .argument("<setting>", `one of: ${[...config.allSettings, ...STORE_SETTINGS, "accountGroups.<name>"].join(", ")}`)
       .option("--defaults", "change what every profile gets, rather than this profile")
       .option("--personal", "only for personal accounts — the personal section of the file")

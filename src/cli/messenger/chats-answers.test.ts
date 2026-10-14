@@ -171,7 +171,7 @@ describe("chats list", () => {
     const call = harness()
     const first = JSON.parse((await call(["chats", "list", "--limit", "2", "--json"])).stdout)
     expect(first.items.map((one: { ref: string }) => one.ref)).toEqual(["chat:chat/500/7", "chat:chat/500/8"])
-    expect(first.page).toEqual({ limit: 2, has_more: true })
+    expect(first.page).toEqual({ mode: "page", limit: 2, has_more: true, next_page: 2 })
     expect(first.next[0]).toMatchObject({ step: "page.next", command: "chats list", args: { page: 2, limit: 2 } })
   })
 

@@ -164,7 +164,7 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
         "Everything one person took part in, in every messenger linked to them, newest first: items [{ at, subject " +
         "(message, chat, email, meeting, task, document…), subject_id, role (sender, mentioned, participant, " +
         "recipient, assignee, author…), scope, provider, account, chat_id, locator, project_id }]; page.has_more " +
-        "and page.cursor when cut at limit (pass the cursor back with the same filters); meta.truncated when " +
+        "and page.next_cursor when cut at limit (pass the cursor back with the same filters); meta.truncated when " +
         "changes still queued are left out. A message carries a locator other tools take. Reads the store only.",
       input: v.object({
         person: v.pipe(v.string(), v.minLength(1), v.description("person id, @username, or part of a name")),
@@ -181,7 +181,7 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
           ),
         ),
         cursor: v.optional(
-          v.pipe(v.string(), v.description("page.cursor of the previous answer, with the same filters")),
+          v.pipe(v.string(), v.description("page.next_cursor of the previous answer, with the same filters")),
         ),
       }),
       annotations: { ...READ, openWorldHint: false },
@@ -200,6 +200,7 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
           items: found.items.map(snakeKeys),
           limit: found.limits.items,
           has_more: found.hasMore,
+          paging: "cursor",
           ...(found.cursor === undefined ? {} : { cursor: found.cursor }),
           ...(found.pending > 0 ? { meta: { truncated: true } } : {}),
         })

@@ -24,7 +24,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
         "caption. Only when the owner asked for this exact message to this exact chat. Hidden files and folders, " +
         `~/.ssh and ${messenger.app.command}'s own folders are refused, with no way around it here. ` +
         "A name that matches several chats is refused with the candidates — pick an id, never guess. " +
-        `On outcome_unknown, retry with the send_id it returns and ${name} drops the duplicate; never with a new one. ` +
+        `On outcome_unknown, retry with the operation_id it returns and ${name} drops the duplicate; never with a new one. ` +
         `With \`at\`, ${name} sends it later and the answer carries scheduled_for; never retry a scheduled send — ` +
         "read messages_scheduled instead.",
       input: v.object({
@@ -63,7 +63,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
             ),
           ),
         ),
-        send_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
+        operation_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
         silent: v.optional(v.pipe(v.boolean(), v.description("deliver without a notification"))),
         no_preview: v.optional(v.pipe(v.boolean(), v.description("no preview card for a link in the text"))),
         md: v.optional(
@@ -106,7 +106,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
           ...(attachments.length === 0 ? {} : { attachments }),
           ...(args.spoiler === true ? { spoiler: true } : {}),
           ...(args.caption_above === true ? { captionAbove: true } : {}),
-          ...(args.send_id === undefined ? {} : { sendId: args.send_id }),
+          ...(args.operation_id === undefined ? {} : { sendId: args.operation_id }),
           ...(args.topic === undefined ? {} : { threadId: args.topic }),
           ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
           ...(args.reply_to === undefined ? {} : { replyTo: args.reply_to }),

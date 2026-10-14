@@ -1,12 +1,14 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { readEvidencePacket } from "../../services/evidence-read.js"
+import { LOCAL_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { evidenceAnswer } from "./message-answers.js"
 
 export const evidenceCommand = (messenger: Messenger): Command =>
-  new Command("evidence")
+  annotate(new Command("evidence"), { effects: LOCAL_READ })
     .description("a bounded evidence packet from stored messages, newest first")
     .argument("<chat>", messenger.chatArgument)
     .option("--limit <n>", "how many, 1–100", positiveCount("--limit"))

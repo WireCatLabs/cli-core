@@ -171,7 +171,9 @@ export const callMeetingTool = async (
     }
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
   } catch (error) {
-    const { content, structuredContent } = mcpErrorResult(errorObjectOf(error, failure))
+    const { content, structuredContent } = mcpErrorResult(
+      errorObjectOf(error, { ...failure, effects: { remote: "none", local: "read" } }),
+    )
     return { content, structuredContent, isError: true as const }
   }
 }

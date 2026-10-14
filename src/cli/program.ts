@@ -10,12 +10,14 @@ import {
   resolvePaths,
   type Streams,
 } from "@wirecat/cli-base"
+import { metaOf } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
 import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { type AppIdentity, envName } from "./app.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
+import { judgedEffects, judgedTargets } from "./effects.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { isCliFailure, isCommanderFailure } from "./failures.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
@@ -442,8 +444,14 @@ const failed = (
     settled.settlementFailed && isCliFailure(error)
       ? new CliError(error.code, error.message, { ...error.details, settlement_failed: true })
       : error
-  const object = errorObjectOf(failure, failureContext(app.errors))
-  const command = commandPath(program, program.args.length > 0 ? program.args : rest) || app.command
+  const path = commandPath(program, program.args.length > 0 ? program.args : rest)
+  const effects = judgedEffects(path ? metaOf(commandAt(program, path) ?? program).effects : undefined)
+  const object = errorObjectOf(failure, {
+    ...failureContext(app.errors),
+    targets: judgedTargets(program),
+    ...(effects ? { effects } : {}),
+  })
+  const command = path || app.command
   return {
     object,
     cli: app.command,

@@ -2,13 +2,14 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { capability } from "../../ports/messenger.js"
 import { renderMessages } from "../../render/messages.js"
+import { REMOTE_READ } from "../effects.js"
 import { listOf, renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { messageItems, selfOf, viewOf } from "./message-items.js"
 
 /** Where to look after a scheduled send ended without an answer: repeating it would schedule a second one. */
 export const scheduledCommand = (messenger: Messenger): Command => {
-  const command = new Command("scheduled")
+  const command = annotate(new Command("scheduled"), { effects: REMOTE_READ })
     .description("messages waiting to be sent later in a chat, soonest first; cancel one in the app")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {

@@ -227,7 +227,10 @@ export const searchAllIncludingMeetings = async (
   if (!only.includes("meetings")) return legacy
   const compiled = meetingQuery(request.text, request.exact)
   if ("reason" in compiled)
-    return { ...legacy, skipped: [...legacy.skipped, { resource: "meetings", reason: compiled.reason }] }
+    return {
+      ...legacy,
+      skipped: [...legacy.skipped, { resource: "meetings", code: "validation_error", reason: compiled.reason }],
+    }
   let meetings: CollectedMeetings
   const meetingAccount = request.meetingAccount ?? account
   try {
@@ -236,7 +239,10 @@ export const searchAllIncludingMeetings = async (
     if (codeOf(error) !== "not_found") throw error
     return {
       ...legacy,
-      skipped: [...legacy.skipped, { resource: "meetings", reason: "the selected meeting account is not stored" }],
+      skipped: [
+        ...legacy.skipped,
+        { resource: "meetings", code: "not_found", reason: "the selected meeting account is not stored" },
+      ],
     }
   }
   const ranked = new Map<string, { item: SearchAllItem | MeetingSearchItem; score: number }>()
@@ -301,7 +307,10 @@ export const searchAllWithMeetings = async (
     searchMessages,
   )
   return only.includes("meetings")
-    ? { ...found, skipped: [...found.skipped, { resource: "meetings", reason: MEETINGS_UNNAMED }] }
+    ? {
+        ...found,
+        skipped: [...found.skipped, { resource: "meetings", code: "validation_error", reason: MEETINGS_UNNAMED }],
+      }
     : found
 }
 
@@ -338,7 +347,11 @@ const searchAllOfSource = async (
   const meetings = await holdingMeetings(store, named("meetings"))
   const empty = named("meetings")
     .filter((one) => !meetings.some(({ provider, account }) => provider === one.provider && account === one.account))
-    .map(({ provider, account }) => ({ source: `${provider}:${account}`, reason: "no meetings stored for it" }))
+    .map(({ provider, account }) => ({
+      source: `${provider}:${account}`,
+      code: "not_found" as const,
+      reason: "no meetings stored for it",
+    }))
   if (only.includes("meetings") && meetings.length > 1)
     throw new CliError(
       "validation_error",
@@ -361,6 +374,6 @@ const searchAllOfSource = async (
   )
   const unnamed = only
     .filter((resource) => !read.includes(resource))
-    .map((resource) => ({ resource, reason: `--source names no ${resource} account` }))
+    .map((resource) => ({ resource, code: "not_found" as const, reason: `--source names no ${resource} account` }))
   return { ...found, skipped: [...skipped, ...empty, ...unnamed, ...found.skipped] }
 }

@@ -9,6 +9,7 @@ import {
   type SearchAllIncludingMeetingsFound,
 } from "../../services/search-all-meetings.js"
 import type { Note } from "../../store/index.js"
+import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -48,7 +49,7 @@ const noteTypeOf = (value: string): Note["source"] => {
 }
 
 const allCommand = (messenger: Messenger): Command => {
-  const command = new Command("all")
+  const command = annotate(new Command("all"), { effects: REMOTE_READ, partial: true })
     .description(
       (messenger.serverSearch
         ? "search messenger messages, mail and notes in the local store, and the messenger's server for messages " +
@@ -151,7 +152,7 @@ const allCommand = (messenger: Messenger): Command => {
 }
 
 const notesCommand = (messenger: Messenger): Command =>
-  annotate(new Command("notes"), { output: { entity: "note", view: "hit" } })
+  annotate(new Command("notes"), { effects: LOCAL_READ, partial: true, output: { entity: "note", view: "hit" } })
     .description(
       "search the notes — written in memo, or imported from a notes folder — by words and, with the local " +
         "text model, by meaning; each hit says which found it and what it links to",

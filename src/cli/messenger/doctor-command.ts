@@ -1,5 +1,6 @@
 import { dirname, resolve } from "node:path"
 import { writeSecurely } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { engineStates } from "../../attachments/extract.js"
 import type { AccountStanding, MessengerAdapter } from "../../ports/messenger.js"
@@ -7,6 +8,7 @@ import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { storePath } from "../../store/path.js"
 import { type BaseContext, baseContext, environmentOf, outputFor } from "../context.js"
+import { LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { providerErrorKey } from "../runs/events.js"
 import { listRuns, runsDirFor, runtime } from "../runs/run.js"
@@ -24,7 +26,7 @@ import { storeSummary } from "./store-maintenance-command.js"
  * open — each is a field in the answer, never an exception.
  */
 export const doctorCommand = (messenger: Messenger): Command => {
-  const command = new Command("doctor")
+  const command = annotate(new Command("doctor"), { effects: REMOTE_READ })
     .description("the state this installation is in, without connecting unless --online")
     .option("--online", "also connect once and read the account; sends nothing")
     .action(async function (this: Command) {
@@ -61,35 +63,34 @@ const EXCLUDES = ["message text", "chat titles", "names", "phone numbers", "the 
 
 const reportCommand = (messenger: Messenger): Command => {
   const { app } = messenger
-  const report = new Command("report").description("what a problem report holds; writes nothing").action(function (
-    this: Command,
-  ) {
-    const output = outputFor(this)
-    const create = `${app.command} doctor report create`
-    renderAnswer(
-      this,
-      output,
-      itemOf(
-        { includes: INCLUDES, excludes: EXCLUDES, ...(app.issues ? { send_to: app.issues } : {}) },
-        { next: [nextStep("doctor.report-create", { args: {} })] },
-      ),
-      () =>
-        [
-          `A problem report is one file for the author of ${app.command}.`,
-          "",
-          "It holds:",
-          ...INCLUDES.map((line) => `- ${line}`),
-          "",
-          `It never holds: ${EXCLUDES.join(", ")}.`,
-          "",
-          `Create one:          ${create}`,
-          `About a given run:   ${create} --run <id>   (ids: ${app.command} runs list)`,
-        ].join("\n"),
-    )
-  })
+  const report = annotate(new Command("report"), { effects: REMOTE_READ })
+    .description("what a problem report holds; writes nothing")
+    .action(function (this: Command) {
+      const output = outputFor(this)
+      const create = `${app.command} doctor report create`
+      renderAnswer(
+        this,
+        output,
+        itemOf(
+          { includes: INCLUDES, excludes: EXCLUDES, ...(app.issues ? { send_to: app.issues } : {}) },
+          { next: [nextStep("doctor.report-create", { args: {} })] },
+        ),
+        () =>
+          [
+            `A problem report is one file for the author of ${app.command}.`,
+            "",
+            "It holds:",
+            ...INCLUDES.map((line) => `- ${line}`),
+            "",
+            `It never holds: ${EXCLUDES.join(", ")}.`,
+            "",
+            `Create one:          ${create}`,
+            `About a given run:   ${create} --run <id>   (ids: ${app.command} runs list)`,
+          ].join("\n"),
+      )
+    })
 
-  report
-    .command("create")
+  annotate(report.command("create"), { effects: LOCAL_WRITE })
     .description("write a problem report to a file, and say where to send it")
     .option("--run <id>", "the run the report is about; the newest failed one if not given")
     .option("--output <file>", "where to write it; a new file in this directory if not given")

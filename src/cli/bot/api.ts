@@ -52,7 +52,11 @@ export const generatedApiCommand = (api: ApiCommands): Command => {
       command.option("--body <json>", "the request body as JSON; - reads it from stdin")
       command.option("--body-file <path>", "the request body from a JSON file; - is stdin")
     }
-    annotate(command, { origin: "generated", operation_id: operation.id, mutates: operation.effect !== "read" })
+    annotate(command, {
+      origin: "generated",
+      api_operation: operation.id,
+      effects: { remote: operation.effect === "read" ? "read" : "write", local: "none" },
+    })
     command.action(async function (this: Command) {
       const options = this.opts<Record<string, string | undefined>>()
       const input: ApiCommandInput = { path: {}, query: {}, headers: {}, fields: {} }

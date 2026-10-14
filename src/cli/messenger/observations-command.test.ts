@@ -88,17 +88,16 @@ const setup = async (permissions?: object) => {
   return { call, connect }
 }
 describe("observation CLI", () => {
-  it("declares counter refresh as a local write in command discovery", async () => {
+  it("declares counter refresh as a remote read kept in the store, in command discovery", async () => {
     const { call } = await setup()
     const discovery = await call("commands", "stats", "messages", "counters", "refresh", "--json")
     expect(discovery.code, discovery.stderr).toBe(0)
-    const commands = JSON.parse(discovery.stdout).commands as { path: string[]; mutates?: boolean; local?: boolean }[]
+    const commands = JSON.parse(discovery.stdout).commands as { path: string[]; effects?: unknown }[]
     expect(commands.find((command) => command.path.join(" ") === "stats messages counters refresh")).toMatchObject({
-      mutates: true,
-      local: true,
+      effects: { remote: "read", local: "write" },
     })
     const shown = await call("commands", "stats", "messages", "counters", "show", "--json")
-    expect(JSON.parse(shown.stdout).commands[0]?.mutates).not.toBe(true)
+    expect(JSON.parse(shown.stdout).commands[0]?.effects).toEqual({ remote: "none", local: "read" })
   })
 
   it("shows counter freshness and exact dry-run targets without connecting", async () => {
@@ -140,6 +139,8 @@ describe("observation CLI", () => {
       checkpoints: [{ present: 1, observable: 1 }, { unknown: 1 }, { pending: 1 }],
     })
     expect(found.next?.[0]).toEqual({
+      kind: "command",
+      safe_to_auto_execute: true,
       step: "stats.evidence",
       command: "stats messages evidence",
       args: { message: item.cohort, selection: JSON.stringify(item.selection), component: "report" },

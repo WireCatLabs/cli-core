@@ -1,7 +1,9 @@
 import type { Renderer, RenderFormat, Streams } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type PackageUpgradePorts, type PackageUpgradeResult, upgradePackage } from "../services/package-upgrade.js"
 import type { AppIdentity } from "./app.js"
+import { LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 
 export interface UpgradeContext extends Omit<PackageUpgradePorts, "onInstall"> {
@@ -15,7 +17,7 @@ export const upgradeCommand = (
   packageName: string,
   contextFor: (command: Command) => UpgradeContext,
 ): Command =>
-  new Command("upgrade")
+  annotate(new Command("upgrade"), { effects: LOCAL_WRITE })
     .description(`upgrade ${app.command} with the package manager that installed it; --check only looks`)
     .option("--check", "say whether a newer version exists, and install nothing")
     .action(async function (this: Command, { check }: { check?: boolean }) {

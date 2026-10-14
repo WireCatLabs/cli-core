@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import type { Provider } from "../domain/models.js"
 import {
   FOLDER_PROVIDER,
@@ -195,6 +195,8 @@ export const accountsOfList = (value: string, context: ListContext): ListedAccou
 
 export interface SkippedSource {
   source: string
+  /** The answer's `meta.issues` code: the entry holds no account, or none of the kinds this command reads. */
+  code: Extract<ErrorCode, "not_found" | "validation_error">
   reason: string
 }
 
@@ -224,7 +226,11 @@ export const fitting = (
       if (!chosen.has(keyOf({ provider, account }))) chosen.set(keyOf({ provider, account }), { provider, account })
     if (fits.length) continue
     const other = accounts[0]
-    skipped.push({ source: entry, reason: other ? reasonOf(other.kind) : "no account in the store" })
+    skipped.push(
+      other
+        ? { source: entry, code: "validation_error", reason: reasonOf(other.kind) }
+        : { source: entry, code: "not_found", reason: "no account in the store" },
+    )
   }
   if (chosen.size === 0)
     fail(

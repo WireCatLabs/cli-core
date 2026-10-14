@@ -90,7 +90,12 @@ export const meetingProjectEvidenceAnswer = (
       max_vocabulary_read_bytes: page.limits.maxVocabularyReadBytes,
       max_terms: page.limits.maxTerms,
     },
-    page: { limit: page.limits.limit, has_more: page.hasMore, ...(cursor === undefined ? {} : { cursor }) },
+    page: {
+      mode: "cursor",
+      limit: page.limits.limit,
+      has_more: page.hasMore,
+      ...(cursor === undefined ? {} : { next_cursor: cursor }),
+    },
     coverage: {
       archive_completeness: page.coverage.archiveCompleteness,
       current_revisions: page.coverage.currentRevisions,

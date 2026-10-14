@@ -9,7 +9,7 @@ import { callMeetingTool, meetingTools } from "./mcp/index.js"
 import { meetingDetailsAnswer, meetingsList, meetingsQuery } from "./reads.js"
 import { fakeMeetingSource, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
 
-const meta = { run_id: "run", duration_ms: 0 }
+const meta = { run_id: "run", duration_ms: 0, complete: true }
 
 const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
   const store = memoryMeetingStore()
@@ -145,13 +145,23 @@ describe("MCP meeting reads", () => {
       throw new Error("Read failed")
     }
     expect((await callMeetingTool(store, "meetings_list", {})).structuredContent).toEqual({
-      error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
+      error: {
+        code: "internal_error",
+        reason: "command.crashed",
+        message: "the command failed; this is a bug",
+        retry: { safe: false },
+      },
     })
     store.meetings = async () => {
       throw "failure"
     }
     expect((await callMeetingTool(store, "meetings_list", {})).structuredContent).toEqual({
-      error: { code: "internal_error", reason: "command.crashed", message: "the command failed; this is a bug" },
+      error: {
+        code: "internal_error",
+        reason: "command.crashed",
+        message: "the command failed; this is a bug",
+        retry: { safe: false },
+      },
     })
   })
 })

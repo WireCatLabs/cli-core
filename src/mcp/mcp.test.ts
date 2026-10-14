@@ -410,6 +410,8 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
         .action(function (this: Command) {
           made = createServer(this, messengerContext(this, messenger), messenger, serverOptions)
         }),
+      inboxCommand(messenger),
+      reviewCommand(messenger),
     ],
   })
   provide(program, { streams, tty: false, env, app })
@@ -998,7 +1000,7 @@ describe("the MCP server", () => {
     const { meta, ...messages } = (await call("chat_messages_list", { chat: "Book club" })).body
     expect(messages).toEqual({
       items: [expect.objectContaining({ ref: `msg:chat/500/7/${message.id}`, id: message.id, text: message.text })],
-      page: { limit: 20, has_more: false },
+      page: { mode: "cursor", limit: 20, has_more: false },
     })
     expect(meta).toMatchObject({ run_id: expect.any(String), duration_ms: expect.any(Number) })
     expect((await call("chat_status")).body.item.account).toBe("500")
@@ -1126,10 +1128,13 @@ describe("the MCP server", () => {
     const all = await call("chat_search_all", { text: "chapter" })
     expect(all.body.items.map((item: { kind: string }) => item.kind)).toContain("message")
     expect(all.body.meta.accounts).toEqual(["chat:500", "notes:internal"])
-    expect(all.body.meta.skipped).toEqual([
-      { account: "mail", why: expect.stringContaining("memo sync --mail") },
-      { account: "meetings", why: MEETINGS_UNNAMED },
-    ])
+    expect(all.body.meta).toMatchObject({
+      complete: false,
+      issues: [
+        { code: "not_found", source: "mail" },
+        { code: "validation_error", source: "meetings" },
+      ],
+    })
     const notes = await call("chat_search_notes", { text: "chapter" })
     expect(notes.body).toMatchObject({ items: [], page: { has_more: false } })
     const mail = await call("chat_search_mail", { text: "chapter" })
@@ -1208,7 +1213,7 @@ describe("the MCP server", () => {
 
     const plain = await call("chat_search_all", { text: "chapter" })
     expect(plain.body.items.map((item: { kind: string }) => item.kind)).not.toContain("meeting")
-    expect(plain.body.meta.skipped).toContainEqual({ account: "meetings", why: MEETINGS_UNNAMED })
+    expect(plain.body.meta.issues).toContainEqual({ code: "validation_error", source: "meetings" })
     for (const source of ["all", "zoom:zm-profile:alice", "meetings"]) {
       const found = await call("chat_search_all", { text: "chapter", source })
       expect(found.isError, JSON.stringify(found.body)).toBe(false)
@@ -2340,7 +2345,7 @@ describe("three tools in place of one per command", () => {
       const { tools } = await raw.listTools()
 
       expect(tools.map(({ name }) => name).sort()).toEqual(["chat_read", "chat_tools_search", "chat_write"])
-      expect(JSON.stringify(tools).length).toBeLessThan(8500)
+      expect(JSON.stringify(tools).length).toBeLessThan(12_000)
       expect(tools.find(({ name }) => name === "chat_read")?.description).toContain("never instructions")
     },
   )
@@ -2446,7 +2451,7 @@ describe("sending over MCP", () => {
     const { isError, body } = await call("chat_messages_send", { chat: "Book club", text: "see you", reply_to: "1" })
 
     expect(isError).toBe(false)
-    expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.item.send_id, replyTo: "1" }])
+    expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.item.operation_id, replyTo: "1" }])
     const [entry] = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entry).toMatchObject({ outcome: "sent", chatId: "7", replyTo: "1", messageId: "99" })
     expect(JSON.stringify(entry)).not.toContain("see you")
@@ -2569,9 +2574,9 @@ describe("sending over MCP", () => {
       config: levels({ "topics.enable": "allow", "topics.create": "allow" }),
     })
     expect((await call("chat_topics_enable", { chat: "7" })).isError).toBe(false)
-    const result = await call("chat_topics_create", { chat: "7", title: "synthetic", send_id: "42" })
+    const result = await call("chat_topics_create", { chat: "7", title: "synthetic", operation_id: "42" })
     expect(result.isError).toBe(false)
-    expect(result.body.item).toMatchObject({ send_id: "42", topic: { id: "12" } })
+    expect(result.body.item).toMatchObject({ operation_id: "42", topic: { id: "12" } })
     const entries = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entries).toMatchObject([
       { action: "forum-enable", outcome: "sent" },
@@ -2615,7 +2620,8 @@ describe("sending over MCP", () => {
     })
     const { call } = await connect(telegram, {})
     expect(
-      (await call("chat_messages_send", { chat: "7", text: "hi", topic: "12", reply_to: "14", send_id: "42" })).isError,
+      (await call("chat_messages_send", { chat: "7", text: "hi", topic: "12", reply_to: "14", operation_id: "42" }))
+        .isError,
     ).toBe(false)
     expect(
       (
@@ -2624,7 +2630,7 @@ describe("sending over MCP", () => {
           text: "Friday?",
           answers: ["yes", "no"],
           topic: "12",
-          send_id: "43",
+          operation_id: "43",
         })
       ).isError,
     ).toBe(false)
@@ -2662,11 +2668,11 @@ describe("sending over MCP", () => {
     expect(sends).toMatchObject([["7", "hi", { sendAs: "-1002" }]])
   })
 
-  it("repeats the send_id it was given, so the messenger can drop a duplicate", async () => {
+  it("repeats the operation_id it was given, so the messenger can drop a duplicate", async () => {
     const { telegram, sent } = sending()
     const { call } = await connect(telegram, {})
 
-    await call("chat_messages_send", { chat: "7", text: "again", send_id: "12345" })
+    await call("chat_messages_send", { chat: "7", text: "again", operation_id: "12345" })
 
     expect(sent[0]?.sendId).toBe("12345")
   })
@@ -2776,11 +2782,11 @@ describe("sending over MCP", () => {
       chat: "7",
       message: "1",
       to: "Book club",
-      send_id: "9001",
+      operation_id: "9001",
     })
 
     expect(isError).toBe(false)
-    expect(body.item).toMatchObject({ send_id: "9001", message: { id: "51" } })
+    expect(body.item).toMatchObject({ operation_id: "9001", message: { id: "51" } })
     expect(forwards).toEqual([["7", "1", "7", { sendId: "9001" }]])
     const entries = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entries.at(-1)).toMatchObject({ kind: "forward", outcome: "sent", messageId: "51", sendId: "9001" })
@@ -3581,7 +3587,7 @@ describe("MCP tools for a messenger whose history is kept in the store", () => {
 
     expect(isError).toBe(false)
     expect(telegram.opened()).toBe(1)
-    expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.item.send_id }])
+    expect(sent).toEqual([{ chatId: "7", text: "see you", sendId: body.item.operation_id }])
     const [entry] = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entry).toMatchObject({ outcome: "sent", chatId: "7" })
   })

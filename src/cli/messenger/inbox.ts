@@ -6,6 +6,7 @@ import { renderMessages } from "../../render/messages.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { modelWith } from "../../speech/hearing.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -33,7 +34,11 @@ export const PARTIAL_NOTE =
  * `date>2h` is a one-off look from a time of your choosing and leaves the points where they were.
  */
 export const inboxCommand = (messenger: Messenger): Command =>
-  annotate(new Command("inbox"), { output: { entity: "message", view: "message.summary" }, query: INBOX_QUERY })
+  annotate(new Command("inbox"), {
+    effects: REMOTE_READ,
+    output: { entity: "message", view: "message.summary" },
+    query: INBOX_QUERY,
+  })
     .description("other people's unread messages in every chat; --new for what arrived since the last check")
     .addHelpText("after", queryHelp(INBOX_QUERY))
     .argument("[query...]", "from when: date>2h, date>2026-10-01; the saved point stays put")

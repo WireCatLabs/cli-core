@@ -13,6 +13,7 @@ import {
   taskLinkKindOf,
   taskTypeOf,
 } from "../../services/tasks.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -106,7 +107,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
     "what waits on you — unanswered questions, mentions, requests, promises — kept in the local store; review and serve add them",
   )
 
-  withQuery(tasks.command("list").description("tasks, oldest first, with their message or note source"), TASK_QUERY)
+  withQuery(
+    annotate(tasks.command("list"), { effects: LOCAL_READ }).description(
+      "tasks, oldest first, with their message or note source",
+    ),
+    TASK_QUERY,
+  )
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
@@ -128,8 +134,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   planOptions(
-    tasks
-      .command("add")
+    annotate(tasks.command("add"), { effects: LOCAL_WRITE })
       .description("add a task for a stored message or note — a promise, a request")
       .argument("<message>", "a message locator, msg:<provider>/<account>/<chat>/<message>, or note:<id>")
       .requiredOption("--type <name>", "the task's type: question, request, mention or promise", taskTypeOf),
@@ -155,8 +160,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
   })
 
   planOptions(
-    tasks
-      .command("plan")
+    annotate(tasks.command("plan"), { effects: LOCAL_WRITE })
       .description("set a task's title, description, due date and next check; nothing reaches the messenger")
       .argument("<task>", "the task's id or key, as tasks list shows it"),
     "send Alex the API token",
@@ -170,8 +174,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     renderAnswer(this, context, itemOf(snakeKeys(planned)), () => `${card(planned)}\n`)
   })
 
-  tasks
-    .command("link")
+  annotate(tasks.command("link"), { effects: LOCAL_WRITE })
     .description("link a task to what it concerns — messages, chats, people, documents, URLs — to read around later")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .argument("[targets...]", "msg: locators, person:<id>, document:<id>, note:<id>, or a URL")
@@ -196,8 +199,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(linked)), () => `${card(linked)}\n`)
     })
 
-  tasks
-    .command("show")
+  annotate(tasks.command("show"), { effects: LOCAL_READ })
     .description("one task: its plan and everything linked to it")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .action(async function (this: Command, id: string) {
@@ -207,12 +209,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   withQuery(
-    tasks
-      .command("agenda")
-      .description(
-        "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
-          "chats where you owe an answer, chats where you wait for one",
-      ),
+    annotate(tasks.command("agenda"), { effects: LOCAL_READ }).description(
+      "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
+        "chats where you owe an answer, chats where you wait for one",
+    ),
     AGENDA_QUERY,
   )
     .option("--due <span>", "list tasks due within this: 30m, 2h, 1d (default 1d)", durationOf("--due"))
@@ -243,8 +243,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(agendaItem(agenda)), () => `${agendaText(agenda)}\n`)
     })
 
-  tasks
-    .command("close")
+  annotate(tasks.command("close"), { effects: LOCAL_WRITE })
     .description("close a task: done, or dismissed when it needs no answer; a closed task stays closed")
     .argument("<task>", "the task's id, as tasks list shows it")
     .requiredOption("--as <state>", "how it is closed: done, or dismissed — it needs no answer", closedStateOf)
@@ -263,7 +262,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
 }
 
 export const tasksStatsCommand = (messenger: Messenger): Command => {
-  return annotate(new Command("show"), { output: { entity: "task_stats" } })
+  return annotate(new Command("show"), { effects: LOCAL_READ, output: { entity: "task_stats" } })
     .description("per chat: how many tasks are open, the oldest open one, the median time to close")
     .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
     .option("--type <name>", "only this type: question, request, mention or promise", taskTypeOf)

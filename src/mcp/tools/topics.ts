@@ -95,11 +95,11 @@ export const topicWriteTools = (messenger: Messenger): Record<string, AnyTool> =
   topics_create: tool({
     title: "Create a forum topic",
     description:
-      "Only when the owner requested this topic. The group must already have topics enabled. On outcome_unknown, check topics_list and do not repeat the creation, even with the same send_id.",
+      "Only when the owner requested this topic. The group must already have topics enabled. On outcome_unknown, check topics_list and do not repeat the creation, even with the same operation_id.",
     input: v.object({
       chat: chatOf(messenger),
       title: v.pipe(v.string(), v.minLength(1)),
-      send_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+      operation_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     }),
     annotations: WRITE,
     permission: "groups",
@@ -107,7 +107,7 @@ export const topicWriteTools = (messenger: Messenger): Record<string, AnyTool> =
       itemOf(
         snakeKeys(
           await servicesFor(onlineDeps(messenger, adapter, guard)).topics.create(args.chat, args.title, {
-            ...(args.send_id === undefined ? {} : { sendId: args.send_id }),
+            ...(args.operation_id === undefined ? {} : { sendId: args.operation_id }),
           }),
         ),
       ),

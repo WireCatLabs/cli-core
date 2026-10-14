@@ -1,6 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { EVENTS_DAYS } from "../../services/chats.js"
+import { REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
@@ -25,7 +26,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         withPaging(
-          new Command("list")
+          annotate(new Command("list"), { effects: REMOTE_READ })
             .summary("chats, newest first, archived ones included")
             .description(
               "chats, newest first, archived ones included; the query is answered from the local store, " +
@@ -54,7 +55,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
   chats.addCommand(
     withQuery(
       annotate(
-        new Command("events")
+        annotate(new Command("events"), { effects: REMOTE_READ })
           .description(
             "who joined, left, was added or removed, and by whom — from the chat's service messages; " +
               `the last ${EVENTS_DAYS} days unless the query names time`,
@@ -78,8 +79,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  chats
-    .command("inspect")
+  annotate(chats.command("inspect"), { effects: REMOTE_READ })
     .description("what an invite or public link leads to, without joining it")
     .argument("<link>", "an invite link or a public one")
     .action(async function (this: Command, link: string) {
@@ -90,7 +90,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
 
   chats.addCommand(
     annotate(
-      new Command("show")
+      annotate(new Command("show"), { effects: REMOTE_READ })
         .description("one chat: its kind, unread count, last message time and who is in it")
         .argument("<chat>", messenger.chatArgument),
       { output: { entity: "chat" } },
@@ -104,8 +104,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  chats
-    .command("send-as")
+  annotate(chats.command("send-as"), { effects: REMOTE_READ })
     .description("who this account may post as in a chat; changes no saved choice")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {

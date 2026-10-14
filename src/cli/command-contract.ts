@@ -4,7 +4,7 @@ import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import type * as v from "valibot"
 import { ENTITIES, type EntityName } from "../entities/index.js"
-import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
+import { keyForCommand } from "../sends/permissions.js"
 import { answerSchema } from "./envelope.js"
 
 export type JsonSchema = Record<string, unknown>
@@ -91,8 +91,6 @@ export const commandContract = (command: Command) => {
   const meta = metaOf(command)
   const output = outputOf(command)
   const permission = keyForCommand(path)
-  const writes =
-    meta.mutates === true || (permission !== null && permission !== undefined && WRITE_KEYS.includes(permission))
   return {
     schemaVersion: 1,
     path,
@@ -130,8 +128,7 @@ export const commandContract = (command: Command) => {
       implications: [...options].flatMap(([name, one]) => (one.implies ? [{ option: name, values: one.implies }] : [])),
     },
     effects: {
-      mutation: writes ? "declared-write" : "no-write-declared",
-      local: meta.local === true ? "declared" : "possible",
+      ...(meta.effects ?? { remote: "write", local: "write" }),
       conditional: [...options.keys()].filter((name) =>
         ["mark-read", "sync-first", "output", "encrypt", "ocr"].includes(name),
       ),

@@ -180,7 +180,7 @@ export const parityProblems = (manifest: Manifest, cli: Cli, program: CommandsJs
     if (
       !row &&
       command?.origin === "generated" &&
-      command.operation_id &&
+      command.api_operation &&
       path.startsWith("bot api ") &&
       nativeApi &&
       expected(nativeApi, cli) !== false

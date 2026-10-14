@@ -1,6 +1,7 @@
 import { existsSync, rmSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
 import {
   describeWhen,
@@ -19,6 +20,7 @@ import { locationVariables } from "../../background/units.js"
 import { aheadOf } from "../../services/moment.js"
 import { storePath } from "../../store/path.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
+import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -116,8 +118,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
   }
 
   withWhen(
-    command
-      .command("command")
+    annotate(command.command("command"), { effects: LOCAL_WRITE })
       .description(
         `run ${app.command} <args…> on a timer — reads save what they read, so this is how a chat's history fills the store`,
       )
@@ -137,8 +138,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
   })
 
   withWhen(
-    command
-      .command("agent")
+    annotate(command.command("agent"), { effects: LOCAL_WRITE })
       .description(
         `start an agent (claude or codex) with a prompt on a timer; it runs with ${app.envPrefix}_READ_ONLY=1, so it reads and drafts and cannot send — its answer is kept and you are notified`,
       )
@@ -196,8 +196,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
     })
   })
 
-  command
-    .command("list")
+  annotate(command.command("list"), { effects: LOCAL_READ })
     .description("the schedules, when they run and how their last run went")
     .action(function (this: Command) {
       const { context, state } = prepare(this)
@@ -236,8 +235,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       })
     })
 
-  command
-    .command("run")
+  annotate(command.command("run"), { effects: REMOTE_WRITE })
     .description("run a schedule now, as its timer would, and wait for it")
     .argument("<name>")
     .action(async function (this: Command, name: string) {
@@ -249,8 +247,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       if (last.exitCode !== 0) process.exitCode = 1
     })
 
-  command
-    .command("remove")
+  annotate(command.command("remove"), { effects: LOCAL_WRITE })
     .description("stop a schedule and remove its timer; its past output stays")
     .argument("<name>")
     .action(async function (this: Command, name: string) {
@@ -262,8 +259,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
       say({ name, removed: true }, [`Removed ${name}.`])
     })
 
-  command
-    .command("exec")
+  annotate(command.command("exec"), { effects: REMOTE_WRITE })
     .description("what a timer runs, given the schedule's file; to run one by hand, use run")
     .argument("<file>")
     .action(async function (this: Command, file: string) {

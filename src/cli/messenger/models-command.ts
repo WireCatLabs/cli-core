@@ -30,6 +30,7 @@ import { orderedModels, type SpeechModel, speechModel, VAD } from "../../speech/
 import { choose } from "../../speech/transcribe.js"
 import { readSecret } from "../../terminal/prompt.js"
 import { baseContext, environmentOf } from "../context.js"
+import { FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { embeddingKeys } from "../embedding-keys.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
@@ -96,7 +97,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
   const models = new Command("models").description("models that run on this machine")
   const audio = models.command("audio").description("speech models for transcribing voice messages")
 
-  withQuery(audio.command("list"), MODELS_QUERY)
+  withQuery(annotate(audio.command("list"), { effects: LOCAL_READ }), MODELS_QUERY)
     .description("the speech models, most suitable first, which are downloaded, and which one is the default")
     .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
@@ -112,7 +113,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  annotate(audio.command("download"), { output: { entity: "model" } })
+  annotate(audio.command("download"), { effects: FETCH, output: { entity: "model" } })
     .argument("<model>", "a model id from `models audio list`")
     .description("download a speech model once, checked against the sha256 this version expects")
     .action(async function (this: Command, id: string) {
@@ -146,7 +147,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   const text = models.command("text").description("embedding models for searching conversations by meaning")
 
-  withQuery(text.command("list"), MODELS_QUERY)
+  withQuery(annotate(text.command("list"), { effects: LOCAL_READ }), MODELS_QUERY)
     .description("the embedding models, most suitable first, which are downloaded, and which one is the default")
     .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
@@ -169,7 +170,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  annotate(text.command("download"), { output: { entity: "model" } })
+  annotate(text.command("download"), { effects: FETCH, output: { entity: "model" } })
     .argument("<model>", "a model id from `models text list`")
     .addOption(new Option("--accept-terms", "accept the model's licence terms, for a model that has its own"))
     .description("download an embedding model once, checked against the sha256 this version expects")
@@ -209,8 +210,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   const key = text.command("key").description("API keys for embedding and analysis providers")
 
-  key
-    .command("set")
+  annotate(key.command("set"), { effects: LOCAL_WRITE })
     .argument("<provider>", "openai, anthropic, or the host of a --base-url server that wants a key")
     .description("store a key, typed at a hidden prompt or piped on stdin — never as an argument")
     .action(async function (this: Command, provider: string) {
@@ -224,8 +224,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  key
-    .command("remove")
+  annotate(key.command("remove"), { effects: LOCAL_WRITE })
     .argument("<provider>", "openai, anthropic, or a server's host")
     .description("forget a stored key")
     .action(async function (this: Command, provider: string) {
@@ -247,7 +246,10 @@ export const imageModelsCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
   const image = new Command("models").description("models that read pictures, for `images embed` and picture search")
 
-  withQuery(annotate(image.command("list"), { examples: [`${tool} images models list`] }), MODELS_QUERY)
+  withQuery(
+    annotate(image.command("list"), { effects: LOCAL_READ, examples: [`${tool} images models list`] }),
+    MODELS_QUERY,
+  )
     .description("the picture models, which are downloaded, and which one is the default")
     .action(async function (this: Command, words: string[]) {
       const context = baseContext(this, messenger.resolveSettings)
@@ -271,6 +273,7 @@ export const imageModelsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(image.command("download"), {
+    effects: FETCH,
     output: { entity: "model" },
     examples: [`${tool} images models download ${DEFAULT_IMAGE_MODEL}`],
   })

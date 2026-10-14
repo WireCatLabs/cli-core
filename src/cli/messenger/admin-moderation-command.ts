@@ -4,6 +4,7 @@ import { Command } from "commander"
 import { describe, MAX_ACTIONS } from "../../moderation/check.js"
 import { RULE_KEYS } from "../../moderation/rules.js"
 import { momentOf } from "../../services/moment.js"
+import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "./ask.js"
 import { renderItem } from "./chat-answers.js"
@@ -14,8 +15,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
   const rules = new Command("rules").description(
     "what `chats moderate` judges a group by, kept in a file of this profile",
   )
-  rules
-    .command("show")
+  annotate(rules.command("show"), { effects: LOCAL_READ })
     .description("the group's rules; the defaults, marked not saved, if it has none yet")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -23,7 +23,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
       renderItem(this, context, await context.withServices((services) => services.moderation.rules(chat)))
     })
   rules.addCommand(
-    annotate(new Command("set"), { mutates: true, local: true })
+    annotate(new Command("set"), { effects: LOCAL_WRITE })
       .description("change one rule; the group's first change writes every rule with its default")
       .argument("<chat>", messenger.chatArgument)
       .argument("<key>", `one of: ${RULE_KEYS.join(", ")}`)
@@ -34,7 +34,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
       }),
   )
   rules.addCommand(
-    annotate(new Command("unset"), { mutates: true, local: true })
+    annotate(new Command("unset"), { effects: LOCAL_WRITE })
       .description("put one rule back to its default")
       .argument("<chat>", messenger.chatArgument)
       .argument("<key>", `one of: ${RULE_KEYS.join(", ")}`)
@@ -52,7 +52,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
  * in the background.
  */
 export const moderateCommand = (messenger: Messenger): Command =>
-  annotate(new Command("moderate"), { mutates: true })
+  annotate(new Command("moderate"), { effects: REMOTE_WRITE })
     .description("judge a group's new messages and members by its rules, and act as they allow")
     .argument("<chat>", messenger.chatArgument)
     .option("--since-time <time>", "judge what came after this ISO 8601 time, or 2h / 1d ago; the saved point stays")

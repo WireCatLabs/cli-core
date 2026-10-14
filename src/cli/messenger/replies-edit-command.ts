@@ -2,6 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type AudienceEdits, addRule, editAudience, editRule, type RuleEdits, switchRule } from "../../replies/edit.js"
 import { audienceWarnings, repliesPathFor } from "../../replies/rules.js"
+import { LOCAL_WRITE } from "../effects.js"
 import { renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -41,7 +42,7 @@ export const REPLY_AUDIENCE_OPTIONS = [
 
 export const addReplyEditors = (replies: Command, messenger: Messenger): void => {
   replies.addCommand(
-    annotate(new Command("add"), { mutates: true, local: true })
+    annotate(new Command("add"), { effects: LOCAL_WRITE })
       .description("add a rule with every default written out, off until you edit and enable it")
       .argument("<id>", "lower-case letters, digits and -; unique in this profile")
       .action(function (this: Command, id: string) {
@@ -52,7 +53,7 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
   )
   for (const on of [true, false]) {
     replies.addCommand(
-      annotate(new Command(on ? "on" : "off"), { mutates: true, local: true })
+      annotate(new Command(on ? "on" : "off"), { effects: LOCAL_WRITE })
         .description(on ? "enable one reply rule; its template must be ready" : "disable one reply rule")
         .argument("<id>", "the rule's id")
         .action(function (this: Command, id: string) {
@@ -66,7 +67,7 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
         }),
     )
   }
-  const edit = annotate(new Command("edit"), { mutates: true, local: true })
+  const edit = annotate(new Command("edit"), { effects: LOCAL_WRITE })
     .description("change only the named fields of a reply rule; lists replace the whole list")
     .argument("<id>", "the rule's id")
   for (const [flag, help] of REPLY_EDIT_OPTIONS) edit.option(flag, help)
@@ -83,7 +84,7 @@ export const addReplyEditors = (replies: Command, messenger: Messenger): void =>
     )
   })
   replies.addCommand(edit)
-  const audience = annotate(new Command("audience"), { mutates: true, local: true }).description(
+  const audience = annotate(new Command("audience"), { effects: LOCAL_WRITE }).description(
     "show the reply audience, who the rules may answer, or replace its named fields; a new file answers everyone a rule matches",
   )
   for (const [flag, help] of REPLY_AUDIENCE_OPTIONS) audience.option(flag, help)

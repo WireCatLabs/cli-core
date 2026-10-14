@@ -9,6 +9,7 @@ import { maskedAccount } from "../../services/people.js"
 import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/person-context.js"
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
 import { readSecret } from "../../terminal/prompt.js"
+import { FETCH, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, window, withPaging } from "../paging.js"
@@ -30,7 +31,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         withPaging(
-          new Command("list")
+          annotate(new Command("list"), { effects: REMOTE_READ })
             .summary("people you have a one-to-one chat with")
             .description(
               "people you have a one-to-one chat with; name: matches the name, your local alias or the @username, " +
@@ -76,7 +77,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
 
   contacts.addCommand(
     annotate(
-      new Command("show")
+      annotate(new Command("show"), { effects: REMOTE_READ })
         .description("one person and the chats you share with them")
         .argument("<person>", "their id, @username, or part of their name")
         .option("--with-notes", "include your private notes, subject to contacts.notes.list permission"),
@@ -94,8 +95,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  contacts
-    .command("profile")
+  annotate(contacts.command("profile"), { effects: REMOTE_READ })
     .description(
       "everything the messenger says about one person — handles, flags, last seen, when they registered — and " +
         "how many of their messages the store holds in each chat you share, the first and the last, and the " +
@@ -117,8 +117,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  contacts
-    .command("context")
+  annotate(contacts.command("context"), { effects: REMOTE_READ })
     .description(
       "what the store holds about one person, in every messenger linked to them: shared chats, the last " +
         "messages each way, their recent messages, where others mentioned them — never connects",
@@ -188,8 +187,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       if (hasMore) context.renderer.note("cut at --limit; a larger one shows more")
     })
 
-  contacts
-    .command("timeline")
+  annotate(contacts.command("timeline"), { effects: REMOTE_READ })
     .description(
       "everything one person took part in, in every messenger linked to them — messages they wrote or were " +
         "mentioned in, chats, mail, meetings, tasks — newest first, from the store; never connects",
@@ -228,6 +226,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
           items: items.map(snakeKeys),
           limit: limits.items,
           has_more: hasMore,
+          paging: "cursor",
           ...(found.cursor === undefined ? {} : { cursor: found.cursor }),
           args: {
             person,
@@ -240,8 +239,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  contacts
-    .command("check")
+  annotate(contacts.command("check"), { effects: REMOTE_READ })
     .description(
       registriesCover(messenger.provider)
         ? "whether one person looks like a bot, a fake or a spammer: their profile, what they wrote in the store, " +
@@ -270,8 +268,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(answer)))
     })
 
-  contacts
-    .command("link")
+  annotate(contacts.command("link"), { effects: LOCAL_WRITE })
     .description("record that two people in the store are one person — the same name is never enough")
     .argument("<person>", "their id, @username, or part of their name")
     .argument("<other>", "the same in another messenger of the store, as <messenger>:<person> — max:Ana")
@@ -282,8 +279,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       context.renderer.success(`${linked.identities.length} identities are now one person`)
     })
 
-  contacts
-    .command("unlink")
+  annotate(contacts.command("unlink"), { effects: LOCAL_WRITE })
     .description("undo contacts link for one identity: it is a person of its own again")
     .argument("<person>", "their id, @username, or part of their name; <messenger>:<person> for another messenger")
     .action(async function (this: Command, person: string) {
@@ -299,8 +295,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
    * ⚠ **The number is asked for or piped, never an argument**: argv is read by `ps` and kept by shell
    * history, and a phone number is personal data.
    */
-  contacts
-    .command("lookup")
+  annotate(contacts.command("lookup"), { effects: REMOTE_READ })
     .description("who has this phone number — asks for it, or reads it from stdin; never an argument")
     // Commander's own refusal would repeat the number on stderr.
     .allowExcessArguments()
@@ -320,8 +315,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  contacts
-    .command("sync")
+  annotate(contacts.command("sync"), { effects: FETCH })
     .description("take the whole contact list from the messenger into the local store")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)

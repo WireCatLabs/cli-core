@@ -1,24 +1,25 @@
 import { CliError, EXIT_CODES, GENERIC_FAILURE } from "@wirecat/cli-base"
-import { type CommandInfo, describeOptions, describeProgram, flatten } from "@wirecat/cli-base/commands"
-import { CRASH_CODE } from "@wirecat/cli-base/standards"
+import { annotate, type CommandInfo, describeOptions, describeProgram, flatten } from "@wirecat/cli-base/commands"
+import { CRASH_CODE, writes } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import type { AppIdentity } from "./app.js"
 import { commandContract, findCommand } from "./command-contract.js"
 import { outputFor } from "./context.js"
+import { NO_EFFECTS } from "./effects.js"
 import { rootOf } from "./profile.js"
 
 /**
  * The major version of the JSON every command prints. The output types live in this package, so the
  * contract is this package's: raise it with a major version, when a field is removed or renamed.
  */
-export const CONTRACT = 2
+export const CONTRACT = 3
 
 /**
  * The discovery surface an agent reads instead of `--help`. It opens no store, no session and no
  * settings file: which commands exist does not depend on whether this machine has logged in.
  */
 export const commandsCommand = (app: AppIdentity): Command => {
-  const command = new Command("commands")
+  const command = annotate(new Command("commands"), { effects: NO_EFFECTS })
     .description("commands, options and exit codes as JSON — inspect one command path per call")
     .argument("[path...]", "one command path, for example: search messages; inspect other groups in separate calls")
     .action(function (this: Command, path: string[]) {
@@ -30,10 +31,10 @@ export const commandsCommand = (app: AppIdentity): Command => {
 
       if (format === "pretty") {
         renderer.result(
-          flatten(commands).map(({ usage, summary, description, mutates, state }) => ({
+          flatten(commands).map(({ usage, summary, description, effects, state }) => ({
             command: usage,
             description: summary ?? description,
-            writes: mutates ? "yes" : "",
+            writes: effects !== undefined && writes(effects) ? "yes" : "",
             ...(state ? { state } : {}),
           })),
         )
@@ -52,7 +53,7 @@ export const commandsCommand = (app: AppIdentity): Command => {
       })
     })
   command.addCommand(
-    new Command("schema")
+    annotate(new Command("schema"), { effects: NO_EFFECTS })
       .description("one command's argv and result schemas, effects, permissions and retry guidance")
       .argument("<path...>", "one command path, for example: stats messages show")
       .action(function (this: Command, path: string[]) {

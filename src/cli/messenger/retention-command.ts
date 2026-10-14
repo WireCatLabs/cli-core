@@ -1,12 +1,13 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { refuseJsonl, retentionAnswer } from "./stats-answers.js"
 
 export const retentionCommand = (messenger: Messenger) =>
-  annotate(new Command("retention"), { output: { entity: "retention" } })
+  annotate(new Command("retention"), { effects: REMOTE_READ, output: { entity: "retention" } })
     .description("joining cohorts and observed checkpoint membership from saved roster observations")
     .argument("<chat>", messenger.chatArgument)
     .option("--since-time <time>", "joining period starts at ISO 8601 or a relative time; last 90 days by default")

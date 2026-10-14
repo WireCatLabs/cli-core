@@ -8,6 +8,7 @@ import { renderThreadLinks } from "../../render/thread-context.js"
 import { readMail } from "../../services/mail-search.js"
 import { modelWith, spoken } from "../../speech/hearing.js"
 import type { AccountKey } from "../../store/store.js"
+import { REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -44,8 +45,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
   const messages = new Command("messages").description("read and send messages")
   messages.addCommand(evidenceCommand(messenger))
 
-  const list = messages
-    .command("list")
+  const list = annotate(messages.command("list"), { effects: REMOTE_READ })
     .description("a chat's messages, oldest to newest")
     .addHelpText("after", SAVE_HELP)
     .addHelpText("after", queryHelp(HISTORY_QUERY))
@@ -95,6 +95,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
           items: messageItems(heardItems(page.items, hearing), reader),
           limit,
           has_more: page.hasMore,
+          paging: "cursor",
           ...(next === undefined ? {} : { cursor: next }),
           args: { chat, ...(query.length > 0 ? { query: query.join(" ") } : {}) },
           missing: hearingMissing(hearing, transcribe === true),
@@ -152,8 +153,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
 
   messages.addCommand(sendCommand(messenger))
 
-  messages
-    .command("show")
+  annotate(messages.command("show"), { effects: REMOTE_READ })
     .description("one message, by its chat and id or by its msg: locator")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")
@@ -162,7 +162,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
       await readWindow(this, chat, message, { before: 0, after: 0 })
     })
 
-  threadOptions(messages.command("context"))
+  threadOptions(annotate(messages.command("context"), { effects: REMOTE_READ }))
     .description("a message and what came either side of it, oldest first")
     .addHelpText("after", SAVE_HELP)
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)

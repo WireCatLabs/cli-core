@@ -103,7 +103,12 @@ describe("administrator statistics command views", () => {
       "--jsonl",
     ])
     expect(evidence.code, evidence.stderr).toBe(0)
-    expect(JSON.parse(evidence.stdout)).toMatchObject({ message: { ref: "msg:chat/500/7/1" } })
+    const [line, end] = evidence.stdout
+      .trim()
+      .split("\n")
+      .map((one) => JSON.parse(one))
+    expect(line).toMatchObject({ type: "item", data: { message: { ref: "msg:chat/500/7/1" } } })
+    expect(end).toMatchObject({ type: "end", complete: true })
     const responses = await call(["stats", "contacts", "responses", "--answerer", "12", "--json"])
     expect(responses.code, responses.stderr).toBe(0)
     expect(JSON.parse(responses.stdout).item).toMatchObject({

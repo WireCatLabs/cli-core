@@ -71,6 +71,6 @@ export const callMeetingSearchTool = async (
   } catch (error) {
     const thrown =
       !isCliError(error) && signal?.aborted ? new CliError("cancelled", "meeting search was cancelled") : error
-    return mcpErrorResult(errorObjectOf(thrown, failure))
+    return mcpErrorResult(errorObjectOf(thrown, { ...failure, effects: { remote: "none", local: "read" } }))
   }
 }

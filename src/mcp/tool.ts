@@ -1,10 +1,18 @@
 import type { CallToolResult, McpServer, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError, errorCodes, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
-import { type ErrorObject, itemEnvelopeSchema, listEnvelopeSchema, traceIdOf } from "@wirecat/cli-base/standards"
+import {
+  type Effects,
+  type ErrorObject,
+  itemEnvelopeSchema,
+  listEnvelopeSchema,
+  type StepInput,
+  traceIdOf,
+} from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { AISettings } from "../analysis/settings.js"
-import { sealed } from "../cli/envelope.js"
+import { judgedEffects, LOCAL_WRITE, REMOTE_WRITE } from "../cli/effects.js"
+import { judgedAnswer, sealed } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { MAX_BUFFERED_INPUT } from "../cli/input-policy.js"
 import type { Messenger } from "../cli/messenger/context.js"
@@ -85,6 +93,8 @@ interface Tool<S extends Input> {
   description: string
   input: S
   annotations: ToolAnnotations
+  /** What it touches, where its hints cannot say: a read of the messenger kept in the store is not a write there. */
+  effects?: Effects
   _meta?: Record<string, unknown>
   /** A write, and what the profile's `allow` must name for it to be offered. */
   permission?: Permission
@@ -162,6 +172,8 @@ export interface Registration {
   around?: <T>(name: string, definition: AnyTool, work: () => Promise<T>) => Promise<T>
   /** Keeps one audit row per call — tool, tier, outcome, times — never the arguments or the answer. */
   log?: (call: ToolCall) => Promise<void>
+  /** The CLI's commands, by which an answer's next steps are judged safe to run unasked. */
+  targets?: NonNullable<StepInput["targets"]>
 }
 
 export type ToolTier = "read" | "draft" | "write-private" | "write-public" | "destructive" | "admin"
@@ -187,6 +199,14 @@ export const tierOf = (key: string, definition: Pick<AnyTool, "annotations">): T
   if (/draft/.test(key)) return "draft"
   if (/mark_read|read_mark|archive|mute|pin|tag|note|label|folder|alias|save/.test(key)) return "write-private"
   return "write-public"
+}
+
+/** A tool's effects: declared, or read from its hints — an open-world tool that is not read-only writes there. */
+export const effectsOf = (definition: Pick<AnyTool, "annotations" | "effects">): Effects => {
+  if (definition.effects) return definition.effects
+  const { readOnlyHint, openWorldHint } = definition.annotations
+  if (readOnlyHint === true) return { remote: openWorldHint === false ? "none" : "read", local: "read" }
+  return openWorldHint === false ? LOCAL_WRITE : REMOTE_WRITE
 }
 
 /** The audit outcome of an answer: a profile's refusal apart from a failure. */
@@ -298,7 +318,15 @@ export const entryRunner = (registration: Registration): RunEntry => {
   }
 }
 
-const callRunner = ({ messenger, session, withStore, withServices, defaults, around }: Registration): RunEntry => {
+const callRunner = ({
+  messenger,
+  session,
+  withStore,
+  withServices,
+  defaults,
+  around,
+  targets,
+}: Registration): RunEntry => {
   const where = {
     profile: defaults.settings.profile,
     env: defaults.env,
@@ -324,10 +352,10 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
           throw new CliError("permission_error", "messages.sync-first is not allowed by this profile")
         if (definition.custom) {
           const result = await definition.custom(args, { ...defaults, signal: ctx.mcpReq.signal }, ctx)
-          return answered(result, definition.outputLimit?.(args, defaults))
+          return answered(result, definition.outputLimit?.(args, defaults), targets)
         }
         if (definition.local)
-          return answered(await definition.local(args, defaults), definition.outputLimit?.(args, defaults))
+          return answered(await definition.local(args, defaults), definition.outputLimit?.(args, defaults), targets)
         const { online, stored: local, served } = definition
         const stored = local && (!definition.storedWhen || definition.storedWhen(args)) ? local : undefined
         const result = stored
@@ -379,11 +407,11 @@ const callRunner = ({ messenger, session, withStore, withServices, defaults, aro
                 : await session.use(run, (adapter, release) =>
                     (online as NonNullable<typeof online>)(adapter, args, { ...defaults, release }),
                   )
-        return answered(result, definition.outputLimit?.(args, defaults))
+        return answered(result, definition.outputLimit?.(args, defaults), targets)
       }
       return around ? await around(key, definition, execute) : await execute()
     } catch (error) {
-      return failed(error, messenger?.app?.errors)
+      return failed(error, messenger?.app?.errors, effectsOf(definition))
     }
   }
 }
@@ -452,8 +480,12 @@ export class BinaryResource {
   ) {}
 }
 
-export const answered = (answer: object, maxBytes = DEFAULT_OUTPUT_BYTES): CallToolResult => {
-  const value = sealed(answer)
+export const answered = (
+  answer: object,
+  maxBytes = DEFAULT_OUTPUT_BYTES,
+  targets?: NonNullable<StepInput["targets"]>,
+): CallToolResult => {
+  const value = sealed(targets ? judgedAnswer(answer, targets) : answer)
   const bounded = (result: CallToolResult): CallToolResult => {
     if (maxBytes !== 0 && Buffer.byteLength(JSON.stringify(result)) > maxBytes)
       throw new CliError(
@@ -496,8 +528,11 @@ export const answered = (answer: object, maxBytes = DEFAULT_OUTPUT_BYTES): CallT
 }
 
 /** The same object the CLI prints on stderr, so an agent reads one error shape from both. */
-export const failed = (error: unknown, errors?: AppErrors): CallToolResult =>
-  mcpErrorResult(JSON.parse(agentJson(errorObjectOf(error, failureContext(errors)))) as ErrorObject) as CallToolResult
+export const failed = (error: unknown, errors?: AppErrors, effects?: Effects): CallToolResult => {
+  const judged = judgedEffects(effects)
+  const context = { ...failureContext(errors), ...(judged ? { effects: judged } : {}) }
+  return mcpErrorResult(JSON.parse(agentJson(errorObjectOf(error, context))) as ErrorObject) as CallToolResult
+}
 
 /** An option's name as an MCP argument: `beforeId` is `before_id`. */
 export const snakeOf = (key: string): string => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)

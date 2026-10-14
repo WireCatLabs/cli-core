@@ -1,4 +1,6 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { REMOTE_READ } from "../effects.js"
 import { listOf, renderAnswer } from "../envelope.js"
 import { positiveCount, window } from "../paging.js"
 import { nextStep } from "../steps.js"
@@ -11,7 +13,7 @@ export const documentsCommand = (messenger: Messenger): Command => {
     "the Google Docs and Drive documents linked in a chat's stored messages",
   )
   documents.addCommand(
-    new Command("list")
+    annotate(new Command("list"), { effects: REMOTE_READ })
       .description("every document link in the chat, newest first, and whether the store has it")
       .argument("<chat>", messenger.chatArgument)
       .option("--limit <n>", "how many to show", positiveCount("--limit"))

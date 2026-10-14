@@ -1,14 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { FETCH, LOCAL_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
 export const metadataCommand = (messenger: Messenger): Command => {
   const command = new Command("metadata").description("cached group/channel descriptions for local automatic tags")
-  command
-    .command("get")
+  annotate(command.command("get"), { effects: LOCAL_READ })
     .requiredOption("--chat <chat>", "a stored chat")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -19,7 +19,7 @@ export const metadataCommand = (messenger: Messenger): Command => {
         itemOf(snakeKeys(await context.withServices((services) => services.metadata.get(chat)))),
       )
     })
-  annotate(command.command("refresh"), { mutates: true, local: true })
+  annotate(command.command("refresh"), { effects: FETCH })
     .option(
       "--chat <chat>",
       "stored group/channel; repeat for several",

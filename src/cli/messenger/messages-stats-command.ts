@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { StatsGrouping } from "../../services/messages-search.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -11,7 +12,7 @@ import { countsAnswer, refuseJsonl } from "./stats-answers.js"
 const GROUPINGS: StatsGrouping[] = ["chat", "sender", "day", "hour"]
 
 export const messagesStatsCommand = (messenger: Messenger): Command =>
-  syncOptions(annotate(new Command("show"), { output: { entity: "message_counts" } }))
+  syncOptions(annotate(new Command("show"), { effects: REMOTE_READ, output: { entity: "message_counts" } }))
     .description(
       "how many stored messages match, by chat, sender, day or hour — the local store only; optionally fetches new messages with --sync-first",
     )

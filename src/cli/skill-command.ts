@@ -1,14 +1,16 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import { skillCommand as sharedSkillCommand } from "@wirecat/cli-base/skill"
 import type { Command } from "commander"
 import type { AppIdentity } from "./app.js"
 import { environmentOf, outputFor } from "./context.js"
+import { LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 
 /**
  * `skill show` and `skill install`. `skill` is the CLI's own SKILL.md, shipped beside `dist/` in the
  * package and in a checkout alike, so the skill printed is always this version's.
  */
-export const skillCommand = (app: AppIdentity, skill: URL): Command =>
-  sharedSkillCommand(
+export const skillCommand = (app: AppIdentity, skill: URL): Command => {
+  const command = sharedSkillCommand(
     app,
     skill,
     (command) => {
@@ -17,6 +19,10 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command =>
     },
     SHARED_SKILLS,
   )
+  // cli-base 0.28.0 leaves its skill commands without effects, which would count them as writes.
+  for (const sub of command.commands) annotate(sub, { effects: sub.name() === "install" ? LOCAL_WRITE : LOCAL_READ })
+  return command
+}
 
 /** Skills this package ships for every CLI on it, printed by `skill show <name>`: `skills/` beside `dist/` and `src/`. */
 const SHARED_SKILLS = {

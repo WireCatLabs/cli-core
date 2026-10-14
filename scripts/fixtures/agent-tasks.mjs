@@ -88,7 +88,7 @@ const code = await run(
                   { operationId: "synthetic-operation", retryable: false },
                 )
               }),
-            { mutates: true },
+            { effects: { remote: "write", local: "write" } },
           ),
         ),
       new Command("sends").addCommand(

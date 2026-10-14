@@ -11,6 +11,7 @@ import { momentOf } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
+import { FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { isCliFailure } from "../failures.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
@@ -50,7 +51,7 @@ const ALL_CHATS = "--all"
 
 export const syncCommand = (messenger: Messenger): Command => {
   const fetching = messenger.fetching ?? FETCHING
-  return new Command("sync")
+  return annotate(new Command("sync"), { effects: FETCH })
     .description(
       "bring a chat's history in the local store up to date, newest first; run it again to continue; --all syncs every chat",
     )
@@ -243,26 +244,28 @@ export const syncCommand = (messenger: Messenger): Command => {
 export const jobsCommand = (messenger: Messenger): Command => {
   const command = new Command("jobs").description("background sync jobs")
 
-  withQuery(withPaging(command.command("list").description("background sync jobs, newest first")), JOBS_QUERY).action(
-    function (this: Command, words: string[]) {
-      const context = messengerContext(this, messenger)
-      const query = listQuery(typedQuery(words), JOBS_QUERY, "store jobs list")
-      const jobs = jobItems(jobsDir(messenger.app, context.env), context.profile, query)
-      const { limit, offset } = pageOf(context.settings)
-      const items = jobs.slice(offset, offset + limit)
-      renderAnswer(
-        this,
-        context,
-        pagedList("store jobs list", context.settings, { items, has_more: jobs.length > offset + limit }),
-        () => items.map((one) => `${jobLine(one)}\n`).join(""),
-      )
-      if (jobs.length === 0 && context.format === "pretty")
-        context.renderer.note(`no ${query ? "matching " : ""}background sync jobs for this profile`)
-    },
-  )
+  withQuery(
+    withPaging(
+      annotate(command.command("list"), { effects: LOCAL_READ }).description("background sync jobs, newest first"),
+    ),
+    JOBS_QUERY,
+  ).action(function (this: Command, words: string[]) {
+    const context = messengerContext(this, messenger)
+    const query = listQuery(typedQuery(words), JOBS_QUERY, "store jobs list")
+    const jobs = jobItems(jobsDir(messenger.app, context.env), context.profile, query)
+    const { limit, offset } = pageOf(context.settings)
+    const items = jobs.slice(offset, offset + limit)
+    renderAnswer(
+      this,
+      context,
+      pagedList("store jobs list", context.settings, { items, has_more: jobs.length > offset + limit }),
+      () => items.map((one) => `${jobLine(one)}\n`).join(""),
+    )
+    if (jobs.length === 0 && context.format === "pretty")
+      context.renderer.note(`no ${query ? "matching " : ""}background sync jobs for this profile`)
+  })
 
-  command
-    .command("show")
+  annotate(command.command("show"), { effects: LOCAL_READ })
     .description("one background job — the newest when none is named — and what the store now holds of its chat")
     .argument("[job]", "the job id `messages sync --background` printed")
     .action(async function (this: Command, id: string | undefined) {
@@ -276,8 +279,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys({ ...jobDetails(job), ...(held ? { held } : {}), log: job.log })))
     })
 
-  command
-    .command("cancel")
+  annotate(command.command("cancel"), { effects: LOCAL_WRITE })
     .description("stop a running background job after its current page; a later sync resumes where it stopped")
     .argument("<job>", "the job id")
     .action(function (this: Command, id: string) {
@@ -291,8 +293,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ job: job.id, cancelled: true }))
     })
 
-  command
-    .command("retry")
+  annotate(command.command("retry"), { effects: LOCAL_WRITE })
     .description("start a partial, failed or died job again, as a new job; the sync resumes where the store stopped")
     .argument("[job]", "the job id")
     .option("--failed", "every chat whose newest job partial, failed or died")
@@ -333,7 +334,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
         context.renderer.note("no partial, failed or died jobs to retry")
     })
 
-  annotate(command.command("clear"), { mutates: true, local: true })
+  annotate(command.command("clear"), { effects: LOCAL_WRITE })
     .description("forget finished jobs and remove their logs; a running job is kept")
     .action(function (this: Command) {
       const context = messengerContext(this, messenger)

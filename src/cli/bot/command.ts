@@ -4,6 +4,7 @@ import { Argument, Command } from "commander"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { envName } from "../app.js"
+import { LOCAL_READ, LOCAL_WRITE, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { renderItem, wholeList } from "../messenger/chat-answers.js"
 import { botAdminsCommand, botMembersCommand } from "./admins.js"
@@ -22,7 +23,7 @@ import { botWatchCommand } from "./watch.js"
 const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
   const auth = new Command("auth").description("the bot token this profile uses")
 
-  annotate(auth.command("set"), { mutates: true, local: true })
+  annotate(auth.command("set"), { effects: LOCAL_WRITE })
     .description(
       `check a bot token with ${bot.name ?? "the messenger"}, then keep it — typed at a hidden prompt or piped on stdin`,
     )
@@ -47,8 +48,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
       })
     })
 
-  auth
-    .command("show")
+  annotate(auth.command("show"), { effects: LOCAL_READ })
     .description("where this profile's bot token comes from, and which bot it is")
     .action(async function (this: Command) {
       const context = online(botContext(this, bot), this)
@@ -65,7 +65,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
       })
     })
 
-  annotate(auth.command("remove"), { mutates: true, local: true })
+  annotate(auth.command("remove"), { effects: LOCAL_WRITE })
     .description("forget this profile's bot token")
     .action(async function (this: Command) {
       const context = botContext(this, bot)
@@ -78,7 +78,7 @@ const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
 }
 
 const meCommand = (bot: BotMessenger): Command =>
-  new Command("me")
+  annotate(new Command("me"), { effects: REMOTE_READ })
     .description("the bot this profile's token belongs to: id, name and username")
     .action(async function (this: Command) {
       const context = online(botContext(this, bot), this)
@@ -93,7 +93,7 @@ const meCommand = (bot: BotMessenger): Command =>
     })
 
 const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
-  new Command("list")
+  annotate(new Command("list"), { effects: LOCAL_READ })
     .description(
       `every name on this machine that has a bot token; --check asks ${bot.name ?? "the messenger"} which bot each is`,
     )
@@ -134,8 +134,7 @@ const recipientsCommand = (bot: BotMessenger): Command => {
   const command = new Command("recipients").description(
     "the chats this bot may write to; with no list, every chat — `clear` removes the list",
   )
-  command
-    .command("list")
+  annotate(command.command("list"), { effects: LOCAL_READ })
     .description("the chats on the list, or nothing when there is no list")
     .action(async function (this: Command) {
       const context = botContext(this, bot)
@@ -147,7 +146,7 @@ const recipientsCommand = (bot: BotMessenger): Command => {
         ),
       )
     })
-  annotate(command.command("add <chat>"), { mutates: true, local: true })
+  annotate(command.command("add <chat>"), { effects: LOCAL_WRITE })
     .description("allow a chat: its id, `user:<id>`, or the title of a chat this bot has seen")
     .action(async function (this: Command, chat: string) {
       const context = botContext(this, bot)
@@ -162,13 +161,13 @@ const recipientsCommand = (bot: BotMessenger): Command => {
         )
       })
     })
-  annotate(command.command("remove <chat>"), { mutates: true, local: true })
+  annotate(command.command("remove <chat>"), { effects: LOCAL_WRITE })
     .description("take a chat off the list")
     .action(async function (this: Command, chat: string) {
       const context = botContext(this, bot)
       await context.run(async () => renderItem(this, context, { removed: context.recipients().remove(chat) ?? null }))
     })
-  annotate(command.command("clear"), { mutates: true, local: true })
+  annotate(command.command("clear"), { effects: LOCAL_WRITE })
     .description("remove the list: the bot may write to any chat again")
     .action(async function (this: Command) {
       const context = botContext(this, bot)
@@ -181,7 +180,7 @@ const sendsCommand = (bot: BotMessenger): Command =>
   new Command("sends")
     .description("what this bot sent, edited and deleted from this machine — ids and outcomes, never text")
     .addCommand(
-      new Command("list").action(async function (this: Command) {
+      annotate(new Command("list"), { effects: LOCAL_READ }).action(async function (this: Command) {
         const context = botContext(this, bot)
         await context.run(async () =>
           renderAnswer(this, context, wholeList("bot sends list", context.journal().entries().map(snakeKeys))),
@@ -193,8 +192,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
   const command = new Command("chats").description(
     `the chats this bot is in — ${bot.name ?? "the messenger"} gives a bot no list of them, so \`list\` shows the ones it has seen`,
   )
-  command
-    .command("list")
+  annotate(command.command("list"), { effects: REMOTE_READ })
     .description(`chats this bot has seen on this machine — not a complete list from ${bot.name ?? "the messenger"}`)
     .action(async function (this: Command) {
       const context = botContext(this, bot)
@@ -203,8 +201,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
       )
     })
 
-  command
-    .command("show")
+  annotate(command.command("show"), { effects: REMOTE_READ })
     .description(`one chat from ${bot.name ?? "the messenger"}, and remember it`)
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .action(async function (this: Command, chat: string) {
@@ -219,7 +216,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("leave"), { mutates: true })
+  annotate(command.command("leave"), { effects: REMOTE_WRITE })
     .description("take the bot out of a chat; only an admin of the chat can bring it back")
     .argument("<chat>", "a chat id, or the title of a chat this bot has seen")
     .action(async function (this: Command, chat: string) {
@@ -238,7 +235,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("action"), { mutates: true })
+  annotate(command.command("action"), { effects: REMOTE_WRITE })
     .description("show what the bot is doing in a chat — typing, sending a photo — for a few seconds")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .addArgument(new Argument("<action>", "what the chat sees").choices(BOT_ACTIONS))

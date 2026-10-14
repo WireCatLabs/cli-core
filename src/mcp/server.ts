@@ -3,9 +3,11 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError } from "@wirecat/cli-base"
 import { skillResource } from "@wirecat/cli-base/skill"
 import * as v from "valibot"
+import { judgedTargets } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
 import { connected, type Messenger, type MessengerContext } from "../cli/messenger/context.js"
+import { rootOf } from "../cli/steps.js"
 import { warmEmbedders } from "../embeddings/embed.js"
 import { guardFor } from "../sends/guard.js"
 import { levelFor, readKeysForCommand } from "../sends/permissions.js"
@@ -108,6 +110,7 @@ export const createServer = (
         messenger,
         session,
         withStore: context.withStore,
+        targets: judgedTargets(rootOf(command)),
         log: async (call) => {
           if (!recalledAccount(app, provider, settings.profile, context.env)) return
           await log.record({ actor: { bot: `${app.command}-mcp` }, ...call })

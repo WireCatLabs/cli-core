@@ -5,6 +5,7 @@ import { readUpload } from "../../sends/upload.js"
 import { maskedAccount } from "../../services/people.js"
 import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { NONE_NAMED } from "../settings.js"
 import { accountSessionsCommand } from "./account-sessions-command.js"
@@ -17,7 +18,7 @@ export const accountCommand = (messenger: Messenger): Command => {
   const account = new Command("account")
     .description("the logged-in account")
     .addCommand(
-      new Command("list")
+      annotate(new Command("list"), { effects: REMOTE_READ })
         .description("every profile on this computer, and the account each is logged in as; asks the messenger nothing")
         .action(async function (this: Command) {
           const context = messengerContext(this, messenger, { needsProfile: false })
@@ -47,7 +48,7 @@ export const accountCommand = (messenger: Messenger): Command => {
         }),
     )
     .addCommand(
-      annotate(new Command("show"), { output: { entity: "account" } })
+      annotate(new Command("show"), { effects: REMOTE_READ, output: { entity: "account" } })
         .description("who this profile is logged in as; the phone number shows its last four digits")
         .option("--show-phone", "print the whole phone number")
         .action(async function (this: Command) {
@@ -62,7 +63,7 @@ export const accountCommand = (messenger: Messenger): Command => {
         }),
     )
     .addCommand(
-      annotate(new Command("update"), { mutates: true })
+      annotate(new Command("update"), { effects: REMOTE_WRITE })
         .description("change the name, the description or the photo everyone sees on your profile")
         .option("--first-name <name>", "your first name")
         .option("--last-name <name>", "your last name")

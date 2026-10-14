@@ -4,6 +4,7 @@ import { Command } from "commander"
 import { ADMIN_RIGHTS } from "../../domain/models.js"
 import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { renderAnswer, snakeKeys } from "../envelope.js"
 import { rightsOf } from "../messenger/admin-commands.js"
 import { renderItem, wholeList } from "../messenger/chat-answers.js"
@@ -26,8 +27,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
   const offered = bot.adminRights ?? ADMIN_RIGHTS
   const command = new Command("admins").description("the admins of a chat the bot is an admin in")
 
-  command
-    .command("list")
+  annotate(command.command("list"), { effects: REMOTE_READ })
     .description("the chat's admins and what each may do")
     .argument("<chat>", CHAT)
     .action(async function (this: Command, chat: string) {
@@ -40,7 +40,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("add"), { mutates: true })
+  annotate(command.command("add"), { effects: REMOTE_WRITE })
     .description("make a member an admin with these rights")
     .argument("<chat>", CHAT)
     .argument("<person>", PERSON)
@@ -71,7 +71,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("remove"), { mutates: true })
+  annotate(command.command("remove"), { effects: REMOTE_WRITE })
     .description("take an admin's rights back; they stay a member")
     .argument("<chat>", CHAT)
     .argument("<person>", PERSON)
@@ -102,7 +102,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
 export const botMembersCommand = (bot: BotMessenger): Command => {
   const command = new Command("members").description("the people in a chat the bot is an admin in")
 
-  annotate(command.command("remove"), { mutates: true })
+  annotate(command.command("remove"), { effects: REMOTE_WRITE })
     .description("take a person out of a chat; their messages stay")
     .argument("<chat>", CHAT)
     .argument("<person>", PERSON)

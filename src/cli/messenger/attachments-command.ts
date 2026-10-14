@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { engineHint } from "../../attachments/extract.js"
 import { gatewayOcr } from "../../attachments/gateway-ocr.js"
 import { ATTACHMENT_QUERY, type AttachmentItem, type ExtractItem, type ExtractRun } from "../../services/attachments.js"
 import { downloadMessage } from "../../services/file-download.js"
 import { environmentOf } from "../context.js"
+import { FETCH, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
@@ -36,7 +38,7 @@ const summary = (run: ExtractRun) =>
     .join(", ")
 
 const extractCommand = (messenger: Messenger): Command =>
-  new Command("extract")
+  annotate(new Command("extract"), { effects: FETCH })
     .description(
       "read the text of downloaded files — text, PDF/DOCX text layers, ODT/ODS/XLSX/PPTX/EPUB — into the local store, where search finds them",
     )
@@ -137,7 +139,7 @@ const row = ({ message, position, name, local_path, extraction }: AttachmentItem
 const listCommand = (messenger: Messenger): Command =>
   withQuery(
     withPaging(
-      new Command("list").description(
+      annotate(new Command("list"), { effects: REMOTE_READ }).description(
         "files of stored messages, newest first: where each was saved and whether its text is held — never the text",
       ),
     ),
@@ -154,7 +156,7 @@ const listCommand = (messenger: Messenger): Command =>
   })
 
 const showCommand = (messenger: Messenger): Command =>
-  new Command("show")
+  annotate(new Command("show"), { effects: REMOTE_READ })
     .description("read a bounded chunk of one retained attachment; JSON includes base64 bytes")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator alone`)
     .argument("[message]", "the message id")
@@ -200,8 +202,7 @@ const showCommand = (messenger: Messenger): Command =>
 
 const textCommand = (messenger: Messenger): Command => {
   const text = new Command("text").description("the text of one file, as an agent read it")
-  text
-    .command("set")
+  annotate(text.command("set"), { effects: LOCAL_WRITE })
     .description("keep the text an agent read from a file — a scan, a photo — so search finds it; nothing is sent")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")

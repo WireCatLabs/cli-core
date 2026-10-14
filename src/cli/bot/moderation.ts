@@ -10,6 +10,7 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { momentOf } from "../../services/moment.js"
 import { environmentOf } from "../context.js"
+import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "../messenger/ask.js"
 import { type BotContext, botContext, online } from "./context.js"
@@ -42,15 +43,14 @@ const shown = (context: BotContext, chatId: Id, rules: ModerationRules) => {
 /** `bot chats rules show|set|unset`: kept on this machine, the chat named the bot's way. */
 export const botRulesCommand = (bot: BotMessenger): Command => {
   const command = new Command("rules").description("a chat's moderation rules for this bot, kept on this machine")
-  command
-    .command("show")
+  annotate(command.command("show"), { effects: LOCAL_READ })
     .description("the chat's rules; the defaults, marked not saved, if it has none yet")
     .argument("<chat>", CHAT)
     .action(function (this: Command, chat: string) {
       const context = botContext(this, bot)
       renderAnswer(this, context, shown(context, context.chatRef(chat), rulesOf(context, bot)))
     })
-  annotate(command.command("set"), { mutates: true, local: true })
+  annotate(command.command("set"), { effects: LOCAL_WRITE })
     .description(`change one rule — ${RULE_KEYS.join(", ")}`)
     .argument("<chat>", CHAT)
     .argument("<key>", "the rule")
@@ -65,7 +65,7 @@ export const botRulesCommand = (bot: BotMessenger): Command => {
       rules.set(chatId, titleOf(context, chatId), key, value)
       renderAnswer(this, context, shown(context, chatId, rules))
     })
-  annotate(command.command("unset"), { mutates: true, local: true })
+  annotate(command.command("unset"), { effects: LOCAL_WRITE })
     .description("put one rule back to its default")
     .argument("<chat>", CHAT)
     .argument("<key>", "the rule")
@@ -173,7 +173,7 @@ const yes = (answer: string) => /^\s*y(es)?\s*$/i.test(answer)
  * what the rules name. A removal bans unless `--no-ban`.
  */
 export const botModerateCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("moderate"), { mutates: true })
+  annotate(new Command("moderate"), { effects: REMOTE_WRITE })
     .description("judge a group's new messages and joins by its rules, and act as they allow — as the bot")
     .argument("<chat>", CHAT)
     .option("--since-time <time>", "judge what came after this ISO 8601 time, or 2h / 1d ago; the saved point stays")

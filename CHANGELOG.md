@@ -7,8 +7,37 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **On `@wirecat/cli-base` 0.28.0, with its standard shapes** (peer `>=0.28.0 <0.29.0`). `commands --json` is
+  contract 3.
+  - **Every command declares `effects: { remote, local }`** (`none | read | write`) in place of `mutates` and
+    `local`; reads too, since a command without it counts as a write. `REMOTE_READ`, `FETCH` (reads the messenger
+    to keep it here: a sync, a download), `REMOTE_WRITE`, `LOCAL_READ`,
+    `LOCAL_WRITE` and `NO_EFFECTS` from `@wirecat/cli-core/cli` name the usual pairs. A generated `bot api`
+    command says `api_operation` instead of `operation_id`.
+  - **Every error has `retry: { safe, after_ms? }`**; `retryable` is no longer in `details`. Retry and a step's
+    `safe_to_auto_execute` are judged on the messenger side only: a sync or a cached read is safe to
+    repeat though it writes the store. A write that failed before it left says `sent: false`.
+  - **Next steps have `kind` and `safe_to_auto_execute`**, at most two per answer. MCP answers judge them against
+    the CLI's commands as `--json` does.
+  - **`meta.complete` and `meta.issues` replace `meta.skipped`.** A source a search left out is
+    `{ code, source }`, an error code; `search all`, `search notes`, `search messages` and `search mail` declare
+    `partial` and still exit 0.
+  - **`page` has `mode`**: `{ mode: "page", …, next_page? }` or `{ mode: "cursor", …, next_cursor? }`; `cursor`
+    is gone. `listOf` takes `paging: "cursor"` for a cursor source on its last page.
+  - **`--jsonl` prints `{"type":"item","data":…}` lines and an end line** `{"type":"end","complete",…,"page"}`.
+  - **Log records name a registered event** (`CORE_LOG_EVENTS`): `request`, `response`, `warning` and `cache`
+    are written as `provider.request`, `provider.response`, `client.warning` and `cache.answered`; a crash as
+    `command.crashed`; a send-journal line as `send.recorded`; serve's lines as `serve.note|success|warning|failure`.
+- **`--operation-id` replaces `--send-id`** (`messages send|forward`, `polls create`, `topics create`), and the MCP
+  argument `operation_id` replaces `send_id`. A write's answer and an unknown outcome's error carry one
+  `operation_id`; `send_id` is gone.
+
 ### Added
 
+- **`sealed`, `metaNow` and `jsonlRecords` from `@wirecat/cli-core/cli`**: an app's own answer gets the same `meta`
+  and JSON lines (with the end line) as cli-core's.
 - **Known people's names in stored messages** (`kind:person-name`, no migration). A capitalized word that is a name
   of someone met in a messenger, a meeting or through a confirmed phone, in any case and from a Latin profile too
   (`Valery` finds «Валерию»); two in a row that one person shares are a full name. A name links by rule to the one

@@ -26,7 +26,7 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
         v.description("an id from chats_send_as to post as; required where the chat posts as someone else by default"),
       ),
     ),
-    send_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
+    operation_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
     topic: v.optional(
       v.pipe(v.string(), v.minLength(1), v.description("a forum topic id of the to chat, from topics_list")),
     ),
@@ -67,7 +67,7 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       title: "Forward a message",
       description:
         "Forward one message to another chat, where new people will read it. Only when the owner asked for this " +
-        "message to go to this chat. On outcome_unknown, retry with the send_id it returns, never a new one: " +
+        "message to go to this chat. On outcome_unknown, retry with the operation_id it returns, never a new one: " +
         "a repeat without it is a second copy.",
       input: v.object(forwardInput),
       annotations: WRITE,
@@ -80,7 +80,7 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
             message: args.message,
             to: args.to,
             silent: args.silent === true,
-            ...(args.send_id === undefined ? {} : { sendId: args.send_id }),
+            ...(args.operation_id === undefined ? {} : { sendId: args.operation_id }),
             ...(args.send_as === undefined ? {} : { sendAs: args.send_as }),
             ...(args.topic === undefined ? {} : { threadId: args.topic }),
           }),

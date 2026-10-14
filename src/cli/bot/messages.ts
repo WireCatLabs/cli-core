@@ -8,6 +8,7 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { readAttachments } from "../../sends/upload.js"
 import { environmentOf } from "../context.js"
+import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { wholeList } from "../messenger/chat-answers.js"
 import { messageItem } from "../messenger/message-items.js"
@@ -85,7 +86,7 @@ const seen = (context: BotContext, message: Message) => {
 }
 
 const sendCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("send"), { mutates: true })
+  annotate(new Command("send"), { effects: REMOTE_WRITE })
     .description("send a message as the bot; without [text], the text is read from stdin")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("[text]", "the message")
@@ -166,7 +167,7 @@ const sendCommand = (bot: BotMessenger): Command =>
     })
 
 const listCommand = (bot: BotMessenger): Command =>
-  new Command("list")
+  annotate(new Command("list"), { effects: REMOTE_READ })
     .description(
       `the latest messages in a chat; where ${bot.name ?? "the messenger"} gives a bot no history, and with --offline, ` +
         "the ones this bot has seen on this machine",
@@ -203,7 +204,7 @@ const listCommand = (bot: BotMessenger): Command =>
     })
 
 const showCommand = (bot: BotMessenger): Command =>
-  new Command("show")
+  annotate(new Command("show"), { effects: REMOTE_READ })
     .description("one message by its id in a chat")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<message>", "message id")
@@ -237,7 +238,7 @@ const showCommand = (bot: BotMessenger): Command =>
     })
 
 const editCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("edit"), { mutates: true })
+  annotate(new Command("edit"), { effects: REMOTE_WRITE })
     .description("replace the text of a message the bot sent")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<message>", "message id")
@@ -273,7 +274,7 @@ const editCommand = (bot: BotMessenger): Command =>
     })
 
 const deleteCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("delete"), { mutates: true })
+  annotate(new Command("delete"), { effects: REMOTE_WRITE })
     .description("delete messages in a chat the bot can delete in; it cannot be undone")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<messages...>", "message ids")
@@ -296,7 +297,7 @@ const deleteCommand = (bot: BotMessenger): Command =>
     })
 
 const pinCommand = (bot: BotMessenger, pin: boolean): Command => {
-  const command = annotate(new Command(pin ? "pin" : "unpin"), { mutates: true })
+  const command = annotate(new Command(pin ? "pin" : "unpin"), { effects: REMOTE_WRITE })
     .description(pin ? "pin a message in a chat; quietly unless --notify" : "unpin a message in a chat")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<message>", "message id")

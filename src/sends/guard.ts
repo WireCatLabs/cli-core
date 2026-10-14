@@ -261,7 +261,7 @@ export const sendGuard = ({
         throw new CliError(
           "validation_error",
           "this send id was tried under another identity; repeat it with the same --send-as, or it may post twice",
-          { send_id: sendId, retryable: false },
+          { operation_id: sendId, retryable: false },
         )
       }
       return false
@@ -330,7 +330,7 @@ export const sendGuard = ({
           throw new CliError(
             "validation_error",
             "this topic creation was already attempted; check topics list and do not repeat an unknown creation",
-            { send_id: request.sendId, retryable: false },
+            { operation_id: request.sendId, retryable: false },
           )
         }
         return true

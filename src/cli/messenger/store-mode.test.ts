@@ -108,7 +108,7 @@ const call = async (
     },
     { streams, tty, env },
   )
-  return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
+  return { code, stdout: streams.stdout.join(""), lines: streams.stdout, stderr: streams.stderr.join("\n") }
 }
 
 /** A store filled the way `serve` fills it: a server-mode run saves what it read. */
@@ -148,12 +148,14 @@ describe("stored evidence command", () => {
     expect(connection.connects).toEqual([])
   })
 
-  it("streams the packet as one line in --jsonl and names the next page on stderr", async () => {
+  it("streams the packet as one item line and an end line in --jsonl, and names the next page on stderr", async () => {
     const env = await filled()
     const connection = pushing()
     const first = await call(["messages", "evidence", "Book", "--limit", "2", "--jsonl"], env, connection.connect)
     expect(first.code).toBe(0)
-    expect(JSON.parse(first.stdout)).toMatchObject({ kind: "chats", coverage: { included: 2 } })
+    const [line, end] = first.lines.map((one) => JSON.parse(one))
+    expect(line.data).toMatchObject({ kind: "chats", coverage: { included: 2 } })
+    expect(end).toMatchObject({ type: "end", complete: true })
     expect(first.stderr).toContain("--cursor 2")
     expect(connection.connects).toEqual([])
   })

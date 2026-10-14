@@ -53,7 +53,7 @@ export const addMeetingProjectEvidenceCommand = (
       ),
     {
       origin: "handwritten",
-      mutates: false,
+      effects: { remote: "none", local: "read" },
       query: MEETING_PROJECT_EVIDENCE_QUERY,
       output: { entity: "meeting_project_evidence" },
     },

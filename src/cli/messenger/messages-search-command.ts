@@ -8,6 +8,7 @@ import { renderThreadLinks } from "../../render/thread-context.js"
 import type { SearchFound } from "../../services/messages.js"
 import { NO_MAIL, type SearchKind } from "../../services/search-kind.js"
 import { environmentOf } from "../context.js"
+import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { archiveSummary } from "./archive-summary.js"
@@ -24,6 +25,8 @@ export const messagesSearchCommand = (messenger: Messenger, kind: SearchKind = "
   const mail = kind === "mail"
   const base = new Command(kind)
   const command = annotate(mail ? base : backendOptions(threadOptions(syncOptions(base)), messenger), {
+    effects: REMOTE_READ,
+    partial: true,
     output: { entity: "message", view: "hit" },
   })
   command

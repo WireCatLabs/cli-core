@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { holdLock, lockPath, releaseLock, takeLock } from "../../background/lock.js"
 import type { ChatKind, Message, MessageEvent } from "../../domain/models.js"
@@ -13,6 +14,7 @@ import { newSendId } from "../../sends/send-id.js"
 import { onlineDeps } from "../../services/deps.js"
 import { servicesFor } from "../../services/index.js"
 import { applyTaskRulesOnArrival, openRequestTask } from "../../services/task-rules.js"
+import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { failureKey } from "../failures.js"
 import { recalledAccount } from "./accounts.js"
@@ -30,7 +32,7 @@ export { type Lock, lockPath, readLock, servingProfiles } from "../../background
  * taken over. Started by a person, a service unit or `server start` — never by itself (NEED-9).
  */
 export const serveCommand = (messenger: Messenger): Command => {
-  const command = new Command("serve").description(
+  const command = annotate(new Command("serve"), { effects: REMOTE_WRITE }).description(
     "keep the local store current until stopped — what a systemd or launchd unit runs",
   )
 

@@ -4,6 +4,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { PhoneBookEntry } from "../../domain/models.js"
 import { phoneOf } from "../../services/index.js"
+import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -19,7 +20,7 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
       ["unblock", "let a blocked person write to you again"],
     ] as const
   ).map(([name, description]) =>
-    annotate(new Command(name), { mutates: true })
+    annotate(new Command(name), { effects: REMOTE_WRITE })
       .description(description)
       .argument("<person>", PERSON)
       .action(async function (this: Command, person: string) {
@@ -29,7 +30,7 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
       }),
   )
 
-  const rename = annotate(new Command("rename"), { mutates: true })
+  const rename = annotate(new Command("rename"), { effects: REMOTE_WRITE })
     .description("rename the contact in the messenger address book; use contacts alias for a private local name")
     .argument("<person>", PERSON)
     .argument("<first-name>", "the name you want to see for them")
@@ -41,7 +42,7 @@ export const contactWriteCommands = (messenger: Messenger): Command[] => {
     })
 
   /** A file rather than argv: these are phone numbers, and argv is read by `ps` and kept by the shell. */
-  const importing = annotate(new Command("import"), { mutates: true })
+  const importing = annotate(new Command("import"), { effects: REMOTE_WRITE })
     .description("upload phone numbers and add the people the messenger has under them")
     .argument("<file>", "one person per line: number, then a comma, a tab or a semicolon, then the name")
     .action(async function (this: Command, file: string) {

@@ -1,9 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { renderMessages } from "../../render/messages.js"
 import { environmentOf } from "../context.js"
+import { REMOTE_READ } from "../effects.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 
 /**
@@ -12,7 +14,7 @@ import { type Messenger, type MessengerContext, messengerContext } from "./conte
  * because a stream is not one value. Nothing is marked read.
  */
 export const watchCommand = (messenger: Messenger): Command =>
-  new Command("watch")
+  annotate(new Command("watch"), { effects: REMOTE_READ })
     .description("print new messages as they arrive, until Ctrl-C or --timeout (either ends it normally)")
     .option("--events", "also edits, deletions and reactions; every line then names its event")
     .action(async function (this: Command) {

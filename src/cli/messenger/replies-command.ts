@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { DRY_RUN_DAYS, dryRun } from "../../replies/dry-run.js"
 import { replyRenderer } from "../../replies/rendering.js"
@@ -6,6 +7,7 @@ import { audienceWarnings, readReplies, repliesPathFor } from "../../replies/rul
 import { paused, readRepliesState, repliesStatePathFor, writeRepliesState } from "../../replies/state.js"
 import { levelFor } from "../../sends/permissions.js"
 import { momentOf } from "../../services/moment.js"
+import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { replyConsentsCommand } from "./replies-consents-command.js"
@@ -19,8 +21,7 @@ export const repliesCommand = (messenger: Messenger): Command => {
   addReplyEditors(replies, messenger)
   replies.addCommand(replyConsentsCommand(messenger))
 
-  replies
-    .command("test")
+  annotate(replies.command("test"), { effects: LOCAL_READ })
     .description(
       "what the rules would have answered in the stored messages, to whom and why — sends nothing, " +
         "changes nothing, never connects",
@@ -116,15 +117,15 @@ export const repliesCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf({ paused: on }))
     }
 
-  replies
-    .command("pause")
+  annotate(replies.command("pause"), { effects: LOCAL_WRITE })
     .description("stop every reply rule of this profile at once, a running serve too; resume undoes it")
     .action(switched(true))
 
-  replies.command("resume").description("let the reply rules answer again after pause").action(switched(false))
+  annotate(replies.command("resume"), { effects: LOCAL_WRITE })
+    .description("let the reply rules answer again after pause")
+    .action(switched(false))
 
-  replies
-    .command("status")
+  annotate(replies.command("status"), { effects: LOCAL_READ })
     .description("whether the rules may send, which are on, and who they may answer")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
