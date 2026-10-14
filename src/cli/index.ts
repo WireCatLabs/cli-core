@@ -254,6 +254,14 @@ export { callsCommand, stickersCommand } from "./messenger/records-command.js"
 export { repliesCommand } from "./messenger/replies-command.js"
 export { reviewCommand } from "./messenger/review.js"
 export { scheduleCommand } from "./messenger/schedule-command.js"
+export {
+  allHitItem,
+  type HitItem,
+  type MessageHitItem,
+  messageHitItem,
+  type NoteHitItem,
+  noteHitItem,
+} from "./messenger/search-answers.js"
 export { searchCommand } from "./messenger/search-command.js"
 export { searchesCommand } from "./messenger/searches-command.js"
 export { serveCommand, servingProfiles } from "./messenger/serve-command.js"

@@ -13,6 +13,15 @@ shape of this file.
   `search_stemmers.latin` and `account_groups.<name>`. `searchStemmers.*` and `accountGroups.*` are refused, naming
   the new name. What the store saved keeps its key, so no store migrates.
 
+### Added
+
+- **The `note` entity carries what a note command answers**: `revision`, `front_matter`, `content_hash` and
+  `export_path`, which every stored note has (null where they do not apply), and optional `tags` (names) and
+  `backlinks` (`{from, target_text, kind, anchor}`). An app can now declare `{ entity: "note" }` on `notes show`,
+  `add` and `edit`; `note.hit` is unchanged.
+- **The search-hit converters are exported from `./cli`**: `messageHitItem`, `noteHitItem` and `allHitItem`, with
+  their `MessageHitItem`, `NoteHitItem` and `HitItem` types, so an app's own search answers the same items.
+
 ## 0.281.0 — 15.10.2026
 
 ### Changed — may break callers
