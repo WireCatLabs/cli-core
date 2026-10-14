@@ -12,6 +12,7 @@ import {
 } from "@wirecat/cli-base"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
+import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { type AppIdentity, envName } from "./app.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
@@ -230,6 +231,11 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       outputFor(action).renderer.result(preview(action, permissions))
       throw new PreviewComplete()
     }
+    // Not inside the scheduled run itself: its own failure is already on its way to last.json.
+    if (!flags.quiet && commandEnv[envName(definition.app, "SCHEDULED")] === undefined && path[0] !== "schedule") {
+      const notice = failingNoticeFor(definition.app, commandEnv)
+      if (notice) streams.diagnostic(notice)
+    }
     await definition.prepare?.(program, environment)
     if (control.signal.aborted) throw control.failure()
   })
@@ -300,6 +306,15 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       process.stderr.off("error", pipeError)
     }
     await control.finish()
+  }
+}
+
+const failingNoticeFor = (app: AppIdentity, env: NodeJS.ProcessEnv) => {
+  try {
+    const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
+    return failingNotice(app.command, scheduledRuns(state), `${app.command} schedule list`)
+  } catch {
+    return undefined
   }
 }
 
