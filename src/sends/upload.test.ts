@@ -115,6 +115,20 @@ describe("readUpload", () => {
     expect(refusedPlace(join(root, "notes", "session"), app, others)).toBe(false)
   })
 
+  it("**refuses the shared WireCat folder**, where the store's backups and the models are", () => {
+    const { root, env } = setUp()
+    const shared = { ...env, WIRECAT_STATE_DIR: join(root, "wirecat") }
+    expect(refusedPlace(join(root, "wirecat", "wirecat.db.backup-2026-10-14"), app, shared)).toBe(true)
+    expect(refusedPlace(join(root, "wirecat-notes", "a.txt"), app, shared)).toBe(false)
+  })
+
+  it("names the flag but no command in its refusal: bot uploads and `bot api` @path fields hit it too", async () => {
+    const { env, put } = setUp()
+    const refused = readUpload("file", put(".netrc"), { app, env })
+    await expect(refused).rejects.toThrow(/--allow-any-file to the command/)
+    await expect(refused).rejects.not.toThrow(/messages send/)
+  })
+
   it("**compares names case-insensitively on macOS and Windows**, and exactly on Linux", () => {
     const { root, env } = setUp()
     for (const name of [".SSH/id_ed25519", ".Netrc", ".ENV", ".Config/GH/hosts.yml", "STATE/session"]) {

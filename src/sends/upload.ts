@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
-import { storePath } from "../store/path.js"
+import { storePath, wirecatDirectory } from "../store/path.js"
 
 export type UploadKind = "photo" | "file" | "voice"
 
@@ -125,9 +125,13 @@ export const refusedPlace = (
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = process.platform,
 ): boolean => {
-  const own = [{ appName: app.appName, prefix: app.envPrefix }, ...WIRECAT_APPS].flatMap((one) =>
-    Object.values(resolvePaths({ ...one, env, platform })),
-  )
+  const own = [
+    ...[{ appName: app.appName, prefix: app.envPrefix }, ...WIRECAT_APPS].flatMap((one) =>
+      Object.values(resolvePaths({ ...one, env, platform })),
+    ),
+    // The shared WireCat folder: the store, its backups beside it, the models.
+    wirecatDirectory(env, platform),
+  ]
   // The store file and its -wal and -shm, not its folder: MESSAGING_STORE may sit in the home folder.
   const store = resolve(storePath(env))
   let ancestor = resolve(path)
@@ -185,9 +189,8 @@ export const readUpload = async (
   if (!anyFile && refusedPlace(path, app, env)) {
     throw new CliError(
       "validation_error",
-      `cannot send ${path}: known credential files, browser profiles, the folders of ${app.command} and the other ` +
-        "WireCat apps, and the message store " +
-        `are not sent — the owner adds --allow-any-file to \`${app.command} messages send\` if this file is meant to go`,
+      `cannot send ${path}: known credential files, browser profiles, the WireCat apps' folders and the message ` +
+        "store are not sent — the owner adds --allow-any-file to the command if this file is meant to go",
     )
   }
   try {

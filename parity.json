@@ -1331,6 +1331,12 @@
     "bot api": {
       "in": "all",
       "options": {
+        "--allow-any-file": {
+          "in": [],
+          "planned": {
+            "tg": "tg's next cli-core bump: one flag on bot api for every @path field, not one per file-carrying operation"
+          }
+        },
         "--store-token": {
           "in": "all"
         }

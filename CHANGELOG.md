@@ -41,9 +41,10 @@ shape of this file.
   `.azure`, `.claude/.credentials.json`, `.codex/auth.json`, `.password-store`, `.local/share/keyrings`,
   `Library/Keychains`, the Windows credential folders, and Chrome, Chromium, Edge, Brave, Firefox and Safari profiles
   on Linux, macOS and Windows. Every WireCat app's folders are refused, not only the running one's: `max` does not send
-  `tg`'s session. On macOS and Windows the names compare case-insensitively. Other hidden folders (`.worktrees`,
+  `tg`'s session, and nor is the shared WireCat folder with the store's backups. On macOS and Windows the names compare case-insensitively. Other hidden folders (`.worktrees`,
   `.cache`, `.incoming`) still send, and `messages_send` now says so. To send one of the refused files on purpose,
-  the owner passes `--allow-any-file` to `messages send`.
+  the owner passes `--allow-any-file` to the command; the refusal names the flag and no command, since bot uploads
+  reach it too. `refusedPlace` is exported from `./sends`, so an app can check a path without reading it.
 - **`messages download` progress and the export manifest are replaced through an unguessable temporary file opened
   exclusively**, so a link planted in a shared output folder is never written through.
 
