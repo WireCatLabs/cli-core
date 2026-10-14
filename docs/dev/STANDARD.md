@@ -790,6 +790,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--hidden` | `<on\|off>` | on hides a forum's General topic from the topic list, off shows it |  | `topics edit` (tg-only) |
 | `--hide-online` | `<on\|off>` | hide online status and last seen |  | `account privacy set` (planned) |
 | `--history` |  | the people added also see the messages from before they came |  | `chats members add` (max-only) |
+| `--holder` | `<name>` | who you are for task claims: a session or chat id |  | `tasks agenda`, `tasks claim`, `tasks release` |
 | `--html` |  | the text is HTML: <b>, <i>, <a href>, <code> |  | `bot messages edit`, `bot messages send`, `messages edit` (tg-only), `messages send` (tg-only) |
 | `--http` |  | serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login. **MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption** |  | `mcp` |
 | `--http-confirmation` | `<mode>` | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `mcp` |

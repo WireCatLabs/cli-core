@@ -15,7 +15,7 @@ import {
   taskLinkKindOf,
   taskTypeOf,
 } from "../../services/tasks.js"
-import { authorOf } from "../author.js"
+import { holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -59,7 +59,9 @@ const agendaText = (agenda: Agenda) => {
       : []),
     `tasks (${agenda.tasks.length})`,
     ...agenda.tasks.map(
-      (task) => `  ${task.key}  ${task.reasons.join(",").padEnd(9)}  due ${when(task.dueAt)}  ${task.title}`,
+      (task) =>
+        `  ${task.key}  ${task.reasons.join(",").padEnd(9)}  due ${when(task.dueAt)}  ${task.title}` +
+        (task.claimedBy === null ? "" : `  (claimed by ${task.claimedBy} until ${when(task.claimedUntil)})`),
     ),
     `owed — they wrote last (${agenda.owed.length})`,
     ...agenda.owed.map(chat),
@@ -99,8 +101,11 @@ const planOptions = (command: Command, verb: string) =>
 
 const categoryHelp = "what it is about, from the list tasks categories prints: money, documents, meeting, …"
 
-/** Who claims: the agent whose terminal runs the tool, else the owner — as mentions records its author. */
-const holderOf = (command: Command) => authorOf(environmentOf(command).env ?? process.env)
+const holderOf = (command: Command) =>
+  holderIn(environmentOf(command).env ?? process.env, command.opts<{ holder?: string }>().holder)
+
+const HOLDER_HELP =
+  "who you are for claims: a session id or a chat id; default WIRECAT_HOLDER, else Claude Code's session, else the agent's name"
 
 const planFrom = (options: {
   title?: string
@@ -261,6 +266,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       durationOf("--within"),
     )
     .option("--claimed", "also list tasks someone else holds (tasks claim); hidden by default")
+    .option("--holder <name>", HOLDER_HELP)
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
       const options = this.opts<{
@@ -302,7 +308,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
   annotate(tasks.command("claim"), { effects: LOCAL_WRITE })
     .description("take an open task so no other agent works it at once; the claim lapses by itself")
     .argument("<task>", "the task's id or key, as tasks list shows it")
-    .option("--for <span>", "how long the claim lasts: 30m, 2h (default 30m)", durationOf("--for"))
+    .option(
+      "--for <span>",
+      "how long the claim lasts: 30m, 2h (default 30m); claiming again extends it",
+      durationOf("--for"),
+    )
+    .option("--holder <name>", HOLDER_HELP)
     .action(async function (this: Command, id: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.claim")
@@ -312,8 +323,9 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   annotate(tasks.command("release"), { effects: LOCAL_WRITE })
-    .description("give back a task you claimed, before the claim lapses")
+    .description("give back a task you claimed, before the claim lapses; the owner may release any")
     .argument("<task>", "the task's id or key, as tasks list shows it")
+    .option("--holder <name>", HOLDER_HELP)
     .action(async function (this: Command, id: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.release")

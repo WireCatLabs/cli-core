@@ -232,10 +232,10 @@ describe("tasks in the store", () => {
     await expect(store.tasks.claim(task.id, "claude-code", until(30))).rejects.toThrow(
       "codex holds task Q-1 until 2026-10-05T10:30:00.000Z",
     )
-    await expect(store.tasks.claim("Q-1", "codex", until(30))).rejects.toThrow("codex holds task")
+    expect((await store.tasks.claim("Q-1", "codex", until(45))).claimedUntil).toBe("2026-10-05T10:45:00.000Z")
     await expect(store.tasks.release(task.id, "claude-code")).rejects.toThrow("only they or the owner release it")
 
-    now += 31 * 60_000
+    now += 46 * 60_000
     expect((await store.tasks.details(task.id)).claimedBy).toBeNull()
     expect((await store.tasks.claim(task.id, "claude-code", until(30))).claimedBy).toBe("claude-code")
     expect((await store.tasks.release(task.id, "owner")).claimedBy).toBeNull()

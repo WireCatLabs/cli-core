@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { task } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
-import { authorOf } from "../author.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
@@ -281,21 +280,27 @@ describe("tasks", () => {
     expect((await call("tags", "remove", "urgent", "--task", "PR-1", "--json")).code).toBe(0)
     expect(json(await call("tasks", "list", "tag:urgent", "--json")).items).toEqual([])
 
-    const me = authorOf(process.env)
-    expect(item(await call("tasks", "claim", "PR-1", "--for", "2h", "--json"))).toMatchObject({ claimed_by: me })
-    expect((await call("tasks", "claim", "PR-1", "--json")).stderr).toContain(`${me} holds task PR-1 until`)
-    expect(json(await call("tasks", "agenda", "--within", "3650d", "--json")).item.tasks).toMatchObject([
-      { key: "PR-1", claimed_by: me },
+    const mine = ["--holder", "chat-7", "--json"]
+    expect(item(await call("tasks", "claim", "PR-1", "--for", "2h", ...mine))).toMatchObject({ claimed_by: "chat-7" })
+    expect(item(await call("tasks", "claim", "PR-1", "--for", "3h", ...mine)).claimed_by).toBe("chat-7")
+    const other = ["--holder", "claude-code:other", "--json"]
+    expect((await call("tasks", "claim", "PR-1", ...other)).stderr).toContain("chat-7 holds task PR-1 until")
+    expect((await call("tasks", "release", "PR-1", ...other)).stderr).toContain("only they or the owner release it")
+    expect(json(await call("tasks", "agenda", "--within", "3650d", ...mine)).item.tasks).toMatchObject([
+      { key: "PR-1", claimed_by: "chat-7" },
     ])
-    expect(item(await call("tasks", "release", "PR-1", "--json")).claimed_by).toBeNull()
+    expect(json(await call("tasks", "agenda", "--within", "3650d", ...other)).item.tasks).toEqual([])
+    expect(json(await call("tasks", "agenda", "--within", "3650d", "--claimed", ...other)).item.tasks).toMatchObject([
+      { key: "PR-1", claimed_by: "chat-7" },
+    ])
+    expect((await call.pretty("tasks", "agenda", "--within", "3650d", "--holder", "chat-7")).stdout.join("")).toContain(
+      "claimed by chat-7 until",
+    )
+    expect(item(await call("tasks", "release", "PR-1", ...mine)).claimed_by).toBeNull()
 
     const store = await openStore({ path: join(call.root, "m.db") })
     await store.tasks.claim("PR-1", "someone-else", new Date(Date.now() + 60_000))
     await store.close()
-    expect(json(await call("tasks", "agenda", "--within", "3650d", "--json")).item.tasks).toEqual([])
-    expect(json(await call("tasks", "agenda", "--within", "3650d", "--claimed", "--json")).item.tasks).toMatchObject([
-      { key: "PR-1", claimed_by: "someone-else" },
-    ])
     expect(item(await call("tasks", "close", "PR-1", "--as", "done", "--json"))).toMatchObject({ state: "done" })
     expect(item(await call("tasks", "show", "PR-1", "--json")).claimed_by).toBeNull()
   })

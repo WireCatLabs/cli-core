@@ -112,7 +112,8 @@ export interface WorkTasks extends TaskRelationsStore {
   }): Promise<TaskDetails[]>
   events(id: string): Promise<TaskEvent[]>
   /**
-   * Takes an open task for `holder` until `until`, unless someone holds it now — a lapsed claim holds nothing.
+   * Takes an open task for `holder` until `until`, unless someone else holds it now — a lapsed claim holds nothing,
+   * and the holder's own claim is extended.
    * One statement under the write lock, so two processes never both win.
    */
   claim(id: string, holder: string, until: Date): Promise<TaskDetails>
@@ -400,9 +401,9 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
         database
           .prepare(
             "UPDATE tasks SET claimed_by = ?, claimed_until = ?, updated_at = ? " +
-              "WHERE id = ? AND status = 'open' AND (claimed_by IS NULL OR claimed_until < ?) RETURNING id",
+              "WHERE id = ? AND status = 'open' AND (claimed_by IS NULL OR claimed_until < ? OR claimed_by = ?) RETURNING id",
           )
-          .get(holder, until.getTime(), at, task, at),
+          .get(holder, until.getTime(), at, task, at, holder),
       )
       if (!won) {
         const row = rowById(task)

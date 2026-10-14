@@ -101,14 +101,18 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
 
 Two agents, or an agent and the owner, must not work one task at once.
 
+- **The holder is one agent session** (owner, NEED-1119): `--holder <name>`, else `WIRECAT_HOLDER`, else
+  `claude-code:<CLAUDE_CODE_SESSION_ID>` (Claude Code sets it in every process it starts), else the agent's name
+  from `AI_AGENT`, else `owner`. No other agent's session variable is known yet — Codex 0.162.0 sets none found;
+  such an agent falls back to its name, or passes `--holder`. A web agent with no environment passes its chat id.
 - `tasks claim <task> [--for 30m]` — one statement, inside `BEGIN IMMEDIATE`:
   `UPDATE tasks SET claimed_by = ?, claimed_until = ? WHERE id = ? AND status = 'open' AND (claimed_by IS NULL
-  OR claimed_until < ?) RETURNING id`. No row back means someone holds it: the error names who and until when.
-  SQLite lets one writer in at a time across processes, so this is atomic between tg, max, memo and agents on
-  the machine.
+  OR claimed_until < ? OR claimed_by = ?) RETURNING id`. No row back means someone else holds it: the error names
+  who and until when. Claiming again extends one's own claim. SQLite lets one writer in at a time across
+  processes, so this is atomic between tg, max, memo and agents on the machine.
 - The claim is a lease: it expires (default 30 minutes), so a crashed agent never holds a task forever.
-  `tasks release <task>` gives it back; closing a task releases it.
-- `tasks agenda` hides tasks claimed by someone else unless `--claimed` asks for them.
+  `tasks release <task>` gives back one's own claim; the owner may release any. Closing a task releases it.
+- `tasks agenda` shows each task's holder and hides tasks claimed by someone else unless `--claimed` asks for them.
 
 ## Duplicates — the comparison chain
 

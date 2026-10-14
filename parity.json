@@ -415,6 +415,10 @@
     "--history": {
       "meaning": "the people added also see the messages from before they came"
     },
+    "--holder": {
+      "value": "<name>",
+      "meaning": "who you are for task claims: a session or chat id"
+    },
     "--html": {
       "meaning": "the text is HTML: <b>, <i>, <a href>, <code>"
     },
@@ -3978,6 +3982,7 @@
       "options": {
         "--claimed": "all",
         "--due": "all",
+        "--holder": "all",
         "--unanswered": "all",
         "--waiting": "all",
         "--within": "all"
@@ -3989,7 +3994,8 @@
     "tasks claim": {
       "in": "all",
       "options": {
-        "--for": "all"
+        "--for": "all",
+        "--holder": "all"
       }
     },
     "tasks close": {
@@ -4029,7 +4035,10 @@
       }
     },
     "tasks release": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--holder": "all"
+      }
     },
     "tasks show": {
       "in": "all"

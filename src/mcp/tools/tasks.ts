@@ -193,15 +193,16 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "chats where the owner wrote last and nobody answered (`waiting`); chats that moved and whose newest " +
         "message is not stored (`unsynced`: read them first). Read only what it names. `stale` means the store " +
         "saved nothing for a day, so a chat may look quiet only because nothing was synced. `query` picks the " +
-        "chats' kinds: chat_kind:channel (default chat_kind:(dialog OR group)). A task someone claimed is hidden " +
-        "unless `claimed` is true.",
+        "chats' kinds: chat_kind:channel (default chat_kind:(dialog OR group)). A task someone else claimed is " +
+        "hidden unless `claimed` is true; `holder` says who you are.",
       input: v.object({
         due: span("list tasks due within this (default 1d)"),
         unanswered: span("list chats someone else wrote last in this long ago (default 1d)"),
         waiting: span("list chats the owner wrote last in this long ago (default 7d)"),
         within: span("leave out chats silent longer than this (default 30d)"),
         query: queryArgument(AGENDA_QUERY),
-        claimed: v.optional(v.pipe(v.boolean(), v.description("also list tasks someone claimed"))),
+        claimed: v.optional(v.pipe(v.boolean(), v.description("also list tasks someone else claimed"))),
+        holder: v.optional(text(200, "who you are for claims, as tasks claim --holder names you; yours stay listed")),
       }),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "agenda", list: false },
@@ -217,6 +218,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           ...(within === undefined ? {} : { within }),
           ...(query ? { query } : {}),
           claimed: args.claimed === true,
+          ...(args.holder === undefined ? {} : { holder: args.holder }),
         })
         return itemOf(agendaItem(shown))
       },
