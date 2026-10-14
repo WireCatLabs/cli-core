@@ -23,6 +23,8 @@ shape of this file.
 
 ### Added
 
+- **`snakeKeysKeeping(keys)` from `./cli` is a `snakeKeys` that keeps what is under the listed keys as written**: a
+  note's front matter, an email's headers. The key itself still goes snake_case, and either spelling matches.
 - **`declaredSettingName`** from `@wirecat/cli-core/cli`: the snake_case name for a setting typed in camelCase, for an
   app with its own `config set` (max).
 

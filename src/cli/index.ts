@@ -191,6 +191,7 @@ export {
   renderAnswer,
   sealed,
   snakeKeys,
+  snakeKeysKeeping,
 } from "./envelope.js"
 export { withAbort } from "./execution.js"
 export { isCliFailure, isCommanderFailure } from "./failures.js"
