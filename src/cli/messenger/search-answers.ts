@@ -79,25 +79,33 @@ const metaOf = (
 })
 
 /** What the archive lacked for this answer, and the step that would fill it. */
-const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } => {
-  const next: NextStep[] = []
-  const missing: Missing[] = []
+export const coverageGaps = (
+  found: Pick<SearchFound, "coverage" | "refreshed">,
+  shown: number,
+): { next: NextStep[]; missing: Missing[] } => {
   const coverage = found.coverage
   const stale = found.refreshed?.complete === false
-  if (coverage?.next || stale) {
-    next.push(
+  if (!coverage?.next && !stale) return { next: [], missing: [] }
+  return {
+    next: [
       nextStep("messages.sync", {
         args: coverage?.chat === undefined ? { all: true, background: true } : { chat: coverage.chat },
       }),
-    )
-    missing.push({
-      field: "coverage",
-      why: stale
-        ? "the fetch before searching stopped early, so the answer may be stale"
-        : ((coverage && archiveSummary(coverage, found.items.length)) ?? "the local copy may be missing messages"),
-      step: "messages.sync",
-    })
+    ],
+    missing: [
+      {
+        field: "coverage",
+        why: stale
+          ? "the fetch before searching stopped early, so the answer may be stale"
+          : ((coverage && archiveSummary(coverage, shown)) ?? "the local copy may be missing messages"),
+        step: "messages.sync",
+      },
+    ],
   }
+}
+
+const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } => {
+  const { next, missing } = coverageGaps(found, found.items.length)
   const building =
     !found.wordsReady || (found.query?.stemming?.applied === false && found.query.stemming.reason === "building")
   if (building) {

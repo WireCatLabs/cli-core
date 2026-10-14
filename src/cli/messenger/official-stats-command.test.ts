@@ -2,8 +2,11 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { itemEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import type { OfficialChatStats } from "../../domain/models.js"
+import { ENTITIES } from "../../entities/index.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
@@ -77,7 +80,26 @@ describe("stats chats official", () => {
     const officialChatStats = vi.fn(async () => channel)
     const result = await setup({ officialChatStats })(["@synthetic", "--json"])
     expect(result.code).toBe(0)
-    expect(JSON.parse(result.stdout)).toEqual(channel)
+    const body = v.parse(itemEnvelopeSchema(ENTITIES.official_stats), JSON.parse(result.stdout))
+    expect(body.item).toEqual({
+      chat_id: "-1007",
+      title: "Synthetic channel",
+      kind: "channel",
+      since: "2026-09-07T00:00:00.000Z",
+      until: "2026-10-06T00:00:00.000Z",
+      totals: {
+        followers: { current: 120, previous: 110 },
+        views_per_post: { current: 40, previous: 35 },
+        shares_per_post: { current: 1, previous: 0 },
+        reactions_per_post: { current: 3, previous: 2 },
+        views_per_story: { current: 0, previous: 0 },
+        shares_per_story: { current: 0, previous: 0 },
+        reactions_per_story: { current: 0, previous: 0 },
+      },
+      notifications: { enabled: 30, total: 120 },
+      recent_posts: [{ kind: "message", id: "9", views: 41, forwards: 1, reactions: 2 }],
+      graphs: channel.graphs,
+    })
     expect(result.stderr).toContain("graphs not given: languages")
     expect(officialChatStats).toHaveBeenCalledWith("@synthetic")
   })

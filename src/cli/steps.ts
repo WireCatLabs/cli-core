@@ -73,6 +73,29 @@ export const STEPS = defineSteps([
     why: "a search index is still being built; this finishes it",
   },
   {
+    id: "stats.evidence",
+    command: "*",
+    args: [
+      { name: "message", required: false },
+      { name: "person", required: false },
+      { name: "selection", required: true },
+      { name: "component", required: true },
+    ],
+    why: "the messages behind the top row's {component}",
+  },
+  {
+    id: "messages.show",
+    command: "messages show",
+    args: [{ name: "chat", required: true }],
+    why: "the message in full",
+  },
+  {
+    id: "messages.context",
+    command: "messages context",
+    args: [{ name: "chat", required: true }],
+    why: "the messages around it",
+  },
+  {
     id: "search.meetings",
     command: "*",
     args: [{ name: "max_meetings", required: true }],

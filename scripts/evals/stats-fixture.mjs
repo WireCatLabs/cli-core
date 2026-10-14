@@ -63,6 +63,7 @@ const env = {
   HOME: join(root, "home"),
   TMPDIR: join(root, "tmp"),
   NO_COLOR: "1",
+  [`${app.envPrefix}_PROFILE`]: "default",
   [`${app.envPrefix}_STATE_DIR`]: join(root, "state"),
   [`${app.envPrefix}_CONFIG_DIR`]: join(root, "config"),
   [`${app.envPrefix}_CACHE_DIR`]: join(root, "cache"),

@@ -354,9 +354,9 @@ or fact evidence links needs separate store integration.
 
 ## Charts from statistics
 
-`statsCommand(messenger)` from `./cli` mounts `stats charts <chat>`. It returns `{ chart }`:
+`statsCommand(messenger)` from `./cli` mounts `stats charts <chat>`. It answers `{ item }`, the chart:
 messages per day/week, active authors, or joins and leaves (`--chart-kind`). `--output activity.svg`
-or `--output activity.png` also saves a dark image in a new private file and returns `chartFile`. The command reads the same
+or `--output activity.png` also saves a dark image in a new private file, named in the item's `file`. The command reads the same
 statistics service; the chart itself never fetches extra history, sends or marks read. Missing dates
 are gaps, and partial data is labelled. `--jsonl` and image output to stdout are unavailable.
 

@@ -1,14 +1,17 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { StatsGrouping } from "../../services/messages-search.js"
+import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
+import { countsAnswer } from "./stats-answers.js"
 
 const GROUPINGS: StatsGrouping[] = ["chat", "sender", "day", "hour"]
 
 export const messagesStatsCommand = (messenger: Messenger): Command =>
-  syncOptions(new Command("show"))
+  syncOptions(annotate(new Command("show"), { output: { entity: "message_counts" } }))
     .description(
       "how many stored messages match, by chat, sender, day or hour — the local store only; optionally fetches new messages with --sync-first",
     )
@@ -96,23 +99,14 @@ export const messagesStatsCommand = (messenger: Messenger): Command =>
           saved: id,
         })
       })
-      const incomplete = stats.completeness.filter((one) => one.state !== "complete").length
-      if (incomplete > 0)
-        context.renderer.note(
-          `${incomplete} of the chats counted are not held in full, so these are lower bounds — \`${messenger.app.command} messages sync <chat>\` syncs one`,
-        )
-      if (context.format === "pretty") {
+      renderAnswer(this, context, countsAnswer(stats), () => {
         const width = String(Math.max(0, ...stats.items.map(({ count }) => count))).length
-        context.streams.data(
-          stats.items
-            .map(({ key, name, count }) => `${String(count).padStart(width)}  ${name ? `${name} (${key})` : key}`)
-            .join("\n"),
-        )
+        return `${stats.items
+          .map(({ key, name, count }) => `${String(count).padStart(width)}  ${name ? `${name} (${key})` : key}`)
+          .join("\n")}\n`
+      })
+      if (context.format === "pretty")
         context.renderer.note(`${stats.total} messages${stats.hasMore ? `; more rows than --limit ${limit}` : ""}`)
-        return
-      }
-      if (context.format === "jsonl") context.renderer.stream(stats.items)
-      else context.renderer.result({ ...stats, page: 1, limit })
     })
 
 export const groupingOf = (value: string): StatsGrouping => {

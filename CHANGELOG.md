@@ -48,6 +48,15 @@ shape of this file.
   and a `messages.scheduled` next step in place of the stderr note. Delete, pin, unpin and press are their receipts
   (`operation_id`, `chat_id`, `message_id`, `for_everyone`…). `--json <fields>` still keeps `operation_id` and
   `send_id`; an `outcome_unknown` error is unchanged.
+- **Statistics and rankings answer in the envelope, CLI and MCP alike.** A report is one item with its rows in
+  `rows`: `stats messages show` (`message_counts`), `stats messages|contacts top` (`ranking`), `unanswered`,
+  `responses`, `newcomers` and `discussion` (`admin_report`), `stats chats retention` (`retention`), `counters show`
+  (`counters`) and `refresh` (`counter_refresh`), `stats chats official` (`official_stats`) and `stats charts`
+  (`chart`; the written image is the item's `file`, was `chartFile`). `stats * evidence` is a list (`evidence`) that
+  pages by `page.cursor`, was `nextCursor`. Keys are snake_case, durations end in `_ms`, and a row names its message,
+  chat or author by `ref`. `drilldown` is gone: each row keeps its `selection`, and `next` holds the top row's
+  `stats.evidence`, `messages.show` and `messages.context` steps. Coverage is a `missing` entry with a
+  `messages.sync` step; more rows than `--limit` is `meta.truncated`. `--jsonl` prints a report as one line.
 
 ### Added
 

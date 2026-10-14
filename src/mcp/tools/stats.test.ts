@@ -40,7 +40,7 @@ describe("stats_charts", () => {
       })
       expect(
         await tool.stored(store, account, { chat: "7", since_time: "2026-01-01", timezone: "UTC" }, defaults),
-      ).toEqual({ chart: chatChart(stats, { by: "day", kind: "messages", timezone: "UTC" }) })
+      ).toEqual({ item: chatChart(stats, { by: "day", kind: "messages", timezone: "UTC" }) })
       const image = await tool.stored(
         store,
         account,
@@ -57,9 +57,9 @@ describe("stats_charts", () => {
       expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([800, 400])
       const about = response.content[1]
       if (about?.type !== "text") throw new Error("missing chart JSON")
-      expect(JSON.parse(about.text)).toEqual({
-        chart: chatChart(stats, { by: "day", kind: "messages", timezone: "UTC" }),
-        image: { format: "png", width: 800, height: 400 },
+      expect(JSON.parse(about.text)).toMatchObject({
+        item: chatChart(stats, { by: "day", kind: "messages", timezone: "UTC" }),
+        meta: { run_id: expect.any(String) },
       })
       expect(
         await tool.stored(
@@ -68,7 +68,7 @@ describe("stats_charts", () => {
           { chat: "7", chart_kind: "active", by: "week", since_time: "2026-01-01" },
           defaults,
         ),
-      ).toMatchObject({ chart: { kind: "line", x: { type: "week" } } })
+      ).toMatchObject({ item: { kind: "line", x: { type: "week" } } })
       await expect(tool.stored(store, account, { chat: "7", chart_kind: "membership" }, defaults)).rejects.toThrow(
         "unavailable",
       )

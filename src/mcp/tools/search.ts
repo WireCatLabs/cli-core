@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { messagesAnswer, offsetOf } from "../../cli/messenger/search-answers.js"
+import { countsAnswer } from "../../cli/messenger/stats-answers.js"
 import { parseDuration } from "../../cli/settings.js"
 import type { MessagesService, SearchFound } from "../../services/messages.js"
 import { MAX_SEARCH_OFFSET } from "../../services/messages.js"
@@ -224,7 +225,7 @@ export const answerMessagesSearch = async (
 }
 
 export const MESSAGES_STATS_DESCRIPTION =
-  "Count what a strict Lucene query matches in the local store, by chat, sender, calendar day or hour (in the timezone). Each message is counted once; no text means every stored message. Words match every form, as in search_messages; exact=true counts exact forms only. Counts are lower bounds where coverage is not complete. sync_first optionally refreshes within max_chats, sync_time and max_messages; failed refreshes keep counts with stale coverage and refreshed details. Returns { by, items: [{ key, name, account?, count }], total, hasMore, page, limit, query, coverage, completeness }."
+  "Count what a strict Lucene query matches in the local store, by chat, sender, calendar day or hour (in the timezone). Each message is counted once; no text means every stored message. Words match every form, as in search_messages; exact=true counts exact forms only. Counts are lower bounds where coverage is not complete. sync_first optionally refreshes within max_chats, sync_time and max_messages; failed refreshes keep counts with stale coverage and refreshed details. Returns { item: { by, total, rows: [{ key, ref?, name, count }] } }; meta.truncated marks more rows than limit, and missing names a chat the store does not hold whole."
 
 export const messagesStatsInput = (messenger: Messenger) =>
   v.object({
@@ -282,5 +283,5 @@ export const answerMessagesStats = async (
     ...(params.source === undefined ? {} : { source: params.source }),
     ...(resolved ? { saved: resolved.id } : {}),
   })
-  return { ...stats, page: 1, limit: size }
+  return countsAnswer(stats)
 }

@@ -1538,7 +1538,9 @@ describe("the shared read commands", () => {
               missing: [{ field: "coverage", step: "messages.sync" }],
               next: [{ step: "messages.sync", args: { chat: "7" } }],
             }
-          : { refreshed: { complete: false }, coverage: { state: "stale" } },
+          : path[0] === "stats"
+            ? { missing: [{ field: "coverage", step: "messages.sync" }] }
+            : { refreshed: { complete: false }, coverage: { state: "stale" } },
       )
       expect(result.stderr.join("\n")).toContain("refresh incomplete")
       expect(result.stderr.join("\n")).not.toContain("private detail")
@@ -2550,10 +2552,11 @@ describe("the shared read commands", () => {
       expect(stats.code).toBe(0)
       expect(stats.stdout).toHaveLength(1)
       expect(JSON.parse(stats.stdout[0] ?? "null")).toMatchObject({
-        by: "chat",
-        total: 4,
-        items: [{ key: "7", name: "Work fixture", count: 4 }],
-        query: { language: "lucene-v1" },
+        item: {
+          by: "chat",
+          total: 4,
+          rows: [{ key: "7", ref: `chat:${provider}/500/7`, name: "Work fixture", count: 4 }],
+        },
       })
       const badGrouping = await call(
         ["stats", "messages", "show", "--by", "week", "--json"],

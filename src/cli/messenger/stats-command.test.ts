@@ -2,8 +2,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { itemEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as rendering from "../../charts/render.js"
+import { ENTITIES } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -116,8 +119,10 @@ describe("stats charts", () => {
     const { call, connect } = await setup()
     const result = await call(["--chart-kind", "active", "--by", "day", "--timezone", "Europe/Madrid", "--json"])
     expect(result.code).toBe(0)
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      chart: {
+    const body = JSON.parse(result.stdout)
+    expect(v.parse(itemEnvelopeSchema(ENTITIES.chart), body)).toBeTruthy()
+    expect(body).toMatchObject({
+      item: {
         kind: "line",
         timezone: "Europe/Madrid",
         partial: true,
@@ -136,8 +141,7 @@ describe("stats charts", () => {
     const result = await call(["--output", path])
     expect(result.code).toBe(0)
     expect(JSON.parse(result.stdout)).toMatchObject({
-      chart: { partial: false },
-      chartFile: { path, format: "svg", width: 800, height: 400 },
+      item: { partial: false, file: { path, format: "svg", width: 800, height: 400 } },
     })
     const svg = readFileSync(path, "utf8")
     expect(svg).toContain('fill="#111827"')
@@ -158,7 +162,7 @@ describe("stats charts", () => {
     const result = await call(["--chart-kind", "membership", "--by", "week", "--timezone", "UTC"])
     expect(result.code).toBe(0)
     expect(JSON.parse(result.stdout)).toMatchObject({
-      chart: { kind: "grouped-bar", x: { values: ["2026-08-31"] }, series: [{ values: [1] }, { values: [0] }] },
+      item: { kind: "grouped-bar", x: { values: ["2026-08-31"] }, series: [{ values: [1] }, { values: [0] }] },
     })
     expect(connect).toHaveBeenCalledTimes(1)
   })
@@ -169,8 +173,9 @@ describe("stats charts", () => {
     const result = await call(["--output", path, "--json"])
     expect(result.code).toBe(0)
     const body = JSON.parse(result.stdout)
-    expect(body).toMatchObject({ chartFile: { path, format: "png", width: 800, height: 400 } })
-    expect(body.chart).toEqual(JSON.parse((await call(["--json"])).stdout).chart)
+    const { file, ...chart } = body.item
+    expect(file).toEqual({ path, format: "png", width: 800, height: 400 })
+    expect(chart).toEqual(JSON.parse((await call(["--json"])).stdout).item)
     const bytes = readFileSync(path)
     expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
     if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600)
@@ -189,7 +194,7 @@ describe("stats charts", () => {
     expect((await call([], true)).stdout).toContain("Messages per day")
     const quiet = await call(["--quiet", "--output", join(root, "quiet.svg")])
     expect(quiet.code).toBe(0)
-    expect(JSON.parse(quiet.stdout)).toHaveProperty("chartFile")
+    expect(JSON.parse(quiet.stdout).item).toHaveProperty("file")
     expect(quiet.stderr).toBe("")
   })
 

@@ -1,13 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { OfficialChatStats, OfficialPerson, OfficialValue } from "../../domain/models.js"
+import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { capability } from "./port.js"
+import { officialAnswer } from "./stats-answers.js"
 
 const TOP = 5
 
 export const officialStatsCommand = (messenger: Messenger): Command =>
-  new Command("official")
+  annotate(new Command("official"), { output: { entity: "official_stats" } })
     .description(
       `what ${messenger.name ?? messenger.app.command} itself computed for a group or channel you administer: ` +
         "totals against the previous period, top people and every graph as JSON series; the messenger picks the period",
@@ -22,8 +25,7 @@ export const officialStatsCommand = (messenger: Messenger): Command =>
       )
       const failed = Object.entries(stats.graphs).filter(([, graph]) => "error" in graph)
       if (failed.length > 0) context.renderer.note(`graphs not given: ${failed.map(([key]) => key).join(", ")}`)
-      if (context.format === "pretty") context.streams.data(pretty(stats))
-      else context.renderer.result(stats)
+      renderAnswer(this, context, officialAnswer(stats, messenger.provider), () => `${pretty(stats)}\n`)
     })
 
 const value = (name: string, { current, previous }: OfficialValue) => `${name} ${current} (before ${previous})`

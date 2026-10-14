@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { itemEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
+import { ENTITIES } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { seedSearchRecipes } from "../../testing/search-recipes.js"
 import { run } from "../program.js"
@@ -85,7 +88,7 @@ describe("searches", () => {
       ids(json(await call("search", "messages", "--saved", "invoices", "alpha", "--limit", "5", "--json"))),
     ).toEqual(["101", "106"])
     const stats = json(await call("stats", "messages", "show", "--saved", "invoices", "--by", "sender", "--json"))
-    expect(stats.total).toBe(4)
+    expect(v.parse(itemEnvelopeSchema(ENTITIES.message_counts), stats).item.total).toBe(4)
 
     const history = json(await call("searches", "history", "--json"))
     const runs = history.items.map(

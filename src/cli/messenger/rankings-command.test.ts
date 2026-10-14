@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
+import { ENTITIES } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -93,13 +96,15 @@ describe("ranking command views", () => {
       "--json",
     ])
     expect(messages.code, messages.stderr).toBe(0)
-    expect(JSON.parse(messages.stdout)).toMatchObject({
+    const ranked = v.parse(itemEnvelopeSchema(ENTITIES.ranking), JSON.parse(messages.stdout))
+    expect(ranked.item).toMatchObject({
       total: 3,
-      items: [
+      rows: [
         { id: "3", value: 3 },
         { id: "2", value: 2 },
       ],
     })
+    expect(ranked.next?.map(({ step }) => step)).toEqual(["stats.evidence"])
     const authors = await call([
       "stats",
       "contacts",
@@ -118,28 +123,28 @@ describe("ranking command views", () => {
       "--json",
     ])
     expect(authors.code, authors.stderr).toBe(0)
-    expect(JSON.parse(authors.stdout).items[0]).toMatchObject({ id: "11", value: 100 })
+    expect(JSON.parse(authors.stdout).item.rows[0]).toMatchObject({ id: "11", value: 100 })
     const lines = await call(["stats", "contacts", "top", "--measure", "words", "--jsonl"])
     expect(lines.code, lines.stderr).toBe(0)
     expect(
       lines.stdout
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line)),
-    ).toHaveLength(2)
+        .map((line) => JSON.parse(line).rows),
+    ).toEqual([expect.any(Array)])
     expect(connect).not.toHaveBeenCalled()
   })
   it("follows exact evidence selections and cursor continuation", async () => {
     const { call } = await setup()
     const top = await call(["stats", "contacts", "top", "--json"])
-    const row = JSON.parse(top.stdout).items[0]
+    const row = JSON.parse(top.stdout).item.rows[0]
     const args = [
       "stats",
       "contacts",
       "evidence",
       row.id,
       "--selection",
-      JSON.stringify(row.drilldown.selection),
+      JSON.stringify(row.selection),
       "--component",
       "messages",
       "--limit",
@@ -148,15 +153,16 @@ describe("ranking command views", () => {
     ]
     const first = await call(args)
     expect(first.code, first.stderr).toBe(0)
-    const next = JSON.parse(first.stdout).nextCursor
-    const second = await call([...args, "--cursor", next])
+    const page = v.parse(listEnvelopeSchema(ENTITIES.evidence), JSON.parse(first.stdout))
+    expect(page.next?.[0]).toMatchObject({ step: "page.next", args: { person: "11", component: "messages" } })
+    const second = await call([...args, "--cursor", page.page.cursor as string])
     expect(second.code, second.stderr).toBe(0)
-    expect(JSON.parse(second.stdout).hasMore).toBe(false)
+    expect(JSON.parse(second.stdout).page.has_more).toBe(false)
   })
   it("saves and replays a pinned ranking with its weights and explicit overrides", async () => {
     const { call } = await setup()
     const top = await call(["stats", "contacts", "top", "--weights", '{"messages":1}', "--json"])
-    const selection = JSON.parse(top.stdout).items[0].drilldown.selection
+    const selection = JSON.parse(top.stdout).item.rows[0].selection
     const saved = await call([
       "searches",
       "create",
@@ -177,8 +183,8 @@ describe("ranking command views", () => {
       "--json",
     ])
     expect(replay.code, replay.stderr).toBe(0)
-    expect(JSON.parse(replay.stdout).ranking.weights).toEqual({ words: 1 })
-    expect(JSON.parse(replay.stdout).items[0].id).toBe("11")
+    expect(JSON.parse(replay.stdout).item.weights).toEqual({ words: 1 })
+    expect(JSON.parse(replay.stdout).item.rows[0].id).toBe("11")
   })
   it("honors source-resource denials and validates incompatible choices", async () => {
     const { call, connect } = await setup({ messages: "deny", stats: "allow" })

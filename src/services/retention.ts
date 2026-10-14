@@ -108,6 +108,7 @@ export const retentionService = (deps: ServiceDeps) => ({
     )
     return {
       ...found,
+      account,
       items: found.evidence,
       total: found.evidenceTotal,
       included: found.evidence.length,

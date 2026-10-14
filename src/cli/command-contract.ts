@@ -30,141 +30,15 @@ const pagedResult = (item: JsonSchema): JsonSchema => ({
   },
 })
 
-const rankingItem: JsonSchema = {
-  type: "object",
-  additionalProperties: true,
-  properties: {
-    rank: { type: "integer", minimum: 1 },
-    id: identity,
-    value: { type: "number", minimum: 0 },
-    account: {
-      type: "object",
-      properties: { provider: identity, account: identity },
-      required: ["provider", "account"],
-    },
-    components: { type: "object", additionalProperties: { type: ["number", "null"] } },
-    quality: objectResult,
-    drilldown: objectResult,
-    ranking: { type: ["object", "null"] },
-  },
-  required: ["rank", "id", "value", "account", "components", "quality", "drilldown"],
-}
-const rankingEvidenceItem: JsonSchema = {
-  type: "object",
-  additionalProperties: true,
-  properties: { message: messageResult, related: messageResult, contribution: { type: ["number", "null"] } },
-  required: ["message", "contribution"],
-}
-
 export const resultSchemaFor = (
   path: readonly string[],
   format: "json" | "jsonl" = "json",
 ): { schema: JsonSchema; coverage: string } => {
-  const words = path.join(" ")
-  if (path[0] === "stats" && ["messages", "contacts"].includes(path[1] ?? "") && path[2] === "top") {
-    if (format === "jsonl") return { schema: rankingItem, coverage: "declared-domain-fields" }
-    return {
-      schema: {
-        ...pagedResult(rankingItem),
-        required: [
-          "items",
-          "page",
-          "limit",
-          "hasMore",
-          "total",
-          "population",
-          "eligible",
-          "ranking",
-          "coverage",
-          "completeness",
-        ],
-        properties: {
-          ...(pagedResult(rankingItem).properties as Record<string, unknown>),
-          total: { type: "integer", minimum: 0 },
-          population: { type: "integer", minimum: 0 },
-          eligible: { type: "integer", minimum: 0 },
-          ranking: objectResult,
-          coverage: objectResult,
-          completeness: { type: "array", items: objectResult },
-        },
-      },
-      coverage: "declared-domain-fields",
-    }
-  }
-  if (path[0] === "stats" && ["messages", "contacts"].includes(path[1] ?? "") && path[2] === "evidence") {
-    if (format === "jsonl") return { schema: rankingEvidenceItem, coverage: "declared-domain-fields" }
-    return {
-      schema: {
-        type: "object",
-        additionalProperties: true,
-        properties: {
-          items: { type: "array", items: rankingEvidenceItem },
-          total: { type: "integer", minimum: 0 },
-          included: { type: "integer", minimum: 0 },
-          hasMore: { type: "boolean" },
-          nextCursor: { type: ["string", "null"] },
-          fingerprint: { type: "string" },
-          component: { type: "string" },
-        },
-        required: ["items", "total", "included", "hasMore", "nextCursor", "fingerprint", "component"],
-      },
-      coverage: "declared-domain-fields",
-    }
-  }
-
   if (format === "jsonl") {
-    if (words === "stats charts" || words === "stats chats official")
-      return { schema: { not: {} }, coverage: "unsupported-format" }
     if (path[0] === "messages" && ["list", "search", "between"].includes(path[1] ?? ""))
       return { schema: messageResult, coverage: "declared-domain-fields" }
-    if (words === "stats messages show")
-      return {
-        schema: {
-          type: "object",
-          additionalProperties: true,
-          properties: {
-            key: { type: "string" },
-            name: { type: ["string", "null"] },
-            count: { type: "integer", minimum: 0 },
-          },
-        },
-        coverage: "declared-domain-fields",
-      }
     if (path.at(-1) === "list") return { schema: objectResult, coverage: "open-collection-item" }
   }
-  if (words === "stats messages show")
-    return {
-      coverage: "declared",
-      schema: {
-        ...pagedResult({
-          type: "object",
-          additionalProperties: true,
-          properties: {
-            key: { type: "string" },
-            name: { type: ["string", "null"] },
-            count: { type: "integer", minimum: 0 },
-          },
-        }),
-        properties: {
-          ...(pagedResult(objectResult).properties as Record<string, unknown>),
-          by: { enum: ["chat", "sender", "day", "hour"] },
-          total: { type: "integer", minimum: 0 },
-          items: {
-            type: "array",
-            items: {
-              type: "object",
-              additionalProperties: true,
-              properties: {
-                key: { type: "string" },
-                name: { type: ["string", "null"] },
-                count: { type: "integer", minimum: 0 },
-              },
-            },
-          },
-        },
-        required: ["items", "by", "total", "hasMore"],
-      },
-    }
   if (path[0] === "messages" && ["list", "search", "between"].includes(path[1] ?? ""))
     return { schema: pagedResult(messageResult), coverage: "declared-domain-fields" }
   if (path[0] === "messages" && path[1] === "show") return { schema: messageResult, coverage: "declared-domain-fields" }

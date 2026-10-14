@@ -1,9 +1,12 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { AdminReport } from "../../domain/admin-statistics.js"
 import type { AdminQuery } from "../../services/admin-statistics.js"
 import { environmentOf } from "../context.js"
+import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { adminAnswer } from "./stats-answers.js"
 
 const collect = (value: string, previous: string[] = []) => [...previous, value]
 export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport): Command => {
@@ -13,7 +16,9 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
     newcomers: "known-join members and their help within a join window",
     discussion: "viewed posts with little recorded discussion",
   }
-  const command = new Command(report).description(descriptions[report])
+  const command = annotate(new Command(report), { output: { entity: "admin_report" } }).description(
+    descriptions[report],
+  )
   if (report === "newcomers")
     command
       .argument("<chat>", messenger.chatArgument)
@@ -58,11 +63,7 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
         signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,
       }),
     )
-    if (context.format === "jsonl")
-      context.renderer.stream(
-        found.items.map((item) => ({ ...item, report: found.report, cutoff: found.cutoff, quality: found.quality })),
-      )
-    else context.renderer.result(found)
+    renderAnswer(this, context, adminAnswer(found))
   })
   return command
 }

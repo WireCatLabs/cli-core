@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
+import { ENTITIES } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { commandsCommand } from "../commands-command.js"
 import { run } from "../program.js"
@@ -102,9 +105,9 @@ describe("observation CLI", () => {
     const { call, connect } = await setup()
     const shown = await call("stats", "messages", "counters", "show", "--chat", "7", "--counters", "views", "--json")
     expect(shown.code, shown.stderr).toBe(0)
-    const found = JSON.parse(shown.stdout)
-    expect(found.items[0]).toMatchObject({
-      locator: "msg:chat/500/7/1",
+    const found = v.parse(itemEnvelopeSchema(ENTITIES.counters), JSON.parse(shown.stdout)).item
+    expect(found.rows[0]).toMatchObject({
+      ref: "msg:chat/500/7/1",
       counters: [{ value: 10, freshness: "unknown" }],
     })
     const preview = await call(
@@ -118,8 +121,8 @@ describe("observation CLI", () => {
       "--json",
     )
     expect(preview.code, preview.stderr).toBe(0)
-    expect(JSON.parse(preview.stdout)).toMatchObject({
-      dryRun: true,
+    expect(v.parse(itemEnvelopeSchema(ENTITIES.counter_refresh), JSON.parse(preview.stdout)).item).toMatchObject({
+      dry_run: true,
       targets: ["msg:chat/500/7/1"],
       supported: ["views"],
       unsupported: ["reactions", "comments"],
@@ -130,11 +133,17 @@ describe("observation CLI", () => {
     const { call, connect } = await setup()
     const report = await call("stats", "chats", "retention", "7", "--timezone", "UTC", "--json")
     expect(report.code, report.stderr).toBe(0)
-    const found = JSON.parse(report.stdout),
-      item = found.items[0]
+    const found = v.parse(itemEnvelopeSchema(ENTITIES.retention), JSON.parse(report.stdout)),
+      item = found.item.rows[0] as (typeof found.item.rows)[number]
     expect(item).toMatchObject({
       stays: 1,
       checkpoints: [{ present: 1, observable: 1 }, { unknown: 1 }, { pending: 1 }],
+    })
+    expect(found.next?.[0]).toEqual({
+      step: "stats.evidence",
+      command: "stats messages evidence",
+      args: { message: item.cohort, selection: JSON.stringify(item.selection), component: "report" },
+      why: expect.any(String),
     })
     const evidence = await call(
       "stats",
@@ -142,22 +151,23 @@ describe("observation CLI", () => {
       "evidence",
       item.cohort,
       "--selection",
-      JSON.stringify(item.drilldown.arguments.selection),
+      JSON.stringify(item.selection),
       "--component",
       "report",
       "--json",
     )
     expect(evidence.code, evidence.stderr).toBe(0)
-    expect(JSON.parse(evidence.stdout)).toMatchObject({
-      items: [{ person: "2", activity: { state: "observed-message", archiveCovered: false } }],
-      included: 1,
+    const stays = v.parse(listEnvelopeSchema(ENTITIES.evidence), JSON.parse(evidence.stdout))
+    expect(stays).toMatchObject({
+      items: [{ person_ref: "contact:chat/2", activity: { state: "observed-message", archive_covered: false } }],
+      page: { has_more: false },
     })
     expect(connect).not.toHaveBeenCalled()
   })
   it("rechecks retention read permissions when a cohort selection is replayed through message evidence", async () => {
     const allowed = await setup()
     const result = await allowed.call("stats", "chats", "retention", "7", "--json")
-    const row = JSON.parse(result.stdout).items[0]
+    const row = JSON.parse(result.stdout).item.rows[0]
     const denied = await setup({ "stats.chats.retention": "deny" })
     const replay = await denied.call(
       "stats",
@@ -165,7 +175,7 @@ describe("observation CLI", () => {
       "evidence",
       row.cohort,
       "--selection",
-      JSON.stringify(row.drilldown.arguments.selection),
+      JSON.stringify(row.selection),
       "--component",
       "report",
       "--json",
@@ -179,7 +189,7 @@ describe("observation CLI", () => {
     const { call, connect } = await setup()
     const shown = await call("stats", "messages", "counters", "show", "--chat", "7", "--jsonl")
     expect(shown.code, shown.stderr).toBe(0)
-    expect(JSON.parse(shown.stdout)).toMatchObject({ messageId: "1" })
+    expect(JSON.parse(shown.stdout)).toMatchObject({ rows: [{ ref: "msg:chat/500/7/1" }] })
     const refused = await call("stats", "messages", "counters", "refresh", "--json")
     expect(refused.code).not.toBe(0)
     expect(refused.stderr).toContain("explicit")

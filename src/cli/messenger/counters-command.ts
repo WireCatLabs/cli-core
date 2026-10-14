@@ -2,8 +2,10 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { CounterQuery } from "../../services/counters.js"
 import { environmentOf } from "../context.js"
+import { type Body, renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
+import { countersAnswer, refreshAnswer } from "./stats-answers.js"
 
 export const countersCommand = (messenger: Messenger) => {
   const parent = new Command("counters").description("per-counter observations and bounded remote refresh")
@@ -26,7 +28,12 @@ export const countersCommand = (messenger: Messenger) => {
       .option("--counters <names>", "distinct views,reactions,comments fields; all three by default")
       .option("--limit <n>", "messages, 1–100; 20 by default", positiveCount("--limit"))
     if (operation === "show") command.option("--max-age <duration>", "maximum fresh observation age; 24h by default")
-    if (operation === "refresh") annotate(command, { mutates: true, local: true })
+    annotate(
+      command,
+      operation === "refresh"
+        ? { mutates: true, local: true, output: { entity: "counter_refresh" } }
+        : { output: { entity: "counters" } },
+    )
     if (operation === "refresh")
       command
         .option("--max-messages <n>", "maximum messages to refresh, 1–100", positiveCount("--max-messages"))
@@ -43,9 +50,12 @@ export const countersCommand = (messenger: Messenger) => {
         ...(words.length ? { text: words.join(" ") } : {}),
         signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,
       }
-      const found = await context.withServices(async (services) => await services.counters[operation](query))
-      if (context.format === "jsonl" && "items" in found) context.renderer.stream(found.items)
-      else context.renderer.result(found)
+      const body = await context.withServices<Body>(async (services) =>
+        operation === "show"
+          ? countersAnswer(await services.counters.show(query))
+          : refreshAnswer(await services.counters.refresh(query)),
+      )
+      renderAnswer(this, context, body)
     })
     parent.addCommand(command)
   }

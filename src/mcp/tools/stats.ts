@@ -4,7 +4,9 @@ import { chatChart } from "../../charts/chat.js"
 import { CHART_KINDS, CHART_SIZE } from "../../charts/model.js"
 import { chartPng } from "../../charts/png.js"
 import { chartRenderer } from "../../charts/render.js"
+import { sealed } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { chartAnswer } from "../../cli/messenger/stats-answers.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import { type AnyTool, chatOf, Picture, READ, tool } from "../tool.js"
@@ -13,7 +15,7 @@ export const statsTools = (messenger: Messenger): Record<string, AnyTool> => ({
   stats_charts: tool({
     title: "A chart from a chat's statistics",
     description:
-      "A neutral chart description as JSON, or a dark PNG image with that JSON when format is png: " +
+      "A neutral chart description as JSON, or a dark PNG image beside that JSON when format is png: " +
       "messages or active authors per day or week, from the local store. " +
       "Missing dates are gaps, and partial marks lower bounds. Membership needs online events and is unavailable here. " +
       "No image file is written and no messenger connection is opened.",
@@ -26,6 +28,7 @@ export const statsTools = (messenger: Messenger): Record<string, AnyTool> => ({
       format: v.optional(v.pipe(v.picklist(["json", "png"]), v.description("JSON by default; png adds image content"))),
     }),
     annotations: { ...READ, openWorldHint: false },
+    output: { entity: "chart", list: false },
     stored: async (store, account, args, defaults) => {
       const timezone = timezoneOf(args.timezone)
       const by = args.by ?? "day"
@@ -35,12 +38,9 @@ export const statsTools = (messenger: Messenger): Record<string, AnyTool> => ({
         ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
       })
       const chart = chatChart(stats, { kind: args.chart_kind ?? "messages", by, timezone })
-      if (args.format !== "png") return { chart }
+      if (args.format !== "png") return chartAnswer(chart)
       const image = await chartPng(await (await chartRenderer()).render(chart, CHART_SIZE))
-      return new Picture(image.bytes, image.mimeType, {
-        chart,
-        image: { format: image.format, width: image.width, height: image.height },
-      })
+      return new Picture(image.bytes, image.mimeType, sealed(chartAnswer(chart)))
     },
   }),
 })
