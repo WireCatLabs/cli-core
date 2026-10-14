@@ -316,7 +316,7 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
           ],
         })
         const columns: ColumnMap = {
-          name: { type: "kw", sql: "json_extract(d.metadata, '$.catalog.folded.name')" },
+          name: { type: "kw", sql: "json_extract(d.metadata, '$.catalog.folded.name')", folded: true },
           mime: { type: "kw", sql: "json_extract(d.metadata, '$.catalog.mime')" },
           kind: { type: "enum", sql: "json_extract(d.metadata, '$.catalog.kind')" },
           text: {

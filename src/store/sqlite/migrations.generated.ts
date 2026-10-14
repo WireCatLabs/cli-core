@@ -375,5 +375,18 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER mention_pending_message_au AFTER UPDATE OF text ON messages WHEN old.text IS NOT new.text BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('message', new.id);\nEND;",
       "CREATE TRIGGER mentions_message_ad AFTER DELETE ON messages BEGIN\n  DELETE FROM mentions WHERE source_type = 'message' AND source_id = old.id;\n  DELETE FROM mention_pending WHERE source_type = 'message' AND source_id = old.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261014100438_version-8-folded-names",
+    "statements": [
+      "ALTER TABLE `attachments` ADD `name_folded` text;",
+      "ALTER TABLE `attachments` ADD `local_path_folded` text;",
+      "ALTER TABLE `meetings` ADD `title_folded` text;",
+      "ALTER TABLE `tasks` ADD `title_folded` text;",
+      "ALTER TABLE `tasks` ADD `close_reason_folded` text;",
+      "CREATE INDEX `attachments_by_name_folded` ON `attachments` (`name_folded`);",
+      "CREATE INDEX `meetings_by_title_folded` ON `meetings` (`account_id`,`title_folded`);",
+      "CREATE INDEX `tasks_by_title_folded` ON `tasks` (`title_folded`);"
+    ]
   }
 ]

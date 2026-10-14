@@ -10,7 +10,7 @@ import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/p
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
 import { readSecret } from "../../terminal/prompt.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { listQuery, nativeTerms, searchText, typedQuery, withQuery } from "../list-query.js"
+import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, window, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
 import { nextStep } from "../steps.js"
@@ -44,14 +44,14 @@ export const contactsCommand = (messenger: Messenger): Command => {
         throw new CliError("validation_error", `--order is recent or name, not "${order}"`)
       }
       const terms = nativeTerms(listQuery(typedQuery(words), CONTACTS_QUERY, "contacts list"), "contacts list")
-      const search = searchText(terms.get("name"))
+      const name = terms.get("name")
       const notes = terms.get("notes")
       const context = messengerContext(this, messenger)
       notesAllowed(context.settings.permissions, notes)
       const { found, account } = await context.withServices(async (services) => ({
         found: await services.people.list({
           order,
-          ...(search ? { search } : {}),
+          ...(name ? { name } : {}),
           ...(notes ? { notes } : {}),
           ...window(context.settings),
         }),

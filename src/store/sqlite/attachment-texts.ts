@@ -206,10 +206,10 @@ const NEEDS_TEXT =
 export const attachmentColumns = (chats: ReadonlyMap<string, string>): ColumnMap => ({
   position: { type: "num", sql: "(att.position + 1)" },
   kind: { type: "kw", sql: "att.kind" },
-  name: { type: "kw", sql: "att.name" },
+  name: { type: "kw", sql: "att.name_folded", folded: true },
   mime: { type: "kw", sql: "att.mime" },
   size: { type: "num", sql: "att.size" },
-  local_path: { type: "kw", sql: "att.local_path" },
+  local_path: { type: "kw", sql: "att.local_path_folded", folded: true },
   chat: {
     where: (node) =>
       node.operator === "wildcard"

@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { evaluate, type FieldSpec, type Predicate, parseLucene, validateQuery } from "@wirecat/cli-base/query"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import type { CacheDatabase } from "../driver.js"
+import { fold } from "../normalize.js"
 import { openCache } from "../open.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 
@@ -197,5 +198,59 @@ describe("a list query as SQL", () => {
   it("refuses a regular expression on a plain column", () => {
     const ast = parseLucene("kind:/gr.*/", { defaultField: "none" })
     expect(() => queryFilter(ast, COLUMNS, { command: "items list" })).toThrow(CliError)
+  })
+})
+
+describe("a folded name", () => {
+  const names = ["Книжный клуб", "Café Ölçü", "ΣΟΦΙΑ notes", "plain [draft].txt", "Ёлка"]
+  const fields: FieldSpec[] = [
+    { name: "name", type: "kw", operators: ["term", "phrase", "wildcard"], example: "name:club" },
+  ]
+  const columns: ColumnMap = { name: { type: "kw", sql: "name_folded", folded: true } }
+  let folded: CacheDatabase
+  beforeAll(async () => {
+    folded = await openCache(":memory:")
+    folded.exec(
+      "CREATE TABLE names (id INTEGER PRIMARY KEY, name_folded TEXT); CREATE INDEX by_name ON names (name_folded)",
+    )
+    for (const [at, name] of names.entries()) folded.prepare("INSERT INTO names VALUES (?, ?)").run(at + 1, fold(name))
+  })
+  afterAll(() => folded.close())
+  const found = (query: string) => {
+    const ast = validateQuery(parseLucene(query, { defaultField: "none" }), { entity: "n", backend: "sql", fields })
+    const where = queryFilter(ast, columns)
+    return folded
+      .prepare(`SELECT id FROM names WHERE ${where.sql} ORDER BY id`)
+      .all(...where.params)
+      .map((row) => names[Number(row.id) - 1])
+  }
+
+  it.each([
+    ['name:"книжный клуб"', ["Книжный клуб"]],
+    ['name:"КНИЖНЫЙ КЛУБ"', ["Книжный клуб"]],
+    ["name:КНИЖ*", ["Книжный клуб"]],
+    ['name:"cafe olcu"', ["Café Ölçü"]],
+    ['name:"CAFÉ ÖLÇÜ"', ["Café Ölçü"]],
+    ["name:σοφια*", ["ΣΟΦΙΑ notes"]],
+    ["name:елка", ["Ёлка"]],
+    ["name:*\\[draft\\]*", ["plain [draft].txt"]],
+    ["name:plain?\\[draft\\]*", ["plain [draft].txt"]],
+  ])("%s finds %j in any case and script", (query, expected) => {
+    expect(found(query)).toEqual(expected)
+  })
+
+  it("compares a prefix through the column's index", () => {
+    const ast = validateQuery(parseLucene("name:книж*", { defaultField: "none" }), {
+      entity: "n",
+      backend: "sql",
+      fields,
+    })
+    const where = queryFilter(ast, columns)
+    const literal = where.sql.replace("?", `'${String(where.params[0])}'`)
+    const plan = folded
+      .prepare(`EXPLAIN QUERY PLAN SELECT id FROM names WHERE ${literal}`)
+      .all()
+      .map((row) => String(row.detail))
+    expect(plan.join(" ")).toContain("by_name")
   })
 })

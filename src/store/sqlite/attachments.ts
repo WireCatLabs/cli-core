@@ -1,6 +1,7 @@
 import { type DownloadedFile, matchDownloads } from "../../domain/attachments.js"
 import type { Id } from "../../domain/models.js"
 import { and, eq } from "./drizzle/core.js"
+import { folded } from "./folded.js"
 import type { StoreContext } from "./open.js"
 import { attachments, messages } from "./schema.js"
 
@@ -29,7 +30,7 @@ export const keepDownloads = (
     if (position === undefined || !file) return
     orm
       .update(attachments)
-      .set({ localPath: file.path })
+      .set({ localPath: file.path, localPathFolded: folded(file.path) })
       .where(
         and(
           and(eq(attachments.attachableType, "message"), eq(attachments.attachableId, message.pk)),

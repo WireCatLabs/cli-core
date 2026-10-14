@@ -25,6 +25,7 @@ import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import * as eventQueries from "./events.js"
 import { fromJson, int, page, str, toJson } from "./events.js"
+import { folded } from "./folded.js"
 import { meetingIdentityPk } from "./identities.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
@@ -233,6 +234,7 @@ export const saveAttachment = (
       kind: a.kind,
       mime: a.mime,
       name: a.name,
+      name_folded: folded(a.name),
       title: a.title,
       url: a.url,
       size: a.size,
@@ -241,6 +243,7 @@ export const saveAttachment = (
       duration: a.duration,
       provider_ref: toJson(a.providerRef),
       local_path: a.localPath,
+      local_path_folded: folded(a.localPath),
       text: a.text,
       normalized_text: a.normalizedText,
       extraction: a.extraction,
@@ -290,6 +293,7 @@ const save = (context: StoreContext, input: MeetingSave): number => {
     {
       meeting_series_id: seriesId,
       title: meeting.title,
+      title_folded: folded(meeting.title),
       description: meeting.description,
       location: meeting.location,
       join_url: meeting.joinUrl,
@@ -517,7 +521,7 @@ const append = (context: StoreContext, input: TranscriptAppend): TranscriptAppen
 
 const MEETING_COLUMNS = {
   id: { type: "kw", sql: "CAST(id AS TEXT)" },
-  title: { type: "kw", sql: "title" },
+  title: { type: "kw", sql: "title_folded", folded: true },
   started_at: { type: "time", sql: "started_at" },
   ended_at: { type: "time", sql: "ended_at" },
   duration_ms: { type: "num", sql: "duration_ms" },

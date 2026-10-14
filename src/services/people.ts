@@ -37,10 +37,10 @@ export interface ContactSync {
  */
 export interface PeopleService {
   /**
-   * `search` matches the name, the local alias or the @username, as the store searches them. `notes` is a
-   * `notes:` term, answered only from the contacts the store keeps.
+   * `name` matches the name, the local alias or the @username, as the store searches them; `notes` the owner's
+   * private notes. Both are answered only from the contacts the store keeps: never filtered in memory.
    */
-  list(options: { order: "recent" | "name"; search?: string; notes?: Predicate } & PageWindow): Promise<Page<Contact>>
+  list(options: { order: "recent" | "name"; name?: Predicate; notes?: Predicate } & PageWindow): Promise<Page<Contact>>
   show(person: string, options?: { notes?: boolean }): Promise<PersonCard>
   /** What the messenger says about them, and their stored activity in each shared chat. */
   profile(person: string): Promise<PersonProfile>
@@ -127,14 +127,15 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       const held = stored ? { store: await deps.store(), account: await deps.account() } : await storeIfOpen(deps)
       if (held && (await held.store.countContacts(held.account)) > 0)
         return storedContacts(held.store, held.account, options)
-      if (options.notes)
-        queryError(
-          "query.unsupported-field",
-          options.notes.span,
-          "notes: reads the contacts kept in the local store, and it keeps none yet; `contacts sync` fills it",
-          { command: "contacts list" },
-          { supported: ["name"] },
-        )
+      for (const term of [options.name, options.notes])
+        if (term)
+          queryError(
+            "query.unsupported-field",
+            term.span,
+            `${term.field}: reads the contacts kept in the local store, and it keeps none yet; \`contacts sync\` fills it`,
+            { command: "contacts list" },
+            { supported: [] },
+          )
       return contactsIn(
         chats ?? (await (await deps.store()).chats(await deps.account(), {})).items,
         options,
@@ -315,17 +316,11 @@ export const phoneOf = (typed: string): string => {
 const storedContacts = async (
   store: MessageStore,
   account: AccountKey,
-  {
-    order,
-    search,
-    notes,
-    limit,
-    offset,
-  }: { order: "recent" | "name"; search?: string; notes?: Predicate } & PageWindow,
+  { order, name, notes, limit, offset }: { order: "recent" | "name"; name?: Predicate; notes?: Predicate } & PageWindow,
 ): Promise<Page<Contact>> => {
   // Chats saved since the last refresh may have moved someone up; the order is worked out again here.
   if (order === "recent") await store.refreshRecency(account)
-  const query = search?.trim() || undefined
+  const query = name?.value.replace(/^\*+|\*+$/g, "").trim() || undefined
   const filter = {
     ...(query === undefined ? {} : { query }),
     ...(notes ? { notes: notes.value.replace(/^\*+|\*+$/g, "") } : {}),
@@ -353,19 +348,15 @@ const sharedChats = async (store: MessageStore, account: AccountKey, personId: s
  */
 const contactsIn = (
   chats: readonly Chat[],
-  { order, search, limit, offset }: { order: "recent" | "name"; search?: string } & PageWindow,
+  { order, limit, offset }: { order: "recent" | "name" } & PageWindow,
   partnerOf?: (chat: Chat) => Id | undefined,
 ): Page<Contact> => {
-  const wanted = search?.trim().toLowerCase()
   const people = chats
     .filter((chat) => chat.kind === "dialog")
     .flatMap((chat) => {
       const id = partnerOf ? partnerOf(chat) : chat.id
       return id === undefined ? [] : [{ ...toContact(chat), id }]
     })
-    .filter(
-      (person) => !wanted || [person.name, person.username].some((field) => field?.toLowerCase().includes(wanted)),
-    )
     .sort(order === "name" ? byName : byRecency)
   const end = limit === undefined ? people.length : offset + limit
   return { items: people.slice(offset, end), hasMore: people.length > end }

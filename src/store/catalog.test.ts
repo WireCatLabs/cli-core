@@ -202,6 +202,8 @@ it("compiles shared metadata queries in SQL with boolean logic, literal values a
   expect(await get("budget AND person:Rin*")).toEqual(["a.md"])
   expect(await get('mime:"text/plain" AND NOT kind:folder')).toEqual(["a.md"])
   expect(await get("name:Resume*")).toEqual(["b.md"])
+  expect(await get("name:RÉSUMÉ*")).toEqual(["b.md"])
+  expect(await get('name:"résumé archive"')).toEqual(["b.md"])
   expect(await get("kind:folder OR person:editor-id")).toEqual(["a.md", "b.md"])
   expect(await get('person:"Rin Example"')).toEqual(["a.md"])
   expect(await get("parent:root.md AND text:archive")).toEqual(["b.md"])

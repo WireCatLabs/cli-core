@@ -47,7 +47,7 @@ const TIME = (sql: string) => ({ type: "time", sql }) as const
 /** `chat:` names the chat as the messenger does; `groups` holds each name already resolved to its stored id. */
 const taskColumns = (groups: ReadonlyMap<string, string>): ColumnMap => ({
   id: { type: "kw", sql: "t.package_id" },
-  title: { type: "kw", sql: "t.title" },
+  title: { type: "kw", sql: "t.title_folded", folded: true },
   kind: { type: "enum", sql: "t.type" },
   state: { type: "enum", sql: "t.status" },
   origin: { type: "enum", sql: "t.source" },
@@ -58,7 +58,7 @@ const taskColumns = (groups: ReadonlyMap<string, string>): ColumnMap => ({
         : { sql: "t.source_group = ?", params: [groups.get(node.value) ?? ""] },
   },
   source_message: { type: "ref", sql: "t.source_locator" },
-  reason: { type: "kw", sql: "t.close_reason" },
+  reason: { type: "kw", sql: "t.close_reason_folded", folded: true },
   due_at: TIME("t.due_at"),
   closed_at: TIME("t.closed_at"),
   created_at: TIME("t.created_at"),
