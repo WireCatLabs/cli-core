@@ -119,3 +119,89 @@ describe("mentions", () => {
     await reopened.close()
   })
 })
+
+describe("deciding a mention", () => {
+  const status = async (store: Awaited<ReturnType<typeof openStore>>, value: string) =>
+    (await store.mentions(OWNER, q(value), { offset: 0 })).items.map((one) => one.status)
+
+  it("gives a phone an identity owned by a person, everywhere it is written and in later messages", async () => {
+    const { store } = await fresh()
+    await store.savePeople(OWNER, [{ id: "7", name: "Ana" }])
+    const ana = await store.personOf({ provider: "max", id: "7" })
+    await store.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01"), message("2", "или 89000000001")], {
+      via: "history",
+    })
+    const [one] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+
+    const decided = await store.confirmMention(OWNER, one?.id ?? 0, ana?.uid, "owner")
+
+    expect(decided).toMatchObject({ kind: "phone", value: "+79000000001", status: "linked", mentions: 2 })
+    expect(await status(store, "89000000001")).toEqual(["linked", "linked"])
+    const owner = await store.personOf({ provider: "phone", id: "+79000000001" })
+    expect(owner?.uid).toBe(ana?.uid)
+
+    await store.saveMessages(OWNER, "-1", [message("3", "тот же 8 900 000-00-01", "2026-10-02T10:00:00.000Z")], {
+      via: "update",
+    })
+    expect(await status(store, "89000000001")).toEqual(["linked", "linked", "linked"])
+    await store.close()
+  })
+
+  it("links an address that already is someone's identity without asking", async () => {
+    const { path, store } = await fresh()
+    await store.savePeople(OWNER, [{ id: "8", name: "Bo" }])
+    await store.close()
+    const raw = new DatabaseSync(path)
+    const person = raw.prepare("SELECT person_id FROM identity_links").get()?.person_id
+    raw
+      .prepare("INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES ('email', ?, 1, 1)")
+      .run("bo@example.com")
+    raw
+      .prepare(
+        "INSERT INTO identity_links (identity_id, person_id, method, confidence, created_at, author, updated_at) " +
+          "SELECT id, ?, 'mail', 1, 1, 'owner', 1 FROM identities WHERE external_id = 'bo@example.com'",
+      )
+      .run(Number(person))
+    raw.close()
+
+    const reopened = await openStore({ path })
+    await reopened.saveMessages(OWNER, "-1", [message("1", "пиши Bo@Example.com")], { via: "history" })
+    expect(await status(reopened, "kind:email")).toEqual(["linked"])
+    await reopened.close()
+  })
+
+  it("dismisses a value everywhere and keeps it dismissed when it comes again", async () => {
+    const { store } = await fresh()
+    await store.saveMessages(
+      OWNER,
+      "-1",
+      [message("1", "https://example.com/a"), message("2", "https://example.com/a")],
+      {
+        via: "history",
+      },
+    )
+    const [one] = (await store.mentions(OWNER, q("kind:url"), { offset: 0 })).items
+
+    expect(await store.rejectMention(OWNER, one?.id ?? 0, "claude-code")).toMatchObject({
+      status: "dismissed",
+      mentions: 2,
+    })
+    await store.saveMessages(OWNER, "-1", [message("3", "снова https://example.com/a", "2026-10-02T10:00:00.000Z")], {
+      via: "update",
+    })
+    expect(await status(store, "kind:url")).toEqual(["dismissed", "dismissed", "dismissed"])
+    await store.close()
+  })
+
+  it("refuses a phone without a person, a link, and another account's mention", async () => {
+    const { store } = await fresh()
+    await store.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01 https://example.com")], { via: "history" })
+    const [phone, link] = (await store.mentions(OWNER, undefined, { offset: 0 })).items.sort((a, b) =>
+      a.kind.localeCompare(b.kind),
+    )
+    await expect(store.confirmMention(OWNER, phone?.id ?? 0, undefined, "owner")).rejects.toThrow(/person:<uid>/)
+    await expect(store.confirmMention(OWNER, link?.id ?? 0, undefined, "owner")).rejects.toThrow(/reject it/)
+    await expect(store.rejectMention(OTHER, phone?.id ?? 0, "owner")).rejects.toThrow(/no mention/)
+    await store.close()
+  })
+})

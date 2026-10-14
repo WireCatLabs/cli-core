@@ -80,12 +80,15 @@ import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vector
 import { meetingStoreOver } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
 import {
+  confirmMention,
   drainMentions,
   listMentions,
+  type MentionDecision,
   type MentionsRebuild,
   type MentionsState,
   mentionsState,
   rebuildMentions,
+  rejectMention,
   type StoredMention,
   showMention,
 } from "./sqlite/mentions.js"
@@ -460,6 +463,13 @@ export interface MessageStore {
     key: AccountKey,
     id: number,
   ): Promise<(StoredMention & { before: string; after: string; sameValue: number }) | undefined>
+  /**
+   * Says what a mention's value is, everywhere it is written: a phone or an address belongs to the person
+   * (`personUid`), a document id names the stored document.
+   */
+  confirmMention(key: AccountKey, id: number, personUid: string | undefined, by: string): Promise<MentionDecision>
+  /** Dismisses a mention's value everywhere it is written, and on later syncs. */
+  rejectMention(key: AccountKey, id: number, by: string): Promise<MentionDecision>
   /** Finds the mentions of every stored message again, every account's; decisions stay. */
   rebuildMentions(options?: {
     kinds?: readonly MentionKind[]
@@ -1532,6 +1542,32 @@ const storeOver = (context: StoreContext): MessageStore => {
       return accountKey === undefined ? undefined : showMention(database, accountKey, id)
     },
 
+    confirmMention: async (key, id, personUid, by) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) throw new CliError("not_found", `no mention ${id} in this account`)
+      let personPk: number | undefined
+      if (personUid !== undefined) {
+        const person = personLinks.personByUid(context, personUid)
+        if (!person) throw new CliError("not_found", `no person:${personUid} in the store`)
+        personPk = Number(person.uid)
+      }
+      let decision: MentionDecision | undefined
+      inTransaction(() => {
+        decision = confirmMention(context, accountKey, id, personPk, by)
+      })
+      return decision as MentionDecision
+    },
+
+    rejectMention: async (key, id, by) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) throw new CliError("not_found", `no mention ${id} in this account`)
+      let decision: MentionDecision | undefined
+      inTransaction(() => {
+        decision = rejectMention(context, accountKey, id, by)
+      })
+      return decision as MentionDecision
+    },
+
     rebuildMentions: async (options = {}) => rebuildMentions(database, { now: context.now(), ...options }),
 
     mentionsState: async () => mentionsState(database),
@@ -1957,6 +1993,7 @@ export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
 export {
   MENTION_QUERY,
   MENTION_STATUSES,
+  type MentionDecision,
   type MentionStatus,
   type MentionsRebuild,
   type MentionsState,

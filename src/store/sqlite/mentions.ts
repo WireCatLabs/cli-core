@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import { defineQuery, type QueryAst } from "@wirecat/cli-base/query"
 import {
   findMentions,
@@ -8,6 +9,8 @@ import {
   siteOf,
 } from "../../domain/mentions.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import type { StoreContext } from "./open.js"
+import { linkIdentityToPerson } from "./person-links.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 
 /** A stored mention of a message's text, with what `mentions list` and `show` need to point at it. */
@@ -18,6 +21,8 @@ export interface StoredMention {
   domain: string | null
   confidence: number
   status: MentionStatus
+  /** Who linked or dismissed it: `owner`, an agent by name, `rules` for a value that already had an owner. */
+  author: string | null
   /** The message it was found in: its chat's and its own id in the messenger. */
   chatId: string
   messageId: string
@@ -78,6 +83,35 @@ const REBUILD_BATCH = 1000
 const REBUILT_AT = "mentionsRebuiltAt"
 const METHOD = "rules"
 
+type Decision = { status: unknown; target_type: unknown; target_id: unknown; author: unknown }
+
+/**
+ * What a new mention starts as when nothing was decided where it was written: dismissed if its value was
+ * dismissed anywhere, linked when the value already has an original — an identity with an owner for a phone
+ * or an address, the stored document for a document id.
+ */
+const originalOf = (database: CacheDatabase) => {
+  const dismissed = database.prepare(
+    "SELECT status, NULL AS target_type, NULL AS target_id, author FROM mentions " +
+      "WHERE kind = ? AND value = ? AND status = 'dismissed' LIMIT 1",
+  )
+  const identity = database.prepare(
+    "SELECT 'linked' AS status, 'identity' AS target_type, i.id AS target_id, 'rules' AS author FROM identities i " +
+      "JOIN identity_links l ON l.identity_id = i.id WHERE i.provider = ? AND i.external_id = ?",
+  )
+  const document = database.prepare(
+    "SELECT 'linked' AS status, 'document' AS target_type, id AS target_id, 'rules' AS author FROM documents " +
+      "WHERE json_extract(front_matter, '$.fileId') = ? AND deleted_at IS NULL ORDER BY id LIMIT 1",
+  )
+  return (kind: MentionKind, value: string): Decision | undefined =>
+    (dismissed.get(kind, value) as Decision | undefined) ??
+    ((kind === "phone" || kind === "email"
+      ? identity.get(kind, value)
+      : kind === "document"
+        ? document.get(value)
+        : undefined) as Decision | undefined)
+}
+
 const writer = (database: CacheDatabase, now: number, kinds: readonly MentionKind[] | undefined) => {
   const only = kinds ? ` AND kind IN (${kinds.map(() => "?").join(", ")})` : ""
   const decided = database.prepare(
@@ -91,6 +125,7 @@ const writer = (database: CacheDatabase, now: number, kinds: readonly MentionKin
       "VALUES (?, 'message', ?, 'text', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
   const scope = kinds ?? []
+  const original = originalOf(database)
   return (messagePk: number, text: string | null): number => {
     const kept = new Map(decided.all(messagePk, ...scope).map((row) => [`${row.kind}\u0000${row.value}`, row] as const))
     remove.run(messagePk, ...scope)
@@ -98,7 +133,7 @@ const writer = (database: CacheDatabase, now: number, kinds: readonly MentionKin
     let written = 0
     for (const found of findMentions(text)) {
       if (kinds && !kinds.includes(found.kind)) continue
-      const decision = kept.get(`${found.kind}\u0000${found.value}`)
+      const decision = kept.get(`${found.kind}\u0000${found.value}`) ?? original(found.kind, found.value)
       written += Number(
         insert.run(
           found.kind,
@@ -205,7 +240,7 @@ export const mentionsState = (database: CacheDatabase): MentionsState => {
 }
 
 const SELECT =
-  "SELECT mn.id, mn.kind, mn.value, mn.domain, mn.confidence, mn.status, mn.start_offset, mn.end_offset, " +
+  "SELECT mn.id, mn.kind, mn.value, mn.domain, mn.confidence, mn.status, mn.author, mn.start_offset, mn.end_offset, " +
   "m.text, m.external_id AS message_id, m.sent_at, c.external_id AS chat_id " +
   "FROM mentions mn JOIN messages m ON mn.source_type = 'message' AND m.id = mn.source_id AND m.deleted_at IS NULL " +
   "JOIN chats c ON c.id = m.chat_id "
@@ -217,6 +252,7 @@ const stored = (row: Record<string, unknown>): StoredMention => ({
   domain: row.domain == null ? null : String(row.domain),
   confidence: Number(row.confidence),
   status: String(row.status) as MentionStatus,
+  author: row.author == null ? null : String(row.author),
   chatId: String(row.chat_id),
   messageId: String(row.message_id),
   sentAt: new Date(Number(row.sent_at)).toISOString(),
@@ -273,3 +309,91 @@ export const showMention = (
     sameValue,
   }
 }
+
+export interface MentionDecision {
+  kind: MentionKind
+  value: string
+  status: MentionStatus
+  /** What it now names, `identity:12` or `document:7`; `null` when dismissed. */
+  target: string | null
+  /** Every stored mention of this value that now carries the decision. */
+  mentions: number
+}
+
+const mentionOfAccount = (database: CacheDatabase, accountPk: number, id: number) => {
+  const row = database
+    .prepare(
+      "SELECT mn.kind, mn.value FROM mentions mn JOIN messages m ON mn.source_type = 'message' AND m.id = mn.source_id " +
+        "WHERE mn.id = ? AND m.account_id = ?",
+    )
+    .get(id, accountPk)
+  if (!row) throw new CliError("not_found", `no mention ${id} in this account`)
+  return { kind: String(row.kind) as MentionKind, value: String(row.value) }
+}
+
+const decide = (
+  database: CacheDatabase,
+  { kind, value }: { kind: MentionKind; value: string },
+  status: MentionStatus,
+  target: { type: string; id: number } | null,
+  by: string,
+  now: number,
+): MentionDecision => {
+  const changed = database
+    .prepare(
+      "UPDATE mentions SET status = ?, target_type = ?, target_id = ?, author = ?, updated_at = ? " +
+        "WHERE kind = ? AND value = ?",
+    )
+    .run(status, target?.type ?? null, target?.id ?? null, by, now, kind, value).changes
+  return { kind, value, status, target: target ? `${target.type}:${target.id}` : null, mentions: Number(changed) }
+}
+
+/**
+ * Says what a value is, for every place it is written. A phone or an address gets an identity of its own
+ * (`provider` = the kind, the value as its id) owned by `personPk`; moving it to another person later is
+ * that identity's link, not the mentions. A document id names the stored document.
+ */
+export const confirmMention = (
+  context: StoreContext,
+  accountPk: number,
+  id: number,
+  personPk: number | undefined,
+  by: string,
+): MentionDecision => {
+  const { database } = context
+  const mention = mentionOfAccount(database, accountPk, id)
+  const now = context.now()
+  if (mention.kind === "phone" || mention.kind === "email") {
+    if (personPk === undefined)
+      throw new CliError("validation_error", `a ${mention.kind} is confirmed to someone — name them as person:<uid>`)
+    database
+      .prepare(
+        "INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES (?, ?, ?, ?) " +
+          "ON CONFLICT (provider, external_id) DO NOTHING",
+      )
+      .run(mention.kind, mention.value, now, now)
+    const identity = Number(
+      database
+        .prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
+        .get(mention.kind, mention.value)?.id,
+    )
+    linkIdentityToPerson(context, identity, personPk, { method: "mention", by })
+    return decide(database, mention, "linked", { type: "identity", id: identity }, by, now)
+  }
+  if (mention.kind === "document") {
+    const document = database
+      .prepare(
+        "SELECT id FROM documents WHERE json_extract(front_matter, '$.fileId') = ? AND deleted_at IS NULL " +
+          "ORDER BY id LIMIT 1",
+      )
+      .get(mention.value)
+    if (!document)
+      throw new CliError("not_found", "that document is not in the store yet — sync it from Drive, then confirm")
+    return decide(database, mention, "linked", { type: "document", id: Number(document.id) }, by, now)
+  }
+  throw new CliError("validation_error", "a link has nothing to be linked to yet; reject it if it is not worth keeping")
+}
+
+/** Not a real mention, or not worth keeping: every place the value is written, now and on later syncs. */
+export const rejectMention = (context: StoreContext, accountPk: number, id: number, by: string): MentionDecision =>
+  decide(context.database, mentionOfAccount(context.database, accountPk, id), "dismissed", null, by, context.now())

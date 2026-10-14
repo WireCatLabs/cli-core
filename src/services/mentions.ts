@@ -2,7 +2,14 @@ import { CliError } from "@wirecat/cli-base"
 import { parseLucene, validateQuery } from "@wirecat/cli-base/query"
 import { formatLocator } from "../domain/locator.js"
 import type { Page } from "../domain/models.js"
-import { MENTION_QUERY, type MentionsRebuild, type MentionsState, type StoredMention } from "../store/store.js"
+import { parseReference } from "../domain/references.js"
+import {
+  MENTION_QUERY,
+  type MentionDecision,
+  type MentionsRebuild,
+  type MentionsState,
+  type StoredMention,
+} from "../store/store.js"
 import { accountStore, crossAccount, type ServiceDeps } from "./deps.js"
 
 /** One mention as `mentions list` and `show` answer it: the message it is in, by locator. */
@@ -27,6 +34,9 @@ export interface MentionsService {
   list(query: string, window: { limit?: number; offset: number }): Promise<Mentions>
   show(id: number): Promise<MentionDetails>
   rebuild(options?: { onBatch?: (done: number, total: number) => void }): Promise<MentionsRebuild>
+  /** `target` is `person:<uid>` for a phone or an address; a document needs none. */
+  confirm(id: number, target: string | undefined, by: string): Promise<MentionDecision>
+  reject(id: number, by: string): Promise<MentionDecision>
 }
 
 export const mentionsService = (deps: ServiceDeps): MentionsService => {
@@ -57,6 +67,17 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
       const { before, after, sameValue, ...rest } = found
       return { ...mention(rest), before, after, sameValue }
     },
+    confirm: async (id, target, by) => {
+      let personUid: string | undefined
+      if (target !== undefined) {
+        const reference = parseReference(target)
+        if (reference.type !== "person")
+          throw new CliError("validation_error", `a mention is confirmed to a person:<uid>, not ${reference.type}`)
+        personUid = reference.id
+      }
+      return (await accountStore(deps)).confirmMention(id, personUid, by)
+    },
+    reject: async (id, by) => (await accountStore(deps)).rejectMention(id, by),
     rebuild: async (options = {}) =>
       (await crossAccount(deps, "mentions are derived from every account's stored text")).rebuildMentions(options),
   }

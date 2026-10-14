@@ -9,6 +9,13 @@ shape of this file.
 
 ### Added
 
+- **`mentions confirm <id> [person:<uid>]` and `mentions reject <id>`** decide a mention's value everywhere it is
+  written. A phone or an address gets an identity of its own (`provider` `phone` or `email`, the value as its id)
+  owned by the person, through the identity links that already keep their history; a Google document id names the
+  stored document. A rejected value stays dismissed on later syncs. New mentions of a value that already has an
+  owner, or of a stored document, start as `linked`. Items name who decided as `author`: the agent whose terminal
+  runs the tool (`AI_AGENT`, `CLAUDECODE`), else the owner; `--as-owner` records the owner. Permission keys
+  `mentions.confirm` and `mentions.reject`.
 - **A failing schedule is said before every other command:** while a schedule's last run failed, each command
   prints one stderr line first — `tg: scheduled sync failing since 2026-10-14 00:58 (3 runs): <reason> — tg schedule
   list` — so a timer that has been failing for hours is no longer found only by asking. Not inside the scheduled
