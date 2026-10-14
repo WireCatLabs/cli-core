@@ -431,6 +431,8 @@ export const keyForCommand = (path: readonly string[]): PermissionKey | null | u
     return `bot.${inner ?? path.slice(1).join(".")}`
   }
   if (top === undefined || HOUSEKEEPING.has(top)) return null
+  // Picture models moved from `models image` (0.270.0); a model is housekeeping wherever it is listed.
+  if (top === "images" && next === "models") return null
   if (top === "store" && next !== undefined && STORE_MAINTENANCE.has(next)) return null
   // The agent's answers write only to the local store: their own key, so read-only messages can still link (phase 4 A10).
   if (top === "conversations" && next === "links") return "conversations.links"
