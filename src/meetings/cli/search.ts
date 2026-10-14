@@ -40,22 +40,8 @@ export interface MeetingSearchFlags {
   cursor?: string
   maxReadBytes?: number
 }
-/**
- * `search meetings`. The host's `search` closure reindexes before it reads (`refreshMeetingIndex`). It receives
- * every parsed option, so a host can add options to the returned command and choose another source from them.
- */
-export const addMeetingSearchCommand = (
-  program: Command,
-  deps: {
-    search: (
-      query: string,
-      request: MeetingHitSearchOptions,
-      options: MeetingSearchFlags & Record<string, unknown>,
-    ) => Promise<MeetingSearchPage>
-    signal: () => AbortSignal | undefined
-    output: (value: unknown) => void
-  },
-): Command => {
+/** Shared grammar without an action: a host with other source reports supplies their transport routing. */
+export const createMeetingSearchCommand = (program: Command): Command => {
   let search = program.commands.find((command) => command.name() === "search")
   if (!search) {
     search = new Command("search").description("search the stored resources")
@@ -78,26 +64,78 @@ export const addMeetingSearchCommand = (
     .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
     .option("--cursor <cursor>", "continue from the previous page's page.cursor, with the same query and filters")
     .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
-    .action(async (query: string, options: MeetingSearchFlags & Record<string, unknown>) => {
-      const request: MeetingHitSearchOptions = {
-        meetingId: options.meetingId,
-        participantIdentityId: options.identityId,
-        personId: options.personId,
-        eventId: options.eventId,
-        meetingSeriesId: options.seriesId,
-        project: options.project,
-        tag: options.tag,
-        topic: options.topic,
-        since: options.sinceTime,
-        until: options.untilTime,
-        limit: options.limit,
-        after: options.cursor,
-        maxReadBytes: options.maxReadBytes,
-        signal: deps.signal(),
-      }
-      validateMeetingHitSearch(query, request)
-      deps.output(meetingHitsList(await deps.search(query, request, options), request.limit ?? 100))
-    })
   annotate(command, { origin: "handwritten", mutates: false, output: { entity: "meeting_hit" } })
   return command
 }
+
+/** Transport fields become one validated word request before a host opens its selected source. */
+export const meetingHitSearchRequest = (
+  query: string,
+  options: MeetingSearchFlags,
+  signal?: AbortSignal,
+): MeetingHitSearchOptions => {
+  const request: MeetingHitSearchOptions = {
+    meetingId: options.meetingId,
+    participantIdentityId: options.identityId,
+    personId: options.personId,
+    eventId: options.eventId,
+    meetingSeriesId: options.seriesId,
+    project: options.project,
+    tag: options.tag,
+    topic: options.topic,
+    since: options.sinceTime,
+    until: options.untilTime,
+    limit: options.limit,
+    after: options.cursor,
+    maxReadBytes: options.maxReadBytes,
+    signal,
+  }
+  validateMeetingHitSearch(query, request)
+  signal?.throwIfAborted()
+  return request
+}
+
+/** Parsed dates must become ISO values again so the CLI can replay its own continuation. */
+export const meetingSearchArguments = (query: string, options: MeetingSearchFlags): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries({
+      query,
+      meeting_id: options.meetingId,
+      identity_id: options.identityId,
+      person_id: options.personId,
+      event_id: options.eventId,
+      series_id: options.seriesId,
+      project: options.project,
+      tag: options.tag,
+      topic: options.topic,
+      since_time: options.sinceTime === undefined ? undefined : new Date(options.sinceTime).toISOString(),
+      until_time: options.untilTime === undefined ? undefined : new Date(options.untilTime).toISOString(),
+      max_read_bytes: options.maxReadBytes ?? 4194304,
+    }).filter(([, value]) => value !== undefined),
+  )
+
+export const addMeetingSearchCommand = (
+  program: Command,
+  deps: {
+    search: (
+      query: string,
+      request: MeetingHitSearchOptions,
+      options: MeetingSearchFlags & Record<string, unknown>,
+    ) => Promise<MeetingSearchPage>
+    signal: () => AbortSignal | undefined
+    output: (value: unknown) => void
+  },
+): Command =>
+  createMeetingSearchCommand(program).action(
+    async (query: string, options: MeetingSearchFlags & Record<string, unknown>) => {
+      const request = meetingHitSearchRequest(query, options, deps.signal())
+      deps.output(
+        meetingHitsList(
+          await deps.search(query, request, options),
+          request.limit ?? 100,
+          "search meetings",
+          meetingSearchArguments(query, options),
+        ),
+      )
+    },
+  )

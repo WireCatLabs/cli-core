@@ -62,7 +62,10 @@ export const callMeetingSearchTool = async (
     const query = args.query as string
     validateMeetingHitSearch(query, options)
     signal?.throwIfAborted()
-    const result = meetingHitsList(await search(query, options), options.limit ?? 100)
+    const result = meetingHitsList(await search(query, options), options.limit ?? 100, "search meetings", {
+      ...args,
+      max_read_bytes: options.maxReadBytes ?? 4194304,
+    })
     signal?.throwIfAborted()
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
   } catch (error) {

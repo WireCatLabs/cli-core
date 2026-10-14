@@ -231,6 +231,7 @@ export const meetingHitsList = (
   found: MeetingSearchPage,
   limit: number,
   command = "search meetings",
+  args: Record<string, unknown> = {},
 ): MeetingListBody<MeetingHitItem> => {
   const items = found.items.map(meetingHitItem)
   const cursor = found.hasMore && found.nextCursor !== null ? found.nextCursor : undefined
@@ -238,8 +239,15 @@ export const meetingHitsList = (
   const next = [
     ...(cursor === undefined
       ? []
-      : [stepOf(PAGE_NEXT, { command, args: { cursor, limit }, values: { shown: items.length } })]),
-    ...(pending ? [stepOf(SEARCH_AGAIN, { command, args: {} })] : []),
+      : [stepOf(PAGE_NEXT, { command, args: { ...args, cursor, limit }, values: { shown: items.length } })]),
+    ...(pending
+      ? [
+          stepOf(SEARCH_AGAIN, {
+            command,
+            args: Object.fromEntries(Object.entries(args).filter(([key]) => key !== "cursor")),
+          }),
+        ]
+      : []),
   ]
   return {
     items,

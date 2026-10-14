@@ -195,8 +195,11 @@ export { addMeetingPassageCommand } from "./passage.js"
 export { addMeetingProjectEvidenceCommand } from "./project-evidence.js"
 export {
   addMeetingSearchCommand,
+  createMeetingSearchCommand,
   type MeetingHitSearch,
   type MeetingHitSearchOptions,
   type MeetingSearchFlags,
+  meetingHitSearchRequest,
+  meetingSearchArguments,
   validateMeetingHitSearch,
 } from "./search.js"

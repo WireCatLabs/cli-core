@@ -1,5 +1,11 @@
 # Cleanup
 
+- 2026-10-14: `/tmp/meeting-evidence-sdk-schema-preview3` and `/tmp/meeting-evidence-sdk-final-preview` — local-only MCP/continuation previews for synthetic Zoom checks; never publish or commit their file dependencies, retain pending approved cleanup.
+
+- 2026-10-14: `/tmp/meeting-evidence-sdk-schema-preview` (failed build artifact; do not use) and `/tmp/meeting-evidence-sdk-schema-preview2` — local-only schema integration artifacts, never release or commit their file dependencies; retain pending approved cleanup.
+
+- 2026-10-14: `.worktrees/meeting-project-discovery`, branch `feat/meeting-search-host-binding`, `/tmp/meeting-evidence-sdk-preview` and `/tmp/meeting-evidence-sdk-host-binding-preview` — host-composition SDK changes and local-only preview tarballs; never publish these same-version development artifacts, retain until approved cleanup.
+
 - 2026-10-14: `.worktrees/meeting-evidence-contract-fix`, branch `docs/meeting-project-evidence-path` — documentation-only command-path correction; retain until owner-approved cleanup.
 - 2026-10-14: `../zoom-cli/.worktrees/meeting-evidence-contract-fix`, branch `docs/meeting-project-evidence-path` — unused clean Zoom checkout created during command-boundary review; retain until owner-approved cleanup.
 - 2026-10-14: `.worktrees/meeting-project-discovery`, branch `feat/meeting-project-evidence` — shared evidence CLI/MCP implementation and synthetic fixtures retained for review; remove only in the owner-approved cleanup batch.
