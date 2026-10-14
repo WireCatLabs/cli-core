@@ -5,6 +5,14 @@
     "rules": {
       "suspicious": {
         "noImportCycles": "error"
+      },
+      "style": {
+        "noExcessiveLinesPerFile": {
+          "level": "error",
+          "options": {
+            "maxLines": 1000
+          }
+        }
       }
     }
   },
@@ -453,6 +461,91 @@
                     "message": "an image provider sits below the store, the services and the commands: it imports images/types and pure helpers, nothing else; the service layer calls the registry, so a provider never imports it"
                   }
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.test.ts", "test/**", "**/generated/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["scripts/schema/spec.mjs"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": {
+              "level": "error",
+              "options": {
+                "maxLines": 1440
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/store/sqlite/emails.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": {
+              "level": "error",
+              "options": {
+                "maxLines": 1059
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/store/sqlite/lucene.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": {
+              "level": "error",
+              "options": {
+                "maxLines": 1063
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/store/sqlite/schema.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": {
+              "level": "error",
+              "options": {
+                "maxLines": 1687
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/store/store.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": {
+              "level": "error",
+              "options": {
+                "maxLines": 1960
               }
             }
           }
