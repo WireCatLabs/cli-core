@@ -638,7 +638,12 @@ export interface MessageStore {
   /** Per chat that has messages: how many, the oldest and newest, and when the last one was stored. */
   chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>
   /** Per chat that spoke since `since` (ms): its newest message and who sent it when stored, never the text. */
-  chatActivity(key: AccountKey, since: number): Promise<{ chats: ChatActivity[]; storedAt: string | null }>
+  /** `where` is a `tasks agenda` query compiled over `AGENDA_COLUMNS`. */
+  chatActivity(
+    key: AccountKey,
+    since: number,
+    where?: Where,
+  ): Promise<{ chats: ChatActivity[]; storedAt: string | null }>
   /** One person's stored messages per chat of this account, newest first. */
   senderStats(key: AccountKey, senderId: Id): Promise<SenderChatStats[]>
   /** Every name and username this account's store recorded for one person, the current ones included. */
@@ -1766,9 +1771,11 @@ const storeOver = (context: StoreContext): MessageStore => {
       return accountKey === undefined ? [] : reads.chatStats(context, accountKey, chatId)
     },
 
-    chatActivity: async (key, since) => {
+    chatActivity: async (key, since, where) => {
       const accountKey = findAccountPk(key)
-      return accountKey === undefined ? { chats: [], storedAt: null } : reads.chatActivity(context, accountKey, since)
+      return accountKey === undefined
+        ? { chats: [], storedAt: null }
+        : reads.chatActivity(context, accountKey, since, where)
     },
 
     ranges: async (key, chatId) => {
@@ -1956,6 +1963,7 @@ export type { ProposedAction } from "./sqlite/proposed-actions.js"
 export { type ColumnMap, queryFilter, type Where } from "./sqlite/query-filter.js"
 export type { RankedEvidence, RankingEvidenceItem, RankingEvidenceRequest } from "./sqlite/ranking-evidence.js"
 export type { RankedStoreFound, RankedStoreRow, RankingRequest } from "./sqlite/rankings.js"
+export { AGENDA_COLUMNS } from "./sqlite/reads.js"
 export type { RetentionResult } from "./sqlite/retention.js"
 export type {
   MemberCount,

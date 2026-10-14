@@ -9,6 +9,12 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`tasks agenda [query...]` picks its chats' kinds by query and answers one item in the envelope.** `--kind` is
+  gone (`chat_kind:channel`; the default stays `chat_kind:(dialog OR group)`, now in SQL), and so is the MCP
+  `tasks_agenda` argument `kind`, which takes `query`. The answer is `{item, meta}` with the new `agenda` entity:
+  `stored_at`, `tasks[].kind`/`due_at`/`next_check_at`/`created_at`, and each chat as a `chat:` reference with
+  `last_message`, `last_message_at`, `last_from_owner` and `open_tasks`. `--due`, `--unanswered`, `--waiting` and
+  `--within` stay: they shape the sections, they filter no field.
 - **`store jobs list` answers in the list envelope** with the new `job` entity: `id` (was `job`), `started_at`,
   `finished_at`, `page_size`, `issue` and `error` as `{code, message}`; `batch` and `resume` stay in
   `store jobs show`. It pages with `--limit`, `--page` and `--all`; MCP `store_jobs_list` declares its output.

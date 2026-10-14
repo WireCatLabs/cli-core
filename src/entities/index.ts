@@ -1,6 +1,7 @@
 import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { account } from "./account.js"
+import { agenda } from "./agenda.js"
 import { attachment } from "./attachment.js"
 import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
@@ -35,6 +36,7 @@ import { topic } from "./topic.js"
 
 export {
   account,
+  agenda,
   attachment,
   chat,
   chatEvent,
@@ -107,6 +109,7 @@ export const ENTITIES = {
   tagging,
   conversation,
   job,
+  agenda,
   chat_event: chatEvent,
   invite_link: inviteLink,
   join_request: joinRequest,

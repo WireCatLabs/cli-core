@@ -1,7 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
-import type { Agenda } from "../../services/agenda.js"
-import { kindsOf } from "../../services/inbox.js"
+import { AGENDA_QUERY, type Agenda, agendaItem } from "../../services/agenda.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
 import {
   closedStateOf,
@@ -13,7 +12,7 @@ import {
   taskLinkKindOf,
   taskTypeOf,
 } from "../../services/tasks.js"
-import { renderAnswer } from "../envelope.js"
+import { itemOf, renderAnswer } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { listed, positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -206,12 +205,15 @@ export const tasksCommand = (messenger: Messenger): Command => {
       else context.streams.data(`${card(shown)}\n`)
     })
 
-  tasks
-    .command("agenda")
-    .description(
-      "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
-        "chats where you owe an answer, chats where you wait for one",
-    )
+  withQuery(
+    tasks
+      .command("agenda")
+      .description(
+        "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
+          "chats where you owe an answer, chats where you wait for one",
+      ),
+    AGENDA_QUERY,
+  )
     .option("--due <span>", "list tasks due within this: 30m, 2h, 1d (default 1d)", durationOf("--due"))
     .option(
       "--unanswered <span>",
@@ -224,29 +226,20 @@ export const tasksCommand = (messenger: Messenger): Command => {
       "leave out chats silent longer than this: they ended (default 30d)",
       durationOf("--within"),
     )
-    .option("--kind <kinds>", "only these chat kinds, comma-separated (default dialog,group)", (typed) =>
-      kindsOf(typed),
-    )
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
-      const options = this.opts<{
-        due?: number
-        unanswered?: number
-        waiting?: number
-        within?: number
-        kind?: ReturnType<typeof kindsOf>
-      }>()
+      const options = this.opts<{ due?: number; unanswered?: number; waiting?: number; within?: number }>()
+      const query = listQuery(typedQuery(words), AGENDA_QUERY, "tasks agenda")
       const agenda = await context.withServices((services) =>
         services.agenda.show({
           ...(options.due === undefined ? {} : { dueWithin: options.due }),
           ...(options.unanswered === undefined ? {} : { unanswered: options.unanswered }),
           ...(options.waiting === undefined ? {} : { waiting: options.waiting }),
           ...(options.within === undefined ? {} : { within: options.within }),
-          ...(options.kind === undefined ? {} : { kinds: options.kind }),
+          ...(query ? { query } : {}),
         }),
       )
-      if (context.format !== "pretty") context.renderer.result(agenda)
-      else context.streams.data(`${agendaText(agenda)}\n`)
+      renderAnswer(this, context, itemOf(agendaItem(agenda)), () => `${agendaText(agenda)}\n`)
     })
 
   tasks

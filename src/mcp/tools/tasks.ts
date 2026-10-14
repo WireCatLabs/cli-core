@@ -1,10 +1,10 @@
 import * as v from "valibot"
-import { listOf } from "../../cli/envelope.js"
+import { itemOf, listOf } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { listed } from "../../cli/paging.js"
 import type { SendGuard } from "../../sends/guard.js"
-import { kindsOf } from "../../services/inbox.js"
+import { AGENDA_QUERY, agendaItem } from "../../services/agenda.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
 import { TASK_LINK_KINDS, TASK_QUERY, type TaskPlan } from "../../services/tasks.js"
@@ -166,32 +166,32 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         "What needs a look, from the local store and without message text: open tasks overdue, due soon, due a " +
         "check, or never planned; chats where someone else wrote last and the owner has not answered (`owed`); " +
-        "chats where the owner wrote last and nobody answered (`waiting`). Read only what it names. `stale` means " +
-        "the store saved nothing for a day, so a chat may look quiet only because nothing was synced. Returns { at, " +
-        "account, storedAt, stale, tasks: [{ id, key, title, type, source, dueAt, nextCheckAt, createdAt, reasons }], " +
-        "owed: [{ chatId, title, kind, lastMessage, lastMessageAt, lastFromOwner, openTasks }], waiting: [same], " +
-        "unsynced: [same, lastMessage null — the chat moved and its newest message is not stored: read it first] }.",
+        "chats where the owner wrote last and nobody answered (`waiting`); chats that moved and whose newest " +
+        "message is not stored (`unsynced`: read them first). Read only what it names. `stale` means the store " +
+        "saved nothing for a day, so a chat may look quiet only because nothing was synced. `query` picks the " +
+        "chats' kinds: chat_kind:channel (default chat_kind:(dialog OR group)).",
       input: v.object({
         due: span("list tasks due within this (default 1d)"),
         unanswered: span("list chats someone else wrote last in this long ago (default 1d)"),
         waiting: span("list chats the owner wrote last in this long ago (default 7d)"),
         within: span("leave out chats silent longer than this (default 30d)"),
-        kind: v.optional(
-          v.pipe(v.string(), v.minLength(1), v.description("chat kinds, comma-separated: dialog,group")),
-        ),
+        query: queryArgument(AGENDA_QUERY),
       }),
       annotations: { ...READ, openWorldHint: false },
+      output: { entity: "agenda", list: false },
       stored: async (store, account, args, defaults) => {
         const [dueWithin, unanswered, waiting, within] = [args.due, args.unanswered, args.waiting, args.within].map(
           spanMs,
         )
-        return servicesFor(storedDeps(messenger, store, account, defaults.guard)).agenda.show({
+        const query = listQuery(args.query ?? "", AGENDA_QUERY, "tasks agenda")
+        const shown = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).agenda.show({
           ...(dueWithin === undefined ? {} : { dueWithin }),
           ...(unanswered === undefined ? {} : { unanswered }),
           ...(waiting === undefined ? {} : { waiting }),
           ...(within === undefined ? {} : { within }),
-          ...(args.kind === undefined ? {} : { kinds: kindsOf(args.kind, "kind") }),
+          ...(query ? { query } : {}),
         })
+        return itemOf(agendaItem(shown))
       },
     }),
 

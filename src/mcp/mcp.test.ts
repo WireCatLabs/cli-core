@@ -1603,7 +1603,7 @@ describe("the MCP server", () => {
     expect(planned.body).toMatchObject({ title: "Send the plan", dueAt: expect.any(String), nextCheckAt: null })
     const linked = await call("chat_tasks_link", { task: added.body.id, targets: ["https://example.com/plan"] })
     expect(linked.body.links).toMatchObject([{ targetText: "https://example.com/plan", kind: "related-to" }])
-    expect((await call("chat_tasks_agenda", { due: "1d" })).body.tasks).toMatchObject([
+    expect((await call("chat_tasks_agenda", { due: "1d", query: "chat_kind:dialog" })).body.item.tasks).toMatchObject([
       { id: added.body.id, title: "Send the plan", reasons: ["due"] },
     ])
     const closed = await call("chat_tasks_close", { task: added.body.id, as: "dismissed", reason: "no-reply-needed" })
