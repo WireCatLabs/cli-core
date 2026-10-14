@@ -246,6 +246,9 @@ describe("review, the command", () => {
       expect(result.code).toBe(0)
       expect(result.answer.items[0].attachments).toHaveLength(1)
       expect(result.answer.next[0].args.query).toBe('date>"2026-01-01T00:00:00.000Z"')
+      expect(result.answer.missing).toContainEqual(
+        expect.objectContaining({ field: "transcript", step: "messages.transcribe" }),
+      )
     } finally {
       scripted.adapter.history = message
     }

@@ -159,16 +159,22 @@ export const hearForTool = async (
 export const heard = <T extends Message>(messages: readonly T[], hearing: Hearing | undefined): T[] =>
   hearing ? messages.map((message) => withTranscript(message, hearing)) : [...messages]
 
-/** Voice messages asked to be heard and still without text: why, and the command that hears one. */
+/**
+ * Voice messages still without text: why, and the command that hears one. Said without `--transcribe` too, or an
+ * answer whose only content is a voice message reads as complete.
+ */
 export const hearingMissing = (hearing: Hearing | undefined, transcribe: boolean): Missing[] => {
-  if (!transcribe || !hearing) return []
-  if (hearing.problem !== undefined)
+  if (!hearing) return []
+  if (transcribe && hearing.problem !== undefined)
     return [{ field: "transcript", why: `not transcribed: ${hearing.problem}`, step: "messages.transcribe" }]
   if (hearing.unheard.length === 0) return []
+  const ids = hearing.unheard.map((voice) => voice.messageId).join(", ")
   return [
     {
       field: "transcript",
-      why: `${hearing.unheard.length} voice message(s) not heard yet: ${hearing.unheard.map((voice) => voice.messageId).join(", ")}`,
+      why: transcribe
+        ? `${hearing.unheard.length} voice message(s) not heard yet: ${ids}`
+        : `${hearing.unheard.length} voice message(s) not heard: ${ids} — --transcribe hears them`,
       step: "messages.transcribe",
     },
   ]

@@ -174,6 +174,18 @@ describe("read hearing lifecycle", () => {
     })
   })
 
+  it("names an unheard voice message as missing without --transcribe, and hears nothing", async () => {
+    const test = fixture()
+    const answer = await test.execute(["messages", "list", "9"])
+    expect(answer.code).toBe(0)
+    expect(test.events).not.toContain("transcribe")
+    expect(answer.body.missing).toContainEqual({
+      field: "transcript",
+      why: "1 voice message(s) not heard: 1 — --transcribe hears them",
+      step: "messages.transcribe",
+    })
+  })
+
   it("excludes a voice question answered by an admin", async () => {
     const response = {
       ...voice("2"),
