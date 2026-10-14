@@ -2463,39 +2463,19 @@
       "in": "all"
     },
     "images": {
-      "in": [],
-      "planned": {
-        "max": "max's bump that registers imagesCommand",
-        "tg": "tg's bump that registers imagesCommand"
-      }
+      "in": "all"
     },
     "images embed": {
-      "in": [],
-      "planned": {
-        "max": "max's bump that registers imagesCommand",
-        "tg": "tg's bump that registers imagesCommand"
-      }
+      "in": "all"
     },
     "images models": {
-      "in": [],
-      "planned": {
-        "max": "max's bump that registers imagesCommand",
-        "tg": "tg's bump that registers imagesCommand"
-      }
+      "in": "all"
     },
     "images models download": {
-      "in": [],
-      "planned": {
-        "max": "max's bump that registers imagesCommand",
-        "tg": "tg's bump that registers imagesCommand"
-      }
+      "in": "all"
     },
     "images models list": {
-      "in": [],
-      "planned": {
-        "max": "max's bump that registers imagesCommand",
-        "tg": "tg's bump that registers imagesCommand"
-      }
+      "in": "all"
     },
     "inbox": {
       "in": "all",
