@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs"
-import { CliError, configFilePath, loadConfigFile, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
+import { CliError, configFilePath, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
 import {
@@ -14,14 +14,15 @@ import {
   RESOURCES,
 } from "../sends/permissions.js"
 import { type AppIdentity, envName } from "./app.js"
+import { loadSnakeCaseConfig, settingAt } from "./config-keys.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
 import { DEFAULT_PROFILE, usableProfileName } from "./profile.js"
 
 const DEFAULT_LIMIT = DEFAULT_CONFIG.defaults.limit
-const DEFAULT_KEEP_RUNS_FOR_DAYS = DEFAULT_CONFIG.defaults.keepRunsForDays
+const DEFAULT_KEEP_RUNS_FOR_DAYS = DEFAULT_CONFIG.defaults.keep_runs_for_days
 /** On by default: a limit that is off protects nobody from a loop. */
-const DEFAULT_SENDS_PER_HOUR = DEFAULT_CONFIG.defaults.sendsPerHour
+const DEFAULT_SENDS_PER_HOUR = DEFAULT_CONFIG.defaults.sends_per_hour
 
 export const plain =
   (rule: string) =>
@@ -74,30 +75,30 @@ const objectMessage =
  */
 const SHARED_PROFILE_ENTRIES = {
   limit: v.optional(count),
-  timeoutMs: v.optional(count),
+  timeout_ms: v.optional(count),
   color: v.optional(flag),
-  senderColors: v.optional(flag),
+  sender_colors: v.optional(flag),
   record: v.optional(flag),
-  keepRunsForDays: v.optional(count),
-  readOnly: v.optional(flag),
+  keep_runs_for_days: v.optional(count),
+  read_only: v.optional(flag),
   allow: v.optional(permissionList),
   permissions: v.optional(permissionLevels),
-  sendsPerHour: v.optional(count),
-  requestsPerMinute: v.optional(countOrZero),
-  transcribeWith: v.optional(v.picklist(["auto", "messenger", "local"], plain("has to be auto, messenger or local"))),
-  speechModel: v.optional(v.string(plain("has to be a model id from `models audio list`, in quotes"))),
-  catchUpMarksRead: v.optional(flag),
-  searchCatchUp: v.optional(flag),
-  pictureSearch: v.optional(flag),
+  sends_per_hour: v.optional(count),
+  requests_per_minute: v.optional(countOrZero),
+  transcribe_with: v.optional(v.picklist(["auto", "messenger", "local"], plain("has to be auto, messenger or local"))),
+  speech_model: v.optional(v.string(plain("has to be a model id from `models audio list`, in quotes"))),
+  catch_up_marks_read: v.optional(flag),
+  search_catch_up: v.optional(flag),
+  picture_search: v.optional(flag),
   ...AI_ENTRIES,
 }
 
 /**
- * Only a bot reads these. `readOtherBots`: whether this bot may read the local copy of other bots on
+ * Only a bot reads these. `read_other_bots`: whether this bot may read the local copy of other bots on
  * this machine — every one, or those named — when a command asks for it.
  */
 const BOT_ONLY_ENTRIES = {
-  readOtherBots: v.optional(
+  read_other_bots: v.optional(
     v.union(
       [flag, v.array(v.string(), plain("has to be a list of profile names"))],
       plain("has to be true, false or a list of profile names"),
@@ -107,8 +108,8 @@ const BOT_ONLY_ENTRIES = {
 
 /** One program, one version: whether to look for a newer one is not a per-profile matter. */
 const SHARED_DEFAULTS_ONLY = {
-  updateCheck: v.optional(flag),
-  skillHint: v.optional(flag),
+  update_check: v.optional(flag),
+  skill_hint: v.optional(flag),
 }
 
 /**
@@ -146,7 +147,7 @@ interface KindSection {
 }
 
 export interface Config {
-  defaultProfile?: string
+  default_profile?: string
   defaults?: Scope
   profiles: Record<string, Scope>
   personal?: KindSection
@@ -295,7 +296,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       objectMessage(["defaults", "profiles"]),
     )
   const configEntries = {
-    defaultProfile: v.optional(v.string(plain("has to be a profile name, in quotes"))),
+    default_profile: v.optional(v.string(plain("has to be a profile name, in quotes"))),
     defaults: v.optional(v.strictObject(defaultsEntries, objectMessage(Object.keys(defaultsEntries)))),
     profiles: v.optional(
       v.record(
@@ -311,7 +312,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const schema = v.strictObject(configEntries, objectMessage(Object.keys(configEntries)))
   const defaultsOnlyKeys = Object.keys(defaultsOnly)
   const botOnlyKeys = Object.keys(BOT_ONLY_ENTRIES)
-  const allSettings = [...Object.keys(profileEntries), ...botOnlyKeys, ...defaultsOnlyKeys, "defaultProfile"]
+  const allSettings = [...Object.keys(profileEntries), ...botOnlyKeys, ...defaultsOnlyKeys, "default_profile"]
 
   const PROFILE = envName(app, "PROFILE")
   const PROFILE_LOCK = envName(app, "PROFILE_LOCK")
@@ -324,7 +325,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
 
   const readConfig = (path: string): Config => {
     try {
-      return loadConfigFile(path, extension.schema ?? schema, () => ({ profiles: {} })) as Config
+      return loadSnakeCaseConfig(path, extension.schema ?? schema, () => ({ profiles: {} })) as Config
     } catch (error) {
       throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
     }
@@ -383,7 +384,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
       [
         ["first word", flags.profile],
         [PROFILE, given(env[PROFILE])],
-        [extension.sourcePaths ? "config file: defaultProfile" : "config file", config.defaultProfile],
+        [
+          extension.sourcePaths ? "config file: default_profile" : "config file",
+          settingAt(config as unknown as Record<string, unknown>, "default_profile") as string | undefined,
+        ],
         [PROFILE_LOCK, lock],
       ],
       undefined,
@@ -409,43 +413,43 @@ export const settingsFor = <T extends object = Record<never, never>>(
     ]
     const fromLayers = <T>(key: string, fallback: T, only = layers) =>
       first<T>(
-        only.map(([from, scope]): [Source, T | undefined] => [from, scope?.[key] as T | undefined]),
+        only.map(([from, scope]): [Source, T | undefined] => [from, settingAt(scope, key) as T | undefined]),
         fallback,
       )
     const kindLayers = layers.filter(([from]) => from.startsWith(`config file: ${kind}.`))
 
     const limit = flags.limit === undefined ? fromLayers("limit", DEFAULT_LIMIT) : { value: flags.limit, from: "flag" }
     const record = flags.record === undefined ? fromLayers("record", false) : { value: flags.record, from: "flag" }
-    const timeoutMs = fromLayers<number | undefined>("timeoutMs", undefined)
+    const timeoutMs = fromLayers<number | undefined>("timeout_ms", undefined)
     const color = fromLayers<boolean | undefined>("color", undefined)
-    const senderColors = fromLayers("senderColors", false)
-    const catchUpMarksRead = fromLayers("catchUpMarksRead", false)
-    const searchCatchUp = fromLayers("searchCatchUp", false)
-    const pictureSearch = fromLayers("pictureSearch", false)
-    const keepRunsForDays = fromLayers("keepRunsForDays", DEFAULT_KEEP_RUNS_FOR_DAYS)
+    const senderColors = fromLayers("sender_colors", false)
+    const catchUpMarksRead = fromLayers("catch_up_marks_read", false)
+    const searchCatchUp = fromLayers("search_catch_up", false)
+    const pictureSearch = fromLayers("picture_search", false)
+    const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
     const readOnlyLock = given(env[READ_ONLY]) !== undefined && env[READ_ONLY] !== "0" ? READ_ONLY : undefined
-    const configuredReadOnly = fromLayers("readOnly", false)
+    const configuredReadOnly = fromLayers("read_only", false)
     const readOnly = readOnlyLock ? { value: true, from: readOnlyLock } : configuredReadOnly
     const allow = fromLayers<readonly Permission[] | undefined>("allow", undefined)
     // A bot has no hourly limit unless the bot section gives it one: a bot that answers people is
     // expected to send a lot, and a limit there is the owner's choice, not the tool's.
     const sendsPerHour =
       kind === "bot"
-        ? fromLayers("sendsPerHour", Number.POSITIVE_INFINITY, kindLayers)
-        : fromLayers("sendsPerHour", DEFAULT_SENDS_PER_HOUR)
+        ? fromLayers("sends_per_hour", Number.POSITIVE_INFINITY, kindLayers)
+        : fromLayers("sends_per_hour", DEFAULT_SENDS_PER_HOUR)
     const paceFromEnv = given(env[REQUESTS_PER_MINUTE])
     const requestsPerMinute =
       paceFromEnv === undefined
-        ? fromLayers<number | undefined>("requestsPerMinute", undefined)
+        ? fromLayers<number | undefined>("requests_per_minute", undefined)
         : { value: wholeOrZero(paceFromEnv, REQUESTS_PER_MINUTE), from: REQUESTS_PER_MINUTE }
     const readOtherBots =
       kind === "bot"
-        ? fromLayers<boolean | readonly string[]>("readOtherBots", false, kindLayers)
+        ? fromLayers<boolean | readonly string[]>("read_other_bots", false, kindLayers)
         : { value: false, from: "default" }
     // The old settings sit in the layer they were written in, under that layer's own `permissions`.
     const old = configuredReadOnly.value
-      ? { label: "readOnly", from: configuredReadOnly.from }
+      ? { label: "read_only", from: configuredReadOnly.from }
       : { label: "allow", from: allow.from }
     const oldLevels = fromOldSettings(configuredReadOnly.value, allow.value, { bot: kind === "bot" })
     const permissions = layerPermissions([
@@ -461,13 +465,18 @@ export const settingsFor = <T extends object = Record<never, never>>(
       [
         [
           extension.sourcePaths ? "config file: defaults" : "config defaults",
-          shared.updateCheck as boolean | undefined,
+          settingAt(shared, "update_check") as boolean | undefined,
         ],
       ],
       true,
     )
     const skillHint = first(
-      [[extension.sourcePaths ? "config file: defaults" : "config defaults", shared.skillHint as boolean | undefined]],
+      [
+        [
+          extension.sourcePaths ? "config file: defaults" : "config defaults",
+          settingAt(shared, "skill_hint") as boolean | undefined,
+        ],
+      ],
       true,
     )
     const timeout = first<string | undefined>(
@@ -575,7 +584,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
   ): unknown => {
     const [name = setting, ...rest] = setting.split(".")
     const level = name === "permissions" && rest.length > 0 ? rest.join(".") : undefined
-    const modelField = /^models\.([a-z][a-z0-9-]*)\.(provider|model|baseUrl)$/.exec(setting)
+    const modelField = /^models\.([a-z][a-z0-9-]*)\.(provider|model|base_url)$/.exec(setting)
     if (!allSettings.includes(setting) && level === undefined && !modelField) {
       throw new CliError("validation_error", `no setting called "${setting}" — one of: ${allSettings.join(", ")}`)
     }
@@ -593,14 +602,14 @@ export const settingsFor = <T extends object = Record<never, never>>(
     }
 
     const config = readConfig(path)
-    if (setting === "defaultProfile") {
+    if (setting === "default_profile") {
       if (kind !== undefined) {
-        throw new CliError("validation_error", "defaultProfile is one for the whole file — drop --personal and --bot")
+        throw new CliError("validation_error", "default_profile is one for the whole file — drop --personal and --bot")
       }
-      const { defaultProfile: _, ...rest } = config
-      const changed: Config = value === undefined ? rest : { ...rest, defaultProfile: usableProfileName(value) }
+      const { default_profile: _, ...rest } = config
+      const changed: Config = value === undefined ? rest : { ...rest, default_profile: usableProfileName(value) }
       saveConfigFile(path, changed)
-      return changed.defaultProfile ?? null
+      return changed.default_profile ?? null
     }
     const section = kind === undefined ? undefined : (config[kind] ?? {})
     const current =

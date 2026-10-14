@@ -5,7 +5,7 @@ import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js
 const DEFAULT_LIMIT = 100
 
 /**
- * `images`: what the pictures themselves show, for the profiles that turned `pictureSearch` on. A picture is
+ * `images`: what the pictures themselves show, for the profiles that turned `picture_search` on. A picture is
  * read through the messenger's own download, its vector kept, the file dropped; nothing is sent or marked read.
  */
 export const imagesCommand = (messenger: Messenger): Command => {
@@ -15,7 +15,7 @@ export const imagesCommand = (messenger: Messenger): Command => {
     .command("embed")
     .description(
       "compute a vector for each picture the store knows and has none for — downloading it through the messenger, " +
-        "keeping only the vector; needs `pictureSearch` on in the profile and `models image download clip-b32`; " +
+        "keeping only the vector; needs `picture_search` on in the profile and `models image download clip-b32`; " +
         "resumes where it stopped",
     )
     .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)

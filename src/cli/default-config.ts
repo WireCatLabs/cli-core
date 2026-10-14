@@ -2,7 +2,7 @@ import { existsSync, linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } f
 import { dirname, join } from "node:path"
 
 export const DEFAULT_CONFIG = {
-  defaults: { limit: 20, keepRunsForDays: 30, sendsPerHour: 30, updateCheck: true, skillHint: true },
+  defaults: { limit: 20, keep_runs_for_days: 30, sends_per_hour: 30, update_check: true, skill_hint: true },
   profiles: {},
 }
 

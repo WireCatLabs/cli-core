@@ -24,7 +24,7 @@
       "note": "chats requests accept and decline take every pending request instead — Telegram counts them against its hourly limit first; MAX has no way to answer them all at once and refuses it, naming chats requests list — so it differs on purpose (Help text rule 4)"
     },
     "--all-bots": {
-      "meaning": "also read every other bot's copy on this machine that readOtherBots allows"
+      "meaning": "also read every other bot's copy on this machine that read_other_bots allows"
     },
     "--all-can-pin": {
       "value": "<on|off>",
@@ -131,7 +131,7 @@
     },
     "--bots": {
       "value": "<profiles>",
-      "meaning": "also read these bots' copies, comma separated — each allowed by readOtherBots"
+      "meaning": "also read these bots' copies, comma separated — each allowed by read_other_bots"
     },
     "--brief": {
       "meaning": "found messages and mail as reference, title, time, sender and excerpt only"
@@ -621,7 +621,7 @@
       "meaning": "never prompt or open an interactive login; piped input remains available"
     },
     "--no-mark-read": {
-      "meaning": "do not mark read, whatever the catchUpMarksRead setting says"
+      "meaning": "do not mark read, whatever the catch_up_marks_read setting says"
     },
     "--no-mentions-me": {
       "meaning": "do not require a mention of you or a reply to you"

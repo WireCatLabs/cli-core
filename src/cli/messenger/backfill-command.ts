@@ -74,7 +74,7 @@ export const syncCommand = (messenger: Messenger): Command => {
     )
     .option("--since-time <time>", "stop once it reaches messages older than this: ISO 8601, or 2h / 1d ago")
     .option("--last <n>", "stop once the newest n messages are held", wholeNumber)
-    .option("--catch-up", "prepare local search after this run; overrides searchCatchUp")
+    .option("--catch-up", "prepare local search after this run; overrides search_catch_up")
     .option("--no-catch-up", "skip local preparation after this run")
     .option("--catch-up-chunks <n>", "at most this many local vector chunks", wholeNumber)
     .option("--catch-up-messages <n>", "skip a graph rebuild larger than this many messages", wholeNumber)
@@ -137,7 +137,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         ...(catchUpTime === undefined ? {} : { timeMs: parseDuration(catchUpTime, "--catch-up-time") }),
       }
       if (!prepare && (catchUpChunks !== undefined || catchUpMessages !== undefined || catchUpTime !== undefined))
-        throw new CliError("validation_error", "catch-up budgets need --catch-up or searchCatchUp true")
+        throw new CliError("validation_error", "catch-up budgets need --catch-up or search_catch_up true")
       if (estimate) {
         if (since !== undefined || last !== undefined) {
           throw new CliError(

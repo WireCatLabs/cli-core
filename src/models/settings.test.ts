@@ -13,11 +13,11 @@ describe("purpose model settings", () => {
       [
         [
           "profile",
-          { models: { replies: { provider: "off" } }, analysisProvider: "anthropic", analysisModel: "legacy" },
+          { models: { replies: { provider: "off" } }, analysis_provider: "anthropic", analysis_model: "legacy" },
         ],
         [
           "defaults",
-          { models: { default: { provider: "openai", model: "default-model", baseUrl: "https://example.test/v1" } } },
+          { models: { default: { provider: "openai", model: "default-model", base_url: "https://example.test/v1" } } },
         ],
       ],
       { APP_MODELS_REPLIES_MODEL: "reply-model" },
@@ -48,7 +48,7 @@ describe("purpose model settings", () => {
     )
     expect(() =>
       resolveAISettings("APP", [], { APP_MODELS_REPLIES_BASE_URL: "https://user:secret@example.test" }),
-    ).toThrow("models.replies.baseUrl")
+    ).toThrow("models.replies.base_url")
   })
 
   it("sets and unsets dotted model config fields through validated configuration", () => {
@@ -61,7 +61,7 @@ describe("purpose model settings", () => {
     for (const [field, value] of [
       ["provider", "openai"],
       ["model", "test"],
-      ["baseUrl", "https://example.test/v1"],
+      ["base_url", "https://example.test/v1"],
     ])
       change(`models.replies.${field}`, value)
     expect(
@@ -73,7 +73,7 @@ describe("purpose model settings", () => {
     })
     expect(() => change("models.replies.provider", "bad")).toThrow()
     expect(() => change("models.replies.token", "secret")).toThrow("no setting")
-    for (const field of ["provider", "model", "baseUrl"]) change(`models.replies.${field}`)
+    for (const field of ["provider", "model", "base_url"]) change(`models.replies.${field}`)
     expect(
       modelTarget(config.resolveSettings({}, { configDir: root, env: { APP_PROFILE: "default" } }), "replies"),
     ).toBeUndefined()

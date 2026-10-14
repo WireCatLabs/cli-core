@@ -126,7 +126,7 @@ describe("permission configuration migration", () => {
   it.each(PERMISSIONS)("preserves every old %s allow word in both kinds and every layer", (word) => {
     const { path, env } = fresh()
     const input: Config = {
-      defaultProfile: "alice",
+      default_profile: "alice",
       defaults: { allow: [word], region: "shared", mcpTools: ["groups"] },
       profiles: { alice: { allow: [] }, bob: { readOnly: false, allow: ["send"] } },
       personal: { defaults: { readOnly: false }, profiles: { bob: { allow: [word], region: "personal" } } },
@@ -221,7 +221,7 @@ describe("permission configuration migration", () => {
     expect(empty.code, empty.error).toBe(0)
     expect(empty.data.changed).toBe(false)
     expect(existsSync(path)).toBe(true)
-    saveConfigFile(path, { profiles: {}, defaults: { readOnly: true } })
+    saveConfigFile(path, { profiles: {}, defaults: { read_only: true } })
     const original = readFileSync(path, "utf8")
     const locked = { ...env, CHAT_PROFILE: undefined, CHAT_PROFILE_LOCK: "alice" }
     const refused = await call(["config", "migrate", "--json"], locked)
@@ -246,7 +246,7 @@ describe("permission configuration migration", () => {
     expect((await call(["config", "migrate", "--json"], env)).code).not.toBe(0)
     expect(readFileSync(path, "utf8")).toBe(original)
     const restricted = settingsFor(app, { profile: { permissions: v.optional(v.never()) } })
-    saveConfigFile(path, { profiles: {}, defaults: { readOnly: true } })
+    saveConfigFile(path, { profiles: {}, defaults: { read_only: true } })
     const validLegacy = readFileSync(path, "utf8")
     const streams = captureStreams()
     const code = await run(
@@ -258,14 +258,14 @@ describe("permission configuration migration", () => {
     expect(streams.stdout).toEqual([])
     expect(readFileSync(path, "utf8")).toBe(validLegacy)
   })
-  it.each(["readOnly", "allow", "mcpTools"])(
+  it.each(["read_only", "allow", "mcpTools"])(
     "refuses legacy %s edits after migration, including a false-only legacy file",
     async (setting) => {
       const { path, env } = fresh()
-      saveConfigFile(path, { profiles: {}, defaults: { readOnly: false } })
+      saveConfigFile(path, { profiles: {}, defaults: { read_only: false } })
       expect((await call(["config", "migrate", "--json"], env)).code).toBe(0)
       const migrated = readFileSync(path, "utf8")
-      const edit = await call(["config", "set", setting, setting === "readOnly" ? "true" : "send", "--json"], env)
+      const edit = await call(["config", "set", setting, setting === "read_only" ? "true" : "send", "--json"], env)
       expect(edit.code).toBe(2)
       expect(edit.error).toContain("legacy setting")
       expect((await call(["config", "unset", setting, "--json"], env)).code).toBe(2)

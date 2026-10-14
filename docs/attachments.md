@@ -118,7 +118,7 @@ caption, up to 3 messages before and after it in the same chat within 10 minutes
 
 ## Find a picture by what it shows
 
-For a profile with `pictureSearch: true` (off until set), the picture itself can be searched. `models image download
+For a profile with `picture_search: true` (off until set), the picture itself can be searched. `models image download
 clip-b32` fetches the model once (CLIP ViT-B/32, 8-bit, about 155 MB, into the shared models folder under
 `models/image/`); `images embed [--chat <chat>] [--limit <n>]` downloads each image the store knows and has no
 vector for through the messenger, one at a time and without marking anything read, keeps its 512-number vector and

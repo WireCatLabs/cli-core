@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import * as v from "valibot"
@@ -306,8 +306,8 @@ describe("the configuration file", () => {
   it("**says in plain words what is wrong and what is allowed**, not the validation library's", () => {
     withConfig(JSON.stringify({ profiles: { default: { limitt: 5 } } }))
     expect(() => settings()).toThrowError(
-      "profiles.default.limitt: unknown setting — the known ones are limit, timeoutMs, color, senderColors, record, " +
-        "keepRunsForDays, readOnly, allow, permissions, sendsPerHour",
+      "profiles.default.limitt: unknown setting — the known ones are limit, timeout_ms, color, sender_colors, record, " +
+        "keep_runs_for_days, read_only, allow, permissions, sends_per_hour",
     )
 
     withConfig(JSON.stringify({ profiles: { default: { limit: 0, color: "yes" } } }))
@@ -317,7 +317,7 @@ describe("the configuration file", () => {
     withConfig(JSON.stringify({ profiles: { default: { limit: 2.5 } }, defaultProfil: "x" }))
     expect(() => settings()).toThrowError("limit: has to be a whole number, 1 or more, not 2.5")
     expect(() => settings()).toThrowError(
-      "defaultProfil: unknown setting — the known ones are defaultProfile, defaults, profiles",
+      "defaultProfil: unknown setting — the known ones are default_profile, defaults, profiles",
     )
     expect(() => settings()).not.toThrowError(/Expected|Invalid/)
   })
@@ -414,15 +414,15 @@ describe("changing a setting", () => {
       /starts with one of messages/,
     )
 
-    changeSetting(path(), { profile: "work", setting: "readOnly", value: "true" })
+    changeSetting(path(), { profile: "work", setting: "read_only", value: "true" })
     const work = settings({ profile: "work" })
     expect(work.permissions).toMatchObject({ messages: "readonly", contacts: "readonly", "messages.delete": "allow" })
-    expect(work.permissionSources).toMatchObject({ messages: "readOnly", contacts: "config file" })
+    expect(work.permissionSources).toMatchObject({ messages: "read_only", contacts: "config file" })
   })
 
   it("writes to `defaults` when no profile is named", () => {
-    changeSetting(path(), { profile: undefined, setting: "keepRunsForDays", value: "7" })
-    expect(file().defaults).toEqual({ keepRunsForDays: 7 })
+    changeSetting(path(), { profile: undefined, setting: "keep_runs_for_days", value: "7" })
+    expect(file().defaults).toEqual({ keep_runs_for_days: 7 })
   })
 
   it("**refuses a value the reader would refuse, and leaves the file as it was**", () => {
@@ -468,7 +468,7 @@ describe("a bot's settings", () => {
     expect(bot({ profile: "news" }).readOtherBots).toBe(false)
     expect(settings({ profile: "shop" }).readOtherBots).toBe(false)
     expect(() =>
-      changeSetting(join(configDir, "config.json"), { profile: "shop", setting: "readOtherBots", value: "true" }),
+      changeSetting(join(configDir, "config.json"), { profile: "shop", setting: "read_other_bots", value: "true" }),
     ).toThrow(/--bot/)
   })
 
@@ -480,16 +480,16 @@ describe("a bot's settings", () => {
 
   it("**writes into the bot section** and tidies it when emptied", () => {
     const path = join(configDir, "config.json")
-    changeSetting(path, { profile: "sales", setting: "sendsPerHour", value: "200", kind: "bot" })
-    changeSetting(path, { profile: undefined, setting: "readOtherBots", value: "true", kind: "bot" })
+    changeSetting(path, { profile: "sales", setting: "sends_per_hour", value: "200", kind: "bot" })
+    changeSetting(path, { profile: undefined, setting: "read_other_bots", value: "true", kind: "bot" })
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
       profiles: {},
-      bot: { defaults: { readOtherBots: true }, profiles: { sales: { sendsPerHour: 200 } } },
+      bot: { defaults: { read_other_bots: true }, profiles: { sales: { sends_per_hour: 200 } } },
     })
     expect(configuredProfiles({ env: {}, configDir })).toEqual(["sales"])
 
-    changeSetting(path, { profile: "sales", setting: "sendsPerHour", value: undefined, kind: "bot" })
-    changeSetting(path, { profile: undefined, setting: "readOtherBots", value: undefined, kind: "bot" })
+    changeSetting(path, { profile: "sales", setting: "sends_per_hour", value: undefined, kind: "bot" })
+    changeSetting(path, { profile: undefined, setting: "read_other_bots", value: undefined, kind: "bot" })
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ profiles: {} })
   })
 })
@@ -526,7 +526,7 @@ describe("settings extensions", () => {
       audioModel: "large",
       sources: {
         autoStart: "config file: personal.profiles.work",
-        profile: "config file: defaultProfile",
+        profile: "config file: default_profile",
       },
     })
     expect(adapted.resolveSettings({}, { env: {}, configDir, kind: "bot" }).autoStart).toBe(true)
@@ -606,5 +606,102 @@ describe("settings extensions", () => {
       }),
     ).toBe(true)
     expect(adapter.resolveSettings({}, { env: NAMED, configDir }).shared.autoStart).toBe(true)
+  })
+})
+
+describe("a config file written before setting names were snake_case", () => {
+  const OLD = {
+    defaultProfile: "workPhone",
+    defaults: {
+      timeoutMs: 9000,
+      keepRunsForDays: 7,
+      sendsPerHour: 12,
+      updateCheck: false,
+      skillHint: false,
+      embeddingProvider: "local",
+      analysisBaseUrl: "https://example.test/v1",
+      models: { "replies-draft": { provider: "openai", model: "m", baseUrl: "https://example.test/v1" } },
+      permissions: { "messages.delete": "ask" },
+    },
+    profiles: { workPhone: { senderColors: true, catchUpMarksRead: true, requestsPerMinute: 0 } },
+    personal: { defaults: { searchCatchUp: true }, profiles: { workPhone: { pictureSearch: true } } },
+    bot: { defaults: { readOtherBots: ["newsBot"] }, profiles: { newsBot: { readOnly: true } } },
+  }
+  const NEW = {
+    default_profile: "workPhone",
+    defaults: {
+      timeout_ms: 9000,
+      keep_runs_for_days: 7,
+      sends_per_hour: 12,
+      update_check: false,
+      skill_hint: false,
+      embedding_provider: "local",
+      analysis_base_url: "https://example.test/v1",
+      models: { "replies-draft": { provider: "openai", model: "m", base_url: "https://example.test/v1" } },
+      permissions: { "messages.delete": "ask" },
+    },
+    profiles: { workPhone: { sender_colors: true, catch_up_marks_read: true, requests_per_minute: 0 } },
+    personal: { defaults: { search_catch_up: true }, profiles: { workPhone: { picture_search: true } } },
+    bot: { defaults: { read_other_bots: ["newsBot"] }, profiles: { newsBot: { read_only: true } } },
+  }
+  const path = () => join(configDir, "config.json")
+
+  it("**moves every setting name to snake_case on read, and writes the file back once**", () => {
+    writeFileSync(path(), JSON.stringify(OLD), { mode: 0o600 })
+    const read = settings()
+    expect(read).toMatchObject({ profile: "workPhone", timeoutMs: 9000, keepRunsForDays: 7, pictureSearch: true })
+    expect(read.models?.["replies-draft"]).toEqual({
+      provider: "openai",
+      model: "m",
+      base_url: "https://example.test/v1",
+    })
+    expect(JSON.parse(readFileSync(path(), "utf8"))).toEqual(NEW)
+    expect(statSync(path()).mode & 0o777).toBe(0o600)
+
+    const written = readFileSync(path(), "utf8")
+    settings()
+    expect(readFileSync(path(), "utf8")).toBe(written)
+  })
+
+  it("refuses one setting under both names with different values, and leaves the file", () => {
+    const both = JSON.stringify({ defaults: { timeoutMs: 1000, timeout_ms: 2000 } })
+    withConfig(both)
+    expect(() => settings()).toThrow("defaults.timeoutMs and defaults.timeout_ms are the same setting")
+    expect(readFileSync(path(), "utf8")).toBe(both)
+  })
+
+  it("leaves a file the schema refuses as it was, so the error names what is wrong", () => {
+    const broken = JSON.stringify({ defaults: { timeoutMs: 1000, colour: true } })
+    withConfig(broken)
+    expect(() => settings()).toThrow("defaults.colour: unknown setting")
+    expect(readFileSync(path(), "utf8")).toBe(broken)
+  })
+
+  it("**still reads a setting an app's own schema declares in camelCase**, a read-only profile included", () => {
+    const camelSchema = v.strictObject({
+      defaults: v.optional(v.strictObject({ readOnly: v.optional(v.boolean()), timeoutMs: v.optional(v.number()) })),
+      profiles: v.optional(v.record(v.string(), v.strictObject({})), {}),
+    })
+    const own = settingsFor(
+      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
+      { schema: camelSchema },
+    )
+    const file = JSON.stringify({ defaults: { readOnly: true, timeoutMs: 5 } })
+    withConfig(file)
+    const read = own.resolveSettings({}, { env: {}, configDir, needsProfile: false })
+    expect(read.readOnly).toBe(true)
+    expect(read.timeoutMs).toBe(5)
+    expect(levelFor(read.permissions, "messages.send").level).toBe("readonly")
+    expect(readFileSync(path(), "utf8")).toBe(file)
+  })
+
+  it("keeps a name an app still declares in camelCase", () => {
+    const own = settingsFor(
+      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
+      { profile: { autoStart: v.optional(v.boolean()) } },
+    )
+    withConfig(JSON.stringify({ defaults: { autoStart: true, timeoutMs: 5 } }))
+    own.resolveSettings({}, { env: {}, configDir, needsProfile: false })
+    expect(JSON.parse(readFileSync(path(), "utf8"))).toEqual({ defaults: { autoStart: true, timeout_ms: 5 } })
   })
 })

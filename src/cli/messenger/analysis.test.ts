@@ -196,6 +196,6 @@ describe("analysis CLI consent and configuration", () => {
     expect(json(capped)).toMatchObject({ stopped: "budget", stored: 0 })
     expect(calls()).toBe(0)
     const shown = json(await call("config", "show", "--json"))
-    expect(shown.settings).toContainEqual({ setting: "analysisProvider", value: "openai", from: "config file" })
+    expect(shown.settings).toContainEqual({ setting: "analysis_provider", value: "openai", from: "config file" })
   })
 })

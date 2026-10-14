@@ -64,7 +64,7 @@ export interface Messenger {
   provider: Provider
   /** The messenger's own name, as its users write it — `Telegram`, `MAX`. Defaults to the command. */
   name?: string
-  /** How fast one profile may ask the messenger, across processes, unless `requestsPerMinute` says otherwise. */
+  /** How fast one profile may ask the messenger, across processes, unless `requests_per_minute` says otherwise. */
   pace?: PaceRate
   resolveSettings: (flags: GlobalFlags, options?: ResolveOptions) => Settings
   /**

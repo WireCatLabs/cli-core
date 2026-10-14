@@ -27,7 +27,7 @@ export interface Across {
 type PeopleScope = { account: string } | { accounts: string[] }
 
 /**
- * This bot's copy, or — when the command asks and `readOtherBots` allows — other bots' copies too.
+ * This bot's copy, or — when the command asks and `read_other_bots` allows — other bots' copies too.
  * Identities are per provider, so a person is the same in all of them.
  */
 const scopeOf = (context: BotContext, bot: BotMessenger, across: Across = {}) => {
@@ -44,11 +44,11 @@ const scopeOf = (context: BotContext, bot: BotMessenger, across: Across = {}) =>
   }
   const { profile } = context
   const allowed = context.settings.readOtherBots
-  const fix = `${bot.app.command} ${asFirstWord(profile)}config set --bot readOtherBots true, or a list of bots`
+  const fix = `${bot.app.command} ${asFirstWord(profile)}config set --bot read_other_bots true, or a list of bots`
   if (allowed === false) {
     throw new CliError(
       "permission_error",
-      `profile ${profile} may not read other bots' copies (readOtherBots is off, from the ` +
+      `profile ${profile} may not read other bots' copies (read_other_bots is off, from the ` +
         `${context.settings.sources.readOtherBots}) — to allow it: ${fix}`,
     )
   }
@@ -62,7 +62,7 @@ const scopeOf = (context: BotContext, bot: BotMessenger, across: Across = {}) =>
     if (refused.length > 0) {
       throw new CliError(
         "permission_error",
-        `profile ${profile} may read only ${allowed.join(", ") || "no other bot"} (readOtherBots) — not ${refused.join(", ")}`,
+        `profile ${profile} may read only ${allowed.join(", ") || "no other bot"} (read_other_bots) — not ${refused.join(", ")}`,
       )
     }
   }
@@ -81,10 +81,10 @@ const scopeOf = (context: BotContext, bot: BotMessenger, across: Across = {}) =>
 /** `--all-bots` and `--bots`, on every command that reads the copy by person or text. */
 const acrossOptions = (command: Command): Command =>
   command
-    .option("--all-bots", "also read every other bot's copy on this machine that readOtherBots allows")
+    .option("--all-bots", "also read every other bot's copy on this machine that read_other_bots allows")
     .option(
       "--bots <profiles>",
-      "also read these bots' copies, comma separated — each allowed by readOtherBots",
+      "also read these bots' copies, comma separated — each allowed by read_other_bots",
       (value) =>
         value
           .split(",")

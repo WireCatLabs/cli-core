@@ -45,7 +45,7 @@ describe("profile reply rendering", () => {
     vi.stubGlobal("fetch", fetcher)
     const render = () => rendering(rule, message, { id: "11", kind: "dialog" }, Date.now())
     expect((await render()).text).toBe("Later")
-    models = { replies: { provider: "openai", model: "test-model", baseUrl: "https://example.test/v1" } }
+    models = { replies: { provider: "openai", model: "test-model", base_url: "https://example.test/v1" } }
     expect((await render()).text).toBe("Later")
     expect(fetcher).not.toHaveBeenCalled()
     writeReplyConsent(path, { provider: identity, deniedChats: [] })
@@ -65,7 +65,7 @@ describe("profile reply rendering", () => {
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
     const path = replyConsentPathFor(app, "default", env)
     let models: ModelSettings = {
-      replies: { provider: "openai", model: "test-model", baseUrl: "https://example.test/v1" },
+      replies: { provider: "openai", model: "test-model", base_url: "https://example.test/v1" },
     }
     writeReplyConsent(path, { provider: identity, deniedChats: [] })
     const fetcher = vi.fn(async () => {

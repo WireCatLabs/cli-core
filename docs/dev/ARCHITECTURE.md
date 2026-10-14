@@ -541,7 +541,7 @@ synthetic MCP proof are tested here; installed consumer parity is not claimed be
 
 ## Bounded preparation after history fetch
 
-Per-profile `searchCatchUp` defaults to false; messages sync can override it with --catch-up or
+Per-profile `search_catch_up` defaults to false; messages sync can override it with --catch-up or
 --no-catch-up. The fetched chat alone is prepared with500chunks,10,000messages and30seconds by
 default. Explicit budgets have hard caps. Invalid permissions/bounds refuse before connection;
 missing local e5 keeps graph-only progress, without downloading a model or using a remote provider.

@@ -5,12 +5,12 @@ Search defaults to local `e5-small` embeddings. Conversation analysis defaults t
 These shared SDK settings/options reach MAX and Telegram at their next cli-core dependency bump.
 
 All text generation uses the `./models` gateway. Set `models.<purpose>.provider`, `.model`, and
-`.baseUrl` for `analysis`, `replies`, or another caller's purpose. Each field falls back to
+`.base_url` for `analysis`, `replies`, or another caller's purpose. Each field falls back to
 `models.default`; `provider: off` explicitly disables a purpose. With no provider configured,
 the gateway refuses without resolving a key or making a request. A model id is required when
 a provider is enabled. Configuration alone never authorizes data transfer.
 
-Existing `analysisProvider`, `analysisModel` and `analysisBaseUrl` remain supported as analysis
+Existing `analysis_provider`, `analysis_model` and `analysis_base_url` remain supported as analysis
 settings, ahead of the default-purpose fallback; explicit purpose settings take precedence.
 `config set models.analysis.provider openai` sets one field; `config unset models.analysis.provider`
 removes it. The whole `models` object can also be set as JSON. `config show` reports effective
@@ -35,24 +35,24 @@ requests on shutdown, so a timed-out one-shot does not leave an HTTP request hol
 
 | Profile setting | Values / default |
 |---|---|
-| `embeddingProvider` | `local` (default), `openai` |
-| `embeddingModel` | Local model ID, or the provider's embedding model; unset uses e5-small locally and text-embedding-3-small at OpenAI |
-| `embeddingBaseUrl` | OpenAI-compatible API base, including `/v1` where required |
-| `embeddingDims` | Positive vector dimension; required for a custom embedding endpoint |
-| `analysisProvider` | `agent` (default), `openai`, `anthropic` |
-| `analysisModel` | Explicit model ID from your provider; required for configured analysis |
-| `analysisBaseUrl` | OpenAI-compatible API base, or Anthropic API root (without `/v1`) |
+| `embedding_provider` | `local` (default), `openai` |
+| `embedding_model` | Local model ID, or the provider's embedding model; unset uses e5-small locally and text-embedding-3-small at OpenAI |
+| `embedding_base_url` | OpenAI-compatible API base, including `/v1` where required |
+| `embedding_dims` | Positive vector dimension; required for a custom embedding endpoint |
+| `analysis_provider` | `agent` (default), `openai`, `anthropic` |
+| `analysis_model` | Explicit model ID from your provider; required for configured analysis |
+| `analysis_base_url` | OpenAI-compatible API base, or Anthropic API root (without `/v1`) |
 
 `config set` validates values, and `config show` reports their source. Profile and kind-specific configuration use the existing settings layers. Prefixed environment variables such as `MAX_EMBEDDING_PROVIDER`, `MAX_EMBEDDING_MODEL`, `MAX_ANALYSIS_PROVIDER`, `MAX_ANALYSIS_MODEL` and corresponding `_BASE_URL` / `_DIMS` override files. Command options override settings. Changing `--provider` or `--base-url` to a different provider/endpoint starts a new provider choice; give that provider's model/dimensions rather than inheriting another provider's settings. `--provider local --model e5-small` selects local embeddings for one command.
 
 ```sh
-max config set embeddingProvider openai
-max config set embeddingModel text-embedding-3-small
+max config set embedding_provider openai
+max config set embedding_model text-embedding-3-small
 max models text key set openai
 max conversations embed --chat '<chat>' --yes
 
-max config set analysisProvider anthropic
-max config set analysisModel '<model from your provider>'
+max config set analysis_provider anthropic
+max config set analysis_model '<model from your provider>'
 max models text key set anthropic
 max conversations build --chat '<chat>' --analyze --max-tokens 100000 --yes
 ```
@@ -60,9 +60,9 @@ max conversations build --chat '<chat>' --analyze --max-tokens 100000 --yes
 Keys go in the OS keyring or the existing protected credential file, never config or command arguments. Public OpenAI and Anthropic can use `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`, or their prefixed forms. A custom base URL uses its exact host (including port) as the key name:
 
 ```sh
-max config set analysisProvider openai
-max config set analysisBaseUrl http://localhost:11434/v1
-max config set analysisModel '<your installed Ollama model>'
+max config set analysis_provider openai
+max config set analysis_base_url http://localhost:11434/v1
+max config set analysis_model '<your installed Ollama model>'
 # A remote compatible server that needs a key:
 max models text key set '<endpoint host[:port]>'
 ```
@@ -86,5 +86,5 @@ The runner reads the same shipped `link-conversations` skill as your agent, adds
 
 Anthropic uses the official TypeScript SDK and [Messages streaming](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/typescript); the runner reads the final message and checks its stop reason. The OpenAI-compatible adapter checks the first choice's finish reason and reported token usage. Both adapters are tested with local fake servers; there are no real provider calls in the test suite.
 
-Embedding endpoints must accept requests at the configured URL directly. Set `embeddingBaseUrl` to
+Embedding endpoints must accept requests at the configured URL directly. Set `embedding_base_url` to
 the API base serving `/embeddings`; configured gateways use normal HTTP redirect handling.

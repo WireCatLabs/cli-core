@@ -40,7 +40,7 @@ export const gapsCommand = (messenger: Messenger) => {
     .option("--page-size <n>", "messages per provider page", count)
     .option("--pause <duration>", "provider pause between pages", fetching.pause)
     .option("--fingerprint <hash>", "refuse if this previously inspected coverage plan changed")
-    .option("--catch-up", "prepare local search after repair; overrides searchCatchUp")
+    .option("--catch-up", "prepare local search after repair; overrides search_catch_up")
     .option("--no-catch-up", "skip local search preparation after repair")
     .option("--catch-up-chunks <n>", "maximum local chunks prepared", count)
     .option("--catch-up-messages <n>", "maximum stored messages read for preparation", count)
@@ -85,7 +85,7 @@ export const gapsCommand = (messenger: Messenger) => {
         !prepare &&
         (args.catchUpChunks !== undefined || args.catchUpMessages !== undefined || args.catchUpTime !== undefined)
       )
-        throw new CliError("validation_error", "catch-up budgets need --catch-up or searchCatchUp true")
+        throw new CliError("validation_error", "catch-up budgets need --catch-up or search_catch_up true")
       if (prepare) {
         validateCatchUpBounds(preparation)
         refuseLocalWrite(context, messenger.app.command, "conversations.links")

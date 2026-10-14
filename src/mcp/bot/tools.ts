@@ -33,7 +33,7 @@ export interface BotTool {
    * profile translated from old `allow` words opens only the keys those words stood for.
    */
   writes?: PermissionKey
-  /** Reads the local copy by person or text, so it may reach other bots when `readOtherBots` allows. */
+  /** Reads the local copy by person or text, so it may reach other bots when `read_other_bots` allows. */
   across?: boolean
   invocation?: (args: Record<string, unknown>) => Invocation
   /** In place of `invocation`: a tool that is more than one command, with its own form. */

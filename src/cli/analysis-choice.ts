@@ -21,7 +21,7 @@ export const analysisChoice = (
     ...settings,
     analysisProvider: configured.provider === "off" ? "agent" : (configured.provider ?? settings.analysisProvider),
     analysisModel: configured.model ?? settings.analysisModel,
-    analysisBaseUrl: configured.baseUrl ?? settings.analysisBaseUrl,
+    analysisBaseUrl: configured.base_url ?? settings.analysisBaseUrl,
   }
   const override =
     (options.provider !== undefined && options.provider !== (settings.analysisProvider ?? "agent")) ||
@@ -37,12 +37,12 @@ export const analysisChoice = (
   if (provider === "agent")
     throw new CliError(
       "validation_error",
-      "analysisProvider is agent; use your linking skill, or configure openai/anthropic to use --analyze",
+      "analysis_provider is agent; use your linking skill, or configure openai/anthropic to use --analyze",
     )
   if (provider !== "openai" && provider !== "anthropic")
     throw new CliError("validation_error", "analysis provider must be agent, openai or anthropic")
   const model = options.model ?? (override ? undefined : settings.analysisModel)
-  if (!model?.trim()) throw new CliError("validation_error", "set analysisModel or give --model before --analyze")
+  if (!model?.trim()) throw new CliError("validation_error", "set analysis_model or give --model before --analyze")
   const customUrl = options.baseUrl ?? (override ? undefined : settings.analysisBaseUrl)
   const baseUrl = customUrl ?? (provider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1")
   if (!endpoint(baseUrl))

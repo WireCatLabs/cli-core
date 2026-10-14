@@ -44,11 +44,11 @@ describe("AI settings and provider selection", () => {
     expect(embeddingChoice({}, app, settings(), env)).toBe("e5-small")
     expect(settings().analysisProvider).toBe("agent")
     for (const [key, value] of [
-      ["embeddingProvider", "anthropic"],
-      ["analysisProvider", "unknown"],
-      ["embeddingDims", "0"],
-      ["analysisModel", '""'],
-      ["analysisBaseUrl", "https://user:secret@example.test"],
+      ["embedding_provider", "anthropic"],
+      ["analysis_provider", "unknown"],
+      ["embedding_dims", "0"],
+      ["analysis_model", '""'],
+      ["analysis_base_url", "https://user:secret@example.test"],
     ])
       expect(() =>
         config.changeSetting(join(root, "config.json"), {
@@ -59,17 +59,17 @@ describe("AI settings and provider selection", () => {
       ).toThrow()
     config.changeSetting(join(root, "config.json"), {
       profile: "default",
-      setting: "embeddingProvider",
+      setting: "embedding_provider",
       value: "openai",
     })
     config.changeSetting(join(root, "config.json"), {
       profile: "default",
-      setting: "analysisProvider",
+      setting: "analysis_provider",
       value: "anthropic",
     })
     config.changeSetting(join(root, "config.json"), {
       profile: "default",
-      setting: "analysisModel",
+      setting: "analysis_model",
       value: "test-model",
     })
     expect(settings()).toMatchObject({
@@ -144,7 +144,7 @@ describe("AI settings and provider selection", () => {
     const { settings, env } = setup()
     expect(() => analysisChoice({}, app, settings(), env)).toThrow("agent")
     expect(() => analysisChoice({ provider: "bad" }, app, settings(), env)).toThrow("provider")
-    expect(() => analysisChoice({ provider: "anthropic" }, app, settings(), env)).toThrow("analysisModel")
+    expect(() => analysisChoice({ provider: "anthropic" }, app, settings(), env)).toThrow("analysis_model")
     expect(() => analysisChoice({ provider: "anthropic", model: "test" }, app, settings(), env)).toThrow("key")
     expect(() =>
       analysisChoice({ provider: "openai", model: "test", baseUrl: "file:///tmp/test" }, app, settings(), env),
