@@ -7,7 +7,7 @@ import { gatewayOcr } from "../../attachments/gateway-ocr.js"
 import { ATTACHMENT_QUERY, type AttachmentItem, type ExtractItem, type ExtractRun } from "../../services/attachments.js"
 import { downloadMessage } from "../../services/file-download.js"
 import { environmentOf } from "../context.js"
-import { LOCAL_WRITE, REMOTE_READ } from "../effects.js"
+import { FETCH, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
@@ -38,7 +38,7 @@ const summary = (run: ExtractRun) =>
     .join(", ")
 
 const extractCommand = (messenger: Messenger): Command =>
-  annotate(new Command("extract"), { effects: REMOTE_READ })
+  annotate(new Command("extract"), { effects: FETCH })
     .description(
       "read the text of downloaded files — text, PDF/DOCX text layers, ODT/ODS/XLSX/PPTX/EPUB — into the local store, where search finds them",
     )

@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { fetchInto } from "../../services/archive.js"
 import { momentOf } from "../../services/moment.js"
-import { REMOTE_READ } from "../effects.js"
+import { FETCH } from "../effects.js"
 import { renderItem } from "../messenger/chat-answers.js"
 import { stopOnSignal } from "../messenger/patience.js"
 import { parseDuration } from "../settings.js"
@@ -24,7 +24,7 @@ const wholeNumber = (value: string): number => {
  */
 export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMessenger["fetching"]>): Command => {
   const command = new Command("store").description("the bot's local copy on this machine")
-  const fetch = annotate(command.command("fetch"), { effects: REMOTE_READ })
+  const fetch = annotate(command.command("fetch"), { effects: FETCH })
     .description("fetch a chat's history into the bot's local copy, newest first; run it again to continue")
     .argument("<chat>", "a chat id, or the title of a chat this bot has seen")
     .option(

@@ -4,7 +4,7 @@ import * as v from "valibot"
 import { MAX_TEXT_CHARS } from "../../attachments/extract.js"
 import { gatewayOcr } from "../../attachments/gateway-ocr.js"
 import { pdfPreviewLimits } from "../../attachments/limits.js"
-import { REMOTE_READ } from "../../cli/effects.js"
+import { FETCH } from "../../cli/effects.js"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../../cli/execution.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
@@ -102,7 +102,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
         cursor: v.optional(v.pipe(v.string(), v.regex(/^[1-9][0-9]*$/))),
       }),
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true, destructiveHint: false },
-      effects: REMOTE_READ,
+      effects: FETCH,
       stored: async (store, account, args, defaults, connect) => {
         if (args.download && (!args.output_dir || !connect))
           throw new CliError("validation_error", "download needs output_dir and an online session")

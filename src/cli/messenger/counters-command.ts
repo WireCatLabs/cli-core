@@ -2,7 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { CounterQuery } from "../../services/counters.js"
 import { environmentOf } from "../context.js"
-import { LOCAL_READ, REMOTE_READ } from "../effects.js"
+import { FETCH, LOCAL_READ } from "../effects.js"
 import { type Body, renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -32,7 +32,7 @@ export const countersCommand = (messenger: Messenger) => {
     annotate(
       command,
       operation === "refresh"
-        ? { effects: REMOTE_READ, output: { entity: "counter_refresh" } }
+        ? { effects: FETCH, output: { entity: "counter_refresh" } }
         : { effects: LOCAL_READ, output: { entity: "counters" } },
     )
     if (operation === "refresh")

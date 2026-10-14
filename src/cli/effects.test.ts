@@ -125,8 +125,9 @@ describe("command effects", () => {
       const effects = metaOf(command).effects
       return key && WRITE_KEYS.includes(key) && effects && !writes(effects)
     })
-    // Its permission is the whole `conversations.embed` group's, though it only reads (FIND-1262).
-    expect(wrong.map(({ path }) => path)).toEqual(["conversations embed status"])
+    // Reads behind a key a profile must allow: the session list is private, and `conversations embed status`
+    // shares the whole `conversations.embed` group's key (FIND-1262).
+    expect(wrong.map(({ path }) => path)).toEqual(["account sessions list", "conversations embed status"])
   })
 
   it("judge retry and unasked steps on the remote side only", () => {

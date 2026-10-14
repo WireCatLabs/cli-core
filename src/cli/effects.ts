@@ -2,8 +2,10 @@ import { stepTargets } from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 
-/** Reads the service; what it read may be kept in the store. */
-export const REMOTE_READ: Effects = { remote: "read", local: "write" }
+/** Reads the messenger; a page it keeps on the way is incidental. */
+export const REMOTE_READ: Effects = { remote: "read", local: "read" }
+/** Reads the messenger to keep what it read on this machine: a sync, a download, a refresh of the store. */
+export const FETCH: Effects = { remote: "read", local: "write" }
 /** Changes something on the service; a guarded write also records itself here. */
 export const REMOTE_WRITE: Effects = { remote: "write", local: "write" }
 export const LOCAL_READ: Effects = { remote: "none", local: "read" }

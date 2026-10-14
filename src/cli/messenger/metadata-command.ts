@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { LOCAL_READ, REMOTE_READ } from "../effects.js"
+import { FETCH, LOCAL_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -19,7 +19,7 @@ export const metadataCommand = (messenger: Messenger): Command => {
         itemOf(snakeKeys(await context.withServices((services) => services.metadata.get(chat)))),
       )
     })
-  annotate(command.command("refresh"), { effects: REMOTE_READ })
+  annotate(command.command("refresh"), { effects: FETCH })
     .option(
       "--chat <chat>",
       "stored group/channel; repeat for several",

@@ -16,7 +16,7 @@ export { downloadMessage, type Saved, safeName, save } from "../../services/file
 import { OFFLINE } from "../../services/deps.js"
 import type { MessagesService } from "../../services/messages.js"
 import { patiently } from "../../services/patience.js"
-import { REMOTE_READ } from "../effects.js"
+import { FETCH } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
 import { nextStep } from "../steps.js"
@@ -25,7 +25,7 @@ import { stopOnSignal } from "./patience.js"
 
 /** `messages download`: every file of one message, or with `--all` of a whole chat, never over a file already there. */
 export const downloadSubcommand = (messages: Command, messenger: Messenger): Command =>
-  annotate(messages.command("download"), { effects: REMOTE_READ })
+  annotate(messages.command("download"), { effects: FETCH })
     .description("save a message's photos, files, videos and voice notes to a folder — or a whole chat's with --all")
     .argument("<chat>", messenger.chatArgument)
     .argument("[message]", "the message id; left out with --all")

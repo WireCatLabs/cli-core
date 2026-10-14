@@ -11,7 +11,7 @@ import { momentOf } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { LOCAL_READ, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
+import { FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { isCliFailure } from "../failures.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
@@ -51,7 +51,7 @@ const ALL_CHATS = "--all"
 
 export const syncCommand = (messenger: Messenger): Command => {
   const fetching = messenger.fetching ?? FETCHING
-  return annotate(new Command("sync"), { effects: REMOTE_READ })
+  return annotate(new Command("sync"), { effects: FETCH })
     .description(
       "bring a chat's history in the local store up to date, newest first; run it again to continue; --all syncs every chat",
     )

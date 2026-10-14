@@ -2,7 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { registriesCover } from "../../botcheck/registries.js"
 import { AUDIT_BUDGET, AUDIT_PAGE } from "../../services/members-audit.js"
-import { LOCAL_READ, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
+import { FETCH, LOCAL_READ, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, withPaging } from "../paging.js"
@@ -136,7 +136,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  const fetch = annotate(new Command("fetch"), { effects: REMOTE_READ })
+  const fetch = annotate(new Command("fetch"), { effects: FETCH })
     .description(
       "read a group's whole member list into the local store's member history: who joined, who left, daily " +
         "counts and profile changes; someone is recorded as gone only when every member was read",

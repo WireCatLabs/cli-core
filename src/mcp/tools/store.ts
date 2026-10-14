@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { REMOTE_READ } from "../../cli/effects.js"
+import { FETCH } from "../../cli/effects.js"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
@@ -45,7 +45,7 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
       background: v.optional(v.boolean()),
     }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    effects: REMOTE_READ,
+    effects: FETCH,
     stored: async (store, account, args, defaults, connect) => {
       const fetching = messenger.fetching ?? FETCHING
       const deps = {

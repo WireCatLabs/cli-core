@@ -26,7 +26,8 @@ shape of this file.
 - **On `@wirecat/cli-base` 0.28.0, with its standard shapes** (peer `>=0.28.0 <0.29.0`). `commands --json` is
   contract 3.
   - **Every command declares `effects: { remote, local }`** (`none | read | write`) in place of `mutates` and
-    `local`; reads too, since a command without it counts as a write. `REMOTE_READ`, `REMOTE_WRITE`, `LOCAL_READ`,
+    `local`; reads too, since a command without it counts as a write. `REMOTE_READ`, `FETCH` (reads the messenger
+    to keep it here: a sync, a download), `REMOTE_WRITE`, `LOCAL_READ`,
     `LOCAL_WRITE` and `NO_EFFECTS` from `@wirecat/cli-core/cli` name the usual pairs. A generated `bot api`
     command says `api_operation` instead of `operation_id`.
   - **Every error has `retry: { safe, after_ms? }`**; `retryable` is no longer in `details`. Retry and a step's

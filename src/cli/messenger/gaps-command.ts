@@ -7,7 +7,7 @@ import { finishJob, jobsDir, startArchiveJob, updateJob } from "../../services/b
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { LOCAL_READ, REMOTE_READ } from "../effects.js"
+import { FETCH, LOCAL_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
 import { nextStep } from "../steps.js"
@@ -31,7 +31,7 @@ export const gapsCommand = (messenger: Messenger) => {
       renderAnswer(this, context, itemOf(snakeKeys(await context.withServices((services) => services.gaps.plan(chat)))))
     })
   const fetching = messenger.fetching ?? FETCHING
-  annotate(group.command("repair"), { effects: REMOTE_READ })
+  annotate(group.command("repair"), { effects: FETCH })
     .description("fetch bounded interior gaps and recheck coverage; never delete unseen messages")
     .argument("<chat>", messenger.chatArgument)
     .option("--limit <n>", "total messages in this repair, 500 by default", count)

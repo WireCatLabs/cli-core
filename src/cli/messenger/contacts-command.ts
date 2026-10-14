@@ -9,7 +9,7 @@ import { maskedAccount } from "../../services/people.js"
 import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/person-context.js"
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
 import { readSecret } from "../../terminal/prompt.js"
-import { LOCAL_WRITE, REMOTE_READ } from "../effects.js"
+import { FETCH, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount, window, withPaging } from "../paging.js"
@@ -315,7 +315,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(contacts.command("sync"), { effects: REMOTE_READ })
+  annotate(contacts.command("sync"), { effects: FETCH })
     .description("take the whole contact list from the messenger into the local store")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
