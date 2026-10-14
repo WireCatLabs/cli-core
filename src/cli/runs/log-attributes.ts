@@ -1,6 +1,7 @@
 import { logAttributesJsonSchema } from "@wirecat/cli-base/standards"
 import type { SendEntry } from "../../sends/journal.js"
 import type { DiagnosticEvent } from "./events.js"
+import { logAttributes } from "./log-keys.js"
 
 type KeysOf<T> = T extends unknown ? keyof T : never
 
@@ -66,9 +67,19 @@ const background = [
   "targetId",
 ]
 
-/** Every attribute key cli-messaging's writers log, beyond cli-base's own. `createRecordLog` blanks any other. */
+/** A crash: where it happened, never what it said. */
+const crash = ["errorClass", "frames"]
+
+/**
+ * Every attribute key cli-core's writers log, as written: snake_case (`logAttributes`). `createRecordLog`
+ * blanks any other, cli-base's own camelCase list included.
+ */
 export const LOG_ATTRIBUTES: readonly string[] = [
-  ...new Set([...Object.keys(diagnostic), ...Object.keys(send), ...background]),
+  ...new Set(
+    [...Object.keys(diagnostic), ...Object.keys(send), ...background, ...crash].map(
+      (key) => Object.keys(logAttributes({ [key]: true }))[0] as string,
+    ),
+  ),
 ].sort()
 
 /** For `cli-dev lint --schemas`, under the name `log_attributes`. */

@@ -22,10 +22,10 @@ const EVENT_FIELDS = [
   "operation",
   "ids",
   "counts",
-  "durationMs",
+  "duration_ms",
   "outcome",
-  "errorCode",
-  "providerError",
+  "error_code",
+  "provider_error",
   "code",
 ]
 

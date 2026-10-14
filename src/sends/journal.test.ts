@@ -25,7 +25,7 @@ it("writes each entry as a log record of the run that sent it", () => {
     body: "message",
     run_id: "20261013T080000Z-messages-send-a81f2c",
     command: "messages send",
-    attributes: { profile: "default", chatId: "1", outcome: "sent", length: 5 },
+    attributes: { profile: "default", chat_id: "1", outcome: "sent", length: 5 },
     resource: { service: "tg", version: "1.0.0" },
   })
   expect(JSON.parse(lines[1] as string)).toMatchObject({ severity: "warn" })

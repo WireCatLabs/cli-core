@@ -51,7 +51,7 @@ describe("the log allow-list", () => {
     expect(records.every((record) => record.trace_id === "4bf92f3577b34da6a3ce929d0e0e4736")).toBe(true)
     expect(text).not.toContain(NOT_ALLOWED)
     expect(text).not.toContain("private words")
-    expect(records[2]?.attributes).toMatchObject({ event: "crash", errorClass: "TypeError" })
+    expect(records[2]?.attributes).toMatchObject({ event: "crash", error_class: "TypeError" })
   })
 
   it("maps an agent's audit row to a record with ids and codes only", () => {
@@ -81,13 +81,13 @@ describe("the log allow-list", () => {
         tool: "messages_send",
         tier: "write-public",
         outcome: "refused",
-        actorType: "bot",
-        actorId: "3",
+        actor_type: "bot",
+        actor_id: "3",
         agent: "tg-mcp",
-        targetType: "chat",
-        targetId: "9",
-        errorCode: "permission_error",
-        durationMs: 250,
+        target_type: "chat",
+        target_id: "9",
+        error_code: "permission_error",
+        duration_ms: 250,
       },
       resource: { service: "tg", version: "1.0.0" },
     })

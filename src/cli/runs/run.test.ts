@@ -33,7 +33,7 @@ describe("a run directory", () => {
 
     const metadata = JSON.parse(readFileSync(join(run.dir, "run.json"), "utf8")) as Record<string, unknown>
     expect(metadata).toMatchObject({ command: "chats list", profile: "default", status: "running" })
-    expect(metadata.completedAt).toBeUndefined()
+    expect(metadata.completed_at).toBeUndefined()
   })
 
   it("is named so that it sorts, and reads without being opened", async () => {
@@ -72,7 +72,7 @@ describe("a run directory", () => {
     })
     expect(readEvents(run.dir)).toMatchObject([
       { event: "request", operation: "messages.list", severity: "info" },
-      { event: "response", durationMs: 12 },
+      { event: "response", duration_ms: 12 },
     ])
     // biome-ignore lint/suspicious/noControlCharactersInRegex: an escape sequence is what must not be there.
     expect(readFileSync(join(run.dir, "events.jsonl"), "utf8")).not.toMatch(/\u001b\[/)
@@ -83,9 +83,9 @@ describe("a run directory", () => {
     await run.finish("failed", { requests: 2, errorCode: "authentication_error" })
 
     const metadata = JSON.parse(readFileSync(join(run.dir, "run.json"), "utf8")) as Record<string, unknown>
-    expect(metadata).toMatchObject({ status: "failed", requests: 2, errorCode: "authentication_error" })
-    expect(metadata.completedAt).toBeTypeOf("string")
-    expect(metadata.durationMs).toBeTypeOf("number")
+    expect(metadata).toMatchObject({ status: "failed", requests: 2, error_code: "authentication_error" })
+    expect(metadata.completed_at).toBeTypeOf("string")
+    expect(metadata.duration_ms).toBeTypeOf("number")
   })
 
   it("finishes once, whoever calls it twice", async () => {

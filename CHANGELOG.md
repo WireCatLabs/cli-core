@@ -9,6 +9,14 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Log record keys are snake_case, in one step:** every attribute cli-core writes — run events (`duration_ms`,
+  `error_code`, `provider_error`, `age_ms`, crash `error_class`), the send journal (`chat_id`, `send_id`,
+  `operation_id`, `message_id`, `reply_to`, …), background records (`exit_code`, `actor_type`, `target_id`, …), the
+  agent log — and `run.json` and the day's `index.jsonl` (`run_id`, `started_at`, `duration_ms`, `error_code`,
+  `partial.failures[].error_code`, …). `LOG_ATTRIBUTES` lists the snake_case keys; `--trace` JSON lines use them too.
+  The TypeScript shapes (`DiagnosticEvent`, `SendEntry`, `RunMetadata`) keep their names: the conversion is at the
+  file. Files written before are still read: `runs list|show|search`, the runs index, the doctor report and the send
+  guard's hourly limit and retry check take either key, so nothing is rebuilt. `readEvents` returns snake_case keys.
 - **`stats` reports refuse `--jsonl`** (`reason: "output.one-object"`), as charts and official statistics did:
   `stats messages show|unanswered|discussion|top|counters show|counters refresh`, `stats contacts responses|top`,
   `stats chats show|newcomers|retention|official`, `stats tasks show`, `stats charts`. The `* evidence` lists still

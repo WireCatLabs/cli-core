@@ -71,7 +71,7 @@ it("shows a run's failures and leaves the rest to -v", async () => {
     error_code: "timeout",
     event_count: 3,
     events: [
-      { event: "response", errorCode: "timeout" },
+      { event: "response", error_code: "timeout" },
       { event: "warning", code: "slow_answer" },
     ],
   })

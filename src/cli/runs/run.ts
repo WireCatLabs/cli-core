@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { createRecordLog, type Logger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../app.js"
 import { LOG_ATTRIBUTES } from "./log-attributes.js"
+import { fromLogAttributes, logAttributes, snakeLogger } from "./log-keys.js"
 
 export type RunStatus = "success" | "failed" | "partial"
 
@@ -116,23 +117,25 @@ export const startRun = (options: StartRunOptions): Run => {
   const events = join(dir, "events.jsonl")
   writeFileSync(events, "", { flag: "a", mode: 0o600 })
 
-  const file = createRecordLog({
-    to: events,
-    runId: id,
-    command: options.command,
-    resource: { service: options.service, version: options.cliVersion },
-    allow: LOG_ATTRIBUTES,
-    ...(options.traceId === undefined ? {} : { traceId: options.traceId }),
-    ...(options.onError === undefined ? {} : { onError: options.onError }),
-  })
+  const file = snakeLogger(
+    createRecordLog({
+      to: events,
+      runId: id,
+      command: options.command,
+      resource: { service: options.service, version: options.cliVersion },
+      allow: LOG_ATTRIBUTES,
+      ...(options.traceId === undefined ? {} : { traceId: options.traceId }),
+      ...(options.onError === undefined ? {} : { onError: options.onError }),
+    }),
+  )
   const operations = new Set<string>()
   const codes = new Set<string>()
   const noted =
     (write: (event: object, message?: string) => void) =>
     (event: object, message?: string): void => {
-      const { operation, errorCode, code } = event as Record<string, unknown>
+      const { operation, errorCode, error_code, code } = event as Record<string, unknown>
       if (typeof operation === "string") operations.add(operation)
-      for (const value of [errorCode, code]) if (typeof value === "string") codes.add(value)
+      for (const value of [errorCode, error_code, code]) if (typeof value === "string") codes.add(value)
       write(event, message)
     }
   const logger: Logger = {
@@ -200,9 +203,10 @@ const INDEX = "index.jsonl"
 const writeRunFile = (dir: string, metadata: RunMetadata): void => {
   // Atomic, so a reader never sees half of one — and 0600, because it names a profile and a
   // command even though it carries nothing of what was said.
-  writeSecurely(join(dir, "run.json"), `${JSON.stringify(metadata, null, 2)}\n`, 0o600)
+  const written = runFileOf(metadata)
+  writeSecurely(join(dir, "run.json"), `${JSON.stringify(written, null, 2)}\n`, 0o600)
   try {
-    appendFileSync(join(dir, "..", INDEX), `${JSON.stringify(metadata)}\n`, { mode: 0o600 })
+    appendFileSync(join(dir, "..", INDEX), `${JSON.stringify(written)}\n`, { mode: 0o600 })
   } catch {
     // The index only makes reading faster; a day without one is read run by run.
   }
@@ -239,7 +243,7 @@ const runsOfDay = (dayDir: string): RunMetadata[] => {
   for (const line of raw.split("\n")) {
     if (line.trim() === "") continue
     try {
-      const metadata = JSON.parse(line) as RunMetadata
+      const metadata = metadataOf(JSON.parse(line))
       if (typeof metadata.runId === "string") latest.set(metadata.runId, metadata)
     } catch {
       // A torn line from a killed process; that run's next line, or its run.json, still says it.
@@ -293,8 +297,8 @@ export const readEvents = (dir: string): Record<string, unknown>[] => {
 /** A run kept before records were written holds the event's fields at the top of each line. */
 const eventOf = (line: Record<string, unknown>): Record<string, unknown> => {
   const { attributes, time, severity } = line
-  if (attributes === null || typeof attributes !== "object") return line
-  return { time, severity, ...(attributes as Record<string, unknown>) }
+  if (attributes === null || typeof attributes !== "object") return logAttributes(line)
+  return { time, severity, ...logAttributes(attributes) }
 }
 
 /**
@@ -325,7 +329,7 @@ const days = (runsDir: string): string[] => safeReaddir(runsDir).filter((entry) 
 
 const readRun = (dir: string): RunMetadata | undefined => {
   try {
-    return JSON.parse(readFileSync(join(dir, "run.json"), "utf8")) as RunMetadata
+    return metadataOf(JSON.parse(readFileSync(join(dir, "run.json"), "utf8")))
   } catch {
     return undefined
   }
@@ -337,4 +341,26 @@ const safeReaddir = (dir: string): string[] => {
   } catch {
     return []
   }
+}
+
+/** `run.json` and the index hold the metadata in snake_case, `partial` included. */
+const runFileOf = ({ partial, ...metadata }: RunMetadata): Record<string, unknown> => ({
+  ...logAttributes(metadata),
+  ...(partial
+    ? { partial: { ...logAttributes(partial), failures: partial.failures.map((failure) => logAttributes(failure)) } }
+    : {}),
+})
+
+/** A run written either way, before or after its keys were snake_case. */
+const metadataOf = (parsed: Record<string, unknown>): RunMetadata => {
+  const { partial, ...metadata } = fromLogAttributes(parsed)
+  if (partial === null || typeof partial !== "object") return metadata as unknown as RunMetadata
+  const { failures, ...rest } = fromLogAttributes(partial)
+  return {
+    ...metadata,
+    partial: {
+      ...rest,
+      failures: Array.isArray(failures) ? failures.map((failure: object) => fromLogAttributes(failure)) : [],
+    },
+  } as unknown as RunMetadata
 }

@@ -1,8 +1,8 @@
-import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs"
+import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
-import { startRun } from "./run.js"
+import { findRun, listRuns, readEvents, startRun } from "./run.js"
 import { searchRuns } from "./search.js"
 
 it("searches error codes, partial IDs and safe events with profile isolation and pagination", async () => {
@@ -38,7 +38,7 @@ it("searches error codes, partial IDs and safe events with profile isolation and
   expect(result.items).toHaveLength(1)
   expect(result.items[0]).toMatchObject({
     partial: { failures: [{ id: "50" }] },
-    events: [{ operation: "messages.download", errorCode: "rate_limited" }],
+    events: [{ operation: "messages.download", error_code: "rate_limited" }],
   })
   expect(JSON.stringify(result)).not.toContain("private synthetic payload")
   expect(JSON.stringify(result)).not.toContain("synthetic forbidden token")
@@ -72,4 +72,60 @@ it("finds a code a finished run's events carried without opening the runs that c
   const ids = (search: Parameters<typeof searchRuns>[1]) => searchRuns(dir, search).items.map((item) => item.runId)
   expect(ids({ errorCode: "timeout" }).sort()).toEqual([hit.id, killed.id].sort())
   expect(ids({ operation: "messages.send" }).sort()).toEqual([hit.id, killed.id].sort())
+})
+
+it("reads runs written before their keys were snake_case, from the index and from run.json alike", () => {
+  const dir = mkdtempSync(join(tmpdir(), "run-search-old-"))
+  const old = (runId: string) => ({
+    runId,
+    command: "messages download",
+    profile: "work",
+    startedAt: "2026-10-01T08:00:00.000Z",
+    completedAt: "2026-10-01T08:00:01.000Z",
+    status: "partial",
+    durationMs: 1000,
+    cliVersion: "0.1.0",
+    errorCode: "rate_limited",
+    partial: { failed: 1, stopReason: "limit", failures: [{ id: "5", stage: "download", errorCode: "rate_limited" }] },
+    operations: ["messages.download"],
+    codes: ["rate_limited"],
+  })
+  const day = join(dir, "2026-10-01")
+  for (const id of ["20261001T080000Z-messages-download-aaaaaa", "20261001T080000Z-messages-download-bbbbbb"]) {
+    mkdirSync(join(day, id), { recursive: true })
+    writeFileSync(join(day, id, "run.json"), JSON.stringify(old(id)))
+    writeFileSync(
+      join(day, id, "events.jsonl"),
+      `${JSON.stringify({
+        time: "2026-10-01T08:00:00.500Z",
+        severity: "error",
+        body: "response",
+        run_id: id,
+        command: "messages download",
+        attributes: { event: "response", operation: "messages.download", errorCode: "rate_limited", durationMs: 7 },
+        resource: { service: "tg", version: "0.1.0" },
+      })}\n`,
+    )
+  }
+  appendFileSync(join(day, "index.jsonl"), `${JSON.stringify(old("20261001T080000Z-messages-download-aaaaaa"))}\n`)
+
+  const runs = listRuns(dir)
+  expect(runs.map((run) => run.runId).sort()).toEqual([
+    "20261001T080000Z-messages-download-aaaaaa",
+    "20261001T080000Z-messages-download-bbbbbb",
+  ])
+  expect(runs[0]).toMatchObject({ errorCode: "rate_limited", partial: { stopReason: "limit" } })
+  const found = searchRuns(dir, { errorCode: "rate_limited", operation: "messages.download" })
+  expect(found.items).toHaveLength(2)
+  expect(found.items[0]?.events).toEqual([
+    {
+      time: "2026-10-01T08:00:00.500Z",
+      event: "response",
+      operation: "messages.download",
+      error_code: "rate_limited",
+      duration_ms: 7,
+    },
+  ])
+  const shown = findRun(dir, "20261001T080000Z-messages-download-bbbbbb")
+  expect(shown && readEvents(shown.dir)).toMatchObject([{ error_code: "rate_limited", duration_ms: 7 }])
 })

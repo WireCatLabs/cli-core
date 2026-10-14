@@ -4,6 +4,7 @@ import { logRecordOf, resolvePaths } from "@wirecat/cli-base"
 import type { LogRecord } from "@wirecat/cli-base/standards"
 import type { AppIdentity } from "../cli/app.js"
 import { LOG_ATTRIBUTES } from "../cli/runs/log-attributes.js"
+import { fromLogAttributes, logAttributes } from "../cli/runs/log-keys.js"
 import { currentRun } from "../cli/runs/scope.js"
 import type { Id } from "../domain/models.js"
 import { withFileLock } from "./file-lock.js"
@@ -143,7 +144,7 @@ export class SendJournal {
     const { runId, command, traceId } = currentRun()
     const record = logRecordOf({
       severity: entry.outcome === "sent" || entry.outcome === "reserved" ? "info" : "warn",
-      event: attributes,
+      event: logAttributes(attributes),
       message: entry.kind ?? "message",
       time: at,
       runId,
@@ -194,7 +195,7 @@ export class SendJournal {
  * records — flat, with `at` — still counts.
  */
 const entryOf = (line: SendEntry | LogRecord): SendEntry =>
-  "attributes" in line ? ({ at: line.time, ...line.attributes } as SendEntry) : line
+  "attributes" in line ? ({ at: line.time, ...fromLogAttributes(line.attributes) } as SendEntry) : line
 
 /** max-cli wrote the send identity as a number called `cid` before it was shared; read both. */
 const withSendId = (entry: SendEntry & { cid?: number }): SendEntry => {

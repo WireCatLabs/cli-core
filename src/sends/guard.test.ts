@@ -231,6 +231,31 @@ describe("a retry of a send whose outcome was unknown", () => {
     expect(() => guard("g-retry").check({ chatId: "-1001", sendId: "-43" })).toThrow("the next send is possible")
   })
 
+  it("counts and matches a send journalled before the journal's keys were snake_case", () => {
+    const path = sendsPathFor("g-old-keys")
+    mkdirSync(dirname(path), { recursive: true })
+    const record = {
+      time: new Date().toISOString(),
+      severity: "warn",
+      body: "message",
+      run_id: "20261001T000000Z-messages-send-a1b2c3",
+      command: "messages send",
+      attributes: { profile: "g-old-keys", chatId: "-1001", outcome: "outcome_unknown", sendId: "-42", length: 3 },
+      resource: { service: "app", version: "0" },
+    }
+    writeFileSync(path, `${JSON.stringify(record)}\n`)
+
+    expect(() => guard("g-old-keys").check({ chatId: "-1001", sendId: "-42" })).not.toThrow()
+    expect(() => guard("g-old-keys").check({ chatId: "-1001", sendId: "-43" })).toThrow("the next send is possible")
+    guard("g-old-keys").record({ chatId: "-1001", outcome: "sent", sendId: "-42" })
+    expect(new SendJournal(path).entries().map(({ chatId, sendId, outcome }) => ({ chatId, sendId, outcome }))).toEqual(
+      [
+        { chatId: "-1001", sendId: "-42", outcome: "outcome_unknown" },
+        { chatId: "-1001", sendId: "-42", outcome: "sent" },
+      ],
+    )
+  })
+
   it("refuses a retry of an unknown send under another identity", () => {
     const first = guard("g-retry-as")
     first.check({ chatId: "-1001", sendId: "-42", sendAs: "-1002" })

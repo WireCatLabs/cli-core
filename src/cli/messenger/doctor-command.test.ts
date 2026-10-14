@@ -371,7 +371,7 @@ describe("doctor report", () => {
     expect(report.sends[0]).toMatchObject({ chatId: label, outcome: "sent", length: 5 })
     expect(report.doctor.account.remembered).toMatch(/^id:/)
     expect(report.doctor.config.path).toBe("~/home/config/config.json")
-    expect(Object.keys(report.run.events[0]).sort()).toEqual(["errorCode", "event", "ids", "operation", "outcome"])
+    expect(Object.keys(report.run.events[0]).sort()).toEqual(["error_code", "event", "ids", "operation", "outcome"])
   })
 
   it("**labels every id a send journal line can hold**, and a send's operation id as its send id", async () => {
