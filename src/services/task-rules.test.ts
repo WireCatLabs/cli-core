@@ -10,7 +10,7 @@ import { openStore } from "../store/store.js"
 import { memoryTaskStore } from "../tasks/testing/index.js"
 import { onlineDeps } from "./deps.js"
 import { inboxService } from "./inbox.js"
-import { applyTaskRules, applyTaskRulesOnArrival, openRequestTask } from "./task-rules.js"
+import { applyTaskRules, applyTaskRulesOnArrival, applyTaskRulesToStored, openRequestTask } from "./task-rules.js"
 
 const account = { provider: "telegram", account: "500" } as const
 const at = (minute: number) => new Date(Date.UTC(2026, 9, 6, 10, minute)).toISOString()
@@ -182,6 +182,33 @@ describe("a reply rule's task", () => {
 
     expect([first, again]).toEqual([true, false])
     expect(tasks.map((task) => [task.kind, task.state, task.origin])).toEqual([["request", "open", "rule"]])
+    await store.close()
+  })
+})
+
+describe("the rule pass over the store", () => {
+  it("reads only chats stored into after the stop point, and opens and closes as review did", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-stored-")), "messages.db") })
+    await store.saveMessages(account, "-1001", [said("0", 0, "morning"), said("1", 1, "who has the keys?")], {
+      via: "test",
+    })
+
+    const first = await applyTaskRulesToStored(store, account)
+    expect(first).toMatchObject({ added: 1, closed: 0, until: expect.any(String) })
+    expect(await applyTaskRulesToStored(store, account, first.until ?? undefined)).toEqual({
+      added: 0,
+      closed: 0,
+      until: first.until,
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await store.saveMessages(account, "-1001", [said("2", 2, "I do", { outgoing: true, replyToId: "1" })], {
+      via: "test",
+    })
+    const second = await applyTaskRulesToStored(store, account, first.until ?? undefined)
+    expect(second).toMatchObject({ added: 0, closed: 1 })
+    expect(second.until && first.until && second.until > first.until).toBe(true)
+    expect((await store.tasks.list({})).map((task) => task.state)).toEqual(["done"])
     await store.close()
   })
 })

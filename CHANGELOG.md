@@ -30,6 +30,10 @@ shape of this file.
   remembers, so a program with no messenger profile — memo, with `--provider --account` — mounts the local
   builders. `withStore` and the services' `account()` use it first. **`tasksStatsCommand` is exported** beside
   `tasksCommand`, for a program that mounts `stats tasks show` without the rest of `stats`.
+- **`applyTaskRulesToStored(store, account, since?)` from `@wirecat/cli-core/services`:** the task rules `review`
+  applies (a question nobody answered, a mention of the owner; closed once the owner answers), run over what is
+  already stored — each chat stored into after `since`, its new messages with the 50 before them. It returns
+  `until`, the newest store time it saw, for the next pass to start from. For memo, which reads no messenger.
 - **`itemOf`, `listOf`, `pagedList`, `renderAnswer`, `answerSchema` and `snakeKeys` from `@wirecat/cli-core/cli`**,
   with the `Body`, `ItemBody`, `ListBody`, `ListInput` and `AnswerOutput` types: an app's own command answers in the
   same envelope, `meta` and next steps as cli-core's, without a copy of them.
