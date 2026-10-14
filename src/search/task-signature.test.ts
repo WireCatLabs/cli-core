@@ -1,9 +1,15 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { normalize } from "../store/normalize.js"
 import { amountOf, dayOf, dueDayOf } from "./task-signature.js"
 
-const day = (iso: string) => dayOf(Date.parse(iso))
+const day = (date: string) => Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000)
 const wednesday = Date.parse("2026-10-14T10:00:00Z")
+const zone = process.env.TZ
+
+afterEach(() => {
+  if (zone === undefined) delete process.env.TZ
+  else process.env.TZ = zone
+})
 
 describe("amountOf", () => {
   it.each([
@@ -44,5 +50,36 @@ describe("dueDayOf", () => {
 
   it("is null when the text names no date", () => {
     expect(dueDayOf("купи хлеба", wednesday)).toBeNull()
+  })
+
+  it.each([
+    "закажи средства для посуды",
+    "закажи завтрак в номер",
+    "please decide 3 options",
+    "maybe 2 tickets",
+    "срок 5-го квартала",
+    "call upon 5th street",
+    "в марке 3 вида",
+  ])("reads no date in %j", (text) => {
+    expect(dueDayOf(normalize(text), wednesday)).toBeNull()
+  })
+
+  it.each([
+    ["в среду", "2026-10-21"],
+    ["до 3 мая", "2026-05-03"],
+    ["к 5 ноябрю", "2026-11-05"],
+    ["dec 3", "2026-12-03"],
+    ["sept 9", "2026-09-09"],
+  ])("still reads the whole word %j", (text, due) => {
+    expect(dueDayOf(normalize(text), wednesday)).toBe(day(due))
+  })
+
+  it("counts days in the machine's time zone", () => {
+    const lateEvening = Date.parse("2026-10-14T22:30:00Z")
+    process.env.TZ = "Europe/Madrid"
+    expect(dayOf(lateEvening)).toBe(day("2026-10-15"))
+    expect(dueDayOf("завтра", lateEvening)).toBe(day("2026-10-16"))
+    process.env.TZ = "America/New_York"
+    expect(dueDayOf("завтра", lateEvening)).toBe(day("2026-10-15"))
   })
 })

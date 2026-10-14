@@ -46,9 +46,9 @@ describe("prepareTask", () => {
   it("reads the amount and due date from the text unless they are given", () => {
     const text = { title: "Оплатить счёт", description: "15 000 руб до пятницы", createdAt: at(0) }
     expect(prepareTask(text)).toMatchObject({ amount: { value: 15000, currency: "RUB" }, dueDay: dayOf(now) + 2 })
-    expect(prepareTask({ ...text, amount: null, due: new Date("2026-10-20T23:00:00Z") })).toMatchObject({
+    expect(prepareTask({ ...text, amount: null, due: new Date(2026, 9, 20, 23, 30) })).toMatchObject({
       amount: null,
-      dueDay: dayOf(Date.parse("2026-10-20T00:00:00Z")),
+      dueDay: Date.UTC(2026, 9, 20) / DAY,
     })
   })
 })

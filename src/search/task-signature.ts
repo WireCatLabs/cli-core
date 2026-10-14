@@ -32,29 +32,32 @@ export const amountOf = (text: string): TaskAmount | null => {
 
 const RU_WEEKDAYS = ["воскресен", "понедельник", "вторник", "сред", "четверг", "пятниц", "суббот"]
 const EN_WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
-const RU_MONTHS = [
-  "январ",
-  "феврал",
-  "март",
-  "апрел",
-  "ма",
-  "июн",
-  "июл",
-  "август",
-  "сентябр",
-  "октябр",
-  "ноябр",
-  "декабр",
+const WEEKDAY_WORDS =
+  "понедельник[аеу]?|вторник[аеу]?|сред[аеуы]|четверг[аеу]?|пятниц[аеуы]|суббот[аеуы]|воскресень[еяю]|" +
+  EN_WEEKDAYS.join("|")
+const MONTHS = [
+  /^(январ[ьяею]|jan(uary)?)$/u,
+  /^(феврал[ьяею]|feb(ruary)?)$/u,
+  /^(март[ауе]?|mar(ch)?)$/u,
+  /^(апрел[ьяею]|apr(il)?)$/u,
+  /^(ма[яеию]|may)$/u,
+  /^(июн[ьяею]|june?)$/u,
+  /^(июл[ьяею]|july?)$/u,
+  /^(август[ауе]?|aug(ust)?)$/u,
+  /^(сентябр[ьяею]|sept?(ember)?)$/u,
+  /^(октябр[ьяею]|oct(ober)?)$/u,
+  /^(ноябр[ьяею]|nov(ember)?)$/u,
+  /^(декабр[ьяею]|dec(ember)?)$/u,
 ]
-const EN_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
 
-const monthIndex = (word: string): number => {
-  const ru = RU_MONTHS.findIndex((stem) => word.startsWith(stem) && (stem !== "ма" || /^ма[яи]$/u.test(word)))
-  return ru >= 0 ? ru : EN_MONTHS.findIndex((stem) => word.startsWith(stem))
+const monthIndex = (word: string): number => MONTHS.findIndex((month) => month.test(word))
+
+/** The creator's calendar date in the machine's time zone, as a day count: "tomorrow" late at night is local. */
+export const dayOf = (ms: number): number => {
+  const date = new Date(ms)
+  return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY)
 }
-
-export const dayOf = (ms: number): number => Math.floor(ms / DAY)
-const dateDay = (year: number, month: number, day: number) => dayOf(Date.UTC(year, month, day))
+const dateDay = (year: number, month: number, day: number) => Math.floor(Date.UTC(year, month, day) / DAY)
 
 const monthDate = (year: number, word = "", day = ""): number | undefined => {
   const month = monthIndex(word)
@@ -79,30 +82,33 @@ const nextWeekday = (word: string, now: number): number => {
   return day
 }
 
+/** JavaScript's `\b` knows only ASCII letters, so a Cyrillic word needs its edges spelt out. */
+const words = (source: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${source})(?![\\p{L}\\p{N}])`, "gu")
+
 type Resolve = (match: RegExpMatchArray, now: number, year: number) => number | undefined
 
 const DUE_PATTERNS: [RegExp, Resolve][] = [
-  [/послезавтра/gu, (_, now) => now + 2],
-  [/завтра|tomorrow/gu, (_, now) => now + 1],
-  [/сегодня|today/gu, (_, now) => now],
-  [/\b(\d{1,2})\.(\d{2})\b/gu, (m, _, year) => dateDay(year, Number(m[2]) - 1, Number(m[1]))],
-  [/\b(\d{1,2})(?:st|nd|rd|th)?\s+(\p{L}+)/gu, (m, _, year) => monthDate(year, m[2], m[1])],
-  [/\b(\p{L}+)\.?\s+(\d{1,2})\b/gu, (m, _, year) => monthDate(year, m[1], m[2])],
+  [words("послезавтра"), (_, now) => now + 2],
+  [words("завтра|tomorrow"), (_, now) => now + 1],
+  [words("сегодня|today"), (_, now) => now],
+  [words("(\\d{1,2})\\.(\\d{2})"), (m, _, year) => dateDay(year, Number(m[2]) - 1, Number(m[1]))],
+  [words("(\\d{1,2})(?:st|nd|rd|th)?\\s+(\\p{L}+)"), (m, _, year) => monthDate(year, m[2], m[1])],
+  [words("(\\p{L}+)\\.?\\s+(\\d{1,2})"), (m, _, year) => monthDate(year, m[1], m[2])],
   [
-    /(?:до|к|by|until|before|on|deadline)\s+(?:the\s+)?(\d{1,2})(?:-?(?:го|е|числа)|\s+числа|st|nd|rd|th)/gu,
+    words("(?:до|к|by|until|before|on|deadline)\\s+(?:the\\s+)?(\\d{1,2})(?:-?(?:го|е|числа)|\\s+числа|st|nd|rd|th)"),
     (m, now) => nthDay(Number(m[1]), now),
   ],
-  [/конца месяца|end of (?:the )?month/gu, (_, now) => monthEnd(now)],
-  [new RegExp(`(${[...RU_WEEKDAYS, ...EN_WEEKDAYS].join("|")})`, "gu"), (m, now) => nextWeekday(m[1] ?? "", now)],
+  [words("конца месяца|end of (?:the )?month"), (_, now) => monthEnd(now)],
+  [words(`(${WEEKDAY_WORDS})`), (m, now) => nextWeekday(m[1] ?? "", now)],
 ]
 
 /**
- * The due day (whole UTC days since 1970) the earliest date phrase names, read relative to when the task was
- * created; `null` when the text names none. The text is expected normalized (lower case, no diacritics).
+ * The due day (a local calendar date, as `dayOf` counts it) the earliest date phrase names, read relative to when
+ * the task was created; `null` when the text names none. The text is expected normalized (lower case, no diacritics).
  */
 export const dueDayOf = (text: string, createdMs: number): number | null => {
   const now = dayOf(createdMs)
-  const year = new Date(createdMs).getUTCFullYear()
+  const year = new Date(createdMs).getFullYear()
   let best: { index: number; day: number } | undefined
   for (const [pattern, resolve] of DUE_PATTERNS)
     for (const match of text.matchAll(pattern)) {
