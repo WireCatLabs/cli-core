@@ -1,4 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
+import { parseLucene, type QueryAst, validateQuery } from "@wirecat/cli-base/query"
+import { type ListEnvelope, STEPS, type StepDefinition, stepOf } from "@wirecat/cli-base/standards"
+import { MEETING_QUERY, type MeetingItem, type MeetingOwner, meetingItem } from "./item.js"
 import type { MeetingDetails, MeetingFilter, MeetingStore } from "./store.js"
 
 export class MeetingError extends CliError {
@@ -30,7 +33,13 @@ export const meetingShow = async (store: MeetingStore, id: number, accountId?: n
   return details
 }
 export const listed = <T>(items: T[]) => ({ items, page: 1, limit: items.length, hasMore: false })
-export const meetingsList = async (store: MeetingStore, filter: MeetingFilter = {}, page = 1) => {
+/** A list answer without `meta`: the host adds it, as it knows the run. */
+export type MeetingList = Omit<ListEnvelope<MeetingItem>, "meta">
+
+const PAGE_NEXT = STEPS.find((step) => step.id === "page.next") as StepDefinition
+
+/** Newest first; `filter.query` is a list query `meetingsQuery` validated. */
+export const meetingsList = async (store: MeetingStore, filter: MeetingFilter = {}, page = 1): Promise<MeetingList> => {
   validateFilter(filter)
   positiveInteger(page)
   const limit = positiveInteger(filter.limit ?? 100)
@@ -38,8 +47,38 @@ export const meetingsList = async (store: MeetingStore, filter: MeetingFilter = 
   if (!Number.isSafeInteger(offset + limit + 1))
     throw new MeetingError("validation_error", "pagination exceeds safe integer range")
   const rows = await store.meetings({ ...filter, limit: limit + 1, offset })
-  return { items: rows.slice(0, limit), page, limit, hasMore: rows.length > limit }
+  const shown = rows.slice(0, limit)
+  const owners = new Map<number, MeetingOwner>()
+  for (const { accountId } of shown) {
+    if (owners.has(accountId)) continue
+    const owner = await store.account(accountId)
+    if (!owner) throw new MeetingError("not_found", `meeting account ${accountId} is not in the store`)
+    owners.set(accountId, owner)
+  }
+  const has_more = rows.length > limit
+  return {
+    items: shown.map((row) => meetingItem(row, owners.get(row.accountId) as MeetingOwner)),
+    page: { limit, has_more },
+    ...(has_more
+      ? {
+          next: [
+            stepOf(PAGE_NEXT, { command: "meetings list", args: { page: page + 1, limit }, values: { shown: limit } }),
+          ],
+        }
+      : {}),
+  }
 }
+
+/** The query `meetings list` and `meetings_list` take, validated; `undefined` when nothing narrows the list. */
+export const meetingsQuery = (text: string | undefined): QueryAst | undefined => {
+  if (text === undefined || text.trim() === "") return undefined
+  const context = { command: "meetings list", guide: MEETING_QUERY_GUIDE }
+  const query = parseLucene(text, { defaultField: "none", ...context })
+  validateQuery(query, MEETING_QUERY, context)
+  return query
+}
+
+export const MEETING_QUERY_GUIDE = "https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md"
 export interface TranscriptReadOptions {
   history?: boolean
 }

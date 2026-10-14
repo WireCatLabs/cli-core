@@ -9,6 +9,14 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`meetings list [query...]` narrows by one query and answers in the list envelope, without `meta`** (the host
+  adds it). `--since-time` and `--until-time` are gone (`started_at:[2026-10-01 TO 2026-10-31]`; also `id`, `title`,
+  `ended_at`, `duration_ms`, `participants_count`, `created_at`, `updated_at`), and so are the MCP `meetings_list`
+  arguments `since` and `until`, which take `query`; `account_id`, `event_id` and `series_id` stay. Items are the
+  `meeting` entity: ISO times, `ref`, `provider`, `account`, `url`; `page.next` when more exist. `MeetingFilter` takes
+  `query`; `MeetingStore` gains `account(id)`, which a host's own store implements. The `meeting` schema and
+  `formatMeetingReference` now live in `src/meetings/` (exported from `./meetings`), so the module imports nothing
+  of cli-core.
 - **`search all|messages|mail|notes` answer the list envelope, CLI and MCP alike:** `{items, page, next?, missing?,
   meta}` with the entities `hit`, `message.hit` and `note.hit` (snake_case keys: `matched_in`, `found_in`,
   `found_by`, `discovery.missing_terms`). `--page <n>` (MCP `page`) replaces `--offset`, and the next page is a

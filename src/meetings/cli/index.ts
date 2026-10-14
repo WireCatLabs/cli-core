@@ -1,8 +1,20 @@
+import { annotate } from "@wirecat/cli-base/commands"
+import { defineQuery, fieldsHelp } from "@wirecat/cli-base/query"
 import { type Command, InvalidArgumentError, Option } from "commander"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
+import { MEETING_QUERY } from "../item.js"
 import { pull } from "../pull.js"
-import { listed, MeetingError, meetingShow, meetingSummary, meetingsList, meetingTranscript } from "../reads.js"
+import {
+  listed,
+  MEETING_QUERY_GUIDE,
+  MeetingError,
+  meetingShow,
+  meetingSummary,
+  meetingsList,
+  meetingsQuery,
+  meetingTranscript,
+} from "../reads.js"
 import { SAVE_HELP } from "../save-hints.js"
 import type { MeetingSource } from "../source.js"
 import type { MeetingStore } from "../store.js"
@@ -44,16 +56,22 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
     const opts = command.optsWithGlobals()
     deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
   }
-  output(group.command("list").description("list stored meetings"))
-    .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", date)
-    .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", date)
+  const list = group
+    .command("list")
+    .description("stored meetings, newest first")
+    .allowUnknownOption()
+    .argument("[query...]", "field:value terms that narrow the list — the fields are below")
+    .addHelpText("after", `\n${fieldsHelp(MEETING_QUERY, MEETING_QUERY_GUIDE)}`)
+  annotate(list, { query: defineQuery(MEETING_QUERY), output: { entity: "meeting" } })
+  output(list)
     .option("--limit <n>", "meetings per page", integer, 100)
     .option("--page <n>", "page number", integer, 1)
-    .action(async (opts: { sinceTime?: number; untilTime?: number; limit: number; page: number }, command: Command) => {
+    .action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+      const query = meetingsQuery(words.join(" "))
       print(
         await meetingsList(
           deps.store,
-          { accountId: deps.accountId, since: opts.sinceTime, until: opts.untilTime, limit: opts.limit },
+          { accountId: deps.accountId, limit: opts.limit, ...(query ? { query } : {}) },
           opts.page,
         ),
         command,

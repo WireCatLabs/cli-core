@@ -37,6 +37,7 @@ import {
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
+import { type ColumnMap, queryFilter } from "./query-filter.js"
 import { inBatch } from "./search-index.js"
 
 type Row = Record<string, unknown>
@@ -512,6 +513,17 @@ const append = (context: StoreContext, input: TranscriptAppend): TranscriptAppen
   })
 }
 
+const MEETING_COLUMNS = {
+  id: { type: "kw", sql: "CAST(id AS TEXT)" },
+  title: { type: "kw", sql: "title" },
+  started_at: { type: "time", sql: "started_at" },
+  ended_at: { type: "time", sql: "ended_at" },
+  duration_ms: { type: "num", sql: "duration_ms" },
+  participants_count: { type: "num", sql: "participants_count" },
+  created_at: { type: "time", sql: "created_at" },
+  updated_at: { type: "time", sql: "updated_at" },
+} as const satisfies ColumnMap
+
 const filtered = (filter: MeetingFilter = {}) => {
   const where: string[] = []
   const params: SqlValue[] = []
@@ -525,6 +537,11 @@ const filtered = (filter: MeetingFilter = {}) => {
   if (filter.meetingSeriesId !== undefined) add("meeting_series_id = ?", filter.meetingSeriesId)
   if (filter.since !== undefined) add("started_at >= ?", filter.since)
   if (filter.until !== undefined) add("started_at <= ?", filter.until)
+  if (filter.query !== undefined) {
+    const compiled = queryFilter(filter.query, MEETING_COLUMNS, { command: "meetings list" })
+    where.push(`(${compiled.sql})`)
+    params.push(...compiled.params)
+  }
   const [limit, offset] = page(filter)
   return {
     sql: `SELECT * FROM meetings${where.length ? ` WHERE ${where.join(" AND ")}` : ""}
@@ -712,6 +729,10 @@ export const meetingStoreOver = (
         .prepare(sql)
         .all(...params)
         .map(meetingOf)
+    },
+    async account(id) {
+      const row = database.prepare("SELECT provider, external_id FROM accounts WHERE id = ?").get(id)
+      return row ? { provider: String(row.provider), account: String(row.external_id) } : null
     },
     async meeting(id) {
       return details(database, id)

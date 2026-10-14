@@ -1,11 +1,13 @@
 import { errorObjectOf, type FailureContext, mcpErrorResult } from "@wirecat/cli-base"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
+import { MEETING_QUERY } from "../item.js"
 import {
   listed,
   MeetingError,
   meetingShow,
   meetingSummary,
   meetingsList,
+  meetingsQuery,
   meetingTranscript,
   positiveInteger,
 } from "../reads.js"
@@ -14,18 +16,20 @@ import type { MeetingFilter, MeetingStore } from "../store.js"
 
 const integer = { type: "integer", minimum: 1 }
 const text = { type: "string", minLength: 1 }
-const filters = {
-  account_id: integer,
-  event_id: integer,
-  series_id: integer,
-  since: { type: "number" },
-  until: { type: "number" },
-}
 export const meetingTools = [
   {
     name: "meetings_list",
-    description: "list stored meetings",
-    properties: { ...filters, limit: integer, page: integer },
+    description:
+      "stored meetings, newest first; `query` narrows them by field:value terms (Lucene: AND OR NOT, [a TO b], > <) " +
+      `over ${MEETING_QUERY.fields.map((field) => field.name).join(", ")}, e.g. started_at:[2026-10-01 TO 2026-10-31]`,
+    properties: {
+      account_id: integer,
+      event_id: integer,
+      series_id: integer,
+      query: text,
+      limit: integer,
+      page: integer,
+    },
     required: [],
   },
   {
@@ -90,8 +94,6 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
       throw new MeetingError("validation_error", "export format must be markdown or vtt")
     else if (key === "query" && (typeof value !== "string" || !value.trim()))
       throw new MeetingError("validation_error", "query must not be empty")
-    else if (["since", "until"].includes(key) && (typeof value !== "number" || !Number.isFinite(value)))
-      throw new MeetingError("validation_error", "expected epoch milliseconds")
   }
   return args
 }
@@ -108,15 +110,17 @@ export const callMeetingTool = async (
       accountId: args.account_id as number | undefined,
       eventId: args.event_id as number | undefined,
       meetingSeriesId: args.series_id as number | undefined,
-      since: args.since as number | undefined,
-      until: args.until as number | undefined,
     }
     let result: object
     switch (name) {
       case "meetings_list":
         result = await meetingsList(
           store,
-          { ...filter, limit: args.limit as number | undefined },
+          {
+            ...filter,
+            limit: args.limit as number | undefined,
+            query: meetingsQuery(args.query as string | undefined),
+          },
           args.page as number | undefined,
         )
         break

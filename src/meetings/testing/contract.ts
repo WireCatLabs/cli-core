@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { parseLucene } from "@wirecat/cli-base/query"
 import type { ContractCase, MeetingStore } from "../store.js"
 import { sampleEvent, sampleMeeting } from "./samples.js"
 
@@ -23,6 +24,19 @@ export const meetingStoreContract = (make: () => MeetingStore | Promise<MeetingS
       await s.setCursor(1, "second", 2)
       assert.equal(await s.cursor(1), "second")
       assert.equal(await s.cursor(2), null)
+    }),
+    test("a list query narrows by the meeting's own fields, and its account has a name", async (s) => {
+      const d = await s.saveMeeting(sampleMeeting())
+      const query = (text: string) => parseLucene(text, { defaultField: "none", command: "meetings list" })
+      const ids = async (text: string) => (await s.meetings({ query: query(text) })).map((m) => m.id)
+      const at = new Date(d.meeting.startedAt ?? 0).toISOString()
+      assert.deepEqual(await ids(`started_at:["${at}" TO "${at}"]`), [d.meeting.id])
+      assert.deepEqual(await ids(`started_at>"${at}"`), [])
+      assert.deepEqual(await ids(`id:${d.meeting.id} title:"example planning"`), [d.meeting.id])
+      assert.deepEqual(await ids("-title:*planning*"), [])
+      const owner = await s.account(d.meeting.accountId)
+      assert.ok(owner?.provider)
+      assert.ok(owner?.account)
     }),
     test("atomic parts, ids and defensive snapshots", async (s) => {
       const input = sampleMeeting()

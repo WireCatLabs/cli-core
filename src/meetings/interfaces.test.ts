@@ -1,10 +1,15 @@
+import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { addMeetingCommands, type MeetingCommandDeps } from "./cli/index.js"
+import { meeting } from "./item.js"
 import { callMeetingTool, meetingTools } from "./mcp/index.js"
-import { meetingShow, meetingsList } from "./reads.js"
+import { meetingShow, meetingsList, meetingsQuery } from "./reads.js"
 import { SAVE_NEXT_STEPS } from "./save-hints.js"
 import { fakeMeetingSource, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
+
+const meta = { run_id: "run", duration_ms: 0 }
 
 const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
   const store = memoryMeetingStore()
@@ -29,20 +34,13 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
 describe("meeting commands", () => {
   it("lists, shows, reads transcripts, finds participants and lists events", async () => {
     const { run, outputs, d } = await setup()
-    await run([
-      "meetings",
-      "list",
-      "--json",
-      "--limit",
-      "1",
-      "--page",
-      "1",
-      "--since-time",
-      "1970-01-01",
-      "--until-time",
-      "1970-01-02",
-    ])
-    expect(outputs[0]).toMatchObject({ format: "json", value: { page: 1, limit: 1, hasMore: false } })
+    await run(["meetings", "list", "--json", "--limit", "1", "--page", "1", "started_at:[1970-01-01 TO 1970-01-02]"])
+    expect(outputs[0]).toMatchObject({ format: "json", value: { page: { limit: 1, has_more: false } } })
+    expect(v.parse(listEnvelopeSchema(meeting), { ...(outputs[0]?.value as object), meta })).toMatchObject({
+      items: [{ ref: `meeting:1/${d.meeting.id}`, id: String(d.meeting.id), provider: "memory", account: "1" }],
+    })
+    await run(["meetings", "list", "started_at>=1970-01-02", "--json"])
+    expect(outputs.pop()).toMatchObject({ value: { items: [] } })
     await run(["meetings", "show", String(d.meeting.id)])
     expect(outputs[1]).toMatchObject({ format: "text", value: { meeting: { id: d.meeting.id } } })
     await run(["meetings", "transcript", String(d.meeting.id), "--jsonl"])
@@ -67,7 +65,9 @@ describe("meeting commands", () => {
     for (const args of [
       ["meetings", "list", "--limit", "0"],
       ["meetings", "list", "--limit", "9007199254740992"],
-      ["meetings", "list", "--since-time", "bad"],
+      ["meetings", "list", "--since-time", "2026-01-01"],
+      ["meetings", "list", "started_at>bad"],
+      ["meetings", "list", "title"],
       ["meetings", "show", "999"],
       ["meetings", "list", "--json", "--jsonl"],
     ])
@@ -89,12 +89,16 @@ describe("MCP meeting reads", () => {
       account_id: 1,
       limit: 1,
       page: 1,
-      since: 0,
-      until: 2000,
+      query: "started_at:[1970-01-01 TO 1970-01-02]",
     })
     expect(list.structuredContent).toEqual(
-      await meetingsList(store, { accountId: 1, limit: 1, since: 0, until: 2000 }, 1),
+      await meetingsList(
+        store,
+        { accountId: 1, limit: 1, query: meetingsQuery("started_at:[1970-01-01 TO 1970-01-02]") },
+        1,
+      ),
     )
+    expect(list.structuredContent).toMatchObject({ items: [{ id: String(d.meeting.id) }] })
     const show = await callMeetingTool(store, "meeting_show", { meeting: d.meeting.id })
     expect(show.structuredContent).toEqual({ ...d, next_steps: SAVE_NEXT_STEPS })
     expect(JSON.parse(show.content[0]?.text ?? "null")).toEqual({ ...d, next_steps: SAVE_NEXT_STEPS })
@@ -119,8 +123,8 @@ describe("MCP meeting reads", () => {
       ["meeting_show", { meeting: 0 }],
       ["meetings_search", { query: "example" }],
       ["meeting_people", { query: " " }],
-      ["meetings_list", { since: "bad" }],
-      ["meetings_list", { until: Number.NaN }],
+      ["meetings_list", { since: 0 }],
+      ["meetings_list", { query: "nofield:1" }],
       ["meeting_show", { meeting: 999 }],
     ] as [string, unknown][]) {
       const result = await callMeetingTool(store, name, args)
@@ -147,8 +151,10 @@ it("pagination detects the next page and readers validate arguments", async () =
   const input = sampleMeeting()
   input.meeting.externalId = "second"
   await store.saveMeeting(input)
-  expect((await meetingsList(store, { limit: 1 })).hasMore).toBe(true)
-  expect((await meetingsList(store, { limit: 1 }, 2)).hasMore).toBe(false)
+  const first = await meetingsList(store, { limit: 1 })
+  expect(first.page.has_more).toBe(true)
+  expect(first.next).toMatchObject([{ step: "page.next", command: "meetings list", args: { page: 2, limit: 1 } }])
+  expect((await meetingsList(store, { limit: 1 }, 2)).page.has_more).toBe(false)
   await expect(meetingShow(store, -1)).rejects.toThrow()
   await expect(meetingsList(store, {}, 0)).rejects.toThrow()
   const saved = await store.meeting((await store.meetings())[0]?.id ?? 0)

@@ -1,3 +1,5 @@
+import { evaluate } from "@wirecat/cli-base/query"
+import { MEETING_QUERY, meetingItem } from "../item.js"
 import type { Event, EventSeries, MeetingSeries } from "../model.js"
 import { MeetingError, positiveInteger } from "../reads.js"
 import type { MeetingDetails, MeetingFilter, MeetingSave, MeetingStore, SearchHit } from "../store.js"
@@ -14,6 +16,9 @@ interface State {
 }
 const overlap = (start: number | null, end: number | null, from: number, to: number) =>
   start !== null && start <= to && (end ?? start) >= from
+/** A test store keeps no accounts: every id is an account of the `memory` provider. */
+const MEMORY_OWNER = (id: number) => ({ provider: "memory", account: String(id) })
+
 const filterMeetings = (rows: MeetingDetails[], filter: MeetingFilter = {}) => {
   if (filter.limit !== undefined && (!Number.isInteger(filter.limit) || filter.limit < 0))
     throw new Error("Invalid limit")
@@ -27,7 +32,9 @@ const filterMeetings = (rows: MeetingDetails[], filter: MeetingFilter = {}) => {
         (filter.eventId === undefined || m.eventId === filter.eventId) &&
         (filter.meetingSeriesId === undefined || m.meetingSeriesId === filter.meetingSeriesId) &&
         (filter.since === undefined || (m.startedAt !== null && m.startedAt >= filter.since)) &&
-        (filter.until === undefined || (m.startedAt !== null && m.startedAt <= filter.until)),
+        (filter.until === undefined || (m.startedAt !== null && m.startedAt <= filter.until)) &&
+        (filter.query === undefined ||
+          evaluate(filter.query, MEETING_QUERY.fields, meetingItem(m, MEMORY_OWNER(m.accountId)))),
     )
     .sort((a, b) => (b.meeting.startedAt ?? 0) - (a.meeting.startedAt ?? 0) || a.meeting.id - b.meeting.id)
     .slice(filter.offset ?? 0, filter.limit === undefined ? undefined : (filter.offset ?? 0) + filter.limit)
@@ -100,6 +107,9 @@ export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
     },
     async meetings(filter) {
       return structuredClone(filterMeetings(state.meetings, filter).map((d) => d.meeting))
+    },
+    async account(id) {
+      return MEMORY_OWNER(id)
     },
     async meeting(id) {
       return structuredClone(state.meetings.find((d) => d.meeting.id === id) ?? null)
