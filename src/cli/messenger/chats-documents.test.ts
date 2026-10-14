@@ -10,6 +10,7 @@ import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import { chatsCommand } from "./chats-command.js"
 import type { Messenger } from "./context.js"
+import { messagesCommand } from "./messages-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const OWNER = { provider: "chat", account: "500" }
@@ -97,7 +98,7 @@ const setup = async (config?: object) => {
       const streams = captureStreams()
       const code = await run(
         argv,
-        { app, commands: () => [chatsCommand(messenger)] },
+        { app, commands: () => [chatsCommand(messenger), messagesCommand(messenger)] },
         { streams, tty, env: { ...env, NO_COLOR: "1" } },
       )
       return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
