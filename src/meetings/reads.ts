@@ -1,6 +1,17 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLucene, type QueryAst, validateQuery } from "@wirecat/cli-base/query"
 import { type ListEnvelope, STEPS, type StepDefinition, stepOf } from "@wirecat/cli-base/standards"
+import {
+  type MeetingDetailsItem,
+  type MeetingItemBody,
+  type MeetingListBody,
+  type MeetingSummaryItem,
+  type MeetingTranscriptItem,
+  meetingDetailsItem,
+  meetingSummaryItem,
+  meetingTranscriptItem,
+  wholeList,
+} from "./answers.js"
 import { MEETING_QUERY, type MeetingItem, type MeetingOwner, meetingItem } from "./item.js"
 import {
   type MeetingParticipantSearchOptions,
@@ -133,21 +144,41 @@ export const MEETING_QUERY_GUIDE = "https://github.com/WireCatLabs/cli-core/blob
 export interface TranscriptReadOptions {
   history?: boolean
 }
-export const meetingTranscript = async (
+const ownerOf = async (store: MeetingStore, accountId: number): Promise<MeetingOwner> => {
+  const owner = await store.account(accountId)
+  if (!owner) throw new MeetingError("not_found", `meeting account ${accountId} is not in the store`)
+  return owner
+}
+/** `meetings show`: one item, the meeting with its people, chat, transcripts named by `ref` and summaries. */
+export const meetingDetailsAnswer = async (
+  store: MeetingStore,
+  id: number,
+  accountId?: number,
+): Promise<MeetingItemBody<MeetingDetailsItem>> => {
+  const details = await meetingShow(store, id, accountId)
+  return { item: meetingDetailsItem(details, await ownerOf(store, details.meeting.accountId)) }
+}
+export const meetingTranscriptAnswer = async (
   store: MeetingStore,
   id: number,
   accountId?: number,
   options: TranscriptReadOptions = {},
-) => {
+): Promise<MeetingListBody<MeetingTranscriptItem>> => {
   const details = await meetingShow(store, id, accountId)
-  return listed(
-    details.transcripts.filter(
-      (t) => (options.history || t.transcript.supersededAt === null) && t.transcript.deletedAt === null,
-    ),
+  return wholeList(
+    details.transcripts
+      .filter((t) => (options.history || t.transcript.supersededAt === null) && t.transcript.deletedAt === null)
+      .map((t) => meetingTranscriptItem(details.meeting.accountId, t.transcript, t.rows)),
   )
 }
-export const meetingSummary = async (store: MeetingStore, id: number, accountId?: number) =>
-  listed((await meetingShow(store, id, accountId)).summaries)
+export const meetingSummaryAnswer = async (
+  store: MeetingStore,
+  id: number,
+  accountId?: number,
+): Promise<MeetingListBody<MeetingSummaryItem>> => {
+  const details = await meetingShow(store, id, accountId)
+  return wholeList(details.summaries.map((one) => meetingSummaryItem(details.meeting.accountId, one)))
+}
 export const meetingsSearch = async (store: MeetingStore, query: string, filter: MeetingFilter = {}) => {
   validateFilter(filter)
   if (!query.trim()) throw new MeetingError("validation_error", "query must not be empty")

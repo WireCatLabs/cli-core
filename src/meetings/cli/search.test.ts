@@ -6,9 +6,11 @@ it("forwards combined context, dates and continuation to an injected provider-ne
   const program = new Command("example")
   const controller = new AbortController()
   const result = {
-    items: [],
-    hasMore: false,
-    nextCursor: null,
+    items: [
+      { ref: "meeting:1/2/3/0", meetingId: 2, scope: "transcript" as const, id: 9, text: "the budget", startMs: 1500 },
+    ],
+    hasMore: true,
+    nextCursor: "next-page",
     coverage: {
       archiveCompleteness: "unknown" as const,
       currentRevisions: true as const,
@@ -64,7 +66,26 @@ it("forwards combined context, dates and continuation to an injected provider-ne
     },
     expect.objectContaining({ eventId: 56, seriesId: 78 }),
   )
-  expect(output).toHaveBeenCalledWith(result)
+  expect(output).toHaveBeenCalledWith({
+    items: [
+      {
+        ref: "meeting:1/2/3/0",
+        meeting: "meeting:1/2",
+        scope: "transcript",
+        id: "9",
+        excerpt: "the budget",
+        offset_ms: 1500,
+      },
+    ],
+    page: { limit: 10, has_more: true, cursor: "next-page" },
+    next: [
+      expect.objectContaining({
+        step: "page.next",
+        command: "search meetings",
+        args: { cursor: "next-page", limit: 10 },
+      }),
+    ],
+  })
 })
 it("rejects impossible dates and invalid selectors before opening a store", async () => {
   const cases = [

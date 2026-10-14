@@ -1,4 +1,5 @@
 import { CliError, errorObjectOf, type FailureContext, isCliError, mcpErrorResult } from "@wirecat/cli-base"
+import { meetingHitsList } from "../answers.js"
 import { type MeetingHitSearch, validateMeetingHitSearch } from "../search-validation.js"
 
 const integer = { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER }
@@ -61,7 +62,7 @@ export const callMeetingSearchTool = async (
     const query = args.query as string
     validateMeetingHitSearch(query, options)
     signal?.throwIfAborted()
-    const result = await search(query, options)
+    const result = meetingHitsList(await search(query, options), options.limit ?? 100)
     signal?.throwIfAborted()
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
   } catch (error) {

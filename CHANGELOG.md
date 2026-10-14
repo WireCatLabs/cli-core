@@ -9,6 +9,17 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Meeting reads answer in the envelope** (without `meta`, which the host adds). `meetings show` and MCP
+  `meeting_show` answer `{item}` with the new `meeting_details` entity (the `meeting` fields, `event_id`, `series_id`,
+  participants, chat, current transcripts by `ref` with `lines_count`, summaries, attachments; provider `metadata`
+  and `externalId` are gone). `meetings transcript|summary` answer `{items, page}` with `meeting_transcript` (cues as
+  `lines` with `offset_ms`) and `meeting_summary`. `search meetings` and `search_meetings` answer
+  `{items, page, next?, missing?}` with `meeting_hit`: `offset_ms` replaces `startMs`, `meeting` (a `meeting:`
+  reference) replaces `meetingId`, `excerpt` replaces `text`, `page.cursor` and a `page.next` step replace
+  `nextCursor`, and pending indexing is a `missing` entry with the new `meetings.search-again` step. The read
+  functions are `meetingDetailsAnswer`, `meetingTranscriptAnswer` and `meetingSummaryAnswer`; `meetingHitsList`
+  converts a `searchHits` page. No answer carries `next_steps` any more: `SAVE_NEXT_STEPS` is `SAVE_INSTRUCTION`,
+  for the host's server instructions, and MCP `conversations_show` drops it too.
 - **`messages sync`, `store *` and `attachments extract|show|text set` answer `{item}`**, snake_case, CLI and MCP
   alike: `messages sync` (with `--estimate` and `--background`), `store status` (a list), `store clear --left`,
   `store export --json` (the list envelope of `message` items; `--jsonl` and files keep their own format), `store

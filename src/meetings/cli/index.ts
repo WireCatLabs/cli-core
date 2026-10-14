@@ -10,12 +10,12 @@ import {
   listed,
   MEETING_QUERY_GUIDE,
   MeetingError,
+  meetingDetailsAnswer,
   meetingPeople,
-  meetingShow,
-  meetingSummary,
+  meetingSummaryAnswer,
   meetingsList,
   meetingsQuery,
-  meetingTranscript,
+  meetingTranscriptAnswer,
 } from "../reads.js"
 import { SAVE_HELP } from "../save-hints.js"
 import type { MeetingSource } from "../source.js"
@@ -80,31 +80,28 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
       )
     })
   output(
-    group
-      .command("show")
+    annotate(group.command("show"), { output: { entity: "meeting_details" } })
       .description("show a stored meeting")
       .argument("<meeting>", "stored meeting id", integer)
       .addHelpText("after", SAVE_HELP),
   ).action(async (id: number, _opts: unknown, command: Command) => {
-    print(await meetingShow(deps.store, id, deps.accountId), command)
+    print(await meetingDetailsAnswer(deps.store, id, deps.accountId), command)
   })
   output(
-    group
-      .command("transcript")
+    annotate(group.command("transcript"), { output: { entity: "meeting_transcript" } })
       .description("show current meeting transcripts")
       .argument("<meeting>", "stored meeting id", integer)
       .option("--history", "include superseded transcript versions")
       .addHelpText("after", SAVE_HELP),
   ).action(async (id: number, opts: { history?: boolean }, command: Command) => {
-    print(await meetingTranscript(deps.store, id, deps.accountId, { history: opts.history }), command)
+    print(await meetingTranscriptAnswer(deps.store, id, deps.accountId, { history: opts.history }), command)
   })
   output(
-    group
-      .command("summary")
+    annotate(group.command("summary"), { output: { entity: "meeting_summary" } })
       .description("show stored meeting summaries")
       .argument("<meeting>", "stored meeting id", integer),
   ).action(async (id: number, _opts: unknown, command: Command) => {
-    print(await meetingSummary(deps.store, id, deps.accountId), command)
+    print(await meetingSummaryAnswer(deps.store, id, deps.accountId), command)
   })
   output(
     group

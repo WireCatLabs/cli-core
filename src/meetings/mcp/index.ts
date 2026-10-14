@@ -3,15 +3,14 @@ import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { MEETING_QUERY } from "../item.js"
 import {
   MeetingError,
+  meetingDetailsAnswer,
   meetingPeople,
-  meetingShow,
-  meetingSummary,
+  meetingSummaryAnswer,
   meetingsList,
   meetingsQuery,
-  meetingTranscript,
+  meetingTranscriptAnswer,
   positiveInteger,
 } from "../reads.js"
-import { SAVE_NEXT_STEPS } from "../save-hints.js"
 import type { MeetingFilter, MeetingStore } from "../store.js"
 
 const integer = { type: "integer", minimum: 1 }
@@ -79,7 +78,6 @@ export const meetingTools = [
   inputSchema: { type: "object", properties, required, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }))
-const CONTENT_READS = new Set(["meeting_show", "meeting_transcript", "meeting_summary"])
 
 const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
   const tool = meetingTools.find((t) => t.name === name)
@@ -146,15 +144,15 @@ export const callMeetingTool = async (
         )
         break
       case "meeting_show":
-        result = await meetingShow(store, args.meeting as number, filter.accountId)
+        result = await meetingDetailsAnswer(store, args.meeting as number, filter.accountId)
         break
       case "meeting_transcript":
-        result = await meetingTranscript(store, args.meeting as number, filter.accountId, {
+        result = await meetingTranscriptAnswer(store, args.meeting as number, filter.accountId, {
           history: args.history as boolean | undefined,
         })
         break
       case "meeting_summary":
-        result = await meetingSummary(store, args.meeting as number, filter.accountId)
+        result = await meetingSummaryAnswer(store, args.meeting as number, filter.accountId)
         break
       case "meeting_export":
         result = await exportMeeting(store, args.meeting as number, {
@@ -171,7 +169,6 @@ export const callMeetingTool = async (
           cursor: args.cursor as string | undefined,
         })
     }
-    if (CONTENT_READS.has(name)) result = { ...result, next_steps: SAVE_NEXT_STEPS }
     return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
   } catch (error) {
     const { content, structuredContent } = mcpErrorResult(errorObjectOf(error, failure))

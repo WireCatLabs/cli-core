@@ -5,7 +5,6 @@ import { listOf } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { listed } from "../../cli/paging.js"
-import { SAVE_NEXT_STEPS } from "../../meetings/index.js"
 import { BATCH_SIZE, CONVERSATION_QUERY } from "../../services/conversations.js"
 import { REFRESH_BOUNDS } from "../../services/embeddings.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
@@ -279,7 +278,6 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
     }),
 
     conversations_show: tool({
-      nextSteps: SAVE_NEXT_STEPS,
       title: "Read a conversation",
       description:
         "One conversation's messages, oldest first: by `id` from conversations_list, or the conversation a " +

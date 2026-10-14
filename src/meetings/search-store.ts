@@ -24,7 +24,8 @@ export interface MeetingSearchOptions {
 }
 
 export interface MeetingSearchPage {
-  items: SearchHit[]
+  /** Each with its `ref`: the cue of a transcript passage, else the meeting. */
+  items: (SearchHit & { ref: string })[]
   hasMore: boolean
   nextCursor: string | null
   coverage: {

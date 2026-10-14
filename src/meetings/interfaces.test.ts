@@ -1,12 +1,12 @@
-import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
+import { meetingDetails, meetingSummary, meetingTranscript } from "./answers.js"
 import { addMeetingCommands, type MeetingCommandDeps } from "./cli/index.js"
 import { meeting } from "./item.js"
 import { callMeetingTool, meetingTools } from "./mcp/index.js"
-import { meetingShow, meetingsList, meetingsQuery } from "./reads.js"
-import { SAVE_NEXT_STEPS } from "./save-hints.js"
+import { meetingDetailsAnswer, meetingsList, meetingsQuery } from "./reads.js"
 import { fakeMeetingSource, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
 
 const meta = { run_id: "run", duration_ms: 0 }
@@ -42,9 +42,15 @@ describe("meeting commands", () => {
     await run(["meetings", "list", "started_at>=1970-01-02", "--json"])
     expect(outputs.pop()).toMatchObject({ value: { items: [] } })
     await run(["meetings", "show", String(d.meeting.id)])
-    expect(outputs[1]).toMatchObject({ format: "text", value: { meeting: { id: d.meeting.id } } })
+    expect(outputs[1]).toMatchObject({ format: "text" })
+    expect(v.parse(itemEnvelopeSchema(meetingDetails), { ...(outputs[1]?.value as object), meta }).item).toMatchObject({
+      ref: `meeting:1/${d.meeting.id}`,
+      participants: [{ name: "Alice Example" }],
+    })
     await run(["meetings", "transcript", String(d.meeting.id), "--jsonl"])
-    expect(outputs[2]).toMatchObject({ format: "jsonl", value: { items: d.transcripts } })
+    expect(outputs[2]).toMatchObject({ format: "jsonl" })
+    const transcripts = v.parse(listEnvelopeSchema(meetingTranscript), { ...(outputs[2]?.value as object), meta })
+    expect(transcripts.items[0]?.lines[0]).toMatchObject({ offset_ms: d.transcripts[0]?.rows[0]?.startMs })
     await run(["meetings", "people", "Alice"])
     expect(outputs[3]).toMatchObject({ value: { items: d.participants } })
     await run(["events", "list"])
@@ -100,11 +106,15 @@ describe("MCP meeting reads", () => {
     )
     expect(list.structuredContent).toMatchObject({ items: [{ id: String(d.meeting.id) }] })
     const show = await callMeetingTool(store, "meeting_show", { meeting: d.meeting.id })
-    expect(show.structuredContent).toEqual({ ...d, next_steps: SAVE_NEXT_STEPS })
-    expect(JSON.parse(show.content[0]?.text ?? "null")).toEqual({ ...d, next_steps: SAVE_NEXT_STEPS })
+    expect(show.structuredContent).toEqual(await meetingDetailsAnswer(store, d.meeting.id))
+    expect(JSON.parse(show.content[0]?.text ?? "null")).toEqual(show.structuredContent)
+    expect(show.structuredContent).not.toHaveProperty("next_steps")
+    const transcript = await callMeetingTool(store, "meeting_transcript", { meeting: d.meeting.id })
     expect(
-      (await callMeetingTool(store, "meeting_transcript", { meeting: d.meeting.id })).structuredContent,
-    ).toMatchObject({ items: d.transcripts })
+      v.parse(listEnvelopeSchema(meetingTranscript), { ...transcript.structuredContent, meta }).items,
+    ).toHaveLength(d.transcripts.length)
+    const summary = await callMeetingTool(store, "meeting_summary", { meeting: d.meeting.id })
+    expect(() => v.parse(listEnvelopeSchema(meetingSummary), { ...summary.structuredContent, meta })).not.toThrow()
     expect(
       (await callMeetingTool(store, "meeting_people", { query: "Alice", account_id: 1 })).structuredContent,
     ).toMatchObject({ items: d.participants })
@@ -155,9 +165,9 @@ it("pagination detects the next page and readers validate arguments", async () =
   expect(first.page.has_more).toBe(true)
   expect(first.next).toMatchObject([{ step: "page.next", command: "meetings list", args: { page: 2, limit: 1 } }])
   expect((await meetingsList(store, { limit: 1 }, 2)).page.has_more).toBe(false)
-  await expect(meetingShow(store, -1)).rejects.toThrow()
+  await expect(meetingDetailsAnswer(store, -1)).rejects.toThrow()
   await expect(meetingsList(store, {}, 0)).rejects.toThrow()
   const saved = await store.meeting((await store.meetings())[0]?.id ?? 0)
   if (!saved) throw new Error("Missing meeting")
-  await expect(meetingShow(store, saved.meeting.id, 2)).rejects.toThrow(/not found/)
+  await expect(meetingDetailsAnswer(store, saved.meeting.id, 2)).rejects.toThrow(/not found/)
 })
