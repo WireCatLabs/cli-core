@@ -1225,16 +1225,17 @@ describe("the MCP server", () => {
     expect(evidence?.annotations).toMatchObject({ readOnlyHint: true })
     const first = await call("chat_messages_evidence", { chat: "Book", limit: 1 })
     expect(first.isError).toBe(false)
-    expect(first.body).toMatchObject({
+    expect(first.body.item).toMatchObject({
       kind: "chats",
       source: { provider: "chat", account: "500", chat: "7" },
-      nextBeforeId: "2",
       items: [{ locator: "msg:chat/500/7/2" }],
-      coverage: { hasMore: true, history: "unknown" },
+      coverage: { has_more: true, history: "unknown" },
     })
-    const next = await call("chat_messages_evidence", { chat: "7", before_id: first.body.nextBeforeId })
-    expect(next.body).toMatchObject({ nextBeforeId: null, items: [{ locator: "msg:chat/500/7/1" }] })
-    const invalid = await call("chat_messages_evidence", { chat: "7", before_id: "missing" })
+    expect(first.body.next).toMatchObject([{ step: "page.next", args: { cursor: "2" } }])
+    const next = await call("chat_messages_evidence", { chat: "7", cursor: first.body.next[0].args.cursor })
+    expect(next.body.item).toMatchObject({ items: [{ locator: "msg:chat/500/7/1" }] })
+    expect(next.body.next).toBeUndefined()
+    const invalid = await call("chat_messages_evidence", { chat: "7", cursor: "missing" })
     expect(invalid.isError).toBe(true)
     expect(invalid.body.error.code).toBe("not_found")
     expect(
@@ -2201,7 +2202,7 @@ describe("the photo tool", () => {
 
     expect(isError).toBe(false)
     expect(content[0]).toEqual({ type: "image", mimeType: "image/jpeg", data: Buffer.from(jpeg).toString("base64") })
-    expect(JSON.parse(content[1]?.text ?? "")).toEqual({ chatId: "7", messageId: "1", bytes: jpeg.length })
+    expect(JSON.parse(content[1]?.text ?? "")).toEqual({ chat_id: "7", message_id: "1", bytes: jpeg.length })
   })
 
   it("refuses anything else with the command that saves it", async () => {
@@ -2237,8 +2238,8 @@ describe("the transcribe tool", () => {
       }),
     )
 
-    expect((await call("chat_messages_transcribe", { chat: "Book club", message: "5" })).body).toEqual({
-      messageId: "5",
+    expect((await call("chat_messages_transcribe", { chat: "Book club", message: "5" })).body.item).toEqual({
+      message_id: "5",
       text: "hello there",
       pending: false,
       via: "chat",

@@ -1,5 +1,6 @@
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { heardAnswer } from "../../cli/messenger/message-answers.js"
 import { choose, hearLocally, hearOnline } from "../../speech/transcribe.js"
 import { type AnyTool, chatOf, message, nameOf, READ, tool } from "../tool.js"
 
@@ -10,7 +11,7 @@ export const messagesTranscribeTools = (messenger: Messenger): Record<string, An
       `A voice message as text — by ${nameOf(messenger)} where the account allows it, else by a speech model ` +
       "on this machine. Can take up to a minute; pending: true means it was not finished yet — ask again later. " +
       "Never downloads a model: a missing one is refused with the command the owner runs. " +
-      "Returns { messageId, text, pending, via, model? }.",
+      "Answers item { message_id, text, pending, via, model? }.",
     input: v.object({
       chat: chatOf(messenger),
       message,
@@ -29,9 +30,9 @@ export const messagesTranscribeTools = (messenger: Messenger): Record<string, An
         defaults.env,
       )
       const heard = await hearOnline(messenger, adapter, args.chat, args.message, choice)
-      if (!(heard instanceof Uint8Array)) return heard
+      if (!(heard instanceof Uint8Array)) return heardAnswer(heard, args.chat)
       await defaults.release?.()
-      return hearLocally(heard, args.message, choice)
+      return heardAnswer(await hearLocally(heard, args.message, choice), args.chat)
     },
   }),
 })

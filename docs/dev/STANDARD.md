@@ -704,7 +704,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--background` |  | run as a job that outlives this command; `store jobs show` follows it |  | `messages sync`, `store gaps repair` |
 | `--base-url` | `<url>` | a server with OpenAI's /v1/embeddings: Gemini, Jina, or Ollama and LM Studio on this machine |  | `conversations build`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `search conversations` |
 | `--batch` | `<id>` | the batch id `conversations batches next` printed |  | `conversations links add` |
-| `--before-id` | `<id>` | read what came before this message id; not with --before-time |  | `chats media` (planned), `messages evidence` |
+| `--before-id` | `<id>` | read what came before this message id; not with --before-time |  | `chats media` (planned) |
 | `--before-n` | `<n>` | how many messages before it |  | `messages context` |
 | `--block` | `<value>` | Set to `true` if user should be blocked in chat. |  | `bot chats members remove` |
 | `--bot` |  | the bot section of the profile's settings, rather than the personal account's |  | `config set`, `config show`, `config unset` |
@@ -738,7 +738,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--context` | `<n>` | messages before and after each hit |  | `search mail`, `search messages`, `searches create` |
 | `--correct` | `<n>` | with --quiz: the right answer's position, from 1 |  | `polls create` (tg-only) |
 | `--counters` | `<names>` | the counter fields: views,reactions,comments |  | `stats messages counters refresh`, `stats messages counters show` |
-| `--cursor` | `<cursor>` | continue from the extraction or ranking-evidence cursor |  | `attachments extract`, `messages comments` (tg-only), `messages list`, `stats contacts evidence`, `stats messages evidence` |
+| `--cursor` | `<cursor>` | continue from the extraction or ranking-evidence cursor |  | `attachments extract`, `messages comments` (tg-only), `messages evidence`, `messages list`, `stats contacts evidence`, `stats messages evidence` |
 | `--days` | `<days>` | days of the working window, such as mon-fri or sat,sun |  | `replies edit` |
 | `--debug` |  | on a failure, its whole record — cause and stack — in place of the short line |  | every command |
 | `--deep` | `<n>` | also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second. **TG specializes the SDK help with the bounded Telegram audit; MAX retains the generic SDK wording. Align the shared help with provider capabilities separately; SDK adoption alone does not remove the difference.** |  | `chats members audit` |

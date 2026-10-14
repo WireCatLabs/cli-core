@@ -15,7 +15,9 @@ export { downloadMessage, type Saved, safeName, save } from "../../services/file
 import { OFFLINE } from "../../services/deps.js"
 import type { MessagesService } from "../../services/messages.js"
 import { patiently } from "../../services/patience.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
+import { nextStep } from "../steps.js"
 import { type Fetching, type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
 import { stopOnSignal } from "./patience.js"
 
@@ -81,16 +83,18 @@ export const downloadSubcommand = (messages: Command, messenger: Messenger): Com
       const { saved, extraction, batch } = result
       if (extraction && context.format !== "json")
         context.renderer.note(`${extraction.extracted} extracted, ${extraction.failed} unreadable`)
-      if (context.format === "pretty") context.streams.data(`${saved.map((one) => one.path).join("\n")}\n`)
-      else if (context.format === "jsonl") {
-        context.renderer.stream(saved)
-        if (batch) context.renderer.stream([{ type: "batch_summary", complete: false, batch }])
-      } else
-        context.renderer.result({
-          items: saved,
-          ...(extraction ? { extraction } : {}),
-          ...(batch ? { complete: false, batch } : {}),
-        })
+      renderAnswer(
+        this,
+        context,
+        itemOf(
+          snakeKeys({
+            files: saved,
+            ...(extraction ? { extraction } : {}),
+            ...(batch ? { complete: false, batch } : {}),
+          }),
+        ),
+        () => `${saved.map((one) => one.path).join("\n")}\n`,
+      )
     })
 
 /** The most messages a provider hands out per history request — Telegram's cap. */
@@ -203,7 +207,16 @@ const downloadChat = async (
       const batch = downloadBatch.failed ? downloadBatch : undefined
       return { ...walked, complete: walked.complete && extraction.complete, ...(batch ? { batch } : {}) }
     })
-    if (context.format === "json") context.renderer.result({ items, ...result, ...(extract ? { extraction } : {}) })
+    if (context.format === "json")
+      renderAnswer(
+        command,
+        context,
+        itemOf(snakeKeys({ files: items, ...result, ...(extract ? { extraction } : {}) }), {
+          ...(result.complete
+            ? {}
+            : { next: [nextStep("messages.download", { args: { chat, all: true, output_dir: output } })] }),
+        }),
+      )
     else {
       if (context.format === "jsonl" && result.batch) context.renderer.stream([{ type: "batch_summary", ...result }])
       context.renderer.note(summary(result))

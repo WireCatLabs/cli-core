@@ -3,6 +3,7 @@ import * as v from "valibot"
 import { itemOf, listOf } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { COMMENTS_QUERY, cursorOf, historyWindow } from "../../cli/messenger/history-query.js"
+import { evidenceAnswer } from "../../cli/messenger/message-answers.js"
 import { messageItems, type ReadMessage, selfOf } from "../../cli/messenger/message-items.js"
 import { capability } from "../../cli/messenger/port.js"
 import { isLocator, parseLocator } from "../../domain/locator.js"
@@ -34,26 +35,25 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
       description:
         "A chat evidence packet from the current profile's local archive, newest first. Never connects or marks " +
         "read. Whole messages fill at most 64 KiB of JSON items; the packet envelope is additional. Returns " +
-        "source locators, fingerprints, coverage (history unknown) and nextBeforeId. Pass a non-null cursor as " +
-        "before_id for older messages. An oversized first message returns an empty, byte-truncated packet " +
-        "with no cursor; handle that obstruction explicitly. Prepares evidence, not a generated summary.",
+        "the packet as item: source locators, fingerprints and coverage (history unknown). When older messages " +
+        "exist, next has page.next: pass its cursor. An oversized first message returns an empty, byte-truncated " +
+        "packet with no next step; handle that obstruction explicitly. Prepares evidence, not a generated summary.",
       input: v.object({
         chat,
         limit,
-        before_id: v.optional(v.pipe(message, v.description("only messages older than this message id"))),
+        cursor: v.optional(v.pipe(v.string(), v.minLength(1), v.description("page.next's cursor"))),
       }),
       annotations: { ...READ, openWorldHint: false },
-      stored: (store, account, args, defaults) =>
-        readEvidencePacket(
+      stored: async (store, account, args, defaults) => {
+        const limit = args.limit ?? defaults.limit
+        const packet = await readEvidencePacket(
           store,
           account,
-          {
-            chat: args.chat,
-            limit: args.limit ?? defaults.limit,
-            ...(args.before_id === undefined ? {} : { before: args.before_id }),
-          },
+          { chat: args.chat, limit, ...(args.cursor === undefined ? {} : { before: args.cursor }) },
           messenger,
-        ),
+        )
+        return evidenceAnswer(packet, args.chat, limit)
+      },
     }),
 
     messages_list: tool({

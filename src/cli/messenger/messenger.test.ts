@@ -3659,7 +3659,7 @@ describe("messages download", () => {
     )
 
     expect(code).toBe(0)
-    expect(JSON.parse(stdout[0] ?? "").items).toEqual([
+    expect(JSON.parse(stdout[0] ?? "").item.files).toEqual([
       { kind: "file", path: join(into, "bashrc"), bytes: 5 },
       { kind: "photo", path: join(into, "1-2.jpg"), bytes: 4 },
     ])
@@ -3718,9 +3718,9 @@ describe("messages download", () => {
       env,
     )
     expect(result.code).toBe(0)
-    expect(JSON.parse(result.stdout[0] ?? "")).toMatchObject({
+    expect(JSON.parse(result.stdout[0] ?? "").item).toMatchObject({
       complete: false,
-      items: [{ path: join(into, "broken.docx") }],
+      files: [{ path: join(into, "broken.docx") }],
       batch: { failed: 1, succeeded: 1, failures: [{ stage: "extract", error: { actions: expect.any(Array) } }] },
     })
     expect(readFileSync(join(into, "broken.docx"), "utf8")).toBe("not a document")
@@ -3790,8 +3790,8 @@ describe("messages download", () => {
 
       expect(code).toBe(0)
       expect(asked).toEqual(["5", "2"])
-      expect(JSON.parse(stdout[0] ?? "")).toMatchObject({
-        items: [{ path: join(into, "notes.txt") }, { path: join(into, "2-1-notes.txt") }],
+      expect(JSON.parse(stdout[0] ?? "").item).toMatchObject({
+        files: [{ path: join(into, "notes.txt") }, { path: join(into, "2-1-notes.txt") }],
         saved: 2,
         complete: true,
       })
@@ -3819,11 +3819,11 @@ describe("messages download", () => {
         { ...env, MESSAGING_BATCH_MAX_ERROR_PERCENT: "1" },
       )
       expect(result.code).toBe(0)
-      const body = JSON.parse(result.stdout[0] ?? "")
+      const body = JSON.parse(result.stdout[0] ?? "").item
       expect(body).toMatchObject({
         saved: 5,
         complete: false,
-        batch: { attempted: 10, failed: 5, stopReason: "error_rate" },
+        batch: { attempted: 10, failed: 5, stop_reason: "error_rate" },
       })
       expect(asked).toHaveLength(5)
       expect(JSON.parse(readFileSync(join(into, ".download-7.json"), "utf8")).failed).toBeUndefined()
@@ -3835,7 +3835,7 @@ describe("messages download", () => {
       const kinds = { 6: "file", 5: "file", 3: "file", 1: "file" }
       const first: string[] = []
       const cut = await call(
-        ["messages", "download", "Book", "--all", "--pause", "1ms", "--output-dir", into],
+        ["messages", "download", "Book", "--all", "--pause", "1ms", "--output-dir", into, "--json"],
         async () => chatOf([5, 4, 3, 2, 1], kinds, first, "3"),
         env,
       )
@@ -3847,9 +3847,13 @@ describe("messages download", () => {
       )
 
       expect(cut.code).toBe(0)
+      expect(JSON.parse(cut.stdout[0] ?? "")).toMatchObject({
+        item: { complete: false },
+        next: [{ step: "messages.download", args: { chat: "Book", all: true, output_dir: into } }],
+      })
       expect(first).toEqual(["5", "1"])
       expect(second).toEqual(["6", "3"])
-      expect(JSON.parse(again.stdout[0] ?? "")).toMatchObject({ saved: 2, existing: 0, complete: true })
+      expect(JSON.parse(again.stdout[0] ?? "").item).toMatchObject({ saved: 2, existing: 0, complete: true })
       expect(readdirSync(into).filter((name) => !name.startsWith("."))).toHaveLength(4)
     })
 
@@ -3919,7 +3923,7 @@ describe("messages download", () => {
       )
       expect(result.code).toBe(0)
       expect(limits).toEqual([30])
-      expect(JSON.parse(result.stdout[0] ?? "")).toMatchObject({ saved: 0, complete: true })
+      expect(JSON.parse(result.stdout[0] ?? "").item).toMatchObject({ saved: 0, complete: true })
     })
 
     const byTime: Partial<Messenger> = { fetching: { page: 100, pause: "1ms", maxPages: 10, orderBy: "time" } }
@@ -3973,7 +3977,7 @@ describe("messages download", () => {
       expect(cut.code).toBe(0)
       expect(first).toEqual(["msg-f", "msg-e", "msg-d", "msg-b", "msg-a"])
       expect(second).toEqual(["msg-g", "msg-c"])
-      expect(JSON.parse(again.stdout[0] ?? "")).toMatchObject({ saved: 2, existing: 0, complete: true })
+      expect(JSON.parse(again.stdout[0] ?? "").item).toMatchObject({ saved: 2, existing: 0, complete: true })
       expect(readdirSync(into).filter((name) => !name.startsWith("."))).toHaveLength(7)
       expect(JSON.parse(readFileSync(join(into, ".download-7.json"), "utf8"))).toMatchObject({ by: "time" })
     })
@@ -4052,7 +4056,7 @@ describe("messages transcribe", () => {
     }
   }
 
-  it("prints the text, and says on stderr when it was not finished", async () => {
+  it("answers the text, and asks again later through a messages.transcribe step when it was not finished", async () => {
     const done = await call(
       ["messages", "transcribe", "Book", "5", "--json"],
       async () => ({ ...fake, transcribe: async () => ({ text: "hello", pending: false }) }),
@@ -4064,9 +4068,13 @@ describe("messages transcribe", () => {
       env(),
     )
 
-    expect(JSON.parse(done.stdout[0] ?? "")).toEqual({ messageId: "5", text: "hello", pending: false, via: "chat" })
+    const answer = JSON.parse(done.stdout[0] ?? "")
+    expect(answer.item).toEqual({ message_id: "5", text: "hello", pending: false, via: "chat" })
+    expect(answer.next).toBeUndefined()
     expect(done.stderr).toEqual([])
-    expect(pending.stderr.join("")).toContain("not finished")
+    expect(JSON.parse(pending.stdout[0] ?? "").next).toMatchObject([
+      { step: "messages.transcribe", args: { chat: "7", message: "5" } },
+    ])
   })
 
   it("**refuses --local before connecting** when the model is not downloaded, naming the command", async () => {
@@ -4130,7 +4138,7 @@ describe("messages transcribe", () => {
       const again = await call(["messages", "transcribe", "Book", "1", "--json"], connect, root)
 
       expect(JSON.parse(shown.stdout[0] ?? "").item.transcript).toBe("synthetic zebrafinch")
-      expect(JSON.parse(again.stdout[0] ?? "")).toMatchObject({ text: "synthetic zebrafinch", pending: false })
+      expect(JSON.parse(again.stdout[0] ?? "").item).toMatchObject({ text: "synthetic zebrafinch", pending: false })
       expect(asked).toEqual(["transcribe"])
       expect(await found(root, connect)).toEqual(["1"])
       const pretty = await call(["search", "messages", "zebrafinch"], connect, root, { tty: true })

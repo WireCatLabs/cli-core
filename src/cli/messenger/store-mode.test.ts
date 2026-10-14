@@ -124,36 +124,47 @@ const filled = async () => {
 }
 
 describe("stored evidence command", () => {
-  it.each(["--json", "--jsonl"])("returns a complete packet in %s and pages without connecting", async (format) => {
+  it("returns a complete packet in --json as one item and pages with page.next without connecting", async () => {
     const env = await filled()
     const connection = pushing()
-    const first = await call(["messages", "evidence", "Book", "--limit", "2", format], env, connection.connect)
+    const first = await call(["messages", "evidence", "Book", "--limit", "2", "--json"], env, connection.connect)
     expect(first.code).toBe(0)
     expect(first.stderr).toBe("")
-    const packet = JSON.parse(first.stdout)
-    expect(packet).toMatchObject({
+    const answer = JSON.parse(first.stdout)
+    expect(answer.item).toMatchObject({
       kind: "chats",
       source: { provider: "chat", account: "500", chat: "7" },
-      nextBeforeId: "2",
-      coverage: { provided: 2, included: 2, hasMore: true, history: "unknown" },
+      coverage: { provided: 2, included: 2, has_more: true, history: "unknown" },
     })
-    expect(packet.items.map((item: { locator: string }) => item.locator)).toEqual([
+    expect(answer.item.items.map((item: { locator: string }) => item.locator)).toEqual([
       "msg:chat/500/7/3",
       "msg:chat/500/7/2",
     ])
-    const next = await call(["messages", "evidence", "7", "--before-id", "2", format], env, connection.connect)
-    expect(JSON.parse(next.stdout)).toMatchObject({ nextBeforeId: null, items: [{ locator: "msg:chat/500/7/1" }] })
+    expect(answer.next).toMatchObject([{ step: "page.next", args: { chat: "Book", cursor: "2", limit: 2 } }])
+    const next = await call(["messages", "evidence", "7", "--cursor", "2", "--json"], env, connection.connect)
+    const older = JSON.parse(next.stdout)
+    expect(older.item).toMatchObject({ items: [{ locator: "msg:chat/500/7/1" }] })
+    expect(older.next).toBeUndefined()
     expect(connection.connects).toEqual([])
   })
 
-  it("shows human evidence with coverage and continuation notes", async () => {
+  it("streams the packet as one line in --jsonl and names the next page on stderr", async () => {
+    const env = await filled()
+    const connection = pushing()
+    const first = await call(["messages", "evidence", "Book", "--limit", "2", "--jsonl"], env, connection.connect)
+    expect(first.code).toBe(0)
+    expect(JSON.parse(first.stdout)).toMatchObject({ kind: "chats", coverage: { included: 2 } })
+    expect(first.stderr).toContain("--cursor 2")
+    expect(connection.connects).toEqual([])
+  })
+
+  it("shows human evidence and the continuation", async () => {
     const env = await filled()
     const connection = pushing()
     const result = await call(["messages", "evidence", "7", "--limit", "1"], env, connection.connect, undefined, true)
     expect(result.code).toBe(0)
     expect(result.stdout).toContain("msg:chat/500/7/3")
-    expect(result.stderr).toContain("history coverage unknown")
-    expect(result.stderr).toContain("--before-id 3")
+    expect(result.stderr).toContain("--cursor 3")
     expect(connection.connects).toEqual([])
   })
 
@@ -166,7 +177,7 @@ describe("stored evidence command", () => {
     const env = await filled()
     for (const flags of [
       ["--limit", "101"],
-      ["--before-id", "missing"],
+      ["--cursor", "missing"],
     ]) {
       const result = await call(["messages", "evidence", "7", "--json", ...flags], env, connection.connect)
       expect(result.code).not.toBe(0)
@@ -449,8 +460,8 @@ describe("a messenger whose history is read from the store", () => {
     const first = await call(argv, env, files, "store")
     const again = await call(argv, env, files, "store")
 
-    expect(JSON.parse(first.stdout)).toMatchObject({ saved: 2, complete: true })
-    expect(JSON.parse(again.stdout)).toMatchObject({ saved: 0, complete: true })
+    expect(JSON.parse(first.stdout).item).toMatchObject({ saved: 2, complete: true })
+    expect(JSON.parse(again.stdout).item).toMatchObject({ saved: 0, complete: true })
     expect(asked).toEqual(["3", "1"])
   })
 })

@@ -9,6 +9,12 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`messages evidence|transcribe|download` answer in the envelope**, CLI and MCP alike, snake_case. `evidence` is
+  one item, the packet (fingerprints unchanged, still taken over the library's field names); `--before-id` and MCP
+  `before_id` become `--cursor`/`cursor`, given by a `page.next` step in place of `nextBeforeId` and the stderr note.
+  `transcribe` is `{message_id, text, pending, via, model?}`, and a pending one carries a `messages.transcribe` step.
+  `download` is `{files, …}` (was `items`); a cut-short `--all` carries a `messages.download` step to go on. MCP
+  `messages_photo`'s caption is `{chat_id, message_id, bytes}`.
 - **`tasks agenda [query...]` picks its chats' kinds by query and answers one item in the envelope.** `--kind` is
   gone (`chat_kind:channel`; the default stays `chat_kind:(dialog OR group)`, now in SQL), and so is the MCP
   `tasks_agenda` argument `kind`, which takes `query`. The answer is `{item, meta}` with the new `agenda` entity:

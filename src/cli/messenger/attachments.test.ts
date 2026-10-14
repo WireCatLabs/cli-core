@@ -540,7 +540,7 @@ describe("extraction follow-ups", () => {
       "--json",
     )
     expect(all.code).toBe(0)
-    expect(json(all)).toMatchObject({ extraction: { extracted: 1, complete: true } })
+    expect(json(all).item).toMatchObject({ extraction: { extracted: 1, complete: true } })
     expect(await hits(call, "content:fetched")).toEqual(["7"])
   })
 
@@ -581,7 +581,7 @@ describe("extraction follow-ups", () => {
       "--json",
     )
     expect(result.code).toBe(0)
-    expect(json(result)).toMatchObject({ extraction: { extracted: 1, complete: true } })
+    expect(json(result).item).toMatchObject({ extraction: { extracted: 1, complete: true } })
     expect(await hits(call, "content:fetched")).toEqual(["7"])
     expect(await hits(call, "content:Quarterly")).toEqual([])
   })
