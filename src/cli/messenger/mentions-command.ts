@@ -1,5 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
+import { MENTION_KINDS, type MentionKind } from "../../domain/mentions.js"
 import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
 import { authorOf } from "../author.js"
@@ -16,7 +17,9 @@ const line = ({ id, kind, value, domain, status, sentAt, locator, field }: Menti
 /** `mentions …`: phones, e-mail addresses, links and documents found in stored message text. */
 export const mentionsCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
-  const mentions = new Command("mentions").description("phones, e-mail, links and documents found in stored messages")
+  const mentions = new Command("mentions").description(
+    "phones, e-mail, links, documents and known people's names found in stored messages",
+  )
 
   annotate(mentions.command("list"), {
     query: MENTION_QUERY,
@@ -60,7 +63,8 @@ export const mentionsCommand = (messenger: Messenger): Command => {
         itemOf(snakeKeys(found)),
         () =>
           `${line(found)}\n…${found.before}[${found.written}]${found.after}…\n` +
-          `same ${found.kind} in ${found.sameValue} other place${found.sameValue === 1 ? "" : "s"}\n`,
+          `same ${found.kind} in ${found.sameValue} other place${found.sameValue === 1 ? "" : "s"}\n` +
+          (found.candidates.length > 0 ? `may be ${found.candidates.join(", ")}\n` : ""),
       )
     })
 
@@ -70,9 +74,14 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     examples: [`${tool} mentions confirm 12 person:7`, `${tool} mentions confirm 15`],
   })
     .summary("say what a mention is, everywhere its value is written")
-    .description("say what a mention is, everywhere its value is written: a phone's owner, the stored document")
+    .description(
+      "say what a mention is: a phone's owner everywhere it is written, the stored document, who a name means",
+    )
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
-    .argument("[person]", "person:<uid> or organization:<id> that owns the phone or the address; a document needs none")
+    .argument(
+      "[person]",
+      "person:<uid> or organization:<id> that owns the phone or the address; person:<uid> a name means; a document needs none",
+    )
     .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
     .action(async function (this: Command, id: number, person: string | undefined) {
       const context = messengerContext(this, messenger)
@@ -83,7 +92,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
 
   annotate(mentions.command("reject"), { mutates: true, local: true, examples: [`${tool} mentions reject 12`] })
     .summary("dismiss a mention's value everywhere, and on later syncs")
-    .description("not a real mention, or not worth keeping: dismiss its value everywhere, and on later syncs")
+    .description("not a real mention: dismiss its value everywhere and on later syncs; a name only where it is")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
     .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
     .action(async function (this: Command, id: number) {
@@ -93,13 +102,24 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       context.renderer.result(await context.withServices((services) => services.mentions.reject(id, by)))
     })
 
-  annotate(mentions.command("rebuild"), { mutates: true, local: true, examples: [`${tool} mentions rebuild`] })
+  annotate(mentions.command("rebuild"), {
+    mutates: true,
+    local: true,
+    examples: [`${tool} mentions rebuild`, `${tool} mentions rebuild --kind person-name`],
+  })
     .description("find the mentions of every stored message again; decisions are kept")
+    .addOption(
+      new Option("--kind <kind>", "only this kind: person-name after people were added or renamed").choices(
+        MENTION_KINDS,
+      ),
+    )
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, tool, "mentions.rebuild")
+      const { kind } = this.opts<{ kind?: MentionKind }>()
       const done = await context.withServices((services) =>
         services.mentions.rebuild({
+          ...(kind ? { kinds: [kind] } : {}),
           onBatch: (read, total) => context.renderer.note(`${read} of ${total} messages read`),
         }),
       )

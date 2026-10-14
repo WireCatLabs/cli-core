@@ -315,3 +315,87 @@ describe("an organization's number", () => {
     raw.close()
   })
 })
+
+describe("known people's names", () => {
+  const from = (id: string, sender: string, text: string, chatId = "-1"): Message => ({
+    ...message(id, text),
+    chatId,
+    senderId: sender,
+  })
+  const named = async () => {
+    const { path, store } = await fresh()
+    await store.savePeople(OWNER, [
+      { id: "7", name: "Arkady Belkin" },
+      { id: "8", name: "Аркадий Смирнов" },
+    ])
+    const belkin = await store.personOf({ provider: "max", id: "7" })
+    const smirnov = await store.personOf({ provider: "max", id: "8" })
+    return { path, store, belkin: `person:${belkin?.uid}`, smirnov: `person:${smirnov?.uid}` }
+  }
+  const names = async (store: Awaited<ReturnType<typeof openStore>>) =>
+    (await store.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items
+      .map(({ messageId, written, status, target }) => `${messageId} ${written} ${status} ${target}`)
+      .sort()
+
+  it("links a name by rule only to the one person it fits who wrote in that chat", async () => {
+    const { store, belkin } = await named()
+    await store.saveMessages(OWNER, "-1", [from("1", "7", "Аркадий придёт, Смирнову передам")], { via: "history" })
+    await store.saveMessages(OWNER, "-2", [from("2", "9", "Белкину привет", "-2")], { via: "history" })
+
+    expect(await names(store)).toEqual([`1 Аркадий linked ${belkin}`, "1 Смирнову found null", "2 Белкину found null"])
+    const [smirnov] = (await store.mentions(OWNER, q("kind:person-name status:found"), { offset: 0 })).items.filter(
+      (one) => one.messageId === "1",
+    )
+    expect((await store.mention(OWNER, smirnov?.id ?? 0))?.candidates).toHaveLength(1)
+    await store.close()
+  })
+
+  it("decides a name where it is written, keeps the decision on a rebuild, and finds the person's messages", async () => {
+    const { store, smirnov } = await named()
+    await store.saveMessages(
+      OWNER,
+      "-2",
+      [from("1", "9", "Смирнов звонил", "-2"), from("2", "9", "Смирнов это фирма", "-2")],
+      { via: "history" },
+    )
+    const [call, firm] = (await store.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items.sort((a, b) =>
+      a.messageId.localeCompare(b.messageId),
+    )
+
+    expect(await store.confirmMention(OWNER, call?.id ?? 0, smirnov, "owner")).toMatchObject({ mentions: 1 })
+    expect(await store.rejectMention(OWNER, firm?.id ?? 0, "owner")).toMatchObject({ mentions: 1 })
+    await store.rebuildMentions({ kinds: ["person-name"] })
+    expect(await names(store)).toEqual([`1 Смирнов linked ${smirnov}`, "2 Смирнов dismissed null"])
+
+    const found = await searchStore(store, OWNER, { text: `mentions:"${smirnov}"`, language: "lucene", limit: 10 })
+    expect(found.items.map(({ id }) => id)).toEqual(["1"])
+    const [dismissed] = (await store.mentions(OWNER, q("kind:person-name status:dismissed"), { offset: 0 })).items
+    await expect(store.confirmMention(OWNER, dismissed?.id ?? 0, undefined, "owner")).rejects.toThrow(/person:<uid>/)
+    await store.close()
+  })
+
+  it("leaves the kinds a later build finds when it reads a text again", async () => {
+    const { path, store } = await fresh()
+    await store.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01")], { via: "history" })
+    await store.close()
+    const raw = new DatabaseSync(path)
+    raw
+      .prepare(
+        "INSERT INTO mentions (kind, source_type, source_id, source_field, start_offset, end_offset, value, method, " +
+          "version, confidence, status, created_at, updated_at) SELECT 'place', 'message', id, 'text', 0, 2, 'x', " +
+          "'rules', 1, 0.5, 'found', 1, 1 FROM messages",
+      )
+      .run()
+    raw.close()
+
+    const reopened = await openStore({ path })
+    await reopened.rebuildMentions()
+    const raw2 = new DatabaseSync(path)
+    expect(raw2.prepare("SELECT kind FROM mentions ORDER BY kind").all()).toEqual([
+      { kind: "phone" },
+      { kind: "place" },
+    ])
+    raw2.close()
+    await reopened.close()
+  })
+})

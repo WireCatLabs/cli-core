@@ -53,6 +53,10 @@ const validateTag = (node: Predicate): void => {
   if (tagOf(node.value) === undefined)
     searchError("query.invalid-tag", node.span, "a tag is 1-32 letters a-z, digits and hyphens")
 }
+const validateMentioned = (node: Predicate): void => {
+  if (!/^(?:person|organization|document):[1-9]\d*$/u.test(node.value))
+    searchError("query.invalid-reference", node.span, "use person:<uid>, organization:<id> or document:<id>, quoted")
+}
 const validateTopic = (node: Predicate): void => {
   if (!/^\d+$/u.test(node.value)) searchError("query.invalid-topic", node.span, "use a thread id in one chat")
 }
@@ -379,6 +383,17 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     support: "A2" as const,
     validate: filled,
   })),
+  {
+    name: "mentions",
+    example: 'mentions:"person:12"',
+    index: "mentions (target_type, target_id); messages only, not mail yet",
+    aliases: [],
+    type: "kw" as const,
+    operators: terms,
+    normalization: "a person (by name, phone or address), an organization or a document, linked; quoted",
+    support: "A2" as const,
+    validate: validateMentioned,
+  },
   {
     name: "tag",
     example: "tag:work",

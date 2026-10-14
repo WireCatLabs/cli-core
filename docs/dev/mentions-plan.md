@@ -218,7 +218,11 @@ an index lookup.
    to stored documents and chats, and `links domains list` (sites by number of links).
    **1e** — the other texts: file texts and voice transcripts built (store version 10); notes, documents and mail
    to come.
-2. `person-name` for known people (stems against names and aliases); `mentions:<reference>`.
+2. `person-name` for known people (stems against names and aliases); `mentions:<reference>` — built: people met
+   in a messenger, a meeting or a confirmed phone, not the e-mail-only ones; a Latin name transliterated; a stem or
+   the written name plus up to three letters of ending; a rule link only to the one fitting person who wrote in the
+   chat; `mentions rebuild --kind`. Builds of 0.264–0.269 delete a text's `person-name` rows when they read it
+   again (they deleted every kind); from this one, a build keeps the kinds it does not know.
 3. Unknown names and `place`, with `places`; precision measured on a labelled sample of the owner's chats
    (results private, totals to cli-testing).
 
