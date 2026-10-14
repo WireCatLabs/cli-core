@@ -6,7 +6,7 @@ import { typedSendAs } from "../../sends/send-as.js"
 import { readAttachments } from "../../sends/upload.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { writtenAnswer } from "./message-writes.js"
+import { afterWrite, writtenAnswer } from "./message-writes.js"
 import { readAll } from "./stdin.js"
 import { threadIdOf } from "./thread.js"
 
@@ -123,8 +123,8 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
   if (body.trim() === "" && attachments.length === 0 && sticker === undefined) {
     throw new CliError("validation_error", "nothing to send — give the text or pipe it in")
   }
-  const { sent, reader } = await context.withServices(async (services) => ({
-    sent: await services.messages.send({
+  const { sent, reader } = await context.withServices(async (services) => {
+    const sent = await services.messages.send({
       chat,
       text: body,
       ...(sendId === undefined ? {} : { sendId }),
@@ -141,12 +141,14 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
       ...(spoiler === true ? { spoiler } : {}),
       ...(captionAbove === true ? { captionAbove } : {}),
       ...(sticker === undefined ? {} : { sticker }),
-    }),
-    reader: await services.messages.reader(),
-  }))
-  renderAnswer(
-    command,
-    context,
-    writtenAnswer({ ...sent, ...(scheduledFor === undefined ? {} : { scheduledFor }) }, reader),
+    })
+    return afterWrite(sent, async () => ({ sent, reader: await services.messages.reader() }))
+  })
+  await afterWrite(sent, () =>
+    renderAnswer(
+      command,
+      context,
+      writtenAnswer({ ...sent, ...(scheduledFor === undefined ? {} : { scheduledFor }) }, reader),
+    ),
   )
 }

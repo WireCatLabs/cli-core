@@ -217,7 +217,10 @@ export const embeddingsService = (deps: ServiceDeps): EmbeddingsService => {
   const command = deps.messenger.app.command
 
   const notDownloaded = (id: string) =>
-    new CliError("not_found", `${id} is not downloaded — \`${command} models text download ${id}\``)
+    new CliError("not_found", `${id} is not downloaded — \`${command} models text download ${id}\``, {
+      reason: "model.not-downloaded",
+      model: id,
+    })
 
   const notBuiltError = (chatId: Id) =>
     new CliError(

@@ -77,13 +77,18 @@ it("returns large previews within their configured budget without lifting other 
   const ctx = { mcpReq: { signal: new AbortController().signal } } as unknown as ServerContext
   const run = (env: NodeJS.ProcessEnv) =>
     entryRunner({ messenger, defaults: { settings: {}, env } } as unknown as Registration)
-  const result = await run({})("attachments_show", fixture, { page: 1 }, ctx)
+  const result = await run({})("attachments_show", fixture, { message: "m1", page: 1 }, ctx)
   expect(result.isError).not.toBe(true)
   expect(result.content[0]?.type).toBe("image")
   expect(Buffer.byteLength(JSON.stringify(result))).toBeGreaterThan(4 * 1024 * 1024)
-  const smaller = await run({ MESSAGING_PDF_PREVIEW_MAX_MIB: "1" })("attachments_show", fixture, { page: 1 }, ctx)
+  const smaller = await run({ MESSAGING_PDF_PREVIEW_MAX_MIB: "1" })(
+    "attachments_show",
+    fixture,
+    { message: "m1", page: 1 },
+    ctx,
+  )
   expect(smaller.isError).toBe(true)
-  const ordinary = await run({})("attachments_show", fixture, {}, ctx)
+  const ordinary = await run({})("attachments_show", fixture, { message: "m1" }, ctx)
   expect(ordinary.isError).toBe(true)
 })
 
@@ -110,10 +115,10 @@ it("keeps partial MCP identifiers without payloads and honors explicitly disable
     messenger,
     defaults: { env, settings: { profile: "work" }, history: false },
   } as unknown as Registration
-  await entryRunner(registration)("attachments_show", fixture, {}, ctx)
+  await entryRunner(registration)("attachments_show", fixture, { message: "m1" }, ctx)
   expect(listRuns(runsDirFor(app, env))).toEqual([])
   registration.defaults.history = true
-  await entryRunner(registration)("attachments_show", fixture, {}, ctx)
+  await entryRunner(registration)("attachments_show", fixture, { message: "m1" }, ctx)
   const [metadata] = listRuns(runsDirFor(app, env))
   expect(metadata).toMatchObject({
     status: "partial",

@@ -56,6 +56,7 @@ export const notDownloaded = (messenger: Messenger, model: SpeechModel): CliErro
     "not_found",
     `the speech model ${model.id} is not on this machine — the owner downloads it once with ` +
       `\`${messenger.app.command} models audio download ${model.id}\` (${megabytes(installedBytes(model))})`,
+    { reason: "model.not-downloaded", model: model.id },
   )
 
 /**

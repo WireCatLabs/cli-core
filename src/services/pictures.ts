@@ -71,7 +71,8 @@ export const picturesService = (deps: ServiceDeps) => {
     if (deps.pictureEmbedder) return deps.pictureEmbedder()
     const model = imageModel(DEFAULT_IMAGE_MODEL)
     const directory = imageModelsDirectory(deps.env)
-    if (!isImageModelInstalled(model, directory)) throw new CliError("not_found", missingModel(model.id))
+    if (!isImageModelInstalled(model, directory))
+      throw new CliError("not_found", missingModel(model.id), { reason: "model.not-downloaded", model: model.id })
     const { openPictureEmbedder } = await import("../images/picture/embedder.js")
     return openPictureEmbedder(model, directory)
   }

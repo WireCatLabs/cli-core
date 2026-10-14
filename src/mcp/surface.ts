@@ -30,6 +30,8 @@ export interface McpCommand {
   input: Input
   /** The envelope it answers with, once it declares its entity. */
   output?: v.GenericSchema
+  /** `run` checks the arguments itself, and records a refusal. */
+  checked?: boolean
   run: (args: Record<string, unknown>, ctx: ServerContext) => Promise<CallToolResult>
 }
 
@@ -156,7 +158,9 @@ export const registerCommands = (
             "validation_error",
             `"${command}" ${writing ? "only reads" : "writes"}: call it with ${prefix}_${writing ? "read" : "write"}`,
           )
-        const parsed = v.safeParse(one.input, writing ? agentArguments(given ?? {}) : (given ?? {}))
+        const args = writing ? agentArguments(given ?? {}) : (given ?? {})
+        if (one.checked) return runnableOnly(await one.run(args, ctx), (named) => byNormal.has(normal(named)))
+        const parsed = v.safeParse(v.strictObject(one.input.entries), args)
         if (!parsed.success)
           throw new CliError("validation_error", `${command}: ${v.summarize(parsed.issues)}`, {
             arguments: toJsonSchema(one.input),
@@ -217,6 +221,7 @@ export const registerSurface = (server: McpServer, tools: Record<string, AnyTool
           writes: definition.annotations.readOnlyHint !== true,
           input: inputOf(definition, syncAllowedFor(key, registration.defaults)),
           ...(definition.output ? { output: outputSchemaOf(definition) } : {}),
+          checked: true,
           run: (args, ctx) => run(key, definition, args, ctx),
         } satisfies McpCommand,
       ]),

@@ -1,3 +1,4 @@
+import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Message } from "../../domain/models.js"
 import type { AccountKey } from "../../store/store.js"
 import { itemOf } from "../envelope.js"
@@ -26,3 +27,21 @@ export const writtenAnswer = ({ operationId, sendId, message, scheduledFor }: Wr
     },
     scheduledFor === undefined ? {} : { next: [nextStep("messages.scheduled", { args: { chat: message.chatId } })] },
   )
+
+/**
+ * What runs after a write went out. A failure there keeps the write's `operation_id` and `send_id` and says not to
+ * retry: an agent that repeats a "failed" send without its `send_id` sends it to the person twice.
+ */
+export const afterWrite = async <T>(
+  { operationId, sendId }: Pick<Written, "operationId" | "sendId">,
+  work: () => T | Promise<T>,
+): Promise<T> => {
+  try {
+    return await work()
+  } catch (error) {
+    const ids = { operation_id: operationId, ...(sendId === undefined ? {} : { send_id: sendId }), retryable: false }
+    throw isCliError(error)
+      ? new CliError(error.code, error.message, { ...error.details, ...ids })
+      : new CliError("invalid_response", "the write went through, but its answer could not be built", ids)
+  }
+}

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import type { Message } from "../domain/models.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { searchStore } from "./messages.js"
-import { searchNotesQuery } from "./notes-search.js"
+import { embedNotes, searchNotesQuery } from "./notes-search.js"
 
 const account: AccountKey = { provider: "telegram", account: "1" }
 const TEXT = "Budget review is running late. Los pisos en Valencia. Сдаю квартиру в мае."
@@ -159,6 +159,15 @@ describe("the notes' indexes", () => {
     await expect(searchNotesQuery(store, { text: "from:alice", limit: 10 })).rejects.toThrow(
       /from: is not a note field — notes take text, exact, body, tag, date, in/,
     )
+  })
+
+  it("names a missing text model by reason, not only in words", async () => {
+    const store = await open()
+    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) }
+    await expect(embedNotes(store, { env })).rejects.toMatchObject({
+      code: "not_found",
+      details: { reason: "model.not-downloaded", model: expect.any(String) },
+    })
   })
 
   it("**hands out each chunk once, and finds the nearest note** by its vectors", async () => {

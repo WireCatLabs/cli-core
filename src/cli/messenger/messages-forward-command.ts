@@ -3,7 +3,7 @@ import { Command } from "commander"
 import { typedSendAs } from "../../sends/send-as.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { writtenAnswer } from "./message-writes.js"
+import { afterWrite, writtenAnswer } from "./message-writes.js"
 
 export const forwardCommand = (messenger: Messenger): Command => {
   const forward = annotate(new Command("forward"), { mutates: true })
@@ -34,8 +34,8 @@ export const forwardCommand = (messenger: Messenger): Command => {
       topic?: string
     }>()
     const sendAs = typedSendAs(given)
-    const { forwarded, reader } = await context.withServices(async (services) => ({
-      forwarded: await services.messages.forward({
+    const { forwarded, reader } = await context.withServices(async (services) => {
+      const forwarded = await services.messages.forward({
         chat,
         message: message.trim(),
         to,
@@ -43,9 +43,9 @@ export const forwardCommand = (messenger: Messenger): Command => {
         ...(sendId === undefined ? {} : { sendId }),
         ...(sendAs === undefined ? {} : { sendAs }),
         ...(topic === undefined ? {} : { threadId: topic }),
-      }),
-      reader: await services.messages.reader(),
-    }))
-    renderAnswer(this, context, writtenAnswer(forwarded, reader))
+      })
+      return afterWrite(forwarded, async () => ({ forwarded, reader: await services.messages.reader() }))
+    })
+    await afterWrite(forwarded, () => renderAnswer(this, context, writtenAnswer(forwarded, reader)))
   })
 }
