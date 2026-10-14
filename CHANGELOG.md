@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.277.0 — 14.10.2026
+
 ### Added
 
 - **`liftJson`, `checkJson` and `answerFields` from `./cli`**: an app without the messenger program (drive, memo, zoom)
