@@ -13,6 +13,7 @@ import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
 import type { Messenger } from "./context.js"
+import { messagesCommand } from "./messages-command.js"
 import { lockPath } from "./serve-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
@@ -57,9 +58,10 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
     chatArgument: "a chat",
   }
   const streams = captureStreams()
-  const commands = () => [storeCommand(messenger), configCommand(app, settingsFor(app))]
+  const commands = () => [storeCommand(messenger), messagesCommand(messenger), configCommand(app, settingsFor(app))]
   const code = await run(argv, { app, commands }, { streams, tty: false, env })
-  return { code, stdout: streams.stdout, stderr: streams.stderr, answer: JSON.parse(streams.stdout[0] ?? "null") }
+  const body = JSON.parse(streams.stdout[0] ?? "null")
+  return { code, stdout: streams.stdout, stderr: streams.stderr, body, answer: body?.item ?? body }
 }
 
 describe("store info", () => {
@@ -77,27 +79,27 @@ describe("store info", () => {
     expect(answer).toMatchObject({
       schema: { version: latest, speaks: latest, writable: true },
       rows: { accounts: 1, chats: 2, messages: 2 },
-      pendingNormalization: 2,
+      pending_normalization: 2,
     })
     expect((await call(["store", "info", "--json"], env)).answer.schema.version).toBe(latest)
   })
 })
 
 describe("store check", () => {
-  it("**prints one JSON value on stdout and the advice on stderr**", async () => {
+  it("**prints one JSON value on stdout, its steps in it**", async () => {
     const env = envFor()
     ;(await seeded(env)).close()
 
-    const { code, stdout, stderr, answer } = await call(["store", "check", "--json"], env)
+    const { code, stdout, body, answer } = await call(["store", "check", "--json"], env)
     expect(code).toBe(0)
     expect(stdout).toHaveLength(1)
     expect(answer).toMatchObject({
       ok: true,
       integrity: ["ok"],
-      foreignKeyViolations: 0,
-      searchIndexes: { messages_fts: "ok", chats_fts: "ok", identities_fts: "ok" },
+      foreign_key_violations: 0,
+      search_indexes: { messages_fts: "ok", chats_fts: "ok", identities_fts: "ok" },
     })
-    expect(stderr.join("\n")).toContain("chat messages sync <chat>")
+    expect(body.next).toContainEqual(expect.objectContaining({ step: "messages.sync" }))
   })
 
   it("names a note left on a deleted message, and a pointer of an unknown type, as orphans", async () => {
@@ -111,7 +113,7 @@ describe("store check", () => {
     database.close()
 
     const { answer, stderr } = await call(["store", "check", "--json"], env)
-    expect(answer.orphanPointers).toEqual([
+    expect(answer.orphan_pointers).toEqual([
       { table: "notes", pointer: "notable", type: "gizmo", count: 1, known: false },
       { table: "notes", pointer: "notable", type: "message", count: 1, known: true },
     ])
@@ -123,7 +125,7 @@ describe("store check", () => {
     ;(await seeded(env)).close()
 
     const { answer } = await call(["store", "check", "--json"], env)
-    expect(answer.chatsBehind).toEqual([
+    expect(answer.chats_behind).toEqual([
       {
         provider: "chat",
         account: "500",
@@ -151,8 +153,8 @@ describe("store check", () => {
 
     const { answer, stderr } = await call(["store", "check", "--json"], env)
     expect(answer.conversations).toEqual([
-      expect.objectContaining({ chat: "8", rulesVersion: RULES_VERSION, current: true, staleAgentLinks: 0 }),
-      expect.objectContaining({ chat: "7", rulesVersion: 1, current: false, staleAgentLinks: 1 }),
+      expect.objectContaining({ chat: "8", rules_version: RULES_VERSION, current: true, stale_agent_links: 0 }),
+      expect.objectContaining({ chat: "7", rules_version: 1, current: false, stale_agent_links: 1 }),
     ])
     expect(stderr.join("\n")).toContain("1 chats' conversations were built by older rules — `chat conversations build")
   })
@@ -166,9 +168,9 @@ describe("store check", () => {
 
     const first = (await call(["store", "check", "--json"], env)).answer
     expect(first.ok).toBe(false)
-    expect(first.checks.searchIndexes).toBe(false)
-    expect(first.searchIndexes.messages_fts).not.toBe("ok")
-    expect((await call(["store", "check", "--json"], env)).answer.searchIndexes).toEqual(first.searchIndexes)
+    expect(first.checks.search_indexes).toBe(false)
+    expect(first.search_indexes.messages_fts).not.toBe("ok")
+    expect((await call(["store", "check", "--json"], env)).answer.search_indexes).toEqual(first.search_indexes)
   })
 })
 
@@ -184,7 +186,7 @@ describe("store check on a file a newer build wrote", () => {
   it("**passes the schema check when this build may still write the file**", async () => {
     const { answer, stderr } = await ahead(1)
     expect(answer.checks.schema).toBe(true)
-    expect(answer.schema).toMatchObject({ version: latest + 1, minCompatible: 1, speaks: latest })
+    expect(answer.schema).toMatchObject({ version: latest + 1, min_compatible: 1, speaks: latest })
     expect(stderr.join("\n")).toContain(`the file is at schema ${latest + 1}, newer than this build's ${latest}`)
   })
 
@@ -204,7 +206,7 @@ describe("a file that is empty or is not a database", () => {
     expect((await call(["store", "info", "--json"], env)).answer).toMatchObject({ schema: { version: 0 }, rows: {} })
     const { answer, stdout } = await call(["store", "check", "--json"], env)
     expect(stdout).toHaveLength(1)
-    expect(answer).toMatchObject({ opens: true, ok: false, checks: { schema: false }, searchIndexes: {} })
+    expect(answer).toMatchObject({ opens: true, ok: false, checks: { schema: false }, search_indexes: {} })
   })
 
   it("**says a file that will not open does not open**, instead of failing", async () => {
@@ -235,7 +237,7 @@ describe("store migrate", () => {
       indexed: 0,
       terms: 4,
       stemmed: 2,
-      notesIndexed: 0,
+      notes_indexed: 0,
     })
     expect(stderr.join("\n")).toContain("2 of 2 normalized")
 
@@ -274,14 +276,14 @@ describe("the word index", () => {
       normalized: 0,
       indexed: 2,
       terms: 4,
-      fileTexts: 0,
+      file_texts: 0,
       stemmed: 2,
-      notesIndexed: 0,
+      notes_indexed: 0,
       involvements: 0,
     })
     expect(await words(env, "hola")).toBe(1)
     const { answer: info } = await call(["store", "info", "--json"], env)
-    expect(info.wordIndex).toMatchObject({ watermark: 2, filledThrough: 2, ready: true, pendingNormalization: 0 })
+    expect(info.word_index).toMatchObject({ watermark: 2, filled_through: 2, ready: true, pending_normalization: 0 })
   })
 
   it("**`store check` checks it, and says how far a large file's fill has come**", async () => {
@@ -290,12 +292,12 @@ describe("the word index", () => {
     database.exec("UPDATE search_index_state SET watermark = 10, filled_through = 1")
     database.close()
 
-    const { answer, stderr } = await call(["store", "check", "--json"], env)
+    const { answer, body } = await call(["store", "check", "--json"], env)
 
-    expect(answer.searchIndexes.message_words).toBe("ok")
-    expect(answer.searchIndexes.attachment_words).toBe("ok")
-    expect(answer.wordIndex).toMatchObject({ watermark: 10, filledThrough: 1, ready: false })
-    expect(stderr.join("\n")).toContain("the word index reaches message 1 of 10 — `chat store migrate` finishes it")
+    expect(answer.search_indexes.message_words).toBe("ok")
+    expect(answer.search_indexes.attachment_words).toBe("ok")
+    expect(answer.word_index).toMatchObject({ watermark: 10, filled_through: 1, ready: false })
+    expect(body.next).toContainEqual(expect.objectContaining({ step: "store.migrate" }))
   })
 
   it("**`store check` says the typo vocabulary is behind the messages**, and `store migrate` finishes it", async () => {
@@ -306,12 +308,12 @@ describe("the word index", () => {
     database.exec("UPDATE search_index_state SET terms_through = 1 WHERE name = 'message_words'")
     database.close()
 
-    const { answer, stderr } = await call(["store", "check", "--json"], env)
-    expect(answer.wordIndex).toMatchObject({ ready: true, termsThrough: 1, termsReady: false })
-    expect(stderr.join("\n")).toContain("the typo vocabulary reaches message 1 of 2 — `chat store migrate` finishes it")
+    const { answer, body } = await call(["store", "check", "--json"], env)
+    expect(answer.word_index).toMatchObject({ ready: true, terms_through: 1, terms_ready: false })
+    expect(body.next).toContainEqual(expect.objectContaining({ step: "store.migrate" }))
 
     await call(["store", "migrate", "--json"], env)
-    expect((await call(["store", "check", "--json"], env)).answer.wordIndex).toMatchObject({ termsReady: true })
+    expect((await call(["store", "check", "--json"], env)).answer.word_index).toMatchObject({ terms_ready: true })
   })
 
   it("`store reindex` refuses a file requiring a newer build", async () => {
@@ -369,9 +371,9 @@ describe("store restore", () => {
     database.close()
 
     const { answer } = await call(["store", "restore", file, "--json"], env)
-    expect(answer).toMatchObject({ path: env.MESSAGING_STORE, restoredFrom: file, schema: latest })
+    expect(answer).toMatchObject({ path: env.MESSAGING_STORE, restored_from: file, schema: latest })
     expect(await messagesIn(String(env.MESSAGING_STORE))).toBe(2)
-    expect(await messagesIn(answer.keptAt)).toBe(1)
+    expect(await messagesIn(answer.kept_at)).toBe(1)
     expect(existsSync(file)).toBe(true)
   })
 
@@ -468,7 +470,7 @@ describe("store reset", () => {
 
     const { code, answer, stderr } = await call(["store", "reset", "--yes", "--json"], env)
     expect(code).toBe(0)
-    expect(answer).toMatchObject({ path, reset: true, schema: latest, backedUp: { rows: { messages: 2 } } })
+    expect(answer).toMatchObject({ path, reset: true, schema: latest, backed_up: { rows: { messages: 2 } } })
     expect(answer.backup).toMatch(/m\.db\.backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/)
     expect(stderr.join("\n")).toContain(`backed the store up to ${answer.backup}`)
     expect(await messagesIn(answer.backup)).toBe(2)
@@ -483,7 +485,7 @@ describe("store reset", () => {
 
     const { code, answer, stderr } = await call(["store", "reset", "--no-backup", "--yes", "--json"], env)
     expect(code).toBe(0)
-    expect(answer).toMatchObject({ path, reset: true, schema: latest, backup: null, backedUp: null })
+    expect(answer).toMatchObject({ path, reset: true, schema: latest, backup: null, backed_up: null })
     expect(stderr.join("\n")).toContain("there is no backup")
     expect(readdirSync(dirname(path)).some((name) => name.includes(".backup-"))).toBe(false)
     expect(await messagesIn(path)).toBe(0)
@@ -503,7 +505,7 @@ describe("store reset", () => {
 })
 
 describe("the stems", () => {
-  it("**`config set searchStemmers.*` is store-wide**: stems wait for `store reindex`, which rebuilds them", async () => {
+  it("**`config set search_stemmers.*` is store-wide**: stems wait for `store reindex`, which rebuilds them", async () => {
     const env = envFor()
     ;(await seeded(env)).close()
     await call(["store", "migrate", "--json"], env)
@@ -516,14 +518,14 @@ describe("the stems", () => {
       value: "english",
     })
     expect(set.stderr.join("\n")).toContain("store-wide")
-    expect((await call(["store", "info", "--json"], env)).answer.stemIndex).toMatchObject({
+    expect((await call(["store", "info", "--json"], env)).answer.stem_index).toMatchObject({
       ready: false,
       cause: "stemmer_changed",
       wanted: "snowball-3.1.1 cyrillic=russian latin=english",
     })
 
     expect((await call(["store", "reindex", "--json"], env)).answer).toMatchObject({ stemmed: 2 })
-    expect((await call(["store", "info", "--json"], env)).answer.stemIndex).toMatchObject({
+    expect((await call(["store", "info", "--json"], env)).answer.stem_index).toMatchObject({
       ready: true,
       built: "snowball-3.1.1 cyrillic=russian latin=english",
     })
@@ -594,7 +596,7 @@ describe("store repair and store copies delete", () => {
     const deleted = await call(["store", "copies", "delete", "chats__repair_0123abcd", "--json"], env)
 
     expect(dry.answer).toMatchObject({
-      dryRun: true,
+      dry_run: true,
       repaired: [],
       mismatches: [],
       copies: [{ name: "chats__repair_0123abcd" }],

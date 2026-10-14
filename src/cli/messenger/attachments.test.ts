@@ -164,7 +164,10 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
   return { call: runs(false), pretty: runs(true), piped: (text: string) => runs(false, text), root, env, files }
 }
 
-const json = (result: { stdout: string }) => JSON.parse(result.stdout || "null")
+const json = (result: { stdout: string }) => {
+  const body = JSON.parse(result.stdout || "null")
+  return body?.item ?? body
+}
 const hits = async (call: (...argv: string[]) => Promise<{ stdout: string }>, query: string) =>
   json(await call("search", "messages", query, "--language", "lucene", "--json")).items.map(
     ({ ref }: { ref: string }) => ref.split("/").at(-1),
@@ -176,8 +179,8 @@ describe("attachments extract", () => {
     const done = await fixture.call("attachments", "show", "7", "3", "--page", "1", "--json")
     expect(done.code).toBe(0)
     const answer = json(done)
-    expect(answer).toMatchObject({ mimeType: "image/png", complete: true, pdf: { page: 1, pageCount: 1 } })
-    expect(answer.pdf.sourceSha256).not.toBe(answer.sha256)
+    expect(answer).toMatchObject({ mime_type: "image/png", complete: true, pdf: { page: 1, page_count: 1 } })
+    expect(answer.pdf.source_sha256).not.toBe(answer.sha256)
     expect(Buffer.from(answer.base64, "base64").subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
     expect(
       json(await fixture.call("attachments", "list", "chat:7", "is:needs_text", "--json")).items.some(
@@ -198,10 +201,10 @@ describe("attachments extract", () => {
     const fixture = await setup()
     const result = await fixture.call("attachments", "show", "7", "1", "--json", "--chunk-bytes", "8")
     expect(result.code).toBe(0)
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      readBytes: 8,
+    expect(json(result)).toMatchObject({
+      read_bytes: 8,
       complete: false,
-      nextOffsetBytes: 8,
+      next_offset_bytes: 8,
       base64: Buffer.from(SECRET).subarray(0, 8).toString("base64"),
     })
   })
@@ -214,7 +217,7 @@ describe("attachments extract", () => {
       expect(result.stdout).not.toContain(Buffer.from(SECRET).toString("base64"))
       const preview = await fixture.call("attachments", "show", "7", "3", "--page", "1", "--json")
       expect(preview.code).not.toBe(0)
-      expect(preview.stdout).not.toContain('"mimeType":"image/png"')
+      expect(preview.stdout).not.toContain('"mime_type":"image/png"')
     }
   })
 
@@ -330,7 +333,7 @@ describe("attachments extract", () => {
     try {
       const result = await call("attachments", "extract", "--ocr", "--concurrency", "2", "--limit", "1", "--json")
       expect(result.code).toBe(0)
-      expect(json(result)).toMatchObject({ extracted: 1, items: [{ locator: "msg:chat/500/7/8", ocrPages: 1 }] })
+      expect(json(result)).toMatchObject({ extracted: 1, files: [{ locator: "msg:chat/500/7/8", ocr_pages: 1 }] })
       expect(result.stdout + result.stderr).not.toContain("bulkocrinvoice")
       expect(await hits(call, "content:bulkocrinvoice")).toEqual(["8"])
       expect(fetcher).toHaveBeenCalledTimes(1)
@@ -348,13 +351,13 @@ describe("attachments extract", () => {
     const answer = json(done)
     expect(answer).toMatchObject({
       extracted: 3,
-      needsAgent: 2,
+      needs_agent: 2,
       failed: 0,
       unsupported: 1,
-      notDownloaded: 1,
+      not_downloaded: 1,
       complete: true,
     })
-    expect(answer.items).toEqual([
+    expect(answer.files).toEqual([
       {
         locator: "msg:chat/500/7/5",
         attachment: 1,
@@ -362,7 +365,7 @@ describe("attachments extract", () => {
         name: "5-1.jpg",
         status: "needs-agent",
         extractor: "none",
-        localPath: expect.stringMatching(/files[/\\]5-1\.jpg$/),
+        local_path: expect.stringMatching(/files[/\\]5-1\.jpg$/),
       },
       expect.objectContaining({
         locator: "msg:chat/500/7/4",
@@ -398,7 +401,7 @@ describe("attachments extract", () => {
     expect(json(await call("attachments", "extract", "--json"))).toMatchObject({
       extracted: 0,
       unchanged: 5,
-      items: [],
+      files: [],
     })
 
     writeFileSync(join(files, "notes.txt"), "Revised estimate")
@@ -411,7 +414,7 @@ describe("attachments extract", () => {
     const { call } = await setup()
     expect(json(await call("attachments", "extract", "--limit", "2", "--json"))).toMatchObject({
       complete: false,
-      items: [{}, {}],
+      files: [{}, {}],
     })
     expect(json(await call("attachments", "extract", "--json"))).toMatchObject({
       complete: true,
@@ -434,7 +437,7 @@ describe("attachments extract", () => {
 
     const seen: string[] = []
     for (let run = 0; run < 3; run += 1) {
-      const { items } = json(await call("attachments", "extract", "--limit", "1", "--json"))
+      const { files: items } = json(await call("attachments", "extract", "--limit", "1", "--json"))
       seen.push(...items.map(({ locator }: { locator: string }) => locator))
     }
     expect(seen).toEqual(["msg:chat/500/7/9", "msg:chat/500/7/8", "msg:chat/500/7/5"])
@@ -453,7 +456,7 @@ describe("attachments extract", () => {
     const { rmSync } = await import("node:fs")
     rmSync(join(files, "notes.txt"))
     const answer = json(await call("attachments", "extract", "--chat", "Work fixture", "--json"))
-    expect(answer.items.find(({ locator }: { locator: string }) => locator === "msg:chat/500/7/1")).toMatchObject({
+    expect(answer.files.find(({ locator }: { locator: string }) => locator === "msg:chat/500/7/1")).toMatchObject({
       status: "missing",
     })
     expect(json(await call("attachments", "extract", "--chat", "7", "--json")).extracted).toBe(0)
@@ -467,7 +470,7 @@ describe("attachments extract", () => {
     }
     const { call } = await setup({ load: without })
     const done = await call("attachments", "extract", "--json")
-    expect(json(done)).toMatchObject({ enginesMissing: ["unpdf"], extracted: 2 })
+    expect(json(done)).toMatchObject({ engines_missing: ["unpdf"], extracted: 2 })
     expect(done.stderr.match(/package unpdf, which ships with chat, could not be loaded/g)).toHaveLength(1)
   })
 
@@ -479,7 +482,7 @@ describe("attachments extract", () => {
     }
     const { call } = await setup({ load: without })
     const done = json(await call("attachments", "extract", "--json"))
-    const pdf = done.items.find(({ status }: { status: string }) => status === "engine-missing")
+    const pdf = done.files.find(({ status }: { status: string }) => status === "engine-missing")
     expect(pdf.issue.message).toContain("the package unpdf, which ships with this tool, could not be loaded")
   })
 
@@ -495,7 +498,7 @@ describe("attachments extract", () => {
     const { call, root } = await setup()
     const into = join(root, "fetched")
     const answer = json(await call("attachments", "extract", "--download", "--output-dir", into, "--json"))
-    expect(answer).toMatchObject({ notDownloaded: 0, extracted: 4 })
+    expect(answer).toMatchObject({ not_downloaded: 0, extracted: 4 })
     expect(await hits(call, "content:fetched")).toEqual(["7"])
     const database = await openCache(join(root, "m.db"))
     const row = database.prepare("SELECT local_path FROM attachments WHERE name = 'later.txt'").get()
@@ -516,7 +519,7 @@ describe("attachments extract", () => {
   it("**store reindex rebuilds the files' word index**", async () => {
     const { call } = await setup()
     await call("attachments", "extract")
-    expect(json(await call("store", "reindex", "--json"))).toMatchObject({ fileTexts: 3 })
+    expect(json(await call("store", "reindex", "--json"))).toMatchObject({ file_texts: 3 })
     expect(await hits(call, "content:invoice")).toEqual(["1"])
   })
 })
@@ -540,7 +543,7 @@ describe("extraction follow-ups", () => {
       "--json",
     )
     expect(all.code).toBe(0)
-    expect(json(all).item).toMatchObject({ extraction: { extracted: 1, complete: true } })
+    expect(json(all)).toMatchObject({ extraction: { extracted: 1, complete: true } })
     expect(await hits(call, "content:fetched")).toEqual(["7"])
   })
 
@@ -581,7 +584,7 @@ describe("extraction follow-ups", () => {
       "--json",
     )
     expect(result.code).toBe(0)
-    expect(json(result).item).toMatchObject({ extraction: { extracted: 1, complete: true } })
+    expect(json(result)).toMatchObject({ extraction: { extracted: 1, complete: true } })
     expect(await hits(call, "content:fetched")).toEqual(["7"])
     expect(await hits(call, "content:Quarterly")).toEqual([])
   })

@@ -13,6 +13,7 @@ import {
 } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { CliError } from "@wirecat/cli-base"
+import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
@@ -40,6 +41,8 @@ import {
   stemsState,
 } from "../../store/store.js"
 import { environmentOf, outputFor } from "../context.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { nextStep } from "../steps.js"
 import { answerOf } from "./ask.js"
 import type { Messenger } from "./context.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
@@ -103,6 +106,10 @@ export const storeSummary = async (env: NodeJS.ProcessEnv) => {
   }
 }
 
+/** A maintenance answer: one item, snake_case, its hints as steps where a registered one fits. */
+const result = (command: Command, value: unknown, next: NextStep[] = []) =>
+  renderAnswer(command, outputFor(command), itemOf(snakeKeys(value), { next }))
+
 export const storeMaintenanceCommands = (messenger: Messenger): Command[] => [
   infoCommand(),
   checkCommand(messenger),
@@ -138,14 +145,14 @@ const repairCommand = (messenger: Messenger): Command =>
       const { dryRun } = this.opts<{ dryRun?: boolean }>()
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
-        renderer.result({ path, exists: false })
+        result(this, { path, exists: false })
         return
       }
       if (!dryRun) refuseWhileServing(this, messenger)
       const fresh = await openCache(":memory:")
       try {
         const report = await reading(path, (database) => repairStore(database, fresh, { dryRun: dryRun === true }))
-        renderer.result({ path, ...report })
+        result(this, { path, ...report })
         if (format === "pretty") for (const note of notesOf(report, messenger.app.command)) renderer.note(note)
       } finally {
         fresh.close()
@@ -183,11 +190,10 @@ const copiesCommand = (): Command =>
       .description("delete one copy `store repair` kept, named exactly; refuses any other table")
       .argument("<name>", "the copy's name, as `store repair` printed it")
       .action(async function (this: Command, name: string) {
-        const { renderer } = outputFor(this)
         const path = storePath(environmentOf(this).env ?? process.env)
         if (!existsSync(path)) throw new CliError("not_found", `no store at ${path}`)
         const deleted = await reading(path, (database) => deleteCopy(database, name))
-        renderer.result({ path, deleted })
+        result(this, { path, deleted })
       }),
   )
 
@@ -195,10 +201,9 @@ const infoCommand = (): Command =>
   new Command("info")
     .description("the store file: where it is, its size, its schema and how many rows it holds; changes nothing")
     .action(async function (this: Command) {
-      const { renderer } = outputFor(this)
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
-        renderer.result({ path, exists: false })
+        result(this, { path, exists: false })
         return
       }
       const read = reading(path, (database) => {
@@ -215,7 +220,7 @@ const infoCommand = (): Command =>
           stemIndex: stemsState(database) ?? null,
         }
       })
-      renderer.result(await read.catch((error) => ({ path, exists: true, opens: false, error: messageOf(error) })))
+      result(this, await read.catch((error) => ({ path, exists: true, opens: false, error: messageOf(error) })))
     })
 
 /**
@@ -230,18 +235,29 @@ const checkCommand = (messenger: Messenger): Command =>
       const { renderer } = outputFor(this)
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
-        renderer.result({ path, exists: false, ok: true })
+        result(this, { path, exists: false, ok: true })
         return
       }
       let answer: Awaited<ReturnType<typeof inspect>>
       try {
         answer = await inspect(path)
       } catch (error) {
-        renderer.result({ path, exists: true, ok: false, opens: false, error: messageOf(error) })
+        result(this, { path, exists: true, ok: false, opens: false, error: messageOf(error) })
         return
       }
-      renderer.result(answer)
       const { command } = messenger.app
+      const next = new Map<string, NextStep>()
+      const step = (id: string, args: Record<string, unknown> = {}) => {
+        if (!next.has(id)) next.set(id, nextStep(id, { args }))
+      }
+      const words = answer.wordIndex
+      const stems = answer.stemIndex
+      if (answer.pendingNormalization) step("store.migrate")
+      if (words && (words.filledThrough < words.watermark || (words.ready && !words.termsReady))) step("store.migrate")
+      if (stems?.cause === "stemmer_changed") step("store.reindex")
+      else if (stems && !stems.ready) step("store.migrate")
+      if (answer.chatsBehind.some((chat) => chat.provider === messenger.provider)) step("messages.sync")
+      result(this, answer, [...next.values()])
       if (answer.schema.version < SPEAKS) {
         renderer.note(
           `the file is behind this build — a copy first, \`${command} store backup <file>\`, then \`${command} store migrate\``,
@@ -256,37 +272,10 @@ const checkCommand = (messenger: Messenger): Command =>
           `the file is at schema ${answer.schema.version}, newer than this build's ${SPEAKS}, and this build may still write it`,
         )
       }
-      if (answer.pendingNormalization) {
-        renderer.note(`${answer.pendingNormalization} messages wait for normalization — \`${command} store migrate\``)
-      }
-      const words = answer.wordIndex
-      if (words && words.filledThrough < words.watermark) {
-        renderer.note(
-          `the word index reaches message ${words.filledThrough} of ${words.watermark} — \`${command} store migrate\` finishes it`,
-        )
-      }
-      if (words?.ready && !words.termsReady) {
-        renderer.note(
-          `the typo vocabulary reaches message ${words.termsThrough} of ${words.newest} — \`${command} store migrate\` finishes it`,
-        )
-      }
-      const stems = answer.stemIndex
-      if (stems?.cause === "stemmer_changed") {
-        renderer.note(
-          `the stems were built by ${stems.built}, the store asks for ${stems.wanted} — \`${command} store reindex\``,
-        )
-      } else if (stems && !stems.ready) {
-        renderer.note(
-          `the stems reach message ${stems.filledThrough} of ${stems.watermark}, ${stems.pending} queued — \`${command} store migrate\` finishes them`,
-        )
-      }
-      const ours = answer.chatsBehind.filter((chat) => chat.provider === messenger.provider).length
-      if (ours > 0)
-        renderer.note(`${ours} chats hold less than their newest message — \`${command} messages sync <chat>\``)
       const orphans = answer.orphanPointers.reduce((sum, { count }) => sum + count, 0)
       if (orphans > 0)
         renderer.note(
-          `${orphans} pointers name a row that is gone or a type the store does not know — see orphanPointers`,
+          `${orphans} pointers name a row that is gone or a type the store does not know — see orphan_pointers`,
         )
       const older = answer.conversations.filter((chat) => chat.provider === messenger.provider && !chat.current).length
       if (older > 0) {
@@ -439,7 +428,7 @@ const migrateCommand = (messenger: Messenger): Command =>
       const { renderer } = outputFor(this)
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
-        renderer.result({ path, exists: false })
+        result(this, { path, exists: false })
         renderer.note(`no store yet — the first \`${messenger.app.command}\` command that reads a chat creates it`)
         return
       }
@@ -461,7 +450,7 @@ const migrateCommand = (messenger: Messenger): Command =>
           ...notes,
         }
       })
-      renderer.result(answer)
+      result(this, answer)
     })
 
 /** Normalizes, indexes and builds the typo vocabulary, saying how far each has gone. */
@@ -508,7 +497,7 @@ const reindexCommand = (messenger: Messenger): Command =>
       const { renderer } = outputFor(this)
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
-        renderer.result({ path, exists: false })
+        result(this, { path, exists: false })
         return
       }
       const answer = await reading(path, (database) => {
@@ -539,7 +528,7 @@ const reindexCommand = (messenger: Messenger): Command =>
           involvements: involvementStoreOver({ database, now: Date.now }).rebuild(),
         }
       })
-      renderer.result(answer)
+      result(this, answer)
     })
 
 /** A consistent copy of a store that may be in use. Never overwrites a file. */
@@ -562,7 +551,6 @@ const backupCommand = (): Command =>
     .argument("<file>", "the new file")
     .option(...ENCRYPT_OPTION)
     .action(async function (this: Command, file: string) {
-      const { renderer } = outputFor(this)
       const { encrypt } = this.opts<{ encrypt?: boolean }>()
       const path = storePath(environmentOf(this).env ?? process.env)
       const target = resolve(file)
@@ -580,7 +568,7 @@ const backupCommand = (): Command =>
           rows: { chats: count(database, "chats"), messages: count(database, "messages") },
         }))
         if (password !== undefined) await sealFile(copyAt, target, password)
-        renderer.result({
+        result(this, {
           path: target,
           from: path,
           bytes: bytesOf(target),
@@ -603,7 +591,6 @@ const decryptCommand = (): Command =>
     .argument("<file>", "a file `store backup --encrypt` or `store export --encrypt` wrote")
     .requiredOption("--output <file>", "the new file, readable only by you")
     .action(async function (this: Command, file: string) {
-      const { renderer } = outputFor(this)
       const { output } = this.opts<{ output: string }>()
       const from = resolve(file)
       const to = resolve(output)
@@ -611,7 +598,7 @@ const decryptCommand = (): Command =>
       if (!isSealed(from)) throw new CliError("validation_error", `${from} was not written with --encrypt`)
       if (existsSync(to)) throw new CliError("validation_error", `${to} exists — never overwritten`)
       await unsealFile(from, to, await passwordOf(this, { twice: false }))
-      renderer.result({ path: to, from, bytes: bytesOf(to) })
+      result(this, { path: to, from, bytes: bytesOf(to) })
     })
 
 /**
@@ -668,7 +655,7 @@ const restoreFrom = async (command: Command, messenger: Messenger, backup: strin
   }
   renameSync(incoming, path)
 
-  renderer.result({ path, restoredFrom: given, keptAt: kept, schema: schema.version })
+  result(command, { path, restoredFrom: given, keptAt: kept, schema: schema.version })
   if (kept) renderer.note(`the store it replaced is kept at ${kept}`)
   // One that has not touched the store yet holds nothing open, and was not seen.
   renderer.note("restart every serve and mcp of either CLI that was running, so they read the restored store")
@@ -752,7 +739,7 @@ const resetCommand = (messenger: Messenger): Command =>
       const { command } = messenger.app
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
-        renderer.result({ path, exists: false, reset: false })
+        result(this, { path, exists: false, reset: false })
         renderer.note(
           `no store at ${path} — nothing to reset; the first \`${command}\` command that reads a chat creates it`,
         )
@@ -792,7 +779,7 @@ const resetCommand = (messenger: Messenger): Command =>
       await (await openStore({ path, command })).close()
       const schema = await reading(path, (database) => schemaOf(database).version)
 
-      renderer.result({ path, exists: true, reset: true, backup, backedUp, schema })
+      result(this, { path, exists: true, reset: true, backup, backedUp, schema })
       renderer.note(
         backup
           ? `the store is empty at schema ${schema}; \`${command} store restore ${backup}\` puts the old one back once a build can read it`

@@ -6,7 +6,9 @@ import { finishJob, jobsDir, startArchiveJob, updateJob } from "../../services/b
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { parseDuration } from "../settings.js"
+import { nextStep } from "../steps.js"
 import type { SpawnJob } from "./backfill-jobs.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { stopOnSignal } from "./patience.js"
@@ -25,7 +27,7 @@ export const gapsCommand = (messenger: Messenger) => {
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.gaps.plan(chat)))
+      renderAnswer(this, context, itemOf(snakeKeys(await context.withServices((services) => services.gaps.plan(chat)))))
     })
   const fetching = messenger.fetching ?? FETCHING
   group
@@ -119,14 +121,17 @@ export const gapsCommand = (messenger: Messenger) => {
           "0",
         ]
         const spawn = environmentOf<BaseEnvironment & { spawnJob?: SpawnJob }>(this).spawnJob
-        context.renderer.result(
-          startArchiveJob(
-            messenger.app,
-            context.env,
-            context.profile,
-            { chat: planned.chat, argv, limit, pageSize },
-            spawn,
-          ),
+        const started = startArchiveJob(
+          messenger.app,
+          context.env,
+          context.profile,
+          { chat: planned.chat, argv, limit, pageSize },
+          spawn,
+        )
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys(started), { next: [nextStep("store.job", { args: { job: started.job } })] }),
         )
         return
       }
@@ -151,7 +156,7 @@ export const gapsCommand = (messenger: Messenger) => {
           }),
         )
         if (job) finishJob(messenger.app, dir, job, { finishedAt: new Date().toISOString(), result: { ...result } })
-        context.renderer.result(result)
+        renderAnswer(this, context, itemOf(snakeKeys(result)))
       } catch (error) {
         if (job)
           finishJob(messenger.app, dir, job, {

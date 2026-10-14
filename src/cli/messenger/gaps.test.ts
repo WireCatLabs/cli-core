@@ -70,7 +70,8 @@ const fixture = async () => {
       { app, commands: () => [storeCommand(messenger)] },
       { env, streams, tty: false, ...extra },
     )
-    return { code, body: JSON.parse(streams.stdout.join("") || "null"), stderr: streams.stderr.join("") }
+    const answer = JSON.parse(streams.stdout.join("") || "null")
+    return { code, body: answer?.item ?? answer, stderr: streams.stderr.join("") }
   }
   return { call, connect, env }
 }

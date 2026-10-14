@@ -6,9 +6,10 @@ import { gatewayOcr } from "../../attachments/gateway-ocr.js"
 import { ATTACHMENT_QUERY, type AttachmentItem, type ExtractItem, type ExtractRun } from "../../services/attachments.js"
 import { downloadMessage } from "../../services/file-download.js"
 import { environmentOf } from "../context.js"
-import { renderAnswer } from "../envelope.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
+import { nextStep } from "../steps.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { stopOnSignal } from "./patience.js"
 import { readAll } from "./stdin.js"
@@ -107,12 +108,22 @@ const extractCommand = (messenger: Messenger): Command =>
             ...(pipeline === undefined ? {} : { ocr: pipeline, concurrency: concurrency ?? 4 }),
             onItem: (item) => {
               if (context.format === "pretty") context.streams.data(`${line(item)}\n`)
-              else if (context.format === "jsonl") context.renderer.stream([item])
+              else if (context.format === "jsonl") context.renderer.stream([snakeKeys(item)])
             },
           }),
         )
+        const { items, ...totals } = run
+        const next =
+          run.cursor === undefined
+            ? []
+            : [
+                nextStep("attachments.extract", {
+                  args: { cursor: run.cursor, ...(chat === undefined ? {} : { chat }) },
+                }),
+              ]
         for (const engine of run.enginesMissing) context.renderer.note(engineHint(engine, messenger.app.command))
-        if (context.format === "json") context.renderer.result(run)
+        if (context.format === "json")
+          renderAnswer(this, context, itemOf(snakeKeys({ ...totals, files: items }), { next }))
         else context.renderer.note(summary(run))
       } finally {
         stop.release()
@@ -176,20 +187,13 @@ const showCommand = (messenger: Messenger): Command =>
             ]),
           }),
         )
-        if (context.format === "pretty")
-          context.streams.data(
-            done.locator +
-              " #" +
-              done.attachment +
-              "  " +
-              done.readBytes +
-              "/" +
-              done.totalBytes +
-              " bytes  SHA-256 " +
-              done.sha256 +
-              "\n",
-          )
-        else context.renderer.result(done)
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys(done)),
+          () =>
+            `${done.locator} #${done.attachment}  ${done.readBytes}/${done.totalBytes} bytes  SHA-256 ${done.sha256}\n`,
+        )
       } finally {
         stop.release()
       }
@@ -218,9 +222,12 @@ const textCommand = (messenger: Messenger): Command => {
           text: given,
         }),
       )
-      if (context.format === "pretty")
-        context.streams.data(`${done.locator} #${done.attachment}  ${done.chars} characters kept\n`)
-      else context.renderer.result(done)
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(done)),
+        () => `${done.locator} #${done.attachment}  ${done.chars} characters kept\n`,
+      )
     })
   return text
 }

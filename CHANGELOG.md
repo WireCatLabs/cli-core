@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`messages sync`, `store *` and `attachments extract|show|text set` answer `{item}`**, snake_case, CLI and MCP
+  alike: `messages sync` (with `--estimate` and `--background`), `store status` (a list), `store clear --left`,
+  `store export --json` (the list envelope of `message` items; `--jsonl` and files keep their own format), `store
+  export --to`, `store gaps plan|repair`, `store info|check|migrate|reindex|backup|restore|decrypt|repair|reset|copies
+  delete`. Hints that name a registered command are now steps: a background job names `store.job`, a sync that left
+  search unprepared names `conversations.build` and `conversations.embed`, `store check` names `store.migrate`,
+  `store.reindex` and `messages.sync`, a cut-short `attachments extract` names `attachments.extract` with its cursor.
+  `attachments extract --json` calls its per-file rows `files` (was `items`); a missing package stays in
+  `engines_missing` and the stderr hint, since installing it is not a command of this CLI.
+
 ## 0.267.0 — 14.10.2026
 
 ### Changed — may break callers

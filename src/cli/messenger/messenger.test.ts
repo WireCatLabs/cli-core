@@ -3381,8 +3381,8 @@ describe("the shared read commands", () => {
 
     const status = await call(["store", "status", "--json"], never, env)
     expect(JSON.parse(status.stdout[0] ?? "")).toMatchObject({
-      items: [{ chatId: "7", title: null, messages: 3, held: [] }],
-      hasMore: false,
+      items: [{ chat_id: "7", title: null, messages: 3, held: [] }],
+      page: { has_more: false },
     })
     const exported = await call(["store", "export", "7", "--jsonl"], never, env)
     expect(exported.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2", "3"])
@@ -3392,9 +3392,9 @@ describe("the shared read commands", () => {
     expect(one.stdout).toHaveLength(1)
     const help = (await call(["store", "export", "--help"], never, env)).stdout.join("\n").replace(/\s+/g, " ")
     expect(help).not.toContain("as JSON lines")
-    expect(help).toContain("--jsonl one message per line, --json one { items, page, limit, hasMore } object")
+    expect(help).toContain("--jsonl one message per line, --json the list envelope of messages")
     const envelope = JSON.parse(one.stdout[0] ?? "")
-    expect(envelope).toMatchObject({ page: 1, limit: 3, hasMore: false })
+    expect(envelope).toMatchObject({ page: { limit: 3, has_more: false } })
     expect(envelope.items.map((message: { id: string }) => message.id)).toEqual(["1", "2", "3"])
     const transcript = await call(["store", "export", "7", "--format", "markdown"], never, env)
     expect(transcript.stdout.join("\n")).toMatch(/^# 7\n\n## \d{4}-\d{2}-\d{2}\n\n\*\*\d{2}:\d{2} /)
@@ -3419,9 +3419,9 @@ describe("the shared read commands", () => {
     expect(unconfirmed.code).not.toBe(0)
     expect(unconfirmed.stderr.join("\n")).toContain("1 chat(s) this account has left and their 3 message(s)")
     const cleared = await call(["store", "clear", "--left", "--allow-dangerous", "--json"], never, env)
-    expect(JSON.parse(cleared.stdout[0] ?? "")).toEqual({ cleared: true, chats: 1, messages: 3 })
+    expect(JSON.parse(cleared.stdout[0] ?? "").item).toEqual({ cleared: true, chats: 1, messages: 3 })
     const again = await call(["store", "clear", "--left", "--json"], never, env)
-    expect(JSON.parse(again.stdout[0] ?? "")).toEqual({ cleared: false, chats: 0, messages: 0 })
+    expect(JSON.parse(again.stdout[0] ?? "").item).toEqual({ cleared: false, chats: 0, messages: 0 })
     expect(JSON.parse((await call(["store", "status", "--json"], never, env)).stdout[0] ?? "").items).toEqual([])
   })
 
@@ -3442,7 +3442,7 @@ describe("the shared read commands", () => {
     const again = await call(["store", "export", "7", "--output", file], never, env)
 
     expect(written.code).toBe(0)
-    expect(JSON.parse(written.stdout[0] ?? "")).toEqual({ path: file, format: "jsonl", count: 2 })
+    expect(JSON.parse(written.stdout[0] ?? "").item).toEqual({ path: file, format: "jsonl", count: 2 })
     expect(statSync(file).mode & 0o777).toBe(0o600)
     expect(
       readFileSync(file, "utf8")
@@ -3464,7 +3464,7 @@ describe("the shared read commands", () => {
     }
     const dir = join(root, "export")
     const exported = async () =>
-      JSON.parse((await call(["store", "export", "7", "--to", dir, "--json"], never, env)).stdout[0] ?? "")
+      JSON.parse((await call(["store", "export", "7", "--to", dir, "--json"], never, env)).stdout[0] ?? "").item
     const lines = (file: string) =>
       readFileSync(join(dir, file), "utf8")
         .trim()
@@ -3538,7 +3538,7 @@ describe("the shared read commands", () => {
       password("pw one"),
     )
     const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"))
-    const run = first.stdout[0] ? JSON.parse(first.stdout[0]).chats[0].file : ""
+    const run = first.stdout[0] ? JSON.parse(first.stdout[0]).item.chats[0].file : ""
     const plainInto = await call(["store", "export", "7", "--to", dir], never, env)
     const wrong = await call(
       ["store", "decrypt", join(dir, run), "--output", join(root, "x.jsonl")],
@@ -3608,13 +3608,17 @@ describe("the shared read commands", () => {
     const badRestore = await call(["store", "restore", backup], never, env, password("nope"))
     const restored = await call(["store", "restore", backup, "--json"], never, env, password("pw one"))
 
-    expect(JSON.parse(backedUp.stdout[0] ?? "")).toMatchObject({ path: backup, encrypted: true, rows: { messages: 3 } })
+    expect(JSON.parse(backedUp.stdout[0] ?? "").item).toMatchObject({
+      path: backup,
+      encrypted: true,
+      rows: { messages: 3 },
+    })
     expect(readdirSync(away)).toEqual(["store.sealed"])
     expect(readFileSync(backup).subarray(0, 15).toString()).not.toBe("SQLite format 3")
     expect(readdirSync(root).filter((name) => name.includes(".backup-"))).toEqual([])
     expect(badRestore.code).toBe(2)
     expect(restored.code).toBe(0)
-    expect(JSON.parse(restored.stdout[0] ?? "")).toMatchObject({ restoredFrom: backup })
+    expect(JSON.parse(restored.stdout[0] ?? "").item).toMatchObject({ restored_from: backup })
     expect(readdirSync(root).filter((name) => name.includes("unsealing"))).toEqual([])
   })
 

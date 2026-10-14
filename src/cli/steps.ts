@@ -107,6 +107,39 @@ export const STEPS = defineSteps([
     why: "a search index is still being built; this finishes it",
   },
   {
+    id: "attachments.extract",
+    command: "attachments extract",
+    args: [
+      { name: "cursor", required: true },
+      { name: "chat", required: false },
+    ],
+    why: "it stopped before every file was read; this goes on where it stopped",
+  },
+  {
+    id: "store.job",
+    command: "store jobs show",
+    args: [{ name: "job", required: false }],
+    why: "it runs in the background; this shows how far it got",
+  },
+  {
+    id: "store.reindex",
+    command: "store reindex",
+    args: [],
+    why: "the stems were built by another stemmer; this builds them again",
+  },
+  {
+    id: "conversations.build",
+    command: "conversations build",
+    args: [{ name: "chat", required: true }],
+    why: "the chat's conversations are missing or older than the messages; this builds them",
+  },
+  {
+    id: "conversations.embed",
+    command: "conversations embed",
+    args: [{ name: "chat", required: true }],
+    why: "the chat's conversations are not searchable by meaning yet; this embeds them",
+  },
+  {
     id: "stats.evidence",
     command: "*",
     args: [

@@ -21,8 +21,8 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "Local recorded coverage only: returns inclusive uncovered ranges, ordering units, unknown edges and fingerprint. Missing message ids alone are not gaps.",
     input: v.object({ chat: chatOf(messenger) }),
     annotations: { ...READ, openWorldHint: false },
-    stored: (store, account, args, defaults) =>
-      gapsService(storedDeps(messenger, store, account, defaults.guard)).plan(args.chat),
+    stored: async (store, account, args, defaults) =>
+      itemOf(snakeKeys(await gapsService(storedDeps(messenger, store, account, defaults.guard)).plan(args.chat))),
   }),
   store_gaps_repair: tool({
     title: "Repair interior archive gaps",
@@ -115,15 +115,24 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
           "--timeout",
           "0",
         ]
-        return startArchiveJob(
-          messenger.app,
-          defaults.env,
-          defaults.settings.profile,
-          { chat: plan.chat, argv, limit: args.limit ?? GAP_BOUNDS.limit, pageSize: args.page_size ?? fetching.page },
-          defaults.spawnJob,
+        return itemOf(
+          snakeKeys(
+            startArchiveJob(
+              messenger.app,
+              defaults.env,
+              defaults.settings.profile,
+              {
+                chat: plan.chat,
+                argv,
+                limit: args.limit ?? GAP_BOUNDS.limit,
+                pageSize: args.page_size ?? fetching.page,
+              },
+              defaults.spawnJob,
+            ),
+          ),
         )
       }
-      return service.repair(args.chat, {
+      const repaired = await service.repair(args.chat, {
         catchUp: prepare ? preparation : false,
         limit: args.limit,
         maxGaps: args.max_gaps,
@@ -133,6 +142,7 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
         fingerprint: args.fingerprint,
         signal: defaults.signal,
       })
+      return itemOf(snakeKeys(repaired))
     },
   }),
   store_jobs_show: tool({
