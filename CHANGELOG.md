@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+## 0.275.0 — 14.10.2026
+
+### Added
+
+- `messageItem` (and the types `ReadMessage`, `MessageItem`) from `./cli` (#1203): a domain message as every command
+  answers it, for an app command that prints messages itself, such as max's `watch`.
+
 ## 0.274.0 — 14.10.2026
 
 ### Changed — may break callers
@@ -25,8 +32,6 @@ shape of this file.
 
 ### Added
 
-- `messageItem` (and the types `ReadMessage`, `MessageItem`) from `./cli`: a domain message as every command
-  answers it, for an app command that prints messages itself, such as max's `watch`.
 - **`Messenger.accountOf(command)`: a command can name its own account** in place of the one its profile
   remembers, so a program with no messenger profile — memo, with `--provider --account` — mounts the local
   builders. `withStore` and the services' `account()` use it first. **`tasksStatsCommand` is exported** beside
