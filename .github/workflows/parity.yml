@@ -16,6 +16,9 @@ on:
       - .github/workflows/parity.yml
       - scripts/parity/build-app.sh
       - scripts/parity/app-ref.sh
+      - src/cli/**
+      - src/mcp/**
+      - src/entities/**
   workflow_call:
     inputs:
       app_ref:
