@@ -5,26 +5,13 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.281.0 — 15.10.2026
 
 ### Changed — may break callers
 
 - **The store-wide settings are snake_case**: `config set|unset|show` take and answer `search_stemmers.cyrillic`,
   `search_stemmers.latin` and `account_groups.<name>`. `searchStemmers.*` and `accountGroups.*` are refused, naming
   the new name. What the store saved keeps its key, so no store migrates.
-
-### Added
-
-- **The `note` entity carries what a note command answers**: `revision`, `front_matter`, `content_hash` and
-  `export_path`, which every stored note has (null where they do not apply), and optional `tags` (names) and
-  `backlinks` (`{from, target_text, kind, anchor}`). An app can now declare `{ entity: "note" }` on `notes show`,
-  `add` and `edit`; `note.hit` is unchanged.
-- **The search-hit converters are exported from `./cli`**: `messageHitItem`, `noteHitItem` and `allHitItem`, with
-  their `MessageHitItem`, `NoteHitItem` and `HitItem` types, so an app's own search answers the same items.
-
-## 0.281.0 — 15.10.2026
-
-### Changed — may break callers
 
 - **A note or document whose title matches the query now comes first in `search notes`, `search all` and `drive search`.**
   For a query of plain words, a title equal to the query ranks first, then a title containing it as a phrase, then a title holding all its words in any order; the rest
@@ -49,6 +36,20 @@ shape of this file.
   of `find`, with the `WordQuery`, `SearchScope` and `WordOptions` types. Removed from `./services`:
   `migrateLegacyQuery`, `QueryMigration`, `SavedQuery`. `SearchQuery` loses `language` and `pattern`, `SearchParams`
   loses `language` and `regex`, `ResolvedSearch` loses `pattern`, `ServerSkip` loses `legacy`.
+
+### Added
+
+- **The `note` entity carries what a note command answers**: `revision`, `front_matter`, `content_hash` and
+  `export_path`, which every stored note has (null where they do not apply), and optional `tags` (names) and
+  `backlinks` (`{from, target_text, kind, anchor}`). An app can now declare `{ entity: "note" }` on `notes show`,
+  `add` and `edit`; `note.hit` is unchanged.
+- **The search-hit converters are exported from `./cli`**: `messageHitItem`, `noteHitItem` and `allHitItem`, with
+  their `MessageHitItem`, `NoteHitItem` and `HitItem` types, so an app's own search answers the same items.
+
+- **`snakeKeysKeeping(keys)` from `./cli` is a `snakeKeys` that keeps what is under the listed keys as written**: a
+  note's front matter, an email's headers. The key itself still goes snake_case, and either spelling matches.
+- **`declaredSettingName`** from `@wirecat/cli-core/cli`: the snake_case name for a setting typed in camelCase, for an
+  app with its own `config set` (max).
 
 ### Fixed
 
@@ -82,13 +83,6 @@ shape of this file.
   reach it too. `refusedPlace` is exported from `./sends`, so an app can check a path without reading it.
 - **`messages download` progress and the export manifest are replaced through an unguessable temporary file opened
   exclusively**, so a link planted in a shared output folder is never written through.
-
-### Added
-
-- **`snakeKeysKeeping(keys)` from `./cli` is a `snakeKeys` that keeps what is under the listed keys as written**: a
-  note's front matter, an email's headers. The key itself still goes snake_case, and either spelling matches.
-- **`declaredSettingName`** from `@wirecat/cli-core/cli`: the snake_case name for a setting typed in camelCase, for an
-  app with its own `config set` (max).
 
 ## 0.280.0 — 14.10.2026
 
