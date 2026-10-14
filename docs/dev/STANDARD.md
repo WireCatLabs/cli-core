@@ -1154,8 +1154,10 @@ PNG adds `image/png` content and JSON text `{ chart, image: { format, width, hei
 it writes no file and uses the same `messages` read permission.
 
 1. **Three tools, not one per command** (NEED-766): `<tool>_tools_search` finds commands by words
-   and gives each one's arguments; `<tool>_read` runs a command that only reads and `<tool>_write`
-   one that changes something, as `{ "command": "messages list", "arguments": { … } }`. A command
+   and gives each one's arguments and the shape of its answer (`output`: the envelope of its entity, or
+   any envelope); `<tool>_read` runs a command that only reads and `<tool>_write`
+   one that changes something, as `{ "command": "messages list", "arguments": { … } }`. Both declare
+   the envelope (a list `{items, page, …}` or one thing `{item, …}`) as their `outputSchema`. A command
    is its CLI path. The bot server's three are `<tool>_bot_tools_search`, `<tool>_bot_read` and
    `<tool>_bot_write`, and its commands are the path under `bot`. `status` answers what the server is.
    `conversations refresh` runs what `search conversations --refresh` runs before it searches

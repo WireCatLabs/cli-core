@@ -24,6 +24,7 @@ import {
   TRANSCRIBE_OPTION,
 } from "./hearing-command.js"
 import { cursorOf, HISTORY_QUERY, historyWindow } from "./history-query.js"
+import { threadAnswer } from "./message-answers.js"
 import { messageItem, messageItems, type ReadMessage, viewOf } from "./message-items.js"
 import { commentsCommand } from "./messages-comments-command.js"
 import { deleteCommand } from "./messages-delete-command.js"
@@ -175,22 +176,21 @@ export const messagesCommand = (messenger: Messenger): Command => {
       if (requested) {
         const context = messengerContext(this, messenger)
         const target = targetOf(messenger, chat, message)
-        const found = await context.withServices((services) =>
-          services.messages.thread(isLocator(chat) ? chat : target.chat, isLocator(chat) ? undefined : target.message, {
-            ...requested,
-            before,
-            after,
-          }),
-        )
+        const { found, reader } = await context.withServices(async (services) => ({
+          found: await services.messages.thread(
+            isLocator(chat) ? chat : target.chat,
+            isLocator(chat) ? undefined : target.message,
+            { ...requested, before, after },
+          ),
+          reader: await services.messages.reader(),
+        }))
         if (found.fallback) context.renderer.note(`thread context uses time neighbours: ${found.fallback}`)
         if (found.stale) context.renderer.note("thread graph may be stale; stale links were not followed")
         if (found.stopped.length) context.renderer.note(`thread context stopped: ${found.stopped.join(", ")}`)
-        if (context.format === "pretty") {
-          context.streams.data(renderMessages(found.items, viewOf(context, messenger)))
+        renderAnswer(this, context, threadAnswer(found, reader), () => {
           const links = renderThreadLinks(found)
-          if (links) context.streams.data(`\n${links}\n`)
-        } else if (context.format === "jsonl") context.renderer.stream([found])
-        else context.renderer.result(found)
+          return `${renderMessages(found.items, viewOf(context, messenger))}${links ? `\n${links}\n` : ""}`
+        })
         return
       }
       await readWindow(this, chat, message, { before, after })

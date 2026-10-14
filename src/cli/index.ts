@@ -108,7 +108,7 @@ export {
 export { botFiles, botsDirectory, ChatRegistry, registryProfiles, type SeenChat } from "./bot/registry.js"
 export { BotTokenStore, type BotTokenStoreOptions } from "./bot/token.js"
 export { PressLog, UpdatesCursor } from "./bot/updates.js"
-export { commandContract, type JsonSchema, resultSchemaFor, SCHEMA_DIALECT } from "./command-contract.js"
+export { commandContract, type JsonSchema, SCHEMA_DIALECT } from "./command-contract.js"
 export { CONTRACT, commandsCommand } from "./commands-command.js"
 export { configCommand, refuseUnknownKey } from "./config-command.js"
 export {
@@ -231,7 +231,7 @@ export { tagsCommand } from "./messenger/tags-command.js"
 export { tasksCommand } from "./messenger/tasks-command.js"
 export { topicsCommand } from "./messenger/topics-command.js"
 export { watchCommand } from "./messenger/watch-command.js"
-export { listed, renderList, renderPage, window, withPaging } from "./paging.js"
+export { window, withPaging } from "./paging.js"
 export {
   knownBeside,
   knownPermissionKeys,

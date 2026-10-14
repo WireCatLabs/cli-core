@@ -97,9 +97,7 @@ export const saveFiles = async (
       onSaved?.(one)
     } catch (error) {
       const issue = batch.fail(message, "download", error, (file.position ?? index) + 1)
-      warn(
-        `message ${message}, attachment ${(file.position ?? index) + 1}: ${issue.code} — ${issue.actions.map((action) => action.message).join(" ")}`,
-      )
+      warn(`message ${message}, attachment ${(file.position ?? index) + 1}: ${issue.code} — ${issue.message}`)
     }
   }
   await recordPaths(messages, chat, message, successful, saved, warn, (error) =>

@@ -1,10 +1,10 @@
 import { PassThrough } from "node:stream"
 import { CliError, captureStreams } from "@wirecat/cli-base"
-import { annotate as described } from "@wirecat/cli-base/commands"
+import { annotate, annotate as described } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { readSecret } from "../terminal/prompt.js"
-import { commandContract, findCommand, resultSchemaFor } from "./command-contract.js"
+import { commandContract, findCommand } from "./command-contract.js"
 import { commandsCommand } from "./commands-command.js"
 import { environmentOf, outputFor } from "./context.js"
 import { preview } from "./preview.js"
@@ -35,7 +35,7 @@ const invoke = async (
   const prepare = vi.fn()
   const performed = vi.fn(async function (this: Command) {
     if (action) await action(this)
-    else outputFor(this).renderer.result({ id: "synthetic", text: "synthetic payload", operationId: "op-synthetic" })
+    else outputFor(this).renderer.result({ id: "synthetic", text: "synthetic payload", operation_id: "op-synthetic" })
   })
   const streams = captureStreams()
   const result = await run(
@@ -198,7 +198,7 @@ describe("agent CLI contract", () => {
 
   it("projects fields and fails visibly before an oversized document is emitted", async () => {
     const projected = await invoke(["messages", "send", "synthetic", "--json=id"])
-    expect(JSON.parse(projected.stdout[0] ?? "")).toEqual({ id: "synthetic", operationId: "op-synthetic" })
+    expect(JSON.parse(projected.stdout[0] ?? "")).toEqual({ id: "synthetic", operation_id: "op-synthetic" })
     const bounded = await invoke(["messages", "send", "synthetic", "--json", "--max-output-bytes", "4"])
     expect(bounded.result).not.toBe(0)
     expect(bounded.stdout).toEqual([])
@@ -234,8 +234,17 @@ describe("agent CLI contract", () => {
     expect(contract.validation.conflicts).toEqual([["offline", "refresh"]])
     expect(contract.validation.implications).toHaveLength(1)
     expect(() => findCommand(root, ["absent"])).toThrow("unknown command path")
-    expect(resultSchemaFor(["messages", "list"]).coverage).toBe("declared-domain-fields")
-    expect(resultSchemaFor(["tasks", "list"]).coverage).toBe("collection-with-open-items")
+    expect(contract.outputSchemaCoverage).toBe("envelope-with-open-items")
+    expect((contract.outputSchema as { anyOf?: unknown[] }).anyOf).toHaveLength(2)
+  })
+
+  it("generates the output from the entity a command declares: a list or one thing of it", () => {
+    const root = new Command("fixture")
+    root.addCommand(annotate(new Command("topics"), { output: { entity: "topic" } }))
+    const contract = commandContract(findCommand(root, ["topics"]))
+    expect(contract.outputSchemaCoverage).toBe("declared-entity")
+    expect(JSON.stringify(contract.outputSchema)).toContain("unread_count")
+    expect(contract.jsonlSchema).toMatchObject({ type: "object", properties: { title: { type: "string" } } })
   })
 })
 

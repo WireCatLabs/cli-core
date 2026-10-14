@@ -1706,7 +1706,7 @@ describe("the shared read commands", () => {
     const context = await call(["messages", "context", "msg:chat/500/7/3", "--thread", "--json"], never, env)
     expect(context.code).toBe(0)
     expect(context.stdout).toHaveLength(1)
-    const found = JSON.parse(context.stdout[0] ?? "")
+    const found = JSON.parse(context.stdout[0] ?? "").item
     expect(found).toMatchObject({ mode: "thread", chain: ["2", "1"], stale: false, stopped: [] })
     expect(found.items.map((item: { id: string }) => item.id)).toEqual(["1", "2", "3"])
     const search = await call(["search", "messages", "chapter", "--thread", "--json"], never, env)
@@ -1763,7 +1763,7 @@ describe("the shared read commands", () => {
     )
     expect(found.code).toBe(0)
     expect(found.stdout).toHaveLength(1)
-    expect(JSON.parse(found.stdout[0] ?? "")).toMatchObject({
+    expect(JSON.parse(found.stdout[0] ?? "").item).toMatchObject({
       mode: "time",
       fallback: "not_built",
       items: [{ id: "2" }],
@@ -3760,7 +3760,7 @@ describe("messages download", () => {
     expect(JSON.parse(result.stdout[0] ?? "").item).toMatchObject({
       complete: false,
       files: [{ path: join(into, "broken.docx") }],
-      batch: { failed: 1, succeeded: 1, failures: [{ stage: "extract", error: { actions: expect.any(Array) } }] },
+      batch: { failed: 1, succeeded: 1, failures: [{ stage: "extract", error: { retryable: false } }] },
     })
     expect(readFileSync(join(into, "broken.docx"), "utf8")).toBe("not a document")
   })

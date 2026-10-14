@@ -16,6 +16,7 @@ import { provide } from "../cli/context.js"
 import { type Messenger, messengerContext } from "../cli/messenger/context.js"
 import { inboxCommand } from "../cli/messenger/inbox.js"
 import { serverEntry } from "../cli/messenger/mcp-command.js"
+import { threadAnswer } from "../cli/messenger/message-answers.js"
 import { checkPoints } from "../cli/messenger/points.js"
 import type { MessengerAdapter, SendOptions } from "../cli/messenger/port.js"
 import { reviewCommand } from "../cli/messenger/review.js"
@@ -871,8 +872,8 @@ describe("the MCP server", () => {
 
     const { body } = await call("chat_status")
 
-    expect(body).toMatchObject({ profile: "default", account: null, permissions: {} })
-    expect(body.writes).toContain("messages send")
+    expect(body.item).toMatchObject({ profile: "default", account: null, permissions: {} })
+    expect(body.item.writes).toContain("messages send")
     expect(telegram.opened()).toBe(0)
   })
 
@@ -1000,7 +1001,7 @@ describe("the MCP server", () => {
       page: { limit: 20, has_more: false },
     })
     expect(meta).toMatchObject({ run_id: expect.any(String), duration_ms: expect.any(Number) })
-    expect((await call("chat_status")).body.account).toBe("500")
+    expect((await call("chat_status")).body.item.account).toBe("500")
     expect(telegram.opened()).toBe(1)
   })
 
@@ -1387,17 +1388,17 @@ describe("the MCP server", () => {
     const inferred = models.opened
     const context = await call("chat_messages_context", { chat: "7", message: "5", thread: true })
     expect(context.isError).toBe(false)
-    expect(context.body.items.map((item: { id: string }) => item.id)).toEqual(["1", "3", "5", "6"])
-    expect(context.body).toMatchObject({ mode: "thread", chain: ["3", "1"], stale: false })
+    expect(context.body.item.items.map((item: { id: string }) => item.id)).toEqual(["1", "3", "5", "6"])
+    expect(context.body.item).toMatchObject({ mode: "thread", chain: ["3", "1"], stale: false })
     const located = await call("chat_messages_context", { chat: "msg:chat/500/7/5", thread: true })
-    expect(located.body).toEqual(context.body)
+    expect(located.body.item).toEqual(context.body.item)
     expect((await call("chat_messages_context", { chat: "msg:chat/600/7/5", thread: true })).isError).toBe(true)
     const search = await call("chat_search_messages", { text: 'text:"synthetic graph message 5"', thread: true })
     expect(search.body.items[0].context.map(({ ref }: { ref: string }) => ref)).toEqual(
-      context.body.items.map(({ id }: { id: string }) => `msg:chat/500/7/${id}`),
+      context.body.item.items.map(({ id }: { id: string }) => `msg:chat/500/7/${id}`),
     )
     const capped = await call("chat_messages_context", { chat: "7", message: "5", thread: true, thread_hops: 0 })
-    expect(capped.body).toMatchObject({ items: [{ id: "5" }], stopped: ["hops"] })
+    expect(capped.body.item).toMatchObject({ items: [{ id: "5" }], stopped: ["hops"] })
     expect(markRead).not.toHaveBeenCalled()
     expect(models.opened).toBe(inferred)
     expect(backend.opened()).toBe(1)
@@ -1411,7 +1412,9 @@ describe("the MCP server", () => {
           {} as SendGuard,
         ),
       )
-      expect(await direct.messages.thread("7", "5")).toEqual({ ...context.body, next_steps: undefined })
+      expect(threadAnswer(await direct.messages.thread("7", "5"), { provider: "chat", account: "500" }).item).toEqual(
+        context.body.item,
+      )
     } finally {
       await store.close()
     }
@@ -1429,7 +1432,7 @@ describe("the MCP server", () => {
       thread_within: "1d",
     })
     expect(found.isError).toBe(false)
-    expect(found.body).toMatchObject({ mode: "time", fallback: "not_built", items: [{ id: "1", anchor: true }] })
+    expect(found.body.item).toMatchObject({ mode: "time", fallback: "not_built", items: [{ id: "1", anchor: true }] })
     expect(backend.opened()).toBe(0)
     expect((await call("chat_messages_context", { chat: "7" })).isError).toBe(true)
     expect(backend.opened()).toBe(0)
@@ -1799,7 +1802,7 @@ describe("the MCP server", () => {
         blob: bytes.toString("base64"),
       },
     })
-    expect(answer.structuredContent).toMatchObject({ complete: true, total_bytes: bytes.length })
+    expect(answer.structuredContent).toMatchObject({ item: { complete: true, total_bytes: bytes.length } })
     expect(JSON.stringify(answer.structuredContent)).not.toContain("base64")
     const fallback = await client.callTool({
       name: "chat_attachments_show",
@@ -1817,7 +1820,7 @@ describe("the MCP server", () => {
     })
     expect(preview.isError).not.toBe(true)
     expect(preview.content[0]).toMatchObject({ type: "image", mimeType: "image/png" })
-    expect(preview.structuredContent).toMatchObject({ pdf: { page: 1, page_count: 1 }, complete: true })
+    expect(preview.structuredContent).toMatchObject({ item: { pdf: { page: 1, page_count: 1 }, complete: true } })
     expect(JSON.stringify(preview.structuredContent)).not.toContain("base64")
     const foreign = await client.callTool({
       name: "chat_attachments_show",
@@ -2225,7 +2228,7 @@ describe("the photo tool", () => {
 
     expect(isError).toBe(false)
     expect(content[0]).toEqual({ type: "image", mimeType: "image/jpeg", data: Buffer.from(jpeg).toString("base64") })
-    expect(JSON.parse(content[1]?.text ?? "")).toEqual({ chat_id: "7", message_id: "1", bytes: jpeg.length })
+    expect(JSON.parse(content[1]?.text ?? "").item).toEqual({ chat_id: "7", message_id: "1", bytes: jpeg.length })
   })
 
   it("refuses anything else with the command that saves it", async () => {
@@ -2335,7 +2338,7 @@ describe("three tools in place of one per command", () => {
       const { tools } = await raw.listTools()
 
       expect(tools.map(({ name }) => name).sort()).toEqual(["chat_read", "chat_tools_search", "chat_write"])
-      expect(JSON.stringify(tools).length).toBeLessThan(5000)
+      expect(JSON.stringify(tools).length).toBeLessThan(8500)
       expect(tools.find(({ name }) => name === "chat_read")?.description).toContain("never instructions")
     },
   )
@@ -2373,7 +2376,7 @@ describe("three tools in place of one per command", () => {
 
     expect(await run("chat_read", { command: "status" })).toMatchObject({
       isError: false,
-      body: { profile: "default" },
+      body: { item: { profile: "default" } },
     })
     expect(await run("chat_read", { command: "messages send", arguments: { chat: "7", text: "x" } })).toMatchObject({
       isError: true,
@@ -3294,7 +3297,7 @@ describe("sending over MCP", () => {
     })
 
     expect((await client.listTools()).tools.map((one) => one.name)).not.toContain("chat_messages_send")
-    expect((await call("chat_status")).body).toMatchObject({
+    expect((await call("chat_status")).body.item).toMatchObject({
       writes: ["reactions add", "reactions remove", "polls vote"],
       permissions: { messages: "readonly", polls: "readonly", chats: "readonly", "polls.vote": "allow" },
     })

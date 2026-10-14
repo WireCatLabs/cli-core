@@ -504,7 +504,7 @@ describe("store fetch in the background", () => {
 
     expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({
       state: "partial",
-      issue: { code: "rate_limited", retry_after_ms: 600000, actions: expect.any(Array) },
+      issue: { code: "rate_limited", retry_after_ms: 600000, retryable: true },
     })
 
     const gone = spawned(2 ** 22 + 12345)

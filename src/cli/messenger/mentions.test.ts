@@ -93,11 +93,11 @@ describe("mentions", () => {
 
     const phone = page.items[2]
     const shown = JSON.parse((await chat("mentions", "show", String(phone.id), "--json")).stdout)
-    expect(shown).toMatchObject({ written: "8 (900) 000-00-01", before: "звони ", after: "" })
+    expect(shown.item).toMatchObject({ written: "8 (900) 000-00-01", before: "звони ", after: "" })
 
     const rebuilt = await chat("mentions", "rebuild", "--json")
     expect(rebuilt.code).toBe(0)
-    expect(JSON.parse(rebuilt.stdout)).toEqual({ messages: 2, mentions: 3 })
+    expect(JSON.parse(rebuilt.stdout).item).toEqual({ messages: 2, mentions: 3 })
     expect((await chat("mentions", "list", "--json")).stderr).not.toContain("mentions rebuild")
   })
 

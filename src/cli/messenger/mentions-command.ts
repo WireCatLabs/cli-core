@@ -2,8 +2,9 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
-import { queryHelp } from "../list-query.js"
-import { positiveCount, renderPage, window } from "../paging.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { pagedList, queryHelp } from "../list-query.js"
+import { positiveCount, window } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
 const line = ({ id, kind, value, domain, status, sentAt, locator }: Mention) =>
@@ -32,7 +33,16 @@ export const mentionsCommand = (messenger: Messenger): Command => {
         context.renderer.note(
           `messages stored before mentions existed are not read yet — \`${tool} mentions rebuild\` reads them`,
         )
-      renderPage(context, found, (items) => items.map((item) => `${line(item)}\n`).join(""))
+      renderAnswer(
+        this,
+        context,
+        pagedList("mentions list", context.settings, {
+          items: found.items.map(snakeKeys),
+          has_more: found.hasMore,
+          args: { query: query.join(" ") },
+        }),
+        () => found.items.map((item) => `${line(item)}\n`).join(""),
+      )
     })
 
   annotate(mentions.command("show"), { examples: [`${tool} mentions show 12`] })
@@ -41,9 +51,12 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, id: number) {
       const context = messengerContext(this, messenger)
       const found = await context.withServices((services) => services.mentions.show(id))
-      if (context.format !== "pretty") return context.renderer.result(found)
-      context.streams.data(
-        `${line(found)}\n…${found.before}[${found.written}]${found.after}…\n` +
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(found)),
+        () =>
+          `${line(found)}\n…${found.before}[${found.written}]${found.after}…\n` +
           `same ${found.kind} in ${found.sameValue} other place${found.sameValue === 1 ? "" : "s"}\n`,
       )
     })
@@ -58,7 +71,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
           onBatch: (read, total) => context.renderer.note(`${read} of ${total} messages read`),
         }),
       )
-      context.renderer.result(done)
+      renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
 
   return mentions
