@@ -3,10 +3,10 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { renderMessages } from "../../render/messages.js"
 import { listOf, renderAnswer } from "../envelope.js"
+import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { COMMENTS_QUERY, cursorOf, historyWindow } from "./history-query.js"
-import { queryHelp } from "./list-query.js"
 import { messageItems, viewOf } from "./message-items.js"
 
 export const commentsCommand = (messenger: Messenger): Command => {

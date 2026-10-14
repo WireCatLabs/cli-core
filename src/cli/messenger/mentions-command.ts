@@ -1,8 +1,8 @@
 import { annotate } from "@wirecat/cli-base/commands"
-import { fieldsHelp } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import type { Mention } from "../../services/mentions.js"
 import { MENTION_QUERY } from "../../store/store.js"
+import { queryHelp } from "../list-query.js"
 import { positiveCount, renderPage, window } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
@@ -22,7 +22,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     .argument("[query...]", "fields below; a bare word is a value, so 89001234567 finds +79001234567")
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
-    .addHelpText("after", `\n${fieldsHelp(MENTION_QUERY)}`)
+    .addHelpText("after", queryHelp(MENTION_QUERY))
     .action(async function (this: Command, query: string[]) {
       const context = messengerContext(this, messenger)
       const found = await context.withServices((services) =>

@@ -2,6 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import {
   dateRange,
   defineQuery,
+  type FieldSpec,
   fieldsHelp,
   fieldsNamed,
   type Predicate,
@@ -73,8 +74,11 @@ export const listQuery = (text: string, registry: QueryRegistry, command: string
   }
 }
 
-/** The query words a list's action receives, for `listQuery`. */
-export const typedQuery = (words: readonly string[] | undefined): string => (words ?? []).join(" ")
+/** A list's `[query...]` as typed: the words after its arguments, or one string from MCP. */
+export type QueryWords = readonly string[] | string | undefined
+
+/** The query a list's action or MCP tool received, as one string for `listQuery`. */
+export const typedQuery = (words: QueryWords): string => (typeof words === "string" ? words : (words ?? []).join(" "))
 
 const EVERY = Number.MAX_SAFE_INTEGER - 1
 
@@ -168,3 +172,9 @@ export const timeBounds = (term: Predicate | undefined, zone = "UTC"): { since?:
 /** A text term as the plain words a provider searches by: `name:ana`, `name:"Ana K"`, `name:*ana*`. */
 export const searchText = (term: Predicate | undefined): string | undefined =>
   term === undefined ? undefined : term.value.replace(/^\*+|\*+$/g, "")
+
+/** A field the provider filters itself; names follow the search language, as in `search messages`. */
+export const nativeField = (field: Omit<FieldSpec, "native">): FieldSpec => ({ ...field, native: true })
+
+/** The Fields section of a list's help, for a list that places its own `[query...]`. */
+export const queryHelp = (registry: QueryRegistry): string => `\n${fieldsHelp(registry, LIST_QUERY_GUIDE)}`
