@@ -184,14 +184,17 @@ module with the reason for each number; nothing else hard-codes them.
 | Band | Created by an agent | Created by a rule |
 |---|---|---|
 | Certain (§ 2) | — | nothing new |
-| Likely | listed first; the agent must choose (below) | to the review list |
-| Maybe | `tasks add` refuses and lists up to 5 candidates with score and reasons ("same person, same amount, 2 of 5 stems shared"); the agent repeats with `--attach <task>` or `--new` | to the review list |
+| Likely | listed first; the agent must choose (below) | to the review list; the reviewing agent decides |
+| Maybe | `tasks add` refuses and lists up to 5 candidates with score and reasons ("same person, same amount, 2 of 5 stems shared"); the agent repeats with `--attach <task>` or `--new` | to the review list; the reviewing agent decides |
 | Different | created | created |
 
 - Refusing, not warning: an agent skips a warning; it cannot skip an exit code. Asking the creating agent costs
   no extra model call — it is already the judge (Mem0 decides add / update / nothing the same way,
   arXiv 2504.19413).
-- **The review list:** `tasks duplicates` lists pairs a rule left in "same" or "maybe", newest first, with reasons.
+- **Who reviews (owner, NEED-1103 A):** the agent that goes through tasks after `sync` decides each pair a rule
+  left in "likely" or "maybe" — it reads the meaning the fields miss — and passes the owner only the pairs it is
+  unsure about (`tasks duplicates --unsure`). Its merges can be undone like any other.
+- **The review list:** `tasks duplicates` lists pairs a rule left in "likely" or "maybe", newest first, with reasons.
   `tasks merge <dup> --into <task>` links every message of the duplicate to the task, closes the duplicate
   `dismissed` with a `duplicate-of` relation, and records the decision; `tasks duplicates reject <dup> <task>`
   records "not the same" so the pair is not offered again.
