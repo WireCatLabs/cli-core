@@ -95,7 +95,22 @@ export {
   meetingHitContextLimits,
   validateMeetingPassage,
 } from "./passage.js"
-export type { MeetingProjectDiscoveryOptions, MeetingProjectDiscoveryPage } from "./project-discovery.js"
+export type {
+  MeetingProjectDiscoveryOptions,
+  MeetingProjectDiscoveryPage,
+  MeetingProjectDiscoveryReader,
+} from "./project-discovery.js"
+export { readMeetingProjectEvidence } from "./project-evidence.js"
+export {
+  type MeetingProjectEvidenceAnswer,
+  type MeetingProjectEvidenceItem,
+  meetingProjectEvidence,
+} from "./project-evidence-answer.js"
+export {
+  MEETING_PROJECT_EVIDENCE_QUERY,
+  type MeetingProjectEvidenceRequest,
+  prepareMeetingProjectEvidence,
+} from "./project-evidence-query.js"
 export { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
 export { type PullOptions, pull, type RunReport } from "./pull.js"
 export type {

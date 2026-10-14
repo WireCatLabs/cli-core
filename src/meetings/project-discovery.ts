@@ -7,6 +7,11 @@ export interface MeetingProjectDiscoveryOptions extends Omit<MeetingSearchOption
   maxVocabularyReadBytes?: number
 }
 
+export type MeetingProjectDiscoveryReader = (
+  project: string,
+  options: Omit<MeetingProjectDiscoveryOptions, "accountId">,
+) => Promise<MeetingProjectDiscoveryPage>
+
 /** One bounded name lane; repeating references across lanes are the same evidence. */
 export interface MeetingProjectDiscoveryPage {
   schemaVersion: 1

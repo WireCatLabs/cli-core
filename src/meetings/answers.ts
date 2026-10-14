@@ -13,7 +13,7 @@ import { type MeetingOwner, meeting, meetingItem } from "./item.js"
 import type { Summary, Transcript, TranscriptRow } from "./model.js"
 import { formatMeetingReference, parseMeetingReference } from "./reference.js"
 import type { MeetingSearchPage } from "./search-store.js"
-import type { MeetingDetails } from "./store.js"
+import type { MeetingDetails, SearchHit } from "./store.js"
 
 const text = v.string()
 const count = v.pipe(v.number(), v.integer(), v.minValue(0))
@@ -218,19 +218,21 @@ export const MEETING_STEPS = defineSteps([
 const SEARCH_AGAIN = MEETING_STEPS[0] as StepDefinition
 
 /** `search meetings`: the store's page, its cursor as `page.next`, and passages not indexed yet as `missing`. */
+export const meetingHitItem = (hit: SearchHit & { ref: string }): MeetingHitItem => ({
+  ref: hit.ref,
+  meeting: meetingRef(parseMeetingReference(hit.ref).accountId, hit.meetingId),
+  scope: hit.scope,
+  id: String(hit.id),
+  excerpt: hit.text,
+  offset_ms: hit.startMs,
+})
+
 export const meetingHitsList = (
   found: MeetingSearchPage,
   limit: number,
   command = "search meetings",
 ): MeetingListBody<MeetingHitItem> => {
-  const items = found.items.map((hit) => ({
-    ref: hit.ref,
-    meeting: meetingRef(parseMeetingReference(hit.ref).accountId, hit.meetingId),
-    scope: hit.scope,
-    id: String(hit.id),
-    excerpt: hit.text,
-    offset_ms: hit.startMs,
-  }))
+  const items = found.items.map(meetingHitItem)
   const cursor = found.hasMore && found.nextCursor !== null ? found.nextCursor : undefined
   const pending = found.coverage.indexing === "pending"
   const next = [

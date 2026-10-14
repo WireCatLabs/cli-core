@@ -124,6 +124,11 @@ shape of this file.
 
 ### Added
 
+- **Shared project-evidence CLI and MCP adapters preserve cited alias discovery.** Hosts can mount
+  `meetings projects evidence <project> [query...]` and `meeting_project_evidence` with an account-bound reader.
+  The registered item entity retains canonical project, matched name, limits, selection and unknown
+  coverage; continuation repeats every constraint with relative dates frozen. Reads use existing
+  indexes and never confirm membership. Provider applications must adopt these exports explicitly.
 - `CORE_REASONS`, `CORE_DETAILS` and `failureContext` from the package root: an app that renders its own errors
   passes `failureContext({ reasons: REASONS })` to `errorObjectOf`, so cli-core's reasons and detail keys keep their
   names in its output.

@@ -1,7 +1,7 @@
 # Project-word evidence interface
 
-The SDK's `readMeetingProjectDiscovery` is implemented; the consumer interface below is the
-contract for the next shared CLI/MCP adapters. It is not mounted in a released application yet.
+The SDK's `readMeetingProjectDiscovery` and shared CLI/MCP adapters implement this interface.
+Hosts opt into the exports below; it is not mounted in a released application yet.
 
 ## Commands and scope
 
@@ -58,7 +58,28 @@ The existing service owns vocabulary resolution, bounded reads and cursor bindin
 CLI/MCP modules translate their inputs and call the same domain adapter. Zoom binds its selected
 account, store ports, deadline and close-before-output lifetime; it contains no alias policy or SQL.
 
-Synthetic tests must cover equivalent CLI/MCP answers, unknown arguments, scope/date constraints,
+| Export | Entry point | Responsibility |
+|---|---|---|
+| `MeetingProjectDiscoveryReader` | `/meetings` | Callback that omits account selection from caller input |
+| `prepareMeetingProjectEvidence` | `/meetings` | Validate bounded input and freeze query/date constraints |
+| `readMeetingProjectEvidence` | `/meetings` | Coordinate the injected reader and common answer mapping |
+| `meetingProjectEvidence` | `/meetings` | Runtime schema, registered as `meeting_project_evidence` |
+| `addMeetingProjectEvidenceCommand` | `/meetings/cli` | Mount `meetings projects evidence` under an existing meetings group |
+| `meetingProjectEvidenceTool`, `callMeetingProjectEvidenceTool` | `/meetings/mcp` | Discover and invoke the equivalent strict MCP tool |
+
+The host fixes the account in the callback passed to either transport:
+
+```ts
+const read: MeetingProjectDiscoveryReader = (project, options) =>
+  readMeetingProjectDiscovery(ports, project, { ...options, accountId: selectedAccountId })
+```
+
+The account comes after caller options deliberately. The host owns permission checks, opening and
+closing ports and final serialization limits. Tool discovery needs no connection. Both adapters
+return an item envelope without `meta`, which the host supplies. The shared modules do not mount
+themselves, open databases, maintain indexes or import a provider.
+
+Synthetic tests cover equivalent CLI/MCP answers, unknown arguments, scope/date constraints,
 relative-date continuation, empty-name continuation, pending indexes, cancellation and the complete
 registered entity. The existing SDK SQLite and second-provider cases remain the evidence for
 alias resolution and source paging. Adoption also requires reviewing the newer Core read envelopes

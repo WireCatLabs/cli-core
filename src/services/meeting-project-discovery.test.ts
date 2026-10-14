@@ -1,8 +1,11 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { Command } from "commander"
 import { afterEach, expect, it, vi } from "vitest"
-import type { MeetingSave, MeetingSearchPage } from "../meetings/index.js"
+import { addMeetingProjectEvidenceCommand } from "../meetings/cli/index.js"
+import type { MeetingProjectDiscoveryReader, MeetingSave, MeetingSearchPage } from "../meetings/index.js"
+import { callMeetingProjectEvidenceTool } from "../meetings/mcp/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { openStore } from "../store/store.js"
 import { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
@@ -59,6 +62,48 @@ const fixture = async (provider = "example-calendar") => {
   }
   return { store, ports, options, accountId, foreign, first, project }
 }
+
+it("mounts one shared CLI/MCP evidence flow for two providers without confirming project membership", async () => {
+  for (const provider of ["example-calendar", "sample-assistant"]) {
+    const f = await fixture(provider)
+    const read: MeetingProjectDiscoveryReader = (project, options) =>
+      readMeetingProjectDiscovery(f.ports, project, { ...options, accountId: f.accountId })
+    const program = new Command("example")
+    program.command("meetings")
+    const output = vi.fn()
+    addMeetingProjectEvidenceCommand(program, { read, signal: () => undefined, output })
+    await program.parseAsync(
+      [
+        "meetings",
+        "projects",
+        "evidence",
+        "RES",
+        `identity_id:${f.options.participantIdentityId}`,
+        `meeting_id:${f.first.meeting.id}`,
+        "--limit",
+        "1",
+        "--max-read-bytes",
+        "1024",
+      ],
+      { from: "user" },
+    )
+    const first = output.mock.calls[0]?.[0]
+    expect(first.item.hits[0].ref).toMatch(new RegExp(`^meeting:${f.accountId}/${f.first.meeting.id}/`))
+    expect(first.item.association).toBe("unconfirmed-word-evidence")
+    const result = await callMeetingProjectEvidenceTool(read, first.next[0].args)
+    expect(result).not.toHaveProperty("isError")
+    expect(result.structuredContent).toMatchObject({
+      item: {
+        term: { kind: "key" },
+        selection: { identity_id: String(f.options.participantIdentityId) },
+        coverage: { archive_completeness: "unknown", duplicates: "may-repeat-between-terms" },
+      },
+    })
+    expect((await f.store.meetings.searchHits("RES", { ...f.options, projectId: Number(f.project.id) })).items).toEqual(
+      [],
+    )
+  }
+})
 
 it("discovers unlinked meetings through canonical names, keys and aliases with bounded cited continuation", async () => {
   const f = await fixture()

@@ -23,7 +23,14 @@ import { identity } from "./identity.js"
 import { inviteLink } from "./invite-link.js"
 import { job } from "./job.js"
 import { joinRequest } from "./join-request.js"
-import { meeting, meetingDetails, meetingHit, meetingSummary, meetingTranscript } from "./meeting.js"
+import {
+  meeting,
+  meetingDetails,
+  meetingHit,
+  meetingProjectEvidence,
+  meetingSummary,
+  meetingTranscript,
+} from "./meeting.js"
 import { member } from "./member.js"
 import { memory } from "./memory.js"
 import { message } from "./message.js"
@@ -147,6 +154,7 @@ export const ENTITIES = {
   meeting,
   meeting_details: meetingDetails,
   meeting_hit: meetingHit,
+  meeting_project_evidence: meetingProjectEvidence,
   meeting_transcript: meetingTranscript,
   meeting_summary: meetingSummary,
   reference,

@@ -2,6 +2,7 @@
 
 - 2026-10-14: `.worktrees/meeting-evidence-contract-fix`, branch `docs/meeting-project-evidence-path` — documentation-only command-path correction; retain until owner-approved cleanup.
 - 2026-10-14: `../zoom-cli/.worktrees/meeting-evidence-contract-fix`, branch `docs/meeting-project-evidence-path` — unused clean Zoom checkout created during command-boundary review; retain until owner-approved cleanup.
+- 2026-10-14: `.worktrees/meeting-project-discovery`, branch `feat/meeting-project-evidence` — shared evidence CLI/MCP implementation and synthetic fixtures retained for review; remove only in the owner-approved cleanup batch.
 
 - 2026-10-14: `.worktrees/meeting-participant-discovery` and `/tmp/meeting-test-people-*` — isolated bounded participant lookup implementation and invented SQLite fixtures; retain until the owner's cleanup batch.
 

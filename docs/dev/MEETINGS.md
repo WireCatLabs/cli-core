@@ -1,8 +1,7 @@
 # Meetings
 
-The next CLI/MCP consumer contract for project-name evidence is
-[Project-word evidence](MEETING-PROJECT-EVIDENCE.md). It distinguishes the implemented SDK from
-the interface that still needs application adoption.
+The shared CLI/MCP adapters for project-name evidence are documented in
+[Project-word evidence](MEETING-PROJECT-EVIDENCE.md). Applications opt into these exports explicitly.
 
 `src/meetings/`, exported as `@wirecat/cli-core/meetings` (and `/meetings/cli`, `/meetings/mcp`,
 `/meetings/testing`); up to 0.4.2 it was the separate package `@wirecat/cli-meetings`. Each meeting provider
@@ -220,8 +219,11 @@ uncited or non-cue transcript reference fails instead of returning incomplete pr
 This reader does not refresh indexes. Pending indexing and unknown archive/index completeness
 remain explicit. Hosts may use the existing index-maintenance service through their injected
 search port, and retain connection lifetime, cancellation and serialized-output limits. The packet
-is a domain SDK result, not a new CLI answer: consumer adapters must preserve its context/coverage
-in a registered entity and standard envelope. No new CLI flag or MCP tool is mounted by this export.
+is a domain SDK result. The shared `addMeetingProjectEvidenceCommand` and
+`callMeetingProjectEvidenceTool` adapters preserve its context/coverage in the registered
+`meeting_project_evidence` item envelope, including a frozen selection query for continuation.
+See [the consumer interface](MEETING-PROJECT-EVIDENCE.md) for account binding and module ownership.
+The raw discovery export itself mounts no command and performs no indexing.
 
 ## Bounded participant lookup
 
