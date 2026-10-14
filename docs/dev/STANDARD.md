@@ -361,7 +361,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 
 | Flag | Value | Kind | Meaning | Unit |
 |---|---|---|---|---|
-| `--bytes` | `<n>` | count | at most this many bytes of included evidence content | bytes |
+| `--bytes` | `<bytes>` | count | at most this many bytes of included evidence content | bytes |
 | `--max-read-bytes` | `<bytes>` | count | at most this many stored text bytes read for one bounded evidence window | bytes |
 | `--expected-fingerprint` | `<hash>` | string | require the selected evidence anchor to match this previously read fingerprint |  |
 | `--depth` | `<n>` | count | maximum descendant depth in a hierarchy | levels |
