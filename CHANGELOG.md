@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.269.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **`contacts timeline` and `contacts_timeline` page like every other list:** a list cut at `--limit` now answers
