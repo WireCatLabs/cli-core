@@ -177,4 +177,5 @@ export const callMeetingTool = async (
 }
 
 export { callMeetingPassageTool, meetingPassageTool } from "./passage.js"
+export { callMeetingProjectEvidenceTool, meetingProjectEvidenceTool } from "./project-evidence.js"
 export { callMeetingSearchTool, meetingSearchTool } from "./search.js"

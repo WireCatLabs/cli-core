@@ -192,6 +192,7 @@ export const addMeetingCommands = (program: Command, deps: MeetingCommandDeps): 
 }
 
 export { addMeetingPassageCommand } from "./passage.js"
+export { addMeetingProjectEvidenceCommand } from "./project-evidence.js"
 export {
   addMeetingSearchCommand,
   type MeetingHitSearch,
