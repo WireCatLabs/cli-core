@@ -401,6 +401,19 @@ describe("changing a setting", () => {
     expect(file()).toEqual({ profiles: {} })
   })
 
+  it("takes a setting's camelCase name too and writes it in snake_case", () => {
+    changeSetting(path(), { profile: "work", setting: "keepRunsForDays", value: "7" })
+    changeSetting(path(), { profile: "work", setting: "permissions.messages.delete", value: "allow" })
+    expect(file()).toEqual({
+      profiles: { work: { keep_runs_for_days: 7, permissions: { "messages.delete": "allow" } } },
+    })
+    changeSetting(path(), { profile: "work", setting: "keepRunsForDays", value: undefined })
+    expect(file().profiles.work).toEqual({ permissions: { "messages.delete": "allow" } })
+    expect(() => changeSetting(path(), { profile: "work", setting: "keepRunsFor", value: "7" })).toThrow(
+      /no setting called/,
+    )
+  })
+
   it("**writes one permission key at a time**, refuses a level that is not one, and reads `readOnly` as levels", () => {
     changeSetting(path(), { profile: "work", setting: "permissions.messages.delete", value: "allow" })
     changeSetting(path(), { profile: "work", setting: "permissions.contacts", value: "readonly" })

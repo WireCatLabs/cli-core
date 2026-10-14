@@ -14,7 +14,7 @@ import {
   RESOURCES,
 } from "../sends/permissions.js"
 import { type AppIdentity, envName } from "./app.js"
-import { loadSnakeCaseConfig, settingAt, snakeCaseConfig } from "./config-keys.js"
+import { declaredSettingName, loadSnakeCaseConfig, settingAt, snakeCaseConfig } from "./config-keys.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
 import { DEFAULT_PROFILE, usableProfileName } from "./profile.js"
@@ -582,11 +582,13 @@ export const settingsFor = <T extends object = Record<never, never>>(
     path: string,
     {
       profile,
-      setting,
+      setting: typed,
       value,
       kind,
     }: { profile: string | undefined; setting: string; value: string | undefined; kind?: ProfileKind | undefined },
   ): unknown => {
+    const typedHead = typed.split(".")[0] ?? typed
+    const setting = allSettings.includes(typedHead) && typedHead !== "models" ? typed : declaredSettingName(typed)
     const [name = setting, ...rest] = setting.split(".")
     const level = name === "permissions" && rest.length > 0 ? rest.join(".") : undefined
     const modelField = /^models\.([a-z][a-z0-9-]*)\.(provider|model|base_url)$/.exec(setting)
