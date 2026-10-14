@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite"
 import { parseLucene } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../domain/models.js"
+import { searchStore } from "../services/messages.js"
 import { type AccountKey, MENTION_QUERY, openStore } from "./store.js"
 
 const OWNER: AccountKey = { provider: "max", account: "1" }
@@ -202,6 +203,38 @@ describe("deciding a mention", () => {
     await expect(store.confirmMention(OWNER, phone?.id ?? 0, undefined, "owner")).rejects.toThrow(/person:<uid>/)
     await expect(store.confirmMention(OWNER, link?.id ?? 0, undefined, "owner")).rejects.toThrow(/reject it/)
     await expect(store.rejectMention(OTHER, phone?.id ?? 0, "owner")).rejects.toThrow(/no mention/)
+    await store.close()
+  })
+})
+
+describe("mention fields in a message search", () => {
+  const found = async (store: Awaited<ReturnType<typeof openStore>>, text: string) =>
+    (await searchStore(store, OWNER, { text, language: "lucene", limit: 100 })).items.map(({ id }) => id).sort()
+
+  it("finds a phone written any way, an address, a link and a site; a dismissed value is not found", async () => {
+    const { store } = await fresh()
+    await store.saveMessages(
+      OWNER,
+      "-1",
+      [
+        message("1", "звони +7 900 000-00-01"),
+        message("2", "или 8 (900) 000-00-01, или ana@example.com"),
+        message("3", "смета https://docs.google.com/document/d/1SyntheticFileId_abc/edit?utm_source=x"),
+        message("4", "и https://example.com/a"),
+      ],
+      { via: "history" },
+    )
+
+    expect(await found(store, 'phone:"89000000001"')).toEqual(["1", "2"])
+    expect(await found(store, 'email:"Ana@Example.com"')).toEqual(["2"])
+    expect(await found(store, "domain:docs.google.com")).toEqual(["3"])
+    expect(await found(store, 'url:"https://example.com/a#top"')).toEqual(["4"])
+    expect(await found(store, 'phone:89000000001 -email:"ana@example.com"')).toEqual(["1"])
+
+    const [link] = (await store.mentions(OWNER, q("kind:url domain:example.com"), { offset: 0 })).items
+    await store.rejectMention(OWNER, link?.id ?? 0, "owner")
+    expect(await found(store, "domain:example.com")).toEqual(["2"])
+    expect(await found(store, 'url:"https://example.com/a"')).toEqual([])
     await store.close()
   })
 })

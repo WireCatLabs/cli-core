@@ -213,7 +213,8 @@ an index lookup.
 
 1. **1a, 1b — built** (0.264.0 and this release): `mentions list|show|rebuild|confirm|reject`, message text.
    **1c** — organizations own identities (its own migration).
-   **1d** — fields `phone:`, `email:`, `url:`, `domain:` (the query parser lives in cli-base); `links domains list`.
+   **1d** — fields `phone:`, `email:`, `url:`, `domain:` in `search messages`: built. Still to come: links resolved
+   to stored documents and chats, and `links domains list` (sites by number of links).
    **1e** — the other texts: transcripts, file texts, notes, documents, mail.
 2. `person-name` for known people (stems against names and aliases); `mentions:<reference>`.
 3. Unknown names and `place`, with `places`; precision measured on a labelled sample of the owner's chats

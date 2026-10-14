@@ -357,6 +357,28 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     support: "A2" as const,
     validate: filled,
   })),
+  ...(
+    [
+      [
+        "phone",
+        'phone:"8 900 000-00-01"',
+        "a phone found in the text, written any way: +7…, 8…, with spaces or dashes",
+      ],
+      ["email", 'email:"ana@example.com"', "an address found in the text, lower-cased; quoted, since @ is an operator"],
+      ["url", 'url:"https://example.com/a"', "a link found in the text, without utm_*, fbclid and the fragment"],
+      ["domain", "domain:google.com", "the site of a link or an address in the text; docs.google.com means google.com"],
+    ] as const
+  ).map(([name, example, normalization]) => ({
+    name,
+    example,
+    index: "mentions (kind, value) / (domain); messages only, not mail yet",
+    aliases: [],
+    type: "kw" as const,
+    operators: terms,
+    normalization,
+    support: "A2" as const,
+    validate: filled,
+  })),
   {
     name: "tag",
     example: "tag:work",
