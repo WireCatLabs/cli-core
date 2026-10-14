@@ -5,6 +5,8 @@ import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
 import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel } from "../embeddings/models.js"
+import type { PictureEmbedder } from "../images/picture/embedder.js"
+import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
 import { entriesOfList, fitting, type SkippedSource } from "../search/account-list.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
@@ -12,7 +14,9 @@ import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { createStemmer, DEFAULT_STEMMERS } from "../search/stem.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import { openPictureEmbedderFor } from "./document-pictures.js"
 import { vectorModelKey } from "./embeddings.js"
+import { PICTURE_FLOOR, plainWords } from "./pictures.js"
 import { listContextOf } from "./search-kind.js"
 
 export interface NotesSearchRequest {
@@ -251,6 +255,10 @@ export interface NotesFound {
   nextOffset?: number
   /** What the notes found link to, most linked first. */
   linked: LinkedRecord[]
+  /** Documents whose picture is nearest the words, best first; only when `pictures` was asked for. Never in `hits`. */
+  pictures?: { ref: string; score: number }[]
+  /** Why pictures were asked for and none were searched. */
+  picturesSkipped?: string
 }
 
 export interface NotesQuery {
@@ -268,6 +276,11 @@ export interface NotesQuery {
   env?: NodeJS.ProcessEnv
   /** The tool's command, named in the hint when the model is missing. */
   command?: string
+  /** Adds `pictures`, the documents whose picture the plain words describe, beside the hits. English words. */
+  pictures?: boolean
+  pictureLimit?: number
+  /** An open picture embedder, for tests and callers that keep one; opened and closed here when absent. */
+  pictureEmbedder?: PictureEmbedder
 }
 
 const MAX_LINE = 200
@@ -290,6 +303,51 @@ const firstLine = (text: string, query: string): string => {
   return (found ?? lines.find((line) => line.trim() !== "") ?? "").trim().slice(0, MAX_LINE)
 }
 
+/** The documents nearest to what the words describe by their picture. A missing model is a note, not a failure. */
+const pictureLane = async (
+  store: MessageStore,
+  query: string,
+  {
+    folderIds,
+    source,
+    limit,
+    env,
+    command,
+    embedder,
+  }: {
+    folderIds: string[] | undefined
+    source: Note["source"] | undefined
+    limit: number
+    env: NodeJS.ProcessEnv | undefined
+    command: string
+    embedder: PictureEmbedder | undefined
+  },
+): Promise<Pick<NotesFound, "pictures" | "picturesSkipped">> => {
+  const words = plainWords(query)
+  if (words === "" || source === "internal") return {}
+  let vector: Float32Array
+  try {
+    const use = embedder ?? (await openPictureEmbedderFor({ ...(env === undefined ? {} : { env }), command }))
+    try {
+      vector = await use.embedQuery(words)
+    } finally {
+      if (!embedder) await use.close()
+    }
+  } catch (error) {
+    if (error instanceof CliError && error.code === "not_found") return { picturesSkipped: error.message }
+    throw error
+  }
+  const near = await store.notes.nearestPictures(imageModel(DEFAULT_IMAGE_MODEL).key, vector, {
+    limit,
+    ...(folderIds === undefined ? {} : { folderIds }),
+  })
+  return {
+    pictures: near
+      .filter(({ score }) => score >= PICTURE_FLOOR)
+      .map(({ ref, score }) => ({ ref, score: Number(score.toFixed(4)) })),
+  }
+}
+
 /**
  * `search notes`: words and stems, and meaning when the local model is there, merged by reciprocal rank;
  * each hit says which half found it, and the answer lists what the notes found link to.
@@ -309,6 +367,9 @@ export const searchNotes = async (
     timezone,
     env,
     command = "tg",
+    pictures: withPictures = false,
+    pictureLimit = 5,
+    pictureEmbedder,
   }: NotesQuery = {},
 ): Promise<NotesFound> => {
   const label = tag === undefined ? undefined : normalizeTag(tag)
@@ -407,6 +468,16 @@ export const searchNotes = async (
     if (record.ref?.startsWith("note:") || record.ref?.startsWith("document:"))
       record.name = (await store.notes.note(record.ref).catch(() => undefined))?.title ?? record.name
   }
+  const lane = withPictures
+    ? await pictureLane(store, query, {
+        folderIds,
+        source,
+        limit: pictureLimit,
+        env,
+        command,
+        embedder: pictureEmbedder,
+      })
+    : {}
   return {
     query,
     ...(label === undefined ? {} : { tag: label }),
@@ -419,6 +490,7 @@ export const searchNotes = async (
     linked: [...counts.values()].sort(
       (a, b) => b.notes - a.notes || (a.name ?? a.ref ?? "").localeCompare(b.name ?? b.ref ?? ""),
     ),
+    ...lane,
   }
 }
 
