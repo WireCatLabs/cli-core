@@ -778,7 +778,7 @@ const NEW = {
     },
     {
       name: "mentions",
-      doc: "A phone, e-mail address, link or Google document found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.",
+      doc: "A phone, e-mail address, link, Google document or known person's name found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.",
       cols: [
         id(),
         c("kind", "text", { notnull: true, note: "`phone`, `email`, `url`, `document`" }),

@@ -1652,7 +1652,7 @@ Which messages a conversation's chunk is cut from. One row per `conversation` ro
 
 ### `mentions`
 
-A phone, e-mail address, link or Google document found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.
+A phone, e-mail address, link, Google document or known person's name found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|

@@ -81,7 +81,7 @@ Verbs used but not in STANDARD's list, by CLI. Each needs a row above or a renam
 | fact | what happened: a statement, question, decision or promise, with evidence | memory | none |
 | memory | what an agent concluded, with evidence and scope | fact, summary | none |
 | relationship | a confirmed or suggested link between a person, organization or project | relation, link | memo `tasks relations` (task to task); drive `links` (links between references) |
-| mention | a phone, e-mail address, link or document found in one place of a stored text, normalized; found → linked or dismissed | extraction, entity, link (`links` joins two stored records) | none |
+| mention | a phone, e-mail address, link, document or known person's name found in one place of a stored text, normalized; found → linked or dismissed | extraction, entity, link (`links` joins two stored records) | none |
 | reference | the typed name of any stored thing: `msg:`, `chat:`, `contact:`, `note:`, `document:`, `person:`, `task:`, `fact:`, `memory:` (`src/domain/references.ts`) | ref, id | see [Output keys](#output-keys) |
 | locator | the reference of one message: `msg:<provider>/<account>/<chat>/<message>` only (`src/domain/locator.ts`) | ref | memo `search` puts `note:` and `task:` references in `locator` (`cli-memo/src/search/command.ts:82,123`) |
 | profile | the name of one login of this CLI on this machine; chosen, never assumed | account (for this meaning) | memo `mail <account>`, `--account`; drive help "account profiles"; tg/max `contacts profile` (a person's card: another meaning) |
