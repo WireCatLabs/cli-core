@@ -3,8 +3,13 @@ import { metaOf } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import { ENTITIES, type EntityName } from "../entities/index.js"
 
+/** Provider adapters may describe a result whose fields differ from the shared entity. */
+export type JsonFieldsResolver = (command: Command | undefined) => readonly string[] | undefined
+
 /** The fields of the answer a command declares (`annotate(…, { output })`); nothing until it declares one. */
-export const answerFields = (command: Command | undefined): string[] | undefined => {
+export const answerFields = (command: Command | undefined, resolve?: JsonFieldsResolver): string[] | undefined => {
+  const own = resolve?.(command)
+  if (own !== undefined) return [...own]
   const output = command ? metaOf(command).output : undefined
   if (!output) return undefined
   const schema = ENTITIES[(output.view ? `${output.entity}.${output.view}` : output.entity) as EntityName]
@@ -26,7 +31,11 @@ export interface JsonRequest {
  * every name in it is a field of the command's answer, so `--json chats list` and `messages list --json 111` keep
  * their words. Commander sees a plain `--json` either way.
  */
-export const liftJson = (argv: readonly string[], target: (argv: string[]) => Command | undefined): JsonRequest => {
+export const liftJson = (
+  argv: readonly string[],
+  target: (argv: string[]) => Command | undefined,
+  resolve?: JsonFieldsResolver,
+): JsonRequest => {
   const end = argv.indexOf("--")
   const out: string[] = []
   let json = false
@@ -52,7 +61,7 @@ export const liftJson = (argv: readonly string[], target: (argv: string[]) => Co
     out.push(word)
     const following = argv[index + 1]
     if (following === undefined || !PATHS.test(following) || (end >= 0 && index + 1 >= end)) continue
-    const known = answerFields(target([...argv.slice(0, index), ...argv.slice(index + 2)]))
+    const known = answerFields(target([...argv.slice(0, index), ...argv.slice(index + 2)]), resolve)
     if (known && topOf(following).every((name) => known.includes(name))) {
       fields = following
       index++
@@ -62,8 +71,13 @@ export const liftJson = (argv: readonly string[], target: (argv: string[]) => Co
 }
 
 /** Refuses a field the answer does not have, and at a terminal asks which fields instead of printing them all. */
-export const checkJson = (command: Command, { json, fields }: Omit<JsonRequest, "argv">, terminal: boolean): void => {
-  const known = answerFields(command)
+export const checkJson = (
+  command: Command,
+  { json, fields }: Omit<JsonRequest, "argv">,
+  terminal: boolean,
+  resolve?: JsonFieldsResolver,
+): void => {
+  const known = answerFields(command, resolve)
   if (!json || !known) return
   const list = known.join(", ")
   if (fields !== undefined) {

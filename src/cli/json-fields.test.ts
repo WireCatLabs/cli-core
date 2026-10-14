@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { outputFor } from "./context.js"
 import { itemOf, renderAnswer } from "./envelope.js"
-import { checkJson, liftJson } from "./json-fields.js"
+import { answerFields, checkJson, liftJson } from "./json-fields.js"
 import { run } from "./program.js"
 import { commandAt } from "./steps.js"
 
@@ -22,6 +22,27 @@ const target = (words: string[]) =>
   )
 
 describe("--json [fields]", () => {
+  it("uses a provider's result fields for parsing, validation and terminal guidance", () => {
+    const providerFields = (command: Command | undefined) => (command === list ? ["name", "mime"] : undefined)
+    expect(answerFields(list, providerFields)).toEqual(["name", "mime"])
+    expect(liftJson(["chats", "list", "--json", "name"], target, providerFields)).toEqual({
+      argv: ["chats", "list", "--json"],
+      json: true,
+      fields: "name",
+    })
+    expect(() => checkJson(list, { json: true, fields: "name" }, false, providerFields)).not.toThrow()
+    expect(() => checkJson(list, { json: true, fields: "title" }, false, providerFields)).toThrow(
+      "no field title here; the fields are name, mime",
+    )
+    expect(() => checkJson(list, { json: true }, true, providerFields)).toThrow("--json=name,mime")
+  })
+
+  it("falls back to shared fields when a provider leaves a command undescribed", () => {
+    expect(answerFields(list, () => undefined)).toEqual(answerFields(list))
+    expect(() => checkJson(list, { json: true, fields: "title" }, false, () => undefined)).not.toThrow()
+    expect(answerFields(undefined, () => undefined)).toBeUndefined()
+  })
+
   it("takes fields after = or as the next word when they are the answer's fields", () => {
     expect(liftJson(["chats", "list", "--json=title,kind"], target)).toEqual({
       argv: ["chats", "list", "--json"],

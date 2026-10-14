@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- JSON field selection accepts an optional provider field resolver in answerFields, liftJson and
+  checkJson. Provider result shapes can override a shared entity's fields; undescribed commands
+  retain the shared defaults. The public CLI export includes the resolver type.
+
 - `createMeetingPreparationService` from `./services` composes a selected upcoming series with
   bounded stored history, cited transcript cues, stored person links, confirmed projects, accepted
   meeting facts and directly sourced tasks. It reports truncated/unavailable context and performs
