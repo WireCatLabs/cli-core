@@ -338,7 +338,8 @@ and the MCP search took 1.4 s.
 | running a model: in this thread, in workers, kept warm in a child process | `src/embeddings/embed.ts`, `pool.ts`, `workers.ts`, `process.ts`, `child.ts` |
 | download, with sha256, into the shared folder | `src/cli/messenger/models-command.ts`, through `src/speech/install.ts` |
 | an API model | `src/embeddings/remote.ts` |
-| embed, status, clear, search, the merge | `src/services/embeddings.ts` |
+| embed, status, readiness, refresh, clear | `src/services/embeddings-maintenance.ts` |
+| search, related, the merge | `src/services/embeddings-search.ts` |
 | the vector tables and the scan | `src/store/sqlite/vectors.ts` |
 | the commands | `src/cli/messenger/conversations-command.ts` |
 | the MCP tool | `src/mcp/tools/conversations.ts` |
