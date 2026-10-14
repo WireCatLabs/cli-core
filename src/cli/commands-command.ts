@@ -11,7 +11,7 @@ import { rootOf } from "./profile.js"
  * The major version of the JSON every command prints. The output types live in this package, so the
  * contract is this package's: raise it with a major version, when a field is removed or renamed.
  */
-export const CONTRACT = 1
+export const CONTRACT = 2
 
 /**
  * The discovery surface an agent reads instead of `--help`. It opens no store, no session and no
