@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Resumable syncs, one standard for every CLI** ([STANDARD](docs/dev/STANDARD.md#resumable-syncs)): a kill loses
+  nothing saved, a rerun goes on from where the last one stopped, and the status command says how far it is.
+  `@wirecat/cli-core/background` adds `saveCheckpoint`, `readCheckpoint`, `clearCheckpoint` and `checkpointPath`
+  (`<state>/checkpoints/<profile>/<job>.json`, written atomically, the cursor the tool's own) for a tool whose store
+  does not hold its position, and `progressOf` / `progressLine` for the shared progress shape `{ job, profile, done,
+  total, remaining, state, updated_at, cursor_age_ms }`.
+- `store jobs show` (CLI and MCP) answers `progress` in that shape; a job's last saved page now carries its time.
+- **`messages sync --all` passes a chat already held to its newest message**: when the chat list says no
+  message came after the newest stored one, and the held stretch reaches the chat's first message or `--since`,
+  nothing is asked for it. Such a chat answers `fetched: 0, complete: true, current: true`. A run with `--last`, a
+  window or search preparation asks every chat as before.
+
 ## 0.275.0 — 14.10.2026
 
 ### Added
