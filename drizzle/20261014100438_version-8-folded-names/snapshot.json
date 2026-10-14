@@ -11219,7 +11219,7 @@
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "meetings_by_title_folded",
+      "name": "meetings_by_account_id_title_folded",
       "entityType": "indexes",
       "table": "meetings"
     },

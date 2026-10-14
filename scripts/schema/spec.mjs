@@ -187,9 +187,15 @@ const EDITS = {
       ["extracted_at", "integer"],
       ["created_at", "integer", { notnull: true }],
       ["updated_at", "integer", { notnull: true }],
+      [
+        "name_folded",
+        "text",
+        { note: "`fold(name)`, which `attachments list name:` compares: SQLite's `lower()` folds ASCII only" },
+      ],
+      ["local_path_folded", "text", { note: "`fold(local_path)`, for `local_path:`" }],
     ],
     doc: "A file of a message, an email or a meeting, with its extracted text.",
-    keys: ["UNIQUE (attachable_type, attachable_id, position)"],
+    keys: ["UNIQUE (attachable_type, attachable_id, position)", "INDEX (name_folded)"],
     note: "Polymorphic (owner: attachments serve messages and mail); `attachment_texts` merged in; meeting files land here too.",
   },
   transcripts: {
@@ -894,8 +900,13 @@ const NEW = {
         meta(),
         ...ts(),
         del(),
+        c("title_folded", "text", { note: "`fold(title)`, which `meetings list title:` compares" }),
       ],
-      keys: ["UNIQUE (account_id, external_id)", "INDEX (account_id, started_at DESC)"],
+      keys: [
+        "UNIQUE (account_id, external_id)",
+        "INDEX (account_id, started_at DESC)",
+        "INDEX (account_id, title_folded)",
+      ],
     },
     {
       name: "meeting_participants",
@@ -1081,9 +1092,12 @@ const NEW = {
         c("next_check_at", "integer", {
           note: "when an agent should look at the open task again; the agenda lists it from then. Not a reminder: nothing reaches the owner",
         }),
+        c("title_folded", "text", { note: "`fold(title)`, which `tasks list title:` compares" }),
+        c("close_reason_folded", "text", { note: "`fold(close_reason)`, for `reason:`" }),
       ],
       keys: [
         "UNIQUE (project_id, number)",
+        "INDEX (title_folded)",
         "INDEX (project_id, status, due_at)",
         "INDEX (project_id, status, next_check_at)",
         "INDEX (project_id, source_locator)",

@@ -1014,7 +1014,7 @@ One occurrence: it happened once, at one time.
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `title_folded` | text |  |  | `fold(title)`, which `meetings list title:` compares |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, started_at DESC)`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`, `INDEX (account_id, title_folded)`
+*Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
 
 ### `meeting_participants`
 

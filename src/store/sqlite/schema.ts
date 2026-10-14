@@ -961,7 +961,7 @@ export const meetings = sqliteTable(
   (table) => [
     unique().on(table.accountId, table.externalId),
     index("meetings_by_time").on(table.accountId, desc(table.startedAt)),
-    index("meetings_by_title_folded").on(table.accountId, table.titleFolded),
+    index("meetings_by_account_id_title_folded").on(table.accountId, table.titleFolded),
     index("meetings_by_meeting_series_id").on(table.meetingSeriesId),
     index("meetings_by_event_id").on(table.eventId),
     index("meetings_by_host_identity_id").on(table.hostIdentityId),
