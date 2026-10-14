@@ -430,7 +430,7 @@ Help/version exits skip failure settlement. The lifecycle contract
 describes the order and failure behavior.
 
 A CLI describes its messenger once — a `Messenger` (`src/cli/messenger/context.ts`) with a
-`connect` that returns a `MessengerAdapter` (`src/cli/messenger/port.ts`) — and gets the shared
+`connect` that returns a `MessengerAdapter` (`src/ports/messenger.ts`) — and gets the shared
 commands, one file per resource in `src/cli/messenger/`. Two wrappers sit between a command and the
 adapter: `observed.ts` times each call into the run record, `stored.ts` saves what was read. A new
 adapter method is optional and reached with `capability()`; the wrappers pass through any method

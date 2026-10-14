@@ -3,10 +3,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { FloodMemory } from "../../sends/flood.js"
 import { Pacer } from "../../sends/pace.js"
 import { flooded } from "./flooded.js"
-import type { MessengerAdapter } from "./port.js"
 
 const wait = (seconds: number) =>
   new CliError("rate_limited", `wait ${seconds} s`, { retry_after_ms: seconds * 1000, provider_error: "FLOOD_WAIT" })

@@ -3,10 +3,10 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type Audience, MEDIA_KINDS, type MediaKind, type PrivacySettings } from "../../domain/models.js"
 import { sendTime } from "../../domain/send-time.js"
+import { capability } from "../../ports/messenger.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { capability } from "./port.js"
 
 const kindsOf = (typed: string | undefined): MediaKind[] => {
   const kinds = typed === undefined ? [...MEDIA_KINDS] : typed.split(",").map((kind) => kind.trim())

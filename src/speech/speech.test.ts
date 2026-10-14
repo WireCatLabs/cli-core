@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url"
 import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
-import type { MessengerAdapter } from "../cli/messenger/port.js"
+import type { MessengerAdapter } from "../ports/messenger.js"
 import {
   DEFAULT_ORDER,
   install,

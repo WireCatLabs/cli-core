@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { listQuery } from "../cli/list-query.js"
 import type { Messenger } from "../cli/messenger/context.js"
-import type { MessengerAdapter } from "../cli/messenger/port.js"
 import type { Chat, MessageHit } from "../domain/models.js"
+import type { MessengerAdapter } from "../ports/messenger.js"
 import type { SendGuard } from "../sends/guard.js"
 import type { MessageStore } from "../store/store.js"
 import {

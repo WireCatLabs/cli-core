@@ -7,12 +7,12 @@ import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as rendering from "../../charts/render.js"
 import { ENTITIES } from "../../entities/index.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
-import type { MessengerAdapter } from "./port.js"
 import { statsCommand } from "./stats-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }

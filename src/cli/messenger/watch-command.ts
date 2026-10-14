@@ -1,10 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { renderMessages } from "../../render/messages.js"
 import { environmentOf } from "../context.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
-import type { MessengerAdapter } from "./port.js"
 
 /**
  * New messages as they arrive, until Ctrl-C or `--timeout` — both a normal end, exit 0: listening

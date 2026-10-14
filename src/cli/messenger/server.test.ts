@@ -6,11 +6,11 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it, onTestFinished } from "vitest"
 import { unitScope } from "../../background/units.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { FloodMemory } from "../../sends/flood.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
-import type { MessengerAdapter } from "./port.js"
 import { servingProfiles } from "./serve-command.js"
 import {
   followUpsPrompt,

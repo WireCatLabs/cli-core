@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import type { ErrorCode } from "@wirecat/cli-base"
 import { isCliFailure } from "../cli/failures.js"
-import { capability, type HistoryBatch, type MessengerAdapter, type ServerReads } from "../cli/messenger/port.js"
 import type { Chat, Id, Message } from "../domain/models.js"
+import { capability, type HistoryBatch, type MessengerAdapter, type ServerReads } from "../ports/messenger.js"
 import { newSendId } from "../sends/send-id.js"
 import { BUSY_PAGE, contractSeed, type IdMaker, type Seed, wordIds } from "./seed.js"
 

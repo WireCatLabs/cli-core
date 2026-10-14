@@ -2,7 +2,6 @@ import { createHash } from "node:crypto"
 import { readFile, stat } from "node:fs/promises"
 import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
-import { capability, type RemoteFile } from "../cli/messenger/port.js"
 import { formatLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
@@ -12,6 +11,7 @@ import {
   imageModelsDirectory,
   isImageModelInstalled,
 } from "../images/picture/models.js"
+import { capability, type RemoteFile } from "../ports/messenger.js"
 import type { PictureInput } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"

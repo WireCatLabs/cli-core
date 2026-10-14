@@ -1,9 +1,9 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { OfficialChatStats, OfficialPerson, OfficialValue } from "../../domain/models.js"
+import { capability } from "../../ports/messenger.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { capability } from "./port.js"
 import { officialAnswer, refuseJsonl } from "./stats-answers.js"
 
 const TOP = 5

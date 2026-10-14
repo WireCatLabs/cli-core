@@ -1,10 +1,10 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { capability } from "../../ports/messenger.js"
 import { renderMessages } from "../../render/messages.js"
 import { listOf, renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { messageItems, selfOf, viewOf } from "./message-items.js"
-import { capability } from "./port.js"
 
 /** Where to look after a scheduled send ended without an answer: repeating it would schedule a second one. */
 export const scheduledCommand = (messenger: Messenger): Command => {

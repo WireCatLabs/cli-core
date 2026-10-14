@@ -5,6 +5,7 @@ import { CliError, captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Chat, GroupCard } from "../../domain/models.js"
 import { adminTools } from "../../mcp/tools/admin.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -14,7 +15,6 @@ import { groupCommands } from "./admin-commands.js"
 import { chatsCommand } from "./chats-command.js"
 import { contactsCommand } from "./contacts-command.js"
 import type { Messenger } from "./context.js"
-import type { MessengerAdapter } from "./port.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const chat: Chat = {

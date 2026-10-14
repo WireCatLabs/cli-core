@@ -7,7 +7,7 @@ import type { Messenger } from "../../cli/messenger/context.js"
 import { selfOf } from "../../cli/messenger/message-items.js"
 import { writtenAnswer } from "../../cli/messenger/message-writes.js"
 import { VOTERS_QUERY } from "../../cli/messenger/people-queries.js"
-import { capability } from "../../cli/messenger/port.js"
+import { capability } from "../../ports/messenger.js"
 import { closeAfterOf, guardedClose, guardedCreatePoll, guardedVote, pollVoters, quizOf } from "../../sends/polls.js"
 import { type AnyTool, chatOf, limit, message, page, READ, tool, WRITE } from "../tool.js"
 

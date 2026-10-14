@@ -1,7 +1,7 @@
 import * as v from "valibot"
 import { itemOf, snakeKeys } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import type { MessengerAdapter } from "../../cli/messenger/port.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
 import { type AnyTool, tool, WRITE } from "../tool.js"

@@ -1,11 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { capability } from "../../ports/messenger.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { window, withPaging } from "../paging.js"
 import { lines, pageOf, topicAnswer } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { capability } from "./port.js"
 
 const listed = (messenger: Messenger) =>
   async function (this: Command, chat: string) {

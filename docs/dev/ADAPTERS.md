@@ -4,7 +4,7 @@ How a new messenger CLI joins this package. You write two things: an **adapter**
 the messenger, and a **`Messenger`**, which tells the shared commands about it. Then you run the
 **contract cases** over your adapter. You do not edit this package.
 
-The port is [`src/cli/messenger/port.ts`](../../src/cli/messenger/port.ts). Its doc comments are the
+The port is [`src/ports/messenger.ts`](../../src/ports/messenger.ts). Its doc comments are the
 contract. This page is the order to read them in, and the rules that are not in one method.
 
 ## Where to import from

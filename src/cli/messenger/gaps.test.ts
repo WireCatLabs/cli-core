@@ -4,13 +4,13 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import type { Message } from "../../domain/models.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import { storeCommand } from "./archive-commands.js"
 import type { Messenger } from "./context.js"
-import type { MessengerAdapter } from "./port.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", version: "1.0.0", description: "Synthetic" }
 const account = { provider: "test", account: "500" }

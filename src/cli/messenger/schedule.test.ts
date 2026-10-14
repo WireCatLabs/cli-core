@@ -8,10 +8,10 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
-import type { MessengerAdapter } from "./port.js"
 import { scheduleCommand } from "./schedule-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }

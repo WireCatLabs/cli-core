@@ -2,11 +2,11 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { accountSession } from "../../entities/index.js"
+import { capability } from "../../ports/messenger.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { sessionAnswer, wholeList } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { capability } from "./port.js"
 
 const SESSIONS_QUERY = unfilteredQuery("account_session", accountSession)
 

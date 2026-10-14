@@ -1,5 +1,22 @@
 import { CliError } from "@wirecat/cli-base"
 import type {
+  Account,
+  AccountSession,
+  Chat,
+  Contact,
+  Folder,
+  FolderRules,
+  GroupCard,
+  GroupMember,
+  GroupSettings,
+  Id,
+  Member,
+  Message,
+  MessageEvent,
+  Page,
+  Poll,
+} from "../domain/models.js"
+import type {
   AccountEditing,
   AccountTools,
   ChatFolders,
@@ -20,24 +37,7 @@ import type {
   ScheduledMessages,
   Sent,
   ServerReads,
-} from "../cli/messenger/port.js"
-import type {
-  Account,
-  AccountSession,
-  Chat,
-  Contact,
-  Folder,
-  FolderRules,
-  GroupCard,
-  GroupMember,
-  GroupSettings,
-  Id,
-  Member,
-  Message,
-  MessageEvent,
-  Page,
-  Poll,
-} from "../domain/models.js"
+} from "../ports/messenger.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
 import { contractSeed, type Seed } from "./seed.js"
 

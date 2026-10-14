@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
-import type { CounterField, CounterObservations } from "../../domain/counters.js"
-import type { HtmlFormatting, MarkdownFormatting, TextSpan } from "../../domain/formatting.js"
-import type { Markup } from "../../domain/markdown.js"
-import type { MessagePermalink } from "../../domain/message-link.js"
+import type { CounterField, CounterObservations } from "../domain/counters.js"
+import type { HtmlFormatting, MarkdownFormatting, TextSpan } from "../domain/formatting.js"
+import type { Markup } from "../domain/markdown.js"
+import type { MessagePermalink } from "../domain/message-link.js"
 import type {
   Account,
   AccountSession,
@@ -43,8 +43,8 @@ import type {
   Topic,
   TopicChange,
   WindowedMessage,
-} from "../../domain/models.js"
-import type { Upload } from "../../sends/upload.js"
+} from "../domain/models.js"
+import type { Upload } from "../sends/upload.js"
 
 /** One attachment's bytes, fetched over the adapter's connection when `bytes` is read — so read it before the command closes. */
 export interface RemoteFile {

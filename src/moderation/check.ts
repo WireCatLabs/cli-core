@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import type { MessengerAdapter } from "../cli/messenger/port.js"
 import type { GroupMember, Id, Message } from "../domain/models.js"
+import type { MessengerAdapter } from "../ports/messenger.js"
 import type { GroupRules } from "./rules.js"
 
 export type Action = "report" | "delete" | "remove"
