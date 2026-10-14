@@ -215,7 +215,8 @@ an index lookup.
    **1c** — organizations own identities (its own migration).
    **1d** — fields `phone:`, `email:`, `url:`, `domain:` in `search messages`: built. Still to come: links resolved
    to stored documents and chats, and `links domains list` (sites by number of links).
-   **1e** — the other texts: transcripts, file texts, notes, documents, mail.
+   **1e** — the other texts: file texts and voice transcripts built (store version 10); notes, documents and mail
+   to come.
 2. `person-name` for known people (stems against names and aliases); `mentions:<reference>`.
 3. Unknown names and `place`, with `places`; precision measured on a labelled sample of the owner's chats
    (results private, totals to cli-testing).

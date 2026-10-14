@@ -4,10 +4,10 @@ Several sessions work on cli-core, tg-cli and max-cli at once. This page is what
 
 ## Store migrations
 
-**The next free migration version is 12.** Version 11 is taken by mentions in file texts and voice transcripts
-(triggers queue an attachment's text; mentions plan phase 1e, 2026-10-14). Version 10 is taken by organizations owning identities
-(`identity_links.organization_id`, the person column nullable, exactly one owner; mentions plan phase 1c, 2026-10-14).
-Version 9 is taken by partial indexes over the folded copies still to
+**The next free migration version is 12.** Version 11 is taken by organizations owning identities
+(`identity_links.organization_id`, the person column nullable, exactly one owner; mentions plan phase 1c, waiting on
+the owner, 2026-10-14). Version 10 is taken by mentions in file texts and voice transcripts (triggers queue an
+attachment's text; mentions plan phase 1e, 2026-10-14). Version 9 is taken by partial indexes over the folded copies still to
 fill (rows an older build wrote after version 8; slice S5b follow-up, 2026-10-14). Version 8 is taken by folded copies of filterable names (`tasks.title`,
 `tasks.close_reason`, `attachments.name`, `attachments.local_path`, `meetings.title`; slice S5b, 2026-10-14). Version 7 is taken by `mentions` (phones, e-mail, links and documents
 found in text, plan in pull request #1036, 2026-10-13). Version 6 is taken by snake_case keys in stored query trees

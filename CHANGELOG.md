@@ -16,6 +16,11 @@ shape of this file.
 
 ### Added
 
+- **Mentions in a message's files and voice notes** (store version 10). The text `attachments extract` read and a
+  voice note's transcript yield mentions too, listed with their message and `field` `file_text` or `transcript`;
+  `phone:`, `email:`, `url:` and `domain:` find the message. Attachments with text from before version 10 need one
+  `mentions rebuild`, whose answer now counts `attachments` beside `messages`.
+
 - **`phone:`, `email:`, `url:` and `domain:` in a message search** find messages by what their text mentions:
   `phone:"8 900 000-00-01"` finds `+7 900 000-00-01` and `89000000001` alike, `domain:docs.google.com` every link
   and address of `google.com`, `url:` one link without its tracking. An address is quoted (`email:"ana@example.com"`),

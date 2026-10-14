@@ -21,6 +21,8 @@ export interface StoredMention {
   domain: string | null
   confidence: number
   status: MentionStatus
+  /** Which text of the message: `text`, a file's `file_text`, or a voice note's `transcript`. */
+  field: string
   /** Who linked or dismissed it: `owner`, an agent by name, `rules` for a value that already had an owner. */
   author: string | null
   /** The message it was found in: its chat's and its own id in the messenger. */
@@ -74,6 +76,8 @@ export interface MentionsState {
 
 export interface MentionsRebuild {
   messages: number
+  /** Files and voice notes of messages whose text was read. */
+  attachments: number
   mentions: number
 }
 
@@ -112,32 +116,58 @@ const originalOf = (database: CacheDatabase) => {
         : undefined) as Decision | undefined)
 }
 
+/** Where mentions are read from: a message's own text, and the text of its files and voice notes. */
+const SOURCES = {
+  message: {
+    count: "SELECT count(*) AS n FROM messages WHERE deleted_at IS NULL",
+    page: "SELECT id, text, 'text' AS field FROM messages WHERE id > ? AND deleted_at IS NULL ORDER BY id LIMIT ?",
+    one: "SELECT text, 'text' AS field FROM messages WHERE id = ? AND deleted_at IS NULL",
+  },
+  attachment: {
+    count:
+      "SELECT count(*) AS n FROM attachments a JOIN messages m ON m.id = a.attachable_id " +
+      "WHERE a.attachable_type = 'message' AND a.text IS NOT NULL AND a.text <> '' AND m.deleted_at IS NULL",
+    page:
+      "SELECT a.id, a.text, CASE WHEN coalesce(a.extractor, '') LIKE 'speech:%' THEN 'transcript' ELSE 'file_text' END AS field " +
+      "FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id > ? AND a.attachable_type = 'message' " +
+      "AND a.text IS NOT NULL AND a.text <> '' AND m.deleted_at IS NULL ORDER BY a.id LIMIT ?",
+    one:
+      "SELECT a.text, CASE WHEN coalesce(a.extractor, '') LIKE 'speech:%' THEN 'transcript' ELSE 'file_text' END AS field " +
+      "FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id = ? AND a.attachable_type = 'message' " +
+      "AND a.text IS NOT NULL AND m.deleted_at IS NULL",
+  },
+} as const
+type SourceType = keyof typeof SOURCES
+const SOURCE_TYPES = Object.keys(SOURCES) as SourceType[]
+
 const writer = (database: CacheDatabase, now: number, kinds: readonly MentionKind[] | undefined) => {
   const only = kinds ? ` AND kind IN (${kinds.map(() => "?").join(", ")})` : ""
   const decided = database.prepare(
     "SELECT kind, value, status, target_type, target_id, author FROM mentions " +
-      `WHERE source_type = 'message' AND source_id = ? AND status <> 'found'${only}`,
+      `WHERE source_type = ? AND source_id = ? AND status <> 'found'${only}`,
   )
-  const remove = database.prepare(`DELETE FROM mentions WHERE source_type = 'message' AND source_id = ?${only}`)
+  const remove = database.prepare(`DELETE FROM mentions WHERE source_type = ? AND source_id = ?${only}`)
   const insert = database.prepare(
     "INSERT OR IGNORE INTO mentions (kind, source_type, source_id, source_field, start_offset, end_offset, value, " +
       "domain, method, version, confidence, status, target_type, target_id, author, created_at, updated_at) " +
-      "VALUES (?, 'message', ?, 'text', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
   const scope = kinds ?? []
   const original = originalOf(database)
-  return (messagePk: number, text: string | null): number => {
-    const kept = new Map(decided.all(messagePk, ...scope).map((row) => [`${row.kind}\u0000${row.value}`, row] as const))
-    remove.run(messagePk, ...scope)
-    if (text === null) return 0
+  return (type: SourceType, pk: number, source: { text: string; field: string } | null): number => {
+    const kept = new Map(decided.all(type, pk, ...scope).map((row) => [`${row.kind}\u0000${row.value}`, row] as const))
+    remove.run(type, pk, ...scope)
+    if (source === null) return 0
     let written = 0
-    for (const found of findMentions(text)) {
+    for (const found of findMentions(source.text)) {
       if (kinds && !kinds.includes(found.kind)) continue
       const decision = kept.get(`${found.kind}\u0000${found.value}`) ?? original(found.kind, found.value)
       written += Number(
         insert.run(
           found.kind,
-          messagePk,
+          type,
+          pk,
+          source.field,
           found.start,
           found.end,
           found.value,
@@ -158,34 +188,31 @@ const writer = (database: CacheDatabase, now: number, kinds: readonly MentionKin
   }
 }
 
-const liveText = (database: CacheDatabase) => {
-  const read = database.prepare("SELECT text FROM messages WHERE id = ? AND deleted_at IS NULL")
-  return (pk: number): string | null => {
-    const row = read.get(pk)
-    return row ? String(row.text) : null
-  }
-}
+const sourceOf = (row: Record<string, unknown> | undefined) =>
+  row ? { text: String(row.text), field: String(row.field) } : null
 
-/** Finds the mentions of the messages a store write queued, inside that write's transaction. */
+/** Finds the mentions of the texts a store write queued, inside that write's transaction. */
 export const drainMentions = (database: CacheDatabase, now: number, limit = DRAIN_ON_WRITE): number => {
   const queued = database
-    .prepare("SELECT source_id FROM mention_pending WHERE source_type = 'message' ORDER BY source_id LIMIT ?")
+    .prepare("SELECT source_type, source_id FROM mention_pending ORDER BY source_type, source_id LIMIT ?")
     .all(limit)
-    .map((row) => Number(row.source_id))
+    .map((row) => ({ type: String(row.source_type), pk: Number(row.source_id) }))
   if (queued.length === 0) return 0
   const write = writer(database, now, undefined)
-  const text = liveText(database)
-  const dequeue = database.prepare("DELETE FROM mention_pending WHERE source_type = 'message' AND source_id = ?")
-  for (const pk of queued) {
-    write(pk, text(pk))
-    dequeue.run(pk)
+  const read = Object.fromEntries(SOURCE_TYPES.map((type) => [type, database.prepare(SOURCES[type].one)]))
+  const dequeue = database.prepare("DELETE FROM mention_pending WHERE source_type = ? AND source_id = ?")
+  for (const { type, pk } of queued) {
+    const known = SOURCE_TYPES.find((one) => one === type)
+    if (known) write(known, pk, sourceOf(read[known]?.get(pk)))
+    dequeue.run(type, pk)
   }
   return queued.length
 }
 
 /**
- * Finds the mentions of every stored message again, in short write transactions. Decisions stay: a linked or
- * dismissed mention's status moves to the new row with the same kind and value. `kinds` redoes only those.
+ * Finds the mentions of every stored message and attachment text again, in short write transactions. Decisions
+ * stay: a linked or dismissed mention's status moves to the new row with the same kind and value. `kinds` redoes
+ * only those.
  */
 export const rebuildMentions = (
   database: CacheDatabase,
@@ -195,32 +222,32 @@ export const rebuildMentions = (
     onBatch,
   }: { now: number; kinds?: readonly MentionKind[]; onBatch?: (done: number, total: number) => void },
 ): MentionsRebuild => {
-  const total = Number(database.prepare("SELECT count(*) AS n FROM messages WHERE deleted_at IS NULL").get()?.n)
-  const batch = database.prepare(
-    "SELECT id, text FROM messages WHERE id > ? AND deleted_at IS NULL ORDER BY id LIMIT ?",
-  )
-  let after = 0
-  let messages = 0
+  const total = SOURCE_TYPES.reduce((sum, type) => sum + Number(database.prepare(SOURCES[type].count).get()?.n), 0)
+  const read: Record<SourceType, number> = { message: 0, attachment: 0 }
   let mentions = 0
-  for (;;) {
-    const rows = batch.all(after, REBUILD_BATCH)
-    if (rows.length === 0) break
-    database.exec("BEGIN IMMEDIATE")
-    try {
-      const write = writer(database, now, kinds)
-      const dequeue = database.prepare("DELETE FROM mention_pending WHERE source_type = 'message' AND source_id = ?")
-      for (const row of rows) {
-        mentions += write(Number(row.id), String(row.text))
-        if (!kinds) dequeue.run(Number(row.id))
+  for (const type of SOURCE_TYPES) {
+    const batch = database.prepare(SOURCES[type].page)
+    let after = 0
+    for (;;) {
+      const rows = batch.all(after, REBUILD_BATCH)
+      if (rows.length === 0) break
+      database.exec("BEGIN IMMEDIATE")
+      try {
+        const write = writer(database, now, kinds)
+        const dequeue = database.prepare("DELETE FROM mention_pending WHERE source_type = ? AND source_id = ?")
+        for (const row of rows) {
+          mentions += write(type, Number(row.id), sourceOf(row))
+          if (!kinds) dequeue.run(type, Number(row.id))
+        }
+        database.exec("COMMIT")
+      } catch (error) {
+        database.exec("ROLLBACK")
+        throw error
       }
-      database.exec("COMMIT")
-    } catch (error) {
-      database.exec("ROLLBACK")
-      throw error
+      read[type] += rows.length
+      after = Number(rows.at(-1)?.id)
+      onBatch?.(read.message + read.attachment, total)
     }
-    messages += rows.length
-    after = Number(rows.at(-1)?.id)
-    onBatch?.(messages, total)
   }
   if (!kinds) {
     database
@@ -230,7 +257,7 @@ export const rebuildMentions = (
       )
       .run(REBUILT_AT, JSON.stringify(new Date(now).toISOString()), now)
   }
-  return { messages, mentions }
+  return { messages: read.message, attachments: read.attachment, mentions }
 }
 
 export const mentionsState = (database: CacheDatabase): MentionsState => {
@@ -239,11 +266,14 @@ export const mentionsState = (database: CacheDatabase): MentionsState => {
   return { pending, rebuiltAt: row ? (JSON.parse(String(row.value)) as string) : null }
 }
 
+// A mention in a file or a voice note belongs to that attachment's message, and is listed with it.
 const SELECT =
-  "SELECT mn.id, mn.kind, mn.value, mn.domain, mn.confidence, mn.status, mn.author, mn.start_offset, mn.end_offset, " +
-  "m.text, m.external_id AS message_id, m.sent_at, c.external_id AS chat_id " +
-  "FROM mentions mn JOIN messages m ON mn.source_type = 'message' AND m.id = mn.source_id AND m.deleted_at IS NULL " +
-  "JOIN chats c ON c.id = m.chat_id "
+  "SELECT mn.id, mn.kind, mn.value, mn.domain, mn.confidence, mn.status, mn.author, mn.source_field, " +
+  "mn.start_offset, mn.end_offset, CASE WHEN mn.source_type = 'attachment' THEN att.text ELSE m.text END AS text, " +
+  "m.external_id AS message_id, m.sent_at, c.external_id AS chat_id FROM mentions mn " +
+  "LEFT JOIN attachments att ON mn.source_type = 'attachment' AND att.id = mn.source_id AND att.attachable_type = 'message' " +
+  "JOIN messages m ON m.id = CASE WHEN mn.source_type = 'attachment' THEN att.attachable_id ELSE mn.source_id END " +
+  "AND m.deleted_at IS NULL JOIN chats c ON c.id = m.chat_id "
 
 const stored = (row: Record<string, unknown>): StoredMention => ({
   id: Number(row.id),
@@ -253,6 +283,7 @@ const stored = (row: Record<string, unknown>): StoredMention => ({
   confidence: Number(row.confidence),
   status: String(row.status) as MentionStatus,
   author: row.author == null ? null : String(row.author),
+  field: String(row.source_field),
   chatId: String(row.chat_id),
   messageId: String(row.message_id),
   sentAt: new Date(Number(row.sent_at)).toISOString(),
@@ -321,12 +352,7 @@ export interface MentionDecision {
 }
 
 const mentionOfAccount = (database: CacheDatabase, accountPk: number, id: number) => {
-  const row = database
-    .prepare(
-      "SELECT mn.kind, mn.value FROM mentions mn JOIN messages m ON mn.source_type = 'message' AND m.id = mn.source_id " +
-        "WHERE mn.id = ? AND m.account_id = ?",
-    )
-    .get(id, accountPk)
+  const row = database.prepare(`${SELECT}WHERE mn.id = ? AND m.account_id = ?`).get(id, accountPk)
   if (!row) throw new CliError("not_found", `no mention ${id} in this account`)
   return { kind: String(row.kind) as MentionKind, value: String(row.value) }
 }

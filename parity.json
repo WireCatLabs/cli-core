@@ -787,6 +787,9 @@
       "value": "<port>",
       "meaning": "the local port for --http"
     },
+    "--problems": {
+      "meaning": "only failed responses, warnings and crashes"
+    },
     "--profile": {
       "value": "<name>",
       "meaning": "filter diagnostic runs by recorded profile"

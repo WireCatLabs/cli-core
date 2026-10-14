@@ -1642,9 +1642,9 @@ A phone, e-mail address, link or Google document found in one place of one store
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
 | `kind` | text | not null |  | `phone`, `email`, `url`, `document` |
-| `source_type` | text | not null |  | the text's row: `message` |
+| `source_type` | text | not null |  | the text's row: `message`, or `attachment` for a message's file or voice note |
 | `source_id` | integer | not null |  | the row in the `source_type` table |
-| `source_field` | text | not null |  | which text of that row: `text` |
+| `source_field` | text | not null |  | which text of that row: a message's `text`, an attachment's `file_text` or `transcript` |
 | `start_offset` | integer | not null |  | where it is written in that text, in UTF-16 units |
 | `end_offset` | integer | not null |  | where it ends, exclusive; what was written is read back from the source, never copied |
 | `value` | text | not null |  | normalized: `+` and digits for a phone with a known country, digits alone otherwise; a lower-case address; a link without tracking parameters or fragment; a Google file id |
@@ -1667,7 +1667,7 @@ Texts written or edited since their mentions were found: triggers enqueue, the s
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
-| `source_type` | text | not null |  | the text's row: `message` |
+| `source_type` | text | not null |  | the text's row: `message` or `attachment` |
 | `source_id` | integer | not null |  | the row in the `source_type` table |
 
 *Keys and indexes:* `PRIMARY KEY (source_type, source_id)`
