@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.272.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **An `Upload` carries a `source`, not `bytes`**: `{ kind, name, source, asFile? }`, where `source` is
