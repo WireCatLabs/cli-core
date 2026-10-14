@@ -62,7 +62,7 @@ export const createMeetingSearchCommand = (program: Command): Command => {
     .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", timestamp)
     .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", timestamp)
     .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
-    .option("--cursor <cursor>", "continue from the previous page's page.cursor, with the same query and filters")
+    .option("--cursor <cursor>", "continue from the previous page's page.next_cursor, with the same query and filters")
     .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
   annotate(command, {
     origin: "handwritten",

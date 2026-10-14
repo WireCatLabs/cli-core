@@ -7,20 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-### Added
-
-- **Known people's names in stored messages** (`kind:person-name`, no migration). A capitalized word that is a name
-  of someone met in a messenger, a meeting or through a confirmed phone, in any case and from a Latin profile too
-  (`Valery` finds «Валерию»); two in a row that one person shares are a full name. A name links by rule to the one
-  person it fits who wrote in that chat; the rest wait as `found`, and `mentions show` lists the candidates. A name
-  is confirmed (`mentions confirm <id> person:<uid>`) and rejected where it is written, not everywhere. Names of
-  people added or renamed later are found by `mentions rebuild --kind person-name`. Persons known only as an
-  e-mail sender are left out: on one store they were thousands of companies and newsletters.
-- **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
-  or address; `organization:<id>` and `document:<id>` too. Mentions now carry `target`.
-
-## 0.270.0 — 14.10.2026
-
 ### Changed — may break callers
 
 - **On `@wirecat/cli-base` 0.28.0, with its standard shapes** (peer `>=0.28.0 <0.29.0`). `commands --json` is
@@ -44,11 +30,27 @@ shape of this file.
   - **Log records name a registered event** (`CORE_LOG_EVENTS`): `request`, `response`, `warning` and `cache`
     are written as `provider.request`, `provider.response`, `client.warning` and `cache.answered`; a crash as
     `command.crashed`; a send-journal line as `send.recorded`; serve's lines as `serve.note|success|warning|failure`.
-- **`sealed`, `metaNow` and `jsonlRecords` from `@wirecat/cli-core/cli`**: an app's own answer gets the same `meta`
-  and JSON lines (with the end line) as cli-core's.
 - **`--operation-id` replaces `--send-id`** (`messages send|forward`, `polls create`, `topics create`), and the MCP
   argument `operation_id` replaces `send_id`. A write's answer and an unknown outcome's error carry one
   `operation_id`; `send_id` is gone.
+
+### Added
+
+- **`sealed`, `metaNow` and `jsonlRecords` from `@wirecat/cli-core/cli`**: an app's own answer gets the same `meta`
+  and JSON lines (with the end line) as cli-core's.
+- **Known people's names in stored messages** (`kind:person-name`, no migration). A capitalized word that is a name
+  of someone met in a messenger, a meeting or through a confirmed phone, in any case and from a Latin profile too
+  (`Valery` finds «Валерию»); two in a row that one person shares are a full name. A name links by rule to the one
+  person it fits who wrote in that chat; the rest wait as `found`, and `mentions show` lists the candidates. A name
+  is confirmed (`mentions confirm <id> person:<uid>`) and rejected where it is written, not everywhere. Names of
+  people added or renamed later are found by `mentions rebuild --kind person-name`. Persons known only as an
+  e-mail sender are left out: on one store they were thousands of companies and newsletters.
+- **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
+  or address; `organization:<id>` and `document:<id>` too. Mentions now carry `target`.
+
+## 0.270.0 — 14.10.2026
+
+### Changed — may break callers
 
 - **Picture models moved to `images models list|download`**, registered with `imagesCommand`: they serve only
   picture search, which no app registers yet, and `models image` was not a resource name. `modelsCommand` keeps
