@@ -22,6 +22,14 @@ const target = (words: string[]) =>
   )
 
 describe("--json [fields]", () => {
+  it("accepts list-item shorthand without treating a real report's items as its payload", () => {
+    expect(() => checkJson(list, { json: true, fields: "items.ref,items.title" }, false)).not.toThrow()
+    expect(liftJson(["chats", "list", "--json", "items.ref"], target)).toMatchObject({ fields: "items.ref" })
+    expect(() => checkJson(list, { json: true, fields: "items.unknown" }, false)).toThrow("no field unknown")
+    expect(() =>
+      checkJson(list, { json: true, fields: "items.text" }, false, () => ["items", "coverage"]),
+    ).not.toThrow()
+  })
   it("uses a provider's result fields for parsing, validation and terminal guidance", () => {
     const providerFields = (command: Command | undefined) => (command === list ? ["name", "mime"] : undefined)
     expect(answerFields(list, providerFields)).toEqual(["name", "mime"])

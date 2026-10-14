@@ -108,6 +108,8 @@ shape of this file.
 
 ### Added
 
+- **Meeting search hits include nested source context.** The shared CLI/MCP result carries the meeting title, start date and evidence reference, plus a stored source-document URL when available. Context reads share the text byte budget; absent URLs stay null.
+
 - **The `note` entity carries what a note command answers**: `revision`, `front_matter`, `content_hash` and
   `export_path`, which every stored note has (null where they do not apply), and optional `tags` (names) and
   `backlinks` (`{from, target_text, kind, anchor}`). An app can now declare `{ entity: "note" }` on `notes show`,
@@ -121,6 +123,8 @@ shape of this file.
   app with its own `config set` (max).
 
 ### Fixed
+
+- **Nested `--json` paths use the shared projector and accept the `items.ref` list shorthand.** Array order and report coverage, pagination, missing data and execution metadata are retained across CLIs.
 
 - **A store migration that fails in an app with no `store reset` advises moving the file aside**, not
   `` `store reset` `` with no app named. drive opened the store as `tg` and told the owner to run `tg store reset`;

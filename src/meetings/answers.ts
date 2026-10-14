@@ -30,6 +30,14 @@ export const meetingHit = v.strictObject({
   excerpt: text,
   /** How far into the meeting the passage is. */
   offset_ms: v.nullable(count),
+  source: v.optional(
+    v.strictObject({
+      ref: reference,
+      title: v.nullable(text),
+      started_at: v.nullable(isoTime),
+      url: v.nullable(text),
+    }),
+  ),
 })
 
 const line = v.strictObject({
@@ -225,6 +233,16 @@ export const meetingHitItem = (hit: SearchHit & { ref: string }): MeetingHitItem
   id: String(hit.id),
   excerpt: hit.text,
   offset_ms: hit.startMs,
+  ...(hit.source === undefined
+    ? {}
+    : {
+        source: {
+          ref: hit.ref,
+          title: hit.source.title,
+          started_at: iso(hit.source.startedAt),
+          url: hit.source.url,
+        },
+      }),
 })
 
 export const meetingHitsList = (

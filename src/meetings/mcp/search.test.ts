@@ -12,6 +12,29 @@ const page = {
     indexCompleteness: "unknown" as const,
   },
 }
+it("returns stored source context through the same hit contract without a details lookup", async () => {
+  const search = vi.fn(async () => ({
+    ...page,
+    items: page.items.map((hit) => ({
+      ...hit,
+      source: { title: "Example review", startedAt: 1000, url: "https://example.test/summary" },
+    })),
+  }))
+  const answer = await callMeetingSearchTool(search, { query: "budget" })
+  expect(answer.structuredContent).toMatchObject({
+    items: [
+      {
+        source: {
+          ref: "meeting:1/2",
+          title: "Example review",
+          started_at: "1970-01-01T00:00:01.000Z",
+          url: "https://example.test/summary",
+        },
+      },
+    ],
+  })
+  expect(search).toHaveBeenCalledOnce()
+})
 
 it("replays every numeric date and selector in continuation and restarts pending indexes without a stale cursor", async () => {
   const search = vi.fn(async () => ({ ...page, hasMore: true, nextCursor: "next" }))

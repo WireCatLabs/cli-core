@@ -12,7 +12,15 @@ it("forwards combined context, dates and continuation to an injected provider-ne
   const controller = new AbortController()
   const result = {
     items: [
-      { ref: "meeting:1/2/3/0", meetingId: 2, scope: "transcript" as const, id: 9, text: "the budget", startMs: 1500 },
+      {
+        ref: "meeting:1/2/3/0",
+        meetingId: 2,
+        scope: "transcript" as const,
+        id: 9,
+        text: "the budget",
+        startMs: 1500,
+        source: { title: "Example review", startedAt: 1000, url: null },
+      },
     ],
     hasMore: true,
     nextCursor: "next-page",
@@ -80,6 +88,7 @@ it("forwards combined context, dates and continuation to an injected provider-ne
         id: "9",
         excerpt: "the budget",
         offset_ms: 1500,
+        source: { ref: "meeting:1/2/3/0", title: "Example review", started_at: "1970-01-01T00:00:01.000Z", url: null },
       },
     ],
     page: { mode: "cursor", limit: 10, has_more: true, next_cursor: "next-page" },
