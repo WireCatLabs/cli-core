@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **An unheard voice message is named in `missing` without `--transcribe` too.** `review`, `inbox`, `messages
+  list` and their MCP tools add `{field: "transcript", step: "messages.transcribe"}` for each voice message that has
+  no kept transcript, so an answer whose only content is a voice message no longer reads as complete. Nothing more
+  is heard or fetched.
+
 ## 0.273.0 — 14.10.2026
 
 ### Changed — may break callers
