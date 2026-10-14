@@ -212,6 +212,10 @@ lookup. Legacy adapters without the capability keep their old default result; ex
 requesting paging fails instead of silently doing an unbounded read. Consumers need a published
 SDK adoption before these new options become available.
 
+
+Shared CLI/MCP participant reads adapt this store packet to the standard list envelope: `page.limit`,
+`page.has_more`, optional `page.cursor` and a `page.next` step retaining the query and read budgets.
+The host adds run metadata. Coverage and page-local ambiguity stay alongside the envelope.
 ## Cue context and compact passages
 
 Read-budget, metadata, transcript-page and atomic cue-context contracts are exported from
@@ -237,7 +241,3 @@ example meetings passage meeting:1/2/3/9 --before-n 0 --after-n 0 --json
 ```
 
 The selected account is passed separately from the reference; a foreign reference fails before a read. CLI and MCP use one reader and formatter. A second synthetic provider needs no provider-specific branch.
-
-Shared CLI/MCP participant reads adapt this store packet to the standard list envelope: `page.limit`,
-`page.has_more`, optional `page.cursor` and a `page.next` step retaining the query and read budgets.
-The host adds run metadata. Coverage and page-local ambiguity stay alongside the envelope.
