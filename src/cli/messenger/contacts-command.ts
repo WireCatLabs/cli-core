@@ -197,12 +197,14 @@ export const contactsCommand = (messenger: Messenger): Command => {
     .option("--since-time <time>", "nothing older than this ISO 8601 time, or 2h / 1d ago")
     .option("--until-time <time>", "through this ISO 8601 time, or 2h / 1d ago")
     .option("--limit <n>", `at most this many; ${TIMELINE_ITEMS} if not given`, positiveCount("--limit"))
+    .option("--cursor <cursor>", "go on from where the last page stopped; page.next gives it, with the same filters")
     .action(async function (this: Command, person: string) {
-      const { scope, sinceTime, untilTime, limit } = this.opts<{
+      const { scope, sinceTime, untilTime, limit, cursor } = this.opts<{
         scope?: string
         sinceTime?: string
         untilTime?: string
         limit?: number
+        cursor?: string
       }>()
       if (scope !== undefined && !(SCOPES as readonly string[]).includes(scope))
         throw new CliError("validation_error", `--scope is personal or work, not "${scope}"`)
@@ -213,23 +215,27 @@ export const contactsCommand = (messenger: Messenger): Command => {
           ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
           ...(untilTime === undefined ? {} : { until: momentOf(untilTime, "--until-time") }),
           ...(limit === undefined ? {} : { limit }),
+          ...(cursor === undefined ? {} : { cursor }),
         }),
       )
-      const { items, hasMore, limits, person: who, pending } = found
+      const { items, hasMore, limits, pending } = found
       renderAnswer(
         this,
         context,
         listOf("contacts timeline", {
           items: items.map(snakeKeys),
           limit: limits.items,
-          has_more: false,
-          ...(hasMore || pending > 0 ? { meta: { truncated: true } } : {}),
+          has_more: hasMore,
+          ...(found.cursor === undefined ? {} : { cursor: found.cursor }),
+          args: {
+            person,
+            ...(scope === undefined ? {} : { scope }),
+            ...(sinceTime === undefined ? {} : { since_time: sinceTime }),
+            ...(untilTime === undefined ? {} : { until_time: untilTime }),
+          },
+          ...(pending > 0 ? { meta: { truncated: true } } : {}),
         }),
       )
-      if (hasMore)
-        context.renderer.note(
-          `${who.name ?? who.uid}: cut at --limit; a larger one or a narrower time range shows more`,
-        )
     })
 
   contacts

@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`contacts timeline` and `contacts_timeline` page like every other list:** a list cut at `--limit` now answers
+  `page.has_more: true`, `page.cursor` and a `page.next` step (`--cursor` continues, with the same `--scope`,
+  `--since-time` and `--until-time`), where it said `has_more: false` and `meta.truncated`. `meta.truncated` stays
+  for changes still queued and left out of the items. The stderr "cut at --limit" note is gone.
+
 ### Added
 
 - **`mentions confirm <id> [person:<uid>]` and `mentions reject <id>`** decide a mention's value everywhere it is

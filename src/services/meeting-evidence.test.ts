@@ -257,6 +257,7 @@ describe("meeting evidence references", () => {
 it("person context honors explicit account scope and reports mixed-index scan limits", async () => {
   const { store: meetings, input, details } = await fixture()
   const foreign = {
+    id: 1,
     personId: 1,
     identityId: null,
     subjectType: "meeting",
@@ -302,6 +303,7 @@ it("person context honors explicit account scope and reports mixed-index scan li
 it("person context skips stale missing meetings while preserving other typed failures", async () => {
   const { store: meetings, input, details } = await fixture()
   const row = {
+    id: 1,
     personId: 1,
     identityId: null,
     subjectType: "meeting",
