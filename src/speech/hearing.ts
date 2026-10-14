@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { Missing } from "@wirecat/cli-base/standards"
 import { recalledAccount } from "../cli/messenger/accounts.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { MessengerAdapter } from "../cli/messenger/port.js"
@@ -157,3 +158,18 @@ export const hearForTool = async (
 /** Messages with their transcripts; `unheard` as well when `--transcribe` was asked for. */
 export const heard = <T extends Message>(messages: readonly T[], hearing: Hearing | undefined): T[] =>
   hearing ? messages.map((message) => withTranscript(message, hearing)) : [...messages]
+
+/** Voice messages asked to be heard and still without text: why, and the command that hears one. */
+export const hearingMissing = (hearing: Hearing | undefined, transcribe: boolean): Missing[] => {
+  if (!transcribe || !hearing) return []
+  if (hearing.problem !== undefined)
+    return [{ field: "transcript", why: `not transcribed: ${hearing.problem}`, step: "messages.transcribe" }]
+  if (hearing.unheard.length === 0) return []
+  return [
+    {
+      field: "transcript",
+      why: `${hearing.unheard.length} voice message(s) not heard yet: ${hearing.unheard.map((voice) => voice.messageId).join(", ")}`,
+      step: "messages.transcribe",
+    },
+  ]
+}

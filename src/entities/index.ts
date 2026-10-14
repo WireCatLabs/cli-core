@@ -12,6 +12,7 @@ import { identity } from "./identity.js"
 import { meeting } from "./meeting.js"
 import { memory } from "./memory.js"
 import { message } from "./message.js"
+import { messageLink } from "./message-link.js"
 import { note } from "./note.js"
 import { person } from "./person.js"
 import { tagging } from "./tagging.js"
@@ -35,6 +36,7 @@ export {
   meeting,
   memory,
   message,
+  messageLink,
   note,
   person,
   reference,
@@ -46,6 +48,7 @@ export const ENTITIES = {
   message,
   "message.hit": v.pick(message, ["ref", "chat_title", "timestamp", "sender_name", "excerpt", "matched_in", "score"]),
   "message.summary": v.pick(message, ["ref", "timestamp", "sender_name", "text"]),
+  message_link: messageLink,
   chat,
   person,
   identity,

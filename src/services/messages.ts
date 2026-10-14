@@ -224,6 +224,8 @@ type Saved = Partial<Pick<Messenger, "savedChatId" | "app">>
 
 /** Every write goes through the guard: asked before it goes, told after, on every outcome. */
 export interface MessagesService {
+  /** The account these messages are read as, which names each one's locator. */
+  reader(): Promise<AccountKey>
   list(chat: string, window: ListWindow): Promise<Page<Message>>
   around(chat: string, message: string | undefined, window: AroundWindow): Promise<WindowedMessage[]>
   thread(chat: string, message?: Id, options?: ThreadOptions): Promise<ThreadContext>
@@ -379,6 +381,8 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
   return {
     // A provider caps its pages (Telegram at 100), so a larger --limit reads on from the last page's edge.
     // Only by id: where `before` is a send time (MAX), messages sharing the edge moment would be skipped.
+    reader: () => deps.account(),
+
     list: async (chat, window) => {
       const forward = window.after !== undefined
       let page = await listPage(chat, window)

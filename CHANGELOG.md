@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`messages list|show|context|comments|scheduled|link` answer in the envelope**, CLI and MCP alike: each message
+  is the `message` entity (snake_case, `ref` is its `msg:` locator, `transcript` once heard, `anchor` on the one asked
+  for), `link` is `message_link`. `messages list` and `messages comments` take a query instead of filter flags:
+  `id<42`, `id>42`, `date<2h`, `date>2026-10-01`, `topic:12`, all terms together; `--before-id`, `--after-id`,
+  `--before-time`, `--after-time` and `--topic` are gone, and MCP `before_id`… become `query`. More pages are a
+  `page.next` step with `--cursor`. Voice messages left unheard are a `missing` entry; `--mark-read` names its
+  operation on stderr. MCP `messages_list` and `messages_context` no longer add `next_steps`; the server instructions
+  carry the save hint.
+
 ## 0.264.0 — 14.10.2026
 
 ### Changed — may break callers

@@ -8,17 +8,9 @@
       "value": "<chat>",
       "meaning": "put a chat into a folder; repeat it for more"
     },
-    "--after-id": {
-      "value": "<id>",
-      "meaning": "read what came after this message id; not with --after-time or the --before pair"
-    },
     "--after-n": {
       "value": "<n>",
       "meaning": "how many messages after it"
-    },
-    "--after-time": {
-      "value": "<time>",
-      "meaning": "read what came after this ISO 8601 time, or 2h / 1d ago; not with --after-id or the --before pair"
     },
     "--agent": {
       "value": "<agent>",
@@ -137,10 +129,6 @@
     "--before-n": {
       "value": "<n>",
       "meaning": "how many messages before it"
-    },
-    "--before-time": {
-      "value": "<time>",
-      "meaning": "read what came before this ISO 8601 time, or 2h / 1d ago; not with --before-id"
     },
     "--block": {
       "value": "<value>",
@@ -2681,7 +2669,7 @@
       "in": ["tg"],
       "reason": "MAX personal accounts have no channel comments; MAX's comments are a Bot API path",
       "options": {
-        "--before-id": {
+        "--cursor": {
           "in": ["tg"],
           "reason": "MAX personal accounts have no channel comments"
         },
@@ -2778,19 +2766,10 @@
     "messages list": {
       "in": "all",
       "options": {
-        "--after-id": "all",
-        "--after-time": "all",
-        "--before-id": "all",
-        "--before-time": "all",
+        "--cursor": "all",
         "--limit": "all",
         "--mark-read": "all",
         "--model": "all",
-        "--topic": {
-          "in": ["tg"],
-          "planned": {
-            "max": "feat/messages-list-topic"
-          }
-        },
         "--transcribe": "all"
       }
     },

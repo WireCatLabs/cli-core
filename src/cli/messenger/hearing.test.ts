@@ -212,7 +212,7 @@ describe("read hearing lifecycle", () => {
     const answer = await test.execute(["messages", "list", "9", "--transcribe", "--mark-read"])
     expect(answer.code).toBe(0)
     expect(test.events).toEqual(["connect", "mark-read", "transcribe", "closed"])
-    expect(answer.body.markedRead.until).toBe("1")
+    expect(answer.body.items.at(-1).id).toBe("1")
   })
 
   it("keeps a failed transcription incomplete and closes its connection", async () => {

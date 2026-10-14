@@ -23,7 +23,6 @@ import { settingsFor } from "../cli/settings.js"
 import { skillCommand } from "../cli/skill-command.js"
 import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
-import { SAVE_NEXT_STEPS } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import type { SendGuard } from "../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../sends/journal.js"
@@ -846,7 +845,7 @@ describe("the MCP server", () => {
     expect(telegram.opened()).toBe(0)
   })
 
-  it("reads forward with after_id on chat_messages_list, and refuses it with before_id", async () => {
+  it("reads forward with id> on chat_messages_list, and refuses two starting points", async () => {
     const seen: unknown[] = []
     const { call } = await connect(
       scripted({
@@ -857,9 +856,10 @@ describe("the MCP server", () => {
       }),
     )
 
-    expect((await call("chat_messages_list", { chat: "7", after_id: "12" })).body).toMatchObject({ items: [] })
+    expect((await call("chat_messages_list", { chat: "7", query: "id>12" })).body).toMatchObject({ items: [] })
     expect(seen).toEqual([{ id: "12" }])
-    expect((await call("chat_messages_list", { chat: "7", after_id: "12", before_id: "20" })).isError).toBe(true)
+    expect((await call("chat_messages_list", { chat: "7", query: "id>12 id<20" })).isError).toBe(true)
+    expect((await call("chat_messages_list", { chat: "7", query: "id>12", cursor: "before:3" })).isError).toBe(true)
   })
 
   it("takes a message id that is not digits, and refuses one with a space or a control character", async () => {
@@ -877,11 +877,11 @@ describe("the MCP server", () => {
       }),
     )
 
-    expect((await call("chat_messages_list", { chat: "7", before_id: "urn:li:msg:4F2" })).isError).toBe(false)
-    expect((await call("chat_messages_list", { chat: "7", after_id: "wamid.HBgL" })).isError).toBe(false)
+    expect((await call("chat_messages_list", { chat: "7", query: 'id<"urn:li:msg:4F2"' })).isError).toBe(false)
+    expect((await call("chat_messages_list", { chat: "7", cursor: "after:wamid.HBgL" })).isError).toBe(false)
     expect(seen).toEqual(["urn:li:msg:4F2", { id: "wamid.HBgL" }])
-    for (const before_id of ["4 2", "42\u0007", "", "9".repeat(257)]) {
-      const refused = await client.callTool({ name: "chat_messages_list", arguments: { chat: "7", before_id } })
+    for (const cursor of ["before:4 2", "before:42\u0007", "before:", "sideways:9"]) {
+      const refused = await client.callTool({ name: "chat_messages_list", arguments: { chat: "7", cursor } })
       expect(refused.isError).toBe(true)
     }
     expect(seen).toHaveLength(2)
@@ -957,13 +957,12 @@ describe("the MCP server", () => {
       limit: 1,
       hasMore: true,
     })
-    expect((await call("chat_messages_list", { chat: "Book club" })).body).toEqual({
-      items: [message],
-      page: 1,
-      limit: 20,
-      hasMore: false,
-      next_steps: SAVE_NEXT_STEPS,
+    const { meta, ...messages } = (await call("chat_messages_list", { chat: "Book club" })).body
+    expect(messages).toEqual({
+      items: [expect.objectContaining({ ref: `msg:chat/500/7/${message.id}`, id: message.id, text: message.text })],
+      page: { limit: 20, has_more: false },
     })
+    expect(meta).toMatchObject({ run_id: expect.any(String), duration_ms: expect.any(Number) })
     expect((await call("chat_status")).body.account).toBe("500")
     expect(telegram.opened()).toBe(1)
   })
@@ -977,13 +976,13 @@ describe("the MCP server", () => {
     const { call, client } = await connect(scripted({ permalink }))
     const offered = (await client.listTools()).tools.find((one) => one.name === "chat_messages_link")
     expect(offered?.annotations?.readOnlyHint).toBe(true)
-    expect((await call("chat_messages_link", { chat: "7", message: "1" })).body).toEqual({
-      locator: "msg:chat/500/7/1",
+    expect((await call("chat_messages_link", { chat: "7", message: "1" })).body.item).toEqual({
+      ref: "msg:chat/500/7/1",
       url: "https://provider.example/1",
       access: "restricted",
       reason: null,
     })
-    expect((await call("chat_messages_link", { chat: "msg:chat/500/7/1" })).body.locator).toBe("msg:chat/500/7/1")
+    expect((await call("chat_messages_link", { chat: "msg:chat/500/7/1" })).body.item.ref).toBe("msg:chat/500/7/1")
     const mismatch = await client.callTool({ name: "chat_messages_link", arguments: { chat: "msg:chat/other/7/1" } })
     expect(mismatch.isError).toBe(true)
     expect(permalink).toHaveBeenCalledTimes(2)
@@ -2240,7 +2239,8 @@ describe("the transcribe tool", () => {
 
     const { body } = await call("chat_messages_list", { chat: "7", transcribe: true })
 
-    expect(body).toMatchObject({ items: [{ transcript: "read me" }], unheard: [] })
+    expect(body).toMatchObject({ items: [{ transcript: "read me" }] })
+    expect(body.missing).toBeUndefined()
   })
 
   it("hears unread voice messages with `transcribe` on the inbox tool", async () => {
@@ -2636,7 +2636,7 @@ describe("sending over MCP", () => {
     const queue = await call("chat_messages_scheduled", { chat: "7" })
 
     expect(body.scheduledFor).toBe(sent[0]?.at)
-    expect(queue.body.items[0].scheduledFor).toBe("2030-01-01T09:00:00.000Z")
+    expect(queue.body.items[0].scheduled_for).toBe("2030-01-01T09:00:00.000Z")
   })
 
   it("attaches a file from a path, and refuses a hidden one with no way around it", async () => {

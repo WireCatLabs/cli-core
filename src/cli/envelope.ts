@@ -26,6 +26,8 @@ export interface ListInput<T> {
   cursor?: string
   /** The page shown, from 1, for a list paged by `--page`. */
   page?: number
+  /** The command's own arguments and query, so `page.next` reruns the same list. */
+  args?: Record<string, unknown>
   next?: NextStep[]
   missing?: Missing[]
   meta?: Partial<Meta>
@@ -38,12 +40,12 @@ const capped = (steps: NextStep[]) => (steps.length > 0 ? { next: steps.slice(0,
  * page where the source has no cursor.
  */
 export const listOf = <T>(command: string, input: ListInput<T>): ListBody<T> => {
-  const { items, limit, has_more, cursor, page, next = [], missing, meta } = input
+  const { items, limit, has_more, cursor, page, args = {}, next = [], missing, meta } = input
   const more = has_more
     ? [
         nextStep("page.next", {
           command,
-          args: cursor === undefined ? { page: (page ?? 1) + 1, limit } : { cursor, limit },
+          args: { ...args, ...(cursor === undefined ? { page: (page ?? 1) + 1, limit } : { cursor, limit }) },
           values: { shown: items.length },
         }),
       ]
