@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- The parity manifest includes the shared `models image`, `models image download` and `models image list` commands already mounted by Telegram and MAX, so release checks accept their command discovery.
+
 ## 0.264.0 — 14.10.2026
 
 ### Fixed

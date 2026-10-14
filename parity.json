@@ -2876,6 +2876,15 @@
     "models audio list": {
       "in": "all"
     },
+    "models image": {
+      "in": "all"
+    },
+    "models image download": {
+      "in": "all"
+    },
+    "models image list": {
+      "in": "all"
+    },
     "models text": {
       "in": "all"
     },
