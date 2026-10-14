@@ -70,7 +70,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     aliases: [],
     type: "txt",
     operators: ["term", "phrase", "wildcard", "regex"],
-    normalization: "Snowball 3.1.1 by script (Cyrillic, Latin; the store's searchStemmers), then v1",
+    normalization: "Snowball 3.1.1 by script (Cyrillic, Latin; the store's search_stemmers), then v1",
     support: "A1",
   },
   {

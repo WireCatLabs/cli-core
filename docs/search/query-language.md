@@ -318,8 +318,8 @@ Ranking не меняет Boolean множество. Когда в запрос
 «also found other forms: квартира → квартир* (russian)».
 
 Стеммеры выбираются для всего хранилища — каждого профиля, tg и MAX:
-`<cli> config set searchStemmers.cyrillic russian|none`,
-`<cli> config set searchStemmers.latin english,spanish|english|spanish|none`. По умолчанию латиница
+`<cli> config set search_stemmers.cyrillic russian|none`,
+`<cli> config set search_stemmers.latin english,spanish|english|spanish|none`. По умолчанию латиница
 идёт через оба стеммера, английский и испанский: слово находится в любой из двух форм, и язык угадывать
 не нужно. Архиву только на английском можно оставить `english` (меньше склеек). После смены поиск по
 словам ждёт `<cli> store reindex`.
@@ -338,7 +338,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 
 | Поле | Тип | Значения / нормализация | Пример | Поддержка |
 |---|---|---|---|---|
-| `text` | txt | Snowball 3.1.1 by script (Cyrillic, Latin; the store's searchStemmers), then v1 | `invoice` | term, phrase, wildcard, regex |
+| `text` | txt | Snowball 3.1.1 by script (Cyrillic, Latin; the store's search_stemmers), then v1 | `invoice` | term, phrase, wildcard, regex |
 | `exact` | txt | NFKD/marks/NFC/lowercase v1 | `exact:invoice` | term, phrase, wildcard, regex |
 | `body` | txt | raw, case-sensitive | `body:/.*invoice.*/` | term, phrase, wildcard, regex |
 | `from` | kw | account-scoped resolution | `from:"Alice Synthetic"` | term, phrase |
@@ -426,8 +426,8 @@ accounts провайдера/класса, включая `all`; `in:` берё
 `--source` (`max`, `all`), провайдер или его псевдоним (`tg`), вид (`messages`, `mail`, `notes`, `meetings`). Папка
 заметок — `notes:<id>`, тот же id, что у найденной заметки; заметки, написанные в memo, — `notes:internal`. Профиль известен всем приложениям, как только его приложение что-то сохранило: при первой
 записи оно отмечает в хранилище (`store_settings`, ключ `profiles`), какой аккаунт у профиля.
-Группа хранится в хранилище для всех приложений: `config set accountGroups.work tg:tg2,max:Alice,email:me@work.example`,
-`config unset accountGroups.work`, видна в `config show`. Группа не включает другие группы.
+Группа хранится в хранилище для всех приложений: `config set account_groups.work tg:tg2,max:Alice,email:me@work.example`,
+`config unset account_groups.work`, видна в `config show`. Группа не включает другие группы.
 Из списка `search messages` и `search conversations` берут аккаунты сообщений, `search mail` — только почтовые
 ящики, `search notes` — `notes:internal` и папки заметок одним запросом (страницы `--page` идут по одному списку);
 остальные элементы названы в ответе в `skipped: [{ source, reason }]`. Если подходящих не осталось — ошибка. Список и положительный `in:` вместе

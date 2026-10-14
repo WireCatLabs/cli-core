@@ -98,7 +98,7 @@ export const resetStems = (
   if (state.cause === "stemmer_unknown") {
     throw new CliError(
       "validation_error",
-      "the store asks for stemmers this tool does not know — upgrade this tool, or choose again with config set searchStemmers.*",
+      "the store asks for stemmers this tool does not know — upgrade this tool, or choose again with config set search_stemmers.*",
       { reason: "stemmer.unknown" },
     )
   }
