@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { TAGGING_QUERY, type TaggingItem, type TagTargetInput, type TagTargetView } from "../../services/tags.js"
-import { renderAnswer } from "../envelope.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -54,11 +54,10 @@ export const tagsCommand = (messenger: Messenger): Command => {
         dryRun?: boolean
       }>()
       if (!dryRun) refuseLocalWrite(context, messenger.app.command, "tags.auto")
-      context.renderer.result(
-        await context.withServices((services) =>
-          services.metadata.auto({ chats: chat, limit: Number(limit), refresh: refreshMetadata, dryRun }),
-        ),
+      const done = await context.withServices((services) =>
+        services.metadata.auto({ chats: chat, limit: Number(limit), refresh: refreshMetadata, dryRun }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
 
   targetOptions(
@@ -72,9 +71,11 @@ export const tagsCommand = (messenger: Messenger): Command => {
     refuseLocalWrite(context, messenger.app.command, "tags.add")
     const target = this.opts<TagTargetInput>()
     const done = await context.withServices((services) => services.tags.add(target, given))
-    if (context.format !== "pretty") return context.renderer.result(done)
-    if (done.added.length) context.streams.data(`${describe(done.target)}: ${done.added.join(", ")}\n`)
-    if (done.unchanged.length) context.renderer.note(`already there: ${done.unchanged.join(", ")}`)
+    renderAnswer(this, context, itemOf(snakeKeys(done)), () =>
+      done.added.length ? `${describe(done.target)}: ${done.added.join(", ")}\n` : "",
+    )
+    if (done.unchanged.length && context.format === "pretty")
+      context.renderer.note(`already there: ${done.unchanged.join(", ")}`)
   })
 
   targetOptions(
@@ -92,9 +93,11 @@ export const tagsCommand = (messenger: Messenger): Command => {
       const done = await context.withServices((services) =>
         services.tags.remove(target, given, this.opts<{ source?: "manual" | "auto" }>().source),
       )
-      if (context.format !== "pretty") return context.renderer.result(done)
-      if (done.removed.length) context.streams.data(`${describe(done.target)}: ${done.removed.join(", ")} removed\n`)
-      if (done.unchanged.length) context.renderer.note(`not there: ${done.unchanged.join(", ")}`)
+      renderAnswer(this, context, itemOf(snakeKeys(done)), () =>
+        done.removed.length ? `${describe(done.target)}: ${done.removed.join(", ")} removed\n` : "",
+      )
+      if (done.unchanged.length && context.format === "pretty")
+        context.renderer.note(`not there: ${done.unchanged.join(", ")}`)
     })
 
   withQuery(

@@ -109,7 +109,7 @@ describe("searches", () => {
     })
     expect(json(await call("searches", "show", "invoices", "--json")).item.runs).toBe(3)
 
-    expect(json(await call("searches", "clear", "--json"))).toEqual({ cleared: 3 })
+    expect(json(await call("searches", "clear", "--json")).item).toEqual({ cleared: 3 })
     expect(json(await call("searches", "delete", "invoices", "--json")).item.name).toBe("invoices")
     expect(json(await call("searches", "list", "--json")).items).toEqual([])
   })

@@ -15,6 +15,12 @@ shape of this file.
 - **Each model in `models audio|text|image list` carries `path`**, the folder its files go in, downloaded or not.
   `models * download` answers that same `model` item (`{item}`; `works` and `directory` are gone — a failed check
   still fails the command), and `models text key set|remove` answer `{item}`.
+- **Task, tag, contact-note, metadata and job writes and reads answer `{item}`**, snake_case, CLI and MCP alike:
+  `tasks add|plan|link|show|close` (`closed_by`, `due_at`, `next_check_at`, `links[].target_text`, …), `tags
+  add|remove|auto` (`target.chat_id`, `dry_run`), `searches clear`, `contacts alias set|rm`, `contacts notes
+  remove`, `metadata get`, `metadata refresh` (`{chats, has_more}` in place of `{items, hasMore}`), `store jobs
+  show|cancel|retry|clear`. `store jobs retry --failed` answers a list. `contacts notes list|show|add|edit` answer the
+  new `contact_note` entity (`contact` as a `contact:` reference, `revision`, `created_at`, `updated_at`).
 
 ## 0.266.0 — 14.10.2026
 

@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { listOf } from "../../cli/envelope.js"
+import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { parseDuration } from "../../cli/settings.js"
@@ -144,7 +144,7 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
       const job = readJob(jobsDir(messenger.app, defaults.env), args.job)
       if (!job || job.profile !== defaults.settings.profile)
         throw new CliError("not_found", "no such job in this profile")
-      return { ...job, state: stateOf(job) }
+      return itemOf(snakeKeys({ ...job, state: stateOf(job) }))
     },
   }),
   store_jobs_list: tool({

@@ -1609,20 +1609,21 @@ describe("the MCP server", () => {
     await store.close()
 
     const added = await call("chat_tasks_add", { message: "msg:chat/500/7/101", type: "promise" })
-    expect(added.body).toMatchObject({ kind: "promise", state: "open", origin: "agent", created: true })
+    expect(added.body.item).toMatchObject({ kind: "promise", state: "open", origin: "agent", created: true })
+    const taskId = added.body.item.id
     expect((await call("chat_tasks_list", { query: "state:open kind:promise" })).body).toMatchObject({
-      items: [{ id: added.body.id, source_message: "msg:chat/500/7/101" }],
+      items: [{ id: taskId, source_message: "msg:chat/500/7/101" }],
       page: { has_more: false },
     })
-    const planned = await call("chat_tasks_plan", { task: added.body.id, title: "Send the plan", due: "2h" })
-    expect(planned.body).toMatchObject({ title: "Send the plan", dueAt: expect.any(String), nextCheckAt: null })
-    const linked = await call("chat_tasks_link", { task: added.body.id, targets: ["https://example.com/plan"] })
-    expect(linked.body.links).toMatchObject([{ targetText: "https://example.com/plan", kind: "related-to" }])
+    const planned = await call("chat_tasks_plan", { task: taskId, title: "Send the plan", due: "2h" })
+    expect(planned.body.item).toMatchObject({ title: "Send the plan", due_at: expect.any(String), next_check_at: null })
+    const linked = await call("chat_tasks_link", { task: taskId, targets: ["https://example.com/plan"] })
+    expect(linked.body.item.links).toMatchObject([{ target_text: "https://example.com/plan", kind: "related-to" }])
     expect((await call("chat_tasks_agenda", { due: "1d", query: "chat_kind:dialog" })).body.item.tasks).toMatchObject([
-      { id: added.body.id, title: "Send the plan", reasons: ["due"] },
+      { id: taskId, title: "Send the plan", reasons: ["due"] },
     ])
-    const closed = await call("chat_tasks_close", { task: added.body.id, as: "dismissed", reason: "no-reply-needed" })
-    expect(closed.body).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closedBy: "agent" })
+    const closed = await call("chat_tasks_close", { task: taskId, as: "dismissed", reason: "no-reply-needed" })
+    expect(closed.body.item).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closed_by: "agent" })
     expect((await call("chat_stats_tasks_show")).body).toMatchObject({ items: [{ group: "7", open: 0 }] })
     const foreign = await call("chat_tasks_add", { message: "msg:chat/999/7/101", type: "promise" })
     expect([foreign.isError, foreign.body.error.code]).toEqual([true, "validation_error"])
@@ -1644,23 +1645,23 @@ describe("the MCP server", () => {
       { chatId: "7", title: "AI news", username: null, description: null },
     )
     await store.close()
-    expect((await call("chat_contacts_alias_set", { person: "10", alias: "Local" })).body).toMatchObject({
+    expect((await call("chat_contacts_alias_set", { person: "10", alias: "Local" })).body.item).toMatchObject({
       alias: "Local",
     })
     const added = await call("chat_contacts_notes_add", { person: "Local", text: "Own note" })
-    expect(added.body).toMatchObject({ revision: 1, text: "Own note" })
-    const id = added.body.id
+    expect(added.body.item).toMatchObject({ revision: 1, text: "Own note" })
+    const id = added.body.item.id
     expect((await call("chat_contacts_notes_list", { person: "10" })).body).toMatchObject({ items: [{ id }] })
-    expect((await call("chat_contacts_notes_show", { person: "10", id })).body).toMatchObject({ text: "Own note" })
+    expect((await call("chat_contacts_notes_show", { person: "10", id })).body.item).toMatchObject({ text: "Own note" })
     expect(
-      (await call("chat_contacts_notes_edit", { person: "10", id, text: "Edited", revision: 1 })).body,
+      (await call("chat_contacts_notes_edit", { person: "10", id, text: "Edited", revision: 1 })).body.item,
     ).toMatchObject({ revision: 2 })
-    expect((await call("chat_contacts_notes_remove", { person: "10", id })).body).toMatchObject({ removed: true })
-    expect((await call("chat_contacts_alias_rm", { person: "10" })).body).toMatchObject({ alias: null })
-    expect((await call("chat_metadata_get", { chat: "7" })).body).toMatchObject({ metadata: { title: "AI news" } })
-    expect((await call("chat_tags_auto", { chats: ["7"], dry_run: true })).body).toMatchObject({
-      dryRun: true,
-      items: [{ chatId: "7" }],
+    expect((await call("chat_contacts_notes_remove", { person: "10", id })).body.item).toMatchObject({ removed: true })
+    expect((await call("chat_contacts_alias_rm", { person: "10" })).body.item).toMatchObject({ alias: null })
+    expect((await call("chat_metadata_get", { chat: "7" })).body.item).toMatchObject({ metadata: { title: "AI news" } })
+    expect((await call("chat_tags_auto", { chats: ["7"], dry_run: true })).body.item).toMatchObject({
+      dry_run: true,
+      items: [{ chat_id: "7" }],
     })
     const readonly = await connect(scripted(), {
       config: levels({ contacts: "readonly", metadata: "readonly", tags: "readonly" }),
@@ -1682,7 +1683,7 @@ describe("the MCP server", () => {
     await store.close()
 
     const added = await call("chat_tags_add", { tags: ["Paid"], chat: "7", message: "101" })
-    expect(added.body).toMatchObject({ target: { type: "message", messageId: "101" }, added: ["paid"] })
+    expect(added.body.item).toMatchObject({ target: { type: "message", message_id: "101" }, added: ["paid"] })
     expect((await call("chat_tags_list", { query: "tag:paid" })).body).toMatchObject({
       items: [{ tag: "paid", type: "message", target: "msg:chat/500/7/101" }],
       page: { has_more: false },
@@ -1693,9 +1694,11 @@ describe("the MCP server", () => {
       "103",
       "108",
     ])
-    expect((await call("chat_tags_remove", { tags: ["paid"], message: "msg:chat/500/7/101" })).body).toMatchObject({
-      removed: ["paid"],
-    })
+    expect((await call("chat_tags_remove", { tags: ["paid"], message: "msg:chat/500/7/101" })).body.item).toMatchObject(
+      {
+        removed: ["paid"],
+      },
+    )
     const twoTargets = await call("chat_tags_add", { tags: ["x"], chat: "7", contact: "11" })
     expect([twoTargets.isError, twoTargets.body.error.code]).toEqual([true, "validation_error"])
 
@@ -2009,7 +2012,7 @@ describe("the MCP server", () => {
     expect(queued.isError, JSON.stringify(queued.body)).toBe(false)
     expect(spawnJob.mock.calls[0]?.[0]).toEqual(expect.arrayContaining(["--fingerprint", "--repair-time", "1s"]))
     expect(backend.opened()).toBe(0)
-    expect((await call("chat_store_jobs_show", { job: queued.body.job })).body).toMatchObject({
+    expect((await call("chat_store_jobs_show", { job: queued.body.job })).body.item).toMatchObject({
       profile: "default",
       chat: "7",
       pid: 999999,
@@ -2092,7 +2095,7 @@ describe("the MCP server", () => {
     expect((await call("chat_searches_history", { limit: 1 })).body).toMatchObject({
       page: { limit: 1, has_more: true },
     })
-    expect((await call("chat_searches_clear")).body).toEqual({ cleared: 2 })
+    expect((await call("chat_searches_clear")).body.item).toEqual({ cleared: 2 })
     expect((await call("chat_searches_delete", { name: "invoices" })).body.item).toMatchObject({ name: "invoices" })
 
     const readOnly = await connect(scripted(), { config: levels({ searches: "readonly" }) })

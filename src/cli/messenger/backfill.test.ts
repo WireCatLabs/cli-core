@@ -463,7 +463,7 @@ describe("store fetch in the background", () => {
     const child = await call(calls[0]?.argv ?? [], chatOf(state), { ...env, ...calls[0]?.env })
     expect(child.code).toBe(0)
 
-    expect((await call(["store", "jobs", "show", "--json"], idle, env)).answer).toMatchObject({
+    expect((await call(["store", "jobs", "show", "--json"], idle, env)).answer.item).toMatchObject({
       job,
       state: "done",
       fetched: 150,
@@ -499,14 +499,14 @@ describe("store fetch in the background", () => {
     const wait = { newest: 10, asked: [] as (string | undefined)[], wait: 10 * 60_000 }
     await call(calls[0]?.argv ?? [], chatOf(wait), { ...env, ...calls[0]?.env })
 
-    expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({
+    expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer.item).toMatchObject({
       state: "partial",
       issue: { code: "rate_limited", retry_after_ms: 600000, actions: expect.any(Array) },
     })
 
     const gone = spawned(2 ** 22 + 12345)
     const other = (await call(["messages", "sync", "8", "--background", "--json"], idle, env, gone)).answer
-    expect((await call(["store", "jobs", "show", other.job, "--json"], idle, env)).answer).toMatchObject({
+    expect((await call(["store", "jobs", "show", other.job, "--json"], idle, env)).answer.item).toMatchObject({
       state: "died",
     })
     const refused = await call(["store", "jobs", "cancel", other.job], idle, env)
@@ -521,9 +521,12 @@ describe("store fetch in the background", () => {
     const { job } = (await call(["messages", "sync", "7", "--background", "--json"], idle, env, { spawnJob })).answer
 
     const signal = exited()
-    expect((await call(["store", "jobs", "cancel", job, "--json"], idle, env)).answer).toEqual({ job, cancelled: true })
+    expect((await call(["store", "jobs", "cancel", job, "--json"], idle, env)).answer.item).toEqual({
+      job,
+      cancelled: true,
+    })
     expect(await signal).toBe("SIGTERM")
-    expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({
+    expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer.item).toMatchObject({
       state: "cancelled",
     })
   })
@@ -537,13 +540,16 @@ describe("store fetch in the background", () => {
 
     const retried = await call(["store", "jobs", "retry", first, "--json"], idle, env, dead)
 
-    expect(retried.answer).toMatchObject({ retried: first, chat: "7", pid: 2 ** 22 + 12345 })
+    expect(retried.answer.item).toMatchObject({ retried: first, chat: "7", pid: 2 ** 22 + 12345 })
     expect(dead.calls[1]?.argv).toEqual(dead.calls[0]?.argv)
-    expect(dead.calls[1]?.env.CHAT_BACKFILL_JOB).toBe(retried.answer.job)
-    expect(retried.answer.job).not.toBe(first)
+    expect(dead.calls[1]?.env.CHAT_BACKFILL_JOB).toBe(retried.answer.item.job)
+    expect(retried.answer.item.job).not.toBe(first)
 
-    updateJob(jobsDir(app, env), retried.answer.job, { finishedAt: new Date().toISOString(), result: { fetched: 5 } })
-    const done = await call(["store", "jobs", "retry", retried.answer.job], idle, env, dead)
+    updateJob(jobsDir(app, env), retried.answer.item.job, {
+      finishedAt: new Date().toISOString(),
+      result: { fetched: 5 },
+    })
+    const done = await call(["store", "jobs", "retry", retried.answer.item.job], idle, env, dead)
     expect(done.stderr).toContain("did not fail — it is done")
     expect((await call(["store", "jobs", "retry"], idle, env, dead)).stderr).toContain("name a job, or --failed")
   })
@@ -659,7 +665,7 @@ describe("store fetch in the background", () => {
 
     const cleared = await call(["store", "jobs", "clear", "--json"], idle, env)
 
-    expect(cleared.answer).toEqual({ cleared: [died] })
+    expect(cleared.answer.item).toEqual({ cleared: [died] })
     expect(listJobs(dir).map((job) => job.id)).toEqual([running])
     expect(existsSync(log)).toBe(false)
   })
@@ -676,7 +682,9 @@ describe("store fetch in the background", () => {
         await call(["messages", "sync", "7", "--background", "--json"], idle, env, spawned(stranger.pid ?? 0))
       ).answer
 
-      expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer).toMatchObject({ state: "died" })
+      expect((await call(["store", "jobs", "show", job, "--json"], idle, env)).answer.item).toMatchObject({
+        state: "died",
+      })
       expect((await call(["store", "jobs", "cancel", job], idle, env)).code).not.toBe(0)
       expect(stranger.exitCode).toBeNull()
       expect(stranger.signalCode).toBeNull()

@@ -11,10 +11,10 @@ import { momentOf } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { renderAnswer } from "../envelope.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { isCliFailure } from "../failures.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
-import { renderList, withPaging } from "../paging.js"
+import { withPaging } from "../paging.js"
 import { parseDuration } from "../settings.js"
 import {
   finishJob,
@@ -263,7 +263,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
         chatId === undefined
           ? undefined
           : await context.withServices((services) => services.archive.held(chatId)).catch(() => undefined)
-      context.renderer.result({ ...brief(job), ...(held ? { held } : {}), log: job.log })
+      renderAnswer(this, context, itemOf(snakeKeys({ ...brief(job), ...(held ? { held } : {}), log: job.log })))
     })
 
   command
@@ -278,7 +278,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       }
       updateJob(jobsDir(messenger.app, context.env), job.id, { cancelRequestedAt: new Date().toISOString() })
       process.kill(job.pid, "SIGTERM")
-      context.renderer.result({ job: job.id, cancelled: true })
+      renderAnswer(this, context, itemOf({ job: job.id, cancelled: true }))
     })
 
   command
@@ -295,7 +295,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       if (id !== undefined) {
         const job = findJob(messenger, context, id)
         if (!broken(job)) throw new CliError("validation_error", `job ${job.id} did not fail — it is ${stateOf(job)}`)
-        context.renderer.result(retryJob(this, context, messenger, job))
+        renderAnswer(this, context, itemOf(snakeKeys(retryJob(this, context, messenger, job))))
         return
       }
       const newest = new Map<string, Job>()
@@ -310,8 +310,17 @@ export const jobsCommand = (messenger: Messenger): Command => {
           items.push({ retried: job.id, chat: job.chat, error: { code: error.code, message: error.message } })
         }
       }
-      renderList(context.renderer, context.format, items)
-      if (items.length === 0) context.renderer.note("no partial, failed or died jobs to retry")
+      renderAnswer(
+        this,
+        context,
+        listOf("store jobs retry", {
+          items: items.map(snakeKeys),
+          limit: Math.max(1, items.length),
+          has_more: false,
+        }),
+      )
+      if (items.length === 0 && context.format === "pretty")
+        context.renderer.note("no partial, failed or died jobs to retry")
     })
 
   annotate(command.command("clear"), { mutates: true, local: true })
@@ -321,7 +330,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
       const dir = jobsDir(messenger.app, context.env)
       const finished = listJobs(dir).filter((job) => job.profile === context.profile && stateOf(job) !== "running")
       for (const job of finished) removeJob(dir, job)
-      context.renderer.result({ cleared: finished.map((job) => job.id) })
+      renderAnswer(this, context, itemOf({ cleared: finished.map((job) => job.id) }))
     })
 
   return command

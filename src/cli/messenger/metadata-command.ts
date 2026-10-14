@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
@@ -12,7 +13,11 @@ export const metadataCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const { chat } = this.opts<{ chat: string }>()
-      context.renderer.result(await context.withServices((services) => services.metadata.get(chat)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.metadata.get(chat)))),
+      )
     })
   annotate(command.command("refresh"), { mutates: true, local: true })
     .option(
@@ -44,7 +49,7 @@ export const metadataCommand = (messenger: Messenger): Command => {
           items.push({ chatId: chat, error: { code: error.code, message: error.message } })
         }
       }
-      context.renderer.result({ items, hasMore: chats.length > limit })
+      renderAnswer(this, context, itemOf(snakeKeys({ chats: items, has_more: chats.length > limit })))
     })
   return command
 }

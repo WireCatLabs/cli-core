@@ -127,11 +127,11 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
     searches_clear: tool({
       title: "Clear search history",
       description:
-        "Empties the search history; saved searches stay. Writes only to the local store. Returns { cleared }.",
+        "Empties the search history; saved searches stay. Writes only to the local store. Returns { item: { cleared } }.",
       input: v.object({}),
       annotations: { ...LOCAL, destructiveHint: true, idempotentHint: true },
       stored: async (store, account, _args, defaults) => {
-        return services(store, account, defaults.guard).searches.clear()
+        return itemOf(await services(store, account, defaults.guard).searches.clear())
       },
     }),
   }

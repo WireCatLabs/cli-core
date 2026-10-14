@@ -153,6 +153,14 @@ const samples: Record<EntityName, unknown> = {
     created_at: at,
     updated_at: at,
   },
+  contact_note: {
+    id: "n1",
+    contact: "contact:telegram/42",
+    text: "met at the conference",
+    revision: 1,
+    created_at: at,
+    updated_at: at,
+  },
   reference: "note:42",
   model: {
     id: "e5-small",

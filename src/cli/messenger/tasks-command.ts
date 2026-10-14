@@ -12,7 +12,7 @@ import {
   taskLinkKindOf,
   taskTypeOf,
 } from "../../services/tasks.js"
-import { itemOf, renderAnswer } from "../envelope.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { listed, positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -142,12 +142,14 @@ export const tasksCommand = (messenger: Messenger): Command => {
       created,
       card: planned,
     } = await context.withServices((services) => services.tasks.add(message, options.type, "owner", plan))
-    if (context.format !== "pretty")
-      context.renderer.result({ ...task, created, ...(planned ? { card: planned } : {}) })
-    else {
-      context.streams.data(`${planned ? card(planned) : line(task)}\n`)
-      if (!created) context.renderer.note("this source already has a task — that one is shown, unchanged")
-    }
+    renderAnswer(
+      this,
+      context,
+      itemOf(snakeKeys({ ...task, created, ...(planned ? { card: planned } : {}) })),
+      () => `${planned ? card(planned) : line(task)}\n`,
+    )
+    if (!created && context.format === "pretty")
+      context.renderer.note("this source already has a task — that one is shown, unchanged")
   })
 
   planOptions(
@@ -163,8 +165,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     if (Object.keys(plan).length === 0)
       throw new CliError("validation_error", "give at least one of --title, --description, --due, --check")
     const planned = await context.withServices((services) => services.tasks.plan(id, plan, "owner"))
-    if (context.format !== "pretty") context.renderer.result(planned)
-    else context.streams.data(`${card(planned)}\n`)
+    renderAnswer(this, context, itemOf(snakeKeys(planned)), () => `${card(planned)}\n`)
   })
 
   tasks
@@ -190,8 +191,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const linked = await context.withServices((services) =>
         services.tasks.link(id, { references: targets, chats: chat }, { kind, by: "owner" }),
       )
-      if (context.format !== "pretty") context.renderer.result(linked)
-      else context.streams.data(`${card(linked)}\n`)
+      renderAnswer(this, context, itemOf(snakeKeys(linked)), () => `${card(linked)}\n`)
     })
 
   tasks
@@ -201,8 +201,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, id: string) {
       const context = messengerContext(this, messenger)
       const shown = await context.withServices((services) => services.tasks.show(id))
-      if (context.format !== "pretty") context.renderer.result(shown)
-      else context.streams.data(`${card(shown)}\n`)
+      renderAnswer(this, context, itemOf(snakeKeys(shown)), () => `${card(shown)}\n`)
     })
 
   withQuery(
@@ -255,8 +254,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const closed = await context.withServices((services) =>
         services.tasks.close(id, { as, by: "owner", ...(reason === undefined ? {} : { reason }) }),
       )
-      if (context.format !== "pretty") context.renderer.result(closed)
-      else context.streams.data(`${line(closed)}\n`)
+      renderAnswer(this, context, itemOf(snakeKeys(closed)), () => `${line(closed)}\n`)
     })
 
   return tasks
