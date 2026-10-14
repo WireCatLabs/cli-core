@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import { NOT_FILES } from "../../domain/attachments.js"
@@ -109,7 +109,7 @@ interface Stretch {
 
 type KeyedBy = "id" | "time"
 
-interface Progress {
+export interface Progress {
   by: KeyedBy
   done: Stretch[]
   failed?: Id[]
@@ -137,10 +137,9 @@ const readProgress = (path: string, by: KeyedBy, note: (message: string) => void
   }
 }
 
-const writeProgress = (path: string, chatId: Id, progress: Progress) => {
-  writeFileSync(`${path}.tmp`, `${JSON.stringify({ chat: chatId, ...progress })}\n`, { mode: 0o600 })
-  renameSync(`${path}.tmp`, path)
-}
+// --output may be a shared folder: an unguessable temporary name opened `wx` never writes through a planted link.
+export const writeProgress = (path: string, chatId: Id, progress: Progress) =>
+  writeSecurely(path, `${JSON.stringify({ chat: chatId, ...progress })}\n`, 0o600)
 
 const downloadChat = async (
   command: Command,

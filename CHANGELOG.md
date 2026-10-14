@@ -36,6 +36,16 @@ shape of this file.
   A schedule run started under the lock stays locked, and a schedule saved under it carries the variable.
   To make one of these changes, run the command without the variable. A CLI marks commands of its own with
   `grantsAuthority` from `./cli`.
+- **A send or an attachment folder refuses more known credential places**: `.netrc`, `_netrc`,
+  `.git-credentials`, `.config/git/credentials`, `.config/gh`, `.config/gcloud`, `.docker/config.json`, `.kube`,
+  `.azure`, `.claude/.credentials.json`, `.codex/auth.json`, `.password-store`, `.local/share/keyrings`,
+  `Library/Keychains`, the Windows credential folders, and Chrome, Chromium, Edge, Brave, Firefox and Safari profiles
+  on Linux, macOS and Windows. Every WireCat app's folders are refused, not only the running one's: `max` does not send
+  `tg`'s session. On macOS and Windows the names compare case-insensitively. Other hidden folders (`.worktrees`,
+  `.cache`, `.incoming`) still send, and `messages_send` now says so. To send one of the refused files on purpose,
+  the owner passes `--allow-any-file` to `messages send`.
+- **`messages download` progress and the export manifest are replaced through an unguessable temporary file opened
+  exclusively**, so a link planted in a shared output folder is never written through.
 
 ### Added
 
