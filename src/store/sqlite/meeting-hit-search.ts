@@ -4,10 +4,10 @@ import { formatMeetingReference } from "../../domain/meeting-reference.js"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
+import { indexedText } from "./meeting-index-values.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
 import { meetingReadSnapshot, positiveReadInteger } from "./meeting-reads.js"
 import { meetingStemmableText, meetingStemState } from "./meeting-stem-state.js"
-import { indexedText } from "./meetings.js"
 import type { StoreContext } from "./open.js"
 
 interface Cursor {

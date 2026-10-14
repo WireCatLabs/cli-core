@@ -7,7 +7,8 @@ import type { Message } from "../domain/models.js"
 import { openCache } from "../store/open.js"
 import { resetStems } from "../store/sqlite/stems.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
-import { type SearchFound, searchStore, statsStore } from "./messages.js"
+import type { SearchFound } from "./messages.js"
+import { searchStore, statsStore } from "./messages-archive-search.js"
 import { searchLucene } from "./messages-search.js"
 
 const account: AccountKey = { provider: "telegram", account: "1" }

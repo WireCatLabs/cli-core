@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
+import { calendarKey } from "../domain/calendar.js"
 import { parseLocator } from "../domain/locator.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
@@ -17,7 +18,8 @@ import {
 } from "../store/store.js"
 import { withExcerpt } from "./excerpt.js"
 import { mailAround, mergeMail, withMailThreads } from "./mail-search.js"
-import { chatAmong, type SearchFound, type SearchQuery, senderAmong } from "./messages.js"
+import { chatAmong, senderAmong } from "./message-resolution.js"
+import type { SearchFound, SearchQuery } from "./messages.js"
 import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
 
 const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is"])
@@ -507,19 +509,6 @@ export interface MessageStats {
   query: QueryMetadata
   coverage: SearchCoverage
   completeness: (ChatCompleteness & AccountKey)[]
-}
-export const calendarKey = (zone: string, by: "day" | "hour") => {
-  const format = new Intl.DateTimeFormat("en-CA", {
-    timeZone: zone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    ...(by === "hour" ? { hour: "2-digit", hourCycle: "h23" } : {}),
-  } as Intl.DateTimeFormatOptions)
-  return (time: number) => {
-    const part = Object.fromEntries(format.formatToParts(time).map(({ type, value }) => [type, value]))
-    return `${part.year}-${part.month}-${part.day}${by === "hour" ? `T${part.hour}` : ""}`
-  }
 }
 /** Distinct matching messages counted by chat, sender, or calendar day/hour in the query's timezone. */
 export const statsLucene = async (

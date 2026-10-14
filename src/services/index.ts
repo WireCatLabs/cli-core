@@ -63,6 +63,7 @@ export { inboxService } from "./inbox.js"
 export { readMail } from "./mail-search.js"
 export { type MeetingHitSearchRequest, refreshMeetingIndex, searchMeetingHits } from "./meeting-hit-search.js"
 export { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
+export { chatIdIn, storedChatId } from "./message-resolution.js"
 export type {
   AroundWindow,
   FoundMessage,
@@ -75,7 +76,8 @@ export type {
   SearchQuery,
   SendRequest,
 } from "./messages.js"
-export { chatIdIn, DELETE_AT_ONCE, messagesService, searchStore, storedChatId } from "./messages.js"
+export { DELETE_AT_ONCE, messagesService } from "./messages.js"
+export { searchStore } from "./messages-archive-search.js"
 export type { ModerateOptions, ModerationService, ShownRules } from "./moderation.js"
 export { moderationService } from "./moderation.js"
 export type { ContactSync, PeopleService } from "./people.js"
@@ -92,8 +94,10 @@ export type { PersonTimeline, Scope, TimelineItem, TimelineOptions } from "./per
 export { personTimeline, SCOPES, TIMELINE_ITEMS, TIMELINE_MAX } from "./person-timeline.js"
 export type { RankedRow, RankingFound, RankingQuery, RankingsService } from "./rankings.js"
 export { rankingsService } from "./rankings.js"
-export type { ResolvedSearch, SearchesService, SearchParams } from "./searches.js"
-export { searchesService, searchRecordOf } from "./searches.js"
+export type { SearchParams } from "./search-record.js"
+export { searchRecordOf } from "./search-record.js"
+export type { ResolvedSearch, SearchesService } from "./searches.js"
+export { searchesService } from "./searches.js"
 export type { TagsAdded, TagsRemoved, TagsService, TagTargetInput, TagTargetView } from "./tags.js"
 export { tagsService } from "./tags.js"
 export type { TaskItem, TaskList, TaskListRequest, TasksService, TaskView } from "./tasks.js"

@@ -14,7 +14,8 @@ import {
 } from "../images/picture/models.js"
 import type { PictureInput } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
-import { type MessagesService, storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
+import type { MessagesService } from "./messages.js"
 
 /** A bigger file is no photo a chat sends: skipping it costs a vector, reading it costs memory. */
 export const PICTURE_MAX_BYTES = 25 * 1024 * 1024

@@ -19,7 +19,7 @@ import { type MessageStore, openStore } from "../store/store.js"
 import { seedSearchRecipes } from "../testing/search-recipes.js"
 import { storedDeps } from "./deps.js"
 import { servicesFor } from "./index.js"
-import { searchStore } from "./messages.js"
+import { searchStore } from "./messages-archive-search.js"
 
 const nameTerm = (value: string) =>
   ({ kind: "predicate", field: "name", operator: "term", value, span: [0, 0] }) as unknown as Predicate

@@ -8,7 +8,8 @@ import { HISTORY_KEPT } from "../store/sqlite/searches.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import { messagesService } from "./messages.js"
-import { searchesService, searchRecordOf } from "./searches.js"
+import { searchRecordOf } from "./search-record.js"
+import { searchesService } from "./searches.js"
 
 const OWNER: AccountKey = { provider: "tg", account: "1" }
 const live: MessageStore[] = []

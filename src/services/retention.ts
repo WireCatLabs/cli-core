@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import type { RetentionOptions } from "../domain/retention.js"
 import type { ServiceDeps } from "./deps.js"
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 import { momentOf } from "./moment.js"
 
 export interface RetentionQuery {

@@ -8,7 +8,7 @@ import { QUERY_LIMITS } from "../search/lucene/types.js"
 import type { StoreContext } from "../store/sqlite/open.js"
 import { directReplies } from "../store/sqlite/search.js"
 import { type MessageStore, openStore } from "../store/store.js"
-import { searchStore } from "./messages.js"
+import { searchStore } from "./messages-archive-search.js"
 
 const account = { provider: "synthetic", account: "500" }
 const stores: MessageStore[] = []

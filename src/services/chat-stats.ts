@@ -1,7 +1,7 @@
+import { calendarKey } from "../domain/calendar.js"
 import type { ChatEvents, Id, Message } from "../domain/models.js"
 import type { ChatCompleteness, MemberCount } from "../store/store.js"
-import { questions } from "./inbox.js"
-import { calendarKey } from "./messages-search.js"
+import { questions } from "./questions.js"
 
 export const TOP_POSTS = 5
 

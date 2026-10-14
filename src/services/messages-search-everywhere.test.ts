@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Attachment, Message } from "../domain/models.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
-import { searchStore } from "./messages.js"
+import { searchStore } from "./messages-archive-search.js"
 
 const account: AccountKey = { provider: "telegram", account: "100" }
 const live: MessageStore[] = []

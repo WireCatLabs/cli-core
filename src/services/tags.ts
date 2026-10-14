@@ -10,7 +10,7 @@ import { pickPerson } from "../resolve.js"
 import type { AccountKey, MessageStore, StoredTag, TagTarget } from "../store/store.js"
 import { type ColumnMap, queryFilter } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 
 /** As typed: `chat` alone is the chat; with `message`, a message in it. `message` may be a locator instead. */
 export interface TagTargetInput {

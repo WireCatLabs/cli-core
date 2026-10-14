@@ -9,7 +9,7 @@ import type { SearchQuery } from "./messages.js"
 import { prepareLucene, stemExecution } from "./messages-search.js"
 import { momentOf } from "./moment.js"
 import { type RankingSelection, rankingSelection, readRankingSelection } from "./rankings-selection.js"
-import { searchRecordOf } from "./searches.js"
+import { searchRecordOf } from "./search-record.js"
 
 export type AdminQuery = SearchQuery & {
   answerers?: string[]

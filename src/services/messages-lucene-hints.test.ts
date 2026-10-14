@@ -7,7 +7,7 @@ import type { AppIdentity } from "../cli/app.js"
 import type { Message } from "../domain/models.js"
 import { QUERY_LIMITS } from "../search/lucene/types.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
-import { searchStore } from "./messages.js"
+import { searchStore } from "./messages-archive-search.js"
 
 const account: AccountKey = { provider: "telegram", account: "1" }
 const live: MessageStore[] = []

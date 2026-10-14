@@ -6,7 +6,7 @@ import { AUTHOR_MEASURES, MESSAGE_MEASURES, type RankingTarget } from "../../dom
 import { assertRetentionEvidenceRead } from "../../sends/permissions.js"
 import { isAdminSelection } from "../../services/admin-statistics.js"
 import { isRetentionSelection } from "../../services/retention.js"
-import type { SearchParams } from "../../services/searches.js"
+import type { SearchParams } from "../../services/search-record.js"
 import { searchServices, syncInputs } from "../search-sync.js"
 import { type AnyTool, READ, tool } from "../tool.js"
 import { syncArgs } from "./search.js"

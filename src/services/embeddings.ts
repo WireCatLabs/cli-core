@@ -4,7 +4,7 @@ import { RULES_VERSION } from "../conversations/link.js"
 import { formatLocator, parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
 import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
-import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel } from "../embeddings/models.js"
+import { DEFAULT_TEXT_MODEL, meaningFloor, textModel, vectorModelKey } from "../embeddings/models.js"
 import { type RemoteModel, remoteKey } from "../embeddings/remote.js"
 import { CONTEXT_MESSAGES, CONTEXT_MINUTES } from "../images/context/index.js"
 import { registeredImageProviders } from "../images/registry.js"
@@ -18,7 +18,7 @@ import {
 } from "../store/store.js"
 import { type Built, conversationsService } from "./conversations.js"
 import type { ServiceDeps } from "./deps.js"
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 import { type Prepared, prepareLucene } from "./messages-search.js"
 import { MAIL } from "./search-kind.js"
 import { refreshSearch, type SearchRefreshed, type SyncOptions } from "./search-refresh.js"
@@ -196,9 +196,6 @@ export interface FoundConversation {
   /** The chunk's text changed after it was embedded: the score is for what it said then (NEED-550 B). */
   stale: boolean
 }
-
-/** A vector's model: the provider, the model and its size — vectors of two of them never mix. */
-export const vectorModelKey = (model: TextModel): string => `local:${model.id}:${model.dims}`
 
 /** Chunks per batch for one local session; one short transaction writes each batch. */
 const PER_SESSION = 8

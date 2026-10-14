@@ -7,7 +7,7 @@ import type { AttachmentInput, EmailInput } from "../store/index.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { storeOnlyDeps } from "./deps.js"
 import { embeddingsService } from "./embeddings.js"
-import { searchStore } from "./messages.js"
+import { searchStore } from "./messages-archive-search.js"
 import { personContext } from "./person-context.js"
 
 const MAIL: AccountKey = { provider: "email", account: "owner@example.com" }

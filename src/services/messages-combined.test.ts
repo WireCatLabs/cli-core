@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Message } from "../domain/models.js"
 import { QUERY_LIMITS } from "../search/lucene/types.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
-import { searchStore } from "./messages.js"
+import { searchStore } from "./messages-archive-search.js"
 import { COMBINED_DEFAULTS, searchCombined } from "./messages-combined.js"
 
 const account: AccountKey = { provider: "synthetic", account: "500" }

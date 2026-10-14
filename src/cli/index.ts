@@ -47,9 +47,10 @@ export { repliesStatePathFor } from "../replies/state.js"
 export { guardedApp, guardedPress, guardedStart, type Pressed } from "../sends/buttons.js"
 export { guardedClose, guardedCreatePoll, guardedVote } from "../sends/polls.js"
 export type { InboxReader } from "../services/inbox.js"
-export { INBOX_CHATS, newIn, REVIEW_CHATS, reviewIn, unanswered, unreadIn } from "../services/inbox.js"
+export { INBOX_CHATS, newIn, REVIEW_CHATS, reviewIn, unreadIn } from "../services/inbox.js"
 export { momentOf } from "../services/moment.js"
 export { maskedAccount } from "../services/people.js"
+export { unanswered } from "../services/questions.js"
 export { openRequestTask } from "../services/task-rules.js"
 export {
   type AgentPolicy,

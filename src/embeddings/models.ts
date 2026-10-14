@@ -125,4 +125,7 @@ export const textModel = (id: string): TextModel => {
 }
 
 /** The cosine a meaning hit must beat, measured in bench/search-quality; an unmeasured model keeps every hit. */
+/** A vector's model: the provider, the model and its size — vectors of two of them never mix. */
+export const vectorModelKey = (model: TextModel): string => `local:${model.id}:${model.dims}`
+
 export const meaningFloor = (key: string): number => (key === "local:e5-small:384" ? 0.8 : 0)
