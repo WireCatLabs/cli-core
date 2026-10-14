@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.278.0 — 14.10.2026
+
 ### Added
 
 - JSON field selection accepts an optional provider field resolver in answerFields, liftJson and
