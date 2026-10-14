@@ -4,7 +4,8 @@ Several sessions work on cli-core, tg-cli and max-cli at once. This page is what
 
 ## Store migrations
 
-**The next free migration version is 13.** Version 12 is taken by `mail_rules` (mail rules move from memo's
+**The next free migration version is 14.** Version 13 is taken by task fields (`category`, `claimed_by`,
+`claimed_until`, per-type keys for message tasks, tasks as a taggable type; tasks plan step 2, 2026-10-14). Version 12 is taken by `mail_rules` (mail rules move from memo's
 config into the store, with the rule that decided each email; universal mail rules plan in cli-memo, 2026-10-14).
 Version 11 is taken by organizations owning identities
 (`organization_identities`, a table of its own beside `identity_links`; mentions plan phase 1c, owner's choice,
