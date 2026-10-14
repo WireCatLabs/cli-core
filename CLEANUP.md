@@ -22,3 +22,6 @@
 - 2026-10-14: `../cli-messaging-wt-a2-s3c`, branch `feat/a2-s3-store-lists-3` and later S3 part-3 branches — wave 2 slice S3 (attachments, meetings, jobs lists, agenda); remove once merged.
 - 2026-10-14: `../cli-messaging-wt-a2-s3d`, branch `feat/a2-s3-meetings-list` — wave 2 slice S3 (meetings list onto the envelope); remove once merged.
 - 2026-10-14: `../cli-messaging-wt-a2-s3d` also carries branch `feat/a2-s3-searches` (saved searches onto the envelope); remove once merged.
+
+- 2026-10-14: `.worktrees/meeting-project-discovery`, branch `feat/meeting-project-discovery`, and `/tmp/meeting-test-project-words-*` — retained SDK discovery implementation and invented fixtures; remove in the owner-approved cleanup batch.
+- 2026-10-14: `../cli-base/.worktrees/meeting-project-aliases`, branch `feat/meeting-project-aliases` — unused clean vocabulary-design checkout; retained pending the owner-approved cleanup batch.

@@ -18,6 +18,7 @@ production adapter; the providers below are invented fixtures, not available Mee
 | `MeetingContextStore` | typed event and participant link receipts | atomic scoped ownership, compare-and-set and identity association audit |
 | `MeetingReadCapabilities` / `MeetingContextReadCapabilities` | bounded metadata, transcript pages and atomic cue-centered snapshots | account ownership, read-byte preflight and revision-aware reads |
 | `MeetingParticipantSearchStore` | shared CLI/MCP participant discovery and continuation steps | account/query-bound candidate pages, Unicode literal matching and read budgets |
+| `readMeetingProjectDiscovery` | one bounded canonical/key/alias page with cited unconfirmed evidence | the existing vocabulary resolver and account-scoped `MeetingSearchStore`; no provider-specific project catalog |
 | `MeetingSearchStore` | bounded hit pages with opaque continuation and coverage | seek pagination, read budgets and account/query-bound cursors |
 | `MeetingSearchIndexStore` | explicit bounded maintenance receipt | scoped pending rows and transactional byte-bounded indexing batches |
 | `MeetingTranscriptReceiptStore` | exact append outcomes | counts and writes in one transaction, including historical replay |

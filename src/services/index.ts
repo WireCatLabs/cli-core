@@ -62,6 +62,7 @@ export type { InboxService } from "./inbox.js"
 export { inboxService } from "./inbox.js"
 export { readMail } from "./mail-search.js"
 export { type MeetingHitSearchRequest, refreshMeetingIndex, searchMeetingHits } from "./meeting-hit-search.js"
+export { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
 export type {
   AroundWindow,
   FoundMessage,

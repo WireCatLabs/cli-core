@@ -63,6 +63,7 @@ shape of this file.
 - `CORE_REASONS`, `CORE_DETAILS` and `failureContext` from the package root: an app that renders its own errors
   passes `failureContext({ reasons: REASONS })` to `errorObjectOf`, so cli-core's reasons and detail keys keep their
   names in its output.
+- `readMeetingProjectDiscovery` reads canonical project names, keys and explicit aliases as bounded word evidence before any meeting membership is confirmed. It preserves account/filter/vocabulary-bound continuation, cited references and unknown archive coverage without creating links or indexing. Shared request/packet types are exported from the meetings module; CLI/MCP mounting remains a consumer task.
 
 ## 0.267.0 — 14.10.2026
 
