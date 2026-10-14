@@ -104,7 +104,7 @@ const BOUND: [string, Read][] = [
       }),
   ],
   ["search stats by chat", ({ store }) => asAlpha(store).messages.stats({ ...search, by: "chat" })],
-  ["chats list", ({ store }) => asAlpha(store).chats.list({}, { limit: 10, offset: 0 })],
+  ["chats list", ({ store }) => asAlpha(store).chats.list({ limit: 10, offset: 0 })],
   ["attachments list", ({ store }) => asAlpha(store).attachments.list({ chat: CHAT, limit: 10 })],
   ["store messages", ({ store }) => store.messages(alpha, CHAT, { limit: 10 })],
   ["store message by id", ({ store }) => store.message(alpha, "1", { chatId: CHAT })],
