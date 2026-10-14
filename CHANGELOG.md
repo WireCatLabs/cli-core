@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.274.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **An unheard voice message is named in `missing` without `--transcribe` too.** `review`, `inbox`, `messages
