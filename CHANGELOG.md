@@ -26,6 +26,10 @@ shape of this file.
 
 ### Added
 
+- **`Messenger.accountOf(command)`: a command can name its own account** in place of the one its profile
+  remembers, so a program with no messenger profile — memo, with `--provider --account` — mounts the local
+  builders. `withStore` and the services' `account()` use it first. **`tasksStatsCommand` is exported** beside
+  `tasksCommand`, for a program that mounts `stats tasks show` without the rest of `stats`.
 - **`itemOf`, `listOf`, `pagedList`, `renderAnswer`, `answerSchema` and `snakeKeys` from `@wirecat/cli-core/cli`**,
   with the `Body`, `ItemBody`, `ListBody`, `ListInput` and `AnswerOutput` types: an app's own command answers in the
   same envelope, `meta` and next steps as cli-core's, without a copy of them.
