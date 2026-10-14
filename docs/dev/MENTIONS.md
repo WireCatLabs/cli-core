@@ -1,0 +1,123 @@
+# Mentions — how they work
+
+What is built today. The user guide is [mentions.md](../mentions.md); the design, the decisions and what comes next
+are in the [plan](mentions-plan.md); the columns are in [schema.md](../storage/schema.md#mentions).
+
+A mention is a value found in one place of one stored text, normalized, with a status. It is **derived**: every
+row can be found again from the text, except the decision on it, which is carried across rebuilds.
+
+Not to be confused with `messages.mentions`: the people a messenger itself says a message mentions (an `@handle`).
+That column comes from the provider; the `mentions` table comes from our rules.
+
+## Where the code is
+
+| file | what |
+| --- | --- |
+| `src/domain/mentions.ts` | the rules for `phone`, `email`, `url`, `document`; `MENTION_KINDS`, `MENTION_VERSIONS`, `siteOf` |
+| `src/domain/person-names.ts` | `person-name`: the name index, Latin → Cyrillic, matching by stem or written form |
+| `src/store/sqlite/mentions.ts` | the writer, the queue drain, `rebuildMentions`, list, show, confirm, reject; `MENTION_QUERY` |
+| `src/store/sqlite/lucene.ts` | the search fields `phone:` `email:` `url:` `domain:` `mentions:` |
+| `src/services/mentions.ts` | the service the commands call |
+| `src/cli/messenger/mentions-command.ts` | `mentions list|show|confirm|reject|rebuild` |
+| `src/cli/author.ts` | who decided: the agent from `AI_AGENT`/`CLAUDECODE`, else the owner, `--as-owner` |
+
+## Tables
+
+- `mentions` — one row per kind per place: `(source_type, source_id, source_field, start_offset, kind)` is unique.
+  `source_type` is `message` or `attachment`; `source_field` is `text`, `file_text` or `transcript`. Offsets are
+  UTF-16, as JavaScript counts them. The written spelling is not copied; it is read back from the source.
+- `mention_pending` — texts written or edited since their mentions were found. Triggers on `messages` and
+  `attachments` fill it; JavaScript empties it.
+- `store_settings.mentionsRebuiltAt` — when a full rebuild last ran. `mentions list` says so while it is null:
+  messages stored before mentions existed are not read yet.
+- `identities` with `provider` `phone` or `email` — made only when a number or an address gets an owner.
+  `identity_links` gives it a person, `organization_identities` an organization.
+
+Store versions: 7 added the tables, 10 the attachment sources, 11 `organization_identities`. Each migration only
+adds; older builds keep reading the store.
+
+## The flow
+
+1. A store write (sync, watch, an edit) changes a message or an attachment's text. A trigger queues it in
+   `mention_pending`.
+2. In the same transaction, `drainMentions` reads up to 500 queued texts and runs the writer on each.
+3. The writer, for one source:
+   - keeps the decisions made there by a person or an agent (status not `found`, author not `rules`);
+   - deletes the source's rows **of the kinds this build knows**, and only those, so an older build that reads the
+     text again does not drop a newer build's kinds;
+   - finds the mentions and inserts each with its decision: the kept one, else the rule's own, else the value's
+     original (below), else `found`.
+4. A deleted message or attachment row takes its mentions and its queue entry with it (a trigger).
+5. `mentions rebuild [kind]` runs the same writer over every message and attachment text, 1,000 per short write
+   transaction, with progress. With a kind it redoes that kind only and leaves the queue and `mentionsRebuiltAt`
+   alone.
+
+**The original of a value.** A value starts as `dismissed` when it is dismissed anywhere, as `linked` to an
+identity when a phone or an address has one with an owner, as `linked` to a document when a document id is a
+stored Drive file (`documents.front_matter.fileId`). All three have the author `rules`.
+
+**Decisions.** `confirm` and `reject` of a `phone`, `email`, `url` or `document` update every row with that kind
+and value. A `person-name` is decided on its own row only. Rules-authored decisions are not kept across a
+rebuild; they are derived again, so a better rule can change them.
+
+## The rules
+
+| kind | how | confidence |
+| --- | --- | --- |
+| `email` | one pattern, lower-cased; `domain` from the public suffix list ([`psl`](https://github.com/lupomontero/psl)) | 0.95 |
+| `url` | `http(s)://…`, or a bare domain with a listed suffix that does not look like code or a file name (`readme.md`, `items.parts[0]`); tracking parameters and the fragment dropped; `domain` from `psl` | 0.95 with a scheme, 0.9 with `www.`, 0.6 bare |
+| `document` | a Google Docs, Sheets or Drive link inside a `url`; the value is the file id | 0.95 |
+| `phone` | own rules, no library: a 7–15 digit candidate kept by its shape, a Russian mobile or a phone word before it; dropped as a date, an IP, a sum, a card (Luhn) or an order, invoice or tax number. `+7…` when the country is clear, else the digits alone | 0.9 / 0.7 / 0.5 |
+| `person-name` | see below | 0.9 full name, 0.6 one word |
+
+`MENTION_VERSIONS` holds a version per kind. Bump it when a kind's rule changes, so the rows say which rule found
+them.
+
+### Names
+
+- **Who is looked for:** persons other than the owner who have a non-e-mail, non-bot identity (met in a
+  messenger, a meeting, or a confirmed phone): the person's name, its identities' names, its aliases. E-mail-only
+  persons are left out: in a mailbox they are mostly companies and mailing lists.
+- **Index:** every name word of three or more letters, by its Snowball stem (if the stem has two letters or more)
+  and by its lower-case written form. A Latin word is also indexed in a rough Cyrillic spelling
+  (`cyrillicOf`: Valery → валерий).
+- **Matching:** a capitalized word of four or more letters. It matches by stem, or by its written form with up to
+  three end letters cut. The second path exists because Snowball reads a surname's `-ов` as an ending:
+  «Иванов» stems to `иван`, «Иванову» to `иванов`.
+- **Full names:** two matching words, one space apart, that share a person are one mention of that person.
+- **Rule link:** a name is linked to a person by the rules only when exactly one of its people wrote in that chat
+  (`messages.sender_identity_id` → `identity_links`). One human can be a separate person per messenger until the
+  rows are merged, so a name often fits several.
+- `mentions show` returns them as `candidates`.
+
+## Search
+
+`phone:`, `email:`, `url:` match `(kind, value)` after the same normalization as the rules; `domain:` matches
+`domain` through `siteOf`. They skip dismissed rows. `mentions:"person:<id>"` matches linked rows only: a name
+linked to that person, or a phone or an address whose identity is theirs; `organization:<id>` goes through
+`organization_identities`; `document:<id>` through the target. Another type is `query.invalid-reference`. A
+mention in an attachment finds its message. Mail has no mentions yet, so these fields match nothing there.
+
+## Adding a kind
+
+1. Add it to `MENTION_KINDS` and `MENTION_VERSIONS`, and its rule to `findMentions` (or a module of its own, as
+   names are).
+2. Decide whether it is decided per value (as a phone) or per row (as a name), in `decide`, and what `confirm`
+   links it to.
+3. Older builds keep the new kind's rows: the writer deletes only the kinds it knows.
+4. Tests: a table of real spellings that must match, and texts that must yield nothing.
+
+## Rules that hold
+
+- No phone digits in a log, an error, a fixture, a test or a document. Tests use reserved fictional numbers.
+- No model, and no outside service, by default.
+- A migration only adds. Nothing that `mentions rebuild` can find again is copied anywhere else.
+- Measurements on real stores go to [cli-testing](https://github.com/WireCatLabs/cli-testing) as totals only.
+
+## Known limits
+
+- Only messages and their attachments are read: not notes, Drive documents or mail.
+- A `url` cannot be confirmed: links are not yet resolved to a stored document or chat.
+- Names are known people only. Words under four letters are skipped, so «Оля» or «Ира» are missed.
+- Builds 0.264–0.270 delete a text's `person-name` rows when they read the text again; `mentions rebuild
+  person-name` with a newer build finds them again.

@@ -1662,7 +1662,7 @@ export const chunkMessages = sqliteTable(
 )
 
 /**
- * A phone, e-mail address, link or document found in one place of one stored text. Derived: `mentions rebuild`
+ * A phone, e-mail address, link, document or known person's name found in one place of one stored text. Derived: `mentions rebuild`
  * finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.
  */
 export const mentions = sqliteTable(

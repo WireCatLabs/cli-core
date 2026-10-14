@@ -28,6 +28,7 @@ write. A messenger plugs in as one adapter and gets all of it.
 | [CLI standard](docs/dev/STANDARD.md) | The rules every WireCat CLI follows: command shape, output, exit codes, permissions, MCP |
 | [Glossary](docs/dev/GLOSSARY.md) | One word, one meaning across the tools |
 | [Query language](docs/search/query-language.md) · [spec](docs/search/query-language-spec.md) · [Image search](docs/search/images.md) | The search syntax and its exact grammar; finding pictures by context and by what they show |
+| [Mentions](docs/mentions.md) · [how they work](docs/dev/MENTIONS.md) | Phones, e-mail, links, documents and names found in messages: search, review, rebuild; the tables and the rules |
 | [Storage](docs/storage/README.md) | The schema, the search indexes and the decisions behind them |
 | [Knowledge](docs/dev/KNOWLEDGE.md) · [Meetings](docs/dev/MEETINGS.md) | Labels, links and proposals across sources; the meetings module and its providers |
 | [Testing](docs/dev/TESTING.md) · [Parity audit](docs/dev/PARITY-AUDIT.md) | The sandbox, the coverage floor, the checks across tg and max |
