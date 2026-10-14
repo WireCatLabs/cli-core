@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { addMeetingCommands } from "./cli/index.js"
 import { exportMeeting, serializeVtt } from "./export.js"
 import { callMeetingTool } from "./mcp/index.js"
-import { meetingSummary, meetingTranscript } from "./reads.js"
+import { meetingSummaryAnswer, meetingTranscriptAnswer } from "./reads.js"
 import type { MeetingSave } from "./store.js"
 import { memoryMeetingStore, sampleMeeting } from "./testing/index.js"
 import { parseVtt } from "./vtt.js"
@@ -61,14 +61,14 @@ describe("archive reads", () => {
   it("keeps current reads separate from retained transcript history and excludes deleted versions", async () => {
     const { store, second } = await corrected()
     const id = second.meeting.id
-    expect((await meetingTranscript(store, id, 1)).items).toHaveLength(1)
-    expect((await meetingTranscript(store, id, 1, { history: true })).items).toHaveLength(2)
-    expect((await meetingSummary(store, id, 1)).items[0]?.content).toBe("Example content")
+    expect((await meetingTranscriptAnswer(store, id, 1)).items).toHaveLength(1)
+    expect((await meetingTranscriptAnswer(store, id, 1, { history: true })).items).toHaveLength(2)
+    expect((await meetingSummaryAnswer(store, id, 1)).items[0]?.content).toBe("Example content")
     const hidden = structuredClone(second)
     present(hidden.transcripts[0]).transcript.deletedAt = 5000
     store.meeting = async () => hidden
-    expect((await meetingTranscript(store, id, 1, { history: true })).items).toHaveLength(1)
-    await expect(meetingSummary(store, id, 2)).rejects.toMatchObject({ code: "not_found" })
+    expect((await meetingTranscriptAnswer(store, id, 1, { history: true })).items).toHaveLength(1)
+    await expect(meetingSummaryAnswer(store, id, 2)).rejects.toMatchObject({ code: "not_found" })
   })
 
   it("exports current Markdown and explicitly selected historical VTT without exposing another account", async () => {

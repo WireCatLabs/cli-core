@@ -210,7 +210,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
           if (total > maxReadBytes) fail("Meeting search exceeds its stored text byte budget")
         }
         checkMeetingCancelled(input.signal)
-        const items = rows.slice(0, limit).map((row): SearchHit => {
+        const items = rows.slice(0, limit).map((row): SearchHit & { ref: string } => {
           const kind = Number(row.kind)
           let text: string
           if (kind === 2) {

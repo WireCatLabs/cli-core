@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { meetingHitsList } from "../answers.js"
+import type { MeetingSearchPage } from "../search-store.js"
 import { type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
 export { type MeetingHitSearch, type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
@@ -49,7 +51,7 @@ export const addMeetingSearchCommand = (
       query: string,
       request: MeetingHitSearchOptions,
       options: MeetingSearchFlags & Record<string, unknown>,
-    ) => Promise<unknown>
+    ) => Promise<MeetingSearchPage>
     signal: () => AbortSignal | undefined
     output: (value: unknown) => void
   },
@@ -74,7 +76,7 @@ export const addMeetingSearchCommand = (
     .option("--since-time <time>", "meetings starting at or after this ISO 8601 date or time", timestamp)
     .option("--until-time <time>", "meetings starting at or before this ISO 8601 date or time", timestamp)
     .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
-    .option("--cursor <cursor>", "continue from the previous page's nextCursor, with the same query and filters")
+    .option("--cursor <cursor>", "continue from the previous page's page.cursor, with the same query and filters")
     .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
     .action(async (query: string, options: MeetingSearchFlags & Record<string, unknown>) => {
       const request: MeetingHitSearchOptions = {
@@ -94,8 +96,8 @@ export const addMeetingSearchCommand = (
         signal: deps.signal(),
       }
       validateMeetingHitSearch(query, request)
-      deps.output(await deps.search(query, request, options))
+      deps.output(meetingHitsList(await deps.search(query, request, options), request.limit ?? 100))
     })
-  annotate(command, { origin: "handwritten", mutates: false })
+  annotate(command, { origin: "handwritten", mutates: false, output: { entity: "meeting_hit" } })
   return command
 }

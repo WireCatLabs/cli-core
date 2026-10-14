@@ -2,13 +2,13 @@ import { expect, it, vi } from "vitest"
 import { callMeetingSearchTool, meetingSearchTool } from "./search.js"
 
 const page = {
-  items: [],
+  items: [{ ref: "meeting:1/2", meetingId: 2, scope: "chat" as const, id: 4, text: "budget", startMs: null }],
   hasMore: false,
   nextCursor: null,
   coverage: {
     archiveCompleteness: "unknown" as const,
     currentRevisions: true as const,
-    indexing: "ready" as const,
+    indexing: "pending" as const,
     indexCompleteness: "unknown" as const,
   },
 }
@@ -26,7 +26,11 @@ it("offers the same bounded search without letting a tool caller choose an accou
     topic: "costs",
     limit: 10,
   })
-  expect(result.structuredContent).toEqual(page)
+  expect(result.structuredContent).toEqual({
+    items: [{ ref: "meeting:1/2", meeting: "meeting:1/2", scope: "chat", id: "4", excerpt: "budget", offset_ms: null }],
+    page: { limit: 10, has_more: false },
+    missing: [expect.objectContaining({ field: "excerpt", step: "meetings.search-again" })],
+  })
   expect(search).toHaveBeenCalledWith(
     "budget",
     expect.objectContaining({
