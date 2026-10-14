@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.266.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **`inbox` and `review` answer the list envelope**, CLI and MCP alike: the messages, oldest first, as
