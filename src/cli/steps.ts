@@ -54,6 +54,24 @@ export const STEPS = defineSteps([
     args: [{ name: "model", required: true }],
     why: "{model} is not downloaded, so nothing is searched by meaning",
   },
+  {
+    id: "models.download-image",
+    command: "models image download",
+    args: [{ name: "model", required: true }],
+    why: "{model} is not downloaded, so pictures are not searched by what they show",
+  },
+  {
+    id: "store.migrate",
+    command: "store migrate",
+    args: [],
+    why: "a search index is still being built; this finishes it",
+  },
+  {
+    id: "search.meetings",
+    command: "*",
+    args: [{ name: "max_meetings", required: true }],
+    why: "stopped after {scanned} meetings; more may match",
+  },
 ])
 
 export const nextStep = (id: string, input: StepInput): NextStep => {

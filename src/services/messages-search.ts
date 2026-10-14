@@ -208,7 +208,7 @@ export const prepareLucene = async (
       : undefined)
   if (leaves.some(({ field }) => field === "topic")) {
     if (!globalChat && (chats.length !== 1 || !requiresChat(ast.root, chats[0] as QueryNode)))
-      searchError("query.topic-scope", { start: 0, end: 0 }, "name one required chat or use --chat")
+      searchError("query.topic-scope", { start: 0, end: 0 }, "name one chat with chat:, required")
   }
   const wordsReady = (await store.searchIndexState())?.ready === true
   if (hasText(ast.root) && !wordsReady) await indexNotReady(store, messenger.app?.command)

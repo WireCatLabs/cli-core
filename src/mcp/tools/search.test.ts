@@ -38,16 +38,14 @@ describe.each(["max", "tg"])("the shared MCP search bridge for %s", (command) =>
     },
   }
 
-  it("accepts short standard text and cached chat names through the same schema", async () => {
-    const args = v.parse(messagesSearchInput(messenger), { text: "x", chat: "Synthetic Chat" })
+  it("takes the chat in the query, and answers the list envelope", async () => {
+    const args = v.parse(messagesSearchInput(messenger), { text: 'x chat:"Synthetic Chat"' })
     const search = vi.fn(async () => found)
     const result = await answerMessagesSearch({ search }, args, { limit: 20 })
     expect(search).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "x", chat: "Synthetic Chat", language: "lucene" }),
+      expect.objectContaining({ text: 'x chat:"Synthetic Chat"', language: "lucene" }),
     )
-    expect(result).toEqual({ ...found, page: 1, limit: 20 })
-    expect(result.coverage?.state).toBe("unknown")
-    expect(result.query?.fieldsVersion).toBe(1)
+    expect(result).toEqual({ items: [], page: { limit: 20, has_more: false }, meta: { accounts: ["max:synthetic"] } })
   })
 
   it("**forwards exact**, so bare words match their exact form only", async () => {
@@ -84,9 +82,7 @@ describe.each(["max", "tg"])("the shared MCP search bridge for %s", (command) =>
       }),
     )
     expect(search).toHaveBeenCalledOnce()
-    expect(result.limit).toBe(7)
-    expect(result.completeness).toEqual(found.completeness)
-    expect(result.wordsReady).toBe(true)
+    expect(result.page.limit).toBe(7)
   })
 
   it("refuses missing input before calling the search service", async () => {

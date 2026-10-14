@@ -69,7 +69,8 @@ const setup = async (config?: object) => {
 }
 
 const json = (result: { stdout: string[] }) => JSON.parse(result.stdout[0] ?? "null")
-const ids = (answer: { items: { id: string }[] }) => answer.items.map(({ id }) => id).sort()
+const idOf = (item: { id?: string; ref?: string }) => item.id ?? item.ref?.split("/").at(-1)
+const ids = (answer: { items: { id?: string; ref?: string }[] }) => answer.items.map(idOf).sort()
 
 describe("searches", () => {
   it("**saves a search, runs it with --saved and more words, and keeps every run in the history**", async () => {
@@ -79,11 +80,7 @@ describe("searches", () => {
     expect(json(await call("searches", "history", "--json")).items).toEqual([])
 
     const first = json(await call("search", "messages", "--saved", "invoices", "--json"))
-    expect([first.items.map(({ id }: { id: string }) => id), first.limit, first.hasMore]).toEqual([
-      ["106", "105"],
-      2,
-      true,
-    ])
+    expect([first.items.map(idOf), first.page.limit, first.page.has_more]).toEqual([["106", "105"], 2, true])
     expect(
       ids(json(await call("search", "messages", "--saved", "invoices", "alpha", "--limit", "5", "--json"))),
     ).toEqual(["101", "106"])
@@ -185,10 +182,10 @@ it("tells in each search's help what transcript:, content: and filename: narrow 
   expect(messages).toContain("A bare word looks in message text, voice transcripts, file names and file text")
   expect(messages).toContain("transcript:")
   expect(messages).toContain("chat search messages 'content:invoice'")
-  expect(messages).toContain("each hit's reference is locator")
-  expect(await help("mail")).toContain("each email's reference is locator")
+  expect(messages).toContain("each hit's reference is ref")
+  expect(await help("mail")).toContain("each email's reference is ref")
   const all = await help("all")
   expect(all).toContain("transcript: narrows a message search to voice transcripts")
   expect(all).toContain("each result's reference is ref")
-  expect(await help("notes")).toContain("the list is hits, not items")
+  expect(await help("notes")).toContain("the list is items")
 })

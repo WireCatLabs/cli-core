@@ -594,15 +594,15 @@ describe("the MCP server", () => {
       sync_time: "1s",
     })
     expect(search.isError).toBe(false)
-    expect(search.body).toMatchObject({ refreshed: { chats: ["7"], messages: 1, complete: true } })
-    expect(search.body.items.map((hit: { id: string }) => hit.id).sort()).toEqual(["1", "2"])
+    expect(search.body).not.toHaveProperty("missing")
+    expect(search.body.items.map((hit: { ref: string }) => hit.ref.split("/").at(-1)).sort()).toEqual(["1", "2"])
     const stats = await call("chat_stats_messages_show", { text: "chapter", chat: "7", sync_first: true })
     expect(stats.body.total).toBe(2)
     expect(stats.body.refreshed.complete).toBe(true)
     const saved = await call("chat_search_messages", { saved: "chapter-query", sync_first: true })
-    expect(saved.body.refreshed.complete).toBe(true)
+    expect(saved.isError).toBe(false)
     const local = await call("chat_search_messages", { saved: "chapter-query" })
-    expect(local.body.refreshed).toBeUndefined()
+    expect(local.isError).toBe(false)
     expect(history).toHaveBeenCalledTimes(3)
     expect(backend.opened()).toBe(1)
     expect(markRead).not.toHaveBeenCalled()
@@ -618,8 +618,11 @@ describe("the MCP server", () => {
     const backend = scripted({ searchMessages })
     const { client, call } = await connect(backend, { root, serverSearch: true })
     const found = await call("chat_search_messages", { text: "chapter", backend: "both", server_time: "2s" })
-    expect(found.body).toMatchObject({ server: { backend: "both", new: 1, complete: true } })
-    expect(found.body.items.map(({ id, source }: { id: string; source: string }) => [id, source]).sort()).toEqual([
+    expect(
+      found.body.items
+        .map(({ ref, found_in }: { ref: string; found_in: string }) => [ref.split("/").at(-1), found_in])
+        .sort(),
+    ).toEqual([
       ["1", "archive"],
       ["30", "server"],
     ])
@@ -645,16 +648,14 @@ describe("the MCP server", () => {
       body.items.filter(({ kind }) => kind === "message").map(({ ref }) => ref.split("/").at(-1))
 
     const archive = await call("chat_search_all", { text: "chapter", backend: "archive" })
-    expect(archive.body.server).toBeUndefined()
     expect(ids(archive.body)).toEqual(["1"])
     expect(backend.opened()).toBe(0)
 
     const server = await call("chat_search_all", { text: "chapter", backend: "server", server_time: "2s" })
-    expect(server.body.server).toMatchObject({ backend: "server", calls: 1, new: 1, complete: true })
+    expect(searchMessages).toHaveBeenCalledTimes(1)
     expect(ids(server.body)).toEqual(["30"])
 
     const both = await call("chat_search_all", { text: "chapter", backend: "both" })
-    expect(both.body.server).toMatchObject({ backend: "both", calls: 1 })
     expect(ids(both.body).sort()).toEqual(["1", "30"])
 
     searchMessages.mockClear()
@@ -682,7 +683,7 @@ describe("the MCP server", () => {
         config: levels({ "messages.server-search": level }),
       })
       const found = await call("chat_search_messages", { text: "chapter", backend: "both" })
-      expect(found.body).toMatchObject({ server: { skipped: "not_allowed" }, items: [{ id: "1", source: "archive" }] })
+      expect(found.body).toMatchObject({ items: [{ ref: "msg:chat/500/7/1", found_in: "archive" }] })
       const strict = await call("chat_search_messages", { text: "chapter", backend: "server" })
       expect(strict.isError).toBe(true)
       const strictAll = await call("chat_search_all", { text: "chapter", backend: "server" })
@@ -700,12 +701,11 @@ describe("the MCP server", () => {
         throw new Error("private detail")
       },
     })
-    const search = await call("chat_search_messages", { text: "chapter", chat: "7", sync_first: true })
-    expect(search.isError).toBe(false)
+    const search = await call("chat_search_messages", { text: "chapter chat:7", sync_first: true })
+    expect(search.isError, JSON.stringify(search.body)).toBe(false)
     expect(search.body).toMatchObject({
-      items: [{ id: "1" }],
-      coverage: { state: "stale" },
-      refreshed: { complete: false },
+      items: [{ ref: "msg:chat/500/7/1" }],
+      missing: [{ field: "coverage", step: "messages.sync" }],
     })
     expect(JSON.stringify(search.body)).not.toContain("private detail")
   })
@@ -1054,13 +1054,9 @@ describe("the MCP server", () => {
         timezone: "UTC",
       })
       expect(textual.isError, recipe.title).toBe(false)
-      expect(structured.body).toEqual(textual.body)
-      expect(textual.body.items.map((item: { id: string }) => item.id).sort()).toEqual(recipe.ids)
-      expect(textual.body).toMatchObject({
-        page: 1,
-        query: { language: "lucene-v1", timezone: "UTC" },
-        coverage: { coveredChats: recipe.query.startsWith("chat:") ? 1 : 3 },
-      })
+      expect(structured.body.items).toEqual(textual.body.items)
+      expect(textual.body.items.map((item: { ref: string }) => item.ref.split("/").at(-1)).sort()).toEqual(recipe.ids)
+      expect(textual.body).toMatchObject({ page: { has_more: false }, meta: { accounts: ["chat:500"] } })
     }
     expect(telegram.opened()).toBe(opened)
     expect((await call("chat_search_messages", {})).isError).toBe(true)
@@ -1074,11 +1070,9 @@ describe("the MCP server", () => {
 
     const { body } = await call("chat_search_messages", { text: "chapter" })
 
-    expect(body.items.map((hit: { id: string }) => hit.id)).toEqual(["1"])
-    expect(body).toMatchObject({ corrections: [], completeness: [{ chatId: "7" }], wordsReady: true })
-    expect(body).toMatchObject({ query: { language: "lucene-v1" }, page: 1 })
+    expect(body.items.map((hit: { ref: string }) => hit.ref)).toEqual(["msg:chat/500/7/1"])
+    expect(body).toMatchObject({ page: { has_more: false }, meta: { accounts: ["chat:500"] } })
     const typo = await call("chat_search_messages", { text: "chaptre", context: 1, language: "legacy" })
-    expect(typo.body).toMatchObject({ corrections: [{ from: "chaptre", to: ["chapter"] }] })
     expect(typo.body.items[0].context).toEqual(expect.any(Array))
     expect((await call("chat_search_messages", { text: "chapter", source: "all" })).body.items).toHaveLength(1)
     const unheld = await call("chat_search_messages", { text: "chapter", source: "nowhere" })
@@ -1097,13 +1091,13 @@ describe("the MCP server", () => {
 
     const all = await call("chat_search_all", { text: "chapter" })
     expect(all.body.items.map((item: { kind: string }) => item.kind)).toContain("message")
-    expect(all.body.searched).toEqual(["messages", "notes"])
-    expect(all.body.skipped).toEqual([
-      { resource: "mail", reason: expect.stringContaining("memo sync --mail") },
-      { resource: "meetings", reason: MEETINGS_UNNAMED },
+    expect(all.body.meta.accounts).toEqual(["chat:500", "notes:internal"])
+    expect(all.body.meta.skipped).toEqual([
+      { account: "mail", why: expect.stringContaining("memo sync --mail") },
+      { account: "meetings", why: MEETINGS_UNNAMED },
     ])
     const notes = await call("chat_search_notes", { text: "chapter" })
-    expect(notes.body).toMatchObject({ by: "words", hits: [] })
+    expect(notes.body).toMatchObject({ items: [], page: { has_more: false } })
     const mail = await call("chat_search_mail", { text: "chapter" })
     expect(mail.isError).toBe(true)
     expect(JSON.stringify(mail.body)).toContain("memo sync --mail")
@@ -1134,29 +1128,26 @@ describe("the MCP server", () => {
     await store.close()
 
     const every = await call("chat_search_mail", { text: "chapter" })
-    expect(every.body.items.map(({ id }: { id: string }) => id).sort()).toEqual([
-      "<alice@example.test>",
-      "<bob@example.test>",
+    const bob = "msg:email/bob%40example.test/thread-1/%3Cbob%40example.test%3E"
+    expect(every.body.items.map(({ ref }: { ref: string }) => ref).sort()).toEqual([
+      "msg:email/alice%40example.test/thread-1/%3Calice%40example.test%3E",
+      bob,
     ])
     const one = await call("chat_search_mail", { text: "chapter", source: "email:bob@example.test" })
-    expect(one.body.items.map(({ id }: { id: string }) => id)).toEqual(["<bob@example.test>"])
-    expect(one.body.accounts).toEqual([{ resource: "mail", provider: "email", account: "bob@example.test" }])
-    expect(one.body).not.toHaveProperty("coverage")
+    expect(one.body.items.map(({ ref }: { ref: string }) => ref)).toEqual([bob])
+    expect(one.body.meta.accounts).toEqual(["email:bob@example.test"])
+    expect(one.body).not.toHaveProperty("missing")
     expect(one.body.items[0]).toMatchObject({
       excerpt: "Reading group Which chapter next?",
       email: { from: { address: "bob@example.test" }, thread: "chat:email/bob%40example.test/thread-1" },
     })
     expect(one.body.items[0]).not.toHaveProperty("text")
-    const brief = await call("chat_search_mail", { text: "chapter", source: "email:bob@example.test", detail: "brief" })
-    expect(brief.body.items[0]).not.toHaveProperty("email")
-    const full = await call("chat_search_mail", { text: "chapter", source: "email:bob@example.test", detail: "full" })
-    expect(full.body.items[0].text).toBe("Reading group\n\nWhich chapter next?")
     const first = await call("chat_search_mail", { text: "chapter", limit: 1 })
-    expect(first.body.nextOffset).toBe(1)
-    const rest = await call("chat_search_mail", { text: "chapter", limit: 1, offset: first.body.nextOffset })
-    expect(rest.body.items[0].id).not.toBe(first.body.items[0].id)
-    expect(rest.body.nextOffset).toBeUndefined()
-    const opened = await call("chat_messages_context", { chat: one.body.items[0].locator })
+    expect(first.body.next[0]).toMatchObject({ step: "page.next", args: { query: "chapter", page: 2, limit: 1 } })
+    const rest = await call("chat_search_mail", { text: "chapter", limit: 1, page: first.body.next[0].args.page })
+    expect(rest.body.items[0].ref).not.toBe(first.body.items[0].ref)
+    expect(rest.body).not.toHaveProperty("next")
+    const opened = await call("chat_messages_context", { chat: one.body.items[0].ref })
     expect(opened.body.items).toEqual([
       expect.objectContaining({ id: "<bob@example.test>", anchor: true, text: "Reading group\n\nWhich chapter next?" }),
     ])
@@ -1183,20 +1174,21 @@ describe("the MCP server", () => {
 
     const plain = await call("chat_search_all", { text: "chapter" })
     expect(plain.body.items.map((item: { kind: string }) => item.kind)).not.toContain("meeting")
-    expect(plain.body.skipped).toContainEqual({ resource: "meetings", reason: MEETINGS_UNNAMED })
+    expect(plain.body.meta.skipped).toContainEqual({ account: "meetings", why: MEETINGS_UNNAMED })
     for (const source of ["all", "zoom:zm-profile:alice", "meetings"]) {
       const found = await call("chat_search_all", { text: "chapter", source })
-      expect(found.isError).toBe(false)
-      expect(found.body.searched).toContain("meetings")
+      expect(found.isError, JSON.stringify(found.body)).toBe(false)
+      expect(found.body.meta.accounts).toContain("zoom:zm-profile:alice")
       expect(found.body.items).toContainEqual(
-        expect.objectContaining({ kind: "meeting", provider: "zoom", text: "Bob Sample on the chapter" }),
+        expect.objectContaining({ kind: "meeting", provider: "zoom", excerpt: "Bob Sample on the chapter" }),
       )
     }
     const unasked = await call("chat_search_all", { text: "chapter", only: ["meetings"] })
     expect(unasked.isError).toBe(true)
     expect(JSON.stringify(unasked.body)).toContain(MEETINGS_UNNAMED)
     const every = await call("chat_search_all", { text: "chapter", source: "zoom", max_meetings: "all" })
-    expect(every.body.meetings).toMatchObject({ complete: true })
+    expect(every.isError).toBe(false)
+    expect(every.body).not.toHaveProperty("missing")
     const bounded = await call("chat_search_all", { text: "chapter", max_meetings: 5 })
     expect(bounded.isError).toBe(true)
     expect(JSON.stringify(bounded.body)).toContain(MEETINGS_UNNAMED)
@@ -1372,7 +1364,9 @@ describe("the MCP server", () => {
     expect(located.body).toEqual(context.body)
     expect((await call("chat_messages_context", { chat: "msg:chat/600/7/5", thread: true })).isError).toBe(true)
     const search = await call("chat_search_messages", { text: 'text:"synthetic graph message 5"', thread: true })
-    expect(search.body.items[0].thread).toEqual({ ...context.body, next_steps: undefined })
+    expect(search.body.items[0].context.map(({ ref }: { ref: string }) => ref)).toEqual(
+      context.body.items.map(({ id }: { id: string }) => `msg:chat/500/7/${id}`),
+    )
     const capped = await call("chat_messages_context", { chat: "7", message: "5", thread: true, thread_hops: 0 })
     expect(capped.body).toMatchObject({ items: [{ id: "5" }], stopped: ["hops"] })
     expect(markRead).not.toHaveBeenCalled()
@@ -1679,7 +1673,11 @@ describe("the MCP server", () => {
       page: { has_more: false },
     })
     const found = await call("chat_search_messages", { text: "tag:paid OR tag:family", language: "lucene" })
-    expect(found.body.items.map(({ id }: { id: string }) => id).sort()).toEqual(["101", "103", "108"])
+    expect(found.body.items.map(({ ref }: { ref: string }) => ref.split("/").at(-1)).sort()).toEqual([
+      "101",
+      "103",
+      "108",
+    ])
     expect((await call("chat_tags_remove", { tags: ["paid"], message: "msg:chat/500/7/101" })).body).toMatchObject({
       removed: ["paid"],
     })
@@ -1731,7 +1729,7 @@ describe("the MCP server", () => {
       replaced: null,
     })
     const found = await call("chat_search_messages", { text: "content:квартальный", language: "lucene" })
-    expect(found.body.items.map(({ id }: { id: string }) => id)).toEqual(["108"])
+    expect(found.body.items.map(({ ref }: { ref: string }) => ref.split("/").at(-1))).toEqual(["108"])
     expect((await call("chat_attachments_list", { needs_text: true })).body.items).toEqual([])
 
     const readOnly = await connect(scripted(), { config: levels({ attachments: "readonly" }) })
@@ -1887,7 +1885,7 @@ describe("the MCP server", () => {
     expect(JSON.stringify(answer.body)).not.toContain("extractionneedle")
     expect(
       (await call("chat_search_messages", { text: "content:extractionneedle" })).body.items.map(
-        ({ id }: { id: string }) => id,
+        ({ ref }: { ref: string }) => ref.split("/").at(-1),
       ),
     ).toEqual(["900"])
     expect(backend.opened()).toBe(0)
@@ -1932,7 +1930,7 @@ describe("the MCP server", () => {
       expect(JSON.stringify(answer.body)).not.toContain("mcpocrneedle")
       expect(
         (await call("chat_search_messages", { text: "content:mcpocrneedle" })).body.items.map(
-          ({ id }: { id: string }) => id,
+          ({ ref }: { ref: string }) => ref.split("/").at(-1),
         ),
       ).toEqual(["901"])
       expect(fetcher).toHaveBeenCalledTimes(1)
@@ -2069,7 +2067,7 @@ describe("the MCP server", () => {
       command: "stats",
     })
     const found = await call("chat_search_messages", { saved: "invoices", text: "alpha", limit: 5 })
-    expect(found.body.items.map(({ id }: { id: string }) => id).sort()).toEqual(["101", "106"])
+    expect(found.body.items.map(({ ref }: { ref: string }) => ref.split("/").at(-1)).sort()).toEqual(["101", "106"])
     expect((await call("chat_stats_messages_show", { saved: "invoices" })).body).toMatchObject({
       by: "sender",
       total: 4,

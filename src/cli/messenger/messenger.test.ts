@@ -1495,21 +1495,25 @@ describe("the shared read commands", () => {
       },
     }
     for (const path of [
-      ["search", "messages", "chapter"],
-      ["stats", "messages", "show", "chapter"],
-      ["search", "conversations", "chapter"],
+      ["search", "messages", "chapter", "chat:7"],
+      ["stats", "messages", "show", "chapter", "--chat", "7"],
+      ["search", "conversations", "chapter", "--chat", "7"],
     ]) {
       const result = await call(
-        [...path, "--chat", "7", "--sync-first", "--sync-time", "1s", "--max-messages", "10", "--json"],
+        [...path, "--sync-first", "--sync-time", "1s", "--max-messages", "10", "--json"],
         async () => broken,
         env,
       )
       expect(result.code).toBe(0)
       expect(result.stdout).toHaveLength(1)
-      expect(JSON.parse(result.stdout[0] ?? "")).toMatchObject({
-        refreshed: { complete: false },
-        coverage: { state: "stale" },
-      })
+      expect(JSON.parse(result.stdout[0] ?? "")).toMatchObject(
+        path[0] === "search" && path[1] === "messages"
+          ? {
+              missing: [{ field: "coverage", step: "messages.sync" }],
+              next: [{ step: "messages.sync", args: { chat: "7" } }],
+            }
+          : { refreshed: { complete: false }, coverage: { state: "stale" } },
+      )
       expect(result.stderr.join("\n")).toContain("refresh incomplete")
       expect(result.stderr.join("\n")).not.toContain("private detail")
     }
@@ -1562,8 +1566,7 @@ describe("the shared read commands", () => {
     )
     expect(result.code).toBe(0)
     const answer = JSON.parse(result.stdout[0] ?? "")
-    expect(answer.server).toMatchObject({ backend: "both", calls: 1, new: 1, complete: true })
-    expect(answer.items.find(({ id }: { id: string }) => id === "40")).toMatchObject({ source: "server" })
+    expect(answer.items.find(({ ref }: { ref: string }) => ref.endsWith("/40"))).toMatchObject({ found_in: "server" })
     expect(searchMessages).toHaveBeenCalledWith({ text: "chapter" }, expect.objectContaining({ limit: 100 }))
     const without = await call(["search", "messages", "chapter", "--backend", "both"], async () => fake, env)
     expect(without.code).not.toBe(0)
@@ -1616,7 +1619,10 @@ describe("the shared read commands", () => {
       { serverSearch: true },
     )
     expect(both.code).toBe(0)
-    expect(JSON.parse(both.stdout[0] ?? "").server).toMatchObject({ skipped: "not_allowed" })
+    expect(
+      JSON.parse(both.stdout[0] ?? "").items.every(({ found_in }: { found_in?: string }) => found_in !== "server"),
+    ).toBe(true)
+    expect(both.stderr.join("\n")).toContain("server search skipped: not_allowed")
     const server = await call(
       ["search", "messages", "chapter", "--backend", "server", "--json"],
       async () => connection,
@@ -1655,7 +1661,10 @@ describe("the shared read commands", () => {
     expect(found).toMatchObject({ mode: "thread", chain: ["2", "1"], stale: false, stopped: [] })
     expect(found.items.map((item: { id: string }) => item.id)).toEqual(["1", "2", "3"])
     const search = await call(["search", "messages", "chapter", "--thread", "--json"], never, env)
-    expect(JSON.parse(search.stdout[0] ?? "").items.find((hit: { id: string }) => hit.id === "3").thread).toEqual(found)
+    const hit = JSON.parse(search.stdout[0] ?? "").items.find((one: { ref: string }) => one.ref === "msg:chat/500/7/3")
+    expect(hit.context.map(({ ref }: { ref: string }) => ref)).toEqual(
+      found.items.map(({ id }: { id: string }) => `msg:chat/500/7/${id}`),
+    )
     const capped = await call(
       ["messages", "context", "7", "3", "--thread", "--thread-hops", "0", "--jsonl"],
       never,
@@ -1732,12 +1741,19 @@ describe("the shared read commands", () => {
     const found = await call(["search", "messages", "chapter", "--json"], never, env)
     const hits = JSON.parse(found.stdout[0] ?? "").items
     expect(found.code).toBe(0)
-    expect(hits.map((hit: { id: string }) => hit.id)).toEqual(["3", "2", "1"])
-    expect(hits[0].locator).toBe("msg:chat/500/7/3")
-    const elsewhere = await call(["search", "messages", "chapter", "--chat", "999", "--json"], never, env)
+    expect(hits.map((hit: { ref: string }) => hit.ref)).toEqual([
+      "msg:chat/500/7/3",
+      "msg:chat/500/7/2",
+      "msg:chat/500/7/1",
+    ])
+    const elsewhere = await call(["search", "messages", "chapter", "chat:999", "--json"], never, env)
     expect(JSON.parse(elsewhere.stdout[0] ?? "").items).toEqual([])
     const pattern = await call(["search", "messages", "--regex", "ch.pt", "--limit", "1", "--json"], never, env)
-    expect(JSON.parse(pattern.stdout[0] ?? "")).toMatchObject({ items: [{ id: "3" }], hasMore: true })
+    expect(JSON.parse(pattern.stdout[0] ?? "")).toMatchObject({
+      items: [{ ref: "msg:chat/500/7/3" }],
+      page: { limit: 1, has_more: true },
+      next: [{ step: "page.next", args: { query: "ch.pt", regex: true, page: 2, limit: 1 } }],
+    })
     const broken = await call(["search", "messages", "--regex", "(", "--json"], never, env)
     expect(broken.code).toBe(2)
     expect(broken.stderr.join("\n")).toContain("not a regular expression")
@@ -1760,13 +1776,9 @@ describe("the shared read commands", () => {
     }
 
     const typo = await json("chaptr", "three")
-    expect(typo.answer).toMatchObject({
-      corrections: [{ from: "chaptr", to: ["chapter"] }],
-      completeness: [{ chatId: "7", state: "unknown" }],
-      wordsReady: true,
-      limit: 20,
-    })
-    expect(typo.answer.items[0]).toMatchObject({ match: "corrected", score: expect.any(Number) })
+    expect(typo.answer).toMatchObject({ page: { limit: 20 } })
+    expect(typo.answer).not.toHaveProperty("missing")
+    expect(typo.answer.items[0]).toMatchObject({ score: expect.any(Number) })
     expect(typo.stderr.join("\n")).toContain("chaptr → chapter")
     expect(typo.stderr.join("\n")).toContain(
       "1 of the chats searched are not held in full — `chat messages sync <chat>`",
@@ -1779,9 +1791,6 @@ describe("the shared read commands", () => {
     expect((await json("in:nowhere", "chapter")).error).toBe(
       'in: takes chat, personal, bots, all, messages, mail — not "nowhere"',
     )
-    const both = await json("chat:Elsewhere", "chapter", "--chat", "Book")
-    expect(both.code).toBe(2)
-    expect(both.error).toBe('--chat and chat: name different chats: "Book" and "Elsewhere"')
 
     const pretty = await call(["search", "messages", "chapter", "--limit", "1", "--context", "1"], never, env, {
       tty: true,
@@ -1814,17 +1823,16 @@ describe("the shared read commands", () => {
     expect(mail.stderr.join("\n")).toContain("memo sync --mail --since-time <time>")
     const answer = JSON.parse(mail.stdout[0] ?? "")
     expect(answer.items).toHaveLength(2)
-    expect(answer.items.every(({ locator }: { locator: string }) => locator.startsWith("msg:email/"))).toBe(true)
-    expect(answer.completeness).toEqual([])
-    expect(answer).not.toHaveProperty("coverage")
+    expect(answer.items.every(({ ref }: { ref: string }) => ref.startsWith("msg:email/"))).toBe(true)
+    expect(answer).not.toHaveProperty("missing")
 
     for (const language of ["lucene", "legacy"]) {
       const args = ["search", "messages", "chapter", "--language", language, "--json"]
       const all = await call([...args, "--source", "all"], never, env)
       expect(all.code).toBe(0)
-      const items = JSON.parse(all.stdout[0] ?? "").items as { locator: string }[]
+      const items = JSON.parse(all.stdout[0] ?? "").items as { ref: string }[]
       expect(items.length).toBeGreaterThan(0)
-      expect(items.some(({ locator }) => locator.startsWith("msg:email/"))).toBe(false)
+      expect(items.some(({ ref }) => ref.startsWith("msg:email/"))).toBe(false)
       expect(all.stderr.join("\n")).not.toContain("mail search")
       const asked = await call([...args, "--source", "email"], never, env)
       expect(asked.code).toBe(2)
@@ -1852,7 +1860,7 @@ describe("the shared read commands", () => {
     const all = await call(["search", "all", "chapter", "--json"], never, env)
     expect(all.code).toBe(0)
     const answer = JSON.parse(all.stdout[0] ?? "")
-    expect(answer.searched).toContain("messages")
+    expect(answer.meta.accounts).toContain("chat:500")
     expect(answer.items.filter(({ kind }: { kind: string }) => kind === "message")).toHaveLength(messages.items.length)
 
     const mail = await call(["search", "mail", "chapter", "--json"], never, env)
@@ -1891,30 +1899,32 @@ describe("the shared read commands", () => {
     expect(mail.ref).toBe("msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E")
     expect(mail.title).toBe("Reading group")
     expect(mail).toMatchObject({
-      text: "Reading group Which chapter next?",
-      from: { name: "Alice Example", ref: expect.stringMatching(/^person:\d+$/) },
-      email: { thread: "chat:email/owner%40example.test/thread-7" },
-      foundBy: ["words"],
+      excerpt: "Reading group Which chapter next?",
+      sender_name: "Alice Example",
+      sender_ref: expect.stringMatching(/^person:\d+$/),
+      found_by: ["words"],
     })
 
     const kinds = JSON.parse(
       (await call(["search", "all", "chapter kind:group", "--json"], never, env)).stdout[0] ?? "",
     )
-    expect(kinds.skipped.map(({ resource }: { resource: string }) => resource)).toContain("mail")
+    expect(kinds.meta.skipped.map(({ account }: { account: string }) => account)).toContain("mail")
 
     const withContext = await call(["search", "mail", "chapter", "--context", "1", "--json"], never, env)
     expect(withContext.code).toBe(0)
     const [hit] = JSON.parse(withContext.stdout[0] ?? "").items
-    expect(hit.id).toBe("<a@example.test>")
-    expect(hit.context.map(({ id, anchor }: { id: string; anchor?: boolean }) => [id, anchor ?? false])).toEqual([
-      ["<a@example.test>", true],
-      ["<b@example.test>", false],
+    expect(hit.ref).toBe("msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E")
+    expect(hit.context.map(({ ref }: { ref: string }) => ref)).toEqual([
+      "msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E",
+      "msg:email/owner%40example.test/thread-7/%3Cb%40example.test%3E",
     ])
 
     const one = await call(["search", "mail", "chapter", "--source", "email:Owner@example.test", "--json"], never, env)
     const narrowed = JSON.parse(one.stdout[0] ?? "")
-    expect(narrowed.items.map(({ id }: { id: string }) => id)).toEqual(["<a@example.test>"])
-    expect(narrowed.accounts).toEqual([{ resource: "mail", provider: "email", account: "owner@example.test" }])
+    expect(narrowed.items.map(({ ref }: { ref: string }) => ref)).toEqual([
+      "msg:email/owner%40example.test/thread-7/%3Ca%40example.test%3E",
+    ])
+    expect(narrowed.meta.accounts).toEqual(["email:owner@example.test"])
     const unheld = await call(
       ["search", "mail", "chapter", "--source", "email:other@example.test", "--json"],
       never,
@@ -2005,11 +2015,10 @@ describe("the shared read commands", () => {
       JSON.parse((await call(["search", "mail", "chapter", "--json", ...flags], never, env)).stdout[0] ?? "")
 
     const answer = await search()
-    expect(answer).not.toHaveProperty("coverage")
+    expect(answer).not.toHaveProperty("missing")
     const [hit] = answer.items
     expect(hit).not.toHaveProperty("text")
-    expect(hit).not.toHaveProperty("providerMetadata")
-    expect(hit).not.toHaveProperty("replyTo")
+    expect(hit).not.toHaveProperty("provider_metadata")
     expect(hit.excerpt).toContain("third chapter")
     expect(hit.excerpt.length).toBeLessThan(260)
     expect(hit.email).toEqual({
@@ -2018,25 +2027,20 @@ describe("the shared read commands", () => {
       to: [{ name: "Bob Sample", address: "bob@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
       cc: [{ name: "Kai Sample", address: "kai@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
       bcc: [{ name: null, address: "dana@example.test", ref: expect.stringMatching(/^person:\d+$/) }],
-      replyTo: [],
+      reply_addresses: [],
       labels: ["Starred"],
       thread: "chat:email/owner%40example.test/thread-8",
       read: false,
       flagged: true,
     })
 
-    const [brief] = (await search("--brief")).items
-    expect(Object.keys(brief).sort()).toEqual(["chatTitle", "excerpt", "locator", "score", "senderName", "timestamp"])
-    const [full] = (await search("--full")).items
-    expect(full.text).toContain(body)
-    expect(full.providerMetadata).toBeDefined()
-    expect(full.email.labels).toEqual(["Starred"])
-    const [picked] = (await search("--json=locator,text")).items
-    expect(picked.text).toContain(body)
+    const [picked] = (await search("--json=ref,email")).items
+    expect(Object.keys(picked).sort()).toEqual(["email", "ref"])
+    expect(picked.email.labels).toEqual(["Starred"])
     expect((await call(["search", "mail", "chapter", "--brief", "--full", "--json"], never, env)).code).toBe(2)
   })
 
-  it("**search mail** and **search all** page with --offset and say where the next page starts", async () => {
+  it("**search mail** and **search all** page with --page and say where the next page starts", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-offset-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -2062,22 +2066,25 @@ describe("the shared read commands", () => {
       throw new Error("search must never connect")
     })
     const page = async (...args: string[]) =>
-      JSON.parse((await call([...args, "--limit", "1", "--json", "--brief"], never, env)).stdout[0] ?? "")
+      JSON.parse((await call([...args, "--limit", "1", "--json"], never, env)).stdout[0] ?? "")
 
     const seen: string[] = []
-    let next: number | undefined = 0
+    let next: number | undefined = 1
     while (next !== undefined) {
-      const found = await page("search", "mail", "lighthouse", "--newest", "--offset", String(next))
-      seen.push(...found.items.map(({ locator }: { locator: string }) => locator))
-      next = found.nextOffset
+      const found = await page("search", "mail", "lighthouse", "--newest", "--page", String(next))
+      seen.push(...found.items.map(({ ref }: { ref: string }) => ref))
+      next = found.next?.find(({ step }: { step: string }) => step === "page.next")?.args.page
     }
     expect(seen).toHaveLength(3)
     expect(new Set(seen).size).toBe(3)
-    const second = await page("search", "all", "lighthouse", "--only", "mail", "--offset", "1")
-    expect(second).toMatchObject({ hasMore: true, nextOffset: 2 })
+    const second = await page("search", "all", "lighthouse", "--only", "mail", "--page", "2")
+    expect(second).toMatchObject({
+      page: { has_more: true },
+      next: [{ step: "page.next", command: "search all", args: { query: "lighthouse", only: "mail", page: 3 } }],
+    })
     expect(second.items).toHaveLength(1)
-    const last = await page("search", "all", "lighthouse", "--only", "mail", "--offset", "2")
-    expect(last.nextOffset).toBeUndefined()
+    const last = await page("search", "all", "lighthouse", "--only", "mail", "--page", "3")
+    expect(last).not.toHaveProperty("next")
   })
 
   it("**search all** finds a message, a mail and a note with one query, each typed, and says what it skipped", async () => {
@@ -2110,8 +2117,10 @@ describe("the shared read commands", () => {
     )
     expect(answer.items.find(({ kind }: { kind: string }) => kind === "note").ref).toMatch(/^note:/)
     expect(answer.items.find(({ kind }: { kind: string }) => kind === "mail").ref).toMatch(/^msg:email\//)
-    expect(answer.searched).toEqual(["messages", "mail", "notes"])
-    expect(answer.notes.by).toBe("words")
+    expect(answer.meta.accounts).toEqual(
+      expect.arrayContaining(["chat:500", "email:owner@example.test", "notes:internal"]),
+    )
+    expect(answer.items.find(({ kind }: { kind: string }) => kind === "note").found_by).toEqual(["words"])
 
     const notesOnly = JSON.parse(
       (await call(["search", "all", "chapter", "--only", "notes", "--json"], never, env)).stdout[0] ?? "",
@@ -2121,24 +2130,24 @@ describe("the shared read commands", () => {
     const fromField = JSON.parse(
       (await call(["search", "all", "from:me AND chapter", "--json"], never, env)).stdout[0] ?? "",
     )
-    expect(fromField.skipped.map(({ resource }: { resource: string }) => resource)).toContain("notes")
+    expect(fromField.meta.skipped.map(({ account }: { account: string }) => account)).toContain("notes")
 
     const notes = JSON.parse(
       (await call(["search", "notes", "chapter", "--type", "internal", "--json"], never, env)).stdout[0] ?? "",
     )
-    expect(notes.hits).toHaveLength(1)
-    expect(notes.hits[0].foundBy).toEqual(["words"])
+    expect(notes.items).toHaveLength(1)
+    expect(notes.items[0].found_by).toEqual(["words"])
     const files = JSON.parse(
       (await call(["search", "notes", "chapter", "--type", "file", "--json"], never, env)).stdout[0] ?? "",
     )
-    expect(files.hits).toHaveLength(0)
+    expect(files.items).toHaveLength(0)
     const written = JSON.parse(
       (await call(["search", "notes", "chapter", "--source", "notes:internal,email", "--json"], never, env))
         .stdout[0] ?? "",
     )
-    expect(written.hits).toHaveLength(1)
-    expect(written.accounts).toEqual([{ resource: "notes", provider: "notes", account: "internal" }])
-    expect(written.skipped).toEqual([{ source: "email", reason: "a mailbox — search mail reads it" }])
+    expect(written.items).toHaveLength(1)
+    expect(written.meta.accounts).toEqual(["notes:internal"])
+    expect(written.meta.skipped).toEqual([{ account: "email", why: "a mailbox — search mail reads it" }])
     expect(never).not.toHaveBeenCalled()
   })
 
@@ -2180,18 +2189,16 @@ describe("the shared read commands", () => {
 
     const archive = await search(never, "--backend", "archive")
     expect(never).not.toHaveBeenCalled()
-    expect(archive.server).toBeUndefined()
     expect(messageIds(archive)).not.toContain("40")
     expect(archive.items.map(({ kind }: { kind: string }) => kind)).toContain("note")
 
     const onlyServer = await search(server, "--backend", "server", "--server-time", "2s")
-    expect(onlyServer.server).toMatchObject({ backend: "server", calls: 1, new: 1, complete: true })
+    expect(searchMessages).toHaveBeenCalledTimes(1)
     expect(messageIds(onlyServer)).toEqual(["40"])
     expect(onlyServer.items.filter(({ kind }: { kind: string }) => kind === "message")).toHaveLength(1)
     expect(onlyServer.items.map(({ kind }: { kind: string }) => kind)).toContain("note")
 
     const both = await search(server, "--backend", "both")
-    expect(both.server).toMatchObject({ backend: "both", calls: 1 })
     expect(messageIds(both)).toContain("40")
     expect(messageIds(both).length).toBeGreaterThan(1)
 
@@ -2201,9 +2208,9 @@ describe("the shared read commands", () => {
     expect(messageIds(unasked)).toContain("40")
 
     const offline = await search(never, "--backend", "server", "--offline")
-    expect(offline.skipped).toContainEqual({
-      resource: "messages",
-      reason: expect.stringContaining("not with --offline"),
+    expect(offline.meta.skipped).toContainEqual({
+      account: "messages",
+      why: expect.stringContaining("not with --offline"),
     })
     expect(never).not.toHaveBeenCalled()
 
@@ -2243,20 +2250,19 @@ describe("the shared read commands", () => {
 
     const plain = JSON.parse((await call(["search", "all", "chapter", "--json"], never, env)).stdout[0] ?? "")
     expect(kinds(plain)).toEqual(new Set(["message"]))
-    expect(plain.searched).not.toContain("meetings")
-    expect(plain).not.toHaveProperty("meetings")
-    expect(plain.skipped).toContainEqual({ resource: "meetings", reason: MEETINGS_UNNAMED })
+    expect(plain.missing?.map(({ field }: { field: string }) => field) ?? []).not.toContain("items")
+    expect(plain.meta.skipped).toContainEqual({ account: "meetings", why: MEETINGS_UNNAMED })
 
     const named = await call(["search", "all", "chapter", "--source", "all", "--json"], never, env)
     expect(named.code).toBe(0)
     const answer = JSON.parse(named.stdout[0] ?? "")
     expect(kinds(answer)).toEqual(new Set(["message", "meeting"]))
-    expect(answer.searched).toContain("meetings")
+    expect(answer.meta.accounts).toContain("zoom:zm-profile:alice")
     expect(answer.items.find(({ kind }: { kind: string }) => kind === "meeting")).toMatchObject({
       provider: "zoom",
       account: "zm-profile:alice",
       title: "Reading circle",
-      text: "Bob Sample reads the chapter aloud",
+      excerpt: "Bob Sample reads the chapter aloud",
     })
 
     const only = JSON.parse(
@@ -2307,10 +2313,15 @@ describe("the shared read commands", () => {
 
     const one = JSON.parse((await search("--max-meetings", "1")).stdout[0] ?? "")
     expect(one.items).toEqual([])
-    expect(one.meetings).toMatchObject({ meetingsScanned: 1, complete: false })
+    expect(one).toMatchObject({
+      missing: [{ field: "items", why: "stopped after 1 meetings; more may match", step: "search.meetings" }],
+      next: [{ step: "search.meetings", command: "search all", args: { query: "chapter", max_meetings: "all" } }],
+    })
     const every = JSON.parse((await search("--max-meetings", "all")).stdout[0] ?? "")
-    expect(every.items.map(({ text }: { text: string }) => text)).toEqual(["Bob Sample reads the chapter aloud"])
-    expect(every.meetings).toMatchObject({ meetingsScanned: 2, complete: true })
+    expect(every.items.map(({ excerpt }: { excerpt: string }) => excerpt)).toEqual([
+      "Bob Sample reads the chapter aloud",
+    ])
+    expect(every).not.toHaveProperty("missing")
 
     const zero = await search("--max-meetings", "0")
     expect(zero.code).toBe(2)
@@ -2331,7 +2342,7 @@ describe("the shared read commands", () => {
     expect(found.code).toBe(0)
     const answer = JSON.parse(found.stdout[0] ?? "")
     expect(answer.items.length).toBeGreaterThan(0)
-    expect(answer.skipped).toContainEqual({ resource: "meetings", reason: "--source names no meetings account" })
+    expect(answer.meta.skipped).toContainEqual({ account: "meetings", why: "--source names no meetings account" })
     const alone = await call(["search", "all", "chapter", "--source", "meetings", "--json"], never, env)
     expect(alone.code).toBe(2)
     expect(alone.stderr.join("\n")).toContain("--source names nothing search all reads: meetings")
@@ -2347,9 +2358,8 @@ describe("the shared read commands", () => {
     const answer = JSON.parse(
       (await call(["search", "all", "chapter", "--source", "chat:500", "--json"], never, env)).stdout[0] ?? "",
     )
-    expect(answer.searched).toEqual(["messages"])
-    expect(answer.accounts).toEqual([{ resource: "messages", provider: "chat", account: "500" }])
-    expect(answer.skipped).toContainEqual({ resource: "notes", reason: "--source names no notes account" })
+    expect(answer.meta.accounts).toEqual(["chat:500"])
+    expect(answer.meta.skipped).toContainEqual({ account: "notes", why: "--source names no notes account" })
     const pretty = await call(["search", "all", "chapter", "--source", "chat:500"], never, env, { tty: true })
     expect(pretty.stderr.join("\n")).toContain("searched: chat:500")
     expect(pretty.stdout.join("\n")).not.toContain("searched:")
@@ -2357,7 +2367,7 @@ describe("the shared read commands", () => {
     expect(both.code).toBe(2)
   })
 
-  it("**the old search paths are gone**, with no alias, and --type narrows search messages", async () => {
+  it("**the old search paths are gone**, with no alias, and has: narrows search messages as --type did", async () => {
     const root = mkdtempSync(join(tmpdir(), "search-paths-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -2374,14 +2384,18 @@ describe("the shared read commands", () => {
       expect(answer.stderr.join("\n")).toMatch(/unknown command|too many arguments/)
     }
     const text = JSON.parse(
-      (await call(["search", "messages", "chapter", "--type", "text", "--json"], never, env)).stdout[0] ?? "",
+      (await call(["search", "messages", "chapter", "NOT has:attachment", "--json"], never, env)).stdout[0] ?? "",
     )
     expect(text.items.length).toBeGreaterThan(0)
     const voice = JSON.parse(
-      (await call(["search", "messages", "chapter", "--type", "voice", "--json"], never, env)).stdout[0] ?? "",
+      (await call(["search", "messages", "chapter", "has:voice", "--json"], never, env)).stdout[0] ?? "",
     )
     expect(voice.items).toHaveLength(0)
-    expect((await call(["search", "messages", "chapter", "--type", "video"], never, env)).code).toBe(2)
+    for (const gone of [
+      ["--type", "text"],
+      ["--chat", "7"],
+    ])
+      expect((await call(["search", "messages", "chapter", ...gone], never, env)).code).toBe(2)
   })
 
   it("**search messages keeps the messenger accounts of a --source list** and names the rest in skipped", async () => {
@@ -2399,8 +2413,8 @@ describe("the shared read commands", () => {
         "",
     )
     expect(answer.items.length).toBeGreaterThan(0)
-    expect(answer.coverage.accounts).toEqual([{ provider: "chat", account: "500" }])
-    expect(answer.skipped).toEqual([{ source: "zoom:z1", reason: "meetings — search all reads them" }])
+    expect(answer.meta.accounts).toEqual(["chat:500"])
+    expect(answer.meta.skipped).toEqual([{ account: "zoom:z1", why: "meetings — search all reads them" }])
     const pretty = await call(["search", "messages", "chapter", "--source", "chat:500,zoom:z1"], never, env, {
       tty: true,
     })
@@ -2430,7 +2444,7 @@ describe("the shared read commands", () => {
     }
     const search = (...argv: string[]) => call(["search", "messages", ...argv], never, env)
     const locators = async (...argv: string[]) =>
-      JSON.parse((await search(...argv, "--json")).stdout[0] ?? "").items.map((hit: { locator: string }) => hit.locator)
+      JSON.parse((await search(...argv, "--json")).stdout[0] ?? "").items.map((hit: { ref: string }) => hit.ref)
 
     expect(await locators("chapter")).not.toContain("msg:other/600/7/40")
     expect(await locators("chapter", "in:other")).toEqual(["msg:other/600/7/40"])
@@ -2441,17 +2455,12 @@ describe("the shared read commands", () => {
       "msg:chat/500/7/1",
     ])
     const wide = JSON.parse((await search("chapter", "in:all", "--context", "1", "--json")).stdout[0] ?? "")
-    expect(wide.completeness).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ provider: "chat", account: "500", chatId: "7" }),
-        expect.objectContaining({ provider: "other", account: "600", chatId: "7" }),
-      ]),
-    )
+    expect(wide.meta.accounts).toEqual(expect.arrayContaining(["chat:500", "other:600"]))
     expect(
       wide.items
-        .find((hit: { locator: string }) => hit.locator.startsWith("msg:other"))
-        .context.map((one: { id: string }) => one.id),
-    ).toEqual(["40"])
+        .find((hit: { ref: string }) => hit.ref.startsWith("msg:other"))
+        .context.map((one: { ref: string }) => one.ref),
+    ).toEqual(["msg:other/600/7/40"])
 
     const pretty = await call(["search", "messages", "chapter", "in:all"], never, env, { tty: true })
     expect(pretty.stdout.join("\n")).toContain("other · Reading circle  msg:other/600/7/40")
@@ -2474,8 +2483,8 @@ describe("the shared read commands", () => {
     )
     expect(await failed("--regex", "chapter", "--source", "all")).toContain("--regex reads the account it runs as")
     expect(await failed("from:Olga", "chapter", "in:all")).toContain('"Olga" matches 2 people in different accounts')
-    expect(await failed("chapter", "--chat", "7", "in:all")).toContain('"7" matches 2 chats in different accounts')
-    expect(await locators("chapter", "--chat", "Reading", "in:all")).toEqual(["msg:other/600/7/40"])
+    expect(await failed("chapter", "chat:7", "in:all")).toContain('"7" matches 2 chats in different accounts')
+    expect(await locators("chapter", "chat:Reading", "in:all")).toEqual(["msg:other/600/7/40"])
   })
 
   it.each(["max", "telegram"])(
@@ -2505,15 +2514,10 @@ describe("the shared read commands", () => {
         )
         expect(result.code, recipe.title).toBe(0)
         const answer = JSON.parse(result.stdout[0] ?? "null")
-        expect(answer.items.map((item: { id: string }) => item.id).sort(), recipe.title).toEqual(recipe.ids)
-        expect(answer).toMatchObject({
-          page: 1,
-          limit: 20,
-          hasMore: false,
-          corrections: [],
-          query: { language: "lucene-v1", timezone: "UTC" },
-          coverage: { coveredChats: recipe.query.startsWith("chat:") ? 1 : 3 },
-        })
+        expect(answer.items.map((item: { ref: string }) => item.ref.split("/").at(-1)).sort(), recipe.title).toEqual(
+          recipe.ids,
+        )
+        expect(answer).toMatchObject({ page: { limit: 20, has_more: false }, meta: { accounts: [`${provider}:500`] } })
         expect(result.stdout).toHaveLength(1)
       }
       const stats = await call(["stats", "messages", "show", "invoice", "--json"], never, env, {}, { provider })
@@ -4085,7 +4089,7 @@ describe("messages transcribe", () => {
       JSON.parse(
         (await call(["search", "messages", "zebrafinch", "--language", "lucene", "--json"], connect, root)).stdout[0] ??
           "",
-      ).items.map(({ id }: { id: string }) => id)
+      ).items.map(({ ref }: { ref: string }) => ref.split("/").at(-1))
 
     it("**is shown by messages show, found by search and not heard again**", async () => {
       const root = env()
@@ -4631,7 +4635,7 @@ describe("the guard, account and mcp config commands", () => {
     expect(listed.stderr.join("\n")).toContain("--cursor before:1")
 
     const found = await call(["search", "messages", "chapter", "--jsonl"], online, env)
-    expect(found.stdout.map((line) => JSON.parse(line).id)).toEqual(["3", "2", "1"])
+    expect(found.stdout.map((line) => JSON.parse(line).ref.split("/").at(-1))).toEqual(["3", "2", "1"])
   })
 })
 

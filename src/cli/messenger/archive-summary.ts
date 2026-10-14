@@ -4,7 +4,7 @@ const count = new Intl.NumberFormat("en")
 
 /**
  * One line on what the archive held for a search, when it could hold more or nothing was found:
- * "searched 12,430 messages in 37 chats — 5 never fetched, 2 behind; `tg messages sync --all --background` fetches them".
+ * "searched 12,430 messages in 37 chats — 5 never fetched, 2 behind". The command that fetches more is a next step.
  */
 export const archiveSummary = (coverage: SearchCoverage, hits: number): string | undefined => {
   const { neverFetched, behind, withGaps } = coverage.chats
@@ -15,6 +15,5 @@ export const archiveSummary = (coverage: SearchCoverage, hits: number): string |
     withGaps ? `${withGaps} with gaps` : "",
   ].filter(Boolean)
   const searched = `searched ${count.format(coverage.messages)} messages in ${count.format(coverage.coveredChats)} chats`
-  const advice = coverage.next ? `; \`${coverage.next}\` fetches ${problems.length ? "them" : "more"}` : ""
-  return `${searched}${problems.length ? ` — ${problems.join(", ")}` : ""}${advice}`
+  return `${searched}${problems.length ? ` — ${problems.join(", ")}` : ""}`
 }

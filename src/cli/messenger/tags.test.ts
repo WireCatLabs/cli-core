@@ -114,7 +114,14 @@ describe("tags", () => {
     expect((await call("tags", "list", "--limt", "2", "--json")).code).toBe(2)
 
     const search = json(await call("search", "messages", "tag:work", "--json"))
-    expect(search.items.map(({ id }: { id: string }) => id).sort()).toEqual(["101", "102", "103", "106", "107", "108"])
+    expect(search.items.map(({ ref }: { ref: string }) => ref.split("/").at(-1)).sort()).toEqual([
+      "101",
+      "102",
+      "103",
+      "106",
+      "107",
+      "108",
+    ])
 
     expect(json(await call("tags", "remove", "vip", "gone", "--contact", "11", "--json"))).toMatchObject({
       removed: ["vip"],

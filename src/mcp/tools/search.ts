@@ -1,9 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { messagesAnswer, offsetOf } from "../../cli/messenger/search-answers.js"
 import { parseDuration } from "../../cli/settings.js"
-import { DETAILS } from "../../output-detail.js"
-import type { MessagesService } from "../../services/messages.js"
+import type { MessagesService, SearchFound } from "../../services/messages.js"
 import { MAX_SEARCH_OFFSET } from "../../services/messages.js"
 import type { SearchKind } from "../../services/search-kind.js"
 import type { SearchesService, SearchParams } from "../../services/searches.js"
@@ -14,7 +14,7 @@ import { chatOf, limit } from "../tool.js"
 const EXACT = "bare words and quotes match their exact form only, as exact:word does; not with an AST"
 
 export const MESSAGES_SEARCH_DESCRIPTION =
-  "Use discover=true for partial lexical evidence and eligible replies to natural questions in the local archive, without model downloads; inspect each hit’s discovery.missingTerms and surrounding messages before answering. Explicit syntax stays strict, and ranking is not answer confidence. Search the local store, and the messenger's server where it can search, using the Lucene 9.12.3 profile, default AND, with strict Boolean matching. Legacy discovery is explicit with language=legacy. Text or a versioned AST, account-scoped filters, calendar timezone, term/body regex and candidate presets use one service. Empty hits still report archive coverage. `saved` runs a saved search (searches_list) or an earlier run (searches_history). With sync_first, first fetch new messages within max_chats (5), sync_time (30s), max_messages (500), under messages.sync-first permission. A failed or bounded refresh keeps local results with stale coverage and refreshed details. thread=true attaches each hit's bounded parent/reply graph, with provenance and stale-edge labels; thread_hops, thread_messages, thread_bytes, thread_within set its separate bounds. Guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md. Text words and quoted phrases match every form of their words (Snowball stems, exact forms ranked first, query.stemming says how); exact:word, or exact=true, matches the exact form only. A bare word also matches voice transcripts, file names and file text; each hit's matchedIn says where (text, transcript, filename, file) and its excerpt comes from there; text:, transcript:, content: (file text), filename: narrow to one place. Without discover=true, where the messenger's server can search, it is also asked by default (backend=both; archive for the local store only) within server_time (5s), under messages.server-search: its hits are saved and re-checked by the same strict query, each hit says its source (archive, server, both), and server says what the server step did. coverage says what the archive held: messages and chats searched, chats never fetched or behind, up to ten attention chats, and next — the command that would improve the answer; when next is set and nothing was found, run it (or ask the owner) before concluding the message does not exist. Returns { items, page, limit, hasMore, corrections, completeness, wordsReady, stemsReady, query, coverage, server? }."
+  "Use discover=true for partial lexical evidence and eligible replies to natural questions in the local archive, without model downloads; inspect each item's discovery.missing_terms and its context before answering. Explicit syntax stays strict, and ranking is not answer confidence. Search the local store, and the messenger's server where it can search, using the Lucene 9.12.3 profile, default AND, with strict Boolean matching. Legacy discovery is explicit with language=legacy. chat: narrows to one chat; has:voice, has:file and NOT has:attachment to voice messages, files or text alone. `saved` runs a saved search (searches_list) or an earlier run (searches_history). With sync_first, first fetch new messages within max_chats (5), sync_time (30s), max_messages (500), under messages.sync-first permission. thread=true puts each hit's bounded parent/reply graph in its context; thread_hops, thread_messages, thread_bytes, thread_within set its bounds. Guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md. Text words and quoted phrases match every form of their words (Snowball stems, exact forms ranked first); exact:word, or exact=true, matches the exact form only. A bare word also matches voice transcripts, file names and file text; each item's matched_in says where (text, transcript, filename, file) and its excerpt comes from there; items with matched_in picture follow the text hits on the first page: pictures found by what they show, where the profile turned picture search on; text:, transcript:, content: (file text), filename: narrow to one place. Without discover=true, where the messenger's server can search, it is also asked by default (backend=both; archive for the local store only) within server_time (5s), under messages.server-search: its hits are saved and re-checked by the same strict query, and each item's found_in says archive, server or both. Returns { items, page, next?, missing?, meta }: items are message hits; meta.accounts the accounts read. A missing entry with field coverage means the archive lacks messages: when nothing was found, run its next step (messages sync) or ask the owner before concluding the message does not exist."
 
 export const backendInputs = {
   backend: v.optional(
@@ -35,28 +35,19 @@ export const backendArgs = (args: { backend?: "archive" | "server" | "both"; ser
   ...(args.server_time === undefined ? {} : { server: { timeMs: parseDuration(args.server_time, "server_time") } }),
 })
 
-export const offset = v.optional(
+export const page = v.optional(
   v.pipe(
     v.number(),
     v.integer(),
-    v.minValue(0),
+    v.minValue(1),
     v.maxValue(MAX_SEARCH_OFFSET),
-    v.description("skip this many hits: the nextOffset of the page before"),
+    v.description("which page, from 1: the page a page.next step names"),
   ),
 )
 
 export const messagesSearchInput = (messenger: Messenger) =>
   v.object({
-    offset,
-    detail: v.optional(
-      v.pipe(
-        v.picklist(DETAILS),
-        v.description(
-          "brief: reference, title, time, sender and excerpt only; full: the whole text and every provider field; " +
-            "unset: people, thread, labels and an excerpt",
-        ),
-      ),
-    ),
+    page,
     // Typed as present so the answer code reads them; offered only where the server can search.
     ...((messenger.serverSearch ? backendInputs : {}) as typeof backendInputs),
     ...threadInputs,
@@ -73,18 +64,11 @@ export const messagesSearchInput = (messenger: Messenger) =>
     ),
     language: v.optional(v.picklist(["lucene", "legacy"])),
     timezone: v.optional(v.string()),
-    chat: v.optional(chatOf(messenger)),
     source: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.description("a messenger held on this machine; personal, bots or all — as in: in text"),
-      ),
-    ),
-    type: v.optional(
-      v.pipe(
-        v.picklist(["text", "voice", "file"]),
-        v.description("only messages of this type: text alone, a voice message, or a file"),
       ),
     ),
     newest: v.optional(v.pipe(v.boolean(), v.description("newest first instead of best first"))),
@@ -105,22 +89,12 @@ export const messagesSearchInput = (messenger: Messenger) =>
   })
 
 /** `search_mail`: the mailboxes in the local store; no server, no fetching, no saved searches. */
-export const mailSearchInput = (messenger: Messenger) =>
+export const mailSearchInput = () =>
   v.object({
-    offset,
-    detail: v.optional(
-      v.pipe(
-        v.picklist(DETAILS),
-        v.description(
-          "brief: reference, title, time, sender and excerpt only; full: the whole text and every provider field; " +
-            "unset: people, thread, labels and an excerpt",
-        ),
-      ),
-    ),
+    page,
     text: v.optional(v.pipe(v.string(), v.description("the query, in the strict Lucene language"))),
     ast: v.optional(v.unknown()),
     timezone: v.optional(v.string()),
-    chat: v.optional(chatOf(messenger)),
     source: v.optional(
       v.pipe(
         v.string(),
@@ -158,7 +132,7 @@ export type MessagesSearchArgs = v.InferOutput<ReturnType<typeof messagesSearchI
 
 const typedOf = (args: Record<string, unknown>): SearchParams =>
   Object.fromEntries(
-    ["text", "discover", "language", "timezone", "chat", "source", "newest", "exact", "context", "limit", "by"].flatMap(
+    ["text", "discover", "language", "timezone", "source", "newest", "exact", "context", "limit", "by"].flatMap(
       (key) => (args[key] === undefined ? [] : [[key, args[key]]]),
     ),
   )
@@ -174,10 +148,10 @@ const resolveSaved = async (
   return searches.resolve(args.saved, typedOf(args))
 }
 
-const TYPES = { text: "NOT has:attachment", voice: "has:voice", file: "has:file" } as const
-
-const withType = (text: string | undefined, type: keyof typeof TYPES | undefined) =>
-  type === undefined ? text : text === undefined ? TYPES[type] : `(${text}) AND ${TYPES[type]}`
+const offsetArg = (page: number | undefined, limit: number) => {
+  const offset = offsetOf(page, limit)
+  return offset === undefined ? {} : { offset }
+}
 
 export const answerMessagesSearch = async (
   messages: Pick<MessagesService, "search">,
@@ -186,10 +160,19 @@ export const answerMessagesSearch = async (
   searches?: Pick<SearchesService, "resolve">,
   kind: SearchKind = "messages",
 ) => {
-  if (given.type !== undefined && given.ast !== undefined)
-    throw new CliError("validation_error", "type narrows text; an AST names its own fields")
-  const text = withType(given.text, given.type)
-  const args = { ...given, ...(text === undefined ? {} : { text }) }
+  const args = given
+  const again = {
+    ...(args.text === undefined ? {} : { query: args.text }),
+    ...(args.saved === undefined ? {} : { saved: args.saved }),
+    ...(args.source === undefined ? {} : { source: args.source }),
+    ...(args.discover ? { discover: true } : {}),
+    ...(args.language === undefined ? {} : { language: args.language }),
+    ...(args.exact ? { exact: true } : {}),
+    ...(args.newest ? { newest: true } : {}),
+    ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
+  }
+  const answer = (found: SearchFound, limit: number) =>
+    messagesAnswer(`search ${kind}`, found, { limit, page: args.page ?? 1, again }, args.text)
   const resolved = await resolveSaved(searches, args)
   if (resolved) {
     const { params, pattern } = resolved
@@ -206,7 +189,7 @@ export const answerMessagesSearch = async (
       signal: defaults.signal,
       ...(params.timezone === undefined ? {} : { timezone: params.timezone }),
       limit: size,
-      ...(args.offset === undefined ? {} : { offset: args.offset }),
+      ...offsetArg(args.page, size),
       newest: params.newest === true,
       ...(params.exact ? { exact: true } : {}),
       context: params.context ?? 0,
@@ -214,7 +197,7 @@ export const answerMessagesSearch = async (
       ...(params.source === undefined ? {} : { source: params.source }),
       saved: resolved.id,
     })
-    return { ...found, page: 1, limit: size }
+    return answer(found, size)
   }
   if (args.text === undefined && args.ast === undefined)
     throw new CliError("validation_error", "give search text, a versioned AST, or saved")
@@ -231,14 +214,13 @@ export const answerMessagesSearch = async (
     signal: defaults.signal,
     ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
     limit: size,
-    ...(args.offset === undefined ? {} : { offset: args.offset }),
+    ...offsetArg(args.page, size),
     newest: args.newest === true,
     ...(args.exact ? { exact: true } : {}),
     context: args.context ?? 0,
-    ...(args.chat === undefined ? {} : { chat: args.chat }),
     ...(args.source === undefined ? {} : { source: args.source }),
   })
-  return { ...found, page: 1, limit: size }
+  return answer(found, size)
 }
 
 export const MESSAGES_STATS_DESCRIPTION =

@@ -164,7 +164,7 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
 const json = (result: { stdout: string }) => JSON.parse(result.stdout || "null")
 const hits = async (call: (...argv: string[]) => Promise<{ stdout: string }>, query: string) =>
   json(await call("search", "messages", query, "--language", "lucene", "--json")).items.map(
-    ({ id }: { id: string }) => id,
+    ({ ref }: { ref: string }) => ref.split("/").at(-1),
   )
 
 describe("attachments extract", () => {
