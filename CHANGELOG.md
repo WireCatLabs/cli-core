@@ -20,7 +20,6 @@ shape of this file.
   `details.operation_id`, `details.send_id` and `retryable: false`, so the send is not repeated.
 - **A missing model is `reason: "model.not-downloaded"`** with `details.model` (text, picture and speech models), so
   a caller branches on the reason, not on the message text.
-||||||| parent of bbd94111 (feat!: account, runtime and diagnostic commands answer in the envelope)
 - **Account, runtime and diagnostic commands answer in the envelope**, snake_case, CLI and MCP alike:
   `account list|show|update`, `account sessions list|end` (new `account_session` entity; `account show` and MCP
   `account_show` answer the `account` entity with `provider`), `flood clear`, `recipients *`, `sends list` (now
