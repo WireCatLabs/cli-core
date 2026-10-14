@@ -1,7 +1,7 @@
 # Provider integration
 
 The SDK exposes separate capabilities rather than a mandatory provider base class. Existing
-`MeetingSource` ingestion and `MeetingStore` persistence remain unchanged. Zoom supplies the first
+`MeetingSource` defines ingestion; `MeetingStore` defines persistence and account ownership metadata. Zoom supplies the first
 production adapter; the providers below are invented fixtures, not available Meet or Teams clients.
 
 ## Choose capabilities
@@ -16,6 +16,8 @@ production adapter; the providers below are invented fixtures, not available Mee
 | `RecordingArchiveScheduler` | schedule validation, preview and explicit installation | OS timers or another host scheduler |
 | `MeetingContextPorts` | validates notes, tags, memories and explicit event/person changes; previews by default | shared knowledge records, account ownership and durable evidence checks |
 | `MeetingContextStore` | typed event and participant link receipts | atomic scoped ownership, compare-and-set and identity association audit |
+| `MeetingReadCapabilities` / `MeetingContextReadCapabilities` | bounded metadata, transcript pages and atomic cue-centered snapshots | account ownership, read-byte preflight and revision-aware reads |
+| `MeetingParticipantSearchStore` | shared CLI/MCP participant discovery and continuation steps | account/query-bound candidate pages, Unicode literal matching and read budgets |
 | `MeetingSearchStore` | bounded hit pages with opaque continuation and coverage | seek pagination, read budgets and account/query-bound cursors |
 | `MeetingSearchIndexStore` | explicit bounded maintenance receipt | scoped pending rows and transactional byte-bounded indexing batches |
 | `MeetingTranscriptReceiptStore` | exact append outcomes | counts and writes in one transaction, including historical replay |
@@ -25,6 +27,35 @@ No capability requires the others. A read-only assistant can expose `get` withou
 writes. A recording service can implement a catalog and transfers without managing meetings.
 The SDK contains no filesystem, database, vendor client, credentials or automatic provider setup.
 cli-core implements the durable meeting store and its evidence/context/semantic services.
+
+## Stored meeting reads
+
+Import the read interfaces from `@wirecat/cli-core/meetings`. A provider using the shared SQLite
+store already receives these capabilities; it should not implement another participant index or
+transcript-window formatter. Existing store-entry imports of read contracts remain aliases.
+A custom `MeetingStore` implements `account(id)` as well as meeting reads: return the provider
+and account label for that stored account, or `null` when absent. List items use this metadata
+for shared references and cannot be rendered with a guessed owner. Labels do not authenticate users.
+
+Mount `addMeetingCommands` with an already authorized account ID. The host owns connection
+lifetime, deadlines, output limits and run metadata. `meetings list [query...]` validates metadata
+filters through the shared query registry and returns shared meeting entities in the list envelope.
+The generic MCP adapter accepts equivalent queries; a provider host fixes/removes `account_id`
+from caller arguments before dispatch, as Zoom does. Never expose another account through a cursor.
+
+The optional `participantCandidates(query, options)` port reads only observed IDs, names and emails;
+it never requires session history or transcript text. Enforce `limit`, `scanLimit`, `maxReadBytes`
+and cancellation, and check stored text sizes before loading them. Cursors bind the selected
+account and normalized literal query. An empty scan page may still have continuation; edits and
+deletions between calls do not form an immutable archive snapshot.
+
+The raw store packet reports `has_more` / `next_cursor`; `meetingPeople` and the shared CLI/MCP
+adapters adapt it to `page.limit`, `page.has_more`, optional `page.cursor` and `page.next`.
+Preserve that whole answer in JSONL so an empty page does not erase its cursor or coverage.
+Page-local identity ambiguity is evidence to review, never speaker attribution or a person link.
+A capable store requires an account; older stores retain default legacy reads and refuse explicit
+paging options. Use the atomic cue-context port and shared passage formatter for cited context,
+rather than reconstructing transcript windows in each provider.
 
 ## Remote management
 
@@ -139,7 +170,9 @@ word alignment or speaker recognition. Local sources are separate from provider 
 retain model/media provenance. A failed or cancelled recognition never appends partial rows. The
 existing target is appended atomically; no occurrence is created from guessed meeting metadata.
 
-`indexSearch` maintains a bounded pending batch explicitly; read-only hit paging never drains queues.
+`indexSearch` maintains a bounded pending batch explicitly; raw `searchHits` paging never drains queues.
+The higher-level `searchMeetingHits` service refreshes pending batches before reading. Hosts that
+require reads without index writes should bind the raw port and state that coverage can be pending.
 Hit continuation bounds rows inside one meeting. Its coverage reports pending indexing and unknown
 archive completeness. It is a live view, not a snapshot across modifications between calls. Exact
 append receipts do not imply bounded legacy meeting-history hydration in a producer adapter.
