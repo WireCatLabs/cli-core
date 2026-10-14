@@ -1,7 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { renderPage, window, withPaging } from "../paging.js"
+import { itemOf, listOf, renderAnswer } from "../envelope.js"
+import { window, withPaging } from "../paging.js"
+import { lines, pageOf, snakeKeys, topicAnswer } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { capability } from "./port.js"
 
@@ -13,9 +15,23 @@ const listed = (messenger: Messenger) =>
       throw new CliError("validation_error", "`topics` asks the messenger; not with --offline")
     }
     const wanted = { ...window(context.settings), ...(query ? { search: query } : {}) }
-    renderPage(
+    const found = await context.withMessenger((adapter) =>
+      capability(adapter, "topics", "list forum topics")(chat, wanted),
+    )
+    const command = query === undefined ? "topics list" : "search topics"
+    renderAnswer(
+      this,
       context,
-      await context.withMessenger((adapter) => capability(adapter, "topics", "list forum topics")(chat, wanted)),
+      listOf(command, {
+        items: found.items.map(topicAnswer),
+        ...pageOf(context.settings, found),
+        args: { chat, ...(query === undefined ? {} : { text: query }) },
+      }),
+      lines(({ id, title, closed, pinned, unread_count }) =>
+        [id, title, closed ? "closed" : "", pinned ? "pinned" : "", unread_count ? `${unread_count} unread` : ""].join(
+          "  ",
+        ),
+      ),
     )
   }
 
@@ -48,7 +64,8 @@ export const topicsCommand = (messenger: Messenger): Command => {
       .argument("<topic>", "the topic id, from `topics list`")
       .action(async function (this: Command, chat: string, topic: string) {
         const context = messengerContext(this, messenger)
-        context.renderer.result(await context.withServices((services) => services.topics.show(chat, topic)))
+        const shown = await context.withServices((services) => services.topics.show(chat, topic))
+        renderAnswer(this, context, itemOf(topicAnswer(shown)))
       })
 
   annotate(topics.command("enable"), { mutates: true })
@@ -57,11 +74,10 @@ export const topicsCommand = (messenger: Messenger): Command => {
     .option("--upgrade", "upgrade a basic group to a supergroup first; its chat id changes")
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withServices((services) =>
-          services.topics.enable(chat, { upgrade: this.opts<{ upgrade?: boolean }>().upgrade === true }),
-        ),
+      const done = await context.withServices((services) =>
+        services.topics.enable(chat, { upgrade: this.opts<{ upgrade?: boolean }>().upgrade === true }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
   annotate(topics.command("create"), { mutates: true })
     .description("create a named topic in an existing forum; never enable or upgrade a group implicitly")
@@ -70,9 +86,10 @@ export const topicsCommand = (messenger: Messenger): Command => {
     .option("--send-id <id>", "identify this creation attempt; an already sent or unknown id is refused")
     .action(async function (this: Command, chat: string, title: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withServices((services) => services.topics.create(chat, title, this.opts<{ sendId?: string }>())),
+      const created = await context.withServices((services) =>
+        services.topics.create(chat, title, this.opts<{ sendId?: string }>()),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(created)))
     })
   annotate(topics.command("edit"), { mutates: true })
     .description("rename, close or reopen a forum topic")
@@ -93,16 +110,15 @@ export const topicsCommand = (messenger: Messenger): Command => {
       const closes = onOff("--closed", closed)
       const pins = onOff("--pinned", pinned)
       const hides = onOff("--hidden", hidden)
-      context.renderer.result(
-        await context.withServices((services) =>
-          services.topics.edit(chat, topic, {
-            ...(title === undefined ? {} : { title }),
-            ...(closes === undefined ? {} : { closed: closes }),
-            ...(pins === undefined ? {} : { pinned: pins }),
-            ...(hides === undefined ? {} : { hidden: hides }),
-          }),
-        ),
+      const done = await context.withServices((services) =>
+        services.topics.edit(chat, topic, {
+          ...(title === undefined ? {} : { title }),
+          ...(closes === undefined ? {} : { closed: closes }),
+          ...(pins === undefined ? {} : { pinned: pins }),
+          ...(hides === undefined ? {} : { hidden: hides }),
+        }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
   annotate(topics.command("delete"), { mutates: true })
     .description("delete a forum topic and every message in it, for everyone; it cannot be undone")
@@ -111,7 +127,11 @@ export const topicsCommand = (messenger: Messenger): Command => {
     .option("--allow-dangerous", "go ahead without the question an ask level puts before a deletion")
     .action(async function (this: Command, chat: string, topic: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.topics.delete(chat, topic)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.topics.delete(chat, topic)))),
+      )
     })
   annotate(topics.command("order"), { mutates: true })
     .description("put the pinned topics in this order; it pins and unpins nothing")
@@ -119,7 +139,11 @@ export const topicsCommand = (messenger: Messenger): Command => {
     .argument("<topic...>", "the pinned topics' ids, first to last")
     .action(async function (this: Command, chat: string, order: string[]) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.topics.order(chat, order)))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.topics.order(chat, order)))),
+      )
     })
   return topics
 }

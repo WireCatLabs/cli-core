@@ -20,7 +20,7 @@ import type {
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { AccountStore } from "../store/account-store.js"
-import type { MemberCount, RosterChange, TrackedChat } from "../store/store.js"
+import type { AccountKey, MemberCount, RosterChange, TrackedChat } from "../store/store.js"
 import { type ChatStats, chatStats, type StatsPeriod } from "./chat-stats.js"
 import { accountStore, accountStoreIfOpen, fromStore, nothingStored, type ServiceDeps } from "./deps.js"
 import { type MemberEvent, memberEvents } from "./member-history.js"
@@ -55,32 +55,7 @@ export interface FetchedMembers extends RosterChange {
 /** How many stored messages one read of the store takes while `stats` walks the period. */
 const STATS_PAGE = 1000
 
-/** @deprecated A filtered list now searches every chat; kept because `./services` exports it. */
-export const CHAT_SCAN = 200
-
-/** Checked by the caller, in its own words (`checkedFilter`). */
-export interface ChatFilter {
-  search?: string
-  kind?: string
-  unread?: boolean
-}
-
 export const CHAT_KINDS: ChatKind[] = ["dialog", "group", "channel", "saved"]
-
-/** Refuses a filter that would match nothing useful, before anything is asked. */
-export const checkedFilter = ({ search, kind, unread }: ChatFilter): ChatFilter => {
-  if (search !== undefined && search.trim().length < 3) {
-    throw new CliError("validation_error", `--search takes at least 3 characters, got "${search}"`)
-  }
-  if (kind !== undefined && !CHAT_KINDS.includes(kind as ChatKind)) {
-    throw new CliError("validation_error", `--kind is one of ${CHAT_KINDS.join(", ")} — not "${kind}"`)
-  }
-  return {
-    ...(search === undefined ? {} : { search: search.trim() }),
-    ...(kind ? { kind } : {}),
-    ...(unread ? { unread } : {}),
-  }
-}
 
 export interface PageWindow {
   limit?: number
@@ -96,18 +71,17 @@ export interface MarkedRead {
 }
 
 export interface ChatsService {
-  /**
-   * Newest first. A filtered list searches every chat — Telegram's unread can sit anywhere in a list
-   * sorted by the last message — and `partial` says the messenger could not list them all.
-   */
-  list(filter: ChatFilter, window: PageWindow): Promise<Page<Chat> & { partial: boolean }>
+  /** Newest first. Neither the messenger nor the store filters the list, so it takes no filter. */
+  list(window: PageWindow): Promise<Page<Chat>>
+  /** The account these chats belong to, which names each one in a `chat:` reference. */
+  account(): Promise<AccountKey>
   show(chat: string): Promise<ChatCard>
   members(
     chat: string,
     window: PageWindow,
   ): Promise<Page<GroupMember> & { chatId: Id; participantsCount?: number | null }>
-  /** `since` in ms, parsed by the caller; `only` keeps the events named, comma-separated as typed. */
-  events(chat: string, options: { since?: number; only?: string }): Promise<ChatEvents>
+  /** `since` in ms, parsed by the caller. */
+  events(chat: string, options: { since?: number }): Promise<ChatEvents>
   inspect(link: string): Promise<LinkTarget>
   /**
    * Counts over the stored messages since `since` (ms; `EVENTS_DAYS` ago when unset). Joins and leaves
@@ -167,21 +141,12 @@ const deepChecks = async (
 }
 
 export const chatsService = (deps: ServiceDeps): ChatsService => ({
-  list: async (filter, window) => {
-    const filtering = filter.search !== undefined || filter.kind !== undefined || filter.unread === true
-    if (!filtering) {
-      const page = fromStore(deps)
-        ? await (await accountStore(deps)).chats(window)
-        : await capability(await deps.connection(), "chats", "list chats")(window)
-      return { ...page, partial: false }
-    }
-    const scanned = fromStore(deps)
-      ? await (await accountStore(deps)).chats({ offset: 0 })
-      : await capability(await deps.connection(), "chats", "list chats")({ offset: 0 })
-    const found = scanned.items.filter(matches(filter))
-    const end = window.limit === undefined ? found.length : window.offset + window.limit
-    return { items: found.slice(window.offset, end), hasMore: found.length > end, partial: scanned.hasMore }
-  },
+  list: async (window) =>
+    fromStore(deps)
+      ? (await accountStore(deps)).chats(window)
+      : capability(await deps.connection(), "chats", "list chats")(window),
+
+  account: () => deps.account(),
 
   show: async (chat) => {
     if (fromStore(deps)) {
@@ -218,20 +183,12 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     return { chatId, items: everyone.slice(window.offset, end), hasMore: everyone.length > end }
   },
 
-  events: async (chat, { since, only }) => {
+  events: async (chat, { since }) => {
     if (deps.offline) {
       throw new CliError("validation_error", "`chats events` reads the chat's history; with `--offline` there is none")
     }
     const from = since ?? Date.now() - EVENTS_DAYS * 86_400_000
-    const found = await capability(
-      await deps.connection(),
-      "chatEvents",
-      "read who joined or left",
-    )(chat, {
-      since: from,
-    })
-    const wanted = only === undefined ? undefined : new Set(only.split(",").map((name) => name.trim()))
-    return wanted ? { ...found, events: found.events.filter((one) => wanted.has(one.event)) } : found
+    return capability(await deps.connection(), "chatEvents", "read who joined or left")(chat, { since: from })
   },
 
   inspect: async (link) => {
@@ -455,12 +412,4 @@ const readMembers = async (
 const storedMembers = async (store: AccountStore, chatId: Id): Promise<Member[] | null> => {
   const members = (await store.members(chatId)).filter((one) => one.id !== store.account.account)
   return members.length === 0 ? null : members
-}
-
-const matches = ({ search, kind, unread }: ChatFilter) => {
-  const needle = search?.toLocaleLowerCase()
-  return (chat: Chat) =>
-    (needle === undefined || (chat.title ?? "").toLocaleLowerCase().includes(needle)) &&
-    (kind === undefined || chat.kind === kind) &&
-    (!unread || (chat.unreadCount ?? 0) > 0)
 }

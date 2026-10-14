@@ -1,4 +1,6 @@
 import * as v from "valibot"
+import { itemOf } from "../../cli/envelope.js"
+import { snakeKeys } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
@@ -14,9 +16,13 @@ export const moderationTools = (messenger: Messenger): Record<string, AnyTool> =
     description: "The rules `chats_moderate` judges a group by; the defaults, marked not saved, if it has none.",
     input: v.object({ chat: chatOf(messenger) }),
     annotations: READ,
-    online: (adapter, args, { guard, settings, env }) =>
-      servicesFor(onlineDeps(messenger, adapter, guard, { profile: settings.profile, env })).moderation.rules(
-        args.chat,
+    online: async (adapter, args, { guard, settings, env }) =>
+      itemOf(
+        snakeKeys(
+          await servicesFor(onlineDeps(messenger, adapter, guard, { profile: settings.profile, env })).moderation.rules(
+            args.chat,
+          ),
+        ),
       ),
   }),
   chats_moderate: tool({
@@ -31,14 +37,17 @@ export const moderationTools = (messenger: Messenger): Record<string, AnyTool> =
     }),
     annotations: WRITE,
     permission: "groups",
-    online: (adapter, args, { guard, settings, env }) =>
-      servicesFor(onlineDeps(messenger, adapter, guard, { profile: settings.profile, env })).moderation.moderate(
-        args.chat,
-        {
-          ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
-          dryRun: args.dry_run === true,
-          allowDangerous: false,
-        },
+    online: async (adapter, args, { guard, settings, env }) =>
+      itemOf(
+        snakeKeys(
+          await servicesFor(
+            onlineDeps(messenger, adapter, guard, { profile: settings.profile, env }),
+          ).moderation.moderate(args.chat, {
+            ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
+            dryRun: args.dry_run === true,
+            allowDangerous: false,
+          }),
+        ),
       ),
   }),
 })

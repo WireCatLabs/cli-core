@@ -1,10 +1,14 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { registriesCover } from "../../botcheck/registries.js"
-import { AUDIT_BUDGET, AUDIT_MIN_SCORE, AUDIT_PAGE } from "../../services/members-audit.js"
-import { momentOf } from "../../services/moment.js"
-import { listed, positiveCount, renderPage, window, withPaging } from "../paging.js"
+import { AUDIT_BUDGET, AUDIT_PAGE } from "../../services/members-audit.js"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { withQuery } from "../list-query.js"
+import { positiveCount, withPaging } from "../paging.js"
 import { casKey } from "../registry-keys.js"
+import { lines, snakeKeys } from "./chat-answers.js"
+import { membersAudit, membersHistory, membersList } from "./chat-lists.js"
+import { AUDIT_QUERY, HISTORY_QUERY } from "./chat-queries.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `chats members …`; a subcommand that changes membership belongs here too. */
@@ -12,123 +16,119 @@ export const membersCommand = (messenger: Messenger): Command => {
   const members = new Command("members").description("who is in a group")
 
   members.addCommand(
-    withPaging(
-      new Command("list")
-        .description("everyone in a group, a page at a time, with their role and when they were last seen")
-        .argument("<chat>", messenger.chatArgument),
+    annotate(
+      withPaging(
+        new Command("list")
+          .description("everyone in a group, a page at a time, with their role and when they were last seen")
+          .argument("<chat>", messenger.chatArgument),
+      ),
+      { output: { entity: "member" } },
     ).action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      const wanted = window(context.settings)
-      const page = await context.withServices((services) => services.chats.members(chat, wanted))
-      renderPage(context, page)
+      const body = await context.withServices((services) => membersList(services, chat, context.settings))
+      renderAnswer(
+        this,
+        context,
+        body,
+        lines(({ id, name, username, role }) =>
+          [id, name ?? "", username ? `@${username}` : "", role ?? ""].join("  "),
+        ),
+      )
     }),
   )
 
   members.addCommand(
-    new Command("audit")
-      .description(
-        "members that look like bots, each with its reasons — read from the member list and the local store; " +
-          "never one request per person, and it removes nobody",
+    withQuery(
+      annotate(
+        new Command("audit")
+          .description(
+            "members that look like bots, each with its reasons — read from the member list and the local store; " +
+              "never one request per person, and it removes nobody",
+          )
+          .argument("<chat>", messenger.chatArgument)
+          .option(
+            "--budget <pages>",
+            `at most this many pages of ${AUDIT_PAGE} members, a pause between them (default: ${AUDIT_BUDGET})`,
+            positiveCount("--budget"),
+          )
+          .option(
+            "--deep <n>",
+            registriesCover(messenger.provider)
+              ? "also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which " +
+                  "are sent their ids — one person a second"
+              : "also check the top n in full — profile, photos and everything they wrote — one person a second; the " +
+                  "public ban lists cover Telegram only, so nothing is sent",
+            positiveCount("--deep"),
+          ),
+        { output: { entity: "member" } },
+      ),
+      AUDIT_QUERY,
+    ).action(async function (this: Command, chat: string, words: string[]) {
+      const context = messengerContext(this, messenger)
+      const { budget, deep } = this.opts<{ budget?: number; deep?: number }>()
+      const key = deep === undefined ? undefined : casKey(messenger.app, context.env)
+      const { audit, body } = await context.withServices((services) =>
+        membersAudit(services, chat, words, {
+          ...(budget === undefined ? {} : { budget }),
+          ...(deep === undefined ? {} : { deep }),
+          ...(key ? { registry: { casKey: key } } : {}),
+        }),
       )
-      .argument("<chat>", messenger.chatArgument)
-      .option(
-        "--budget <pages>",
-        `at most this many pages of ${AUDIT_PAGE} members, a pause between them (default: ${AUDIT_BUDGET})`,
-        positiveCount("--budget"),
-      )
-      .option(
-        "--min-score <n>",
-        `only members scoring at least this; 1 lists everyone with a reason (default: ${AUDIT_MIN_SCORE})`,
-        positiveCount("--min-score"),
-      )
-      .option(
-        "--deep <n>",
-        registriesCover(messenger.provider)
-          ? "also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which " +
-              "are sent their ids — one person a second"
-          : "also check the top n in full — profile, photos and everything they wrote — one person a second; the " +
-              "public ban lists cover Telegram only, so nothing is sent",
-        positiveCount("--deep"),
-      )
-      .action(async function (this: Command, chat: string) {
-        const context = messengerContext(this, messenger)
-        const { budget, minScore, deep } = this.opts<{ budget?: number; minScore?: number; deep?: number }>()
-        const key = deep === undefined ? undefined : casKey(messenger.app, context.env)
-        const audit = await context.withServices((services) =>
-          services.chats.audit(chat, {
-            ...(budget === undefined ? {} : { budget }),
-            ...(minScore === undefined ? {} : { minScore }),
-            ...(deep === undefined ? {} : { deep }),
-            ...(key ? { registry: { casKey: key } } : {}),
-          }),
-        )
-        if (audit.more) {
-          const of = audit.participantsCount === null ? "" : ` of ${audit.participantsCount}`
-          context.renderer.note(`${audit.read}${of} members read; a higher --budget reads more`)
-        }
-        if (audit.fetch)
-          context.renderer.note(`"never wrote" counts only stored messages — \`${audit.fetch}\` fetches the rest`)
-        if (audit.unknown.length > 0)
-          context.renderer.note(`not judged, nothing to judge by: ${audit.unknown.join(", ")}`)
-        if (context.format !== "pretty") {
-          context.renderer.result(audit)
-          return
-        }
-        context.renderer.stream(
-          audit.items.map(({ id, name, username, score, reasons, check }) => ({
+      if (audit.more) {
+        const of = audit.participantsCount === null ? "" : ` of ${audit.participantsCount}`
+        context.renderer.note(`${audit.read}${of} members read; a higher --budget reads more`)
+      }
+      renderAnswer(
+        this,
+        context,
+        body,
+        lines(({ score, id, name, username, reasons, check }) =>
+          [
             score,
             id,
-            name: name ?? "",
-            username: username ?? "",
-            reasons: reasons.join(", "),
-            ...(check
-              ? {
-                  checked: check.score,
-                  listed: check.registries
-                    .filter(({ answer }) => answer === "listed")
-                    .map(({ name }) => name)
-                    .join(", "),
-                }
-              : {}),
-          })),
-        )
-      }),
+            name ?? "",
+            username ? `@${username}` : "",
+            (reasons ?? []).join(", "),
+            check ? `checked ${String(check.score)}` : "",
+          ].join("  "),
+        ),
+      )
+    }),
   )
 
   members.addCommand(
-    new Command("history")
-      .description(
-        "who joined, who left and whose profile changed, oldest first — what chats members fetch recorded in the " +
-          "local store; never asks the messenger",
-      )
-      .argument("<chat>", messenger.chatArgument)
-      .option("--since-time <time>", "ISO 8601, or 2h / 1d ago; everything recorded if not given")
-      .action(async function (this: Command, chat: string) {
-        const context = messengerContext(this, messenger)
-        const { sinceTime } = this.opts<{ sinceTime?: string }>()
-        const found = await context.withServices((services) =>
-          services.chats.memberHistory(
-            chat,
-            sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") },
-          ),
-        )
-        if (found.events.length === 0) {
-          context.renderer.note(
-            `nothing recorded — \`${messenger.app.command} chats members fetch ${found.chatId} --track\` starts it`,
+    withQuery(
+      annotate(
+        new Command("history")
+          .description(
+            "who joined, who left and whose profile changed, oldest first — what chats members fetch recorded in the " +
+              "local store; never asks the messenger",
           )
-        }
-        if (context.format === "jsonl") return context.renderer.stream(found.events)
-        if (context.format !== "pretty")
-          return context.renderer.result({ ...listed(found.events), hasMore: false, chatId: found.chatId })
-        context.renderer.stream(
-          found.events.map(({ at, event, id, name, username, before }) => ({
-            time: at,
-            event,
-            person: [name, username ? `@${username}` : null, `(${id})`].filter(Boolean).join(" "),
-            was: before ? [before.name, before.username ? `@${before.username}` : null].filter(Boolean).join(" ") : "",
-          })),
-        )
-      }),
+          .argument("<chat>", messenger.chatArgument),
+        { output: { entity: "chat_event" } },
+      ),
+      HISTORY_QUERY,
+    ).action(async function (this: Command, chat: string, words: string[]) {
+      const context = messengerContext(this, messenger)
+      const body = await context.withServices((services) => membersHistory(services, chat, words))
+      renderAnswer(
+        this,
+        context,
+        body,
+        lines(({ time, type, people, before }) =>
+          [
+            time,
+            type,
+            people
+              .map((one) =>
+                [one.name, one.username ? `@${one.username}` : null, `(${one.id ?? "?"})`].filter(Boolean).join(" "),
+              )
+              .join(", "),
+            before ? [before.name, before.username ? `@${before.username}` : null].filter(Boolean).join(" ") : "",
+          ].join("  "),
+        ),
+      )
+    }),
   )
 
   const fetch = new Command("fetch")
@@ -164,13 +164,13 @@ export const membersCommand = (messenger: Messenger): Command => {
               : "the chat's own member count is unknown or larger than the list — nobody is recorded as gone",
           )
         }
-        if (context.format !== "pretty") {
-          context.renderer.result(fetched)
-          return
-        }
-        context.streams.data(
-          `${fetched.read} members read; ${fetched.joined.length} new, ${fetched.gone.length} gone, ` +
-            `${fetched.changed.length} changed their profile${fetched.tracked ? "; tracked daily" : ""}`,
+        renderAnswer(
+          this,
+          context,
+          itemOf(snakeKeys(fetched)),
+          () =>
+            `${fetched.read} members read; ${fetched.joined.length} new, ${fetched.gone.length} gone, ` +
+            `${fetched.changed.length} changed their profile${fetched.tracked ? "; tracked daily" : ""}\n`,
         )
       }),
   )
@@ -186,9 +186,10 @@ export const membersCommand = (messenger: Messenger): Command => {
     add.action(async function (this: Command, chat: string, people: string[]) {
       const context = messengerContext(this, messenger)
       const history = this.opts<{ history?: boolean }>().history === true
-      context.renderer.result(
-        await context.withServices((services) => services.admin.addMembers(chat, people, history ? { history } : {})),
+      const added = await context.withServices((services) =>
+        services.admin.addMembers(chat, people, history ? { history } : {}),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(added)))
     }),
   )
 
@@ -199,7 +200,8 @@ export const membersCommand = (messenger: Messenger): Command => {
       .argument("<person...>", "an id, or part of a name")
       .action(async function (this: Command, chat: string, people: string[]) {
         const context = messengerContext(this, messenger)
-        context.renderer.result(await context.withServices((services) => services.admin.removeMembers(chat, people)))
+        const removed = await context.withServices((services) => services.admin.removeMembers(chat, people))
+        renderAnswer(this, context, itemOf(snakeKeys(removed)))
       }),
   )
 

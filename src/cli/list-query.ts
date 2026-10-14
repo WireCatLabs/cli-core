@@ -1,12 +1,15 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import {
+  dateRange,
   defineQuery,
   fieldsHelp,
   fieldsNamed,
+  type Predicate,
   parseLucene,
   QUERY_LIMITS,
   type QueryAst,
   type QueryRegistry,
+  queryError,
   validateQuery,
 } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
@@ -21,12 +24,20 @@ export const LIST_QUERY_GUIDE = "https://github.com/WireCatLabs/cli-core/blob/ma
  * `commands --json`. The registry is checked here, so a field whose example does not run fails at startup.
  */
 export const withQuery = (command: Command, registry: QueryRegistry): Command => {
-  annotate(command, { query: defineQuery(registry), output: { entity: registry.entity } })
+  const query = defineQuery(registry)
+  annotate(command, { query, output: { entity: registry.entity } })
+  const shown = askable(query)
   // `-kind:channel` is a negated term, not an option; a mistyped option still fails, as a query word.
-  return command
+  command
     .allowUnknownOption()
-    .argument("[query...]", "field:value terms that narrow the list — the fields are below")
-    .addHelpText("after", `\n${fieldsHelp(registry, LIST_QUERY_GUIDE)}`)
+    .argument(
+      "[query...]",
+      shown.length > 0
+        ? "field:value terms that narrow the list — the fields are below"
+        : "field:value terms; this list filters by none yet",
+    )
+  if (shown.length > 0) command.addHelpText("after", `\n${fieldsHelp({ ...query, fields: shown }, LIST_QUERY_GUIDE)}`)
+  return command
 }
 
 /** `tasks list`, as a query error names the command. */
@@ -85,16 +96,75 @@ export const pagedList = <T>(
     page,
   })
 
+/** The fields a list can be narrowed by: a provider list only those its source answers. */
+const askable = (registry: QueryRegistry) =>
+  registry.backend === "native" ? registry.fields.filter((field) => field.native) : registry.fields
+
 /** An MCP list's `query` argument: the language the CLI list takes after its arguments. */
-export const queryArgument = (registry: QueryRegistry) =>
-  v.optional(
+export const queryArgument = (registry: QueryRegistry) => {
+  const fields = askable(registry)
+  return v.optional(
     v.pipe(
       v.string(),
       v.maxLength(QUERY_LIMITS.bytes),
       v.description(
-        `field:value terms that narrow the list (Lucene: AND OR NOT, [a TO b], > <); fields: ${registry.fields
-          .map((field) => field.name)
-          .join(", ")}; e.g. ${registry.fields[0]?.example ?? ""}`,
+        fields.length === 0
+          ? "field:value terms; this list filters by none yet, so any term is refused"
+          : `field:value terms that narrow the list (Lucene: AND OR NOT, [a TO b], > <); fields: ${fields
+              .map((field) => field.name)
+              .join(", ")}; e.g. ${fields[0]?.example ?? ""}`,
       ),
     ),
   )
+}
+
+/**
+ * The terms of a query a provider answers: field:value joined by AND, each field once. Anything else is a
+ * question the source cannot ask, so it is refused rather than answered from a part of the list.
+ */
+export const nativeTerms = (ast: QueryAst | undefined, command: string): Map<string, Predicate> => {
+  const terms = new Map<string, Predicate>()
+  if (!ast) return terms
+  const context = { command, guide: LIST_QUERY_GUIDE }
+  const add = (node: Predicate) => {
+    if (terms.has(node.field))
+      queryError("query.unsupported-placement", node.span, `${node.field} only once here`, context)
+    terms.set(node.field, node)
+  }
+  const { root } = ast
+  if (root.kind === "predicate") add(root)
+  else
+    for (const clause of root.clauses) {
+      if (clause.occur !== "must" || clause.node.kind !== "predicate")
+        queryError(
+          "query.unsupported-placement",
+          clause.node.span,
+          "this list takes only field:value terms joined by AND",
+          context,
+        )
+      add(clause.node)
+    }
+  return terms
+}
+
+/** A `time` term as epoch ms bounds: `time>=7d`, `time:[2026-10-01 TO 2026-10-07]`, `time:today`. */
+export const timeBounds = (term: Predicate | undefined, zone = "UTC"): { since?: number; until?: number } => {
+  if (!term) return {}
+  const upper = term.operator === "range" ? (term.upper ?? "*") : term.value
+  const range = dateRange(
+    term.value,
+    upper,
+    term.operator === "range" ? term.lower_inclusive !== false : true,
+    term.operator === "range" ? term.upper_inclusive !== false : true,
+    zone,
+    term.span,
+  )
+  return {
+    ...(range.lower === undefined ? {} : { since: range.lower }),
+    ...(range.upper === undefined ? {} : { until: range.upper }),
+  }
+}
+
+/** A text term as the plain words a provider searches by: `name:ana`, `name:"Ana K"`, `name:*ana*`. */
+export const searchText = (term: Predicate | undefined): string | undefined =>
+  term === undefined ? undefined : term.value.replace(/^\*+|\*+$/g, "")

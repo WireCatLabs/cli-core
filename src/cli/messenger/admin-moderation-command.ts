@@ -4,7 +4,9 @@ import { Command } from "commander"
 import { describe, MAX_ACTIONS } from "../../moderation/check.js"
 import { RULE_KEYS } from "../../moderation/rules.js"
 import { momentOf } from "../../services/moment.js"
+import { itemOf, renderAnswer } from "../envelope.js"
 import { answerOf } from "./ask.js"
+import { renderItem, snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `chats rules show|set|unset`: the rules live in a file of this profile, and only the chat's id is asked of the messenger. */
@@ -18,7 +20,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.moderation.rules(chat)))
+      renderItem(this, context, await context.withServices((services) => services.moderation.rules(chat)))
     })
   rules.addCommand(
     annotate(new Command("set"), { mutates: true, local: true })
@@ -28,7 +30,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
       .argument("<value>", "the new value; a list is comma-separated")
       .action(async function (this: Command, chat: string, key: string, value: string) {
         const context = messengerContext(this, messenger)
-        context.renderer.result(await context.withServices((services) => services.moderation.set(chat, key, value)))
+        renderItem(this, context, await context.withServices((services) => services.moderation.set(chat, key, value)))
       }),
   )
   rules.addCommand(
@@ -38,7 +40,7 @@ export const rulesCommand = (messenger: Messenger): Command => {
       .argument("<key>", `one of: ${RULE_KEYS.join(", ")}`)
       .action(async function (this: Command, chat: string, key: string) {
         const context = messengerContext(this, messenger)
-        context.renderer.result(await context.withServices((services) => services.moderation.unset(chat, key)))
+        renderItem(this, context, await context.withServices((services) => services.moderation.unset(chat, key)))
       }),
   )
   return rules
@@ -82,17 +84,15 @@ export const moderateCommand = (messenger: Messenger): Command =>
           },
         }),
       )
-      context.renderer.result(
-        context.format === "pretty"
-          ? rows.map((row) => ({
-              what: row.kind,
-              who: row.personName ?? row.personId,
-              rule: row.rule,
-              action: row.action,
-              outcome: row.outcome,
-              ...(row.reason ? { why: row.reason } : {}),
-            }))
-          : { chatId, rows },
+      renderAnswer(this, context, itemOf(snakeKeys({ chatId, rows })), () =>
+        rows
+          .map((row) =>
+            [row.kind, row.personName ?? row.personId, row.rule, row.action, row.outcome, row.reason ?? ""]
+              .join("  ")
+              .trimEnd(),
+          )
+          .map((line) => `${line}\n`)
+          .join(""),
       )
       for (const note of notes) context.renderer.note(note)
     })

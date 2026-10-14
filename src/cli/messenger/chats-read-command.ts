@@ -1,5 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 export const markReadCommand = (messenger: Messenger): Command =>
@@ -11,13 +13,19 @@ export const markReadCommand = (messenger: Messenger): Command =>
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
       const { until, topic } = this.opts<{ until?: string; topic?: string }>()
-      context.renderer.result(
-        await context.withServices((services) =>
-          services.chats.markRead({
-            chat,
-            ...(until === undefined ? {} : { until: until.trim() }),
-            ...(topic === undefined ? {} : { threadId: topic }),
-          }),
+      renderAnswer(
+        this,
+        context,
+        itemOf(
+          snakeKeys(
+            await context.withServices((services) =>
+              services.chats.markRead({
+                chat,
+                ...(until === undefined ? {} : { until: until.trim() }),
+                ...(topic === undefined ? {} : { threadId: topic }),
+              }),
+            ),
+          ),
         ),
       )
     })

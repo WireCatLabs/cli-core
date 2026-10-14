@@ -69,10 +69,6 @@
     "--anonymous": {
       "meaning": "nobody sees who voted for what"
     },
-    "--answer": {
-      "value": "<id>",
-      "meaning": "only those who chose this answer, as `polls show` prints it"
-    },
     "--answerer": {
       "value": "<person>",
       "meaning": "stored name, alias, @username, ID or scoped person locator; ambiguous names require a choice; repeat it for more"
@@ -484,7 +480,7 @@
     "--link": {
       "value": "<link>",
       "meaning": "an invite link: only the requests made through it",
-      "note": "chats requests list filters by it; accept and decline take it with --all — one link, worded for each command (Help text rule 4)"
+      "note": "accept and decline take it with --all — one link, worded for each command (Help text rule 4)"
     },
     "--local": {
       "meaning": "use the model on this machine, never the messenger"
@@ -585,10 +581,6 @@
       "value": "<n>",
       "meaning": "minimum selected messages for a ranked author",
       "default": "1; 5 for engaging unless explicitly set"
-    },
-    "--min-score": {
-      "value": "<n>",
-      "meaning": "only rows scoring at least this"
     },
     "--min-views": {
       "value": "<n>",
@@ -876,9 +868,6 @@
     "--revoke": {
       "meaning": "forget every login given to a browser app over --http"
     },
-    "--revoked": {
-      "meaning": "the links you stopped, instead"
-    },
     "--revote": {
       "meaning": "people may change their vote"
     },
@@ -897,14 +886,6 @@
     "--score": {
       "value": "<helpful|active|engaging>",
       "meaning": "the named ranking score preset; not with an explicit --measure"
-    },
-    "--search": {
-      "value": "<text>",
-      "meaning": "only chats whose name contains this; at least 3 characters"
-    },
-    "--search-notes": {
-      "value": "<text>",
-      "meaning": "only people whose private notes contain this text"
     },
     "--secret-stdin": {
       "meaning": "a secret MAX sends back in X-Max-Bot-Api-Secret — asked for, or read from a pipe"
@@ -1076,7 +1057,7 @@
     "--type": {
       "value": "<names>",
       "meaning": "only these types",
-      "note": "each command names its own types — chats events the messenger's event types, comma-separated, as it names them; tasks add gives the new task question, request, mention or promise — search messages text, voice or file, and search notes internal or file — so it differs on purpose (Help text rule 4)"
+      "note": "each command names its own types — tasks add gives the new task question, request, mention or promise — search messages text, voice or file, and search notes internal or file — so it differs on purpose (Help text rule 4)"
     },
     "--types": {
       "value": "<value>",
@@ -1087,9 +1068,6 @@
       "meaning": "only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d",
       "note": "max's own `review` still takes bare hours until T6 moves it (e2)",
       "default": "24h"
-    },
-    "--unread": {
-      "meaning": "only chats with unread messages"
     },
     "--until": {
       "value": "<message>",
@@ -1780,11 +1758,7 @@
       }
     },
     "chats events": {
-      "in": "all",
-      "options": {
-        "--since-time": "all",
-        "--type": "all"
-      }
+      "in": "all"
     },
     "chats folders": {
       "in": "all"
@@ -1895,10 +1869,6 @@
         "--limit": {
           "in": ["tg"],
           "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
-        },
-        "--revoked": {
-          "in": ["tg"],
-          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
         }
       },
       "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
@@ -1939,11 +1909,8 @@
       "in": "all",
       "options": {
         "--all": "all",
-        "--kind": "all",
         "--limit": "all",
-        "--page": "all",
-        "--search": "all",
-        "--unread": "all"
+        "--page": "all"
       }
     },
     "chats mark-read": {
@@ -1995,8 +1962,7 @@
       "in": "all",
       "options": {
         "--budget": "all",
-        "--deep": "all",
-        "--min-score": "all"
+        "--deep": "all"
       }
     },
     "chats members fetch": {
@@ -2007,10 +1973,7 @@
       }
     },
     "chats members history": {
-      "in": "all",
-      "options": {
-        "--since-time": "all"
-      }
+      "in": "all"
     },
     "chats members list": {
       "in": "all",
@@ -2067,8 +2030,7 @@
       "in": "all",
       "options": {
         "--limit": "all",
-        "--link": "all",
-        "--search": "all"
+        "--page": "all"
       }
     },
     "chats rules": {
@@ -2243,11 +2205,7 @@
         "--all": "all",
         "--limit": "all",
         "--order": "all",
-        "--page": "all",
-        "--search": "all",
-        "--search-notes": {
-          "in": "all"
-        }
+        "--page": "all"
       }
     },
     "contacts lookup": {
@@ -2974,10 +2932,6 @@
       "in": ["tg"],
       "reason": "max-cli does not list who voted in a poll",
       "options": {
-        "--answer": {
-          "in": ["tg"],
-          "reason": "max-cli does not list who voted in a poll"
-        },
         "--limit": {
           "in": ["tg"],
           "reason": "max-cli does not list who voted in a poll"

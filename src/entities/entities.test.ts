@@ -140,6 +140,28 @@ const samples: Record<EntityName, unknown> = {
     sources: ["manual"],
     created_at: at,
   },
+  chat_event: {
+    chat_id: "2",
+    time: at,
+    type: "join",
+    message_id: "5",
+    by: { id: "9", name: null },
+    people: [{ id: "9", name: "Synthetic" }],
+  },
+  invite_link: { link: "https://example.test/join/x", approval: false, expires_at: null, max_uses: null },
+  join_request: { person_id: "9", name: "Synthetic", username: null, requested_at: at },
+  member: { id: "9", name: "Synthetic", username: null, role: "member", score: 2, reasons: ["no_photo"] },
+  poll_vote: { person_id: "9", name: null, username: null, answers: ["0"], voted_at: at },
+  topic: {
+    id: "3",
+    title: "Synthetic topic",
+    closed: false,
+    pinned: false,
+    unread_count: 0,
+    last_message_at: null,
+    created_at: at,
+  },
+  folder: { id: "2", title: "Synthetic folder", chat_ids: ["7"], include: ["groups"] },
 }
 
 /** The names each entity's fields had elsewhere, which a schema must refuse. */
@@ -156,6 +178,12 @@ const renamed: Partial<Record<EntityName, [from: string, to: string]>> = {
   fact: ["text", "statement"],
   memory: ["text", "body"],
   meeting: ["url", "join_url"],
+  chat_event: ["time", "timestamp"],
+  invite_link: ["expires_at", "expire_time"],
+  join_request: ["requested_at", "requestedAt"],
+  poll_vote: ["voted_at", "votedAt"],
+  topic: ["unread_count", "unreadCount"],
+  folder: ["chat_ids", "chatIds"],
 }
 
 const rename = (sample: unknown, [from, to]: [string, string]) => {

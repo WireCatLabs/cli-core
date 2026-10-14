@@ -900,8 +900,8 @@ describe("the MCP server", () => {
 
     const { body } = await call("chat_chats_members_audit", { chat: "7", budget: 1 })
 
-    expect(body).toMatchObject({ chatId: "7", read: 1, more: false, items: [{ id: "40", score: 4 }] })
-    expect(body.unknown).toContain("never_wrote")
+    expect(body).toMatchObject({ items: [{ id: "40", score: 4 }], page: { has_more: false } })
+    expect(body.meta.truncated).toBeUndefined()
     expect(pages).toEqual([{ limit: 200, offset: 0 }])
   })
 
@@ -925,13 +925,20 @@ describe("the MCP server", () => {
       }),
     )
 
-    expect((await call("chat_search_topics", { chat: "7", text: "pis", limit: 5 })).body).toEqual({
-      items: [topic],
-      page: 1,
-      limit: 5,
-      hasMore: false,
+    const shown = {
+      id: "4",
+      title: "Pisos",
+      closed: false,
+      pinned: false,
+      unread_count: 0,
+      last_message_at: null,
+      created_at: null,
+    }
+    expect((await call("chat_search_topics", { chat: "7", text: "pis", limit: 5 })).body).toMatchObject({
+      items: [shown],
+      page: { limit: 5, has_more: false },
     })
-    expect((await call("chat_topics_list", { chat: "7", limit: 5 })).body).toMatchObject({ items: [topic] })
+    expect((await call("chat_topics_list", { chat: "7", limit: 5 })).body).toMatchObject({ items: [shown] })
     expect((await call("chat_topics_list", { chat: "7", search: "pis" })).isError).toBe(true)
     expect(seen).toEqual([
       { limit: 5, offset: 0, search: "pis" },
@@ -939,23 +946,22 @@ describe("the MCP server", () => {
     ])
   })
 
-  it("filters chat_chats_list, and says when the messenger could not list every chat", async () => {
+  it("refuses a chat_chats_list query field the messenger cannot filter", async () => {
     const { call } = await connect(scripted())
 
-    const { body } = await call("chat_chats_list", { kind: "channel" })
+    const { body } = await call("chat_chats_list", { query: "kind:channel" })
 
-    expect(body).toMatchObject({ items: [], hasMore: false, partial: true })
+    expect(body.error).toMatchObject({ reason: "query.unsupported-field" })
   })
 
   it("answers listings in the command's envelope, and connects once for several calls", async () => {
     const telegram = scripted()
     const { call } = await connect(telegram)
 
-    expect((await call("chat_chats_list", { limit: 1, page: 2 })).body).toEqual({
-      items: [chat],
-      page: 2,
-      limit: 1,
-      hasMore: true,
+    expect((await call("chat_chats_list", { limit: 1, page: 2 })).body).toMatchObject({
+      items: [{ id: chat.id, title: chat.title, unread_count: chat.unreadCount }],
+      page: { limit: 1, has_more: true },
+      next: [{ step: "page.next", args: { page: 3, limit: 1 } }],
     })
     const { meta, ...messages } = (await call("chat_messages_list", { chat: "Book club" })).body
     expect(messages).toEqual({
@@ -996,9 +1002,9 @@ describe("the MCP server", () => {
     const { call } = await connect(scripted({ chats: async () => ({ items: [chat, ...dialogs], hasMore: false }) }))
 
     const listed = await call("chat_contacts_list", { order: "name", limit: 1 })
-    expect(listed.body).toMatchObject({ items: [{ name: "Adam" }], page: 1, limit: 1, hasMore: true })
-    expect((await call("chat_contacts_list", { search: "zo" })).body.items).toMatchObject([{ name: "Zoe" }])
-    expect((await call("chat_contacts_show", { person: "Olga" })).body).toMatchObject({ id: "9", name: "Olga" })
+    expect(listed.body).toMatchObject({ items: [{ name: "Adam" }], page: { limit: 1, has_more: true } })
+    expect((await call("chat_contacts_list", { query: "name:zo" })).body.items).toMatchObject([{ name: "Zoe" }])
+    expect((await call("chat_contacts_show", { person: "Olga" })).body.item).toMatchObject({ id: "9", name: "Olga" })
   })
 
   it("profiles a person with the phone always masked", async () => {
@@ -1019,8 +1025,8 @@ describe("the MCP server", () => {
 
     const { body } = await call("chat_contacts_profile", { person: "Olga" })
 
-    expect(body).toMatchObject({ id: "9", phone: "***0123", seen: "week" })
-    expect(body.chats).toMatchObject([{ id: "7", kind: "group" }])
+    expect(body.item).toMatchObject({ id: "9", phone: "***0123", seen: "week" })
+    expect(body.item.chats).toMatchObject([{ id: "7", kind: "group" }])
   })
 
   it("runs calls that arrive together one after another, over the one connection", async () => {
@@ -1258,16 +1264,18 @@ describe("the MCP server", () => {
     const { call } = await connect(scripted())
     await call("chat_messages_list", { chat: "7" })
 
-    expect((await call("chat_chats_members_history", { chat: "7" })).body).toEqual({ chatId: "7", items: [] })
+    expect((await call("chat_chats_members_history", { chat: "7" })).body).toMatchObject({
+      items: [],
+      page: { has_more: false },
+    })
     expect((await call("chat_chats_documents_list", { chat: "7" })).body).toMatchObject({
       items: [],
-      page: 1,
-      hasMore: false,
+      page: { has_more: false },
     })
-    expect((await call("chat_chats_tracking_list")).body).toEqual({ items: [] })
-    expect((await call("chat_chats_tracking_show", { chat: "7" })).body).toEqual({
-      chatId: "7",
-      trackedAt: null,
+    expect((await call("chat_chats_tracking_list")).body).toMatchObject({ items: [], page: { has_more: false } })
+    expect((await call("chat_chats_tracking_show", { chat: "7" })).body.item).toEqual({
+      chat_id: "7",
+      tracked_at: null,
       counts: [],
     })
   })
@@ -2006,10 +2014,10 @@ describe("the MCP server", () => {
     const asked = await call("chat_contacts_check", { person: "Olga", registries: true })
 
     expect(quiet.isError).toBe(false)
-    expect(quiet.body.registries).toEqual([])
-    expect(implicit.body.registries.map((one: { answer: string }) => one.answer)).toEqual(["unknown", "unknown"])
-    expect(quiet.body.notes).toContain("the ban lists were not asked")
-    expect(asked.body.registries.map((one: { answer: string }) => one.answer)).toEqual(["unknown", "unknown"])
+    expect(quiet.body.item.registries).toEqual([])
+    expect(implicit.body.item.registries.map((one: { answer: string }) => one.answer)).toEqual(["unknown", "unknown"])
+    expect(quiet.body.item.notes).toContain("the ban lists were not asked")
+    expect(asked.body.item.registries.map((one: { answer: string }) => one.answer)).toEqual(["unknown", "unknown"])
   })
 
   it("honours permission tightening on an already-open MCP session, including local writes", async () => {
@@ -2509,7 +2517,7 @@ describe("sending over MCP", () => {
     expect((await call("chat_topics_enable", { chat: "7" })).isError).toBe(false)
     const result = await call("chat_topics_create", { chat: "7", title: "synthetic", send_id: "42" })
     expect(result.isError).toBe(false)
-    expect(result.body).toMatchObject({ sendId: "42", topic: { id: "12" } })
+    expect(result.body.item).toMatchObject({ send_id: "42", topic: { id: "12" } })
     const entries = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entries).toMatchObject([
       { action: "forum-enable", outcome: "sent" },
@@ -2592,7 +2600,9 @@ describe("sending over MCP", () => {
     const { call, client } = await connect(telegram, {})
     const offered = (await client.listTools()).tools.find((one) => one.name === "chat_chats_send_as")
     expect(offered?.annotations?.readOnlyHint).toBe(true)
-    expect((await call("chat_chats_send_as", { chat: "7" })).body.items).toEqual(identities)
+    expect((await call("chat_chats_send_as", { chat: "7" })).body.items).toEqual(
+      identities.map(({ premiumRequired, ...one }) => ({ ...one, premium_required: premiumRequired })),
+    )
     expect((await call("chat_messages_send", { chat: "7", text: "hi", send_as: "-1002" })).isError).toBe(false)
     expect((await call("chat_messages_send", { chat: "7", text: "hi", send_as: "-1099" })).isError).toBe(true)
     expect(sends).toMatchObject([["7", "hi", { sendAs: "-1002" }]])
@@ -2770,7 +2780,7 @@ describe("sending over MCP", () => {
     const shown = await reading.call("chat_topics_show", { chat: "Book club", topic: "5" })
     const plainTools = (await plain.client.listTools()).tools.map((one) => one.name)
 
-    expect(shown.body).toEqual(topic)
+    expect(shown.body.item).toMatchObject({ id: topic.id, title: topic.title, unread_count: 0, created_at: null })
     expect(asked).toEqual([["Book club", "5"]])
     expect(plainTools).not.toContain("chat_topics_show")
   })
@@ -2814,7 +2824,7 @@ describe("sending over MCP", () => {
     const added = await call("chat_reactions_add", { chat: "Book", message: "1", emoji: "🔥" })
     await call("chat_reactions_remove", { chat: "Book", message: "1" })
 
-    expect(added.body).toEqual({ operationId: expect.any(String), chatId: "7", messageId: "1", reaction: "🔥" })
+    expect(added.body.item).toEqual({ operation_id: expect.any(String), chat_id: "7", message_id: "1", reaction: "🔥" })
     expect(reactions).toEqual([
       ["7", "1", "🔥"],
       ["7", "1", null],
@@ -2844,7 +2854,7 @@ describe("sending over MCP", () => {
     expect(denied).not.toContain("chat_chats_mark_read")
     expect(denied).toContain("chat_messages_send")
     expect(tools).toContain("chat_chats_mark_read")
-    expect(body).toEqual({ operationId: expect.any(String), chatId: "7", until: "1" })
+    expect(body.item).toEqual({ operation_id: expect.any(String), chat_id: "7", until: "1" })
     expect(marks).toEqual([["7", "1"]])
   })
 
@@ -2919,8 +2929,8 @@ describe("sending over MCP", () => {
     await call("chat_chats_join", { link: "https://t.me/+abc" })
     const left = await call("chat_chats_leave", { chat: "7" })
 
-    expect(created.body).toMatchObject({ operationId: expect.any(String), chat: { id: "70" } })
-    expect(left.body).toEqual({ operationId: expect.any(String), chatId: "7" })
+    expect(created.body.item).toMatchObject({ operation_id: expect.any(String), chat: { id: "70" } })
+    expect(left.body.item).toEqual({ operation_id: expect.any(String), chat_id: "7" })
     expect(done).toEqual([
       ["create", "Plans", ["91"], { channel: false }],
       ["join", "https://t.me/+abc"],
@@ -2964,8 +2974,8 @@ describe("sending over MCP", () => {
     const shown = await call("chat_chats_link_show", { chat: "7" })
     const reset = await call("chat_chats_link_reset", { chat: "7" })
 
-    expect(shown.body).toEqual({ chatId: "7", title: "Book club", link: "https://t.me/+old" })
-    expect(reset.body).toMatchObject({ chat: { link: "https://t.me/+new" } })
+    expect(shown.body.item).toEqual({ chat_id: "7", title: "Book club", link: "https://t.me/+old" })
+    expect(reset.body.item).toMatchObject({ chat: { link: "https://t.me/+new" } })
     expect(done).toEqual([
       ["update", "7", { title: "Books", settings: { allCanPin: true } }],
       ["reset", "7"],
@@ -2990,7 +3000,7 @@ describe("sending over MCP", () => {
       max_uses: 5,
     })
 
-    expect(changed.body).toMatchObject({ chatId: "7", expiresAt: null, maxUses: 5 })
+    expect(changed.body.item).toMatchObject({ chat_id: "7", expires_at: null, max_uses: 5 })
     expect(changes).toEqual([{ approval: false, expiresAt: null, maxUses: 5 }])
   })
 
@@ -3019,7 +3029,7 @@ describe("sending over MCP", () => {
     await call("chat_chats_admins_add", { chat: "7", person: "Ivan", rights: ["pin"] })
     await call("chat_chats_admins_remove", { chat: "7", person: "Ivan" })
 
-    expect(added.body).toMatchObject({ chatId: "7", added: ["91"], notAdded: [] })
+    expect(added.body.item).toMatchObject({ chat_id: "7", added: ["91"], not_added: [] })
     expect(done).toEqual([
       ["add", "7", ["91"], { history: true }],
       ["remove", "7", ["91"]],
@@ -3053,9 +3063,16 @@ describe("sending over MCP", () => {
     await call("chat_chats_folders_update", { folder: "Work", title: "Job", add: ["7"], remove: ["7"] })
     const deleted = await call("chat_chats_folders_delete", { folder: "4" })
 
-    expect(listed.body).toEqual({ items: [folder], page: 1, limit: 1, hasMore: false })
-    expect(shown.body).toMatchObject({ id: "4", title: "Work", chats: [{ id: "7" }], pinned: [], excluded: [] })
-    expect(deleted.body).toEqual({ operationId: expect.any(String), folderId: "4" })
+    expect(listed.body).toMatchObject({
+      items: [{ id: "4", title: "Work", chat_ids: ["7"] }],
+      page: { limit: 1, has_more: false },
+    })
+    expect(shown.body.item).toMatchObject({
+      id: "4",
+      title: "Work",
+      chats: [{ id: "7" }],
+    })
+    expect(deleted.body.item).toEqual({ operation_id: expect.any(String), folder_id: "4" })
     expect(done).toEqual([
       ["create", "Home", ["7"]],
       ["update", "4", { title: "Job", add: ["7"], remove: ["7"] }],
@@ -3129,8 +3146,8 @@ describe("sending over MCP", () => {
     const rules = await call("chat_chats_rules_show", { chat: "7" })
     const moderated = await call("chat_chats_moderate", { chat: "7", since_time: "2h", dry_run: true })
 
-    expect(rules.body).toMatchObject({ saved: false, rules: { consent: { delete: "ask" } } })
-    expect(moderated.body).toMatchObject({ rows: [] })
+    expect(rules.body.item).toMatchObject({ saved: false, rules: { consent: { delete: "ask" } } })
+    expect(moderated.body.item).toMatchObject({ rows: [] })
   })
 
   it("creates a poll that closes by itself, only where the messenger can", async () => {
@@ -3175,10 +3192,13 @@ describe("sending over MCP", () => {
     const reading = await connect(telegram, { config: READ_ONLY, pollVoters: true })
     const plain = await connect(telegram, {})
 
-    const listed = await reading.call("chat_polls_voters", { chat: "7", message: "1", answer: "MA" })
+    const listed = await reading.call("chat_polls_voters", { chat: "7", message: "1", query: "answers:MA" })
     const plainTools = (await plain.client.listTools()).tools.map((one) => one.name)
 
-    expect(listed.body).toMatchObject({ chatId: "7", total: 1, items: [vote] })
+    expect(listed.body).toMatchObject({
+      items: [{ person_id: "91", name: "Ana", username: null, answers: ["MA"], voted_at: vote.votedAt }],
+      page: { has_more: false },
+    })
     expect(plainTools).not.toContain("chat_polls_voters")
   })
 
@@ -3208,7 +3228,7 @@ describe("sending over MCP", () => {
     const readingTools = (await reading.client.listTools()).tools.map((one) => one.name)
     await writing.call("chat_polls_vote", { chat: "7", message: "1", answers: ["MA"] })
 
-    expect(shown.body.answers[0].id).toBe("MA")
+    expect(shown.body.item.answers[0].id).toBe("MA")
     expect(readingTools).not.toContain("chat_polls_vote")
     expect(votes).toEqual([["7", "1", ["MA"]]])
   })
@@ -3434,7 +3454,7 @@ describe("MCP tools for a messenger whose history is kept in the store", () => {
     const nothing = await call("chat_messages_list", { chat: "99" })
 
     expect(chats.body.items.map((one: Chat) => one.id)).toEqual(["7"])
-    expect(shown.body).toMatchObject({ id: "7", title: "Book club" })
+    expect(shown.body.item).toMatchObject({ id: "7", title: "Book club" })
     expect(messages.body.items.map((one: Message) => one.id)).toEqual(["1"])
     expect(around.body.items).toEqual([expect.objectContaining({ id: "1", anchor: true })])
     expect(contacts.isError).toBe(false)

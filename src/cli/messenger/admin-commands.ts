@@ -3,7 +3,12 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { ADMIN_RIGHTS, type AdminRight, GROUP_SETTINGS, type GroupSettings } from "../../domain/models.js"
 import { readUpload } from "../../sends/upload.js"
+import { renderAnswer } from "../envelope.js"
+import { withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
+import { lines, renderItem, withPage } from "./chat-answers.js"
+import { inviteLinks, joinRequests } from "./chat-lists.js"
+import { LINKS_QUERY, REQUESTS_QUERY } from "./chat-queries.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 const SETTING_FLAGS: Record<keyof GroupSettings, [flag: string, help: string]> = {
@@ -46,7 +51,9 @@ const updateCommand = (messenger: Messenger): Command => {
     const settings = settingsOf(keys, rest)
     const upload =
       photo === undefined ? undefined : await readUpload("photo", photo, { app: messenger.app, env: context.env })
-    context.renderer.result(
+    renderItem(
+      this,
+      context,
       await context.withServices((services) =>
         services.admin.update(chat, {
           ...(title === undefined ? {} : { title }),
@@ -67,7 +74,7 @@ const linkCommand = (messenger: Messenger): Command => {
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.admin.link(chat)))
+      renderItem(this, context, await context.withServices((services) => services.admin.link(chat)))
     })
   link.addCommand(
     annotate(new Command("create"), { mutates: true })
@@ -83,7 +90,9 @@ const linkCommand = (messenger: Messenger): Command => {
           expireTime?: string
           maxUses?: number
         }>()
-        context.renderer.result(
+        renderItem(
+          this,
+          context,
           await context.withServices((services) =>
             services.admin.createLink(chat, {
               approval: approval === true,
@@ -95,23 +104,37 @@ const linkCommand = (messenger: Messenger): Command => {
       }),
   )
   if (messenger.inviteLinkList !== false)
-    link
-      .command("list")
-      .description("your invite links, newest first, with how many joined and how many wait")
-      .argument("<chat>", messenger.chatArgument)
-      .option("--revoked", "the links you stopped, instead")
-      .option("--limit <n>", "how many", positiveCount("--limit"))
-      .action(async function (this: Command, chat: string) {
+    link.addCommand(
+      withQuery(
+        annotate(
+          withPage(
+            new Command("list")
+              .description("your invite links, newest first, with how many joined and how many wait")
+              .argument("<chat>", messenger.chatArgument),
+          ),
+          { output: { entity: "invite_link" } },
+        ),
+        LINKS_QUERY,
+      ).action(async function (this: Command, chat: string, words: string[]) {
         const context = messengerContext(this, messenger)
-        const { revoked } = this.opts<{ revoked?: boolean }>()
-        const { limit } = context.settings
-        const found = await context.withServices((services) =>
-          services.admin.links(chat, { limit, revoked: revoked === true }),
+        const body = await context.withServices((services) => inviteLinks(services, chat, words, context.settings))
+        renderAnswer(
+          this,
+          context,
+          body,
+          lines(({ link, approval, expires_at, joined_count, pending_count, revoked }) =>
+            [
+              link,
+              revoked ? "revoked" : "",
+              approval ? "approval" : "",
+              expires_at ? `until ${expires_at}` : "",
+              joined_count === undefined ? "" : `${joined_count} joined`,
+              pending_count ? `${pending_count} waiting` : "",
+            ].join("  "),
+          ),
         )
-        if (context.format === "json") context.renderer.result(found)
-        else context.renderer.stream(found.items)
-        if (found.hasMore) context.renderer.note(`more links: raise --limit above ${limit}`)
-      })
+      }),
+    )
   if (messenger.inviteLinkRevoke !== false)
     link.addCommand(
       annotate(new Command("revoke"), { mutates: true })
@@ -120,7 +143,7 @@ const linkCommand = (messenger: Messenger): Command => {
         .argument("<link>", "the link, as `chats link list` shows it")
         .action(async function (this: Command, chat: string, link: string) {
           const context = messengerContext(this, messenger)
-          context.renderer.result(await context.withServices((services) => services.admin.revokeLink(chat, link)))
+          renderItem(this, context, await context.withServices((services) => services.admin.revokeLink(chat, link)))
         }),
     )
   if (messenger.inviteLinkUpdate === true)
@@ -143,7 +166,9 @@ const linkCommand = (messenger: Messenger): Command => {
             expireTime?: string
             maxUses?: number
           }>()
-          context.renderer.result(
+          renderItem(
+            this,
+            context,
             await context.withServices((services) =>
               services.admin.updateLink(chat, link, {
                 ...(approval === undefined ? {} : { approval }),
@@ -160,7 +185,7 @@ const linkCommand = (messenger: Messenger): Command => {
       .argument("<chat>", messenger.chatArgument)
       .action(async function (this: Command, chat: string) {
         const context = messengerContext(this, messenger)
-        context.renderer.result(await context.withServices((services) => services.admin.resetLink(chat)))
+        renderItem(this, context, await context.withServices((services) => services.admin.resetLink(chat)))
       }),
   )
   return link
@@ -178,7 +203,11 @@ const adminsCommand = (messenger: Messenger): Command => {
       .action(async function (this: Command, chat: string, person: string) {
         const context = messengerContext(this, messenger)
         const rights = rightsOf(offered, this.opts<{ can: string }>().can)
-        context.renderer.result(await context.withServices((services) => services.admin.addAdmin(chat, person, rights)))
+        renderItem(
+          this,
+          context,
+          await context.withServices((services) => services.admin.addAdmin(chat, person, rights)),
+        )
       }),
   )
   admins.addCommand(
@@ -188,7 +217,7 @@ const adminsCommand = (messenger: Messenger): Command => {
       .argument("<person>", "an id, or part of a name")
       .action(async function (this: Command, chat: string, person: string) {
         const context = messengerContext(this, messenger)
-        context.renderer.result(await context.withServices((services) => services.admin.removeAdmin(chat, person)))
+        renderItem(this, context, await context.withServices((services) => services.admin.removeAdmin(chat, person)))
       }),
   )
   return admins
@@ -215,23 +244,30 @@ export const rightsOf = (offered: readonly AdminRight[], typed: string): AdminRi
 
 const requestsCommand = (messenger: Messenger): Command => {
   const requests = new Command("requests").description("requests to join a group that needs an admin's approval")
-  requests
-    .command("list")
-    .description("who asked to join, newest first; only admins see them, and reading tells nobody")
-    .argument("<chat>", messenger.chatArgument)
-    .option("--limit <n>", "how many", positiveCount("--limit"))
-    .option("--search <text>", "only people whose name or @username has this")
-    .option("--link <link>", "only people who asked through this invite link; not with --search")
-    .action(async function (this: Command, chat: string) {
+  requests.addCommand(
+    withQuery(
+      annotate(
+        withPage(
+          new Command("list")
+            .description("who asked to join, newest first; only admins see them, and reading tells nobody")
+            .argument("<chat>", messenger.chatArgument),
+        ),
+        { output: { entity: "join_request" } },
+      ),
+      REQUESTS_QUERY,
+    ).action(async function (this: Command, chat: string, words: string[]) {
       const context = messengerContext(this, messenger)
-      const { limit } = context.settings
-      const { search, link } = this.opts<{ search?: string; link?: string }>()
-      const window = { limit, ...(search === undefined ? {} : { search }), ...(link === undefined ? {} : { link }) }
-      const found = await context.withServices((services) => services.admin.requests(chat, window))
-      if (context.format === "json") context.renderer.result(found)
-      else context.renderer.stream(found.items)
-      if (found.hasMore) context.renderer.note(`more requests: raise --limit above ${limit}`)
-    })
+      const body = await context.withServices((services) => joinRequests(services, chat, words, context.settings))
+      renderAnswer(
+        this,
+        context,
+        body,
+        lines(({ person_id, name, username, requested_at }) =>
+          [person_id, name ?? "", username ? `@${username}` : "", requested_at ?? ""].join("  "),
+        ),
+      )
+    }),
+  )
   for (const [verb, accept, help] of [
     ["accept", true, "let them in; the group sees them join"],
     ["decline", false, "turn the request away"],
@@ -249,7 +285,9 @@ const requestsCommand = (messenger: Messenger): Command => {
           if ((person === undefined) === (all !== true))
             throw new CliError("validation_error", "give one person, or --all — not both, not neither")
           if (link !== undefined && all !== true) throw new CliError("validation_error", "--link goes with --all")
-          context.renderer.result(
+          renderItem(
+            this,
+            context,
             await context.withServices(
               (services): Promise<object> =>
                 person === undefined
@@ -273,7 +311,9 @@ export const groupCommands = (messenger: Messenger): Command[] => [
     .action(async function (this: Command, title: string, people: string[]) {
       const context = messengerContext(this, messenger)
       const { channel } = this.opts<{ channel?: boolean }>()
-      context.renderer.result(
+      renderItem(
+        this,
+        context,
         await context.withServices((services) => services.admin.create({ title, people, channel: channel === true })),
       )
     }),
@@ -283,7 +323,7 @@ export const groupCommands = (messenger: Messenger): Command[] => [
     .argument("<link>", `an invite link, or a public one`)
     .action(async function (this: Command, link: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.admin.join(link)))
+      renderItem(this, context, await context.withServices((services) => services.admin.join(link)))
     }),
 
   annotate(new Command("leave"), { mutates: true })
@@ -291,7 +331,7 @@ export const groupCommands = (messenger: Messenger): Command[] => [
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(await context.withServices((services) => services.admin.leave(chat)))
+      renderItem(this, context, await context.withServices((services) => services.admin.leave(chat)))
     }),
 
   updateCommand(messenger),

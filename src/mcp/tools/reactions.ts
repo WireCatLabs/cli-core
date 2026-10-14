@@ -1,4 +1,6 @@
 import * as v from "valibot"
+import { itemOf } from "../../cli/envelope.js"
+import { snakeKeys } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
 import type { SendGuard } from "../../sends/guard.js"
@@ -23,8 +25,12 @@ export const reactionTools = (messenger: Messenger): Record<string, AnyTool> => 
       }),
       annotations: WRITE,
       permission: "reaction",
-      online: (adapter, args, { guard }) =>
-        messages(adapter, guard).react({ chat: args.chat, message: args.message, emoji: args.emoji }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(
+            await messages(adapter, guard).react({ chat: args.chat, message: args.message, emoji: args.emoji }),
+          ),
+        ),
     }),
     reactions_remove: tool({
       title: "Take a reaction off",
@@ -32,8 +38,10 @@ export const reactionTools = (messenger: Messenger): Record<string, AnyTool> => 
       input: v.object({ chat, message }),
       annotations: WRITE,
       permission: "reaction",
-      online: (adapter, args, { guard }) =>
-        messages(adapter, guard).react({ chat: args.chat, message: args.message, emoji: null }),
+      online: async (adapter, args, { guard }) =>
+        itemOf(
+          snakeKeys(await messages(adapter, guard).react({ chat: args.chat, message: args.message, emoji: null })),
+        ),
     }),
   }
 }

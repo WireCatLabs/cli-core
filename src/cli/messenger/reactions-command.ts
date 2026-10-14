@@ -1,5 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { itemOf, renderAnswer } from "../envelope.js"
+import { snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** `reactions add|remove`: the owner's own reaction on a message. */
@@ -13,11 +15,10 @@ export const reactionsCommand = (messenger: Messenger): Command => {
     .argument("<emoji>", "one emoji, for example 👍")
     .action(async function (this: Command, chat: string, message: string, emoji: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withServices((services) =>
-          services.messages.react({ chat, message: message.trim(), emoji: emoji.trim() }),
-        ),
+      const reacted = await context.withServices((services) =>
+        services.messages.react({ chat, message: message.trim(), emoji: emoji.trim() }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(reacted)))
     })
 
   annotate(reactions.command("remove"), { mutates: true })
@@ -26,11 +27,10 @@ export const reactionsCommand = (messenger: Messenger): Command => {
     .argument("<message>", "the message id")
     .action(async function (this: Command, chat: string, message: string) {
       const context = messengerContext(this, messenger)
-      context.renderer.result(
-        await context.withServices((services) =>
-          services.messages.react({ chat, message: message.trim(), emoji: null }),
-        ),
+      const reacted = await context.withServices((services) =>
+        services.messages.react({ chat, message: message.trim(), emoji: null }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(reacted)))
     })
 
   return reactions

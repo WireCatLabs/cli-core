@@ -73,6 +73,12 @@ const call = async (
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 
+/** An item answer's item; a list answer whole. */
+const answer = (out: { stdout: string[] }) => {
+  const body = JSON.parse(out.stdout[0] ?? "")
+  return body.item ?? body
+}
+
 const base: MessengerAdapter = {
   self: () => "500",
   me: async () => ({ id: "500", name: "Owner", username: null }),
@@ -128,8 +134,7 @@ describe("chats create, join and leave", () => {
     const made = await call(["chats", "create", "Secret plans", "Olga", "@ivan", "--json"], adapter, env)
 
     expect(made.code).toBe(0)
-    const answer = JSON.parse(made.stdout[0] ?? "")
-    expect(answer).toMatchObject({ operationId: expect.any(String), chat: { id: "70", title: "Secret plans" } })
+    expect(answer(made)).toMatchObject({ operation_id: expect.any(String), chat: { id: "70", title: "Secret plans" } })
     expect(created).toEqual([["Secret plans", ["90", "91"], { channel: false }]])
     const [entry] = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entry).toMatchObject({ kind: "chat", action: "create", chatId: "70", people: 2, outcome: "sent" })
@@ -174,8 +179,8 @@ describe("chats create, join and leave", () => {
     const joined = await call(["chats", "join", "https://t.me/+abc", "--json"], adapter, env)
     const gone = await call(["chats", "leave", "Book club", "--json"], adapter, env)
 
-    expect(JSON.parse(joined.stdout[0] ?? "")).toMatchObject({ operationId: expect.any(String), chat: { id: "71" } })
-    expect(JSON.parse(gone.stdout[0] ?? "")).toEqual({ operationId: expect.any(String), chatId: "7" })
+    expect(answer(joined)).toMatchObject({ operation_id: expect.any(String), chat: { id: "71" } })
+    expect(answer(gone)).toEqual({ operation_id: expect.any(String), chat_id: "7" })
     expect(left).toEqual(["7"])
   })
 
@@ -186,7 +191,7 @@ describe("chats create, join and leave", () => {
     const asked = await call(["chats", "join", "https://t.me/+abc", "--json"], adapter, env)
 
     expect(asked.code).toBe(0)
-    expect(JSON.parse(asked.stdout[0] ?? "")).toEqual({ operationId: expect.any(String), requested: true })
+    expect(answer(asked)).toEqual({ operation_id: expect.any(String), requested: true })
     expect(new SendJournal(sendsPathFor(app, "default", env)).entries()).toMatchObject([
       { kind: "chat", action: "join", chatId: null, outcome: "sent" },
     ])
@@ -222,8 +227,8 @@ describe("chats create, join and leave", () => {
     const unclear = await call(["chats", "update", "Book club", "--all-can-pin", "yes"], adapter, env)
     const empty = await call(["chats", "update", "Book club"], adapter, env)
 
-    expect(JSON.parse(renamed.stdout[0] ?? "")).toMatchObject({
-      operationId: expect.any(String),
+    expect(answer(renamed)).toMatchObject({
+      operation_id: expect.any(String),
       chat: { title: "Books" },
     })
     expect(changes).toEqual([
@@ -302,8 +307,8 @@ describe("chats create, join and leave", () => {
     const plain = await call(["chats", "link", "create", "Book club", "--max-uses", "5", "--json"], adapter, env)
     const both = await call(["chats", "link", "create", "Book club", "--approval", "--max-uses", "5"], adapter, env)
 
-    expect(JSON.parse(made.stdout[0] ?? "")).toMatchObject({
-      chatId: "7",
+    expect(answer(made)).toMatchObject({
+      chat_id: "7",
       link: "https://t.me/+synthetic",
       approval: true,
     })
@@ -335,11 +340,11 @@ describe("chats create, join and leave", () => {
     const card7 = await call(["chats", "show", "Book club", "--json"], adapter, env)
 
     expect(hidden.code).toBe(6)
-    expect(JSON.parse(shown.stdout[0] ?? "")).toEqual({ chatId: "7", title: "Book club", link: "https://t.me/+old" })
-    expect(JSON.parse(reset.stdout[0] ?? "")).toMatchObject({ chat: { link: "https://t.me/+new" } })
-    expect(JSON.parse(card7.stdout[0] ?? "")).toMatchObject({
-      link: "https://t.me/+old",
-      settings: { allCanPin: null },
+    expect(answer(shown)).toEqual({ chat_id: "7", title: "Book club", link: "https://t.me/+old" })
+    expect(answer(reset)).toMatchObject({ chat: { link: "https://t.me/+new" } })
+    expect(answer(card7)).toMatchObject({
+      invite_link: "https://t.me/+old",
+      settings: { all_can_pin: null },
     })
     expect(new SendJournal(sendsPathFor(app, "default", env)).entries()).toMatchObject([
       { kind: "chat", action: "link.reset", chatId: "7", outcome: "sent" },
@@ -367,10 +372,13 @@ describe("chats create, join and leave", () => {
     const accepted = await call(["chats", "requests", "accept", "Book club", "91", "--json"], adapter, env)
     const declined = await call(["chats", "requests", "decline", "Book club", "92", "--json"], adapter, env)
 
-    expect(JSON.parse(listed.stdout[0] ?? "")).toEqual({ chatId: "7", items: [request], hasMore: true })
-    expect(listed.stderr.join("")).toContain("raise --limit above 1")
-    expect(JSON.parse(accepted.stdout[0] ?? "")).toMatchObject({ personId: "91", accepted: true, already: false })
-    expect(JSON.parse(declined.stdout[0] ?? "")).toMatchObject({ personId: "92", accepted: false })
+    expect(answer(listed)).toMatchObject({
+      items: [{ person_id: "91", name: "Synthetic Person", username: null, requested_at: request.requestedAt }],
+      page: { limit: 1, has_more: true },
+      next: [{ step: "page.next", args: { chat: "Book club", page: 2, limit: 1 } }],
+    })
+    expect(answer(accepted)).toMatchObject({ person_id: "91", accepted: true, already: false })
+    expect(answer(declined)).toMatchObject({ person_id: "92", accepted: false })
     expect(answered).toEqual([
       ["7", "91", true],
       ["7", "92", false],
@@ -405,7 +413,7 @@ describe("chats create, join and leave", () => {
     const both = await call(["chats", "requests", "accept", "Book club", "91", "--all"], adapter, env)
     const stray = await call(["chats", "requests", "accept", "Book club", "91", "--link", "x"], adapter, env)
     const listed = await call(
-      ["chats", "link", "list", "Book club", "--revoked", "--limit", "5", "--json"],
+      ["chats", "link", "list", "Book club", "revoked:true", "--limit", "5", "--json"],
       adapter,
       env,
     )
@@ -415,11 +423,11 @@ describe("chats create, join and leave", () => {
       env,
     )
 
-    expect(JSON.parse(all.stdout[0] ?? "")).toMatchObject({ chatId: "7", accepted: false, counted: 2 })
+    expect(answer(all)).toMatchObject({ chat_id: "7", accepted: false, counted: 2 })
     expect(done).toEqual([["7", false, "https://t.me/+synthetic"]])
     expect([neither.code, both.code, stray.code]).toEqual([2, 2, 2])
-    expect(JSON.parse(listed.stdout[0] ?? "")).toMatchObject({ chatId: "7", items: [link] })
-    expect(JSON.parse(revoked.stdout[0] ?? "")).toMatchObject({ chatId: "7", revoked: true })
+    expect(answer(listed)).toMatchObject({ items: [{ link: link.link, approval: link.approval }] })
+    expect(answer(revoked)).toMatchObject({ chat_id: "7", revoked: true })
     expect(new SendJournal(sendsPathFor(app, "default", env)).entries().map((one) => one.action)).toEqual([
       "requests.decline",
       "link.revoke",
@@ -446,7 +454,7 @@ describe("chats create, join and leave", () => {
     const nothing = await update()
     const both = await update("--approval", "--max-uses", "5")
 
-    expect(JSON.parse(on.stdout[0] ?? "")).toMatchObject({ chatId: "7", approval: true })
+    expect(answer(on)).toMatchObject({ chat_id: "7", approval: true })
     expect(changes).toEqual([{ approval: true }, { approval: false, maxUses: 5 }])
     expect([off.code, nothing.code, both.code]).toEqual([0, 2, 2])
     expect(new SendJournal(sendsPathFor(app, "default", env)).entries().map((one) => one.action)).toEqual([
@@ -466,9 +474,9 @@ describe("chats create, join and leave", () => {
       },
     }
 
-    const named = await call(["chats", "requests", "list", "Book club", "--search", "ana", "--json"], adapter, env)
-    const linked = await call(["chats", "requests", "list", "Book club", "--link", "https://t.me/+x"], adapter, env)
-    const both = await call(["chats", "requests", "list", "Book club", "--search", "a", "--link", "l"], adapter, env)
+    const named = await call(["chats", "requests", "list", "Book club", "name:ana", "--json"], adapter, env)
+    const linked = await call(["chats", "requests", "list", "Book club", 'link:"https://t.me/+x"'], adapter, env)
+    const both = await call(["chats", "requests", "list", "Book club", "name:a", "username:l"], adapter, env)
 
     expect([named.code, linked.code, both.code]).toEqual([0, 0, 2])
     expect(asked).toEqual([
@@ -556,13 +564,13 @@ describe("chats create, join and leave", () => {
       addsWithHistory: false,
     })
 
-    expect(JSON.parse(added.stdout[0] ?? "")).toEqual({
-      operationId: expect.any(String),
-      chatId: "7",
+    expect(answer(added)).toEqual({
+      operation_id: expect.any(String),
+      chat_id: "7",
       added: ["91"],
-      notAdded: ["92"],
+      not_added: ["92"],
     })
-    expect(JSON.parse(removed.stdout[0] ?? "")).toMatchObject({ chatId: "7", removed: ["91"] })
+    expect(answer(removed)).toMatchObject({ chat_id: "7", removed: ["91"] })
     expect(noHistory.stderr.join("\n")).toContain("unknown option '--history'")
     expect(done).toEqual([
       ["add", "7", ["91", "92"], { history: true }],
@@ -598,7 +606,7 @@ describe("chats create, join and leave", () => {
     const unknown = await call(["chats", "admins", "add", "Book club", "Ivan", "--can", "read"], adapter, env, telegram)
     const taken = await call(["chats", "admins", "remove", "Book club", "Ivan", "--json"], adapter, env)
 
-    expect(JSON.parse(made.stdout[0] ?? "")).toMatchObject({ chatId: "7", personId: "91", rights: ["pin", "members"] })
+    expect(answer(made)).toMatchObject({ chat_id: "7", person_id: "91", rights: ["pin", "members"] })
     expect(unknown.code).toBe(2)
     expect(unknown.stderr.join("\n")).toContain("not read")
     expect(taken.code).toBe(0)
@@ -654,11 +662,11 @@ describe("chats create, join and leave", () => {
     const twice = await call(["chats", "folders", "order", "Work", "4"], adapter, env)
     const joined = await call(["chats", "folders", "join", "https://t.me/addlist/abc", "--json"], adapter, env)
 
-    expect(JSON.parse(listed.stdout[0] ?? "").items).toHaveLength(3)
-    expect(JSON.parse(made.stdout[0] ?? "")).toMatchObject({ folder: { id: "9", chatIds: ["7"] } })
+    expect(answer(listed).items).toHaveLength(3)
+    expect(answer(made)).toMatchObject({ folder: { id: "9", chat_ids: ["7"] } })
     expect([renamed.code, unclear.code, missing.code, empty.code, deleted.code, twice.code]).toEqual([0, 2, 6, 2, 0, 2])
-    expect(JSON.parse(ordered.stdout[0] ?? "").folders.map((one: { id: string }) => one.id)).toEqual(["6", "4", "5"])
-    expect(JSON.parse(joined.stdout[0] ?? "")).toMatchObject({ folder: { id: "12" } })
+    expect(answer(ordered).folders.map((one: { id: string }) => one.id)).toEqual(["6", "4", "5"])
+    expect(answer(joined)).toMatchObject({ folder: { id: "12" } })
     expect(done).toEqual([
       ["create", "Home", ["7"]],
       ["update", "4", { title: "Job", add: ["7"] }],
@@ -694,7 +702,7 @@ describe("chats create, join and leave", () => {
     const shown = await call(["chats", "folders", "show", "Work", "--json"], adapter, env)
 
     expect(shown.code).toBe(0)
-    expect(JSON.parse(shown.stdout[0] ?? "")).toEqual({
+    expect(answer(shown)).toEqual({
       id: "4",
       title: "Work",
       chats: [
@@ -702,8 +710,11 @@ describe("chats create, join and leave", () => {
         { id: "8", title: "Standup", kind: "channel" },
         { id: "9", title: null, kind: null },
       ],
-      pinned: [{ id: "8", title: "Standup", kind: "channel" }],
-      excluded: [{ id: "7", title: "Book club", kind: "group" }],
+      chat_ids: ["7", "8", "9"],
+      pinned_chat_ids: ["8"],
+      excluded_chat_ids: ["7"],
+      pinned_chats: [{ id: "8", title: "Standup", kind: "channel" }],
+      excluded_chats: [{ id: "7", title: "Book club", kind: "group" }],
     })
     expect(asked).toEqual(["8", "9"])
   })
@@ -724,14 +735,11 @@ describe("chats create, join and leave", () => {
     const named = await call(["work", "account", "list", "--json"], offline, unnamed)
 
     expect(listed.code).toBe(0)
-    expect(JSON.parse(listed.stdout[0] ?? "").items).toEqual([
+    expect(answer(listed).items).toEqual([
       { profile: "default", current: false, account: "500", name: "Owner" },
       { profile: "work", current: false, account: "501", name: null },
     ])
-    expect(JSON.parse(named.stdout[0] ?? "").items.map((item: { current: boolean }) => item.current)).toEqual([
-      false,
-      true,
-    ])
+    expect(answer(named).items.map((item: { current: boolean }) => item.current)).toEqual([false, true])
   })
 
   it("**assumes no profile, not even the only one** — an account command says what to name", async () => {
@@ -783,8 +791,8 @@ describe("chats create, join and leave", () => {
     for (const verb of ["remove", "block", "unblock"]) await call(["contacts", verb, "Ivan"], adapter, env)
     const renamed = await call(["contacts", "rename", "Ivan", "Vanya", "P.", "--json"], adapter, env)
 
-    expect(JSON.parse(added.stdout[0] ?? "")).toEqual({ operationId: expect.any(String), person: ivan })
-    expect(JSON.parse(renamed.stdout[0] ?? "")).toMatchObject({ person: { name: "Vanya P." } })
+    expect(answer(added)).toEqual({ operation_id: expect.any(String), person: ivan })
+    expect(answer(renamed)).toMatchObject({ person: { name: "Vanya P." } })
     expect(done).toEqual([
       ["add", "91"],
       ["remove", "91"],
@@ -820,8 +828,8 @@ describe("chats create, join and leave", () => {
     const imported = await call(["contacts", "import", good, "--json"], adapter, env)
     const refused = await call(["contacts", "import", bad], adapter, env)
 
-    expect(JSON.parse(imported.stdout[0] ?? "")).toEqual({
-      operationId: expect.any(String),
+    expect(answer(imported)).toEqual({
+      operation_id: expect.any(String),
       sent: 2,
       recognised: [{ id: "91", name: "Ivan", username: null }],
     })
@@ -860,7 +868,7 @@ describe("chats create, join and leave", () => {
 
     const env = sandbox()
     const imported = await call(["contacts", "import", phones(25), "--json"], adapter, env)
-    expect(JSON.parse(imported.stdout[0] ?? "")).toMatchObject({ sent: 25 })
+    expect(answer(imported)).toMatchObject({ sent: 25 })
     expect(sizes).toEqual([10, 10, 5])
 
     const busy = sandbox()
@@ -903,7 +911,7 @@ describe("chats create, join and leave", () => {
     const unasked = await call(["account", "sessions", "end", "--others"], adapter, env)
     const ended1 = await call(["account", "sessions", "end", "--others", "--yes", "--json"], adapter, env)
 
-    expect(JSON.parse(updated.stdout[0] ?? "")).toMatchObject({ account: { name: "New Name", phone: "***1222" } })
+    expect(answer(updated)).toMatchObject({ account: { name: "New Name", phone: "***1222" } })
     expect(changes).toEqual([{ firstName: "New", description: "hi", photo: "me.jpg" }])
     expect([empty.code, without.code, unasked.code, ended1.code]).toEqual([2, 2, 7, 0])
     expect(ended).toEqual([1])
@@ -975,14 +983,14 @@ describe("chats create, join and leave", () => {
       knowsAccountAge: false,
     })
 
-    expect(JSON.parse(unsaved.stdout[0] ?? "")).toMatchObject({ chatId: "7", saved: false })
-    const first = JSON.parse(planned.stdout[0] ?? "").rows
+    expect(answer(unsaved)).toMatchObject({ chat_id: "7", saved: false })
+    const first = answer(planned).rows
     expect(first.map((row: { rule: string; outcome: string }) => `${row.rule} ${row.outcome}`)).toEqual([
       "blocked planned",
       "links done",
       "links done",
     ])
-    expect(JSON.parse(acted.stdout[0] ?? "").rows.map((row: { outcome: string }) => row.outcome)).toContain("done")
+    expect(answer(acted).rows.map((row: { outcome: string }) => row.outcome)).toContain("done")
     expect(done).toEqual(["delete 1", "delete 3", "remove 9", "delete 1", "delete 3"])
     expect([noAge.code, telegram.code]).toEqual([0, 2])
     expect(telegram.stderr.join("\n")).toContain("does not say how old an account is")
@@ -1017,7 +1025,7 @@ describe("chats create, join and leave", () => {
     }
     const rule = async (own: Partial<Messenger>) => {
       const { stdout } = await call(["chats", "moderate", "Book club", "--json"], adapter, sandbox(), own)
-      return JSON.parse(stdout[0] ?? "").rows.map((row: { rule: string }) => row.rule)
+      return answer({ stdout }).rows.map((row: { rule: string }) => row.rule)
     }
 
     expect(await rule({})).toEqual(["links"])
@@ -1043,8 +1051,12 @@ describe("truncated group event reads", () => {
       sandbox(),
     )
     expect(result.code).toBe(0)
-    expect(JSON.parse(result.stdout.join(""))).toMatchObject({ items: events, hasMore: true })
-    expect(result.stderr.join("")).toContain("adjust --since-time")
+    expect(JSON.parse(result.stdout.join(""))).toMatchObject({
+      items: events.map((one) => ({ chat_id: "7", time: one.timestamp, type: "add", message_id: one.messageId })),
+      page: { has_more: false },
+      meta: { truncated: true },
+    })
+    expect(result.stderr.join("")).toContain("a later time bound reads less")
     expect(result.stderr.join("")).not.toContain("newest")
   })
 })

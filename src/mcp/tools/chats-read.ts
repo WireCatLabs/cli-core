@@ -1,4 +1,6 @@
 import * as v from "valibot"
+import { itemOf } from "../../cli/envelope.js"
+import { snakeKeys } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
 import { type AnyTool, chatOf, message, tool, WRITE } from "../tool.js"
@@ -20,11 +22,15 @@ export const chatsReadTools = (messenger: Messenger): Record<string, AnyTool> =>
     annotations: WRITE,
     permission: "read",
     key: "chats.mark-read",
-    online: (adapter, args, { guard }) =>
-      servicesFor(onlineDeps(messenger, adapter, guard)).chats.markRead({
-        chat: args.chat,
-        ...(args.until === undefined ? {} : { until: args.until }),
-        ...(args.topic === undefined ? {} : { threadId: args.topic }),
-      }),
+    online: async (adapter, args, { guard }) =>
+      itemOf(
+        snakeKeys(
+          await servicesFor(onlineDeps(messenger, adapter, guard)).chats.markRead({
+            chat: args.chat,
+            ...(args.until === undefined ? {} : { until: args.until }),
+            ...(args.topic === undefined ? {} : { threadId: args.topic }),
+          }),
+        ),
+      ),
   }),
 })

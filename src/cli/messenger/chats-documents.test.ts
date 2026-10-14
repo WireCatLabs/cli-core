@@ -10,6 +10,7 @@ import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import { chatsCommand } from "./chats-command.js"
 import type { Messenger } from "./context.js"
+import { messagesCommand } from "./messages-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const OWNER = { provider: "chat", account: "500" }
@@ -97,7 +98,7 @@ const setup = async (config?: object) => {
       const streams = captureStreams()
       const code = await run(
         argv,
-        { app, commands: () => [chatsCommand(messenger)] },
+        { app, commands: () => [chatsCommand(messenger), messagesCommand(messenger)] },
         { streams, tty, env: { ...env, NO_COLOR: "1" } },
       )
       return { code, stdout: streams.stdout.join(""), stderr: streams.stderr.join("\n") }
@@ -118,71 +119,73 @@ describe("chats documents list", () => {
       items: [
         {
           url: doc(GONE),
-          documentId: GONE,
+          document_id: GONE,
           title: null,
-          inStore: false,
-          locator: "msg:chat/500/7/4",
-          sentAt: "2026-01-01T10:04:00.000Z",
+          in_store: false,
+          ref: "msg:chat/500/7/4",
+          sent_at: "2026-01-01T10:04:00.000Z",
           sender,
         },
         {
           url: "https://drive.google.com/drive/my-drive",
-          documentId: null,
+          document_id: null,
           title: null,
-          inStore: false,
-          locator: "msg:chat/500/7/3",
-          sentAt: "2026-01-01T10:03:00.000Z",
+          in_store: false,
+          ref: "msg:chat/500/7/3",
+          sent_at: "2026-01-01T10:03:00.000Z",
           sender,
         },
         {
           url: doc(SHEET),
-          documentId: SHEET,
+          document_id: SHEET,
           title: null,
-          inStore: false,
-          locator: "msg:chat/500/7/2",
-          sentAt: "2026-01-01T10:02:00.000Z",
+          in_store: false,
+          ref: "msg:chat/500/7/2",
+          sent_at: "2026-01-01T10:02:00.000Z",
           sender,
         },
         {
           url: doc(PLAN),
-          documentId: PLAN,
+          document_id: PLAN,
           title: "Q4 plan",
-          inStore: true,
-          locator: "msg:chat/500/7/2",
-          sentAt: "2026-01-01T10:02:00.000Z",
+          in_store: true,
+          ref: "msg:chat/500/7/2",
+          sent_at: "2026-01-01T10:02:00.000Z",
           sender,
         },
         {
           url: doc(PLAN),
-          documentId: PLAN,
+          document_id: PLAN,
           title: "Q4 plan",
-          inStore: true,
-          locator: "msg:chat/500/7/1",
-          sentAt: "2026-01-01T10:01:00.000Z",
+          in_store: true,
+          ref: "msg:chat/500/7/1",
+          sent_at: "2026-01-01T10:01:00.000Z",
           sender,
         },
       ],
-      page: 1,
-      limit: 20,
-      hasMore: false,
+      page: { limit: 20, has_more: false },
+      meta: { run_id: expect.any(String), duration_ms: expect.any(Number) },
     })
   })
 
   it("pages by link, not by message", async () => {
     const { call } = await setup()
     const first = json(await call("chats", "documents", "list", "7", "--limit", "2", "--json"))
-    expect(first).toMatchObject({ page: 1, limit: 2, hasMore: true })
+    expect(first).toMatchObject({ page: { limit: 2, has_more: true }, next: [{ args: { chat: "7", page: 2 } }] })
     const third = json(await call("chats", "documents", "list", "7", "--limit", "2", "--page", "3", "--json"))
-    expect(third).toMatchObject({ page: 3, limit: 2, hasMore: false })
-    expect(third.items.map(({ locator }: { locator: string }) => locator)).toEqual(["msg:chat/500/7/1"])
+    expect(third).toMatchObject({ page: { limit: 2, has_more: false } })
+    expect(third.items.map(({ ref }: { ref: string }) => ref)).toEqual(["msg:chat/500/7/1"])
     expect((await call("chats", "documents", "list", "7", "--all")).code).not.toBe(0)
   })
 
-  it("answers an empty list with a hint on stderr for a chat with no stored messages", async () => {
+  it("answers an empty list with the sync that fetches a chat with no stored messages", async () => {
     const { call } = await setup()
     const empty = await call("chats", "documents", "list", "8", "--json")
-    expect(json(empty)).toEqual({ items: [], page: 1, limit: 20, hasMore: false })
-    expect(empty.stderr).toContain("chat messages sync 8")
+    expect(json(empty)).toMatchObject({
+      items: [],
+      page: { limit: 20, has_more: false },
+      next: [{ step: "messages.sync", command: "messages sync", args: { chat: "8" } }],
+    })
   })
 
   it("prints one line per link for a person", async () => {

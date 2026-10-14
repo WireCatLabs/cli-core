@@ -1,71 +1,57 @@
 import * as v from "valibot"
 import { registriesCover } from "../../botcheck/registries.js"
+import { itemOf, listOf } from "../../cli/envelope.js"
+import { queryArgument } from "../../cli/list-query.js"
+import { chatShown, documentLinkAnswer, snakeKeys, wholeList } from "../../cli/messenger/chat-answers.js"
+import { chatEvents, chatsList, membersAudit, membersHistory, membersList } from "../../cli/messenger/chat-lists.js"
+import { AUDIT_QUERY, CHATS_QUERY, EVENTS_QUERY, HISTORY_QUERY } from "../../cli/messenger/chat-queries.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import type { MessengerAdapter } from "../../cli/messenger/port.js"
-import { listed } from "../../cli/paging.js"
 import { casKey } from "../../cli/registry-keys.js"
-import type { SendGuard } from "../../sends/guard.js"
-import { checkedFilter } from "../../services/chats.js"
+import { nextStep } from "../../cli/steps.js"
 import { EVENTS_DAYS, onlineDeps, servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
-import { type AnyTool, chatOf, envelope, limit, page, paging, READ, tool } from "../tool.js"
+import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.js"
+
+const pagingOf = (args: { limit?: number; page?: number }, defaults: { limit: number }) => {
+  const { size, number } = paging(args, defaults as Parameters<typeof paging>[1])
+  return { limit: size, page: number }
+}
 
 export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
-  const chats = (adapter: MessengerAdapter, guard: SendGuard) =>
-    servicesFor(onlineDeps(messenger, adapter, guard)).chats
   return {
     chats_list: tool({
       title: "List chats",
       description:
         "Chats the owner is in, most recent first. Use it to find a chat's id before reading or sending. " +
-        "With search, kind or unread, every chat is searched, and partial says the messenger could not list them " +
-        "all. Returns { items, page, limit, hasMore, partial? }.",
-      input: v.object({
-        search: v.optional(v.pipe(v.string(), v.minLength(3), v.description("only chats whose name contains this"))),
-        kind: v.optional(v.picklist(["dialog", "group", "channel", "saved"])),
-        unread: v.optional(v.pipe(v.boolean(), v.description("only chats with unread messages"))),
-        limit,
-        page,
-      }),
+        "The list takes no filter yet: neither the messenger nor the store filters chats, so a query is refused.",
+      input: v.object({ query: queryArgument(CHATS_QUERY), limit, page }),
       annotations: READ,
-      served: async (services, { search, kind, unread, ...rest }, defaults) => {
-        const { size, number, window } = paging(rest, defaults)
-        const found = await services.chats.list(checkedFilter({ search, kind, unread }), window)
-        return { ...envelope(found, number, size), ...(found.partial ? { partial: true } : {}) }
-      },
+      output: { entity: "chat", list: true },
+      served: (services, args, defaults) => chatsList(services, args.query, pagingOf(args, defaults)),
     }),
 
     chats_events: tool({
       title: "Who joined or left a chat",
       description:
-        "A chat's service messages since `since_time`: who joined, left, was added or removed, and by whom, oldest " +
-        `first — event is join, leave, add, remove, create, title or pin. ${EVENTS_DAYS} days back if not given. ` +
-        "`type` keeps only those events. Returns { items: [{ messageId, timestamp, event, by, people, title? }], page, " +
-        "limit, hasMore, chatId, since }; hasMore when the history was longer than one run reads.",
-      input: v.object({
-        chat,
-        since_time: v.optional(v.pipe(v.string(), v.description("an ISO 8601 time, or 2h / 1d ago"))),
-        type: v.optional(v.pipe(v.string(), v.description("only these events, comma-separated"))),
-      }),
+        "A chat's service messages: who joined, left, was added or removed, and by whom, oldest first — type is " +
+        `join, leave, add, remove, create, title or pin. The last ${EVENTS_DAYS} days unless query names time ` +
+        '(time>=2d, time>="2026-10-01"). meta.truncated when the history was longer than one run reads.',
+      input: v.object({ chat, query: queryArgument(EVENTS_QUERY) }),
       annotations: READ,
-      online: async (adapter, args, { guard }) => {
-        const { events, more, ...rest } = await chats(adapter, guard).events(args.chat, {
-          ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
-          ...(args.type ? { only: args.type } : {}),
-        })
-        return { ...listed(events), hasMore: more, ...rest }
-      },
+      output: { entity: "chat_event", list: true },
+      online: (adapter, args, { guard }) =>
+        chatEvents(servicesFor(onlineDeps(messenger, adapter, guard)), args.chat, args.query),
     }),
 
     stats_chats_show: tool({
       title: "A chat's numbers for a period",
       description:
         `Counts over a chat's stored messages since \`since_time\` (${EVENTS_DAYS} days back if not given): messages, ` +
-        "senders, replies, threads, reactions, views, forwards and comments where the messenger gave them, topPosts, and " +
-        "questions { asked, answered, medianMinutesToAnswer }. `by` adds a series row per day or week. Reads the local " +
+        "senders, replies, threads, reactions, views, forwards and comments where the messenger gave them, top_posts, and " +
+        "questions { asked, answered, median_minutes_to_answer }. `by` adds a series row per day or week. Reads the local " +
         "store only, so joins and leaves are not in it — chats_events has them. complete is false when the store does " +
-        "not hold the chat whole: then every number is a lower bound, and fetch names the CLI command that fills it.",
+        "not hold the chat whole: then every number is a lower bound, and next names the sync that fills it.",
       input: v.object({
         chat,
         since_time: v.optional(v.pipe(v.string(), v.description("an ISO 8601 time, or 2h / 1d ago"))),
@@ -73,26 +59,31 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         timezone: v.optional(v.pipe(v.string(), v.description("the IANA timezone for calendar days"))),
       }),
       annotations: { ...READ, openWorldHint: false },
-      stored: (store, account, args, defaults) =>
-        servicesFor(storedDeps(messenger, store, account, defaults.guard)).chats.stats(args.chat, {
+      stored: async (store, account, args, defaults) => {
+        const { fetch, ...stats } = await servicesFor(
+          storedDeps(messenger, store, account, defaults.guard),
+        ).chats.stats(args.chat, {
           ...(args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") }),
           ...(args.by ? { by: args.by } : {}),
           ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
-        }),
+        })
+        return itemOf(
+          snakeKeys(stats),
+          fetch === undefined ? {} : { next: [nextStep("messages.sync", { args: { chat: stats.chatId } })] },
+        )
+      },
     }),
 
     chats_members: tool({
       title: "Everyone in a group",
       description:
-        "A group's members, a page at a time: { id, name, username, role?, lastSeenAt? }. role is owner, admin or " +
-        "member; lastSeenAt is null when their privacy hides it. Returns { items, page, limit, hasMore }.",
+        "A group's members, a page at a time: { id, name, username, role?, last_seen_at? }. role is owner, admin or " +
+        "member; last_seen_at is null when their privacy hides it.",
       input: v.object({ chat, limit, page }),
       annotations: READ,
-      online: async (adapter, { chat: reference, ...rest }, defaults) => {
-        const { size, number, window } = paging(rest, defaults)
-        const found = await chats(adapter, defaults.guard).members(reference, window)
-        return { ...envelope(found, number, size), chatId: found.chatId }
-      },
+      output: { entity: "member", list: true },
+      online: (adapter, args, defaults) =>
+        membersList(servicesFor(onlineDeps(messenger, adapter, defaults.guard)), args.chat, pagingOf(args, defaults)),
     }),
 
     chats_members_audit: tool({
@@ -100,63 +91,56 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         "Members of a group that look like bots, highest score first: { id, name, username, score, reasons }. " +
         "Reasons: bot, scam, fake, deleted, no_photo, no_username, odd_name, never_wrote, link_first, burst_join, " +
-        "mass_invited. A score is a hint, never a verdict; the owner and admins are left out. Reads the member list " +
-        "a page at a time (budget pages); unknown names the signals the messenger gave nothing for; more says some " +
-        "members were not read. With deep, the top members also get the full contacts_check, one person a second" +
+        "mass_invited. A score is a hint, never a verdict; the owner and admins are left out. query sets the lowest " +
+        "score shown (score>=3; score>=2 unless named). Reads the member list a page at a time (budget pages); " +
+        "meta.truncated says some members were not read. With deep, the top members also get the full contacts_check, " +
+        "one person a second" +
         (registriesCover(messenger.provider)
           ? " — and their ids are sent to the public ban lists"
           : "; the public ban lists cover Telegram only, so nothing is sent") +
         ". Removes nobody — that is chats_moderate, with the owner's confirmation.",
       input: v.object({
         chat,
+        query: queryArgument(AUDIT_QUERY),
         budget: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description("pages of members to read"))),
-        min_score: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
         deep: v.optional(
           v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(50), v.description("check the top n in full")),
         ),
       }),
       annotations: READ,
-      online: (adapter, args, { guard, env }) => {
+      output: { entity: "member", list: true },
+      online: async (adapter, args, { guard, env }) => {
         const key = args.deep === undefined ? undefined : casKey(messenger.app, env)
-        return chats(adapter, guard).audit(args.chat, {
+        const { body } = await membersAudit(servicesFor(onlineDeps(messenger, adapter, guard)), args.chat, args.query, {
           ...(args.budget === undefined ? {} : { budget: args.budget }),
-          ...(args.min_score === undefined ? {} : { minScore: args.min_score }),
           ...(args.deep === undefined ? {} : { deep: args.deep }),
           ...(key ? { registry: { casKey: key } } : {}),
         })
+        return body
       },
     }),
 
     chats_members_history: tool({
       title: "Who joined, left or changed their profile",
       description:
-        "A group's member history as the local store recorded it with chats members fetch, oldest first: " +
-        "{ chatId, items: [{ at, event: joined | left | changed, id, name, username, invitedBy?, before? }] }. " +
-        "before is the profile seen until then. A leave is recorded only from a member list read whole. Reads the " +
-        "local store only; empty until the owner fetches or tracks the chat.",
-      input: v.object({
-        chat,
-        since_time: v.optional(v.pipe(v.string(), v.description("an ISO 8601 time, or 2h / 1d ago"))),
-      }),
+        "A group's member history as the local store recorded it with chats members fetch, oldest first: type is " +
+        "join, leave or profile; before is the profile seen until then. A leave is recorded only from a member list " +
+        "read whole. query names time to read from (time>=7d). Reads the local store only; empty until the owner " +
+        "fetches or tracks the chat.",
+      input: v.object({ chat, query: queryArgument(HISTORY_QUERY) }),
       annotations: { ...READ, openWorldHint: false },
-      stored: async (store, account, args, defaults) => {
-        const { chatId, events } = await servicesFor(
-          storedDeps(messenger, store, account, defaults.guard),
-        ).chats.memberHistory(
-          args.chat,
-          args.since_time === undefined ? {} : { since: momentOf(args.since_time, "since_time") },
-        )
-        return { chatId, items: events }
-      },
+      output: { entity: "chat_event", list: true },
+      stored: (store, account, args, defaults) =>
+        membersHistory(servicesFor(storedDeps(messenger, store, account, defaults.guard)), args.chat, args.query),
     }),
 
     chats_documents_list: tool({
       title: "Google documents linked in a chat",
       description:
         "Every Google Docs, Sheets, Slides, Forms or Drive link in a chat's stored messages, newest first, one item " +
-        "per link: { items: [{ url, documentId, title, inStore, locator, sentAt, sender: { id, name } }], page, " +
-        "limit, hasMore }. documentId is the Google file id in the URL, null when it carries none; title is the " +
-        "stored document's, null unless inStore. Reads the local store only.",
+        "per link: { url, document_id, title, in_store, ref, sent_at, sender: { id, name } }. document_id is the " +
+        "Google file id in the URL, null when it carries none; title is the stored document's, null unless in_store; " +
+        "ref is the message's locator. Reads the local store only.",
       input: v.object({ chat, limit, page }),
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account, args, defaults) => {
@@ -165,60 +149,77 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
           args.chat,
           window,
         )
-        return envelope(found, number, size)
+        return listOf("chats documents list", {
+          items: found.items.map(documentLinkAnswer),
+          limit: size,
+          has_more: found.hasMore,
+          page: number,
+          args: { chat: args.chat },
+          ...(found.empty ? { next: [nextStep("messages.sync", { args: { chat: found.chatId } })] } : {}),
+        })
       },
     }),
 
     chats_tracking_list: tool({
       title: "Chats whose members are recorded daily",
       description:
-        "The chats whose member lists serve fetches daily into the local store: [{ chatId, title, trackedAt, " +
-        "lastCount: { day, participants, listed, complete } | null }]. Reads the local store only. The owner adds " +
+        "The chats whose member lists serve fetches daily into the local store: { chat_id, title, tracked_at, " +
+        "last_count: { day, participants, listed, complete } | null }. Reads the local store only. The owner adds " +
         "one with the CLI: chats members fetch <chat> --track, or chats tracking add.",
       input: v.object({}),
       annotations: { ...READ, openWorldHint: false },
-      stored: async (store, account) => ({ items: await store.trackedChats(account) }),
+      stored: async (store, account) =>
+        wholeList("chats tracking list", (await store.trackedChats(account)).map(snakeKeys)),
     }),
 
     chats_tracking_show: tool({
       title: "A chat's member count per day",
       description:
         "Whether a chat's members are recorded daily, and its member count per day for the last 30 days: " +
-        "{ chatId, trackedAt | null, counts: [{ day, participants, listed, complete }] }. complete is false for a " +
+        "{ chat_id, tracked_at | null, counts: [{ day, participants, listed, complete }] }. complete is false for a " +
         "day whose member list was not read whole. Reads the local store only.",
       input: v.object({ chat }),
       annotations: { ...READ, openWorldHint: false },
-      stored: (store, account, args, defaults) =>
-        servicesFor(storedDeps(messenger, store, account, defaults.guard)).chats.trackedChat(args.chat),
+      stored: async (store, account, args, defaults) =>
+        itemOf(
+          snakeKeys(
+            await servicesFor(storedDeps(messenger, store, account, defaults.guard)).chats.trackedChat(args.chat),
+          ),
+        ),
     }),
 
     chats_inspect: tool({
       title: "What a link leads to",
       description:
         "What an invite or public link leads to, read without joining: { kind, title, id, username, " +
-        "participantsCount, description, member, approvalNeeded? }. id is null for a private chat the owner is not in.",
+        "participants_count, description, member, approval_needed? }. id is null for a private chat the owner is not in.",
       input: v.object({ link: v.pipe(v.string(), v.minLength(1), v.description("an invite link or a public one")) }),
       annotations: READ,
-      online: (adapter, args, { guard }) => chats(adapter, guard).inspect(args.link),
+      online: async (adapter, args, { guard }) =>
+        itemOf(snakeKeys(await servicesFor(onlineDeps(messenger, adapter, guard)).chats.inspect(args.link))),
     }),
 
     chats_send_as: tool({
       title: "Who the owner may post as",
       description:
-        "The identities the owner may post as in a chat: { id, title, kind, premiumRequired, default }. kind is " +
+        "The identities the owner may post as in a chat: { id, title, kind, premium_required, default }. kind is " +
         "self, channel or group; self is always there; default is the chat's saved choice. Reading changes nothing. " +
-        "Pass an id as messages_send send_as. Returns { items, page, limit, hasMore }.",
+        "Pass an id as messages_send send_as.",
       input: v.object({ chat }),
       annotations: READ,
-      served: async (services, args) => listed(await services.chats.sendAs(args.chat)),
+      served: async (services, args) =>
+        wholeList("chats send-as", (await services.chats.sendAs(args.chat)).map(snakeKeys)),
     }),
 
     chats_show: tool({
       title: "Show a chat",
-      description: "One chat: its kind, unread count, last message time and who is in it.",
+      description:
+        "One chat: its kind, unread count, last message time and who is in it; a group's description, invite link " +
+        "and settings where the messenger gives them.",
       input: v.object({ chat }),
       annotations: READ,
-      served: (services, args) => services.chats.show(args.chat),
+      output: { entity: "chat", list: false },
+      served: async (services, args) => chatShown(await services.chats.account(), await services.chats.show(args.chat)),
     }),
   }
 }

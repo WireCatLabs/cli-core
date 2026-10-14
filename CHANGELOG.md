@@ -56,6 +56,21 @@ shape of this file.
   `@wirecat/cli-messaging-sqlite`/`-onnx` 1.0.1, which are deprecated later. Only a caller that imports an add-on
   directly needs the new name.
 
+- **Chats, members, links, requests, folders, contacts, polls, reactions and topics answer in the
+  envelope**, CLI and MCP alike: a list is `{items, page, next?, missing?, meta}`, anything else `{item, next?,
+  missing?, meta}`, every key in snake_case (`chat_id`, `operation_id`, `not_added`, `unread_count`). New entities
+  `chat_event`, `invite_link`, `join_request`, `member`, `poll_vote`, `topic` and `folder`; the list tools publish their
+  `outputSchema`. Hints that went to stderr are `next` steps (`messages.sync`, `chats.members`,
+  `chats.members-fetch`, `page.next`) or `missing` entries — `chats show` names a member list shorter than the
+  chat's own count, `chats documents list` the sync that fills an empty chat.
+- **These lists take a query in place of their filter flags**, the MCP tools a `query` argument:
+  `chats events <chat> time>=2d` (was `--since-time`), `chats members history <chat> time>=7d`, `chats members audit
+  <chat> score>=3` (was `--min-score`), `chats link list <chat> revoked:true`, `chats requests list <chat> name:ana`
+  or `link:"…"` (was `--search`, `--link`), `contacts list name:ana*` (was `--search`), `polls voters … answers:0`
+  (was `--answer`). A provider list takes only what its source filters, joined by AND; any other field is
+  `query.unsupported-field`. So `chats list --search/--kind/--unread`, `chats events --type` and `contacts list
+  --search-notes`, which filtered every row in memory, are gone without a replacement.
+
 ### Added
 
 - **`withQuery`, `listQuery` and `queryArgument` (`src/cli/list-query.ts`)**: a list's positional `[query...]`, its

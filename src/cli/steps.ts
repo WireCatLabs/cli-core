@@ -34,6 +34,21 @@ export const STEPS = defineSteps([
     why: "a voice message is not heard yet; this hears it",
   },
   {
+    id: "chats.members",
+    command: "chats members list",
+    args: [{ name: "chat", required: true }],
+    why: "the chat's member list has everyone it lets you see",
+  },
+  {
+    id: "chats.members-fetch",
+    command: "chats members fetch",
+    args: [
+      { name: "chat", required: true },
+      { name: "track", required: false },
+    ],
+    why: "nothing is recorded yet; a fetch records the members, and --track keeps doing it daily",
+  },
+  {
     id: "models.download",
     command: "models text download",
     args: [{ name: "model", required: true }],
