@@ -16,7 +16,7 @@ import { chatOf, limit } from "../tool.js"
 const EXACT = "bare words and quotes match their exact form only, as exact:word does; not with an AST"
 
 export const MESSAGES_SEARCH_DESCRIPTION =
-  "Use discover=true for partial lexical evidence and eligible replies to natural questions in the local archive, without model downloads; inspect each item's discovery.missing_terms and its context before answering. Explicit syntax stays strict, and ranking is not answer confidence. Search the local store, and the messenger's server where it can search, using the Lucene 9.12.3 profile, default AND, with strict Boolean matching. Legacy discovery is explicit with language=legacy. chat: narrows to one chat; has:voice, has:file and NOT has:attachment to voice messages, files or text alone. `saved` runs a saved search (searches_list) or an earlier run (searches_history). With sync_first, first fetch new messages within max_chats (5), sync_time (30s), max_messages (500), under messages.sync-first permission. thread=true puts each hit's bounded parent/reply graph in its context; thread_hops, thread_messages, thread_bytes, thread_within set its bounds. Guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md. Text words and quoted phrases match every form of their words (Snowball stems, exact forms ranked first); exact:word, or exact=true, matches the exact form only. A bare word also matches voice transcripts, file names and file text; each item's matched_in says where (text, transcript, filename, file) and its excerpt comes from there; items with matched_in picture follow the text hits on the first page: pictures found by what they show, where the profile turned picture search on; text:, transcript:, content: (file text), filename: narrow to one place. Without discover=true, where the messenger's server can search, it is also asked by default (backend=both; archive for the local store only) within server_time (5s), under messages.server-search: its hits are saved and re-checked by the same strict query, and each item's found_in says archive, server or both. Returns { items, page, next?, missing?, meta }: items are message hits; meta.accounts the accounts read. A missing entry with field coverage means the archive lacks messages: when nothing was found, run its next step (messages sync) or ask the owner before concluding the message does not exist."
+  "Use discover=true for partial lexical evidence and eligible replies to natural questions in the local archive, without model downloads; inspect each item's discovery.missing_terms and its context before answering. Explicit syntax stays strict, and ranking is not answer confidence. Search the local store, and the messenger's server where it can search, using the Lucene 9.12.3 profile, default AND, with strict Boolean matching. chat: narrows to one chat; has:voice, has:file and NOT has:attachment to voice messages, files or text alone. `saved` runs a saved search (searches_list) or an earlier run (searches_history). With sync_first, first fetch new messages within max_chats (5), sync_time (30s), max_messages (500), under messages.sync-first permission. thread=true puts each hit's bounded parent/reply graph in its context; thread_hops, thread_messages, thread_bytes, thread_within set its bounds. Guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/query-language.md. Text words and quoted phrases match every form of their words (Snowball stems, exact forms ranked first); exact:word, or exact=true, matches the exact form only. A bare word also matches voice transcripts, file names and file text; each item's matched_in says where (text, transcript, filename, file) and its excerpt comes from there; items with matched_in picture follow the text hits on the first page: pictures found by what they show, where the profile turned picture search on; text:, transcript:, content: (file text), filename: narrow to one place. Without discover=true, where the messenger's server can search, it is also asked by default (backend=both; archive for the local store only) within server_time (5s), under messages.server-search: its hits are saved and re-checked by the same strict query, and each item's found_in says archive, server or both. Returns { items, page, next?, missing?, meta }: items are message hits; meta.accounts the accounts read. A missing entry with field coverage means the archive lacks messages: when nothing was found, run its next step (messages sync) or ask the owner before concluding the message does not exist."
 
 export const backendInputs = {
   backend: v.optional(
@@ -54,7 +54,7 @@ export const messagesSearchInput = (messenger: Messenger) =>
     ...((messenger.serverSearch ? backendInputs : {}) as typeof backendInputs),
     ...threadInputs,
     ...syncInputs,
-    text: v.optional(v.pipe(v.string(), v.description("the query: Lucene text or explicit legacy syntax"))),
+    text: v.optional(v.pipe(v.string(), v.description("the query, in Lucene syntax"))),
     ast: v.optional(v.unknown()),
     discover: v.optional(
       v.pipe(
@@ -64,7 +64,6 @@ export const messagesSearchInput = (messenger: Messenger) =>
         ),
       ),
     ),
-    language: v.optional(v.picklist(["lucene", "legacy"])),
     timezone: v.optional(v.string()),
     source: v.optional(
       v.pipe(
@@ -168,7 +167,6 @@ export const answerMessagesSearch = async (
     ...(args.saved === undefined ? {} : { saved: args.saved }),
     ...(args.source === undefined ? {} : { source: args.source }),
     ...(args.discover ? { discover: true } : {}),
-    ...(args.language === undefined ? {} : { language: args.language }),
     ...(args.exact ? { exact: true } : {}),
     ...(args.newest ? { newest: true } : {}),
     ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
@@ -177,17 +175,16 @@ export const answerMessagesSearch = async (
     messagesAnswer(`search ${kind}`, found, { limit, page: args.page ?? 1, again }, args.text)
   const resolved = await resolveSaved(searches, args)
   if (resolved) {
-    const { params, pattern } = resolved
+    const { params } = resolved
     const size = params.limit ?? defaults.limit
     const found = await messages.search({
       kind,
       ...syncArgs(args),
       ...backendArgs(args),
       ...threadArgs(args),
-      ...(pattern ? { pattern } : params.text === undefined ? {} : { text: params.text }),
+      ...(params.text === undefined ? {} : { text: params.text }),
       ...(params.ast === undefined ? {} : { ast: params.ast }),
       ...(params.discover === undefined ? {} : { discover: params.discover }),
-      language: params.language ?? (pattern ? "legacy" : "lucene"),
       signal: defaults.signal,
       ...(params.timezone === undefined ? {} : { timezone: params.timezone }),
       limit: size,
@@ -212,7 +209,6 @@ export const answerMessagesSearch = async (
     ...(args.text === undefined ? {} : { text: args.text }),
     ...(args.ast === undefined ? {} : { ast: args.ast }),
     ...(args.discover === undefined ? {} : { discover: args.discover }),
-    language: args.language ?? "lucene",
     signal: defaults.signal,
     ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
     limit: size,
@@ -264,18 +260,12 @@ export const answerMessagesStats = async (
 ) => {
   const resolved = await resolveSaved(searches, args)
   const params: SearchParams = resolved?.params ?? args
-  if (params.regex || params.language === "legacy")
-    throw new CliError(
-      "validation_error",
-      "stats messages show counts strict Lucene queries; this saved search is legacy",
-    )
   const size = params.limit ?? defaults.limit
   const stats = await messages.stats({
     ...syncArgs(args),
     ...(params.text === undefined ? {} : { text: params.text }),
     ...(params.ast === undefined ? {} : { ast: params.ast }),
     by: params.by ?? "chat",
-    language: "lucene",
     ...(params.exact ? { exact: true } : {}),
     signal: defaults.signal,
     ...(params.timezone === undefined ? {} : { timezone: params.timezone }),

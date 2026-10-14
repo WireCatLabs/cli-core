@@ -7,7 +7,7 @@ import { renderMessages } from "../../render/messages.js"
 import { pickPerson } from "../../resolve.js"
 import type { SearchFound } from "../../services/messages.js"
 import { searchStore } from "../../services/messages-archive-search.js"
-import type { AccountKey, MessageStore, StoredHit } from "../../store/store.js"
+import type { MessageStore, StoredHit } from "../../store/store.js"
 import { REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { messageItem } from "../messenger/message-items.js"
@@ -232,11 +232,17 @@ const search = (
     throw new CliError("validation_error", "say what to find: some text, or who wrote it with --from")
   }
   const { people } = scopeOf(context, bot, options)
+  const own = context.registry.botId()
+  if (!own)
+    throw new CliError(
+      "not_found",
+      `nothing is recorded for this bot on this machine — run \`${context.words} messages list <chat>\` once`,
+    )
   const accounts = ("account" in people ? [people.account] : people.accounts).map(context.copy.accountOf)
   return context.copy.read(async (store) => {
     const senders = (await resolve(store, bot, from, people)).map(({ id }) => ({ provider: bot.provider, id }))
-    return searchStore(store, accounts[0] as AccountKey, {
-      text,
+    return searchStore(store, context.copy.accountOf(own), {
+      ...(text.trim() === "" ? {} : { text }),
       accounts,
       ...(senders.length > 0 ? { senders } : {}),
       limit: options.limit ?? context.settings.limit,
@@ -261,7 +267,7 @@ export const botSearchCommand = (bot: BotMessenger): Command => {
     )
     .description(
       "search the messages this bot has read, sent or received on this machine — the local copy only, best " +
-        'match first; every word must appear; "a phrase", -word, a OR b, from: chat: after: before: has:; ' +
+        'match first; a Lucene query: every word must appear; "a phrase", -word, a OR b, from: chat: date: has:; ' +
         "by text, by --from, or both",
     )
     .action(async function (
@@ -278,12 +284,6 @@ export const botSearchCommand = (bot: BotMessenger): Command => {
           limit,
           offset: (page - 1) * limit,
         })
-        for (const { from, to } of found.corrections) context.renderer.note(`${from} → ${to.join(", ")}`)
-        if (!found.wordsReady) {
-          context.renderer.note(
-            `the word index is still being built, so a search by words reads pieces of words until \`${bot.app.command} store migrate\` finishes it`,
-          )
-        }
         renderAnswer(
           this,
           context,

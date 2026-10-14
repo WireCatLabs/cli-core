@@ -118,7 +118,7 @@ const gapsOf = (found: SearchFound): { next: NextStep[]; missing: Missing[] } =>
       field: "text",
       why: found.wordsReady
         ? "other forms of words are not searched while their index is built"
-        : "the word index is still being built, so words were matched by pieces",
+        : "the word index is still being built",
       step: "store.migrate",
     })
   }

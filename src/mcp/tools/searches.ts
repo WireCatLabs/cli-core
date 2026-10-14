@@ -61,9 +61,8 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
         "Writes only to the local store.",
       input: v.object({
         name: v.pipe(v.string(), v.minLength(1), v.description("up to 64 letters a–z, digits and hyphens")),
-        text: v.optional(v.pipe(v.string(), v.minLength(1), v.description("the query: Lucene text or legacy syntax"))),
+        text: v.optional(v.pipe(v.string(), v.minLength(1), v.description("the query, in Lucene syntax"))),
         ast: v.optional(v.unknown()),
-        language: v.optional(v.picklist(["lucene", "legacy"])),
         timezone: v.optional(v.string()),
         chat: v.optional(chatOf(messenger)),
         source: v.optional(v.pipe(v.string(), v.minLength(1), v.description("a messenger held on this machine"))),
@@ -99,7 +98,6 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
               target: selection.target,
               ...selection.options,
               timezone: selection.timezone,
-              language: "lucene",
             },
             { replace: replace === true },
           )

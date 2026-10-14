@@ -236,15 +236,8 @@ normalized text first, then the words, then the typo vocabulary (`search_terms`,
 `search_term_trigrams`), then the words of messages stored since — from `store migrate`,
 `store reindex`, and up to 200 ms before each
 `search messages`. When everything is built it returns without taking the write lock. `search messages`
-ranks by it. The search's steps over it are in
-`src/store/sqlite/words.ts`: `matchWords` (every or any word, whole or as beginnings, bm25 then
-newest), `matchSubstring`, and `knownTerms` and `termCandidates` for typo correction. A chat or
-sender of at most `SCOPE_TOKEN_LIMIT` (100,000) messages is filtered inside the index by its scope token, a larger
-one by a join; `src/store/search-plan.test.ts` fails if any step reads an index once per message.
-`search` (`src/search/search.ts`) runs them in the plan's order — every word topped up by beginnings,
-typo correction, any word unless the query chose with OR, substring — each only when the one before
-found nothing, and by substring alone until the word index is ready. Its tests are the owner's
-scenarios (`docs/storage/search-indexes.md`).
+ranks by it. `src/store/sqlite/words.ts` keeps `knownTerms` and `termCandidates`, which `--discover`
+uses for typo correction; `src/store/search-plan.test.ts` fails if a search reads an index once per message.
 
 **Stems (version 15).** `message_stems` holds the Snowball stems of `messages.text` — stemmed before
 folding, by `createStemmer` (`src/search/stem.ts`) — in the same shape as `message_words`: contentless

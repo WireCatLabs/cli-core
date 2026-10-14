@@ -2,7 +2,6 @@ import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { type Embedder, meanOf, openEmbedder, truncated, unit, warmEmbedders } from "./embed.js"
 import type { TextModel } from "./models.js"
-import { openPool } from "./pool.js"
 
 describe("embedding arithmetic", () => {
   it("**cuts a long text** to the model's limit, keeping the closing special token", () => {
@@ -47,23 +46,6 @@ describe("openEmbedder", () => {
       expect(rounded((await embedder.embed(["cat"], "query"))[0])).toEqual(["0.7071", "0.0000", "0.7071", "0.0000"])
     } finally {
       await embedder.close()
-    }
-  })
-})
-
-describe("openPool", () => {
-  it("**refuses more workers than free memory holds**, before starting any", async () => {
-    await expect(openPool(tiny, "/nowhere", { workers: 4, free: 1_000_000_000 })).rejects.toThrow(
-      "4 workers need about 3 GB, and 1 GB is free — use fewer",
-    )
-  })
-
-  it("is one session in this thread for one worker", async () => {
-    const pool = await openPool(tiny, fileURLToPath(new URL("./fixtures", import.meta.url)), { workers: 1, threads: 1 })
-    try {
-      expect(rounded((await pool.embed(["dog"], "passage"))[0])).toEqual(["0.0000", "1.0000", "0.0000", "0.0000"])
-    } finally {
-      await pool.close()
     }
   })
 })

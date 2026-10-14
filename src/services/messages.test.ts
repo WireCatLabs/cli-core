@@ -129,7 +129,7 @@ describe("the messages service", () => {
     expect(asked).toEqual([])
   })
 
-  it("defaults the service to Lucene like CLI/MCP, keeping explicit legacy and the low-level helper", async () => {
+  it("searches the service and the low-level helper in Lucene, as CLI/MCP do", async () => {
     const store = await keptStore()
     const service = messagesService(storedDeps(messenger, store, account, guard))
     const strict = await service.search({ text: "chapter OR nonexistent", limit: 10 })
@@ -137,10 +137,7 @@ describe("the messages service", () => {
     expect(strict.items.map(({ id }) => id)).toEqual(["3", "2", "1"])
     await expect(service.search({ text: "chapter~1", limit: 10 })).rejects.toMatchObject({ code: "validation_error" })
     expect((await service.stats({ text: "chapter OR nonexistent", by: "chat", limit: 10 })).total).toBe(3)
-    const explicit = await service.search({ text: "chapter", language: "legacy", limit: 10 })
-    expect(explicit.query).toBeUndefined()
-    expect((await searchStore(store, account, { text: "chapter", limit: 10 })).query).toBeUndefined()
-    expect((await service.search({ pattern: /chapter/u, limit: 10 })).query).toBeUndefined()
+    expect((await searchStore(store, account, { text: "chapter", limit: 10 })).query?.language).toBe("lucene-v1")
   })
 
   it("keeps locator account isolation for time context before store or messenger reads", async () => {

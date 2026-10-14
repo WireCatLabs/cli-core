@@ -142,10 +142,6 @@ const answerers = async (
   })
   return [...new Map(found.map((one) => [JSON.stringify(one), one])).values()]
 }
-const requireStore = (store: MessageStore) => {
-  if (!store.adminStatisticsQuery) invalid("this store does not support administrator statistics — upgrade cli-core")
-  return store.adminStatisticsQuery.bind(store)
-}
 export const isAdminSelection = (selection: unknown): boolean => {
   let raw = selection
   if (typeof raw === "string") {
@@ -214,8 +210,8 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
   report: async (report, query) => {
     if (!["unanswered", "responses", "newcomers", "discussion"].includes(report))
       invalid("unknown administrator report")
-    if (query.syncFirst || query.language === "legacy" || query.pattern || query.newest || query.context)
-      invalid("administrator reports read stored strict Lucene selections without sync/regex/newest/context")
+    if (query.syncFirst || query.newest || query.context)
+      invalid("administrator reports read stored strict Lucene selections without sync/newest/context")
     if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) invalid("report limit must be 1–100")
     const cutoff = Date.now(),
       store = await deps.store(),
@@ -236,7 +232,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
           timezone: pinned.base.timezone,
           selectedChat: pinned.base.contextChat ?? pinned.base.execution.chat,
         }
-      : await prepareLucene(store, account, { ...query, language: "lucene" }, deps.messenger)
+      : await prepareLucene(store, account, query, deps.messenger)
     if (pinned) await stemExecution(prepared.execution, store)
     if (pinned && query.text?.trim()) {
       const extra = await prepareLucene(
@@ -247,7 +243,6 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
           accounts: prepared.execution.accounts,
           timezone: prepared.timezone,
           limit: query.limit,
-          language: "lucene",
         },
         deps.messenger,
       )
@@ -301,7 +296,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
     if (options.joinSince > options.joinUntil) invalid("join dates are reversed")
     if (report === "responses" && !options.answerers.length)
       invalid("responses requires at least one --answerer identity")
-    const result = await requireStore(store)(prepared.execution, { options })
+    const result = await store.adminStatisticsQuery(prepared.execution, { options })
     const known = new Set<string>()
     if (report === "responses")
       for (const person of options.answerers) {
@@ -324,7 +319,6 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
         searchRecordOf("admin-statistics", {
           adminReport: report,
           selection,
-          language: "lucene",
           timezone: prepared.timezone,
         }),
         saved ? { saved: saved.id } : {},
@@ -408,7 +402,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
       ...(request.signal ? { signal: request.signal } : {}),
     }
     await stemExecution(execution, store)
-    const result = await requireStore(store)(execution, {
+    const result = await store.adminStatisticsQuery(execution, {
       options: o,
       evidence: { entity, ...(request.cursor ? { cursor: request.cursor } : {}) },
     })

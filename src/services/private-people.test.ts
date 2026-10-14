@@ -252,11 +252,9 @@ describe("cached metadata and automatic tags", () => {
     await f.store.removeTags(key, { type: "chat", chatId: "7" }, ["personal"], "manual")
     expect((await f.store.tags(key, { tag: "personal" })).find((entry) => entry.chatId === "7")).toBeUndefined()
     await f.store.addTags(key, { type: "chat", chatId: "7" }, ["personal"])
-    expect(
-      (await searchStore(f.store, key, { text: "tag:ai", language: "lucene", limit: 100 })).items
-        .map((hit) => hit.id)
-        .sort(),
-    ).toEqual(["101", "102", "105", "106", "107", "109"])
+    expect((await searchStore(f.store, key, { text: "tag:ai", limit: 100 })).items.map((hit) => hit.id).sort()).toEqual(
+      ["101", "102", "105", "106", "107", "109"],
+    )
     await f.store.addTags(key, { type: "chat", chatId: "7" }, ["ai"])
     await f.store.saveChatMetadata(key, { chatId: "7", title: "No known topic", username: null, description: null })
     await f.services.metadata.auto({ chats: ["7"] })

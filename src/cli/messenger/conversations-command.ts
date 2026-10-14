@@ -359,11 +359,6 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       )
       .option("--chat <chat>", messenger.chatArgument),
   )
-    .option(
-      "--workers <n>",
-      "local: sessions in parallel, each with its own copy of the model (~0.7 GB each)",
-      positiveCount("--workers"),
-    )
     .option("--threads <n>", "local: threads in all (default: min(8, cores))", positiveCount("--threads"))
     .option("--concurrency <n>", "remote: requests at once (default: 4)", positiveCount("--concurrency"))
     .option(
@@ -376,7 +371,6 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     const options = this.optsWithGlobals<
       ModelOptions & {
         chat?: string
-        workers?: number
         threads?: number
         maxTokens?: number
         yes?: boolean
@@ -392,7 +386,6 @@ export const conversationsCommand = (messenger: Messenger): Command => {
           build: false,
           model: model as string,
           ...bounds(options),
-          ...(options.workers ? { workers: options.workers } : {}),
           ...(options.threads ? { threads: options.threads } : {}),
           progress: (note) => context.renderer.note(note),
         }),
@@ -412,7 +405,6 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       }
       return services.embeddings.embed(chat, {
         model,
-        ...(options.workers ? { workers: options.workers } : {}),
         ...(options.threads ? { threads: options.threads } : {}),
         ...(options.maxChunks ? { maxChunks: options.maxChunks } : {}),
         progress: (embedded, left) => context.renderer.note(`${embedded} embedded, ${left} left`),

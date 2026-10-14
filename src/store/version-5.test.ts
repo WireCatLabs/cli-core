@@ -47,7 +47,7 @@ it("finds by name a file stored before version 5", async () => {
   const upgraded = await openStore({ path })
   try {
     for (const word of ["heron", "мой", "отчет"]) {
-      const found = await searchStore(upgraded, account, { limit: 20, text: word, language: "lucene" })
+      const found = await searchStore(upgraded, account, { limit: 20, text: word })
       expect(found.items.map(({ id }) => id)).toEqual(["1"])
     }
   } finally {

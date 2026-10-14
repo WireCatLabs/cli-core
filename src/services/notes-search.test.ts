@@ -69,7 +69,7 @@ describe("a note and a message with the same text", () => {
     const note = await store.notes.addNote({ text: TEXT })
     await store.knowledge.addTags(account, { type: "note", id: note.id }, ["work"])
 
-    const messages = await searchStore(store, account, { text: query, language: "lucene", limit: 10, timezone: "UTC" })
+    const messages = await searchStore(store, account, { text: query, limit: 10, timezone: "UTC" })
     expect(messages.items.length > 0).toBe(found)
     expect((await noteIds(store, query)).length > 0).toBe(found)
   })

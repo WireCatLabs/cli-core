@@ -68,7 +68,7 @@ No output schema means output validation is unknown, not proof that responses ag
 manifest rows and opt-in visibility are not implementation absence or passing behaviour tests.
 
 The synthetic fixture covers local personal archive queries/reads and words-only conversation fallback.
-Bot legacy search, semantic model execution,
+Bot search, semantic model execution,
 provider name filters and future remote search are separate workflows. Checked-in reference
 fixtures do not mean Java harnesses, benchmarks, real models or all operator/value combinations
 ran in this audit. Live accounts, delivery/read acknowledgements, OS services/browser auth and

@@ -39,7 +39,6 @@ export const retentionService = (deps: ServiceDeps) => ({
     }
     const store = await deps.store(),
       account = await deps.account()
-    if (!store.retention) throw new CliError("validation_error", "retention requires a newer messaging store")
     const chatId = await storedChatId(deps.messenger, chat, store, account)
     const result = await store.retention(account, chatId, options)
     return {
@@ -95,8 +94,7 @@ export const retentionService = (deps: ServiceDeps) => ({
       raw.chatId.length > 256 ||
       raw.cohort !== reference ||
       !/^\d{4}-\d{2}-\d{2}$/.test(raw.cohort) ||
-      !raw.options ||
-      !store.retention
+      !raw.options
     )
       throw new CliError("validation_error", "invalid or out-of-scope retention selection")
     query.signal?.throwIfAborted()

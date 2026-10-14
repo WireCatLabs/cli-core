@@ -515,7 +515,7 @@ export const QUERY_OPERATORS = [
   {
     name: "fuzzy / proximity",
     example: "invoice~1",
-    semantics: "unsupported_operator; опечатки исправляет `--language legacy`, формы слова ловит prefix `word*`",
+    semantics: "unsupported_operator; формы слова ловит prefix `word*`",
   },
   { name: "boost / minimum / intervals", example: "invoice^2", semantics: "query.unsupported-operator" },
 ] as const

@@ -41,7 +41,7 @@ it("finds a file name among more messages with files than the candidate row limi
     })),
     { via: "history" },
   )
-  const run = (text: string) => searchStore(store, account, { text, language: "lucene", limit: 100 })
+  const run = (text: string) => searchStore(store, account, { text, limit: 100 })
   expect((await run("filename:*.pdf")).items.map(({ id }) => id)).toEqual(["21"])
   expect((await run("has:file AND NOT filename:*.jpg")).items).toHaveLength(1)
   await expect(run("body:/.*/")).rejects.toThrow("candidate rows")

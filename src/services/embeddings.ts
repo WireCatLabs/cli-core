@@ -42,7 +42,6 @@ export interface EmbeddingsService {
     chat: string,
     options: {
       model?: ModelChoice
-      workers?: number
       threads?: number
       /** Stops after this many chunks; the next run resumes. */
       maxChunks?: number
@@ -101,7 +100,6 @@ export interface RefreshOptions {
   embed?: boolean
   maxChats?: number
   maxChunks?: number
-  workers?: number
   threads?: number
   progress?: (note: string) => void
 }

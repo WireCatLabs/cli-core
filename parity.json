@@ -449,11 +449,6 @@
       "meaning": "chat kinds: dialog, group; comma-separated, empty for any",
       "value": "<kinds>"
     },
-    "--language": {
-      "value": "<lucene|legacy>",
-      "meaning": "the query language: strict Lucene or legacy discovery",
-      "default": "lucene"
-    },
     "--last": {
       "value": "<n>",
       "meaning": "stop once the newest n messages are held; not with --since",
@@ -843,9 +838,6 @@
     "--refresh-metadata": {
       "meaning": "read current descriptions from the messenger before classifying"
     },
-    "--regex": {
-      "meaning": "the words are one regular expression, case-insensitive, tested against every stored text"
-    },
     "--remove": {
       "value": "<chat>",
       "meaning": "take a chat out of a folder; repeat it for more"
@@ -1105,10 +1097,6 @@
     "--words": {
       "meaning": "match any of these whole words, comma-separated; empty clears",
       "value": "<words>"
-    },
-    "--workers": {
-      "value": "<n>",
-      "meaning": "sessions in parallel, each with its own copy of the model"
     },
     "--yes": {
       "meaning": "go ahead without the question an ask level puts before a write"
@@ -2345,8 +2333,7 @@
         "--max-tokens": "all",
         "--model": "all",
         "--provider": "all",
-        "--threads": "all",
-        "--workers": "all"
+        "--threads": "all"
       }
     },
     "conversations embed clear": {
@@ -3272,7 +3259,6 @@
         "--context": "all",
         "--discover": "all",
         "--exact": "all",
-        "--language": "all",
         "--limit": "all",
         "--max-chats": {
           "in": "all"
@@ -3282,7 +3268,6 @@
         },
         "--newest": "all",
         "--page": "all",
-        "--regex": "all",
         "--saved": {
           "in": "all"
         },
@@ -3355,16 +3340,10 @@
           "in": "all"
         },
         "--exact": "all",
-        "--language": {
-          "in": "all"
-        },
         "--limit": {
           "in": "all"
         },
         "--newest": {
-          "in": "all"
-        },
-        "--regex": {
           "in": "all"
         },
         "--replace": {

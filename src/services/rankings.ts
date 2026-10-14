@@ -86,11 +86,8 @@ const empty = (): RankedStoreFound => ({
 
 export const rankingsService = (deps: ServiceDeps): RankingsService => ({
   top: async (target, request) => {
-    if (request.language === "legacy" || request.pattern || request.newest || request.context)
-      throw new CliError(
-        "validation_error",
-        "rankings use strict Lucene and ranking order, without regex/newest/context search modes",
-      )
+    if (request.newest || request.context)
+      throw new CliError("validation_error", "rankings use ranking order, without newest/context search modes")
     if (request.limit < 1 || request.limit > 100 || !Number.isInteger(request.limit))
       throw new CliError("validation_error", "ranking limit must be 1–100")
     const pinned =
@@ -129,7 +126,6 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
             accounts: execution.accounts,
             timezone: selection.timezone,
             limit: request.limit,
-            language: "lucene",
             ...(request.exact ? { exact: true } : {}),
           },
           deps.messenger,
@@ -151,7 +147,7 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
         stemsReady: (await store.stemsState())?.ready === true,
         ...(selection.contextChat ? { selectedChat: selection.contextChat } : {}),
       }
-    } else prepared = await prepareLucene(store, account, { ...request, language: "lucene" }, deps.messenger)
+    } else prepared = await prepareLucene(store, account, request, deps.messenger)
     if (
       options.components.some((name) =>
         [
@@ -168,13 +164,10 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
     )
       rankingContextRange(prepared.execution.root)
     const refreshed = await refreshSearch(deps, request)
-    if (request.syncFirst)
-      prepared = await prepareLucene(store, account, { ...request, language: "lucene" }, deps.messenger)
-    if (!store.rankQuery)
-      throw new CliError("validation_error", "this store does not support rankings — upgrade cli-core")
+    if (request.syncFirst) prepared = await prepareLucene(store, account, request, deps.messenger)
     const contextChat = prepared.selectedChat
     let expandedDiscussionChats: string[] = []
-    if (options.messageKind === "comments" && contextChat && store.rankingDiscussionChats) {
+    if (options.messageKind === "comments" && contextChat) {
       expandedDiscussionChats = await store.rankingDiscussionChats(contextChat.account, contextChat.chatId)
       if (expandedDiscussionChats.length) {
         const expand = (node: ResolvedNode): ResolvedNode => {
@@ -307,7 +300,6 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
         ...(request.chat === undefined ? {} : { chat: request.chat }),
         ...(request.source === undefined ? {} : { source: request.source }),
         ...(request.exact ? { exact: true } : {}),
-        language: "lucene" as const,
         timezone: prepared.timezone,
         limit: request.limit,
         target,
@@ -367,8 +359,6 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
         throw new CliError("validation_error", "message does not match this ranking selection")
     } else if (reference !== selection.entity.id)
       throw new CliError("validation_error", "person does not match this ranking selection")
-    if (!store.rankingEvidence)
-      throw new CliError("validation_error", "this store does not support ranking evidence — upgrade cli-core")
     const execution: QueryExecution = {
       ...selection.execution,
       limit: 1,

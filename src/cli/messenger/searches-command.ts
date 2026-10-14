@@ -12,7 +12,7 @@ import { itemOf, listOf, renderAnswer } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
 import { positiveCount, withPaging } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
-import { languageOf, wholeCount } from "./messages-search-command.js"
+import { wholeCount } from "./messages-search-command.js"
 import { groupingOf } from "./messages-stats-command.js"
 
 const line = ({ id, name, command, params, runs, lastRunAt }: StoredSearch) =>
@@ -50,9 +50,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
       "bare words and quotes match their exact form only, as exact:word does; text: still matches every form",
     )
     .option("--context <n>", "messages before and after each hit", wholeCount)
-    .option("--language <lucene|legacy>", "the query language: strict Lucene or legacy discovery", languageOf)
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
-    .option("--regex", "the words are one regular expression, case-insensitive, tested against every stored text")
     .option("--by <chat|sender|day|hour>", "what stats messages show --saved counts by", groupingOf)
     .option("--selection <json>", "save the resolved parent ranking query and options from a drilldown")
     .option("--replace", "overwrite a saved search of the same name")
@@ -77,7 +75,6 @@ export const searchesCommand = (messenger: Messenger): Command => {
             target: selection.target,
             ...selection.options,
             timezone: selection.timezone,
-            language: "lucene",
           }
         }
       }

@@ -145,9 +145,7 @@ describe("searches", () => {
     expect((await call("searches", "create", "123", "invoice", "--json")).stderr).toContain(
       "cannot name a saved search",
     )
-    await call("searches", "create", "pattern", "inv.ice", "--regex", "--json")
-    expect((await call("stats", "messages", "show", "--saved", "pattern", "--json")).stderr).toContain("legacy")
-    expect((await call("search", "messages", "--saved", "pattern", "--regex", "--json")).code).toBe(2)
+    await call("searches", "create", "pattern", "body:/.*inv.ice.*/", "--json")
     expect(ids(json(await call("search", "messages", "--saved", "pattern", "--json")))).toEqual(["101", "102", "106"])
     expect((await call("searches", "create", "pattern", "x", "--json")).stderr).toContain("--replace")
   })

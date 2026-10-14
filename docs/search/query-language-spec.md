@@ -55,8 +55,7 @@ Explicit legacy mode остаётся до отдельно согласован
 `FIELD_VERSION=1`, `PRESET_VERSION=1`; registry включает field type/operators/enums/normalization,
 example/index/aliases/support. AST text/structured validation одна. Из registry генерируются
 operator/field tables, budgets, presets и recipes; `docs:check` проверяет drift.
-`SavedQuery` — versioned interface; persistence/migration repository остаётся A2.
-`migrateLegacyQuery` — pure preview с explicit grouping/UTC instants и discovery warnings.
+Сохранённый поиск хранит `language: "lucene-v1"`; строка другого языка отказывает при запуске.
 
 ## Field mappings
 
@@ -64,7 +63,7 @@ text — существующий SQLite FTS5 `unicode61 remove_diacritics 2` н
 NFKD/mark stripping/NFC/lowercase/control-whitespace folding не меняются. Literal с несколькими
 анализированными tokens сопоставляется как последовательность; несколько query terms — Boolean.
 Phrase proximity, boost и fuzzy profile operators отвергаются; discovery никогда не добавляет hits.
-`~` после term — alternative про `--language legacy` и prefix `word*`; после phrase — про proximity.
+`~` после term — alternative про prefix `word*`; после phrase — про proximity.
 body — исходный case-sensitive keyword. Его empty quoted literal/empty regex выбирают empty body;
 empty text literal не совпадает с индексированным token.
 

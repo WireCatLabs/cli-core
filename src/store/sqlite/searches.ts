@@ -11,7 +11,7 @@ export type SearchCommand = "search" | "stats" | "message-top" | "author-top" | 
 export interface SearchRecord {
   command: SearchCommand
   params: string
-  language: string
+  language: "lucene-v1"
   version: number
   fieldsVersion: number
 }

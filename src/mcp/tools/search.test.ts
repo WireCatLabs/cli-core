@@ -42,9 +42,7 @@ describe.each(["max", "tg"])("the shared MCP search bridge for %s", (command) =>
     const args = v.parse(messagesSearchInput(messenger), { text: 'x chat:"Synthetic Chat"' })
     const search = vi.fn(async () => found)
     const result = await answerMessagesSearch({ search }, args, { limit: 20 })
-    expect(search).toHaveBeenCalledWith(
-      expect.objectContaining({ text: 'x chat:"Synthetic Chat"', language: "lucene" }),
-    )
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ text: 'x chat:"Synthetic Chat"' }))
     expect(result).toEqual({
       items: [],
       page: { mode: "page", limit: 20, has_more: false },
@@ -64,7 +62,6 @@ describe.each(["max", "tg"])("the shared MCP search bridge for %s", (command) =>
     const signal = new AbortController().signal
     const args = v.parse(messagesSearchInput(messenger), {
       ast,
-      language: "legacy",
       timezone: "Europe/Madrid",
       source: "personal",
       newest: true,
@@ -76,7 +73,6 @@ describe.each(["max", "tg"])("the shared MCP search bridge for %s", (command) =>
     expect(search).toHaveBeenCalledWith(
       expect.objectContaining({
         ast,
-        language: "legacy",
         timezone: "Europe/Madrid",
         source: "personal",
         newest: true,
@@ -103,9 +99,5 @@ describe.each(["max", "tg"])("the shared MCP search bridge for %s", (command) =>
     await answerMessagesSearch({ search }, args, { limit: 20 })
     expect(search).toHaveBeenCalledWith(expect.objectContaining({ discover: true }))
     expect(() => v.parse(messagesSearchInput(messenger), { text: "Helix", discover: "yes" })).toThrow()
-  })
-
-  it("rejects a language typo in the common schema", () => {
-    expect(() => v.parse(messagesSearchInput(messenger), { text: "x", language: "typo" })).toThrow()
   })
 })

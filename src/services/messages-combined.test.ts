@@ -89,7 +89,7 @@ describe("internal combined search", () => {
     "(aurora rolluot)",
   ])("preserves the strict execution for %s", async (text) => {
     const store = await opened()
-    const strict = await searchStore(store, account, { ...request(text), language: "lucene" })
+    const strict = await searchStore(store, account, { ...request(text) })
     const combined = await searchCombined(store, account, request(text))
     expect(combined.items).toEqual(strict.items)
     expect(combined.corrections).toEqual([])
@@ -139,20 +139,18 @@ describe("internal combined search", () => {
     )
   })
 
-  it("retains strict exact and AST requests and the legacy SDK default", async () => {
+  it("retains strict exact and AST requests", async () => {
     const store = await opened()
     const ast = parseLucene("aurora rollout")
     const exact = { ...request("aurora roll"), exact: true }
     expect((await searchCombined(store, account, exact)).items).toEqual(
-      (await searchStore(store, account, { ...exact, language: "lucene" })).items,
+      (await searchStore(store, account, { ...exact })).items,
     )
     const structured = { ast, limit: 10, timezone: "UTC" }
     expect((await searchCombined(store, account, structured)).items).toEqual(
       (await searchStore(store, account, structured)).items,
     )
-    expect(
-      (await searchStore(store, account, { text: "aurora quantum unicorn", limit: 10 })).items.length,
-    ).toBeGreaterThan(0)
+    expect((await searchStore(store, account, { text: "aurora quantum unicorn", limit: 10 })).items).toEqual([])
     expect((await searchCombined(store, account, request("aurora quantum unicorn"))).items).toEqual([])
   })
 
@@ -222,17 +220,9 @@ describe("internal combined search", () => {
     const store = await opened()
     expect(ids(await searchCombined(store, account, request("chat:101")))).toEqual(["2", "1"])
     expect((await searchCombined(store, account, { ...request("aurora"), source: "bots" })).items).toEqual([])
-    for (const extras of [
-      { language: "legacy" as const },
-      { pattern: /aurora/iu },
-      { thread: { before: 1, after: 1 } },
-    ])
-      await expect(searchCombined(store, account, { ...request("aurora"), ...extras })).rejects.toMatchObject({
-        code: "validation_error",
-      })
-    await expect(searchCombined({ ...store, matchQuery: undefined }, account, request("aurora"))).rejects.toThrow(
-      "does not support Lucene",
-    )
+    await expect(
+      searchCombined(store, account, { ...request("aurora"), thread: { before: 1, after: 1 } }),
+    ).rejects.toMatchObject({ code: "validation_error" })
   })
 
   it.each([
@@ -301,7 +291,7 @@ it.each(["none", "coverage", "proximity", "phrase", "all"] as const)(
 
 it("bounds hydrated candidate bytes, reranking work and elapsed time", async () => {
   const store = await opened()
-  const original = await searchStore(store, account, { ...request("aurora"), language: "lucene" })
+  const original = await searchStore(store, account, { ...request("aurora") })
   const first = original.items[0]
   if (!first) throw new Error("fixture needs a hit")
   const oversized = {

@@ -14,6 +14,24 @@ shape of this file.
   keep the merged order. Result order changes, and these hits list `title` in `found_by` (a new value: a caller that
   accepts only `words` and `meaning` must accept it). A query with a field, `OR`, `NOT`, a wildcard or a regex is
   ordered as before.
+- **One search language: Lucene.** `--language` (CLI `search messages`, `searches create`) and `language` (MCP
+  `search_messages`, `searches_create`) are gone, with the legacy word search behind them: typo correction, any-word
+  fallback and substring matching. `--discover` keeps typo correction for questions. A search saved or run in the
+  legacy language is refused when replayed: save it again. A saved row's `language` is always `lucene-v1`.
+- **`--regex` is gone** from `search messages` and `searches create`. Use the Lucene regex on the raw body,
+  `body:/.*invoice.*/` (case-sensitive, matches the whole body), or on words, `text:/pass(port)?/`.
+- **`bot search messages` runs Lucene** like every other search, over every copy `--bots`/`--all-bots` names. It
+  refuses until this bot has recorded something on this machine.
+- **`conversations embed --workers` is gone**, with the embedding worker pool: three workers measured 1.04–1.1× one
+  session for about twice the memory. Local embedding runs one session, or a child process for the MCP server.
+- **Every `MessageStore` method is required.** `replies`, `rankQuery`, `rankingEvidence`, `rankingDiscussionChats`,
+  `retention`, `adminStatisticsQuery`, `directReplies`, `matchQuery`, `conversationEligibility`, `countQuery`,
+  `counterTargets`, `counterStates` and `updateCounterObservations` were optional; the refusals asking to upgrade
+  cli-core and the thread context's `unsupported_store` fallback are gone.
+- Removed from the store: `matchWords`, `matchSubstring`, `matchFilters`, `attachmentKinds` and the `pattern` filter
+  of `find`, with the `WordQuery`, `SearchScope` and `WordOptions` types. Removed from `./services`:
+  `migrateLegacyQuery`, `QueryMigration`, `SavedQuery`. `SearchQuery` loses `language` and `pattern`, `SearchParams`
+  loses `language` and `regex`, `ResolvedSearch` loses `pattern`, `ServerSkip` loses `legacy`.
 
 ### Fixed
 

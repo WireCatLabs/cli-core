@@ -169,9 +169,7 @@ const json = (result: { stdout: string }) => {
   return body?.item ?? body
 }
 const hits = async (call: (...argv: string[]) => Promise<{ stdout: string }>, query: string) =>
-  json(await call("search", "messages", query, "--language", "lucene", "--json")).items.map(
-    ({ ref }: { ref: string }) => ref.split("/").at(-1),
-  )
+  json(await call("search", "messages", query, "--json")).items.map(({ ref }: { ref: string }) => ref.split("/").at(-1))
 
 describe("attachments extract", () => {
   it("renders a retained PDF page as bounded PNG without connecting, extracting or storing text", async () => {

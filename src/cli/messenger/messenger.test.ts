@@ -1816,55 +1816,9 @@ describe("the shared read commands", () => {
     ])
     const elsewhere = await call(["search", "messages", "chapter", "chat:999", "--json"], never, env)
     expect(JSON.parse(elsewhere.stdout[0] ?? "").items).toEqual([])
-    const pattern = await call(["search", "messages", "--regex", "ch.pt", "--limit", "1", "--json"], never, env)
-    expect(JSON.parse(pattern.stdout[0] ?? "")).toMatchObject({
-      items: [{ ref: "msg:chat/500/7/3" }],
-      page: { limit: 1, has_more: true },
-      next: [{ step: "page.next", args: { query: "ch.pt", regex: true, page: 2, limit: 1 } }],
-    })
-    const broken = await call(["search", "messages", "--regex", "(", "--json"], never, env)
-    expect(broken.code).toBe(2)
-    expect(broken.stderr.join("\n")).toContain("not a regular expression")
-  })
-
-  it("**searches with explicit legacy language**: corrections, filters, completeness and context, said where they belong", async () => {
-    const root = mkdtempSync(join(tmpdir(), "messenger-"))
-    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
-    await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
-    const never = async (): Promise<MessengerAdapter> => {
-      throw new Error("search must never connect")
-    }
-    const json = async (...argv: string[]) => {
-      const done = await call(["search", "messages", "--language", "legacy", ...argv, "--json"], never, env)
-      const error = done.stderr
-        .filter((line) => line.startsWith("{"))
-        .map((line) => JSON.parse(line).error?.message)
-        .find(Boolean)
-      return { ...done, answer: JSON.parse(done.stdout[0] ?? "null"), error }
-    }
-
-    const typo = await json("chaptr", "three")
-    expect(typo.answer).toMatchObject({ page: { limit: 20 } })
-    expect(typo.answer).not.toHaveProperty("missing")
-    expect(typo.answer.items[0]).toMatchObject({ score: expect.any(Number) })
-    expect(typo.stderr.join("\n")).toContain("chaptr → chapter")
-    expect(typo.stderr.join("\n")).toContain(
-      "1 of the chats searched are not held in full — `chat messages sync <chat>`",
-    )
-
-    expect((await json("from:Olga", "chapter")).answer.items).toHaveLength(3)
-    expect((await json("from:me", "chapter")).answer.items).toEqual([])
-    expect((await json("from:Nadie", "chapter")).error).toBe('from:Nadie — nobody matches "Nadie"')
-    expect((await json("has:photo")).error).toBe("has:photo — the store holds no photo; it holds attachment, link")
-    expect((await json("in:nowhere", "chapter")).error).toBe(
-      'in: takes chat, personal, bots, all, messages, mail — not "nowhere"',
-    )
-
-    const pretty = await call(["search", "messages", "chapter", "--limit", "1", "--context", "1"], never, env, {
-      tty: true,
-    })
-    expect(pretty.stdout.join("\n").match(/chapter three/g)).toHaveLength(2)
-    expect((await json("chapter", "--context", "1", "--limit", "1")).answer.items[0].context).toHaveLength(2)
+    const pattern = await call(["search", "messages", "body:/.*ch.pt.*/", "--limit", "1", "--json"], never, env)
+    expect(JSON.parse(pattern.stdout[0] ?? "")).toMatchObject({ items: [{}], page: { limit: 1, has_more: true } })
+    expect((await call(["search", "messages", "--regex", "ch.pt", "--json"], never, env)).code).toBe(2)
   })
 
   it("**search mail reads the mailboxes only** and search messages never returns mail", async () => {
@@ -1894,18 +1848,16 @@ describe("the shared read commands", () => {
     expect(answer.items.every(({ ref }: { ref: string }) => ref.startsWith("msg:email/"))).toBe(true)
     expect(answer).not.toHaveProperty("missing")
 
-    for (const language of ["lucene", "legacy"]) {
-      const args = ["search", "messages", "chapter", "--language", language, "--json"]
-      const all = await call([...args, "--source", "all"], never, env)
-      expect(all.code).toBe(0)
-      const items = JSON.parse(all.stdout[0] ?? "").items as { ref: string }[]
-      expect(items.length).toBeGreaterThan(0)
-      expect(items.some(({ ref }) => ref.startsWith("msg:email/"))).toBe(false)
-      expect(all.stderr.join("\n")).not.toContain("mail search")
-      const asked = await call([...args, "--source", "email"], never, env)
-      expect(asked.code).toBe(2)
-      expect(asked.stderr.join("\n")).toContain("chat search mail")
-    }
+    const args = ["search", "messages", "chapter", "--json"]
+    const all = await call([...args, "--source", "all"], never, env)
+    expect(all.code).toBe(0)
+    const items = JSON.parse(all.stdout[0] ?? "").items as { ref: string }[]
+    expect(items.length).toBeGreaterThan(0)
+    expect(items.some(({ ref }) => ref.startsWith("msg:email/"))).toBe(false)
+    expect(all.stderr.join("\n")).not.toContain("mail search")
+    const asked = await call([...args, "--source", "email"], never, env)
+    expect(asked.code).toBe(2)
+    expect(asked.stderr.join("\n")).toContain("chat search mail")
     expect(never).not.toHaveBeenCalled()
   })
 
@@ -2543,13 +2495,9 @@ describe("the shared read commands", () => {
         .filter((line) => line.startsWith("{"))
         .map((line) => String(JSON.parse(line).error?.message))
         .join("\n")
-    expect(await failed("chapter", "in:chat", "--source", "other", "--language", "legacy")).toContain(
-      "--source and in: name different messengers: other and chat",
-    )
     expect(await failed("chapter", "--source", "nowhere")).toContain(
       '--source takes chat, other, personal, bots, all, messages, mail — not "nowhere"',
     )
-    expect(await failed("--regex", "chapter", "--source", "all")).toContain("--regex reads the account it runs as")
     expect(await failed("from:Olga", "chapter", "in:all")).toContain('"Olga" matches 2 people in different accounts')
     expect(await failed("chapter", "chat:7", "in:all")).toContain('"7" matches 2 chats in different accounts')
     expect(await locators("chapter", "chat:Reading", "in:all")).toEqual(["msg:other/600/7/40"])
@@ -2574,7 +2522,7 @@ describe("the shared read commands", () => {
       }
       for (const recipe of searchRecipes.recipes) {
         const result = await call(
-          ["search", "messages", recipe.query, "--language", "lucene", "--timezone", "UTC", "--json"],
+          ["search", "messages", recipe.query, "--timezone", "UTC", "--json"],
           never,
           env,
           {},
@@ -2694,7 +2642,7 @@ describe("the shared read commands", () => {
       expect(aborted.code).toBe(130)
       expect(aborted.stdout).toEqual([])
       const deadline = await call(
-        ["search", "messages", "--regex", "invoice", "--timeout", "1ms", "--json"],
+        ["search", "messages", "invoice", "--timeout", "1ms", "--json"],
         never,
         env,
         {},
@@ -2702,11 +2650,7 @@ describe("the shared read commands", () => {
       )
       expect(deadline.code).toBe(9)
       expect(deadline.stdout).toEqual([])
-      for (const flags of [
-        ["--language", "imaginary"],
-        ["--language", "lucene", "--regex"],
-        ["--timezone", "Imaginary/Zone"],
-      ]) {
+      for (const flags of [["--regex"], ["--timezone", "Imaginary/Zone"]]) {
         const result = await call(["search", "messages", "invoice", ...flags, "--json"], never, env, {}, { provider })
         expect(result.code).toBe(2)
       }
@@ -4202,10 +4146,9 @@ describe("messages transcribe", () => {
       },
     })
     const found = async (root: NodeJS.ProcessEnv, connect: Messenger["connect"]) =>
-      JSON.parse(
-        (await call(["search", "messages", "zebrafinch", "--language", "lucene", "--json"], connect, root)).stdout[0] ??
-          "",
-      ).items.map(({ ref }: { ref: string }) => ref.split("/").at(-1))
+      JSON.parse((await call(["search", "messages", "zebrafinch", "--json"], connect, root)).stdout[0] ?? "").items.map(
+        ({ ref }: { ref: string }) => ref.split("/").at(-1),
+      )
 
     it("**is shown by messages show, found by search and not heard again**", async () => {
       const root = env()

@@ -20,7 +20,7 @@ export interface ThreadContext {
   chat: Id
   message: Id
   mode: "thread" | "time"
-  fallback?: "not_built" | "not_stored" | "unsupported_store" | "not_linked"
+  fallback?: "not_built" | "not_stored" | "not_linked"
   items: WindowedMessage[]
   links: (StoredLink & { messageId: Id; chosen: boolean })[]
   chain: Id[]
@@ -94,16 +94,10 @@ export const readThreadContext = async (
   const state = await store.conversationState(account, chat)
   result.builtAt = state?.builtAt ?? null
   const linked = anchor && state?.builtAt ? (await store.conversationOf(account, chat, message)) !== undefined : false
-  const repliesTo = store.replies?.bind(store)
-  if (!anchor || !state?.builtAt || !repliesTo || !linked) {
+  const repliesTo = store.replies.bind(store)
+  if (!anchor || !state?.builtAt || !linked) {
     result.mode = "time"
-    result.fallback = !anchor
-      ? "not_stored"
-      : !state?.builtAt
-        ? "not_built"
-        : !repliesTo
-          ? "unsupported_store"
-          : "not_linked"
+    result.fallback = !anchor ? "not_stored" : !state?.builtAt ? "not_built" : "not_linked"
     result.stale = state?.builtAt !== undefined && state?.builtAt !== null && !linked
     const wantedBefore = options.before ?? 5
     const wantedAfter = options.after ?? 5

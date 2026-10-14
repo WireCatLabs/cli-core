@@ -13,9 +13,6 @@ export interface SearchParams extends RankingInput {
   target?: RankingTarget
   text?: string
   ast?: unknown
-  language?: "lucene" | "legacy"
-  /** `text` is one JavaScript regular expression (legacy `--regex`). */
-  regex?: boolean
   chat?: string
   source?: string
   timezone?: string
@@ -42,11 +39,8 @@ const canonical = (value: unknown, nested = false): unknown =>
 /** One run or one saved search as the store keeps it; the same parameters always give the same text. */
 export const searchRecordOf = (command: SearchCommand, params: SearchParams): SearchRecord => ({
   command,
-  params: JSON.stringify(canonical({ ...params, language: languageOf(params) })),
-  language: languageOf(params) === "lucene" ? "lucene-v1" : "legacy",
+  params: JSON.stringify(canonical(params)),
+  language: "lucene-v1",
   version: QUERY_VERSION,
   fieldsVersion: FIELD_VERSION,
 })
-
-export const languageOf = ({ language, regex, ast }: SearchParams): "lucene" | "legacy" =>
-  language ?? (regex ? "legacy" : ast !== undefined ? "lucene" : "lucene")

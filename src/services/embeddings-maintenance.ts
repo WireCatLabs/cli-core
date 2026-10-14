@@ -2,7 +2,13 @@ import { CliError } from "@wirecat/cli-base"
 import { CHUNK_CHARS, chunkHash, chunkTextOf } from "../conversations/chunks.js"
 import { RULES_VERSION } from "../conversations/link.js"
 import type { Id } from "../domain/models.js"
-import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
+import {
+  defaultThreads,
+  type Embedder,
+  isTextModelInstalled,
+  openEmbedder,
+  textModelsDirectory,
+} from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, textModel, vectorModelKey } from "../embeddings/models.js"
 import { remoteKey } from "../embeddings/remote.js"
 import { CONTEXT_MESSAGES, CONTEXT_MINUTES } from "../images/context/index.js"
@@ -45,7 +51,7 @@ export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT
       speed: null,
       price: remote.price,
       installed: true,
-      perBatch: (_workers: number) => PER_REQUEST * concurrency,
+      perBatch: PER_REQUEST * concurrency,
       open: async (): Promise<Embedder> =>
         (await import("../embeddings/remote.js")).openRemote(remote, apiKey, { concurrency }),
     }
@@ -59,13 +65,11 @@ export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT
     speed: model.chunksPerSecond,
     price: undefined,
     installed: isTextModelInstalled(model, directory),
-    perBatch: (workers: number) => PER_SESSION * Math.max(1, workers),
+    perBatch: PER_SESSION,
     open: async ({
-      workers = 1,
       threads,
       apart = false,
     }: {
-      workers?: number
       threads?: number
       /** In a process of its own, which gives all of its memory back when closed: the MCP server's. */
       apart?: boolean
@@ -75,8 +79,7 @@ export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT
         const { openProcess } = await import("../embeddings/process.js")
         return openProcess(model, directory, { threads: threads ?? defaultThreads() })
       }
-      const { openPool } = await import("../embeddings/pool.js")
-      return openPool(model, directory, { workers, ...(threads ? { threads } : {}) })
+      return openEmbedder(model, directory, { threads: threads ?? defaultThreads() })
     },
   }
 }
@@ -94,13 +97,13 @@ export const withEmbedder = async <T>(
   deps: ServiceDeps,
   target: EmbeddingTarget,
   choice: ModelChoice | undefined,
-  { workers = 1, threads }: { workers?: number; threads?: number | undefined },
+  { threads }: { threads?: number | undefined },
   work: (embedder: Embedder) => Promise<T>,
 ): Promise<T> => {
   const warm = typeof choice !== "object" ? deps.embedders : undefined
   const embedder = warm
     ? await warm.get(target.key, () => target.open({ apart: true }))
-    : await target.open({ workers, ...(threads ? { threads } : {}) })
+    : await target.open(threads ? { threads } : {})
   try {
     return await work(embedder)
   } finally {
@@ -124,12 +127,10 @@ export const embeddingsMaintenance = (
     target: EmbeddingTarget,
     embedder: Embedder,
     {
-      workers = 1,
       maxChunks = Number.POSITIVE_INFINITY,
       progress,
       check,
     }: {
-      workers?: number | undefined
       maxChunks?: number | undefined
       check?: () => void
       progress?: ((done: number, left: number) => void) | undefined
@@ -144,7 +145,7 @@ export const embeddingsMaintenance = (
     while (embedded + skipped < maxChunks) {
       check?.()
       const batch = await store.chunksToEmbed(account, chatId, target.key, {
-        limit: Math.min(target.perBatch(workers), maxChunks - embedded - skipped),
+        limit: Math.min(target.perBatch, maxChunks - embedded - skipped),
         ...(after ? { after } : {}),
       })
       if (batch.length === 0) break
@@ -269,11 +270,11 @@ export const embeddingsMaintenance = (
       }
     },
 
-    embed: async (chat, { model: choice, workers = 1, threads, maxChunks, progress }) => {
+    embed: async (chat, { model: choice, threads, maxChunks, progress }) => {
       const { chatId } = await found(chat)
       const target = embeddingTarget(deps, choice)
-      return withEmbedder(deps, target, choice, { workers, threads }, (embedder) =>
-        embedInto(chatId, target, embedder, { workers, maxChunks, progress }),
+      return withEmbedder(deps, target, choice, { threads }, (embedder) =>
+        embedInto(chatId, target, embedder, { maxChunks, progress }),
       )
     },
 
@@ -294,7 +295,6 @@ export const embeddingsMaintenance = (
       embed = true,
       maxChats = REFRESH_BOUNDS.maxChats,
       maxChunks = REFRESH_BOUNDS.maxChunks,
-      workers,
       threads,
       progress,
       maxMessages,
@@ -337,12 +337,12 @@ export const embeddingsMaintenance = (
           .sort((a, b) => Number(fresh.has(b.chat)) - Number(fresh.has(a.chat)))
           .slice(0, maxChats)
         if (queue.length > 0) {
-          await withEmbedder(deps, target, choice, { workers, threads }, async (embedder) => {
+          await withEmbedder(deps, target, choice, { threads }, async (embedder) => {
             let budget = maxChunks
             for (const { chat } of queue) {
               if (budget <= 0) break
               check?.()
-              const done = await embedInto(chat, target, embedder, { workers, maxChunks: budget, check })
+              const done = await embedInto(chat, target, embedder, { maxChunks: budget, check })
               budget -= done.embedded + done.skipped
               embedded.push(done)
               progress?.(`chat ${chat}: ${done.embedded} chunks embedded with ${target.id}`)

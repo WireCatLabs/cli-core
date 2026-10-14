@@ -45,7 +45,7 @@ const open = async (texts: string[], path = join(mkdtempSync(join(tmpdir(), "ste
   return { store, path }
 }
 const search = (store: MessageStore, text: string, options: { exact?: boolean; newest?: boolean } = {}) =>
-  searchStore(store, account, { text, language: "lucene", limit: 100, ...options })
+  searchStore(store, account, { text, limit: 100, ...options })
 const ids = async (store: MessageStore, text: string, options: { exact?: boolean; newest?: boolean } = {}) =>
   (await search(store, text, options)).items.map(({ id }) => Number(id))
 const failure = async (work: Promise<unknown>) => {
@@ -115,21 +115,20 @@ describe("stemmed strict search", () => {
 
   it("**fills a page from exact forms first**, and from other forms only when they run out", async () => {
     const { store } = await open(["квартиру ищем", "квартира у моря", "квартира в центре", "квартиры дорогие"])
-    const page = await searchStore(store, account, { text: "квартира", language: "lucene", limit: 2 })
+    const page = await searchStore(store, account, { text: "квартира", limit: 2 })
     expect(page.items.map(({ exact }) => exact)).toEqual([true, true])
     expect(page.hasMore).toBe(true)
-    const all = await searchStore(store, account, { text: "квартира", language: "lucene", limit: 3 })
+    const all = await searchStore(store, account, { text: "квартира", limit: 3 })
     expect(all.items.map(({ exact }) => exact)).toEqual([true, true, false])
     expect(all.hasMore).toBe(true)
   })
 
   it("**counts what it finds**: stats total equals the search's hits", async () => {
     const { store } = await open(TEXTS)
-    const stats = await statsStore(store, account, { text: "квартира", language: "lucene", limit: 10, by: "chat" })
+    const stats = await statsStore(store, account, { text: "квартира", limit: 10, by: "chat" })
     expect(stats.total).toBe(2)
     const exact = await statsStore(store, account, {
       text: "квартира",
-      language: "lucene",
       limit: 10,
       by: "chat",
       exact: true,
@@ -171,7 +170,7 @@ describe("stemmed strict search", () => {
     database.exec("UPDATE search_index_state SET filled_through = 0, watermark = 7 WHERE name = 'message_stems'")
     database.close()
     // Past the 200 ms fill a search runs first, which would finish seven rows.
-    const found = await searchLucene(store, account, { text: "квартира", language: "lucene", limit: 10 })
+    const found = await searchLucene(store, account, { text: "квартира", limit: 10 })
     expect(found.items.map(({ id }) => Number(id))).toEqual([2])
     expect(found.stemsReady).toBe(false)
     expect(found.query?.stemming).toEqual({ applied: false, reason: "building", done: 0, total: 7, pending: 0 })
@@ -180,7 +179,7 @@ describe("stemmed strict search", () => {
   it("**still refuses stems the owner chose until store reindex**", async () => {
     const { store } = await open(TEXTS)
     await store.saveStemmers({ cyrillic: "none", latin: "english" })
-    const refused = await failure(searchLucene(store, account, { text: "квартира", language: "lucene", limit: 10 }))
+    const refused = await failure(searchLucene(store, account, { text: "квартира", limit: 10 }))
     expect(refused.details).toMatchObject({ reason: "index.not-ready", cause: "stemmer_changed" })
   })
 })

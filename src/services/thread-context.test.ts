@@ -308,7 +308,6 @@ describe("graph context around a hit", () => {
     const one = await setup()
     const found = await one.services.messages.search({
       text: 'text:"synthetic message 5"',
-      language: "lucene",
       limit: 10,
       context: 1,
       thread: {},
@@ -321,7 +320,7 @@ describe("graph context around a hit", () => {
   it("validates thread bounds even when a search has no hits", async () => {
     const one = await setup()
     await expect(
-      one.services.messages.search({ text: "unmatched", language: "lucene", limit: 10, thread: { maxMessages: 0 } }),
+      one.services.messages.search({ text: "unmatched", limit: 10, thread: { maxMessages: 0 } }),
     ).rejects.toMatchObject({ code: "validation_error" })
   })
 
@@ -331,15 +330,6 @@ describe("graph context around a hit", () => {
     await expect(one.services.messages.thread("msg:test/600/7/5")).rejects.toMatchObject({ code: "validation_error" })
     await expect(one.services.messages.thread("msg:other/500/7/5")).rejects.toMatchObject({ code: "validation_error" })
     expect(one.connection).not.toHaveBeenCalled()
-  })
-
-  it("falls back explicitly for an older store without reply expansion", async () => {
-    const one = await setup()
-    const older: MessageStore = Object.assign(Object.create(one.store) as MessageStore, { replies: undefined })
-    expect(await readThreadContext(older, account, "7", "5")).toMatchObject({
-      mode: "time",
-      fallback: "unsupported_store",
-    })
   })
 
   it("does not hide errors reading the store", async () => {

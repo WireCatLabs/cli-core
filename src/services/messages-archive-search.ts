@@ -1,10 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
-import type { Id } from "../domain/models.js"
-import { search } from "../search/search.js"
-import type { AccountKey, ChatCompleteness, MessageStore, StoredHit } from "../store/store.js"
-import { validateSearchDialect } from "./message-query-validation.js"
-import { type Saved, scopeOf, storedChatId } from "./message-resolution.js"
+import type { AccountKey, MessageStore, StoredHit } from "../store/store.js"
+import type { Saved } from "./message-resolution.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { searchDiscovery } from "./messages-discovery.js"
 import { type MessageStats, type StatsGrouping, searchLucene, statsLucene } from "./messages-search.js"
@@ -82,56 +79,18 @@ const searchPage = async (
   request: SearchQuery,
   messenger: Saved,
 ): Promise<SearchFound> => {
-  const { text, pattern, chat, source, accounts, senders, limit, newest = false, context = 0 } = request
   if (request.signal?.aborted)
     throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
-  validateSearchDialect(request)
   if (request.thread) threadBounds(request.thread)
   if (request.discover !== undefined && typeof request.discover !== "boolean")
     throw new CliError("validation_error", "discover takes a boolean")
-  if (request.discover && (pattern || request.language === "legacy"))
-    throw new CliError("validation_error", "discovery requires Lucene text, without legacy or regex")
   if (request.discover && request.backend === "server")
     throw new CliError("validation_error", "discovery searches the local archive; use backend archive")
   await topUp(store)
-  if (request.discover) return withThreads(store, await searchDiscovery(store, account, request, messenger), request)
-  if (!pattern && (request.language === "lucene" || request.ast !== undefined))
-    return withThreads(store, await searchLucene(store, account, request, messenger), request)
-  const found = pattern
-    ? {
-        ...(await store.find({
-          pattern,
-          signal: request.signal,
-          account,
-          limit,
-          ...(chat === undefined ? {} : { chatId: await storedChatId(messenger, chat, store, account) }),
-        })),
-        corrections: [],
-        wordsReady: (await store.searchIndexState())?.ready === true,
-      }
-    : await search(
-        store,
-        ...(await scopeOf(messenger, store, account, {
-          text: text ?? "",
-          chat,
-          source,
-          accounts,
-          senders,
-          kind: request.kind,
-        })),
-        { limit, newest },
-      )
-  const items = await Promise.all(
-    found.items.map(async (hit) =>
-      context > 0
-        ? {
-            ...hit,
-            context: await store.around(accountOf(hit), hit.chatId, hit.id, { before: context, after: context }),
-          }
-        : hit,
-    ),
-  )
-  return withThreads(store, { ...found, items, completeness: await completenessOf(store, found.items) }, request)
+  const found = request.discover
+    ? await searchDiscovery(store, account, request, messenger)
+    : await searchLucene(store, account, request, messenger)
+  return withThreads(store, found, request)
 }
 
 export const accountOf = (hit: StoredHit): AccountKey => {
@@ -140,20 +99,3 @@ export const accountOf = (hit: StoredHit): AccountKey => {
 }
 
 export const keyOf = ({ provider, account }: AccountKey) => `${provider}/${account}`
-
-/** Each chat's completeness from the account that holds it: a search may span several. */
-const completenessOf = async (store: MessageStore, hits: StoredHit[]): Promise<(ChatCompleteness & AccountKey)[]> => {
-  const chats = new Map<string, { account: AccountKey; chatIds: Set<Id> }>()
-  for (const hit of hits) {
-    const account = accountOf(hit)
-    const held = chats.get(keyOf(account)) ?? { account, chatIds: new Set() }
-    held.chatIds.add(hit.chatId)
-    chats.set(keyOf(account), held)
-  }
-  const found = await Promise.all(
-    [...chats.values()].map(async ({ account, chatIds }) =>
-      (await store.chatCompleteness(account, [...chatIds])).map((one) => ({ ...one, ...account })),
-    ),
-  )
-  return found.flat()
-}

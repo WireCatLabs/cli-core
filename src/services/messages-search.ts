@@ -431,9 +431,7 @@ export const searchLucene = async (
   messenger: Partial<Pick<Messenger, "savedChatId" | "app" | "history" | "provider">> = {},
 ): Promise<SearchFound> => {
   const prepared = await prepareLucene(store, account, request, messenger)
-  const execute = store.matchQuery
-  if (!execute)
-    throw new CliError("validation_error", "this store does not support the Lucene profile — upgrade cli-core")
+  const execute = store.matchQuery.bind(store)
   const mailAccounts = prepared.scopeAccounts.filter(({ provider }) => provider === MAIL)
   const inMailTables = async () => {
     try {
@@ -518,9 +516,7 @@ export const statsLucene = async (
   messenger: Partial<Pick<Messenger, "savedChatId" | "app" | "history" | "provider">> = {},
 ): Promise<MessageStats> => {
   const prepared = await prepareLucene(store, account, request, messenger)
-  const count = store.countQuery
-  if (!count)
-    throw new CliError("validation_error", "this store does not support the Lucene profile — upgrade cli-core")
+  const count = store.countQuery.bind(store)
   const { by } = request
   const calendar = by === "day" || by === "hour"
   const groups = prepared.scopeAccounts.length ? await count(prepared.execution, calendar ? "time" : by) : []

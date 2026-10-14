@@ -374,7 +374,6 @@ describe("ranking services and drilldown selection", () => {
       target: "messages",
       ...selection.options,
       timezone: "UTC",
-      language: "lucene",
     })
     const saved = (await searches.resolve("exclusive-date", {})).params
     const replay = await service.top("messages", { ...saved, weights: { reactions: 1 }, measure: undefined, limit: 3 })

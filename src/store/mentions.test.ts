@@ -209,7 +209,7 @@ describe("deciding a mention", () => {
 
 describe("mention fields in a message search", () => {
   const found = async (store: Awaited<ReturnType<typeof openStore>>, text: string) =>
-    (await searchStore(store, OWNER, { text, language: "lucene", limit: 100 })).items.map(({ id }) => id).sort()
+    (await searchStore(store, OWNER, { text, limit: 100 })).items.map(({ id }) => id).sort()
 
   it("finds a phone written any way, an address, a link and a site; a dismissed value is not found", async () => {
     const { store } = await fresh()
@@ -272,7 +272,7 @@ describe("mentions in files and voice notes", () => {
       ["phone", "transcript", "2", "+7 900 000-00-01"],
     ])
     const found = async (text: string) =>
-      (await searchStore(store, OWNER, { text, language: "lucene", limit: 10 })).items.map(({ id }) => id)
+      (await searchStore(store, OWNER, { text, limit: 10 })).items.map(({ id }) => id)
     expect(await found('phone:"89000000001"')).toEqual(["2"])
     expect(await found('email:"ana@example.com"')).toEqual(["1"])
 
@@ -367,7 +367,7 @@ describe("known people's names", () => {
     await store.rebuildMentions({ kinds: ["person-name"] })
     expect(await names(store)).toEqual([`1 Смирнов linked ${smirnov}`, "2 Смирнов dismissed null"])
 
-    const found = await searchStore(store, OWNER, { text: `mentions:"${smirnov}"`, language: "lucene", limit: 10 })
+    const found = await searchStore(store, OWNER, { text: `mentions:"${smirnov}"`, limit: 10 })
     expect(found.items.map(({ id }) => id)).toEqual(["1"])
     const [dismissed] = (await store.mentions(OWNER, q("kind:person-name status:dismissed"), { offset: 0 })).items
     await expect(store.confirmMention(OWNER, dismissed?.id ?? 0, undefined, "owner")).rejects.toThrow(/person:<uid>/)

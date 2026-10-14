@@ -78,14 +78,8 @@ export const messagesStatsCommand = (messenger: Messenger): Command =>
             ...(words.length ? { text: words.join(" ") } : {}),
             by: by ?? "chat",
             limit,
-            language: "lucene",
           })
         const { id, params } = await services.searches.resolve(saved, { ...typed, text: words.join(" ") })
-        if (params.regex || params.language === "legacy")
-          throw new CliError(
-            "validation_error",
-            "stats messages show counts strict Lucene queries; this saved search is legacy",
-          )
         limit = params.limit ?? limit
         return services.messages.stats({
           ...syncing,
@@ -97,7 +91,6 @@ export const messagesStatsCommand = (messenger: Messenger): Command =>
           ...(params.exact ? { exact: true } : {}),
           by: params.by ?? "chat",
           limit,
-          language: "lucene",
           saved: id,
         })
       })

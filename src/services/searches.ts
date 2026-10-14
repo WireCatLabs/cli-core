@@ -7,14 +7,13 @@ import { SEARCH_QUERY } from "../search/lucene/types.js"
 import type { MessageStore, StoredSearch } from "../store/store.js"
 import { isAdminSelection, readAdminSelection } from "./admin-statistics.js"
 import type { ServiceDeps } from "./deps.js"
-import { languageOf, type SearchParams, searchRecordOf } from "./search-record.js"
+import { type SearchParams, searchRecordOf } from "./search-record.js"
 
 /** A saved search made ready to run, with the options the caller typed laid over the stored ones. */
 export interface ResolvedSearch {
   id: string
   name: string | null
   params: SearchParams
-  pattern?: RegExp
 }
 
 export type SavedSearchItem = v.InferOutput<typeof savedSearch>
@@ -61,28 +60,13 @@ const nameOf = (value: string): string => {
   return name
 }
 
-const patternOf = (source: string): RegExp => {
-  try {
-    return new RegExp(source, "iu")
-  } catch {
-    throw new CliError("validation_error", "not a regular expression — check JavaScript syntax or use Lucene regex")
-  }
-}
-
 /** The query checked as a search would check it, without the store: syntax, fields, values. */
 const checked = (params: SearchParams): SearchParams => {
-  if (params.discover && (params.regex || languageOf(params) === "legacy"))
-    throw new CliError("validation_error", "discovery requires Lucene text, without legacy or regex")
   if (params.text !== undefined && params.ast !== undefined)
     throw new CliError("validation_error", "give query text or an AST, not both")
-  if (params.regex) {
-    if (params.text === undefined) throw new CliError("validation_error", "--regex needs the expression")
-    patternOf(params.text)
-  } else if (languageOf(params) === "lucene") {
-    if (params.ast !== undefined) validateAst(params.ast)
-    else if (params.text !== undefined)
-      validateFields(parseLucene(params.text, { ...SEARCH_QUERY, defaultField: params.exact ? "exact" : "text" }))
-  }
+  if (params.ast !== undefined) validateAst(params.ast)
+  else if (params.text !== undefined)
+    validateFields(parseLucene(params.text, { ...SEARCH_QUERY, defaultField: params.exact ? "exact" : "text" }))
   return params
 }
 
@@ -128,7 +112,6 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
             searchRecordOf("admin-statistics", {
               adminReport: selected.options.report,
               selection: normalized,
-              language: "lucene",
               timezone: selected.base.timezone,
             }),
             { replace },
@@ -182,25 +165,19 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
           ...inherited,
           ...Object.fromEntries(Object.entries(typed).filter(([, one]) => one !== undefined)),
         }
-        const language = languageOf(params)
-        if (language === "lucene" && !params.regex) named(search, () => checked({ ...stored, language }))
+        named(search, () => {
+          // Rows written before the legacy search and --regex were removed: Lucene would read them differently.
+          if (search.language !== "lucene-v1")
+            throw new CliError("validation_error", "the legacy search and --regex are gone; save it again as Lucene")
+          checked(stored)
+        })
         const extra = words?.trim() ? words.trim() : undefined
         if (extra !== undefined) {
-          if (params.regex)
-            throw new CliError(
-              "validation_error",
-              `saved search "${search.name}" is a --regex search; it takes no more words`,
-            )
           if (params.ast !== undefined) params.ast = both(validateAst(params.ast), extra)
           else if (params.text === undefined) params.text = extra
-          else params.text = language === "lucene" ? `(${params.text}) AND (${extra})` : `${params.text} ${extra}`
+          else params.text = `(${params.text}) AND (${extra})`
         }
-        return {
-          id: search.id,
-          name: search.name,
-          params,
-          ...(params.regex && params.text !== undefined ? { pattern: patternOf(params.text) } : {}),
-        }
+        return { id: search.id, name: search.name, params }
       }),
   }
 }

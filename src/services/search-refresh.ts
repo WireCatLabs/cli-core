@@ -4,8 +4,6 @@ import type { QueryExecution, ResolvedNode } from "../search/lucene/resolved.js"
 import type { AccountKey } from "../store/store.js"
 import { archiveService } from "./archive.js"
 import type { ServiceDeps } from "./deps.js"
-import { validateSearchDialect } from "./message-query-validation.js"
-import { scopeOf } from "./message-resolution.js"
 import type { SearchQuery } from "./messages.js"
 import { prepareLucene } from "./messages-search.js"
 
@@ -62,19 +60,13 @@ export const refreshSearch = async (deps: ServiceDeps, request: SearchQuery): Pr
     if (!Number.isSafeInteger(value) || value < 1 || value > max)
       throw new CliError("validation_error", `${name} takes a whole number from 1 to ${max}`)
   }
-  validateSearchDialect(request)
   const guardRequest = { chatId: null, kind: "reaction" as const, key: SYNC_KEY }
   await deps.guard.ask?.(guardRequest)
   deps.guard.check(guardRequest, { reserve: false })
   const store = await deps.store()
   const account = await deps.account()
-  const strict = request.language === "lucene" || request.ast !== undefined
-  const execution = strict
-    ? (await prepareLucene(store, account, request, deps.messenger)).execution
-    : (
-        await scopeOf(deps.messenger, store, account, { ...request, text: request.pattern ? "" : (request.text ?? "") })
-      )[1]
-  const scoped = execution.chat ? [execution.chat] : "root" in execution ? chatScope(execution.root) : undefined
+  const { execution } = await prepareLucene(store, account, request, deps.messenger)
+  const scoped = execution.chat ? [execution.chat] : chatScope(execution.root)
   const options = { ...SYNC_BOUNDS, ...request.syncFirst }
   const note = options.note ?? (() => {})
   const result: SearchRefreshed = { chats: [], messages: 0, failed: [], complete: true }
@@ -90,8 +82,7 @@ export const refreshSearch = async (deps: ServiceDeps, request: SearchQuery): Pr
       for (const { id } of (await store.chats(selected, {})).items) candidates.push({ account: selected, chatId: id })
     else for (const chat of scoped) if (sameAccount(chat.account, selected)) candidates.push(chat)
   }
-  const eligible =
-    "root" in execution ? candidates.filter((chat) => matchesChat(execution.root, chat) !== false) : candidates
+  const eligible = candidates.filter((chat) => matchesChat(execution.root, chat) !== false)
   const unique = [...new Map(eligible.map((chat) => [keyOf(chat), chat])).values()]
   if (unique.length > options.maxChats) result.complete = false
   const controller = new AbortController()

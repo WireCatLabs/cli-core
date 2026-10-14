@@ -83,7 +83,7 @@ describe("bounded search refresh", () => {
     { text: "chapter AND NOT chat:8", chat: "7" },
   ])("fetches only the required scope for %j, without mark-read", async (query) => {
     const one = await setup()
-    const found = await one.services.messages.search({ ...query, language: "lucene", syncFirst: {}, limit: 20 })
+    const found = await one.services.messages.search({ ...query, syncFirst: {}, limit: 20 })
     expect(one.asked).toEqual(query.text?.includes("OR") ? ["7", "8"] : ["7"])
     expect(found.refreshed?.complete).toBe(true)
     expect(found.items.some(({ id }) => id === "2")).toBe(true)
@@ -100,7 +100,6 @@ describe("bounded search refresh", () => {
     const note = vi.fn()
     const found = await one.services.messages.search({
       text: "chapter",
-      language: "lucene",
       limit: 20,
       syncFirst: { note },
     })
@@ -114,7 +113,6 @@ describe("bounded search refresh", () => {
     const one = await setup()
     await one.services.messages.search({
       text: "chapter OR chat:8",
-      language: "lucene",
       limit: 20,
       syncFirst: { maxChats: 2 },
     })
@@ -123,7 +121,7 @@ describe("bounded search refresh", () => {
 
   it("intersects incompatible required chats without fetching", async () => {
     const one = await setup()
-    await one.services.messages.search({ text: "chat:7 AND chat:8", language: "lucene", limit: 20, syncFirst: {} })
+    await one.services.messages.search({ text: "chat:7 AND chat:8", limit: 20, syncFirst: {} })
     expect(one.connection).not.toHaveBeenCalled()
   })
 
@@ -131,7 +129,6 @@ describe("bounded search refresh", () => {
     const one = await setup()
     await one.services.messages.search({
       text: "chapter AND NOT chat:7",
-      language: "lucene",
       limit: 20,
       syncFirst: { maxChats: 2 },
     })
@@ -143,7 +140,6 @@ describe("bounded search refresh", () => {
     await one.services.messages.search({
       text: "chapter chat:7",
       chat: "8",
-      language: "lucene",
       limit: 20,
       syncFirst: {},
     })
@@ -195,7 +191,6 @@ describe("bounded search refresh", () => {
     const found = await servicesFor(one.deps).messages.search({
       text: "chapter",
       chat: "7",
-      language: "lucene",
       limit: 20,
       syncFirst: { note },
     })
@@ -218,7 +213,6 @@ describe("bounded search refresh", () => {
     const found = await servicesFor(deps).messages.search({
       text: "chapter",
       chat: "7",
-      language: "lucene",
       limit: 20,
       syncFirst: {},
     })
@@ -232,7 +226,6 @@ describe("bounded search refresh", () => {
     const found = await one.services.messages.stats({
       text: "chapter",
       chat: "7",
-      language: "lucene",
       by: "chat",
       limit: 20,
       syncFirst: {},
@@ -245,7 +238,6 @@ describe("bounded search refresh", () => {
     const one = await setup()
     const found = await servicesFor({ ...one.deps, offline: true }).messages.stats({
       chat: "7",
-      language: "lucene",
       by: "chat",
       limit: 20,
       syncFirst: {},
@@ -254,17 +246,10 @@ describe("bounded search refresh", () => {
     expect(found.coverage.state).toBe("stale")
   })
 
-  it("reuses legacy scope and regex chat scoping", async () => {
-    const one = await setup()
-    await one.services.messages.search({ text: "chapter chat:7", language: "legacy", limit: 20, syncFirst: {} })
-    await one.services.messages.search({ pattern: /chapter/u, chat: "8", limit: 20, syncFirst: {} })
-    expect(one.asked).toEqual(["7", "8"])
-  })
-
   it("leaves local search and counts disconnected when the option is absent", async () => {
     const one = await setup()
-    const found = await one.services.messages.search({ text: "chapter", language: "lucene", limit: 20 })
-    const stats = await one.services.messages.stats({ language: "lucene", by: "chat", limit: 20 })
+    const found = await one.services.messages.search({ text: "chapter", limit: 20 })
+    const stats = await one.services.messages.stats({ by: "chat", limit: 20 })
     expect(found.refreshed).toBeUndefined()
     expect(stats.refreshed).toBeUndefined()
     expect(one.connection).not.toHaveBeenCalled()
@@ -281,7 +266,6 @@ describe("bounded search refresh", () => {
     const found = await one.services.messages.search({
       text: "chapter",
       source: "all",
-      language: "lucene",
       limit: 20,
       syncFirst: { maxChats: 1 },
     })
@@ -296,7 +280,7 @@ describe("bounded search refresh", () => {
       throw new CliError("permission_error", "denied")
     })
     await expect(
-      one.services.messages.search({ text: "chapter", chat: "7", language: "lucene", limit: 20, syncFirst: {} }),
+      one.services.messages.search({ text: "chapter", chat: "7", limit: 20, syncFirst: {} }),
     ).rejects.toMatchObject({ code: "permission_error" })
     expect(one.connection).not.toHaveBeenCalled()
   })
@@ -307,7 +291,7 @@ describe("bounded search refresh", () => {
       one.asked.push(chat)
       return { items: [message(chat, "2"), message(chat)], hasMore: true }
     }
-    const result = await refreshSearch(one.deps, { chat: "7", language: "lucene", limit: 20, syncFirst: {} })
+    const result = await refreshSearch(one.deps, { chat: "7", limit: 20, syncFirst: {} })
     expect(one.asked).toEqual(["7"])
     expect(result).toMatchObject({ messages: 2, complete: true })
   })
@@ -320,7 +304,6 @@ describe("bounded search refresh", () => {
       return { items: [message(chat, "2")], hasMore: true }
     }
     const result = await refreshSearch(one.deps, {
-      language: "lucene",
       limit: 20,
       syncFirst: { maxMessages: 1, maxChats: 2 },
     })
@@ -342,7 +325,6 @@ describe("bounded search refresh", () => {
       return { items: [message(chat, "2")], hasMore: true }
     }
     const result = await refreshSearch(one.deps, {
-      language: "lucene",
       limit: 20,
       syncFirst: { timeMs: 30, maxChats: 2 },
     })
@@ -359,7 +341,6 @@ describe("bounded search refresh", () => {
     const result = await refreshSearch(one.deps, {
       chat: "7",
       signal: AbortSignal.abort(),
-      language: "lucene",
       limit: 20,
       syncFirst: {},
     })
@@ -380,25 +361,11 @@ describe("bounded search refresh", () => {
     expect(one.connection).not.toHaveBeenCalled()
   })
 
-  it.each([
-    { pattern: /chapter/u, language: "lucene" as const },
-    { pattern: /chapter/u, ast: parseLucene("chapter") },
-    { pattern: /chapter/u, source: "all" },
-    { language: "legacy" as const, timezone: "UTC" },
-    { language: "legacy" as const, ast: parseLucene("chapter") },
-  ])("rejects conflicting query modes %j before network use", async (query) => {
-    const one = await setup()
-    await expect(refreshSearch(one.deps, { ...query, limit: 20, syncFirst: {} })).rejects.toMatchObject({
-      code: "validation_error",
-    })
-    expect(one.connection).not.toHaveBeenCalled()
-  })
-
   it("validates queries before network use", async () => {
     const one = await setup()
-    await expect(
-      refreshSearch(one.deps, { text: "bogus:value", language: "lucene", limit: 20, syncFirst: {} }),
-    ).rejects.toMatchObject({ code: "validation_error" })
+    await expect(refreshSearch(one.deps, { text: "bogus:value", limit: 20, syncFirst: {} })).rejects.toMatchObject({
+      code: "validation_error",
+    })
     expect(one.connection).not.toHaveBeenCalled()
   })
 })

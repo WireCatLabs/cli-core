@@ -117,7 +117,6 @@ export const searchAll = async (
     const given = request.scope?.[kind]
     const query: SearchQuery = {
       text: request.text,
-      language: "lucene",
       kind,
       ...(given ? { accounts: given } : {}),
       ...(kind === "messages"

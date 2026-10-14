@@ -1084,7 +1084,7 @@ describe("the MCP server", () => {
     await store.close()
     const opened = telegram.opened()
     for (const recipe of searchRecipes.recipes) {
-      const textual = await call("chat_search_messages", { text: recipe.query, language: "lucene", timezone: "UTC" })
+      const textual = await call("chat_search_messages", { text: recipe.query, timezone: "UTC" })
       const structured = await call("chat_search_messages", {
         ast: parseLucene(recipe.query),
         timezone: "UTC",
@@ -1108,7 +1108,7 @@ describe("the MCP server", () => {
 
     expect(body.items.map((hit: { ref: string }) => hit.ref)).toEqual(["msg:chat/500/7/1"])
     expect(body).toMatchObject({ page: { has_more: false }, meta: { accounts: ["chat:500"] } })
-    const typo = await call("chat_search_messages", { text: "chaptre", context: 1, language: "legacy" })
+    const typo = await call("chat_search_messages", { text: "chapter", context: 1 })
     expect(typo.body.items[0].context).toEqual(expect.any(Array))
     expect((await call("chat_search_messages", { text: "chapter", source: "all" })).body.items).toHaveLength(1)
     const unheld = await call("chat_search_messages", { text: "chapter", source: "nowhere" })
@@ -1714,7 +1714,7 @@ describe("the MCP server", () => {
       items: [{ tag: "paid", type: "message", target: "msg:chat/500/7/101" }],
       page: { has_more: false },
     })
-    const found = await call("chat_search_messages", { text: "tag:paid OR tag:family", language: "lucene" })
+    const found = await call("chat_search_messages", { text: "tag:paid OR tag:family" })
     expect(found.body.items.map(({ ref }: { ref: string }) => ref.split("/").at(-1)).sort()).toEqual([
       "101",
       "103",
@@ -1769,7 +1769,7 @@ describe("the MCP server", () => {
       chars: 17,
       replaced: null,
     })
-    const found = await call("chat_search_messages", { text: "content:квартальный", language: "lucene" })
+    const found = await call("chat_search_messages", { text: "content:квартальный" })
     expect(found.body.items.map(({ ref }: { ref: string }) => ref.split("/").at(-1))).toEqual(["108"])
     expect((await call("chat_attachments_list", { query: "is:needs_text" })).body.items).toEqual([])
 

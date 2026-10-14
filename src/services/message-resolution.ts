@@ -2,13 +2,10 @@ import { CliError, singleLine } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { Chat, Id, Page, Provider } from "../domain/models.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
-import { inSource, parseQuery, sourceOf } from "../search/query.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountStore } from "../store/account-store.js"
-import type { AccountKey, MessageStore, SearchScope, WordQuery } from "../store/store.js"
+import type { AccountKey, MessageStore } from "../store/store.js"
 import { nothingStored, type ServiceDeps } from "./deps.js"
-import type { SearchQuery } from "./messages.js"
-import { accountsOfKind, listedAccounts } from "./search-kind.js"
 
 /** What a store search reads of the messenger: its saved-messages chat, and its command for a hint. */
 export type Saved = Partial<Pick<Messenger, "savedChatId" | "app">>
@@ -164,80 +161,4 @@ export const senderAmong = async (store: MessageStore, accounts: AccountKey[], r
     }
     throw error
   }
-}
-
-/**
- * The parsed query and the scope it names: the account the command runs as, or every account of the
- * messenger `in:` or `--source` names. `chat:` resolves as `--chat` does, `from:` through the names
- * `contacts search` uses, `from:me` as what the accounts sent — all inside the accounts chosen.
- */
-export const scopeOf = async (
-  messenger: Saved,
-  store: MessageStore,
-  account: AccountKey,
-  {
-    text,
-    chat,
-    source,
-    accounts: given,
-    senders,
-    kind,
-  }: Pick<SearchQuery, "chat" | "source" | "accounts" | "senders" | "kind"> & {
-    text: string
-  },
-): Promise<[WordQuery, SearchScope]> => {
-  const held = await store.accounts()
-  const providers = [...new Set(held.map(({ provider }) => provider))]
-  const parsed = parseQuery(text, { providers })
-  if (chat !== undefined && parsed.chat !== undefined && parsed.chat !== chat) {
-    throw new CliError("validation_error", `--chat and chat: name different chats: "${chat}" and "${parsed.chat}"`)
-  }
-  const listed = await listedAccounts(store, account, source, messenger.app, kind)
-  if (listed && parsed.in !== undefined)
-    throw new CliError("validation_error", "--source names the accounts — leave in: out, or put it in the list")
-  const sourced = source === undefined || listed ? undefined : sourceOf("--source", source, providers)
-  if (sourced !== undefined && parsed.in !== undefined && sourced !== parsed.in) {
-    throw new CliError("validation_error", `--source and in: name different messengers: ${sourced} and ${parsed.in}`)
-  }
-  const wanted = parsed.in ?? sourced
-  if (given !== undefined && (wanted !== undefined || listed)) {
-    throw new CliError("validation_error", "this search reads the accounts it was given — not with in: or --source")
-  }
-  if (given?.length === 0) throw new CliError("validation_error", "a search names at least one account")
-  if (senders !== undefined && parsed.from !== undefined) {
-    throw new CliError("validation_error", "--from and from: together — name the people once")
-  }
-  const accounts = accountsOfKind(
-    kind,
-    given ??
-      listed?.accounts ??
-      (wanted === undefined || held.length === 0
-        ? [account]
-        : held.filter(({ provider }) => inSource(wanted, provider))),
-    held,
-    wanted,
-    messenger.app?.command,
-    undefined,
-    listed !== undefined || given !== undefined,
-  )
-  const named = parsed.chat ?? chat
-  const scope: SearchScope = { accounts }
-  if (named !== undefined) scope.chat = await chatAmong(messenger, store, accounts, named)
-  if (senders !== undefined) scope.senders = senders
-  if (parsed.from?.toLowerCase() === "me") scope.outgoing = true
-  else if (parsed.from !== undefined) scope.sender = await senderAmong(store, accounts, parsed.from)
-  if (parsed.after !== undefined) scope.after = parsed.after
-  if (parsed.before !== undefined) scope.before = parsed.before
-  if (parsed.has.length > 0) {
-    const held = await store.attachmentKinds()
-    const unknown = parsed.has.find((kind) => !["attachment", "link", ...held].includes(kind))
-    if (unknown !== undefined) {
-      throw new CliError(
-        "validation_error",
-        `has:${unknown} — the store holds no ${unknown}; it holds ${["attachment", "link", ...held].join(", ")}`,
-      )
-    }
-    scope.has = parsed.has
-  }
-  return [{ required: parsed.required, excluded: parsed.excluded }, scope]
 }

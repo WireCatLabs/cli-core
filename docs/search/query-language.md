@@ -24,7 +24,7 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 `tag`, `date`, `in`, `has:text`, а у файлов-страниц ещё `title`, `site`, `lang`, `author`, `keyword` — то, что страница
 сообщает о себе; у сообщений и писем эти поля ничего не находят), и для их MCP-инструментов `search_*` (`source` у каждого). Поле, которого у вида нет,
 в `search all` пропускает этот вид, и ответ называет причину в `skipped`. `bot search messages`
-сохраняет legacy discovery; строгий поиск общего архива выбирает bot accounts через `in:bots`.
+читает тот же язык в копиях ботов; строгий поиск общего архива выбирает bot accounts через `in:bots`.
 
 Поиск читает локальную БД и, где сервер мессенджера умеет искать, по умолчанию спрашивает и его
 («Поиск на сервере мессенджера»); прочитанным ничего не отмечает. Хороший поиск требует скачанных чатов:
@@ -49,8 +49,8 @@ tg search messages 'Во сколько ежедневная выгрузка п
 где есть совпадающие слова или небольшой список поддерживаемых замен; общего понимания смысла нет.
 
 Boolean-синтаксис, фразы в кавычках, wildcard, AST, `--exact` и `--newest` сохраняют строгую
-семантику. Без `--discover` действует обычный строгий поиск. Режим не совмещается с legacy,
-`--regex` или `--backend server`; даже при backend=both он ищет только архив.
+семантику. Без `--discover` действует обычный строгий поиск. Режим не совмещается с
+`--backend server`; даже при backend=both он ищет только архив.
 
 ## Быстрый старт
 
@@ -282,7 +282,7 @@ tg search messages 'content:"оплата до" NOT text:оплата' --timezon
 | comparison | `date>=2026-01-01` | Стандартный typed open range; `date:>=2026-01-01` — то же самое в записи Elasticsearch |
 | wildcard | `text:invo*` | Полный term; * — любое число символов, ? — один |
 | regex | `text:/pass(port)?/` | Полный term; bounded subset Lucene RegExp; буквы text приводятся как в индексе |
-| fuzzy / proximity | `invoice~1` | unsupported_operator; опечатки исправляет `--language legacy`, формы слова ловит prefix `word*` |
+| fuzzy / proximity | `invoice~1` | unsupported_operator; формы слова ловит prefix `word*` |
 | boost / minimum / intervals | `invoice^2` | query.unsupported-operator |
 
 <!-- operators: end -->
@@ -512,8 +512,7 @@ Exclusive нижняя day boundary начинает со следующего �
 
 Quoted timestamp должен содержать секунды и offset: `"2026-01-01T10:00:00+02:00"`.
 Для него inclusive/exclusive сравнивает точный UTC instant. `date:2026-01-01` означает весь день.
-`date:7d` — относительная дата этого профиля (см. «Поля»), а не Lucene date math; legacy `after:7d`
-остаётся в legacy mode.
+`date:7d` — относительная дата этого профиля (см. «Поля»), а не Lucene date math.
 
 ## Подсчёт: stats messages show
 
@@ -602,12 +601,12 @@ Detector сообщает **кандидата**, а не подтверждён
 `query.too-large` — reason внутри `validation_error`, с `budget` и `complete:false`;
 сузьте чат/дату/pattern. Для `term expansions` сужать надо сам pattern — см. выше. Timeout/abort освобождает worker и timer. Предел времени проверяется
 между синхронными SQLite calls и bounded batches; уже выполняющийся SQLite statement не прерывается.
-NFA work budget ограничивает один match; legacy JS worker принудительно завершается на deadline.
+NFA work budget ограничивает один match.
 Query page: 1–1000 results, context: прежняя CLI/MCP модель. SQL и FTS получают bound values.
 
 Syntax/field/operator errors несут UTF-16 span `[start,end)`, reason и guide/alternative;
 CLI печатает позицию с единицы. `~` после слова (fuzzy) даёт `query.unsupported-operator` с подсказкой:
-опечатки исправляет `--language legacy` (без `~`), формы слова ловит prefix `word*`.
+формы слова ловит prefix `word*`.
 `index.not-ready` говорит, насколько построен word index (процент или сколько сообщений ждут
 нормализации), и точную команду: `<cli> store migrate` достраивает его сразу; каждый поиск тоже
 строит понемногу. Запросы без слов (`has:`, `kind:`, `date:`) работают и до этого.
@@ -616,28 +615,6 @@ CLI печатает позицию с единицы. `~` после слова
 `stemmer_unknown` — стеммеры знает только более новая версия), `done`/`total` и командой
 (`store migrate` или `store reindex`). Подмены точным поиском нет; `exact:` и `--exact` работают и до этого.
 `query.unsupported-field` отличается от `query.unknown-field`; incomplete archive — состояние охвата, не syntax error.
-
-## Миграция legacy
-
-`search messages --language legacy 'from:alice after:7d invoice -draft'` сохраняет старый parser
-и discovery chain. Standard default строгий: нулевой результат не заменяется похожими словами.
-`--regex` явно выбирает отдельный legacy JS `iu` full-body mode; `--regex --language lucene` — ошибка.
-Legacy regex теперь также имеет row/byte/time budgets; прежний бесконечный scan не сохраняется.
-
-| Legacy | Standard |
-|---|---|
-| `alpha OR beta gamma` | `(alpha OR beta) AND gamma` — тот же grouping, сделанный явным |
-| `after:2026-01-01` | `date:[2026-01-01 TO *]`, с выбранной zone |
-| `before:2026-02-01` | `date:[* TO 2026-02-01}` |
-| `after:7d` | Exact quoted timestamp range; preview фиксирует старый instant |
-| Prefix/discovery автоматически | `text:invo*` явно; typo — `--language legacy` |
-| Точное слово (до полей v2: `invoice`, `"invoice"`) | `exact:invoice`, `exact:"invoice"` или `--exact` |
-| `--regex 'invoice\\s+\\d+'` | Не alias term regex; keep legacy либо отдельно проверяйте body pattern |
-
-Shared `migrateLegacyQuery` — pure preview, без записи saved query и без новой команды.
-Он сохраняет legacy grouping/instants, закрывает ранее tolerated quote с предупреждением,
-но не обещает сохранить discovery results. Сохранённые поиски (`searches`) хранят
-language/version и разбираются заново при каждом запуске — см. «Сохранённые поиски и история».
 
 ## Машинный контракт и охват
 
@@ -707,7 +684,7 @@ Low-level `searchStore` и `MessagesService.search` без language сохран
 отмечается прочитанным; найденное сохраняется с `via: "search"` и не меняет ranges, `fetchedAt`,
 `completeness` и `coverage`.
 
-`both` не падает из-за сервера: при `--offline`, без сессии MCP, в MAX, без разрешения, на legacy
+`both` не падает из-за сервера: при `--offline`, без сессии MCP, в MAX, без разрешения
 или без слов ответ — архив и `server.skipped`. Если `--backend` не указан, такой ответ — просто архив,
 без блока `server`. `server` в этих случаях отказывает. Разрешение —
 `messages.server-search`; `readonly` и `ask` дают ответ из архива. `stats messages show` сервер не
@@ -719,7 +696,7 @@ Low-level `searchStore` и `MessagesService.search` без language сохран
             "failed": [{ "chat": null, "reason": "rate_limited" }], "complete": false }
 ```
 
-`skipped`: `legacy`, `unsupported`, `pushed_history`, `offline`, `not_allowed`, `other_accounts`,
+`skipped`: `unsupported`, `pushed_history`, `offline`, `not_allowed`, `other_accounts`,
 `no_words`, `needs_chat`. `failed[].reason`: `rate_limited`, `search_failed`, `time_or_abort_bound`. Каждый hit
 получает `source`: `archive` (только архив), `server` (новое с сервера), `both` (сервер вернул уже
 хранимое). План: 2026-10-07-server-search.md.

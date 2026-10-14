@@ -60,7 +60,7 @@ const open = async () => {
   await store.fillStems({})
   return store
 }
-const request = (text: string) => ({ text, discover: true, language: "lucene" as const, limit: 10, timezone: "UTC" })
+const request = (text: string) => ({ text, discover: true, limit: 10, timezone: "UTC" })
 const ids = (result: { items: { id: string }[] }) => result.items.map((m) => m.id)
 
 describe("archive discovery", () => {
@@ -189,13 +189,7 @@ describe("archive discovery", () => {
   })
   it("enforces input, cancellation and bounded reply bodies", async () => {
     const store = await open()
-    for (const extra of [
-      { limit: 0 },
-      { context: 21 },
-      { backend: "server" as const },
-      { language: "legacy" as const },
-      { pattern: /export/ },
-    ])
+    for (const extra of [{ limit: 0 }, { context: 21 }, { backend: "server" as const }])
       await expect(searchStore(store, account, { ...request("Helix export"), ...extra })).rejects.toThrow()
     const controller = new AbortController()
     controller.abort()

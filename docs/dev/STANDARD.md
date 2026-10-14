@@ -799,7 +799,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--jsonl` |  | machine-readable output: one JSON object per line, for streaming and jq |  | every command |
 | `--kind` | `<kind>` | only chats of this kind: dialog, group, channel or saved |  | `inbox`, `review`, `store export`, `tasks link` |
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
-| `--language` | `<lucene\|legacy>` | the query language: strict Lucene or legacy discovery | `lucene` | `search messages`, `searches create` |
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch`, `messages sync` |
 | `--last-name` | `<name>` | your last name |  | `account update` |
 | `--left` |  | only the chats this account has left |  | `store clear` |
@@ -900,7 +899,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--record` |  | keep this run under `runs` — ids and timings, never message content. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--refresh` |  | read the private chat with them from MAX first — one request. **one idea, two sources: bring what the answer is read from up to date first. `bot contacts show` reads the private chat again from the messenger; `conversations search` builds and embeds, on this machine, the chats that changed (NEED-551 A, awaiting the owner's wording)** |  | `bot contacts show`, `contacts context`, `search conversations` |
 | `--refresh-metadata` |  | read current descriptions from the messenger before classifying |  | `tags auto` |
-| `--regex` |  | the words are one regular expression, case-insensitive, tested against every stored text |  | `search messages`, `searches create` |
 | `--remove` | `<chat>` | take a chat out of a folder; repeat it for more |  | `chats folders update` |
 | `--repair-time` | `<duration>` | time budget for interior archive gap repair |  | `store gaps repair` |
 | `--replace` |  | overwrite a saved search of the same name |  | `searches create` |
@@ -967,7 +965,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--with-notes` |  | include your private notes, subject to contacts.notes.list permission |  | `contacts show` |
 | `--within` | `<duration>` | the observation window after a known join; each report names what it measures |  | `stats chats newcomers`, `stats chats retention`, `tasks agenda` |
 | `--words` | `<words>` | match any of these whole words, comma-separated; empty clears |  | `replies edit` |
-| `--workers` | `<n>` | sessions in parallel, each with its own copy of the model |  | `conversations embed` |
 | `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `mcp` (planned), `mcp config` (planned) |
 
 <!-- end of the option catalogue -->
@@ -1061,8 +1058,8 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
    [the typo plan](typo-search-default-plan.md)). Strict search runs first and its hits come back
    unchanged. Only when it finds nothing does a plain word that is not a whole archive word get
    help: a known beginning of three or more letters matches as a prefix, an unknown word matches
-   the archive words one edit away. Explicit syntax, phrases, fields, exclusions, an AST, `--exact`
-   and `--regex` stay strict.
+   the archive words one edit away. Explicit syntax, phrases, fields, exclusions, an AST and `--exact`
+   stay strict.
    - **`match` on a hit says how it matched.** A strict hit has no `match`. A forgiven hit has
      `match: "corrected"` or `match: "beginnings"`; when both helped, `corrected` wins, since a
      correction can turn a real word the archive lacks into another one. These are values the

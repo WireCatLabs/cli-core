@@ -77,33 +77,29 @@ const rows = async (path: string) => {
 describe("search history", () => {
   it("**records each run once, with its options as given**; the same run again counts on its row", async () => {
     const { messages, path } = await setup()
-    await messages.search({ text: "invoice", language: "lucene", limit: 5, context: 0 })
-    await messages.search({ context: 0, limit: 5, language: "lucene", text: "invoice" })
-    await messages.stats({ text: "invoice", language: "lucene", limit: 5, by: "day" })
+    await messages.search({ text: "invoice", limit: 5, context: 0 })
+    await messages.search({ context: 0, limit: 5, text: "invoice" })
+    await messages.stats({ text: "invoice", limit: 5, by: "day" })
     expect(await rows(path)).toEqual([
       {
         name: null,
         command: "search",
-        params: '{"context":0,"language":"lucene","limit":5,"text":"invoice"}',
+        params: '{"context":0,"limit":5,"text":"invoice"}',
         runs: 2,
       },
-      { name: null, command: "stats", params: '{"by":"day","language":"lucene","limit":5,"text":"invoice"}', runs: 1 },
+      { name: null, command: "stats", params: '{"by":"day","limit":5,"text":"invoice"}', runs: 1 },
     ])
   })
 
-  it("keeps a refused query and a run with recording off out of it; a --regex run is kept as legacy", async () => {
+  it("keeps a refused query and a run with recording off out of it", async () => {
     const { messages, path } = await setup()
-    await expect(messages.search({ text: "foo:bar", language: "lucene", limit: 5 })).rejects.toMatchObject({
+    await expect(messages.search({ text: "foo:bar", limit: 5 })).rejects.toMatchObject({
       code: "validation_error",
     })
     expect(await rows(path)).toEqual([])
-    await messages.search({ pattern: /inv.ice/iu, language: "legacy", limit: 5 })
-    expect(await rows(path)).toMatchObject([
-      { params: '{"language":"legacy","limit":5,"regex":true,"text":"inv.ice"}' },
-    ])
 
     const off = await setup(false)
-    await off.messages.search({ text: "invoice", language: "lucene", limit: 5 })
+    await off.messages.search({ text: "invoice", limit: 5 })
     expect(await rows(off.path)).toEqual([])
   })
 
@@ -112,7 +108,7 @@ describe("search history", () => {
     store.recordSearch = async () => {
       throw new Error("database is locked")
     }
-    expect((await messages.search({ text: "invoice", language: "lucene", limit: 5 })).items).toHaveLength(2)
+    expect((await messages.search({ text: "invoice", limit: 5 })).items).toHaveLength(2)
   })
 
   it(`keeps the newest ${HISTORY_KEPT} unnamed runs, and never prunes a saved search`, async () => {
@@ -138,7 +134,7 @@ describe("saved searches", () => {
     expect(saved).toMatchObject({
       name: "invoices",
       command: "search",
-      params: { language: "lucene", limit: 3, text: "invoice" },
+      params: { limit: 3, text: "invoice" },
       language: "lucene-v1",
       version: 1,
       fieldsVersion: 2,
@@ -161,7 +157,6 @@ describe("saved searches", () => {
     ["42", { text: "invoice" }, "name.invalid"],
     ["bad name", { text: "invoice" }, "name.invalid"],
     ["typo", { text: "foo:bar" }, "query.unknown-field"],
-    ["regex", { text: "(", regex: true }, undefined],
   ])("refuses %s before saving it", async (name, params, reason) => {
     const { searches } = await setup()
     await expect(searches.create(name, params)).rejects.toMatchObject({
@@ -177,14 +172,12 @@ describe("saved searches", () => {
     const resolved = await searches.resolve("invoices", { text: "late", limit: 9 })
     expect(resolved.params).toEqual({
       text: "(invoice) AND (late)",
-      language: "lucene",
       newest: true,
       limit: 9,
       timezone: "UTC",
     })
     const found = await messages.search({
       ...resolved.params,
-      language: "lucene",
       limit: 9,
       saved: resolved.id,
     } as Parameters<typeof messages.search>[0])
@@ -202,7 +195,7 @@ describe("saved searches", () => {
     })
   })
 
-  it("adds words to a stored AST, and refuses more words for a --regex search", async () => {
+  it("adds words to a stored AST", async () => {
     const { searches } = await setup()
     await searches.create("tree", {
       ast: {
@@ -215,9 +208,17 @@ describe("saved searches", () => {
     expect(resolved.params.ast).toMatchObject({
       root: { kind: "boolean", clauses: [{ occur: "must" }, { occur: "must" }] },
     })
-    await searches.create("pattern", { text: "inv.ice", regex: true })
-    expect((await searches.resolve("pattern", {})).pattern).toEqual(/inv.ice/iu)
-    await expect(searches.resolve("pattern", { text: "more" })).rejects.toMatchObject({ code: "validation_error" })
+  })
+
+  it("refuses a search saved in the removed legacy language instead of reading it as Lucene", async () => {
+    const { searches, path } = await setup()
+    await searches.create("old", { text: "inv.ice" })
+    const database = await openCache(path)
+    database.prepare("UPDATE searches SET language = 'legacy' WHERE name = 'old'").run()
+    database.close()
+    await expect(searches.resolve("old", {})).rejects.toThrow(
+      'saved search "old": the legacy search and --regex are gone',
+    )
   })
 
   it("**a saved relative date means the day it runs**: date>=7d finds different messages on different days", async () => {
@@ -227,7 +228,7 @@ describe("saved searches", () => {
       vi.useFakeTimers({ toFake: ["Date"] })
       vi.setSystemTime(new Date(day))
       const { params } = await searches.resolve("recent", {})
-      const found = await messages.search({ text: params.text as string, language: "lucene", limit: 10 })
+      const found = await messages.search({ text: params.text as string, limit: 10 })
       vi.useRealTimers()
       return found.items.map(({ id }) => id).sort()
     }
