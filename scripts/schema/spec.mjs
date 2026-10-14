@@ -769,8 +769,11 @@ const NEW = {
       cols: [
         id(),
         c("kind", "text", { notnull: true, note: "`phone`, `email`, `url`, `document`" }),
-        ...poly("source", "the text's row: `message`"),
-        c("source_field", "text", { notnull: true, note: "which text of that row: `text`" }),
+        ...poly("source", "the text's row: `message`, or `attachment` for a message's file or voice note"),
+        c("source_field", "text", {
+          notnull: true,
+          note: "which text of that row: a message's `text`, an attachment's `file_text` or `transcript`",
+        }),
         c("start_offset", "integer", { notnull: true, note: "where it is written in that text, in UTF-16 units" }),
         c("end_offset", "integer", {
           notnull: true,
@@ -807,7 +810,7 @@ const NEW = {
       name: "mention_pending",
       doc: "Texts written or edited since their mentions were found: triggers enqueue, the store's next write finds them.",
       cols: [
-        c("source_type", "text", { notnull: true, note: "the text's row: `message`" }),
+        c("source_type", "text", { notnull: true, note: "the text's row: `message` or `attachment`" }),
         c("source_id", "integer", { notnull: true }),
       ],
       keys: ["PRIMARY KEY (source_type, source_id)"],

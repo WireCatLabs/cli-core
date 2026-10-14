@@ -360,17 +360,21 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     } else if (field === "phone" || field === "email" || field === "url" || field === "domain") {
       // Mentions are found in message text only so far: mail has none to match.
       if (corpus.item !== "message") fragment = bound("0")
-      else if (field === "domain")
+      else {
+        const where =
+          field === "domain"
+            ? "mn.domain = ? AND mn.status <> 'dismissed'"
+            : "mn.kind = ? AND mn.value = ? AND mn.status <> 'dismissed'"
+        const params = field === "domain" ? [siteOf(value.toLowerCase())] : [field, normalizedValue(value)]
+        // A file's or a voice note's mention finds the message it belongs to.
         fragment = bound(
-          "m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND mn.domain = ? AND mn.status <> 'dismissed')",
-          siteOf(value.toLowerCase()),
+          `m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND ${where} ` +
+            "UNION SELECT a.attachable_id FROM mentions mn JOIN attachments a ON a.id=mn.source_id " +
+            `AND a.attachable_type='message' WHERE mn.source_type='attachment' AND ${where})`,
+          ...params,
+          ...params,
         )
-      else
-        fragment = bound(
-          "m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND mn.kind = ? AND mn.value = ? AND mn.status <> 'dismissed')",
-          field,
-          normalizedValue(value),
-        )
+      }
     } else if (field === "tag") {
       const tag = tagOf(value)
       if (tag === undefined) searchError("query.invalid-tag", node.span)

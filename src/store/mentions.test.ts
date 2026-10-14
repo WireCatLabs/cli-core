@@ -110,12 +110,12 @@ describe("mentions", () => {
     raw.close()
 
     const reopened = await openStore({ path, now: () => Date.parse("2026-10-13T21:00:00Z") })
-    expect(await reopened.rebuildMentions()).toEqual({ messages: 2, mentions: 2 })
+    expect(await reopened.rebuildMentions()).toEqual({ messages: 2, attachments: 0, mentions: 2 })
     const items = (await reopened.mentions(OWNER, undefined, { offset: 0 })).items
     expect(items.map(({ kind, status }) => `${kind} ${status}`).sort()).toEqual(["email dismissed", "phone found"])
     expect(await reopened.mentionsState()).toEqual({ pending: 0, rebuiltAt: "2026-10-13T21:00:00.000Z" })
 
-    expect(await reopened.rebuildMentions({ kinds: ["phone"] })).toEqual({ messages: 2, mentions: 1 })
+    expect(await reopened.rebuildMentions({ kinds: ["phone"] })).toEqual({ messages: 2, attachments: 0, mentions: 1 })
     expect((await reopened.mentions(OWNER, q("kind:email"), { offset: 0 })).items[0]?.status).toBe("dismissed")
     await reopened.close()
   })
@@ -235,6 +235,51 @@ describe("mention fields in a message search", () => {
     await store.rejectMention(OWNER, link?.id ?? 0, "owner")
     expect(await found(store, "domain:example.com")).toEqual(["2"])
     expect(await found(store, 'url:"https://example.com/a"')).toEqual([])
+    await store.close()
+  })
+})
+
+describe("mentions in files and voice notes", () => {
+  it("finds them in a file's text and a transcript, lists them with the message, and drops them with the text", async () => {
+    const { store } = await fresh()
+    await store.saveMessages(
+      OWNER,
+      "-1",
+      [
+        { ...message("1", "смета во вложении"), attachments: [{ kind: "file", name: "a.pdf" }] },
+        { ...message("2", "голосовое"), attachments: [{ kind: "voice" }] },
+      ],
+      { via: "history" },
+    )
+    const attached = await store.fileAttachments(OWNER, { limit: 10 })
+    const file = attached.find((one) => one.messageId === "1")
+    const voice = attached.find((one) => one.messageId === "2")
+    await store.keepAttachmentText(file?.pk ?? 0, {
+      text: "Подрядчик: ana@example.com",
+      origin: "extracted",
+      extractor: "plain",
+    })
+    await store.keepAttachmentText(voice?.pk ?? 0, {
+      text: "перезвони на +7 900 000-00-01",
+      origin: "extracted",
+      extractor: "speech:whisper",
+    })
+    await store.saveMessages(OWNER, "-1", [message("3", "ещё")], { via: "update" })
+
+    const items = (await store.mentions(OWNER, undefined, { offset: 0 })).items
+    expect(items.map(({ kind, field, messageId, written }) => [kind, field, messageId, written]).sort()).toEqual([
+      ["email", "file_text", "1", "ana@example.com"],
+      ["phone", "transcript", "2", "+7 900 000-00-01"],
+    ])
+    const found = async (text: string) =>
+      (await searchStore(store, OWNER, { text, language: "lucene", limit: 10 })).items.map(({ id }) => id)
+    expect(await found('phone:"89000000001"')).toEqual(["2"])
+    expect(await found('email:"ana@example.com"')).toEqual(["1"])
+
+    expect(await store.rebuildMentions()).toMatchObject({ messages: 3, attachments: 2, mentions: 2 })
+    await store.keepAttachmentText(file?.pk ?? 0, { text: "ничего", origin: "agent", extractor: "agent" })
+    await store.saveMessages(OWNER, "-1", [message("4", "ещё раз")], { via: "update" })
+    expect((await store.mentions(OWNER, q("kind:email"), { offset: 0 })).items).toEqual([])
     await store.close()
   })
 })

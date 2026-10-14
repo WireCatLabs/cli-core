@@ -879,6 +879,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--pin` | `<chat>` | pin this chat at the top of the folder; repeat it for more |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--pinned` | `<on\|off>` | on pins a forum topic at the top of the list, off unpins it |  | `topics edit` (tg-only) |
 | `--port` | `<port>` | the local port for --http |  | `mcp` |
+| `--problems` |  | only failed responses, warnings and crashes |  | `runs show` |
 | `--profile` | `<name>` | filter diagnostic runs by recorded profile |  | `runs search` |
 | `--provider` | `<provider>` | embedding provider: local or openai; analysis: agent, openai or anthropic; consents revoke: exact provider identity from the list |  | `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations related`, `conversations status`, `search conversations` |
 | `--public-url` | `<url>` | the tunnel's https address the browser apps use |  | `mcp` |

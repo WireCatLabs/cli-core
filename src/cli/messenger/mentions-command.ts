@@ -9,8 +9,9 @@ import { pagedList, queryHelp } from "../list-query.js"
 import { positiveCount, window } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 
-const line = ({ id, kind, value, domain, status, sentAt, locator }: Mention) =>
-  `${id}  ${sentAt}  ${kind}  ${value}${domain && kind === "url" ? `  (${domain})` : ""}  ${status}  ${locator}`
+const line = ({ id, kind, value, domain, status, sentAt, locator, field }: Mention) =>
+  `${id}  ${sentAt}  ${kind}  ${value}${domain && kind === "url" ? `  (${domain})` : ""}  ${status}  ${locator}` +
+  (field === "text" ? "" : `  (in its ${field === "transcript" ? "voice note" : "file"})`)
 
 /** `mentions …`: phones, e-mail addresses, links and documents found in stored message text. */
 export const mentionsCommand = (messenger: Messenger): Command => {
