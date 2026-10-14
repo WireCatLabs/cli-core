@@ -9,6 +9,9 @@ shape of this file.
 
 ### Fixed
 
+- **A store migration that fails in an app with no `store reset` advises moving the file aside**, not
+  `` `store reset` `` with no app named. drive opened the store as `tg` and told the owner to run `tg store reset`;
+  it now passes no `command`, and the advice names no command at all.
 - **`config set` with a camelCase name answers with the snake_case setting it saved** (`"setting": "keep_runs_for_days"`
   for `keepRunsForDays`), and the command's own rules for a setting, such as `default_profile` taking no profile, apply
   to either spelling.
