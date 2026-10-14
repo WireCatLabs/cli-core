@@ -130,11 +130,12 @@ describe("command effects", () => {
     expect(wrong.map(({ path }) => path)).toEqual(["account sessions list", "conversations embed status"])
   })
 
-  it("judge retry and unasked steps on the remote side only", () => {
+  it("judge retry on the remote side, and keep a local-only write from running unasked", () => {
     expect(judgedEffects({ remote: "read", local: "write" })).toEqual({ remote: "read", local: "none" })
     expect(judgedEffects(undefined)).toBeUndefined()
     const targets = judgedTargets(program)
     expect(targets("messages sync")?.effects).toEqual({ remote: "read", local: "none" })
     expect(targets("messages send")?.effects).toEqual({ remote: "write", local: "none" })
+    expect(targets("server restart")?.effects).toEqual({ remote: "none", local: "write" })
   })
 })
