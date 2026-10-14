@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.271.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **On `@wirecat/cli-base` 0.28.0, with its standard shapes** (peer `>=0.28.0 <0.29.0`). `commands --json` is
