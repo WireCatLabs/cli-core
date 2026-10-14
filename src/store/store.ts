@@ -95,6 +95,7 @@ import { personSeenInAccounts } from "./sqlite/person-scope.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 import * as privatePeople from "./sqlite/private-people.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
+import type { Where } from "./sqlite/query-filter.js"
 import * as ranges from "./sqlite/ranges.js"
 import { type RankedEvidence, type RankingEvidenceRequest, rankingEvidence } from "./sqlite/ranking-evidence.js"
 import { type RankedStoreFound, type RankingRequest, rankQuery } from "./sqlite/rankings.js"
@@ -121,7 +122,6 @@ import type { StoredTag, TagFilter, TagTarget } from "./sqlite/tags.js"
 import * as tagQueries from "./sqlite/tags.js"
 import { linkInbox, type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
 import * as transcripts from "./sqlite/transcripts.js"
-import { toMs } from "./sqlite/values.js"
 import type { ChunkToEmbed } from "./sqlite/vectors.js"
 import * as vectors from "./sqlite/vectors.js"
 import type { ScoredHit, SearchScope, WordOptions, WordQuery } from "./sqlite/words.js"
@@ -327,11 +327,11 @@ export interface MessageStore {
    * transactions and made current in one, so readers never see half of it and a failed build changes nothing.
    */
   replaceConversations(key: AccountKey, chatId: Id, build: ConversationBuild): Promise<void>
-  /** Newest first; `after` and `before` bound when a conversation started. */
+  /** Newest first; `where` is a list query compiled over `CONVERSATION_COLUMNS`. */
   conversations(
     key: AccountKey,
     chatId: Id,
-    window: { limit: number; after?: string; before?: string },
+    window: { limit: number; offset?: number; where?: Where },
   ): Promise<Page<ConversationSummary>>
   /** Its messages oldest first; `undefined` when the account has no such conversation. */
   conversation(key: AccountKey, id: string): Promise<{ summary: ConversationSummary; messages: Message[] } | undefined>
@@ -1152,15 +1152,11 @@ const storeOver = (context: StoreContext): MessageStore => {
       await conversationQueries.replaceConversations(context, chatKey, build)
     },
 
-    conversations: async (key, chatId, { limit, after, before }) => {
+    conversations: async (key, chatId, window) => {
       const chatKey = chatKeyOf(key, chatId)
       return chatKey === undefined
         ? { items: [], hasMore: false }
-        : conversationQueries.conversationPage(context, chatKey, {
-            limit,
-            ...(after === undefined ? {} : { after: toMs(after) as number }),
-            ...(before === undefined ? {} : { before: toMs(before) as number }),
-          })
+        : conversationQueries.conversationPage(context, chatKey, window)
     },
 
     conversation: async (key, id) => {
@@ -1930,6 +1926,7 @@ export {
 } from "./sqlite/attachment-texts.js"
 export { pendingNormalization } from "./sqlite/backfill.js"
 export { CHAT_LIST_KEY, type ChatCompleteness, fetchedKey, historyStartKey } from "./sqlite/completeness.js"
+export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export type { CounterTarget } from "./sqlite/counters.js"
 export { messageOfEmail, threadConversation } from "./sqlite/emails.js"
 export { orphanPointers } from "./sqlite/entity-types.js"

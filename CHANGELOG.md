@@ -15,6 +15,12 @@ shape of this file.
   and so are the MCP arguments of the same names: `tasks_list` and `tags_list` take `query`. Items are the `task`
   and the new `tagging` entity, so a task no longer carries its message preview (`source_message` names the
   message), and a tag names what it is on as `target`. Both lists page with `--limit` and `--page`, in SQL.
+- **`conversations list <chat> [query...]` takes the chat as its argument and narrows by one query.** `--chat` and
+  `--since-time` are gone (`started_at>=2026-10-01`, `messages_count>=10`, `senders_count>2`), and so are the MCP
+  `conversations_list` argument `since`, which takes `query` and `page`. Items are the new `conversation` entity:
+  `first_message` is the message's locator, `started_at`/`ended_at`, `messages_count`, `senders_count`, `built_at`
+  and `rules_version` replace `firstMessageId`, `firstAt`, `lastAt`, `messageCount`, `senders`, `builtAt` and
+  `algorithmVersion`. The list pages with `--limit` and `--page`, in SQL.
 
 ### Added
 

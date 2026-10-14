@@ -2457,9 +2457,7 @@
     "conversations list": {
       "in": "all",
       "options": {
-        "--chat": "all",
-        "--limit": "all",
-        "--since-time": "all"
+        "--limit": "all"
       }
     },
     "conversations related": {

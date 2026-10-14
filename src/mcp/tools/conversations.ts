@@ -1,15 +1,17 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { embeddingChoice } from "../../cli/embedding-choice.js"
+import { listOf } from "../../cli/envelope.js"
+import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { listed } from "../../cli/paging.js"
 import { SAVE_NEXT_STEPS } from "../../meetings/index.js"
-import { BATCH_SIZE } from "../../services/conversations.js"
+import { BATCH_SIZE, CONVERSATION_QUERY } from "../../services/conversations.js"
 import { REFRESH_BOUNDS } from "../../services/embeddings.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import { searchServices, syncInputs } from "../search-sync.js"
-import { type AnyTool, chatOf, limit, message, READ, tool } from "../tool.js"
+import { type AnyTool, chatOf, limit, message, page, paging, READ, tool } from "../tool.js"
 import { syncArgs } from "./search.js"
 
 /** An MCP client gives up on a call long before 2,000 chunks are embedded. */
@@ -109,26 +111,19 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
       description:
         "The conversations inside a group chat, newest first, found in the stored messages by replies, mentions " +
         `and who wrote next. Only for a chat built with \`${command} conversations build --chat <chat>\`. ` +
-        "Returns { items, limit, hasMore }; each item's id goes to conversations_show.",
-      input: v.object({
-        chat,
-        since: v.optional(
-          v.pipe(v.string(), v.description("only those started at this ISO 8601 time, or 2h / 1d ago, or later")),
-        ),
-        limit,
-      }),
+        "Each item's id goes to conversations_show.",
+      input: v.object({ chat, query: queryArgument(CONVERSATION_QUERY), limit, page }),
       annotations: { ...READ, openWorldHint: false },
+      output: { entity: "conversation", list: true },
       stored: async (store, account, args, defaults) => {
-        const size = args.limit ?? defaults.limit
-        const page = await servicesFor({
+        const { size, number, window } = paging(args, defaults)
+        const query = listQuery(args.query ?? "", CONVERSATION_QUERY, "conversations list")
+        const found = await servicesFor({
           ...storedDeps(messenger, store, account, defaults.guard),
           env: defaults.env,
           profile: defaults.settings.profile,
-        }).conversations.list(args.chat, {
-          limit: size,
-          ...(args.since === undefined ? {} : { since: new Date(momentOf(args.since, "since")).toISOString() }),
-        })
-        return { items: page.items, limit: size, hasMore: page.hasMore }
+        }).conversations.list(args.chat, { ...window, ...(query ? { query } : {}) })
+        return listOf("conversations list", { items: found.items, limit: size, has_more: found.has_more, page: number })
       },
     }),
 

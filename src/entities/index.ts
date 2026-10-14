@@ -4,6 +4,7 @@ import { account } from "./account.js"
 import { attachment } from "./attachment.js"
 import { chat } from "./chat.js"
 import { contact } from "./contact.js"
+import { conversation } from "./conversation.js"
 import { document } from "./document.js"
 import { fact } from "./fact.js"
 import { reference } from "./fields.js"
@@ -27,6 +28,7 @@ export {
   attachment,
   chat,
   contact,
+  conversation,
   document,
   fact,
   identity,
@@ -58,6 +60,7 @@ export const ENTITIES = {
   meeting,
   reference,
   tagging,
+  conversation,
 } as const
 
 export type EntityName = keyof typeof ENTITIES

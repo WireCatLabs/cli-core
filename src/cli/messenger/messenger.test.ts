@@ -4,9 +4,12 @@ import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import type { CommandInfo } from "@wirecat/cli-base/commands"
+import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import { parseMarkdown } from "../../domain/markdown.js"
 import type { Chat, Member, Message, WindowedMessage } from "../../domain/models.js"
+import { conversation } from "../../entities/index.js"
 import { sampleMeeting } from "../../meetings/testing/index.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { MEETINGS_UNNAMED } from "../../services/search-all-meetings.js"
@@ -2998,16 +3001,25 @@ describe("the shared read commands", () => {
       throw new Error("conversations come from the store alone")
     }
 
-    expect((await call(["conversations", "list", "--chat", "7"], never, env)).stderr.join("\n")).toContain(
+    expect((await call(["conversations", "list", "7"], never, env)).stderr.join("\n")).toContain(
       "conversations build --chat 7",
     )
     const built = await call(["conversations", "build", "--chat", "7", "--json"], never, env)
     expect(JSON.parse(built.stdout[0] ?? "")).toMatchObject({ chat: "7", messages: 3, conversations: 1 })
-    const listed = JSON.parse(
-      (await call(["conversations", "list", "--chat", "7", "--json"], never, env)).stdout[0] ?? "",
+    const listed = v.parse(
+      listEnvelopeSchema(conversation),
+      JSON.parse((await call(["conversations", "list", "7", "--json"], never, env)).stdout[0] ?? ""),
     )
-    expect(listed.items).toMatchObject([{ firstMessageId: "1", messageCount: 3, senders: 1 }])
-    const shown = await call(["conversations", "show", listed.items[0].id, "--jsonl"], never, env)
+    expect(listed.items).toMatchObject([{ first_message: "msg:chat/500/7/1", messages_count: 3, senders_count: 1 }])
+    const none = await call(["conversations", "list", "7", "messages_count>3", "--json"], never, env)
+    expect(JSON.parse(none.stdout[0] ?? "").items).toEqual([])
+    const ranged = await call(
+      ["conversations", "list", "7", "started_at>=2020-01-01 senders_count:1", "--json"],
+      never,
+      env,
+    )
+    expect(JSON.parse(ranged.stdout[0] ?? "").items).toHaveLength(1)
+    const shown = await call(["conversations", "show", listed.items[0]?.id ?? "", "--jsonl"], never, env)
     expect(shown.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2", "3"])
     const links = JSON.parse((await call(["messages", "links", "7", "3", "--json"], never, env)).stdout[0] ?? "")
     expect(links).toMatchObject({ links: [{ parentId: "2", kind: "same_sender", chosen: true }], chain: ["2", "1"] })
