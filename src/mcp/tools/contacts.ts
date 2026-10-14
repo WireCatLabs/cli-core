@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
 import { itemOf, listOf } from "../../cli/envelope.js"
-import { listQuery, nativeTerms, queryInput as query, searchText } from "../../cli/list-query.js"
+import { listQuery, nativeTerms, queryArgument, searchText } from "../../cli/list-query.js"
 import { contactAnswer, snakeKeys } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { CONTACTS_QUERY } from "../../cli/messenger/people-queries.js"
@@ -27,7 +27,7 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
         "People the owner has a one-to-one chat with. query name:<text> matches the name, the local alias or the " +
         "@username; nothing else is filtered.",
       input: v.object({
-        query,
+        query: queryArgument(CONTACTS_QUERY),
         order: v.optional(v.picklist(["recent", "name"])),
         limit,
         page,
@@ -36,7 +36,7 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
       output: { entity: "contact", list: true },
       served: async (services, { query: words, order, ...rest }, defaults) => {
         const search = searchText(
-          nativeTerms(listQuery("contacts list", CONTACTS_QUERY, words), "contacts list").get("name"),
+          nativeTerms(listQuery(words ?? "", CONTACTS_QUERY, "contacts list"), "contacts list").get("name"),
         )
         const { size, number, window } = paging(rest, defaults)
         const found = await services.people.list({ order: order ?? "recent", ...(search ? { search } : {}), ...window })

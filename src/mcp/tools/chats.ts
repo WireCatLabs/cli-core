@@ -1,9 +1,10 @@
 import * as v from "valibot"
 import { registriesCover } from "../../botcheck/registries.js"
 import { itemOf, listOf } from "../../cli/envelope.js"
-import { queryInput as query } from "../../cli/list-query.js"
+import { queryArgument } from "../../cli/list-query.js"
 import { chatShown, documentLinkAnswer, snakeKeys, wholeList } from "../../cli/messenger/chat-answers.js"
 import { chatEvents, chatsList, membersAudit, membersHistory, membersList } from "../../cli/messenger/chat-lists.js"
+import { AUDIT_QUERY, CHATS_QUERY, EVENTS_QUERY, HISTORY_QUERY } from "../../cli/messenger/chat-queries.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { casKey } from "../../cli/registry-keys.js"
 import { nextStep } from "../../cli/steps.js"
@@ -24,7 +25,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         "Chats the owner is in, most recent first. Use it to find a chat's id before reading or sending. " +
         "The list takes no filter yet: neither the messenger nor the store filters chats, so a query is refused.",
-      input: v.object({ query, limit, page }),
+      input: v.object({ query: queryArgument(CHATS_QUERY), limit, page }),
       annotations: READ,
       output: { entity: "chat", list: true },
       served: (services, args, defaults) => chatsList(services, args.query, pagingOf(args, defaults)),
@@ -36,7 +37,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         "A chat's service messages: who joined, left, was added or removed, and by whom, oldest first — type is " +
         `join, leave, add, remove, create, title or pin. The last ${EVENTS_DAYS} days unless query names time ` +
         '(time>=2d, time>="2026-10-01"). meta.truncated when the history was longer than one run reads.',
-      input: v.object({ chat, query }),
+      input: v.object({ chat, query: queryArgument(EVENTS_QUERY) }),
       annotations: READ,
       output: { entity: "chat_event", list: true },
       online: (adapter, args, { guard }) =>
@@ -100,7 +101,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         ". Removes nobody — that is chats_moderate, with the owner's confirmation.",
       input: v.object({
         chat,
-        query,
+        query: queryArgument(AUDIT_QUERY),
         budget: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description("pages of members to read"))),
         deep: v.optional(
           v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(50), v.description("check the top n in full")),
@@ -126,7 +127,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         "join, leave or profile; before is the profile seen until then. A leave is recorded only from a member list " +
         "read whole. query names time to read from (time>=7d). Reads the local store only; empty until the owner " +
         "fetches or tracks the chat.",
-      input: v.object({ chat, query }),
+      input: v.object({ chat, query: queryArgument(HISTORY_QUERY) }),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "chat_event", list: true },
       stored: (store, account, args, defaults) =>

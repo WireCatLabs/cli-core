@@ -26,8 +26,7 @@ export const LIST_QUERY_GUIDE = "https://github.com/WireCatLabs/cli-core/blob/ma
 export const withQuery = (command: Command, registry: QueryRegistry): Command => {
   const query = defineQuery(registry)
   annotate(command, { query, output: { entity: registry.entity } })
-  // A provider list refuses every field it cannot ask its source, so its help names only the ones it can.
-  const shown = query.backend === "native" ? query.fields.filter((field) => field.native) : query.fields
+  const shown = askable(query)
   // `-kind:channel` is a negated term, not an option; a mistyped option still fails, as a query word.
   command
     .allowUnknownOption()
@@ -97,19 +96,27 @@ export const pagedList = <T>(
     page,
   })
 
+/** The fields a list can be narrowed by: a provider list only those its source answers. */
+const askable = (registry: QueryRegistry) =>
+  registry.backend === "native" ? registry.fields.filter((field) => field.native) : registry.fields
+
 /** An MCP list's `query` argument: the language the CLI list takes after its arguments. */
-export const queryArgument = (registry: QueryRegistry) =>
-  v.optional(
+export const queryArgument = (registry: QueryRegistry) => {
+  const fields = askable(registry)
+  return v.optional(
     v.pipe(
       v.string(),
       v.maxLength(QUERY_LIMITS.bytes),
       v.description(
-        `field:value terms that narrow the list (Lucene: AND OR NOT, [a TO b], > <); fields: ${registry.fields
-          .map((field) => field.name)
-          .join(", ")}; e.g. ${registry.fields[0]?.example ?? ""}`,
+        fields.length === 0
+          ? "field:value terms; this list filters by none yet, so any term is refused"
+          : `field:value terms that narrow the list (Lucene: AND OR NOT, [a TO b], > <); fields: ${fields
+              .map((field) => field.name)
+              .join(", ")}; e.g. ${fields[0]?.example ?? ""}`,
       ),
     ),
   )
+}
 
 /**
  * The terms of a query a provider answers: field:value joined by AND, each field once. Anything else is a

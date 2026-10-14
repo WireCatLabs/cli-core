@@ -222,7 +222,7 @@ describe("a messenger whose history is read from the store", () => {
     expect(JSON.parse(chats.stdout).items.map((one: Chat) => one.id)).toEqual(["7", "20"])
     expect(JSON.parse(messages.stdout).items.map((one: Message) => one.id)).toEqual(["1", "2", "3"])
     expect(JSON.parse(context.stdout).items.map((one: Message) => one.id)).toEqual(["1", "2"])
-    expect(JSON.parse(shown.stdout)).toMatchObject({ id: "7", title: "Book club" })
+    expect(JSON.parse(shown.stdout).item).toMatchObject({ id: "7", title: "Book club" })
     expect(JSON.parse(contacts.stdout).items.map((one: { name: string }) => one.name)).toEqual(["Zoe"])
     expect(connects).toEqual([])
   })

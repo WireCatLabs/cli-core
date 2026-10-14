@@ -1,9 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { itemOf } from "../../cli/envelope.js"
-import { queryInput as query } from "../../cli/list-query.js"
+import { queryArgument } from "../../cli/list-query.js"
 import { snakeKeys } from "../../cli/messenger/chat-answers.js"
 import { inviteLinks, joinRequests } from "../../cli/messenger/chat-lists.js"
+import { LINKS_QUERY, REQUESTS_QUERY } from "../../cli/messenger/chat-queries.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import type { MessengerAdapter } from "../../cli/messenger/port.js"
 import { ADMIN_RIGHTS, GROUP_SETTINGS } from "../../domain/models.js"
@@ -154,7 +155,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         "The owner's own invite links of a group, newest first: { link, approval, expires_at, max_uses, primary, " +
         "revoked, pending_count, joined_count }. query revoked:true lists the stopped ones. Reading changes nothing.",
-      input: v.object({ chat: chatOf(messenger), query, limit, page }),
+      input: v.object({ chat: chatOf(messenger), query: queryArgument(LINKS_QUERY), limit, page }),
       annotations: READ,
       output: { entity: "invite_link", list: true },
       online: (adapter, args, defaults) =>
@@ -217,7 +218,7 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
         "Who asked to join a group or channel that needs an admin's approval, newest first: { person_id, name, " +
         'username, requested_at, about? }. query narrows by name:ana or username:ana, or by link:"<invite link>" ' +
         "— not both. Only admins see them. Reading tells nobody.",
-      input: v.object({ chat: chatOf(messenger), query, limit, page }),
+      input: v.object({ chat: chatOf(messenger), query: queryArgument(REQUESTS_QUERY), limit, page }),
       annotations: READ,
       output: { entity: "join_request", list: true },
       online: (adapter, args, defaults) =>

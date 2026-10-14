@@ -27,11 +27,13 @@ export interface Paging {
   all?: boolean
 }
 
-const typed = (query: string | readonly string[] | undefined) =>
-  (typeof query === "string" ? query : (query ?? []).join(" ")).trim() || undefined
+const textOf = (query: string | readonly string[] | undefined) =>
+  typeof query === "string" ? query : (query ?? []).join(" ")
+
+const typed = (query: string | readonly string[] | undefined) => textOf(query).trim() || undefined
 
 export const chatsList = async (services: Services, query: string | readonly string[] | undefined, paging: Paging) => {
-  listQuery("chats list", CHATS_QUERY, query)
+  listQuery(textOf(query), CHATS_QUERY, "chats list")
   const { limit, page, all } = paging
   const found = await services.chats.list(all ? { offset: 0 } : { limit, offset: (page - 1) * limit })
   const account = await services.chats.account()
@@ -42,7 +44,7 @@ export const chatsList = async (services: Services, query: string | readonly str
 }
 
 export const chatEvents = async (services: Services, chat: string, query: string | readonly string[] | undefined) => {
-  const terms = nativeTerms(listQuery("chats events", EVENTS_QUERY, query), "chats events")
+  const terms = nativeTerms(listQuery(textOf(query), EVENTS_QUERY, "chats events"), "chats events")
   const { since } = timeBounds(terms.get("time"))
   const found = await services.chats.events(chat, since === undefined ? {} : { since })
   return wholeList(
@@ -67,7 +69,7 @@ export const membersHistory = async (
   chat: string,
   query: string | readonly string[] | undefined,
 ) => {
-  const terms = nativeTerms(listQuery("chats members history", HISTORY_QUERY, query), "chats members history")
+  const terms = nativeTerms(listQuery(textOf(query), HISTORY_QUERY, "chats members history"), "chats members history")
   const { since } = timeBounds(terms.get("time"))
   const found = await services.chats.memberHistory(chat, since === undefined ? {} : { since })
   return wholeList(
@@ -85,7 +87,7 @@ export const membersAudit = async (
   query: string | readonly string[] | undefined,
   options: Omit<Parameters<Services["chats"]["audit"]>[1], "minScore">,
 ) => {
-  const minScore = scoreFloor(listQuery("chats members audit", AUDIT_QUERY, query))
+  const minScore = scoreFloor(listQuery(textOf(query), AUDIT_QUERY, "chats members audit"))
   const audit = await services.chats.audit(chat, { ...options, minScore })
   return { audit, body: auditAnswer(audit) }
 }
@@ -97,7 +99,7 @@ export const inviteLinks = async (
   query: string | readonly string[] | undefined,
   { limit, page }: Paging,
 ) => {
-  const terms = nativeTerms(listQuery("chats link list", LINKS_QUERY, query), "chats link list")
+  const terms = nativeTerms(listQuery(textOf(query), LINKS_QUERY, "chats link list"), "chats link list")
   const revoked = terms.get("revoked")?.value.toLowerCase() === "true"
   const found = await services.admin.links(chat, { limit: limit * page, revoked })
   return listOf("chats link list", {
@@ -115,7 +117,7 @@ export const joinRequests = async (
   query: string | readonly string[] | undefined,
   { limit, page }: Paging,
 ) => {
-  const terms = nativeTerms(listQuery("chats requests list", REQUESTS_QUERY, query), "chats requests list")
+  const terms = nativeTerms(listQuery(textOf(query), REQUESTS_QUERY, "chats requests list"), "chats requests list")
   if (terms.has("name") && terms.has("username"))
     queryError("query.unsupported-placement", (terms.get("username") as Predicate).span, "name or username, not both", {
       command: "chats requests list",

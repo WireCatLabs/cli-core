@@ -12,7 +12,7 @@ import {
 } from "../../sends/polls.js"
 import { typedSendAs } from "../../sends/send-as.js"
 import { itemOf, listOf, renderAnswer } from "../envelope.js"
-import { listQuery, nativeTerms, withQuery } from "../list-query.js"
+import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { lines, pollVoteAnswer, snakeKeys } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -55,7 +55,9 @@ export const pollsCommand = (messenger: Messenger): Command => {
         ),
         VOTERS_QUERY,
       ).action(async function (this: Command, chat: string, message: string, words: string[]) {
-        const answer = nativeTerms(listQuery(this, VOTERS_QUERY, words), "polls voters").get("answers")?.value
+        const answer = nativeTerms(listQuery(typedQuery(words), VOTERS_QUERY, "polls voters"), "polls voters").get(
+          "answers",
+        )?.value
         const context = messengerContext(this, messenger)
         const { limit, page } = context.settings
         const found = await context.withMessenger((connection) =>

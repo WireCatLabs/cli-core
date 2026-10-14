@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { itemOf, listOf } from "../../cli/envelope.js"
-import { listQuery, nativeTerms, queryInput as query } from "../../cli/list-query.js"
+import { listQuery, nativeTerms, queryArgument } from "../../cli/list-query.js"
 import { pollVoteAnswer, snakeKeys } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { VOTERS_QUERY } from "../../cli/messenger/people-queries.js"
@@ -19,11 +19,11 @@ export const pollReadTools = (messenger: Messenger): Record<string, AnyTool> => 
           description:
             "Who voted for what in a poll that is not anonymous, newest first: items [{ person_id, name, username, " +
             "answers, voted_at }]. query answers:<id> keeps those who chose that answer. Reading changes nothing.",
-          input: v.object({ chat: chatOf(messenger), message, query, limit, page }),
+          input: v.object({ chat: chatOf(messenger), message, query: queryArgument(VOTERS_QUERY), limit, page }),
           annotations: { ...READ, idempotentHint: true },
           output: { entity: "poll_vote", list: true },
           online: async (adapter, args, defaults) => {
-            const answer = nativeTerms(listQuery("polls voters", VOTERS_QUERY, args.query), "polls voters").get(
+            const answer = nativeTerms(listQuery(args.query ?? "", VOTERS_QUERY, "polls voters"), "polls voters").get(
               "answers",
             )?.value
             const size = args.limit ?? defaults.limit
