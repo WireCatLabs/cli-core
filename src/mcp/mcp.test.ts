@@ -511,15 +511,24 @@ describe("the MCP server", () => {
     const { call, raw } = await connect(scripted(), { root, connect: connectSpy })
     const top = await call("chat_stats_contacts_top", { measure: "messages", limit: 10 })
     expect(top.isError, JSON.stringify(top.body)).toBe(false)
-    const row = top.body.items[0]
+    const row = top.body.item.rows[0]
     const evidence = await call("chat_stats_contacts_evidence", {
       person: row.id,
-      selection: row.drilldown.selection,
+      selection: row.selection,
       component: "messages",
       limit: 1,
     })
     expect(evidence.isError, JSON.stringify(evidence.body)).toBe(false)
-    expect(evidence.body).toMatchObject({ included: 1, total: 1 })
+    expect(evidence.body).toMatchObject({ items: [{ contribution: expect.any(Number) }], page: { has_more: false } })
+    const step = top.body.next[0]
+    expect(step).toMatchObject({ step: "stats.evidence", command: "stats contacts evidence" })
+    const followed = await call("chat_read", { command: step.command, arguments: { ...step.args, limit: 1 } })
+    expect(followed.isError, JSON.stringify(followed.body)).toBe(false)
+    if (followed.body.page.has_more) {
+      const more = followed.body.next[0]
+      const paged = await call("chat_read", { command: more.command, arguments: more.args })
+      expect(paged.isError, JSON.stringify(paged.body)).toBe(false)
+    }
     expect((await raw.listTools()).tools.map(({ name }) => name).sort()).toEqual([
       "chat_read",
       "chat_tools_search",
@@ -542,7 +551,11 @@ describe("the MCP server", () => {
     ] as const) {
       const found = await call(name, args)
       expect(found.isError, JSON.stringify(found.body)).toBe(false)
-      expect(found.body.quality).toMatchObject({ counterFreshness: "unknown" })
+      expect(found.body.item.quality).toMatchObject({ counter_freshness: "unknown" })
+      for (const step of found.body.next ?? []) {
+        const followed = await call("chat_read", { command: step.command, arguments: step.args })
+        expect(followed.isError, JSON.stringify(followed.body)).toBe(false)
+      }
     }
     expect((await raw.listTools()).tools).toHaveLength(3)
     expect(connectSpy).not.toHaveBeenCalled()
@@ -557,25 +570,29 @@ describe("the MCP server", () => {
     const { call, raw } = await connect(backend, { root, counterFields: ["views"] })
     const retention = await call("chat_stats_chats_retention", { chat: "7", checkpoints: "1d,7d", within: "7d" })
     expect(retention.isError, JSON.stringify(retention.body)).toBe(false)
-    expect(retention.body.quality).toMatchObject({ membership: "observed_checkpoints", continuousSurvival: false })
+    expect(retention.body.item.quality).toMatchObject({
+      membership: "observed_checkpoints",
+      continuous_survival: false,
+    })
+    expect(retention.body.next?.length ?? 0).toBe(retention.body.item.rows.length > 0 ? 1 : 0)
     const shown = await call("chat_stats_messages_counters_show", { chat: "7", counters: "views", limit: 1 })
     expect(shown.isError, JSON.stringify(shown.body)).toBe(false)
     const preview = await call("chat_stats_messages_counters_refresh", {
-      selection: shown.body.selection,
+      selection: shown.body.item.selection,
       counters: "views",
       dry_run: true,
       limit: 1,
     })
     expect(preview.isError, JSON.stringify(preview.body)).toBe(false)
-    expect(preview.body).toMatchObject({ dryRun: true, supported: ["views"] })
+    expect(preview.body.item).toMatchObject({ dry_run: true, supported: ["views"] })
     expect(fetchCounters).not.toHaveBeenCalled()
     const refreshed = await call("chat_stats_messages_counters_refresh", {
-      selection: shown.body.selection,
+      selection: shown.body.item.selection,
       counters: "views",
       limit: 1,
     })
     expect(refreshed.isError, JSON.stringify(refreshed.body)).toBe(false)
-    expect(refreshed.body).toMatchObject({ complete: true, items: [{ updated: ["views"] }] })
+    expect(refreshed.body.item).toMatchObject({ complete: true, results: [{ updated: ["views"] }] })
     expect(fetchCounters).toHaveBeenCalledOnce()
     expect((await raw.listTools()).tools).toHaveLength(3)
   })
@@ -597,8 +614,8 @@ describe("the MCP server", () => {
     expect(search.body).not.toHaveProperty("missing")
     expect(search.body.items.map((hit: { ref: string }) => hit.ref.split("/").at(-1)).sort()).toEqual(["1", "2"])
     const stats = await call("chat_stats_messages_show", { text: "chapter", chat: "7", sync_first: true })
-    expect(stats.body.total).toBe(2)
-    expect(stats.body.refreshed.complete).toBe(true)
+    expect(stats.body.item.total).toBe(2)
+    expect(stats.body).not.toHaveProperty("missing")
     const saved = await call("chat_search_messages", { saved: "chapter-query", sync_first: true })
     expect(saved.isError).toBe(false)
     const local = await call("chat_search_messages", { saved: "chapter-query" })
@@ -1245,10 +1262,7 @@ describe("the MCP server", () => {
     const content = result.content as { type: string; data?: string; mimeType?: string; text?: string }[]
     expect(content[0]).toMatchObject({ type: "image", mimeType: "image/png" })
     expect([...Buffer.from(content[0]?.data ?? "", "base64").subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
-    expect(JSON.parse(content[1]?.text ?? "null")).toMatchObject({
-      chart: { version: 1, kind: "bar" },
-      image: { format: "png", width: 800, height: 400 },
-    })
+    expect(JSON.parse(content[1]?.text ?? "null")).toMatchObject({ item: { version: 1, kind: "bar" } })
     expect(telegram.opened()).toBe(opened)
   })
 
@@ -2045,7 +2059,7 @@ describe("the MCP server", () => {
     const found = await call("chat_search_messages", { text: "invoice" })
     const counted = await call("chat_stats_messages_show", { text: "invoice" })
     expect(found.isError).toBe(false)
-    expect(counted.body).toMatchObject({ total: 4 })
+    expect(counted.body.item).toMatchObject({ total: 4 })
     expect((await call("chat_searches_history")).body.items).toHaveLength(record ? 2 : 0)
   })
 
@@ -2065,7 +2079,7 @@ describe("the MCP server", () => {
     })
     const found = await call("chat_search_messages", { saved: "invoices", text: "alpha", limit: 5 })
     expect(found.body.items.map(({ ref }: { ref: string }) => ref.split("/").at(-1)).sort()).toEqual(["101", "106"])
-    expect((await call("chat_stats_messages_show", { saved: "invoices" })).body).toMatchObject({
+    expect((await call("chat_stats_messages_show", { saved: "invoices" })).body.item).toMatchObject({
       by: "sender",
       total: 4,
     })

@@ -1,5 +1,6 @@
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
+import { adminAnswer, countersAnswer, refreshAnswer, retentionAnswer } from "../../cli/messenger/stats-answers.js"
 import type { AdminQuery } from "../../services/admin-statistics.js"
 import type { CounterQuery } from "../../services/counters.js"
 import { searchServices } from "../search-sync.js"
@@ -71,10 +72,11 @@ export const adminStatisticsTools = (messenger: Messenger): Record<string, AnyTo
     definitions[`stats_${path}_${report}`] = tool({
       title: `Stored ${report} report`,
       description:
-        "Administrator statistics from authorized stored history only. Explicit qualifying replies; selected answerer identities do not prove historical admin roles. Missing joining dates, reply history and counters remain unknown or partial. Returns bounded drilldown selections. No fetch, sends, mark-read or model calls.",
+        "Administrator statistics from authorized stored history only. Explicit qualifying replies; selected answerer identities do not prove historical admin roles. Missing joining dates, reply history and counters remain unknown or partial. Each row carries the selection its evidence takes; next names the top row's evidence. No fetch, sends, mark-read or model calls.",
       input,
       annotations: { ...READ, openWorldHint: false },
-      stored: (store, account, args, defaults) => {
+      output: { entity: "admin_report", list: false },
+      stored: async (store, account, args, defaults) => {
         const services = searchServices(messenger, store, account, defaults)
         const values = args as Partial<AdminQuery> & {
           answerer?: string[]
@@ -84,7 +86,7 @@ export const adminStatisticsTools = (messenger: Messenger): Record<string, AnyTo
           min_views?: number
           max_replies?: number
         }
-        return services.adminStatistics.report(report, {
+        const found = await services.adminStatistics.report(report, {
           limit: values.limit ?? 20,
           timezone: values.timezone,
           saved: values.saved,
@@ -102,6 +104,7 @@ export const adminStatisticsTools = (messenger: Messenger): Record<string, AnyTo
           minViews: values.min_views,
           maxReplies: values.max_replies,
         })
+        return adminAnswer(found)
       },
     })
   }
@@ -123,16 +126,19 @@ export const adminStatisticsTools = (messenger: Messenger): Record<string, AnyTo
       limit: common.limit,
     }),
     annotations: { ...READ, openWorldHint: false },
-    stored: (store, account, args, defaults) =>
-      searchServices(messenger, store, account, defaults).retention.report(args.chat, {
-        sinceTime: args.since_time,
-        untilTime: args.until_time,
-        checkpoints: args.checkpoints,
-        within: args.within,
-        by: args.by,
-        timezone: args.timezone,
-        limit: args.limit,
-      }),
+    output: { entity: "retention", list: false },
+    stored: async (store, account, args, defaults) =>
+      retentionAnswer(
+        await searchServices(messenger, store, account, defaults).retention.report(args.chat, {
+          sinceTime: args.since_time,
+          untilTime: args.until_time,
+          checkpoints: args.checkpoints,
+          within: args.within,
+          by: args.by,
+          timezone: args.timezone,
+          limit: args.limit,
+        }),
+      ),
   })
   for (const operation of ["show", "refresh"] as const) {
     const entries: v.ObjectEntries = {
@@ -168,20 +174,22 @@ export const adminStatisticsTools = (messenger: Messenger): Record<string, AnyTo
         openWorldHint: operation === "refresh",
       },
       key: `stats.messages.counters.${operation}`,
-      stored: (store, account, args, defaults, connect) => {
+      output: { entity: operation === "show" ? "counters" : "counter_refresh", list: false },
+      stored: async (store, account, args, defaults, connect) => {
         const values = args as Partial<CounterQuery> & {
           max_age?: string
           max_messages?: number
           sync_time?: string
           dry_run?: boolean
         }
-        return searchServices(
+        const counters = searchServices(
           messenger,
           store,
           account,
           defaults,
           operation === "refresh" && values.dry_run !== true ? connect : undefined,
-        ).counters[operation]({
+        ).counters
+        const query = {
           text: values.text,
           ast: values.ast,
           chat: values.chat,
@@ -196,7 +204,10 @@ export const adminStatisticsTools = (messenger: Messenger): Record<string, AnyTo
           syncTime: values.sync_time,
           dryRun: values.dry_run,
           signal: defaults.signal,
-        })
+        }
+        return operation === "show"
+          ? countersAnswer(await counters.show(query))
+          : refreshAnswer(await counters.refresh(query))
       },
     })
   }

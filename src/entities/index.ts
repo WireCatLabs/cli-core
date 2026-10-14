@@ -1,13 +1,17 @@
 import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { account } from "./account.js"
+import { adminReport } from "./admin-report.js"
 import { agenda } from "./agenda.js"
 import { attachment } from "./attachment.js"
+import { chart } from "./chart.js"
 import { chat } from "./chat.js"
 import { chatEvent } from "./chat-event.js"
 import { contact } from "./contact.js"
 import { conversation } from "./conversation.js"
+import { counterRefresh, counters } from "./counters.js"
 import { document } from "./document.js"
+import { evidence } from "./evidence.js"
 import { fact } from "./fact.js"
 import { reference } from "./fields.js"
 import { folder } from "./folder.js"
@@ -20,10 +24,14 @@ import { meeting } from "./meeting.js"
 import { member } from "./member.js"
 import { memory } from "./memory.js"
 import { message } from "./message.js"
+import { messageCounts } from "./message-counts.js"
 import { messageLink } from "./message-link.js"
 import { note } from "./note.js"
+import { officialStats } from "./official-stats.js"
 import { person } from "./person.js"
 import { pollVote } from "./poll-vote.js"
+import { ranking } from "./ranking.js"
+import { retention } from "./retention.js"
 import { tagging } from "./tagging.js"
 import { task } from "./task.js"
 import { topic } from "./topic.js"
@@ -36,13 +44,18 @@ import { topic } from "./topic.js"
 
 export {
   account,
+  adminReport,
   agenda,
   attachment,
+  chart,
   chat,
   chatEvent,
   contact,
   conversation,
+  counterRefresh,
+  counters,
   document,
+  evidence,
   fact,
   folder,
   hit,
@@ -54,11 +67,15 @@ export {
   member,
   memory,
   message,
+  messageCounts,
   messageLink,
   note,
+  officialStats,
   person,
   pollVote,
+  ranking,
   reference,
+  retention,
   tagging,
   task,
   topic,
@@ -117,6 +134,15 @@ export const ENTITIES = {
   poll_vote: pollVote,
   topic,
   folder,
+  message_counts: messageCounts,
+  ranking,
+  admin_report: adminReport,
+  retention,
+  evidence,
+  counters,
+  counter_refresh: counterRefresh,
+  official_stats: officialStats,
+  chart,
 } as const
 
 export type EntityName = keyof typeof ENTITIES

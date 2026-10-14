@@ -30,18 +30,10 @@ for (const provider of ["max", "telegram"]) {
       mode === "cli"
         ? call([...cli, "--json"])
         : call(["__mcp", `${command}_read`, JSON.stringify({ command: path, arguments: args })], true)
-    const listed = read("chats list", { search: "Planning", limit: 1 }, [
-      "chats",
-      "list",
-      "--search",
-      "Planning",
-      "--limit",
-      "1",
-    ])
-    assert.equal(listed.items[0].id, "8")
-    assert.equal(read("chats show", { chat: "Garden" }, ["chats", "show", "Garden"]).id, "7")
-    assert.equal(read("contacts show", { person: "@alex_rivera" }, ["contacts", "show", "@alex_rivera"]).id, "9")
-    const people = read("contacts list", { search: "Alex" }, ["contacts", "list", "--search", "Alex"])
+    assert.equal(read("chats show", { chat: "Planning" }, ["chats", "show", "Planning"]).item.id, "8")
+    assert.equal(read("chats show", { chat: "Garden" }, ["chats", "show", "Garden"]).item.id, "7")
+    assert.equal(read("contacts show", { person: "@alex_rivera" }, ["contacts", "show", "@alex_rivera"]).item.id, "9")
+    const people = read("contacts list", {}, ["contacts", "list"])
     assert.deepEqual(people.items.map((one) => one.id).sort(), ["10", "9"])
     const found = read("stats contacts responses", { chat: "Planning", answerer: ["Project lead"] }, [
       "stats",
@@ -52,9 +44,9 @@ for (const provider of ["max", "telegram"]) {
       "--answerer",
       "Project lead",
     ])
-    assert.equal(found.items[0].id, "9")
-    assert.equal(found.items[0].answered, 1)
-    assert.equal(found.items[0].identityKnown, true)
+    assert.equal(found.item.rows[0].id, "9")
+    assert.equal(found.item.rows[0].answered, 1)
+    assert.equal(found.item.rows[0].identity_known, true)
     const missing = read("stats contacts responses", { answerer: ["Taylor Unknown"] }, [
       "stats",
       "contacts",
@@ -71,7 +63,7 @@ for (const provider of ["max", "telegram"]) {
       "Alex",
     ])
     assert.equal(ambiguous.error.code, "validation_error")
-    assert.equal(ambiguous.error.candidates.length, 2)
+    assert.equal(ambiguous.error.details.candidates.length, 2)
     const unseen = read("stats contacts responses", { answerer: ["999"] }, [
       "stats",
       "contacts",
@@ -79,8 +71,8 @@ for (const provider of ["max", "telegram"]) {
       "--answerer",
       "999",
     ])
-    assert.equal(unseen.items[0].identityKnown, false)
-    assert.equal(unseen.items[0].status, "unknown")
+    assert.equal(unseen.item.rows[0].identity_known, false)
+    assert.equal(unseen.item.rows[0].status, "unknown")
   }
   const trace = readFileSync(join(root, "trace.jsonl"), "utf8").trim().split("\n").map(JSON.parse)
   assert.equal(trace.filter((one) => ["fetchCounters", "forbidden"].includes(one.kind)).length, 0)

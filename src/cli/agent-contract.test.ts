@@ -235,7 +235,6 @@ describe("agent CLI contract", () => {
     expect(contract.validation.implications).toHaveLength(1)
     expect(() => findCommand(root, ["absent"])).toThrow("unknown command path")
     expect(resultSchemaFor(["messages", "list"]).coverage).toBe("declared-domain-fields")
-    expect(resultSchemaFor(["stats", "messages", "show"]).coverage).toBe("declared")
     expect(resultSchemaFor(["tasks", "list"]).coverage).toBe("collection-with-open-items")
   })
 })

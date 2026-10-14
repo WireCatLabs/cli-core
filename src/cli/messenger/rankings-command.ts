@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import {
   AUTHOR_MEASURES,
@@ -14,9 +15,11 @@ import { isRetentionSelection, type RetentionService } from "../../services/rete
 import type { SearchParams } from "../../services/searches.js"
 import type { RankedEvidence } from "../../store/store.js"
 import { environmentOf } from "../context.js"
+import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { syncOptions, syncRequest } from "./search-sync-options.js"
+import { evidenceAnswer, rankingAnswer } from "./stats-answers.js"
 
 const selectionOf = (value: string): unknown => {
   if (Buffer.byteLength(value) > RANKING_SELECTION_BYTES)
@@ -28,7 +31,7 @@ const selectionOf = (value: string): unknown => {
   }
 }
 export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget): Command => {
-  const command = syncOptions(new Command("top"))
+  const command = syncOptions(annotate(new Command("top"), { output: { entity: "ranking" } }))
     .description(
       `rank ${target === "messages" ? "stored messages" : "the human authors of stored messages"} by a measure or explainable score; counters are snapshots with per-field observation freshness`,
     )
@@ -101,30 +104,19 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
         ...(saved ? { saved } : {}),
       })
     })
-    if (context.format === "jsonl") context.renderer.stream(found.items)
-    else if (context.format !== "pretty") context.renderer.result(found)
-    else {
-      context.renderer.result(
-        found.items.map(({ rank, id, name, value, components, quality }) => ({
-          rank,
-          id,
-          name,
-          value,
-          components,
-          quality,
-        })),
-      )
-      context.renderer.note(
+    renderAnswer(this, context, rankingAnswer(found), () =>
+      [
+        ...found.items.map(({ rank, name, id, value }) => `${rank}. ${name ?? id}  ${value}`),
         `${found.eligible} eligible of ${found.population}; ${found.excludedMissing} excluded for missing measurements`,
-      )
-      context.renderer.note("snapshot counters are cumulative; freshness depends on each field's observation date")
-    }
+        "",
+      ].join("\n"),
+    )
   })
   return command
 }
 
 export const rankingEvidenceCommand = (messenger: Messenger, target: RankingTarget): Command =>
-  new Command("evidence")
+  annotate(new Command("evidence"), { output: { entity: "evidence" } })
     .description("bounded messages, answer pairs or retention members from an exact drilldown selection")
     .argument(
       target === "messages" ? "<message>" : "<person>",
@@ -155,6 +147,16 @@ export const rankingEvidenceCommand = (messenger: Messenger, target: RankingTarg
           signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,
         }),
       )
-      if (context.format === "jsonl") context.renderer.stream(found.items)
-      else context.renderer.result(found)
+      const limit = options.limit ?? 20
+      const body = evidenceAnswer(
+        `stats ${target} evidence`,
+        found,
+        {
+          [target === "messages" ? "message" : "person"]: reference,
+          selection: JSON.stringify(options.selection),
+          component: options.component,
+        },
+        limit,
+      )
+      renderAnswer(this, context, body)
     })

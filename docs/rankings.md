@@ -54,8 +54,9 @@ Coverage and graph quality tell you when held history is incomplete. No metric p
 
 ## Follow the evidence
 
-Each row returns `drilldown.selection` and exact `drilldown.evidence.arguments` for its evidence
-command. Pass that selection as JSON, with the emitted message locator or native person id:
+A ranking answers one item; its `rows` each carry a `selection` and the row's `id`. The answer's
+`next` names the top row's evidence command ready to run. Pass a row's selection as JSON, with its
+message locator (`ref`) or native person `id`:
 
 ```sh
 app stats messages evidence msg:tg/fixture/room/101 --selection "$selection" --component replies --limit 20 --json
@@ -67,8 +68,8 @@ show measured messages, not lists of viewers or reactors. Author `messages` evid
 all selected messages even when ranking by a score. Active-day evidence lists underlying
 messages; its one-per-message contributions are not summed into distinct days.
 
-Evidence includes `total`, `included`, `hasMore` and `nextCursor`. Continue with the same
-arguments and `--cursor`. A changed contributing row rejects the cursor; restart without it.
+Evidence is a list: `page.has_more` and `page.cursor` say whether more remain, and `next` repeats
+the call with `--cursor`. A changed contributing row rejects the cursor; restart without it.
 Each page retains complete rows within a 64 KiB items budget. An oversized single row directs
 you to `messages show`. Fingerprinting is bounded to 50,000 rows and 8 MiB of stored inputs;
 narrow chat/date scope when the query exceeds a budget. Selection JSON is capped at 64 KiB.
@@ -100,16 +101,16 @@ one scoped account; use `person:<provider>/<account>/<id>` for multiple accounts
 
 `newcomers` defaults to joins in the last 30 days and questions within seven days after a known
 join. `--until-time` ends the join cohort. First-seen-only identities are counted separately in
-`summary.unknownJoin`, not assigned a joining date. A rejoin is a separate stay. Pending help windows
+`summary.unknown_join`, not assigned a joining date. A rejoin is a separate stay. Pending help windows
 and incomplete member history are reported; no saved question does not mean no help was needed.
 
 `discussion` examines stored channel posts. It compares known cumulative views with observed direct discussion replies. Provider
 comment snapshots remain separate; their per-field observation freshness is disclosed; old records remain unknown. Linked discussion needs stored
 link metadata and its group's history. Missing counters or graph links are not zero.
 
-Each row provides `drilldown.command` and exact arguments. Run its existing messages/contacts
-`evidence` command with `--component report` and the returned selection. Follow `nextCursor` with
-the same arguments. The captured cutoff remains fixed; changed evidence requires a fresh report.
+Each row carries its `id` and `selection`, and `next` names the top row's evidence command. Run the
+messages/contacts `evidence` command with `--component report`, the row's `id` and its selection.
+Follow `page.cursor` with the same arguments. The captured cutoff remains fixed; changed evidence requires a fresh report.
 Evidence items fit within 64 KiB. Narrow the chat/date scope if the 50,000-node or 8 MiB budget is
 exceeded. Look at `quality.archives` and `quality.graph` before drawing conclusions, then open the
 returned message locator with `messages show` to check the original context.
@@ -156,9 +157,9 @@ This is observed membership at checkpoints; it does not prove uninterrupted memb
 
 Departures have an interval after the last positive sighting and at or before the first complete absence.
 An interval crossing the first-week boundary cannot prove an early departure. Rejoining starts a separate stay.
-A saved message proves observed activity. No message means no observed message; `archiveCovered` shows
+A saved message proves observed activity. No message means no observed message; `archive_covered` shows
 whether the archive covers the full window. The report does not infer a silent-member rate for the whole group.
-Copy a cohort's drilldown arguments into `stats messages evidence --component report` to page through members.
+Pass a cohort's `cohort` and `selection` to `stats messages evidence --component report` to page through members.
 Selections pin the cutoff; changed observations invalidate the cursor. Evidence pages are bounded to 64 KiB.
 
 ## Check and refresh counters
@@ -197,7 +198,7 @@ When several identities match, choose from the returned account/provider/ID cand
 An unknown name is an error, rather than an invented identity with zero replies. Known opaque IDs
 are accepted; to explicitly select an unseen opaque ID, use `person:provider/account/id`.
 
-Response rows expose `identityKnown`. An explicitly selected ID without stored identity observations
-has `identityKnown: false` and `status: unknown`; a zero count is not evidence that this person never
+Response rows expose `identity_known`. An explicitly selected ID without stored identity observations
+has `identity_known: false` and `status: unknown`; a zero count is not evidence that this person never
 answered. A known identity can have zero **observed** qualifying replies, with the usual archive gaps.
-Saved reports and drilldowns pin the resolved identity, so a later rename does not retarget them.
+Saved reports and row selections pin the resolved identity, so a later rename does not retarget them.

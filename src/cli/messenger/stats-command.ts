@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs"
 import { extname, resolve } from "node:path"
 import { CliError } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import { chartKindOf, chartPeriodOf, chatChart } from "../../charts/chat.js"
@@ -9,6 +10,7 @@ import { chartPng } from "../../charts/png.js"
 import { chartRenderer } from "../../charts/render.js"
 import { EVENTS_DAYS } from "../../services/chats.js"
 import { momentOf } from "../../services/moment.js"
+import { renderAnswer } from "../envelope.js"
 import { adminStatisticsCommand } from "./admin-statistics-command.js"
 import { statsCommand as chatStatsCommand } from "./chats-stats-command.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -17,6 +19,7 @@ import { messagesStatsCommand } from "./messages-stats-command.js"
 import { officialStatsCommand } from "./official-stats-command.js"
 import { rankingEvidenceCommand, rankingsTopCommand } from "./rankings-command.js"
 import { retentionCommand } from "./retention-command.js"
+import { chartAnswer } from "./stats-answers.js"
 import { tasksStatsCommand } from "./tasks-command.js"
 
 export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer): Command => {
@@ -44,8 +47,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
   if (messenger.officialStats === true) chats.addCommand(officialStatsCommand(messenger))
   stats.addCommand(chats)
   stats.addCommand(new Command("tasks").description("task statistics").addCommand(tasksStatsCommand(messenger)))
-  stats
-    .command("charts")
+  annotate(stats.command("charts"), { output: { entity: "chart" } })
     .description("a chart's data from a chat's statistics, and optionally a dark SVG or PNG image")
     .argument("<chat>", messenger.chatArgument)
     .option(
@@ -107,7 +109,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
         context.renderer.note(`chart written to ${path}`)
       }
       if (chart.partial) context.renderer.note("partial data — the chart shows lower bounds")
-      context.renderer.result({ chart, ...(chartFile === undefined ? {} : { chartFile }) })
+      renderAnswer(this, context, chartAnswer(chart, chartFile))
     })
   return stats
 }

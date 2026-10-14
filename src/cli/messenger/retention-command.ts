@@ -1,9 +1,12 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
+import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { retentionAnswer } from "./stats-answers.js"
 
 export const retentionCommand = (messenger: Messenger) =>
-  new Command("retention")
+  annotate(new Command("retention"), { output: { entity: "retention" } })
     .description("joining cohorts and observed checkpoint membership from saved roster observations")
     .argument("<chat>", messenger.chatArgument)
     .option("--since-time <time>", "joining period starts at ISO 8601 or a relative time; last 90 days by default")
@@ -18,20 +21,12 @@ export const retentionCommand = (messenger: Messenger) =>
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
       const found = await context.withServices((services) => services.retention.report(chat, this.opts()))
-      if (context.format === "jsonl") {
-        context.renderer.stream(found.items.map((item) => ({ ...item, cutoff: found.cutoff, quality: found.quality })))
-        return
-      }
-      if (context.format !== "pretty") {
-        context.renderer.result(found)
-        return
-      }
-      context.streams.data(
+      renderAnswer(this, context, retentionAnswer(found), () =>
         found.items
           .map(
             (row) =>
-              `${row.cohort}: ${row.stays} stays; ${row.checkpoints.map((point) => `${point.ageMilliseconds / 86_400_000}d ${point.present}/${point.observable} observed, ${point.unknown} unknown, ${point.pending} pending`).join("; ")}`,
+              `${row.cohort}: ${row.stays} stays; ${row.checkpoints.map((point) => `${point.ageMilliseconds / 86_400_000}d ${point.present}/${point.observable} observed, ${point.unknown} unknown, ${point.pending} pending`).join("; ")}\n`,
           )
-          .join("\n"),
+          .join(""),
       )
     })

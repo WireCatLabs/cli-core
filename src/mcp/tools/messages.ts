@@ -226,6 +226,7 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
       description: MESSAGES_STATS_DESCRIPTION,
       input: messagesStatsInput(messenger),
       annotations: { ...READ, openWorldHint: false },
+      output: { entity: "message_counts", list: false },
       stored: (store, account, args, defaults, connect) => {
         const services = searchServices(messenger, store, account, defaults, args.sync_first ? connect : undefined)
         return answerMessagesStats(services.messages, args, defaults, services.searches)

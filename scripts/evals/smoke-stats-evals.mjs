@@ -21,31 +21,31 @@ const read = (...args) => {
   assert.equal(result.code, 0)
   return result.body
 }
-const report = read("stats", "chats", "retention", "7", "--timezone", "UTC")
-assert.equal(report.unknownJoin, 1)
+const report = read("stats", "chats", "retention", "7", "--timezone", "UTC").item
+assert.equal(report.unknown_join, 1)
 assert.deepEqual(
-  report.items[0].checkpoints.map(({ rate }) => rate),
+  report.rows[0].checkpoints.map(({ rate }) => rate),
   [1, 0.5, null],
 )
-const row = report.items[0]
+const row = report.rows[0]
 const evidenceArgs = [
   "stats",
   "messages",
   "evidence",
   row.cohort,
   "--selection",
-  JSON.stringify(row.drilldown.arguments.selection),
+  JSON.stringify(row.selection),
   "--component",
   "report",
   "--limit",
   "1",
 ]
 const first = read(...evidenceArgs)
-assert.ok(first.nextCursor)
+assert.ok(first.page.cursor)
 assert.equal(invoke(["__advance"]).body.changed, true)
-assert.equal(invoke([...evidenceArgs, "--cursor", first.nextCursor, "--json"]).body.error.reason, "selection.changed")
-const counters = read("stats", "messages", "counters", "show", "--chat", "9")
-assert.equal(counters.items.find(({ messageId }) => messageId === "p10").counters[0].value, 0)
+assert.equal(invoke([...evidenceArgs, "--cursor", first.page.cursor, "--json"]).body.error.reason, "selection.changed")
+const counters = read("stats", "messages", "counters", "show", "--chat", "9").item
+assert.equal(counters.rows.find(({ ref }) => ref.endsWith("/p10")).counters[0].value, 0)
 const selection = JSON.stringify({
   ...counters.selection,
   locators: counters.selection.locators.filter((locator) => locator.endsWith("/p10")),
@@ -62,8 +62,8 @@ const args = [
   "--sync-time",
   "5s",
 ]
-assert.equal(read(...args, "--dry-run").targets.length, 1)
-assert.equal(read(...args, "--counters", "views,reactions").complete, true)
+assert.equal(read(...args, "--dry-run").item.targets.length, 1)
+assert.equal(read(...args, "--counters", "views,reactions").item.complete, true)
 const mcp = invoke(["__mcp", "list"])
 assert.equal(mcp.code, 0)
 assert.deepEqual(

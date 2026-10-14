@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { itemEnvelopeSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
+import { ENTITIES } from "../../entities/index.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -80,45 +83,46 @@ describe("administrator statistics command views", () => {
     const { call, connect } = await setup()
     const result = await call(["stats", "messages", "unanswered", "--chat", "7", "--json", "--older-than", "1h"])
     expect(result.code, result.stderr).toBe(0)
-    const found = JSON.parse(result.stdout)
-    expect(found).toMatchObject({
+    const found = v.parse(itemEnvelopeSchema(ENTITIES.admin_report), JSON.parse(result.stdout))
+    expect(found.item).toMatchObject({
       report: "unanswered",
       total: 1,
-      items: [{ message: "msg:chat/500/7/1", status: "no-observed-answer" }],
+      rows: [{ ref: "msg:chat/500/7/1", id: "msg:chat/500/7/1", status: "no-observed-answer" }],
     })
-    const args = found.items[0].drilldown.arguments
+    const row = found.item.rows[0] as (typeof found.item.rows)[number]
+    expect(found.next?.[0]).toMatchObject({ step: "stats.evidence", args: { message: row.id, component: "report" } })
     const evidence = await call([
       "stats",
       "messages",
       "evidence",
-      args.message,
+      row.id,
       "--component",
       "report",
       "--selection",
-      JSON.stringify(args.selection),
+      JSON.stringify(row.selection),
       "--jsonl",
     ])
     expect(evidence.code, evidence.stderr).toBe(0)
-    expect(JSON.parse(evidence.stdout)).toMatchObject({ message: { id: "1" } })
+    expect(JSON.parse(evidence.stdout)).toMatchObject({ message: { ref: "msg:chat/500/7/1" } })
     const responses = await call(["stats", "contacts", "responses", "--answerer", "12", "--json"])
     expect(responses.code, responses.stderr).toBe(0)
-    expect(JSON.parse(responses.stdout)).toMatchObject({
+    expect(JSON.parse(responses.stdout).item).toMatchObject({
       report: "responses",
-      items: [{ id: "12", answered: 0, medianMilliseconds: null }],
+      rows: [{ ref: "contact:chat/12", id: "12", answered: 0, median_ms: null }],
     })
     const newcomers = await call(["stats", "chats", "newcomers", "7", "--within", "3d", "--json"])
     expect(newcomers.code, newcomers.stderr).toBe(0)
-    expect(JSON.parse(newcomers.stdout)).toMatchObject({ report: "newcomers", items: [] })
+    expect(JSON.parse(newcomers.stdout).item).toMatchObject({ report: "newcomers", rows: [] })
     const discussion = await call(["stats", "messages", "discussion", "--max-replies", "2", "--json"])
     expect(discussion.code, discussion.stderr).toBe(0)
-    expect(JSON.parse(discussion.stdout)).toMatchObject({ report: "discussion", items: [] })
+    expect(JSON.parse(discussion.stdout).item).toMatchObject({ report: "discussion", rows: [] })
     expect(connect).not.toHaveBeenCalled()
   })
-  it("keeps quality on JSONL rows and enforces message-read permission", async () => {
+  it("keeps quality in JSONL and enforces message-read permission", async () => {
     const { call } = await setup()
     const result = await call(["stats", "messages", "unanswered", "--jsonl", "--older-than", "1h"])
     expect(result.code, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout)).toMatchObject({ report: "unanswered", quality: { counterFreshness: "unknown" } })
+    expect(JSON.parse(result.stdout)).toMatchObject({ report: "unanswered", quality: { counter_freshness: "unknown" } })
     const denied = await setup({ messages: "deny" })
     const rejected = await denied.call(["stats", "contacts", "responses", "--answerer", "12", "--json"])
     expect(rejected.code).not.toBe(0)
