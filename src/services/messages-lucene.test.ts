@@ -382,13 +382,6 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     await expect(run(store, account, "alpha", { limit: 10, context: 21 })).rejects.toThrow("query.invalid-context")
     await expect(run(store, account, "body:/alpha/i")).rejects.toThrow("query.unsupported-regex-flags")
     await expect(run(store, account, "alpha~1")).rejects.toThrow("query.unsupported-operator")
-    await expect(
-      searchStore(Object.assign(Object.create(store) as MessageStore, { matchQuery: undefined }), account, {
-        language: "lucene",
-        text: "alpha",
-        limit: 1,
-      }),
-    ).rejects.toThrow("upgrade cli-core")
     const controller = new AbortController()
     controller.abort()
     await expect(run(store, account, "body:/@/", { limit: 10, signal: controller.signal })).rejects.toThrow("aborted")

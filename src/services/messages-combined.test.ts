@@ -230,9 +230,6 @@ describe("internal combined search", () => {
       await expect(searchCombined(store, account, { ...request("aurora"), ...extras })).rejects.toMatchObject({
         code: "validation_error",
       })
-    await expect(searchCombined({ ...store, matchQuery: undefined }, account, request("aurora"))).rejects.toThrow(
-      "does not support Lucene",
-    )
   })
 
   it.each([

@@ -344,7 +344,7 @@ export interface MessageStore {
   ): Promise<(ConversationSummary | undefined)[]>
   /** Every link a message has, the messenger's first. */
   links(key: AccountKey, chatId: Id, messageId: Id, options?: { limit: number }): Promise<StoredLink[]>
-  replies?(key: AccountKey, chatId: Id, messageId: Id, limit: number): Promise<Page<{ messageId: Id }>>
+  replies(key: AccountKey, chatId: Id, messageId: Id, limit: number): Promise<Page<{ messageId: Id }>>
   /** The user's agent's current answer per message: its parent, or `null` for "starts a conversation". */
   agentAnswers(key: AccountKey, chatId: Id): Promise<Map<Id, Id | null>>
   /** Stores the agent's answer to a batch, checked whole first; answers how many were stored (A5). */
@@ -522,21 +522,21 @@ export interface MessageStore {
    * The word index, ranked by bm25, ties newest first (phase 2 plan S4 steps 1, 2 and 4). Chats marked
    * not searchable are left out unless the scope names the chat.
    */
-  rankingDiscussionChats?(account: AccountKey, chatId: string): Promise<string[]>
-  rankingEvidence?(execution: QueryExecution, request: RankingEvidenceRequest): Promise<RankedEvidence>
-  retention?(
+  rankingDiscussionChats(account: AccountKey, chatId: string): Promise<string[]>
+  rankingEvidence(execution: QueryExecution, request: RankingEvidenceRequest): Promise<RankedEvidence>
+  retention(
     key: AccountKey,
     chatId: Id,
     options: RetentionOptions,
     evidence?: { cohort: string; cursor?: string },
   ): Promise<RetentionResult>
-  adminStatisticsQuery?(execution: QueryExecution, request: AdminStoreRequest): Promise<AdminStoreResult>
-  rankQuery?(execution: QueryExecution, request: RankingRequest): Promise<RankedStoreFound>
-  directReplies?(parents: { account: AccountKey; chatId: Id; id: Id }[], limit: number): Promise<Page<StoredHit>>
-  matchQuery?(execution: QueryExecution): Promise<Page<ScoredHit>>
-  conversationEligibility?(execution: QueryExecution): Promise<ConversationEligibility>
+  adminStatisticsQuery(execution: QueryExecution, request: AdminStoreRequest): Promise<AdminStoreResult>
+  rankQuery(execution: QueryExecution, request: RankingRequest): Promise<RankedStoreFound>
+  directReplies(parents: { account: AccountKey; chatId: Id; id: Id }[], limit: number): Promise<Page<StoredHit>>
+  matchQuery(execution: QueryExecution): Promise<Page<ScoredHit>>
+  conversationEligibility(execution: QueryExecution): Promise<ConversationEligibility>
   /** The same matches as `matchQuery`, each counted once, grouped by chat, sender or quarter hour. */
-  countQuery?(execution: QueryExecution, by: QueryGrouping): Promise<QueryGroup[]>
+  countQuery(execution: QueryExecution, by: QueryGrouping): Promise<QueryGroup[]>
   matchWords(query: WordQuery, scope: SearchScope, options: WordOptions): Promise<Page<ScoredHit>>
   /** The substring index, newest first (step 5); pieces under three letters are dropped. */
   matchSubstring(query: WordQuery, scope: SearchScope, options: { limit: number }): Promise<Page<ScoredHit>>
@@ -618,17 +618,17 @@ export interface MessageStore {
     reactions: Reactions,
     options?: { observation?: CounterObservations["reactions"] },
   ): Promise<boolean>
-  counterTargets?(
+  counterTargets(
     execution: QueryExecution,
     options: { now: number; maxAge: number },
   ): Promise<{ items: CounterTarget[]; hasMore: boolean }>
-  counterStates?(
+  counterStates(
     key: AccountKey,
     chatId: Id,
     messageId: Id,
     options: { now: number; maxAge: number },
   ): Promise<CounterState[]>
-  updateCounterObservations?(
+  updateCounterObservations(
     key: AccountKey,
     chatId: Id,
     messageId: Id,

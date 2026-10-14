@@ -70,7 +70,7 @@ export const searchDiscovery = async (
   const originals = new Set(candidates.map((m) => m.locator))
   const parentByLocator = new Map<string, FoundMessage>()
   let replyCount = 0
-  if (store.directReplies && candidates.length) {
+  if (candidates.length) {
     check()
     const proposed = await store.directReplies(
       candidates.map((m) => {

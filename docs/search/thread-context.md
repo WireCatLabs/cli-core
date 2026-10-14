@@ -38,8 +38,7 @@ messages than the limit. An answer with a stop reason is partial, and an empty a
 reply existed. The reader never silently changes the bounds or crosses a stale edge to fill the answer.
 
 When no graph exists, `mode: "time"` and `fallback: "not_built"` say the answer is bounded local time
-context. A hit not included in the snapshot says `not_linked` and is marked stale. A missing/deleted hit says `not_stored`. An older custom store without reply expansion says
-`unsupported_store`. The same byte/message/time/topic caps hold for these fallbacks. The before/after
+context. A hit not included in the snapshot says `not_linked` and is marked stale. A missing/deleted hit says `not_stored`. The same byte/message/time/topic caps hold for these fallbacks. The before/after
 options set the cheap time window only; they do not set graph depth.
 
 MCP `messages_context` and `search_messages` accept `thread`, `thread_hops`, `thread_messages`,

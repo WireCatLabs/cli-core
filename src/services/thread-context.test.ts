@@ -333,15 +333,6 @@ describe("graph context around a hit", () => {
     expect(one.connection).not.toHaveBeenCalled()
   })
 
-  it("falls back explicitly for an older store without reply expansion", async () => {
-    const one = await setup()
-    const older: MessageStore = Object.assign(Object.create(one.store) as MessageStore, { replies: undefined })
-    expect(await readThreadContext(older, account, "7", "5")).toMatchObject({
-      mode: "time",
-      fallback: "unsupported_store",
-    })
-  })
-
   it("does not hide errors reading the store", async () => {
     const one = await setup()
     const broken: MessageStore = Object.assign(Object.create(one.store) as MessageStore, {

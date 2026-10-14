@@ -57,7 +57,6 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       },
       deps.messenger,
     )
-    if (!store.matchQuery) throw new CliError("validation_error", "the store does not support strict search")
     const { items } = await store.matchQuery({
       ...lexical.execution,
       ...(prepared.selectedChat ? { chat: prepared.selectedChat } : {}),
@@ -175,9 +174,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         },
         deps.messenger,
       )
-      if (filter !== undefined && !store.conversationEligibility)
-        throw new CliError("validation_error", "the store does not support conversation filters — upgrade cli-core")
-      const eligibility = filter === undefined ? undefined : await store.conversationEligibility?.(prepared.execution)
+      const eligibility = filter === undefined ? undefined : await store.conversationEligibility(prepared.execution)
       const selected = prepared.selectedChat
       const scopeOf = (one: AccountKey) =>
         selected

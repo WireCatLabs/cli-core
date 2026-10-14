@@ -142,10 +142,6 @@ const answerers = async (
   })
   return [...new Map(found.map((one) => [JSON.stringify(one), one])).values()]
 }
-const requireStore = (store: MessageStore) => {
-  if (!store.adminStatisticsQuery) invalid("this store does not support administrator statistics — upgrade cli-core")
-  return store.adminStatisticsQuery.bind(store)
-}
 export const isAdminSelection = (selection: unknown): boolean => {
   let raw = selection
   if (typeof raw === "string") {
@@ -301,7 +297,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
     if (options.joinSince > options.joinUntil) invalid("join dates are reversed")
     if (report === "responses" && !options.answerers.length)
       invalid("responses requires at least one --answerer identity")
-    const result = await requireStore(store)(prepared.execution, { options })
+    const result = await store.adminStatisticsQuery(prepared.execution, { options })
     const known = new Set<string>()
     if (report === "responses")
       for (const person of options.answerers) {
@@ -408,7 +404,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
       ...(request.signal ? { signal: request.signal } : {}),
     }
     await stemExecution(execution, store)
-    const result = await requireStore(store)(execution, {
+    const result = await store.adminStatisticsQuery(execution, {
       options: o,
       evidence: { entity, ...(request.cursor ? { cursor: request.cursor } : {}) },
     })

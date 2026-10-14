@@ -52,8 +52,7 @@ export const searchCombined = async (
   )
     throw new CliError("validation_error", "invalid internal combined search bounds")
   const prepared = await prepareLucene(store, account, request, messenger)
-  const execute = store.matchQuery
-  if (!execute) throw new CliError("validation_error", "this store does not support Lucene search")
+  const execute = store.matchQuery.bind(store)
   const execution = prepared.execution
   const started = performance.now()
   const check = () => {
