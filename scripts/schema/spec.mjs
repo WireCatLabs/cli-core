@@ -195,7 +195,11 @@ const EDITS = {
       ["local_path_folded", "text", { note: "`fold(local_path)`, for `local_path:`" }],
     ],
     doc: "A file of a message, an email or a meeting, with its extracted text.",
-    keys: ["UNIQUE (attachable_type, attachable_id, position)", "INDEX (name_folded)"],
+    keys: [
+      "UNIQUE (attachable_type, attachable_id, position)",
+      "INDEX (name_folded)",
+      "INDEX (id) WHERE local_path IS NOT NULL AND local_path_folded IS NULL",
+    ],
     note: "Polymorphic (owner: attachments serve messages and mail); `attachment_texts` merged in; meeting files land here too.",
   },
   transcripts: {
@@ -906,6 +910,7 @@ const NEW = {
         "UNIQUE (account_id, external_id)",
         "INDEX (account_id, started_at DESC)",
         "INDEX (account_id, title_folded)",
+        "INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL",
       ],
     },
     {
@@ -1098,6 +1103,7 @@ const NEW = {
       keys: [
         "UNIQUE (project_id, number)",
         "INDEX (title_folded)",
+        "INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL",
         "INDEX (project_id, status, due_at)",
         "INDEX (project_id, status, next_check_at)",
         "INDEX (project_id, source_locator)",

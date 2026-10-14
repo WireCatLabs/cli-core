@@ -733,6 +733,9 @@ export const attachments = sqliteTable(
   (table) => [
     unique().on(table.attachableType, table.attachableId, table.position),
     index("attachments_by_name_folded").on(table.nameFolded),
+    index("attachments_local_path_to_fold")
+      .on(table.id)
+      .where(sql`local_path IS NOT NULL AND local_path_folded IS NULL`),
   ],
 )
 
@@ -962,6 +965,7 @@ export const meetings = sqliteTable(
     unique().on(table.accountId, table.externalId),
     index("meetings_by_time").on(table.accountId, desc(table.startedAt)),
     index("meetings_by_account_id_title_folded").on(table.accountId, table.titleFolded),
+    index("meetings_title_to_fold").on(table.id).where(sql`title IS NOT NULL AND title_folded IS NULL`),
     index("meetings_by_meeting_series_id").on(table.meetingSeriesId),
     index("meetings_by_event_id").on(table.eventId),
     index("meetings_by_host_identity_id").on(table.hostIdentityId),
@@ -1193,6 +1197,11 @@ export const tasks = sqliteTable(
   (table) => [
     unique().on(table.projectId, table.number),
     index("tasks_by_title_folded").on(table.titleFolded),
+    // Empty once every copy is filled, so each open asks "anything left?" without reading the table; a copy with
+    // an index of its own (title_folded, name_folded) needs none.
+    index("tasks_close_reason_to_fold")
+      .on(table.id)
+      .where(sql`close_reason IS NOT NULL AND close_reason_folded IS NULL`),
     index("tasks_by_status").on(table.projectId, table.status, table.dueAt),
     index("tasks_by_project_id_status_next_check_at").on(table.projectId, table.status, table.nextCheckAt),
     index("tasks_by_project_id_source_locator").on(table.projectId, table.sourceLocator),

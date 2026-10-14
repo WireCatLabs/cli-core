@@ -63,6 +63,7 @@ import { applyCounterObservations, type CounterTarget, counterStates, counterTar
 import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
 import { drainEmailIndex, type MailStore, mailStoreOver, threadConversation } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
+import { fillFolded } from "./sqlite/folded.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import * as imageChunks from "./sqlite/image-chunks.js"
@@ -875,6 +876,7 @@ export const openStore = async ({ path, env, now = Date.now, command }: StoreOpt
   const { database, orm } = await openSqlite(file)
   try {
     migrate(database, { now, command })
+    fillFolded(database)
     // A small file is filled on the spot; a larger one waits for `db migrate`, since nothing reads the copy yet.
     const pending = pendingNormalization(database)
     if (pending > 0 && pending <= BACKFILL_ON_OPEN) backfillNormalized(database)

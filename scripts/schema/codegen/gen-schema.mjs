@@ -64,6 +64,9 @@ const NAMES = {
   "involvements:identity_id,occurred_at DESC": "involvements_by_identity",
   "aliases:aliasable_type,aliasable_id,ifnull(account_id, 0) WHERE display = 1": "aliases_displayed",
   "aliases:aliasable_type,aliasable_id": "aliases_by_aliasable_type_aliasable_id",
+  "tasks:id WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL": "tasks_close_reason_to_fold",
+  "attachments:id WHERE local_path IS NOT NULL AND local_path_folded IS NULL": "attachments_local_path_to_fold",
+  "meetings:id WHERE title IS NOT NULL AND title_folded IS NULL": "meetings_title_to_fold",
 }
 
 const parseKey = (k) => {
