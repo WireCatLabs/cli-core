@@ -3,6 +3,7 @@ import { TASK_KINDS, TASK_STATES, type TaskState, type TaskVerdict } from "../..
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { Actor } from "./actors.js"
 import { atomic } from "./atomic.js"
+import { folded } from "./folded.js"
 import { type Author, authorActor } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -216,7 +217,11 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
       values.push(value)
       if (event) recordTaskEvent(database, task, actor, event, { [column]: [before[column] ?? null, value] }, at)
     }
-    if (fields.title !== undefined) change("title", textOf(fields.title, "a task's title", 300))
+    if (fields.title !== undefined) {
+      const title = textOf(fields.title, "a task's title", 300)
+      change("title", title)
+      change("title_folded", folded(title))
+    }
     if (fields.description !== undefined)
       change("description", fields.description === null ? null : textOf(fields.description, "a description", 20000))
     if (fields.priority !== undefined) change("priority", priorityOf(fields.priority), "priority")
@@ -237,8 +242,11 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
         change("closed_by_id", closed ? actor.id : null)
       }
     }
-    if (fields.reason !== undefined)
-      change("close_reason", fields.reason === null ? null : textOf(fields.reason, "a reason", 500))
+    if (fields.reason !== undefined) {
+      const reason = fields.reason === null ? null : textOf(fields.reason, "a reason", 500)
+      change("close_reason", reason)
+      change("close_reason_folded", folded(reason))
+    }
     if (set.length === 0) return
     database.prepare(`UPDATE tasks SET ${set.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, at, task)
   }
@@ -265,14 +273,15 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
         const id = Number(
           database
             .prepare(
-              "INSERT INTO tasks (project_id, number, key, title, type, status, author_type, author_id, source, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?) RETURNING id",
+              "INSERT INTO tasks (project_id, number, key, title, title_folded, type, status, author_type, author_id, source, " +
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
               project,
               number,
               `${String(counted.key)}-${number}`,
               textOf(input.title, "a task's title", 300),
+              folded(textOf(input.title, "a task's title", 300)),
               input.type,
               actor.type,
               actor.id,

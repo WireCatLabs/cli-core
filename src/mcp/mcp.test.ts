@@ -1035,7 +1035,9 @@ describe("the MCP server", () => {
 
     const listed = await call("chat_contacts_list", { order: "name", limit: 1 })
     expect(listed.body).toMatchObject({ items: [{ name: "Adam" }], page: { limit: 1, has_more: true } })
-    expect((await call("chat_contacts_list", { query: "name:zo" })).body.items).toMatchObject([{ name: "Zoe" }])
+    expect((await call("chat_contacts_list", { query: "name:zo" })).body.error).toMatchObject({
+      reason: "query.unsupported-field",
+    })
     expect((await call("chat_contacts_show", { person: "Olga" })).body.item).toMatchObject({ id: "9", name: "Olga" })
   })
 

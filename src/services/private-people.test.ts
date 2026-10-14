@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
+import type { Predicate } from "@wirecat/cli-base/query"
 import { afterEach, describe, expect, it } from "vitest"
 import { rememberAccount } from "../cli/messenger/accounts.js"
 import { contactsCommand } from "../cli/messenger/contacts-command.js"
@@ -19,6 +20,9 @@ import { seedSearchRecipes } from "../testing/search-recipes.js"
 import { storedDeps } from "./deps.js"
 import { servicesFor } from "./index.js"
 import { searchStore } from "./messages.js"
+
+const nameTerm = (value: string) =>
+  ({ kind: "predicate", field: "name", operator: "term", value, span: [0, 0] }) as unknown as Predicate
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const messenger: Messenger = {
@@ -99,7 +103,9 @@ describe("private people metadata", () => {
     const f = await setup()
     await f.services.privatePeople.alias("10", "ЛИЧНЫЙ ПСЕВДОНИМ")
     expect(
-      (await f.services.people.list({ order: "name", search: "личный", offset: 0 })).items.map((person) => person.id),
+      (await f.services.people.list({ order: "name", name: nameTerm("личный"), offset: 0 })).items.map(
+        (person) => person.id,
+      ),
     ).toEqual(["10"])
     await f.services.privatePeople.alias("11", "ЛИЧНЫЙ ПСЕВДОНИМ")
     const lookup = await f.store.people(key.provider, { account: key.account })

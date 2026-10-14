@@ -1,4 +1,5 @@
 import type { Migration } from "../migrations.js"
+import { fillFolded } from "./folded.js"
 import { GENERATED } from "./migrations.generated.js"
 
 /**
@@ -26,7 +27,15 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261013201057_version-6-query-tree-keys", version: 6, minCompatible: 1 },
   { name: "20261013215247_version-7-mentions", version: 7, minCompatible: 1 },
   { name: "20261013215251_version-7-mentions-triggers", version: 7, minCompatible: 1 },
+  { name: "20261014100438_version-8-folded-names", version: 8, minCompatible: 1 },
 ]
+
+/** What a version computes in JS after its statements, keyed by version. */
+const AFTER: Partial<Record<number, Migration["after"]>> = {
+  8: (database) => {
+    fillFolded(database)
+  },
+}
 
 export const generatedMigrations = (
   manifest: ManifestEntry[] = MANIFEST,
@@ -38,7 +47,13 @@ export const generatedMigrations = (
     if (!found) throw new Error(`migration ${entry.name} is in the manifest and not in the bundle — run pnpm db:bundle`)
     const last = migrations.at(-1)
     if (last?.version !== entry.version) {
-      migrations.push({ version: entry.version, minCompatible: entry.minCompatible, statements: [...found.statements] })
+      const after = AFTER[entry.version]
+      migrations.push({
+        version: entry.version,
+        minCompatible: entry.minCompatible,
+        statements: [...found.statements],
+        ...(after ? { after } : {}),
+      })
     } else if (last.minCompatible !== entry.minCompatible) {
       throw new Error(`the rows of version ${entry.version} disagree on minCompatible`)
     } else {

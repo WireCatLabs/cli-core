@@ -5,6 +5,7 @@ import type { AccountKey, DeletionScope } from "../store.js"
 import { findChatPk } from "./chats.js"
 import { applyCounterObservations } from "./counters.js"
 import { and, eq, isNull, type Placeholder, sql } from "./drizzle/core.js"
+import { folded } from "./folded.js"
 import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"
 import { attachments, chats, messageRevisions, messages, messageTranscripts } from "./schema.js"
@@ -43,6 +44,7 @@ const ATTACHMENT_FIELDS = [
   "height",
   "duration",
   "providerRef",
+  "nameFolded",
 ] as const
 
 const placeholders = <const T extends string>(names: readonly T[]) =>
@@ -214,6 +216,7 @@ export const upsertMessage = (
       kind: attachment.kind,
       mime: attachment.mime ?? null,
       name: attachment.name ?? null,
+      nameFolded: folded(attachment.name),
       title: attachment.title ?? null,
       url: attachment.url ?? null,
       size: attachment.size ?? null,

@@ -726,8 +726,14 @@ export const attachments = sqliteTable(
     extractedAt: integer("extracted_at"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    /** `fold(name)`, `fold(local_path)`: SQLite's lower() folds ASCII only, so filters compare these. */
+    nameFolded: text("name_folded"),
+    localPathFolded: text("local_path_folded"),
   },
-  (table) => [unique().on(table.attachableType, table.attachableId, table.position)],
+  (table) => [
+    unique().on(table.attachableType, table.attachableId, table.position),
+    index("attachments_by_name_folded").on(table.nameFolded),
+  ],
 )
 
 export const documents = sqliteTable(
@@ -949,10 +955,13 @@ export const meetings = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    /** `fold(title)`: SQLite's lower() folds ASCII only, so filters compare this. */
+    titleFolded: text("title_folded"),
   },
   (table) => [
     unique().on(table.accountId, table.externalId),
     index("meetings_by_time").on(table.accountId, desc(table.startedAt)),
+    index("meetings_by_account_id_title_folded").on(table.accountId, table.titleFolded),
     index("meetings_by_meeting_series_id").on(table.meetingSeriesId),
     index("meetings_by_event_id").on(table.eventId),
     index("meetings_by_host_identity_id").on(table.hostIdentityId),
@@ -1177,9 +1186,13 @@ export const tasks = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
     nextCheckAt: integer("next_check_at"),
+    /** `fold(title)`, `fold(close_reason)`: SQLite's lower() folds ASCII only, so filters compare these. */
+    titleFolded: text("title_folded"),
+    closeReasonFolded: text("close_reason_folded"),
   },
   (table) => [
     unique().on(table.projectId, table.number),
+    index("tasks_by_title_folded").on(table.titleFolded),
     index("tasks_by_status").on(table.projectId, table.status, table.dueAt),
     index("tasks_by_project_id_status_next_check_at").on(table.projectId, table.status, table.nextCheckAt),
     index("tasks_by_project_id_source_locator").on(table.projectId, table.sourceLocator),

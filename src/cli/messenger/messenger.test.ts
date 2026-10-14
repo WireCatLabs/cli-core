@@ -433,7 +433,7 @@ describe("the shared read commands", () => {
     },
   )
 
-  it("list as contacts only the one-to-one chats, in the order and with the filter asked for", async () => {
+  it("list as contacts only the one-to-one chats, in the order asked for, and filter only stored contacts", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     const names = async (...argv: string[]) =>
@@ -443,7 +443,8 @@ describe("the shared read commands", () => {
 
     expect(await names()).toEqual(["Zoe", "Adam"])
     expect(await names("--order", "name")).toEqual(["Adam", "Zoe"])
-    expect(await names("name:ADAM_")).toEqual(["Adam"])
+    const unstored = await call(["contacts", "list", "--json", "name:ADAM_"], async () => fake, env)
+    expect(JSON.parse(unstored.stderr.at(-1) ?? "").error).toMatchObject({ reason: "query.unsupported-field" })
     const shown = await call(["contacts", "show", "adam", "--json"], async () => fake, env)
     expect(JSON.parse(shown.stdout[0] ?? "").item).toMatchObject({
       ref: "contact:chat/21",

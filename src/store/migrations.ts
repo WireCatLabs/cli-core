@@ -9,6 +9,8 @@ export interface Migration {
   statements: string[]
   /** Runs before the statements, inside the same transaction. */
   before?: (database: CacheDatabase, now: () => number) => void
+  /** Runs after them, inside the same transaction: a fill SQL alone cannot compute. */
+  after?: (database: CacheDatabase, now: () => number) => void
 }
 
 /**
@@ -67,6 +69,7 @@ export const migrate = (
       if (migration.version <= file.version) continue
       migration.before?.(database, now)
       for (const statement of migration.statements) database.exec(statement)
+      migration.after?.(database, now)
       database
         .prepare("INSERT INTO schema_migrations (version, min_compatible, applied_at) VALUES (?, ?, ?)")
         .run(migration.version, migration.minCompatible, now())

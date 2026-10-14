@@ -13,6 +13,7 @@ import {
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { actorOfOrigin, originOfActor } from "./actors.js"
 import { atomic } from "./atomic.js"
+import { folded } from "./folded.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
@@ -158,8 +159,9 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         const made = database
           .prepare(
             "INSERT INTO tasks (project_id, number, key, title, type, status, due_at, closed_at, closed_by_type, closed_by_id, " +
-              "close_reason, author_type, author_id, source, package_id, source_locator, source_kind, source_group, created_at, updated_at) " +
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+              "close_reason, author_type, author_id, source, package_id, source_locator, source_kind, source_group, created_at, updated_at, " +
+              "title_folded, close_reason_folded) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
           )
           .get(
             project,
@@ -182,6 +184,8 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             task.group,
             task.createdAt.getTime(),
             now(),
+            folded(`${task.kind} — ${task.source}`),
+            folded(task.reason),
           )
         recordTaskEvent(database, Number(made?.id), author, "created", null, task.createdAt.getTime())
       })
@@ -198,12 +202,13 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         const at = now()
         database
           .prepare(
-            "UPDATE tasks SET status = ?, close_reason = ?, due_at = ?, closed_at = ?, closed_by_type = ?, closed_by_id = ?, " +
-              "updated_at = ? WHERE id = ?",
+            "UPDATE tasks SET status = ?, close_reason = ?, close_reason_folded = ?, due_at = ?, closed_at = ?, " +
+              "closed_by_type = ?, closed_by_id = ?, updated_at = ? WHERE id = ?",
           )
           .run(
             task.state,
             task.reason ?? null,
+            folded(task.reason),
             time(task.dueAt),
             time(task.closedAt),
             closedBy?.type ?? null,

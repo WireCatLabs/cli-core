@@ -8,25 +8,42 @@ import {
   queryError,
 } from "@wirecat/cli-base/query"
 import type { SqlValue } from "../driver.js"
+import { fold } from "../normalize.js"
 import { type SQL, sql } from "./drizzle/core.js"
 
 export interface Where {
   sql: string
   params: SqlValue[]
+  /** Never NULL, so it needs no `IFNULL` — which would keep SQLite from using an index. */
+  known?: true
 }
 
 /**
  * How a list's store answers one field. A column names its SQL expression; times are epoch milliseconds,
  * booleans 0 or 1. A field that is not one column — words, a relation, an array — builds its own condition.
+ * `folded`: the expression holds `fold()` of the text, so the value is folded the same way and compared as is —
+ * `lower()` folds ASCII only. GLOB, not LIKE, so a prefix pattern can use the column's index.
  */
 export type ColumnMap = Readonly<
-  Record<string, { type: Exclude<FieldType, "txt">; sql: string } | { where: (node: Predicate) => Where }>
+  Record<
+    string,
+    { type: Exclude<FieldType, "txt">; sql: string; folded?: true } | { where: (node: Predicate) => Where }
+  >
 >
 
 export interface FilterOptions extends QueryContext {
   zone?: string
   now?: number
 }
+
+/** A wildcard term as a GLOB pattern: `\x` is a literal x, and a literal `*`, `?` or `[` is bracketed. */
+const glob = (value: string) =>
+  [...fold(value).matchAll(/\\(.)|([*?])|(.)/gsu)]
+    .map(([, escaped, wildcard, plain]) => {
+      const literal = escaped ?? plain ?? ""
+      return wildcard ?? (/[*?[]/u.test(literal) ? `[${literal}]` : literal)
+    })
+    .join("")
 
 const like = (value: string) =>
   value
@@ -77,6 +94,10 @@ const leaf = (node: Predicate, columns: ColumnMap, options: FilterOptions): Wher
     case "bool":
       return { sql: `${sql} = ?`, params: [node.value.toLowerCase() === "true" ? 1 : 0] }
     default:
+      if (column.folded)
+        return node.operator === "wildcard"
+          ? { sql: `${sql} IS NOT NULL AND ${sql} GLOB ?`, params: [glob(node.value)], known: true }
+          : { sql: `${sql} IS NOT NULL AND ${sql} = ?`, params: [fold(node.value)], known: true }
       return node.operator === "wildcard"
         ? { sql: `lower(${sql}) LIKE ? ESCAPE '\\'`, params: [like(node.value)] }
         : { sql: `lower(${sql}) = ?`, params: [node.value.toLowerCase()] }
@@ -89,7 +110,8 @@ const all = (parts: Where[]): Where => ({
 })
 
 // NULL is false here, as in cli-base's `evaluate`: without it, NOT over a missing value would drop the row.
-const known = ({ sql, params }: Where): Where => ({ sql: `IFNULL((${sql}), 0)`, params })
+const known = (where: Where): Where =>
+  where.known ? where : { sql: `IFNULL((${where.sql}), 0)`, params: where.params }
 
 const compile = (node: QueryNode, columns: ColumnMap, options: FilterOptions): Where => {
   if (node.kind === "predicate") return known(leaf(node, columns, options))
@@ -108,7 +130,7 @@ const compile = (node: QueryNode, columns: ColumnMap, options: FilterOptions): W
 
 /**
  * A validated list query as a `WHERE` condition with bound parameters, matching cli-base's `evaluate`: kw, enum
- * and ref compare without case (SQLite's `lower()` folds ASCII only), a lone NOT means everything else, and a
+ * and ref compare without case (a `folded` column for names in any script), a lone NOT means everything else, and a
  * `should` clause counts only when nothing is required.
  */
 export const queryFilter = (ast: QueryAst, columns: ColumnMap, options: FilterOptions = {}): Where =>

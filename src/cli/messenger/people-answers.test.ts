@@ -152,7 +152,7 @@ const contactCard = {
 
 const ROWS: Row[] = [
   { argv: ["contacts", "list", "--limit", "1"], entity: "contact", list: true },
-  { argv: ["contacts", "list", "name:synth*"], entity: "contact", list: true },
+  { argv: ["contacts", "list"], entity: "contact", list: true },
   { argv: ["contacts", "show", "8"], entity: "contact", list: false, adapter: contactCard },
   { argv: ["topics", "list", "7", "--limit", "2"], entity: "topic", list: true, adapter: forum },
   {
@@ -204,8 +204,14 @@ describe("polls voters", () => {
 describe("contacts list", () => {
   it("**filters by name and notes only; anything else is a field the store cannot filter**", async () => {
     const call = harness()
-    const named = JSON.parse((await call(["contacts", "list", "name:*8*", "--json"])).stdout)
-    expect(named.items.map((one: { ref: string }) => one.ref)).toEqual(["contact:chat/8"])
+    const listed = JSON.parse((await call(["contacts", "list", "--json"])).stdout)
+    expect(listed.items.map((one: { ref: string }) => one.ref)).toContain("contact:chat/8")
+    const unstored = await call(["contacts", "list", "name:*8*", "--json"])
+    expect(unstored.code).toBe(2)
+    expect(JSON.parse(unstored.stderr).error).toMatchObject({
+      reason: "query.unsupported-field",
+      message: expect.stringContaining("contacts sync"),
+    })
     const refused = await call(["contacts", "list", "username:ana", "--json"])
     expect(refused.code).toBe(2)
     expect(JSON.parse(refused.stderr).error).toMatchObject({

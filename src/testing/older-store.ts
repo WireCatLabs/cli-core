@@ -4,6 +4,10 @@ import type { CacheDatabase } from "../store/driver.js"
 const UNDO: Record<number, string> = {
   7: `DROP TRIGGER mention_pending_message_ai; DROP TRIGGER mention_pending_message_au;
     DROP TRIGGER mentions_message_ad; DROP TABLE mentions; DROP TABLE mention_pending;`,
+  8: `DROP INDEX attachments_by_name_folded; DROP INDEX meetings_by_account_id_title_folded; DROP INDEX tasks_by_title_folded;
+    ALTER TABLE attachments DROP COLUMN name_folded; ALTER TABLE attachments DROP COLUMN local_path_folded;
+    ALTER TABLE meetings DROP COLUMN title_folded; ALTER TABLE tasks DROP COLUMN title_folded;
+    ALTER TABLE tasks DROP COLUMN close_reason_folded;`,
 }
 
 /** Makes a store look as if it stopped before `version`, so the next open replays every migration from there. */

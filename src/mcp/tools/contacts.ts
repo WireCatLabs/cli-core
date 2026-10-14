@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { REGISTRIES, registriesCover } from "../../botcheck/registries.js"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
-import { listQuery, nativeTerms, queryArgument, searchText } from "../../cli/list-query.js"
+import { listQuery, nativeTerms, queryArgument } from "../../cli/list-query.js"
 import { contactAnswer } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { CONTACTS_QUERY, notesAllowed } from "../../cli/messenger/people-queries.js"
@@ -37,13 +37,13 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
       output: { entity: "contact", list: true },
       served: async (services, { query: words, order, ...rest }, defaults) => {
         const terms = nativeTerms(listQuery(words ?? "", CONTACTS_QUERY, "contacts list"), "contacts list")
-        const search = searchText(terms.get("name"))
+        const name = terms.get("name")
         const notes = terms.get("notes")
         notesAllowed(defaults.settings.permissions ?? {}, notes)
         const { size, number, window } = paging(rest, defaults)
         const found = await services.people.list({
           order: order ?? "recent",
-          ...(search ? { search } : {}),
+          ...(name ? { name } : {}),
           ...(notes ? { notes } : {}),
           ...window,
         })
