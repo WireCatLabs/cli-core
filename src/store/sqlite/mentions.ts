@@ -123,7 +123,8 @@ const originalOf = (database: CacheDatabase) => {
 
 /**
  * People whose names are looked for: not the owner, and only people met in a messenger, a meeting or a confirmed
- * phone. Thousands of persons exist only as an e-mail sender, and their names are mostly companies and newsletters.
+ * phone. Thousands of persons can exist only as an e-mail sender, and their names look mostly like companies and
+ * mailing lists.
  */
 const knownPeople = (database: CacheDatabase): KnownPerson[] => {
   const rows = database
