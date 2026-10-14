@@ -78,6 +78,41 @@ export const applyTaskRulesOnArrival = async (
   return applyTaskRules({ chats: [{ id: message.chatId, messages }] }, { store: store.tasks, account })
 }
 
+/** The most messages one chat gives a stored pass, however many arrived since the last. */
+export const STORED_PASS_LIMIT = 1000
+
+/**
+ * The rule pass over what is already stored, for a program that reads no messenger (memo): every chat of
+ * the account stored into after `since`, its new messages with the ARRIVAL_WINDOW before them, through the
+ * rules `review` applies. `until` is the newest store time it saw — the next pass's `since`, so a pass reads
+ * only what changed. A chat with more new messages than STORED_PASS_LIMIT has its oldest left unread.
+ */
+export const applyTaskRulesToStored = async (
+  store: MessageStore,
+  account: AccountKey,
+  since?: string,
+): Promise<RuleResult & { until: string | null }> => {
+  const result: RuleResult & { until: string | null } = { added: 0, closed: 0, until: since ?? null }
+  for (const chat of await store.chatStats(account)) {
+    if (chat.lastStoredAt === null || (since !== undefined && chat.lastStoredAt <= since)) continue
+    const fresh = since === undefined ? 0 : await store.countMessages(account, chat.chatId, { since })
+    const page = await store.messages(account, chat.chatId, {
+      limit: Math.min(ARRIVAL_WINDOW + fresh, STORED_PASS_LIMIT),
+    })
+    const pass = await applyTaskRules(
+      { chats: [{ id: chat.chatId, messages: page.items }] },
+      {
+        store: store.tasks,
+        account,
+      },
+    )
+    result.added += pass.added
+    result.closed += pass.closed
+    if (result.until === null || chat.lastStoredAt > result.until) result.until = chat.lastStoredAt
+  }
+  return result
+}
+
 /**
  * A reply rule's `task` action: one `request` task pointing at the message. The service gives back
  * the task a source already has, so a message arriving twice opens one.
