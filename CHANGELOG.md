@@ -11,6 +11,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`chats delete|clear|mute|unmute`, `chats media`, `stickers list`, `calls list`, `account privacy show|set` and
+  `schedule command|agent|list|run|remove` answer in the envelope** with snake_case keys (`chat_id`, `muted_until`,
+  `find_by_phone`, `set_id`, `created_at`…); a schedule's `environment` keeps the variables' own names. `chats media`
+  takes `--cursor` in place of `--before-id`, handed out by a `page.next` step instead of the stderr note.
 - **`inbox` and `review` answer the list envelope**, CLI and MCP alike: the messages, oldest first, as
   `message.summary` (now `ref`, `chat_id`, `chat_title`, `timestamp`, `sender_name`, `outgoing`, `text`,
   `transcript`, `attachments`); the MCP tools publish their `outputSchema`. Where to start is the query:

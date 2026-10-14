@@ -118,10 +118,6 @@
       "value": "<id>",
       "meaning": "the batch id `conversations batches next` printed"
     },
-    "--before-id": {
-      "value": "<id>",
-      "meaning": "read what came before this message id; not with --before-time"
-    },
     "--before-n": {
       "value": "<n>",
       "meaning": "how many messages before it"
@@ -1909,7 +1905,7 @@
         "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
       },
       "options": {
-        "--before-id": {
+        "--cursor": {
           "in": ["max"],
           "planned": {
             "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
