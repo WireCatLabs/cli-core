@@ -124,7 +124,7 @@ const originalOf = (database: CacheDatabase) => {
 /**
  * People whose names are looked for: not the owner, and only people met in a messenger, a meeting or a confirmed
  * phone. Thousands of persons can exist only as an e-mail sender, and their names look mostly like companies and
- * mailing lists.
+ * mailing lists. The owner's own name for a contact is that person's name too.
  */
 const knownPeople = (database: CacheDatabase): KnownPerson[] => {
   const rows = database
@@ -135,7 +135,9 @@ const knownPeople = (database: CacheDatabase): KnownPerson[] => {
         "UNION SELECT l.person_id, i.name FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
         "JOIN met ON met.id = l.person_id WHERE i.name IS NOT NULL AND i.provider <> 'email' " +
         "UNION SELECT a.aliasable_id, a.name FROM aliases a JOIN persons p ON p.id = a.aliasable_id " +
-        "WHERE a.aliasable_type = 'person' AND p.owner = 0",
+        "WHERE a.aliasable_type = 'person' AND p.owner = 0 " +
+        "UNION SELECT l.person_id, a.name FROM aliases a JOIN identity_links l ON l.identity_id = a.aliasable_id " +
+        "JOIN met ON met.id = l.person_id WHERE a.aliasable_type = 'identity'",
     )
     .all()
   const names = new Map<number, string[]>()
