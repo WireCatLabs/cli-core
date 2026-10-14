@@ -7,7 +7,7 @@ import {
   closedStateOf,
   TASK_QUERY,
   type TaskCard,
-  type TaskLinkKind,
+  type TaskLinkOptionKind,
   type TaskPlan,
   type TaskView,
   taskLinkKindOf,
@@ -172,9 +172,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   tasks
     .command("link")
-    .description("link a task to what it concerns — messages, chats, people, documents, URLs — to read around later")
+    .description("link a task to messages, chats, people or URLs — or to another task: task:<id>")
     .argument("<task>", "the task's id or key, as tasks list shows it")
-    .argument("[targets...]", "msg: locators, person:<id>, document:<id>, note:<id>, or a URL")
+    .argument(
+      "[targets...]",
+      "msg: locators, person:<id>, document:<id>, note:<id>, a URL; or task:<id>, which links two project tasks",
+    )
     .option(
       "--chat <chat>",
       `a chat it concerns, repeatable; ${messenger.chatArgument}`,
@@ -182,18 +185,23 @@ export const tasksCommand = (messenger: Messenger): Command => {
     )
     .option(
       "--kind <kind>",
-      "related-to (default), evidence — it shows the task is real — or created-from",
+      "related-to (default), evidence — it shows the task is real — or created-from; for task:<id>, related-to, " +
+        "blocked-by or follow-up-of",
       taskLinkKindOf,
     )
     .action(async function (this: Command, id: string, targets: string[]) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.link")
-      const { chat = [], kind = "related-to" } = this.opts<{ chat?: string[]; kind?: TaskLinkKind }>()
+      const { chat = [], kind = "related-to" } = this.opts<{ chat?: string[]; kind?: TaskLinkOptionKind }>()
       if (targets.length === 0 && chat.length === 0) throw new CliError("validation_error", "give a target or --chat")
       const linked = await context.withServices((services) =>
         services.tasks.link(id, { references: targets, chats: chat }, { kind, by: "owner" }),
       )
-      renderAnswer(this, context, itemOf(snakeKeys(linked)), () => `${card(linked)}\n`)
+      renderAnswer(this, context, itemOf(snakeKeys(linked)), () =>
+        "relations" in linked
+          ? `${linked.relations.map((one) => `${one.from} ${one.kind} ${one.to}`).join("\n")}\n`
+          : `${card(linked)}\n`,
+      )
     })
 
   tasks

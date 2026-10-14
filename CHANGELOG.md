@@ -9,6 +9,13 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`tasks link <task> task:<id>` records a task-to-task relation** (owner, 2026-10-14), where it stored an
+  ordinary link: a `task:` target always means a relation between two project tasks, with `--kind blocked-by`,
+  `follow-up-of` or `related-to` (the default); every other target is a link as before (`related-to`, `evidence`,
+  `created-from`). A bare id is a task with `blocked-by` or `follow-up-of`, and with `related-to` when that task
+  exists; otherwise it is refused with "write task:<id>". Task and other targets go in separate calls, and only
+  the owner applies a relation. `tasksService().link` answers `{ relations }` for a relation, the task's card
+  otherwise. memo's `tasks link <task> <other-task> --kind …` keeps working once it mounts this command.
 - **Picture models moved to `images models list|download`**, registered with `imagesCommand`: they serve only
   picture search, which no app registers yet, and `models image` was not a resource name. `modelsCommand` keeps
   `models audio` and `models text`; the `models.download-image` step and the "not downloaded" texts name the new

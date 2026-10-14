@@ -76,3 +76,35 @@ it("keeps a file task when its source is removed and reads the restored file by 
     await store.close()
   }
 })
+
+it("**links two project tasks as a relation when a target is task:**, a bare id by its kind, and nothing else beside it", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-link-")), "m.db") })
+  try {
+    const tasks = tasksService(storeOnlyDeps(store, account, { app }))
+    const project = await store.knowledge.addProject({ name: "Research Example", key: "RES", scope: "work" })
+    const create = (title: string) => store.tasks.create({ project: project.ref, title, type: "chore" }, "owner")
+    const a = await create("Draft")
+    const b = await create("Review")
+    const c = await create("Publish")
+    const link = (targets: string[], kind: "blocked-by" | "follow-up-of" | "related-to" | "evidence") =>
+      tasks.link(a.id, { references: targets }, { kind, by: "owner" })
+
+    expect(await link([`task:${b.id}`], "blocked-by")).toMatchObject({ relations: [{ kind: "blocked-by" }] })
+    await link([c.id], "follow-up-of")
+    await link([b.id], "related-to")
+    expect((await store.tasks.taskRelations(a.id)).map(({ kind }) => kind).sort()).toEqual([
+      "blocked-by",
+      "follow-up-of",
+      "related-to",
+    ])
+    await expect(link(["999"], "related-to")).rejects.toThrow("write task:999")
+    await expect(link([`task:${b.id}`], "evidence")).rejects.toThrow("blocked-by, follow-up-of or related-to")
+    await expect(link([`task:${b.id}`, "https://example.com/plan"], "related-to")).rejects.toThrow("call of their own")
+    await expect(link(["https://example.com/plan"], "blocked-by")).rejects.toThrow("is for a task: target")
+    await expect(
+      tasks.link(a.id, { references: [`task:${b.id}`] }, { kind: "blocked-by", by: "agent" }),
+    ).rejects.toMatchObject({ code: "permission_error" })
+  } finally {
+    await store.close()
+  }
+})

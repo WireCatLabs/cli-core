@@ -35,7 +35,7 @@ another meaning.
 | `import` | bring a file or list the user gives into the store or the messenger, once | all | — | memo `import`, `notes import` (a repeatable catch-up: `sync`) |
 | `export` | write from the store to a file | all | — | none |
 | `extract` | read the text inside files already on this machine into the store | tg, max | — | drive `memories extract` (sends text to a model and proposes memories: another meaning) |
-| `link` / `unlink` | record that two identities are one person, or undo it | tg, max | — | tg/max `tasks link` (a task and what it concerns), memo `tasks link` (task to task), memo `projects meetings link`, drive `people link` (a Google user to a person); tg/max `messages link` (a view: the permalink) |
+| `link` / `unlink` | record that two identities are one person, or undo it | tg, max | — | `tasks link` (a task and what it concerns; with a `task:` target, task to task), memo `projects meetings link`, drive `people link` (a Google user to a person); tg/max `messages link` (a view: the permalink) |
 | `confirm` | the owner accepts what an agent proposed | memo, drive | `accept`, `approve` | memo `facts accept`, `actions approve` vs `relationships confirm`, `memories confirm` (three words, one meaning) |
 | `reject` | the owner refuses what an agent proposed | memo | `decline`, `deny` | none in memo; tg/max `chats requests decline`, `replies consents deny` are the messenger's own words |
 | `start` / `stop` | a running process or a login session | all | `on` / `off`, `enable` | tg/max `replies on` / `off`, memo `auto on` / `off`, tg `topics enable` |

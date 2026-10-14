@@ -38,3 +38,4 @@
 - 2026-10-14: `../cli-messaging-wt-a2-s5a`, branches `feat/a2-s5a-*` — wave 2 slice S5a (account, runtime, bot onto the envelope; removals); remove once merged.
 - 2026-10-14: `../cli-messaging-wt-a2-s5a-r` — second worktree of S5a for rebasing its PRs while the first is busy; remove once merged.
 - 2026-10-14: `../cli-core-wt-account-from-command`, branch `feat/account-from-command` — Messenger.accountOf for memo; remove after its PR merges.
+- 2026-10-14: `../cli-core-wt-task-link`, branch `feat/task-link-relations` — task: target is a task relation; remove after its PR merges.
