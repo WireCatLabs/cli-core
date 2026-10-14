@@ -3,6 +3,11 @@
 **How commands, options, answers and MCP tools of the WireCat CLIs — tg, max, memo, drive and zm — are
 named and shaped is [`STANDARD.md`](STANDARD.md)** — it lives here, and every CLI links it.
 
+**Code structure follows the shared
+[modularity standard](https://github.com/WireCatLabs/cli-base/blob/main/docs/dev/MODULARITY.md).**
+The [architecture map](ARCHITECTURE.md#responsibility-and-dependency-boundaries) applies its layers
+and module-size review guidelines here.
+
 **How tg and max are released and checked live is [`RELEASING.md`](RELEASING.md)**: the steps
 their `release` and `test-live` skills share.
 
@@ -21,8 +26,9 @@ What differs here:
 
 - **English everywhere.** The README, these pages and the changelog are English; max-cli's newer
   documents are Russian.
-- **No messenger.** max-cli's "wire names below the adapter" rule becomes stricter: there is no
-  adapter here at all, and the lint rule in `biome.json` refuses one.
+- **No provider adapter.** max-cli's "wire names below the adapter" rule becomes stricter:
+  vendor clients and vendor adapters stay outside Core, and `biome.json` refuses their imports.
+  Persistence and CLI/MCP adapters implement shared contracts inside Core.
 - **The changelog** has these headings, each at most once per version: `Added`,
   `Changed — may break callers`, `Fixed`, `Security`, `Removed`. The top section is
   `## Unreleased`; a release PR renames it `## <version> — DD.MM.YYYY`. No backlog or decision ids.
