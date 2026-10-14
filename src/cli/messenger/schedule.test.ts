@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import { type BaseEnvironment, provide } from "../context.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
@@ -95,6 +96,7 @@ describe.runIf(posix)("schedule on Linux", () => {
       PATH: env.PATH,
     })
     expect(JSON.stringify(schedule)).not.toContain("never-in-a-schedule")
+    expect(schedule.environment).not.toHaveProperty("CHAT_READ_ONLY")
 
     const units = join(env.XDG_CONFIG_HOME, "systemd", "user")
     expect(readFileSync(join(units, "chat-schedule-sync.service"), "utf8")).toContain(
@@ -132,6 +134,50 @@ describe.runIf(posix)("schedule on Linux", () => {
     const timer = readFileSync(join(env.XDG_CONFIG_HOME, "systemd", "user", "chat-schedule-morning.timer"), "utf8")
     expect(timer).toContain("OnCalendar=*-*-* 08:30:00")
     expect(timer).toContain("Persistent=true")
+  })
+})
+
+describe.runIf(posix)("schedule under the read-only lock", () => {
+  it("**refuses to add, replace or remove a schedule**, and still lists them", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("linux")
+    expect((await call(["command", "keep", "--every", "1h", "--", "messages", "list", "42"], env, system)).code).toBe(0)
+    const file = scheduleFile(env.CHAT_STATE_DIR, "keep")
+    const saved = readFileSync(file, "utf8")
+    const installed = ran.length
+
+    const locked = { ...env, CHAT_READ_ONLY: "1" }
+    const send = await call(
+      ["command", "later", "--once", "30m", "--", "messages", "send", "42", "--text", "hi"],
+      locked,
+      system,
+    )
+    expect(send.code).toBe(5)
+    expect(send.err).toContain("CHAT_READ_ONLY")
+    expect(existsSync(scheduleFile(env.CHAT_STATE_DIR, "later"))).toBe(false)
+    expect(
+      (await call(["command", "keep", "--every", "1m", "--", "messages", "send", "42"], locked, system)).code,
+    ).toBe(5)
+    expect((await call(["agent", "spy", "claude", "send it", "--every", "1h"], locked, system)).code).toBe(5)
+    expect((await call(["remove", "keep"], locked, system)).code).toBe(5)
+    expect(readFileSync(file, "utf8")).toBe(saved)
+    expect(ran).toHaveLength(installed)
+
+    const listed = await call(["list", "--json"], locked, system)
+    expect(listed.code).toBe(0)
+    expect(JSON.parse(listed.out).items).toMatchObject([{ name: "keep" }])
+  })
+
+  it("passes the lock on to a schedule saved past the command line's refusal", async () => {
+    const { env } = setup()
+    const locked = { ...env, CHAT_PROFILE: "default", CHAT_READ_ONLY: "1" }
+    const root = new Command().exitOverride().addCommand(scheduleCommand(messenger))
+    provide(root, { streams: captureStreams(), env: locked, system: machine("linux").system } as BaseEnvironment)
+    await root.parseAsync(["schedule", "command", "later", "--every", "1h", "--", "messages", "list", "42"], {
+      from: "user",
+    })
+    const schedule = JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, "later"), "utf8")) as Schedule
+    expect(schedule.environment).toMatchObject({ CHAT_READ_ONLY: "1" })
   })
 })
 
@@ -292,6 +338,26 @@ describe("a run", () => {
     expect(readFileSync(last.output, "utf8")).toBe("writable\n")
     expect(removed).toEqual(["once"])
     expect(existsSync(file)).toBe(false)
+  })
+
+  it("keeps a run started under the lock locked, whatever the schedule file says", async () => {
+    const { env } = setup()
+    const { system } = machine("linux", [process.execPath, "-e", "console.log(process.env.CHAT_READ_ONLY)"])
+    const file = scheduleFile(env.CHAT_STATE_DIR, "sneaky")
+    mkdirSync(join(file, ".."), { recursive: true })
+    writeFileSync(
+      file,
+      JSON.stringify({
+        name: "sneaky",
+        kind: "command",
+        argv: [],
+        when: { every: 60 },
+        environment: { CHAT_PROFILE: "work", CHAT_READ_ONLY: "0" },
+        createdAt: "",
+      }),
+    )
+    const last = await runSchedule(app, system, { ...env, CHAT_READ_ONLY: "1" }, file)
+    expect(readFileSync(last.output, "utf8")).toBe("1\n")
   })
 
   it("counts failures in a row with the first one's time and the last line said, and a success clears them", async () => {

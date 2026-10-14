@@ -30,7 +30,7 @@ import { orderedModels, type SpeechModel, speechModel, VAD } from "../../speech/
 import { choose } from "../../speech/transcribe.js"
 import { readSecret } from "../../terminal/prompt.js"
 import { baseContext, environmentOf } from "../context.js"
-import { FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { embeddingKeys } from "../embedding-keys.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
 import { listQuery, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
@@ -210,7 +210,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
 
   const key = text.command("key").description("API keys for embedding and analysis providers")
 
-  annotate(key.command("set"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(key.command("set"), { effects: LOCAL_WRITE }))
     .argument("<provider>", "openai, anthropic, or the host of a --base-url server that wants a key")
     .description("store a key, typed at a hidden prompt or piped on stdin — never as an argument")
     .action(async function (this: Command, provider: string) {
@@ -224,7 +224,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       })
     })
 
-  annotate(key.command("remove"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(key.command("remove"), { effects: LOCAL_WRITE }))
     .argument("<provider>", "openai, anthropic, or a server's host")
     .description("forget a stored key")
     .action(async function (this: Command, provider: string) {

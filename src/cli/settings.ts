@@ -13,7 +13,7 @@ import {
   permissionOverrides,
   RESOURCES,
 } from "../sends/permissions.js"
-import { type AppIdentity, envName } from "./app.js"
+import { type AppIdentity, envName, readOnlyLockOf } from "./app.js"
 import { declaredSettingName, loadSnakeCaseConfig, settingAt, snakeCaseConfig } from "./config-keys.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
@@ -318,7 +318,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
 
   const PROFILE = envName(app, "PROFILE")
   const PROFILE_LOCK = envName(app, "PROFILE_LOCK")
-  const READ_ONLY = envName(app, "READ_ONLY")
   const TIMEOUT = envName(app, "TIMEOUT")
   const REQUESTS_PER_MINUTE = envName(app, "REQUESTS_PER_MINUTE")
 
@@ -433,7 +432,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const pictureSearch = fromLayers("picture_search", false)
     const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
-    const readOnlyLock = given(env[READ_ONLY]) !== undefined && env[READ_ONLY] !== "0" ? READ_ONLY : undefined
+    const readOnlyLock = readOnlyLockOf(app, env)
     const configuredReadOnly = fromLayers("read_only", false)
     const readOnly = readOnlyLock ? { value: true, from: readOnlyLock } : configuredReadOnly
     const allow = fromLayers<readonly Permission[] | undefined>("allow", undefined)

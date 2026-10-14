@@ -102,7 +102,7 @@ export {
   evaluateAgent,
   type Observation,
 } from "./agent-evaluation.js"
-export { type AppIdentity, envName } from "./app.js"
+export { type AppIdentity, envName, readOnlyLockOf } from "./app.js"
 export { botAdminsCommand, botMembersCommand } from "./bot/admins.js"
 export { type ApiCommandInput, type ApiCommands, generatedApiCommand } from "./bot/api.js"
 export {
@@ -167,7 +167,9 @@ export {
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export {
+  changesAuthority,
   FETCH,
+  grantsAuthority,
   judgedEffects,
   judgedTargets,
   LOCAL_READ,

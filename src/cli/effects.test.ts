@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest"
 import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { botCommand } from "./bot/command.js"
 import { commandsCommand } from "./commands-command.js"
-import { judgedEffects, judgedTargets } from "./effects.js"
+import { changesAuthority, judgedEffects, judgedTargets } from "./effects.js"
 import { accountCommand } from "./messenger/account-command.js"
 import { storeCommand } from "./messenger/archive-commands.js"
 import { attachmentsCommand } from "./messenger/attachments-command.js"
@@ -128,6 +128,47 @@ describe("command effects", () => {
     // Reads behind a key a profile must allow: the session list is private, and `conversations embed status`
     // shares the whole `conversations.embed` group's key (FIND-1262).
     expect(wrong.map(({ path }) => path)).toEqual(["account sessions list", "conversations embed status"])
+  })
+
+  it("mark the local writes the read-only lock refuses: what changes a later run's authority, and no read", () => {
+    const marked = commands.filter(({ command }) => changesAuthority(command))
+    expect(marked.filter(({ command }) => metaOf(command).effects?.local !== "write")).toEqual([])
+    expect(marked.map(({ path }) => path).sort()).toEqual(
+      [
+        "bot auth remove",
+        "bot auth set",
+        "bot chats rules set",
+        "bot chats rules unset",
+        "bot recipients add",
+        "bot recipients clear",
+        "bot recipients remove",
+        "chats rules set",
+        "chats rules unset",
+        "flood clear",
+        "mcp setup",
+        "models text key remove",
+        "models text key set",
+        "recipients add",
+        "recipients clear",
+        "recipients remove",
+        "replies add",
+        "replies audience",
+        "replies consents allow",
+        "replies consents deny",
+        "replies consents grant",
+        "replies consents revoke",
+        "replies edit",
+        "replies off",
+        "replies on",
+        "replies pause",
+        "replies resume",
+        "schedule agent",
+        "schedule command",
+        "schedule remove",
+        "server install",
+        "server uninstall",
+      ].sort(),
+    )
   })
 
   it("judge retry on the remote side, and keep a local-only write from running unasked", () => {

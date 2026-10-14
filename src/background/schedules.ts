@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, writeSecurely } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
+import { type AppIdentity, readOnlyLockOf } from "../cli/app.js"
 import { recordLogFor } from "../cli/runs/record-log.js"
 import { childTrace } from "../cli/runs/scope.js"
 import { currentArgv } from "./renamed-paths.js"
@@ -439,7 +439,8 @@ export const runSchedule = async (
     ...schedule.environment,
     TRACEPARENT: trace.traceparent,
     [`${app.envPrefix}_SCHEDULED`]: schedule.name,
-    ...(agent ? { [`${app.envPrefix}_READ_ONLY`]: "1" } : {}),
+    // A run started under the lock stays under it, whatever the schedule file says.
+    ...(agent || readOnlyLockOf(app, env) ? { [`${app.envPrefix}_READ_ONLY`]: "1" } : {}),
   }
   // The child's output is data, and an agent's is another program's: it is kept as it came. These lines say
   // only when it ran and how it ended.

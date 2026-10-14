@@ -10,7 +10,7 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { momentOf } from "../../services/moment.js"
 import { environmentOf } from "../context.js"
-import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "../messenger/ask.js"
 import { type BotContext, botContext, online } from "./context.js"
@@ -50,7 +50,7 @@ export const botRulesCommand = (bot: BotMessenger): Command => {
       const context = botContext(this, bot)
       renderAnswer(this, context, shown(context, context.chatRef(chat), rulesOf(context, bot)))
     })
-  annotate(command.command("set"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("set"), { effects: LOCAL_WRITE }))
     .description(`change one rule — ${RULE_KEYS.join(", ")}`)
     .argument("<chat>", CHAT)
     .argument("<key>", "the rule")
@@ -65,7 +65,7 @@ export const botRulesCommand = (bot: BotMessenger): Command => {
       rules.set(chatId, titleOf(context, chatId), key, value)
       renderAnswer(this, context, shown(context, chatId, rules))
     })
-  annotate(command.command("unset"), { effects: LOCAL_WRITE })
+  grantsAuthority(annotate(command.command("unset"), { effects: LOCAL_WRITE }))
     .description("put one rule back to its default")
     .argument("<chat>", CHAT)
     .argument("<key>", "the rule")

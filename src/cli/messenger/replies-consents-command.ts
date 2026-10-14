@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { modelTarget } from "../../models/index.js"
 import { readReplyConsent, replyConsentPathFor, replyModelIdentity, writeReplyConsent } from "../../replies/consents.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { renderItem } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -20,7 +20,7 @@ export const replyConsentsCommand = (messenger: Messenger): Command => {
     })
   for (const grant of [true, false])
     consents.addCommand(
-      annotate(new Command(grant ? "grant" : "revoke"), { effects: LOCAL_WRITE })
+      grantsAuthority(annotate(new Command(grant ? "grant" : "revoke"), { effects: LOCAL_WRITE }))
         .description(
           grant
             ? "allow incoming message data to go to the configured reply model for this profile; chat opt-outs remain"
@@ -50,7 +50,7 @@ export const replyConsentsCommand = (messenger: Messenger): Command => {
     )
   for (const deny of [true, false])
     consents.addCommand(
-      annotate(new Command(deny ? "deny" : "allow"), { effects: LOCAL_WRITE })
+      grantsAuthority(annotate(new Command(deny ? "deny" : "allow"), { effects: LOCAL_WRITE }))
         .description(
           deny
             ? "keep this chat's incoming data away from the reply model"

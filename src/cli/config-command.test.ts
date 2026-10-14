@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { existsSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -123,5 +123,19 @@ describe("config", () => {
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE_LOCK: "work" }
 
     expect((await call(["config", "set", "default_profile", "home"], env)).code).toBe(5)
+  })
+
+  it("**refuses every change under the read-only lock**, and still shows the settings", async () => {
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "work", CHAT_READ_ONLY: "1" }
+
+    expect((await call(["config", "set", "permissions.messages.send", "allow"], env)).code).toBe(5)
+    expect((await call(["config", "set", "read_only", "false", "--defaults"], env)).code).toBe(5)
+    expect((await call(["config", "unset", "allow"], env)).code).toBe(5)
+    expect((await call(["config", "migrate"], env)).code).toBe(5)
+    expect(existsSync(join(root, "config"))).toBe(false)
+    expect((await call(["config", "show", "--json"], env)).answer.settings).toEqual(
+      expect.arrayContaining([{ setting: "read_only", value: true, from: "CHAT_READ_ONLY" }]),
+    )
   })
 })

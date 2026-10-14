@@ -8,7 +8,7 @@ import { Command } from "commander"
 import { ATTACHMENT_LIMIT_ENV } from "../../attachments/limits.js"
 import { type AppIdentity, envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
-import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -176,7 +176,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
   )
   command.addCommand(
     withFlags(
-      annotate(new Command("setup"), { effects: LOCAL_WRITE })
+      grantsAuthority(annotate(new Command("setup"), { effects: LOCAL_WRITE }))
         .description("add this profile's local MCP server to Codex or Claude Code")
         .argument("<client>", "codex or claude-code")
         .option("--allow-writes", "acknowledge that this profile offers writing tools"),

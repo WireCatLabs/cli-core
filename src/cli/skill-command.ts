@@ -3,7 +3,7 @@ import { skillCommand as sharedSkillCommand } from "@wirecat/cli-base/skill"
 import type { Command } from "commander"
 import type { AppIdentity } from "./app.js"
 import { environmentOf, outputFor } from "./context.js"
-import { LOCAL_READ, LOCAL_WRITE } from "./effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 
 /**
  * `skill show` and `skill install`. `skill` is the CLI's own SKILL.md, shipped beside `dist/` in the
@@ -20,7 +20,12 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command => {
     SHARED_SKILLS,
   )
   // cli-base 0.28.0 leaves its skill commands without effects, which would count them as writes.
-  for (const sub of command.commands) annotate(sub, { effects: sub.name() === "install" ? LOCAL_WRITE : LOCAL_READ })
+  for (const sub of command.commands) {
+    const install = sub.name() === "install"
+    annotate(sub, { effects: install ? LOCAL_WRITE : LOCAL_READ })
+    // An installed skill is instructions every later agent follows.
+    if (install) grantsAuthority(sub)
+  }
   return command
 }
 

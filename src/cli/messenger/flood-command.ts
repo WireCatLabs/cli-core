@@ -2,7 +2,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { DEFAULT_PACE, Pacer, pacePathFor } from "../../sends/pace.js"
-import { LOCAL_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
@@ -16,7 +16,7 @@ export const floodCommand = (messenger: Messenger): Command => {
   return new Command("flood")
     .description(`the waits ${name} asked this profile to keep, and a hold on its writes`)
     .addCommand(
-      annotate(new Command("clear"), { effects: LOCAL_WRITE })
+      grantsAuthority(annotate(new Command("clear"), { effects: LOCAL_WRITE }))
         .description(
           `forget them, lift the hold and the profile's pace, once ${name} no longer limits the account; changes nothing there`,
         )
