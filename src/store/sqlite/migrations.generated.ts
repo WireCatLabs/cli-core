@@ -404,5 +404,12 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER mention_pending_attachment_au AFTER UPDATE OF text, extractor ON attachments\n  WHEN new.attachable_type = 'message' AND (old.text IS NOT new.text OR old.extractor IS NOT new.extractor) BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('attachment', new.id);\nEND;",
       "CREATE TRIGGER mentions_attachment_ad AFTER DELETE ON attachments BEGIN\n  DELETE FROM mentions WHERE source_type = 'attachment' AND source_id = old.id;\n  DELETE FROM mention_pending WHERE source_type = 'attachment' AND source_id = old.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261014125554_version-11-organization-identities",
+    "statements": [
+      "CREATE TABLE `organization_identities` (\n\t`id` integer PRIMARY KEY,\n\t`identity_id` integer NOT NULL,\n\t`organization_id` integer NOT NULL,\n\t`method` text NOT NULL,\n\t`author` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_organization_identities_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `fk_organization_identities_organization_id_organizations_id_fk` FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`),\n\tCONSTRAINT `organization_identities_identity_id_organization_id_unique` UNIQUE(`identity_id`,`organization_id`)\n);",
+      "CREATE INDEX `organization_identities_by_organization_id` ON `organization_identities` (`organization_id`);"
+    ]
   }
 ]

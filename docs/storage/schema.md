@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-81 tables, 17 full-text indexes.
+82 tables, 17 full-text indexes.
 
 ## Conventions
 
@@ -251,6 +251,22 @@ A company, team, family or community the owner deals with. Projects, work accoun
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+### `organization_identities`
+
+A phone, an address or an account an organization owns: a shop's number, `info@`. Apart from `identity_links`, which says which person an identity is: one identity may be both someone's and an organization's.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `identity_id` | integer | not null | → `identities.id` | the `identity` it belongs to |
+| `organization_id` | integer | not null | → `organizations.id` | the `organization` it belongs to |
+| `method` | text | not null |  | how it was decided: `mention`, `owner`, an import |
+| `author` | text | not null |  | `owner`, an agent by name, `rules` |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (identity_id, organization_id)`, `INDEX (organization_id)`
 
 ### `bots`
 

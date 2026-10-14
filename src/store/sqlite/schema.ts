@@ -264,6 +264,28 @@ export const organizations = sqliteTable("organizations", {
   deletedAt: integer("deleted_at"),
 })
 
+/** An identity an organization owns; apart from `identity_links`, so one identity can be someone's and an organization's. */
+export const organizationIdentities = sqliteTable(
+  "organization_identities",
+  {
+    id: integer("id").primaryKey(),
+    identityId: integer("identity_id")
+      .notNull()
+      .references(() => identities.id),
+    organizationId: integer("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    method: text("method").notNull(),
+    author: text("author").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.identityId, table.organizationId),
+    index("organization_identities_by_organization_id").on(table.organizationId),
+  ],
+)
+
 export const bots = sqliteTable(
   "bots",
   {
