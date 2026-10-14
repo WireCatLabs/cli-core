@@ -14,8 +14,8 @@ import type { ServiceDeps } from "./deps.js"
 import type { SearchQuery } from "./messages.js"
 import { coverageOf, prepareLucene, stemExecution } from "./messages-search.js"
 import { type RankingSelection, rankingSelection, readRankingSelection } from "./rankings-selection.js"
+import { searchRecordOf } from "./search-record.js"
 import { refreshSearch, type SearchRefreshed } from "./search-refresh.js"
-import { searchRecordOf } from "./searches.js"
 
 export type RankingQuery = SearchQuery & RankingInput & { selection?: unknown }
 export interface RankedRow extends Omit<RankedStoreRow, "provider" | "account" | "pk" | "score" | "graphComplete"> {

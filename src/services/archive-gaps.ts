@@ -4,7 +4,7 @@ import type { Id } from "../domain/models.js"
 import { type AccountKey, historyStartKey, type Range } from "../store/store.js"
 import { abortable, archiveService, FETCHING, type Fetched } from "./archive.js"
 import type { ServiceDeps } from "./deps.js"
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 import { type CatchUpOptions, type CatchUpResult, catchUpSearch, validateCatchUp } from "./search-catchup.js"
 
 export const GAP_BOUNDS = { maxGaps: 5, limit: 500, timeMs: 30_000 }

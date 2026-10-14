@@ -10,7 +10,7 @@ import type { AccountKey, MessageStore, PersonRecord } from "../store/store.js"
 import type { PageWindow } from "./chats.js"
 import { fromStore, type ServiceDeps, storeIfOpen } from "./deps.js"
 
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 import {
   CHAT_MESSAGES,
   type ContextOptions,

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import { openCache } from "../open.js"
 import { openStore } from "../store.js"
 import { ENTITY_TABLES, isEntityType } from "./entity-types.js"
-import { INDEX_CODES } from "./meetings.js"
+import { INDEX_CODES } from "./meeting-index-values.js"
 
 const sources = (directory: string): string[] =>
   readdirSync(directory, { recursive: true, encoding: "utf8" })

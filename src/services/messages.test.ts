@@ -14,7 +14,8 @@ import { SendJournal } from "../sends/journal.js"
 import { RecipientList } from "../sends/recipients.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { onlineDeps, storedDeps } from "./deps.js"
-import { messagesService, searchStore } from "./messages.js"
+import { messagesService } from "./messages.js"
+import { searchStore } from "./messages-archive-search.js"
 
 const account = { provider: "test", account: "500" }
 const messenger = { provider: "test", chatArgument: "a chat" } as Messenger

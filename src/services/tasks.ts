@@ -17,7 +17,7 @@ import {
   type TaskOrigin,
 } from "../tasks/index.js"
 import type { ServiceDeps } from "./deps.js"
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 import { taskAccount } from "./task-rules.js"
 
 export { TASK_KINDS, TASK_STATES }

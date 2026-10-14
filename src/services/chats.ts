@@ -40,7 +40,7 @@ import {
   auditMembers,
   type MembersAudit,
 } from "./members-audit.js"
-import { chatIdIn } from "./messages.js"
+import { chatIdIn } from "./message-resolution.js"
 
 /** How far back `events` looks without `since`, as in max-cli. */
 export const EVENTS_DAYS = 7

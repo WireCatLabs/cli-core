@@ -2,7 +2,7 @@ import { googleDocumentLinks } from "../domain/google-documents.js"
 import { formatLocator } from "../domain/locator.js"
 import type { Id, Page } from "../domain/models.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
-import { chatIdIn } from "./messages.js"
+import { chatIdIn } from "./message-resolution.js"
 
 /** One Google document link in a stored message, as `chats documents list` answers it. */
 export interface ChatDocument {

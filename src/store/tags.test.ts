@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { formatLocator } from "../domain/locator.js"
 import type { Chat, Message } from "../domain/models.js"
-import { searchStore, statsStore } from "../services/messages.js"
+import { searchStore, statsStore } from "../services/messages-archive-search.js"
 import { openCache } from "./open.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
 

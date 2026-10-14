@@ -6,9 +6,9 @@ import {
   openEmbedder,
   textModelsDirectory,
 } from "../embeddings/embed.js"
-import { textModel } from "../embeddings/models.js"
+import { textModel, vectorModelKey } from "../embeddings/models.js"
 import { type Fetch, OPENAI_URL, openRemote, type RemoteModel, remoteKey, remoteModel } from "../embeddings/remote.js"
-import { type ModelChoice, vectorModelKey } from "./embeddings.js"
+import type { ModelChoice } from "./embeddings.js"
 
 export interface MeetingEmbeddingModel {
   key: string

@@ -4,7 +4,7 @@ import type { Chat, ChatKind, Id, Inbox, InboxChat, Message, Review, ReviewChat 
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { CHAT_KINDS } from "./chats.js"
 import { type ServiceDeps, storeIfOpen } from "./deps.js"
-import { readChatId } from "./messages.js"
+import { readChatId } from "./message-resolution.js"
 import { unanswered } from "./questions.js"
 import { applyTaskRules, type RuleResult } from "./task-rules.js"
 
@@ -12,7 +12,6 @@ import { applyTaskRules, type RuleResult } from "./task-rules.js"
  * **At most this many history reads per `inbox`**, as in max-cli: a person opening twenty chats in
  * one burst is already more than a person does, and the rest are named in `skipped`, not lost.
  */
-export { questions, unanswered } from "./questions.js"
 
 export const INBOX_CHATS = 20
 

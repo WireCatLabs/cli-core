@@ -16,7 +16,7 @@ import { type Estimate, estimateBackfill } from "./backfill-estimate.js"
 import { actionable, batchProgress } from "./batch.js"
 import type { ServiceDeps } from "./deps.js"
 
-import { storedChatId } from "./messages.js"
+import { storedChatId } from "./message-resolution.js"
 import { patiently } from "./patience.js"
 import { type CatchUpOptions, type CatchUpResult, catchUpSearch, validateCatchUp } from "./search-catchup.js"
 

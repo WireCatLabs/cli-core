@@ -37,7 +37,7 @@ import {
 } from "../store/store.js"
 import { batchProgress } from "./batch.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
-import { chatIdIn } from "./messages.js"
+import { chatIdIn } from "./message-resolution.js"
 
 export type ExtractStatus = "extracted" | "needs-agent" | "unreadable" | "engine-missing" | "too-large" | "missing"
 

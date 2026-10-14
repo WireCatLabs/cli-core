@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchIndexStore } from "../../meetings/index.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
+import { type INDEX_CODES, indexedText, meetingRowid } from "./meeting-index-values.js"
 import { checkMeetingCancelled, meetingWriteSnapshot } from "./meeting-operation.js"
 import { positiveReadInteger } from "./meeting-reads.js"
 import {
@@ -10,7 +11,6 @@ import {
   meetingStemState,
   meetingStemStateName,
 } from "./meeting-stem-state.js"
-import { type INDEX_CODES, indexedText, meetingRowid } from "./meetings.js"
 import type { StoreContext } from "./open.js"
 
 export function meetingHitIndexOver({ database, now }: StoreContext): MeetingSearchIndexStore {

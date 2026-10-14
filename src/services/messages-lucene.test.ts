@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import type { Chat, Message } from "../domain/models.js"
 import { PRESETS } from "../search/lucene/presets.js"
 import { type AccountKey, fetchedKey, type MessageStore, openStore } from "../store/store.js"
-import { searchStore, statsStore } from "./messages.js"
+import { searchStore, statsStore } from "./messages-archive-search.js"
 
 interface Fixture {
   query: string

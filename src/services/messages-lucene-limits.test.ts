@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it, vi } from "vitest"
 import { type MessageStore, openStore } from "../store/store.js"
-import { searchStore } from "./messages.js"
+import { searchStore } from "./messages-archive-search.js"
 
 vi.mock("../search/lucene/types.js", async (original) => {
   const actual = await original<typeof import("../search/lucene/types.js")>()

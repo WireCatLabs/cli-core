@@ -17,7 +17,7 @@ import {
   type StoredLink,
 } from "../store/store.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
-import { chatIdIn } from "./messages.js"
+import { chatIdIn } from "./message-resolution.js"
 
 /** A page of messages handed to the rules at a time; reading is quick, the rules hold a 50-message window. */
 const READ_PAGE = 5_000

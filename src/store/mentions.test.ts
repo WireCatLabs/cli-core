@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite"
 import { parseLucene } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../domain/models.js"
-import { searchStore } from "../services/messages.js"
+import { searchStore } from "../services/messages-archive-search.js"
 import { type AccountKey, MENTION_QUERY, openStore } from "./store.js"
 
 const OWNER: AccountKey = { provider: "max", account: "1" }
