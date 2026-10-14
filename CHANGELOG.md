@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.276.0 — 14.10.2026
+
 ### Changed — may break callers
 
 - **`store export` writes files in the shape it prints.** `--output` files and `--to` folders held the domain record
