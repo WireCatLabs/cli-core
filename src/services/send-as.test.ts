@@ -107,7 +107,9 @@ describe("sending as an identity", () => {
       chat: "x",
       text: "caption",
       sendAs: "-1002",
-      attachments: [{ kind: "file", name: "synthetic.txt", bytes: new Uint8Array([1]) }],
+      attachments: [
+        { kind: "file", name: "synthetic.txt", source: { kind: "bytes" as const, bytes: new Uint8Array([1]) } },
+      ],
     })
     expect(send).toHaveBeenCalledWith("-1007", "caption", expect.objectContaining({ sendAs: "-1002" }))
   })

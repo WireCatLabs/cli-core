@@ -240,7 +240,7 @@ describe("the fake adapter's optional groups", () => {
     const watching = fake.watch((event) => seen.push(event.event), controller.signal)
     await fake.send(seed.dialog, "now", {
       sendId: "1",
-      attachments: [{ kind: "voice", name: "a.ogg", bytes: new Uint8Array(3) }],
+      attachments: [{ kind: "voice", name: "a.ogg", source: { kind: "bytes" as const, bytes: new Uint8Array(3) } }],
     })
     await fake.send(seed.dialog, "later", { sendId: "2", at: "2030-01-01T00:00:00.000Z" })
     controller.abort()

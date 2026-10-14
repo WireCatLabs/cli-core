@@ -398,7 +398,9 @@ describe("the messages service's writes", () => {
         chat: "Book",
         text: "source",
         markdown: true,
-        attachments: [{ kind: "file", name: "synthetic.txt", bytes: new Uint8Array([1]) }],
+        attachments: [
+          { kind: "file", name: "synthetic.txt", source: { kind: "bytes" as const, bytes: new Uint8Array([1]) } },
+        ],
       }),
     ).rejects.toThrow("spans")
     expect(writes).toEqual([])
@@ -446,7 +448,13 @@ describe("the messages service's writes", () => {
       const validateThread = vi.fn(async () => {})
       const send = vi.fn(writer.send)
       const service = messagesService(onlineDeps(messenger, { ...writer, validateThread, send }, guarding(false)))
-      const attachments = [{ kind: "photo" as const, name: "synthetic.png", bytes: new Uint8Array([1]) }]
+      const attachments = [
+        {
+          kind: "photo" as const,
+          name: "synthetic.png",
+          source: { kind: "bytes" as const, bytes: new Uint8Array([1]) },
+        },
+      ]
       await service.send({
         chat: "Book",
         text: "**hello**",

@@ -47,4 +47,13 @@ export {
 } from "./permissions.js"
 export { type Recipient, RecipientList, recipientsPathFor } from "./recipients.js"
 export { newOperationId, newSendId } from "./send-id.js"
-export { readUpload, type Upload, type UploadKind } from "./upload.js"
+export {
+  MAX_BUFFERED_UPLOAD_BYTES,
+  readUpload,
+  type Upload,
+  type UploadKind,
+  type UploadSource,
+  uploadBlob,
+  uploadBytes,
+  uploadSize,
+} from "./upload.js"
