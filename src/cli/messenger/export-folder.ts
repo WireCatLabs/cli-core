@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { Readable } from "node:stream"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, writeSecurely } from "@wirecat/cli-base"
 import type { Id, Message } from "../../domain/models.js"
 import { checkFor, type PasswordCheck, passes, seal } from "../../sealed.js"
 import type { AccountKey } from "../../store/store.js"
@@ -157,8 +157,5 @@ export const writeChanges = (
 }
 
 /** Written last and replaced whole, so a run stopped halfway leaves the previous manifest, and repeats. */
-export const saveManifest = (dir: string, manifest: ExportManifest): void => {
-  const next = join(dir, `.${MANIFEST}.next`)
-  writeFileSync(next, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 })
-  renameSync(next, join(dir, MANIFEST))
-}
+export const saveManifest = (dir: string, manifest: ExportManifest): void =>
+  writeSecurely(join(dir, MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`, 0o600)

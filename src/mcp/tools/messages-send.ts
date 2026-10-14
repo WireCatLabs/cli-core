@@ -21,8 +21,9 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
       title: "Send a message",
       description:
         "Send one message as the owner — text, or a file or photo from the owner's machine with the text as its " +
-        "caption. Only when the owner asked for this exact message to this exact chat. Hidden files and folders, " +
-        `~/.ssh and ${messenger.app.command}'s own folders are refused, with no way around it here. ` +
+        "caption. Only when the owner asked for this exact message to this exact chat. Known credential files " +
+        "(~/.ssh, ~/.netrc, cloud and git tokens, keyrings, browser profiles), the WireCat apps' own folders and " +
+        "the message store are refused, with no way around it here; other files, hidden ones included, are sent. " +
         "A name that matches several chats is refused with the candidates — pick an id, never guess. " +
         `On outcome_unknown, retry with the operation_id it returns and ${name} drops the duplicate; never with a new one. ` +
         `With \`at\`, ${name} sends it later and the answer carries scheduled_for; never retry a scheduled send — ` +

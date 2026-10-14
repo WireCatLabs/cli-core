@@ -50,6 +50,7 @@ export { newOperationId, newSendId } from "./send-id.js"
 export {
   MAX_BUFFERED_UPLOAD_BYTES,
   readUpload,
+  refusedPlace,
   type Upload,
   type UploadKind,
   type UploadSource,

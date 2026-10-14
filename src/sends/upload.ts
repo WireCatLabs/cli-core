@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
-import { storePath } from "../store/path.js"
+import { storePath, wirecatDirectory } from "../store/path.js"
 
 export type UploadKind = "photo" | "file" | "voice"
 
@@ -52,9 +52,86 @@ export const uploadBytes = async (source: UploadSource): Promise<Uint8Array> => 
 const PHOTO = new Set([".jpg", ".jpeg", ".png", ".webp"])
 const VOICE = new Set([".ogg", ".oga", ".opus"])
 
+/** Single path parts that hold credentials wherever they are. */
+const CREDENTIAL_PARTS = new Set([
+  ".ssh",
+  ".gnupg",
+  ".aws",
+  ".azure",
+  ".kube",
+  ".secrets",
+  "secrets",
+  ".password-store",
+  ".mozilla",
+  ".env",
+  ".npmrc",
+  ".pypirc",
+  ".netrc",
+  "_netrc",
+  ".git-credentials",
+  "credentials.yml.enc",
+  "master.key",
+])
+
+/** Runs of path parts, matched anywhere in the path: tokens, keyrings, browser profiles with their cookies. */
+const CREDENTIAL_RUNS: readonly (readonly string[])[] = [
+  [".config", "autostart"],
+  [".config", "git", "credentials"],
+  [".config", "gh"],
+  [".config", "gcloud"],
+  [".config", "google-chrome"],
+  [".config", "chromium"],
+  [".config", "microsoft-edge"],
+  [".config", "BraveSoftware"],
+  [".docker", "config.json"],
+  [".claude", ".credentials.json"],
+  [".codex", "auth.json"],
+  [".local", "share", "keyrings"],
+  ["Library", "Keychains"],
+  ["Library", "Cookies"],
+  ["Library", "Safari"],
+  ["Library", "Application Support", "Google", "Chrome"],
+  ["Library", "Application Support", "Chromium"],
+  ["Library", "Application Support", "Microsoft Edge"],
+  ["Library", "Application Support", "BraveSoftware"],
+  ["Library", "Application Support", "Firefox"],
+  ["AppData", "Local", "Google", "Chrome"],
+  ["AppData", "Local", "Chromium"],
+  ["AppData", "Local", "Microsoft", "Edge"],
+  ["AppData", "Local", "BraveSoftware"],
+  ["AppData", "Roaming", "Mozilla", "Firefox"],
+  ["AppData", "Local", "Microsoft", "Credentials"],
+  ["AppData", "Roaming", "Microsoft", "Credentials"],
+  ["AppData", "Roaming", "Microsoft", "Protect"],
+  ["AppData", "Roaming", "gcloud"],
+  ["AppData", "Roaming", "GitHub CLI"],
+]
+
+/** Every WireCat app's folders hold its sessions and tokens; `max` must not send `tg`'s, nor the other way round. */
+const WIRECAT_APPS: readonly { appName: string; prefix: string }[] = [
+  { appName: "max-cli", prefix: "MAX" },
+  { appName: "tg-cli", prefix: "TG" },
+  { appName: "cli-memo", prefix: "MEMO" },
+  { appName: "drive-cli", prefix: "DRIVE" },
+  { appName: "zm", prefix: "ZM" },
+  { appName: "cli-messaging", prefix: "MESSAGING" },
+  { appName: "cli-common", prefix: "CLI_COMMON" },
+]
+
 /** Protect known credential/state paths without refusing ordinary hidden developer folders. */
-export const refusedPlace = (path: string, app: AppIdentity, env: NodeJS.ProcessEnv): boolean => {
-  const own = Object.values(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }))
+export const refusedPlace = (
+  path: string,
+  app: AppIdentity,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): boolean => {
+  const own = [
+    ...[{ appName: app.appName, prefix: app.envPrefix }, ...WIRECAT_APPS].flatMap((one) =>
+      Object.values(resolvePaths({ ...one, env, platform })),
+    ),
+    // The shared WireCat folder: the store, its backups beside it, the models.
+    wirecatDirectory(env, platform),
+  ]
   // The store file and its -wal and -shm, not its folder: MESSAGING_STORE may sit in the home folder.
   const store = resolve(storePath(env))
   let ancestor = resolve(path)
@@ -70,21 +147,26 @@ export const refusedPlace = (path: string, app: AppIdentity, env: NodeJS.Process
       ancestor = parent
     }
   }
-  const credentialFolders = new Set([".ssh", ".gnupg", ".aws", ".secrets", "secrets"])
-  const credentialFiles = new Set([".env", ".npmrc", ".pypirc", "credentials.yml.enc", "master.key"])
+  // macOS and Windows find `~/.SSH` at `~/.ssh`, so the names are compared the way their file systems do.
+  const folded = platform === "darwin" || platform === "win32"
+  const fold = (text: string) => (folded ? text.toLowerCase() : text)
+  const parts = new Set([...CREDENTIAL_PARTS].map(fold))
+  const runs = CREDENTIAL_RUNS.map((run) => run.map(fold))
+  const named = (candidate: string) => {
+    const names = candidate.split(sep).map(fold)
+    return names.some(
+      (name, index) =>
+        parts.has(name) ||
+        /^\.env\./.test(name) ||
+        runs.some((run) => run.every((part, offset) => names[index + offset] === part)),
+    )
+  }
+  const same = (a: string, b: string) => fold(a) === fold(b)
   return [resolve(path), real].some(
     (candidate) =>
-      candidate
-        .split(sep)
-        .some(
-          (part, index, parts) =>
-            credentialFolders.has(part) ||
-            credentialFiles.has(part) ||
-            /^\.env\./.test(part) ||
-            (part === ".config" && parts[index + 1] === "autostart"),
-        ) ||
-      own.some((dir) => inside(candidate, dir)) ||
-      [store, `${store}-wal`, `${store}-shm`].includes(candidate),
+      named(candidate) ||
+      own.some((dir) => inside(fold(candidate), fold(dir))) ||
+      [store, `${store}-wal`, `${store}-shm`].some((file) => same(candidate, file)),
   )
 }
 
@@ -107,8 +189,8 @@ export const readUpload = async (
   if (!anyFile && refusedPlace(path, app, env)) {
     throw new CliError(
       "validation_error",
-      `cannot send ${path}: known credential files, ${app.command}'s own folders and the message store ` +
-        `are not sent — the owner adds --allow-any-file to \`${app.command} messages send\` if this file is meant to go`,
+      `cannot send ${path}: known credential files, browser profiles, the WireCat apps' folders and the message ` +
+        "store are not sent — the owner adds --allow-any-file to the command if this file is meant to go",
     )
   }
   try {

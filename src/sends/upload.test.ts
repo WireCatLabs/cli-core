@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync } from
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { readAttachments, readUpload, uploadBlob, uploadBytes } from "./upload.js"
+import { readAttachments, readUpload, refusedPlace, uploadBlob, uploadBytes } from "./upload.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 
@@ -48,8 +48,95 @@ describe("readUpload", () => {
 
   it("allows hidden developer folders and similarly named store neighbors", async () => {
     const { env, put } = setUp()
-    for (const name of [".worktrees/a.txt", ".cache/a.txt", ".incoming/.notes", "store/m.db-report.pdf"])
+    for (const name of [
+      ".worktrees/a.txt",
+      ".cache/a.txt",
+      ".incoming/.notes",
+      "store/m.db-report.pdf",
+      ".config/nvim/init.lua",
+      ".docker/daemon.json",
+      ".claude/settings.json",
+      ".codex/config.toml",
+      ".local/share/fonts/a.ttf",
+    ])
       expect(await readUpload("file", put(name), { app, env })).toMatchObject({ kind: "file" })
+  })
+
+  it.each([
+    ".netrc",
+    "_netrc",
+    ".git-credentials",
+    ".config/git/credentials",
+    ".config/gh/hosts.yml",
+    ".docker/config.json",
+    ".kube/config",
+    ".config/gcloud/credentials.db",
+    ".aws/credentials",
+    ".azure/msal_token_cache.json",
+    ".claude/.credentials.json",
+    ".codex/auth.json",
+    ".npmrc",
+    ".pypirc",
+    ".password-store/mail.gpg",
+    ".local/share/keyrings/login.keyring",
+    "Library/Keychains/login.keychain-db",
+    ".config/google-chrome/Default/Cookies",
+    ".config/chromium/Default/Login Data",
+    ".config/microsoft-edge/Default/Cookies",
+    ".config/BraveSoftware/Brave-Browser/Default/Cookies",
+    ".mozilla/firefox/abc.default/logins.json",
+    "Library/Application Support/Google/Chrome/Default/Cookies",
+    "Library/Application Support/Microsoft Edge/Default/Cookies",
+    "Library/Application Support/Firefox/Profiles/abc/cookies.sqlite",
+    "Library/Safari/History.db",
+    "Library/Cookies/Cookies.binarycookies",
+    "AppData/Local/Google/Chrome/User Data/Default/Cookies",
+    "AppData/Local/Microsoft/Edge/User Data/Default/Cookies",
+    "AppData/Roaming/Mozilla/Firefox/Profiles/abc/logins.json",
+    "AppData/Roaming/Microsoft/Credentials/ABC",
+    "AppData/Roaming/GitHub CLI/hosts.yml",
+  ])("**refuses the known credential place** %s", async (name) => {
+    const { env, put } = setUp()
+    await expect(readUpload("file", put(name), { app, env })).rejects.toThrow(/--allow-any-file/)
+  })
+
+  it("**refuses every WireCat app's folders**, not only its own", () => {
+    const { root, env } = setUp()
+    const others = {
+      ...env,
+      TG_STATE_DIR: join(root, "tg"),
+      MAX_CONFIG_DIR: join(root, "max"),
+      MEMO_STATE_DIR: join(root, "memo"),
+      DRIVE_CONFIG_DIR: join(root, "drive"),
+      ZM_STATE_DIR: join(root, "zoom"),
+    }
+    for (const dir of ["tg", "max", "memo", "drive", "zoom"])
+      expect(refusedPlace(join(root, dir, "session"), app, others)).toBe(true)
+    expect(refusedPlace(join(root, "notes", "session"), app, others)).toBe(false)
+  })
+
+  it("**refuses the shared WireCat folder**, where the store's backups and the models are", () => {
+    const { root, env } = setUp()
+    const shared = { ...env, WIRECAT_STATE_DIR: join(root, "wirecat") }
+    expect(refusedPlace(join(root, "wirecat", "wirecat.db.backup-2026-10-14"), app, shared)).toBe(true)
+    expect(refusedPlace(join(root, "wirecat-notes", "a.txt"), app, shared)).toBe(false)
+  })
+
+  it("names the flag but no command in its refusal: bot uploads and `bot api` @path fields hit it too", async () => {
+    const { env, put } = setUp()
+    const refused = readUpload("file", put(".netrc"), { app, env })
+    await expect(refused).rejects.toThrow(/--allow-any-file to the command/)
+    await expect(refused).rejects.not.toThrow(/messages send/)
+  })
+
+  it("**compares names case-insensitively on macOS and Windows**, and exactly on Linux", () => {
+    const { root, env } = setUp()
+    for (const name of [".SSH/id_ed25519", ".Netrc", ".ENV", ".Config/GH/hosts.yml", "STATE/session"]) {
+      expect(refusedPlace(join(root, name), app, env, "darwin")).toBe(true)
+      expect(refusedPlace(join(root, name), app, env, "win32")).toBe(true)
+    }
+    expect(refusedPlace(join(root, "store", "M.DB"), app, env, "darwin")).toBe(true)
+    expect(refusedPlace(join(root, ".SSH", "id_ed25519"), app, env, "linux")).toBe(false)
   })
 
   it("says what is wrong with a path that is not a readable file", async () => {

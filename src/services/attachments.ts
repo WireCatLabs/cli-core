@@ -544,7 +544,10 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
       )
     if (chosen.localPath === null) throw new CliError("not_found", "download this attachment before transferring it")
     if (refusedPlace(chosen.localPath, deps.messenger.app, deps.env ?? process.env))
-      throw new CliError("validation_error", "cannot transfer hidden files, the CLI's own files or the message store")
+      throw new CliError(
+        "validation_error",
+        "cannot transfer known credential files, the WireCat apps' own files or the message store",
+      )
     const { head, capturedFile, ...bytes } = await retainedBytes(chosen.localPath, window, page !== undefined, deps.env)
     const mimeType = transferMime(head, null, chosen.name)
     let preview: Partial<AttachmentBytes> = {}
