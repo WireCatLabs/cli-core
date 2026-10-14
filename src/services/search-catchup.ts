@@ -56,7 +56,6 @@ export const catchUpSearch = async (
       maxChunks: options.maxChunks ?? CATCH_UP_BOUNDS.maxChunks,
       maxMessages,
       check,
-      workers: 1,
       threads: 1,
     })
     check()

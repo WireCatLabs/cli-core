@@ -329,7 +329,7 @@ One group chat of 100,000 synthetic messages in three languages, 42,417 chunks, 
 | step | time |
 |---|---|
 | `conversations build` | 3.3 s |
-| `conversations embed`, e5-small | ~22 min, Node or Bun; 3 workers gain 1.04–1.1× |
+| `conversations embed`, e5-small | ~22 min, Node or Bun; 3 worker threads gained only 1.04–1.1×, so there are none |
 | `conversations search`, one-shot | ~1.4 s (model load ~1 s, then the scan) |
 | `conversations search` in the MCP server | ~0.35 s |
 | of which the word search | ~25 ms |
@@ -343,7 +343,7 @@ and the MCP search took 1.4 s.
 |---|---|
 | cutting chunks, their text and hash | `src/conversations/chunks.ts` |
 | the model list | `src/embeddings/models.ts` |
-| running a model: in this thread, in workers, kept warm in a child process | `src/embeddings/embed.ts`, `pool.ts`, `workers.ts`, `process.ts`, `child.ts` |
+| running a model: in this thread, or kept warm in a child process | `src/embeddings/embed.ts`, `process.ts`, `child.ts` |
 | download, with sha256, into the shared folder | `src/cli/messenger/models-command.ts`, through `src/speech/install.ts` |
 | an API model | `src/embeddings/remote.ts` |
 | embed, status, readiness, refresh, clear | `src/services/embeddings-maintenance.ts` |

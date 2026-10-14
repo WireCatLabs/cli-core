@@ -1106,10 +1106,6 @@
       "meaning": "match any of these whole words, comma-separated; empty clears",
       "value": "<words>"
     },
-    "--workers": {
-      "value": "<n>",
-      "meaning": "sessions in parallel, each with its own copy of the model"
-    },
     "--yes": {
       "meaning": "go ahead without the question an ask level puts before a write"
     }
@@ -2345,8 +2341,7 @@
         "--max-tokens": "all",
         "--model": "all",
         "--provider": "all",
-        "--threads": "all",
-        "--workers": "all"
+        "--threads": "all"
       }
     },
     "conversations embed clear": {

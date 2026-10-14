@@ -73,8 +73,6 @@ const { contractCases, fakeAdapter } = await import(join(root, "kit/index.js"))
 for (const one of contractCases({ connect: fakeAdapter, orderBy: "time" })) await one.run()
 console.log("dist: ./testing exports the fake adapter, and it passes the contract cases")
 
-// Worker threads load dist/embeddings/worker.js, which the tests, run from the sources, cannot.
-const { openPool } = await import(join(root, "embeddings/pool.js"))
 const tiny = {
   id: "tiny",
   dims: 4,
@@ -83,16 +81,6 @@ const tiny = {
   prefix: { query: "", passage: "" },
   onnx: "onnx/model.onnx",
 }
-const pool = await openPool(tiny, join(root, "../src/embeddings/fixtures"), { workers: 2, threads: 2, free: Infinity })
-const vectors = await pool.embed(["cat", "dog", "cat dog"], "passage")
-await pool.close()
-if (
-  vectors.map((vector: Float32Array) => Array.from(vector, (value) => value.toFixed(2)).join(" ")).join(" | ") !==
-  "1.00 0.00 0.00 0.00 | 0.00 1.00 0.00 0.00 | 0.71 0.71 0.00 0.00"
-) {
-  throw new Error("two embedding workers did not give the tiny model's vectors back in order")
-}
-console.log("dist: two embedding workers load the model and keep the order")
 
 // The MCP server's model runs in a child process started from dist/embeddings/child.js.
 const { openProcess } = await import(join(root, "embeddings/process.js"))

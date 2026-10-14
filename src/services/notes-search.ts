@@ -3,7 +3,13 @@ import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli
 import type { AppIdentity } from "../cli/app.js"
 import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
-import { defaultThreads, type Embedder, isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
+import {
+  defaultThreads,
+  type Embedder,
+  isTextModelInstalled,
+  openEmbedder,
+  textModelsDirectory,
+} from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel, vectorModelKey } from "../embeddings/models.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
@@ -119,8 +125,7 @@ const withLocal = async <T>(
   threads: number | undefined,
   work: (embedder: Embedder) => Promise<T>,
 ): Promise<T> => {
-  const { openPool } = await import("../embeddings/pool.js")
-  const embedder = await openPool(model, directory, { workers: 1, threads: threads ?? defaultThreads() })
+  const embedder = await openEmbedder(model, directory, { threads: threads ?? defaultThreads() })
   try {
     return await work(embedder)
   } finally {
