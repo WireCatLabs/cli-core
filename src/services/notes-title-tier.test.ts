@@ -54,6 +54,20 @@ describe("a title that holds the query comes first", () => {
     expect((await titles(store, "alpha beta")).slice(0, 2)).toEqual(["ALPHA beta", "Alpha beta gamma"])
   })
 
+  it("lifts a title holding all the words in another order after the phrase titles", async () => {
+    const { store } = await seeded([
+      ...repeated,
+      { title: "Plan: quokka", text: filler },
+      { title: "The quokka plan, 2026", text: filler },
+      { title: "Quokka plan", text: filler },
+    ])
+    expect((await titles(store, "quokka plan")).slice(0, 3)).toEqual([
+      "Quokka plan",
+      "The quokka plan, 2026",
+      "Plan: quokka",
+    ])
+  })
+
   it("does not lift a title that holds only one of the words", async () => {
     const { store } = await seeded([...repeated, { title: "Quokka", text: filler }])
     const hits = await titles(store, "quokka plan")
@@ -83,7 +97,14 @@ describe("a title that holds the query comes first", () => {
 
   it("leaves a query with syntax in its own order", async () => {
     const { store } = await seeded([...repeated, { title: "Quokka plan", text: filler }])
-    for (const query of ["title:x OR quokka", '"quokka plan" AND quokka', "quok*", "/quok.*/", "quokka OR plan"])
+    for (const query of [
+      "title:x OR quokka",
+      '"quokka plan" OR quokka',
+      "quokka -zebra",
+      "quok*",
+      "/quok.*/",
+      "quokka OR plan",
+    ])
       expect(
         (await searchNotes(store, query, { env, limit: 20 })).hits.every(({ found_by }) => !found_by.includes("title")),
       ).toBe(true)

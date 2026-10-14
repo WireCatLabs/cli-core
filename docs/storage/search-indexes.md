@@ -286,9 +286,9 @@ downloads a model or calls a remote one in its place. A remote model that fails 
 
 `search notes` (and the notes inside `search all`, and `drive search`) merge words and meaning the same way, with one
 exception. When the query is only words or quoted phrases, notes whose title equals the query come first, then notes whose
-title contains it as a phrase (compared without case or accents), each group in its word order. They are followed by
-the merged list without repeats, and `found_by` lists `title` for them. A query with a field, `OR`, `NOT`, a wildcard,
-a regex or a group is merged as before.
+title contains it as a phrase, then notes whose title holds all its words in any order (compared without case or
+accents), each group in its word order. They are followed by the merged list without repeats, and `found_by` lists
+`title` for them. A query with a field, `OR`, `NOT`, a wildcard, a regex or a group is merged as before.
 
 ### Related to a message
 
