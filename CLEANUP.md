@@ -48,3 +48,4 @@
 - `bench/search/store-chain.ts` — times the legacy word-search chain (`search/search.js`, `matchWords`, `SCOPE_TOKEN_LIMIT`), all removed in refactor/drop-legacy-search; it no longer runs. Keep `bench/search/results.md` as the record. 2026-10-14
 - 2026-10-14: `../cli-core-wt-reserve-13`, branch `docs/reserve-migration-13` — reserves store migration 13 for task fields; remove after its PR merges.
 - 2026-10-14: `../cli-core-wt-task-fields`, branch `feat/task-fields` — tasks plan step 2 (task fields, store version 13); remove after its PR merges.
+- 2026-10-15: `../cli-core-wt-rules-on-sync`, branch `feat/rules-on-sync` — tasks plan step 7; remove after its PR merges.

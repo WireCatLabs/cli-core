@@ -87,7 +87,6 @@ import { openSqlite, type StoreContext } from "./sqlite/open.js"
 import * as personLinks from "./sqlite/person-links.js"
 import { personSeenInAccounts } from "./sqlite/person-scope.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
-
 import * as privatePeople from "./sqlite/private-people.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
 import type { Where } from "./sqlite/query-filter.js"
@@ -116,6 +115,7 @@ import { fillStems, followDefaultStemmers } from "./sqlite/stems-fill.js"
 import * as sync from "./sqlite/sync.js"
 import type { AnyTagTarget, StoredTag, TagFilter } from "./sqlite/tags.js"
 import * as tagQueries from "./sqlite/tags.js"
+import { setTaskRulesStop, taskRulesStop } from "./sqlite/task-rule-stops.js"
 import { linkInbox, type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
 import { read, write } from "./sqlite/transaction.js"
 import * as transcripts from "./sqlite/transcripts.js"
@@ -460,6 +460,9 @@ export interface MessageStore {
     onBatch?: (done: number, total: number) => void
   }): Promise<MentionsRebuild>
   mentionsState(): Promise<MentionsState>
+  /** Where the account's last task-rule pass stopped: the newest store time it read. */
+  taskRulesStop(key: AccountKey): Promise<string | null>
+  setTaskRulesStop(key: AccountKey, until: string): Promise<void>
   /** Saved or edited after `at` (ISO, this machine's clock), oldest first, and the ids deleted after it. */
   changes(key: AccountKey, chatId: Id, at: string): Promise<{ messages: Message[]; deleted: Id[] }>
   /**
@@ -1516,6 +1519,8 @@ const storeOver = (context: StoreContext): MessageStore => {
     rebuildMentions: async (options = {}) => rebuildMentions(database, { now: context.now(), ...options }),
 
     mentionsState: async () => mentionsState(database),
+    taskRulesStop: async (key) => taskRulesStop(database, key),
+    setTaskRulesStop: async (key, until) => setTaskRulesStop(database, key, until, context.now()),
 
     changes: async (key, chatId, at) => {
       const chatKey = chatKeyOf(key, chatId)

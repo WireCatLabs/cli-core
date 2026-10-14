@@ -350,6 +350,26 @@ describe("messages sync", () => {
     ).not.toBe(0)
   })
 
+  it("**opens a task for an unanswered question it stored**, once: the next sync starts where this one stopped", async () => {
+    const env = setup()
+    const asked = { newest: 2, asked: [] as (string | undefined)[] }
+    const recent = (id: number, text: string): Message => ({
+      ...message(id),
+      timestamp: new Date(Date.now() - (3 - id) * 60_000).toISOString(),
+      text,
+    })
+    const chat = {
+      ...chatOf(asked),
+      history: async () => ({ items: [recent(1, "morning"), recent(2, "who has the keys?")], hasMore: false }),
+    } as unknown as MessengerAdapter
+
+    const first = await call(["messages", "sync", "7", "--json"], chat, env)
+    expect(first.answer.tasks).toEqual({ added: 1, closed: 0 })
+    const again = await call(["messages", "sync", "7", "--json"], chat, env)
+    expect(again.code).toBe(0)
+    expect(again.answer.tasks).toBeUndefined()
+  })
+
   it("keeps no old name: backfill and --pace are unknown", async () => {
     const state = { newest: 5, asked: [] as (string | undefined)[] }
     expect((await call(["backfill", "7"], chatOf(state), setup())).code).not.toBe(0)
