@@ -125,6 +125,26 @@ export const listJobs = (dir: string): Job[] =>
         .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
     : []
 
+/** A job as `store jobs list` answers it. */
+export const jobItem = (job: Job) => {
+  const issue = job.result?.issue as { code?: unknown; message?: unknown } | undefined
+  return {
+    id: job.id,
+    chat: job.chat,
+    state: stateOf(job),
+    pid: job.pid,
+    started_at: job.startedAt,
+    ...(job.finishedAt ? { finished_at: job.finishedAt } : {}),
+    fetched: Number(job.result?.fetched ?? job.progress?.fetched ?? 0),
+    ...(job.limit === undefined ? {} : { limit: job.limit }),
+    ...(job.pageSize === undefined ? {} : { page_size: job.pageSize }),
+    ...(job.last === undefined ? {} : { last: job.last }),
+    ...(job.result ? { complete: job.result.complete === true } : {}),
+    ...(issue ? { issue: { code: String(issue.code), message: String(issue.message) } } : {}),
+    ...(job.error ? { error: { code: job.error.code, message: job.error.message } } : {}),
+  }
+}
+
 /** A job that is gone without saying how it ended was killed, or crashed before it could — its log says which. */
 export const stateOf = (job: Job): JobState => {
   if (job.finishedAt !== undefined) {

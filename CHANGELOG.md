@@ -9,6 +9,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`store jobs list` answers in the list envelope** with the new `job` entity: `id` (was `job`), `started_at`,
+  `finished_at`, `page_size`, `issue` and `error` as `{code, message}`; `batch` and `resume` stay in
+  `store jobs show`. It pages with `--limit`, `--page` and `--all`; MCP `store_jobs_list` declares its output.
+  `--state` stays until the owner rules on filtering a folder of job files.
 - **`meetings list [query...]` narrows by one query and answers in the list envelope, without `meta`** (the host
   adds it). `--since-time` and `--until-time` are gone (`started_at:[2026-10-01 TO 2026-10-31]`; also `id`, `title`,
   `ended_at`, `duration_ms`, `participants_count`, `created_at`, `updated_at`), and so are the MCP `meetings_list`

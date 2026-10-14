@@ -3,10 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { CliError, captureStreams, NOT_ALLOWED } from "@wirecat/cli-base"
-import { logRecordSchema } from "@wirecat/cli-base/standards"
+import { listEnvelopeSchema, logRecordSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { describe, expect, it, onTestFinished } from "vitest"
 import type { Message } from "../../domain/models.js"
+import { job as jobEntity } from "../../entities/job.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
@@ -439,12 +440,14 @@ describe("store fetch in the background", () => {
     ])
     expect(calls[0]?.env).toMatchObject({ CHAT_PROFILE: "default", CHAT_BACKFILL_JOB: job })
     expect(calls[0]?.env.CHAT_TIMEOUT).toBeUndefined()
-    expect((await call(["store", "jobs", "list", "--json"], idle, env)).answer).toEqual({
-      items: [expect.objectContaining({ job, state: "running", fetched: 0, limit: 300, pageSize: 100, last: 250 })],
-      page: 1,
-      limit: 1,
-      hasMore: false,
-    })
+    const listed = v.parse(
+      listEnvelopeSchema(jobEntity),
+      (await call(["store", "jobs", "list", "--json"], idle, env)).answer,
+    )
+    expect(listed.items).toEqual([
+      expect.objectContaining({ id: job, state: "running", fetched: 0, limit: 300, page_size: 100, last: 250 }),
+    ])
+    expect(listed.page).toMatchObject({ has_more: false })
 
     const again = await call(["messages", "sync", "7", "--background"], idle, env, { spawnJob })
     expect(again.code).not.toBe(0)
@@ -631,7 +634,7 @@ describe("store fetch in the background", () => {
 
     const listed = async (state: string) =>
       (await call(["store", "jobs", "list", "--state", state, "--json"], idle, env)).answer.items.map(
-        (item: { job: string }) => item.job,
+        (item: { id: string }) => item.id,
       )
 
     expect(await listed("died")).toEqual([died])
@@ -697,11 +700,9 @@ describe("store fetch in the background", () => {
     const env = setup()
     expect((await call(["store", "jobs", "show"], idle, env)).stderr).toContain("no background sync jobs")
     expect((await call(["store", "jobs", "cancel", "nope"], idle, env)).stderr).toContain("no sync job nope")
-    expect((await call(["store", "jobs", "list", "--json"], idle, env)).answer).toEqual({
+    expect((await call(["store", "jobs", "list", "--json"], idle, env)).answer).toMatchObject({
       items: [],
-      page: 1,
-      limit: 0,
-      hasMore: false,
+      page: { has_more: false },
     })
   })
 })

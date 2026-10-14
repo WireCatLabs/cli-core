@@ -1,11 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { listOf } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { parseDuration } from "../../cli/settings.js"
 import { levelFor } from "../../sends/permissions.js"
 import { FETCHING } from "../../services/archive.js"
 import { GAP_BOUNDS, gapsService, validateRepair } from "../../services/archive-gaps.js"
-import { jobsDir, listJobs, readJob, startArchiveJob, stateOf } from "../../services/backfill-jobs.js"
+import { jobItem, jobsDir, listJobs, readJob, startArchiveJob, stateOf } from "../../services/backfill-jobs.js"
 import { storedDeps } from "../../services/deps.js"
 import { validateCatchUp } from "../../services/search-catchup.js"
 import { type AnyTool, chatOf, READ, tool } from "../tool.js"
@@ -149,18 +150,19 @@ export const storeTools = (messenger: Messenger): Record<string, AnyTool> => ({
     description: "The selected profile's own sync/repair jobs, newest first.",
     input: v.object({ limit: count(100), page: count(10_000) }),
     annotations: { ...READ, openWorldHint: false },
+    output: { entity: "job", list: true },
     local: async (args, defaults) => {
       const limit = args.limit ?? 20
       const page = args.page ?? 1
       const rows = listJobs(jobsDir(messenger.app, defaults.env)).filter(
         (job) => job.profile === defaults.settings.profile,
       )
-      return {
-        items: rows.slice((page - 1) * limit, page * limit).map((job) => ({ ...job, state: stateOf(job) })),
-        page,
+      return listOf("store jobs list", {
+        items: rows.slice((page - 1) * limit, page * limit).map(jobItem),
         limit,
-        hasMore: rows.length > page * limit,
-      }
+        page,
+        has_more: rows.length > page * limit,
+      })
     },
   }),
 })

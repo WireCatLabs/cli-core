@@ -4,6 +4,7 @@ export {
   JOB_STATES,
   type Job,
   type JobState,
+  jobItem,
   jobStarted,
   jobsDir,
   listJobs,

@@ -13,6 +13,7 @@ import { folder } from "./folder.js"
 import { hit } from "./hit.js"
 import { identity } from "./identity.js"
 import { inviteLink } from "./invite-link.js"
+import { job } from "./job.js"
 import { joinRequest } from "./join-request.js"
 import { meeting } from "./meeting.js"
 import { member } from "./member.js"
@@ -45,6 +46,7 @@ export {
   hit,
   identity,
   inviteLink,
+  job,
   joinRequest,
   meeting,
   member,
@@ -104,6 +106,7 @@ export const ENTITIES = {
   reference,
   tagging,
   conversation,
+  job,
   chat_event: chatEvent,
   invite_link: inviteLink,
   join_request: joinRequest,

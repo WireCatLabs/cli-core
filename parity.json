@@ -3817,6 +3817,9 @@
     "store jobs list": {
       "in": "all",
       "options": {
+        "--all": "all",
+        "--limit": "all",
+        "--page": "all",
         "--state": "all"
       }
     },
