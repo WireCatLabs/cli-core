@@ -1,6 +1,13 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["./config/wirecat/biome.base.json"],
+  "linter": {
+    "rules": {
+      "suspicious": {
+        "noImportCycles": "error"
+      }
+    }
+  },
   "files": {
     "includes": [
       "**",
