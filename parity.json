@@ -1339,7 +1339,8 @@
           "in": [],
           "planned": {
             "tg": "tg's next cli-core bump: one flag on bot api for every @path field, not one per file-carrying operation"
-          }
+          },
+          "reason": "max's bot api reads no @path files; max uploads bot files through bot uploads put, which has the flag"
         },
         "--store-token": {
           "in": "all"
