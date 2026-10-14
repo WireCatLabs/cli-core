@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
+import { capability, type MessengerAdapter } from "../../ports/messenger.js"
 import type { DiagnosticEvent } from "../runs/events.js"
 import { observed } from "./observed.js"
-import { capability, type MessengerAdapter } from "./port.js"
 import { stored } from "./stored.js"
 
 /** A class, as a real adapter is: a method must reach it with `this` intact. */

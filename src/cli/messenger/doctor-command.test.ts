@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Chat } from "../../domain/models.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { FloodMemory } from "../../sends/flood.js"
 import type { SendEntry } from "../../sends/journal.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
@@ -13,7 +14,6 @@ import { settingsFor } from "../settings.js"
 import { chatsCommand } from "./chats-command.js"
 import type { Messenger } from "./context.js"
 import { CLOCK_SKEW_WARN_MS, doctorCommand } from "./doctor-command.js"
-import type { MessengerAdapter } from "./port.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const chat: Chat = {

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
-import type { MessengerAdapter } from "../cli/messenger/port.js"
+import type { MessengerAdapter } from "../ports/messenger.js"
 import type { GuardRequest, SendGuard } from "../sends/guard.js"
 import type { SendEntry } from "../sends/journal.js"
 import { onlineDeps } from "./deps.js"

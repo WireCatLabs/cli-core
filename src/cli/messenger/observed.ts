@@ -1,7 +1,7 @@
+import { type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { currentOperation } from "../../sends/guarded.js"
 import { isCliFailure } from "../failures.js"
 import { type EventSink, providerErrorKey } from "../runs/events.js"
-import { type MessengerAdapter, throughWrapper } from "./port.js"
 
 type Named = { ids?: Record<string, string>; counts?: Record<string, number> }
 

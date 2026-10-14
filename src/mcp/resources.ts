@@ -1,7 +1,7 @@
 import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/server"
 import { visibleControls } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
-import { capability } from "../cli/messenger/port.js"
+import { capability } from "../ports/messenger.js"
 import type { SendGuard } from "../sends/guard.js"
 import { servicesFor, storedDeps } from "../services/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"

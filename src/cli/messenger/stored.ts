@@ -1,9 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Message, MessageEvent } from "../../domain/models.js"
+import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { isId, pickPerson } from "../../resolve.js"
 import type { AccountKey, DeletionScope, MessageStore } from "../../store/store.js"
 import type { EventSink } from "../runs/events.js"
-import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "./port.js"
 
 export interface Saving {
   account: AccountKey

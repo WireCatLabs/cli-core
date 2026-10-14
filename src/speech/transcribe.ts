@@ -1,7 +1,7 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
-import { capability, type MessengerAdapter, type RemoteFile, type Transcript } from "../cli/messenger/port.js"
 import { fromFile, type Settings } from "../cli/settings.js"
+import { capability, type MessengerAdapter, type RemoteFile, type Transcript } from "../ports/messenger.js"
 import { installedBytes, isInstalled, megabytes, modelPath, modelsDirectory, vadPath } from "./install.js"
 import { orderedModels, type SpeechModel, speechModel } from "./models.js"
 import type { Recognizer } from "./recognize.js"

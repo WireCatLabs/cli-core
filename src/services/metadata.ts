@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { capability } from "../cli/messenger/port.js"
 import { CHANNEL_TAG_RULES_VERSION, classifyChannel } from "../domain/channel-tags.js"
+import { capability } from "../ports/messenger.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
 

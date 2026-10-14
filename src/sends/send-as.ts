@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { capability, type MessengerAdapter } from "../cli/messenger/port.js"
 import type { Id } from "../domain/models.js"
+import { capability, type MessengerAdapter } from "../ports/messenger.js"
 
 /**
  * Found before the chat is resolved, so a messenger without identities refuses before any lookup;

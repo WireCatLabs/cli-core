@@ -3,9 +3,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { MessageEvent } from "../../domain/models.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { MessageStore } from "../../store/store.js"
 import { connected } from "./context.js"
-import type { MessengerAdapter } from "./port.js"
 
 const order: string[] = []
 let finishWrite: () => void = () => {}

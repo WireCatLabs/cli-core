@@ -3,9 +3,9 @@ import type * as v from "valibot"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
 import type { Attachment, MailPerson, Message, MessageHit, QuotedMessage } from "../../domain/models.js"
 import type { message as messageSchema } from "../../entities/message.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { AccountKey } from "../../store/store.js"
 import type { Messenger, MessengerContext } from "./context.js"
-import type { MessengerAdapter } from "./port.js"
 
 export type MessageItem = v.InferOutput<typeof messageSchema>
 

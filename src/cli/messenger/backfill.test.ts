@@ -8,6 +8,7 @@ import * as v from "valibot"
 import { describe, expect, it, onTestFinished } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { job as jobEntity } from "../../entities/job.js"
+import type { MessengerAdapter, ServerReads } from "../../ports/messenger.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
@@ -15,7 +16,6 @@ import { jobsDir, listJobs, readJob, type SpawnJob, saveJob, updateJob } from ".
 import type { Fetching, Messenger } from "./context.js"
 import { conversationsCommand } from "./conversations-command.js"
 import { messagesCommand } from "./messages-command.js"
-import type { MessengerAdapter, ServerReads } from "./port.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 

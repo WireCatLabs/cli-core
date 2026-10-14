@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { capability, type ProfileChange } from "../cli/messenger/port.js"
 import type { Account, AccountSession, Id, PrivacySettings } from "../domain/models.js"
+import { capability, type ProfileChange } from "../ports/messenger.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { ServiceDeps } from "./deps.js"

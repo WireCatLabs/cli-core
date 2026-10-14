@@ -4,12 +4,12 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Chat, Message } from "../../domain/models.js"
+import type { MessengerAdapter, ServerReads } from "../../ports/messenger.js"
 import { reviewIn } from "../../services/inbox.js"
 import { unanswered } from "../../services/questions.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import type { Messenger } from "./context.js"
-import type { MessengerAdapter, ServerReads } from "./port.js"
 import { reviewCommand } from "./review.js"
 
 const app = {

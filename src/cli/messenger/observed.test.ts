@@ -3,10 +3,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { startRun } from "../runs/run.js"
 import { searchRuns } from "../runs/search.js"
 import { observed } from "./observed.js"
-import type { MessengerAdapter } from "./port.js"
 
 const message: Message = {
   id: "50123456",

@@ -2,7 +2,7 @@ import * as v from "valibot"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { topicAnswer } from "../../cli/messenger/chat-answers.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { capability } from "../../cli/messenger/port.js"
+import { capability } from "../../ports/messenger.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
 import { type AnyTool, chatOf, type Defaults, limit, page, paging, READ, tool, WRITE } from "../tool.js"
 

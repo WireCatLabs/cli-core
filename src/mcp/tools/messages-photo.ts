@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { itemOf } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { capability, type RemoteFile } from "../../cli/messenger/port.js"
+import { capability, type RemoteFile } from "../../ports/messenger.js"
 import { type AnyTool, chatOf, message, Picture, READ, tool } from "../tool.js"
 
 /** Larger than this and a client may refuse the answer, or spend the model's context on one picture. */

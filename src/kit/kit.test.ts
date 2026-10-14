@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { MessengerAdapter } from "../cli/messenger/port.js"
 import type { Chat } from "../domain/models.js"
+import type { MessengerAdapter } from "../ports/messenger.js"
 import {
   type ContractCase,
   contractCases,

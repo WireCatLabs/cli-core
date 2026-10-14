@@ -3,8 +3,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Message, MessageEvent } from "../../domain/models.js"
+import type { MessengerAdapter } from "../../ports/messenger.js"
 import { type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
-import type { MessengerAdapter } from "./port.js"
 import { stored } from "./stored.js"
 
 const account = { provider: "test", account: "500" }

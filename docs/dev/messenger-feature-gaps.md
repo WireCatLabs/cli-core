@@ -46,7 +46,7 @@ from this plan. Slices 3, 4 (archive), 5, 6, 7 and 8 have no other owner.
 - Docs PR first: `parity.json` option(s) → `pnpm parity:render`, manifest row `planned`, both CLIs'
   user pages at the same depth (max in Russian, tg in English).
 - Code PR: command and MCP tool call one service; service calls a port group; a new port method
-  goes in a named optional group in `src/cli/messenger/port.ts`, never the core. Tests go through
+  goes in a named optional group in `src/ports/messenger.ts`, never the core. Tests go through
   the command and include a failure path. `## Unreleased` changelog entry. The manifest row turns
   `in` only when the command is on that CLI's `main`.
 - Every write: a `SendKind` or `AccountAction` (`src/sends/journal.ts:11,32`), a key in
