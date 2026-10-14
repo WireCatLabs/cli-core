@@ -7,18 +7,8 @@ shape of this file.
 
 ## Unreleased
 
-## 0.265.0 — 14.10.2026
-
 ### Changed — may break callers
 
-- **`messages list|show|context|comments|scheduled|link` answer in the envelope**, CLI and MCP alike: each message
-  is the `message` entity (snake_case, `ref` is its `msg:` locator, `transcript` once heard, `anchor` on the one asked
-  for), `link` is `message_link`. `messages list` and `messages comments` take a query instead of filter flags:
-  `id<42`, `id>42`, `date<2h`, `date>2026-10-01`, `topic:12`, all terms together; `--before-id`, `--after-id`,
-  `--before-time`, `--after-time` and `--topic` are gone, and MCP `before_id`… become `query`. More pages are a
-  `page.next` step with `--cursor`. Voice messages left unheard are a `missing` entry; `--mark-read` names its
-  operation on stderr. MCP `messages_list` and `messages_context` no longer add `next_steps`; the server instructions
-  carry the save hint.
 - **`search all|messages|mail|notes` answer the list envelope, CLI and MCP alike:** `{items, page, next?, missing?,
   meta}` with the entities `hit`, `message.hit` and `note.hit` (snake_case keys: `matched_in`, `found_in`,
   `found_by`, `discovery.missing_terms`). `--page <n>` (MCP `page`) replaces `--offset`, and the next page is a
@@ -32,6 +22,19 @@ shape of this file.
   with `matched_in: "picture"`, still ranked on their own; `chat:` in the query now narrows them as `--chat` did. A
   missing picture model is a `missing` entry `pictures` with a `models.download-image` step, in place of
   `picturesSkipped`.
+
+## 0.265.0 — 14.10.2026
+
+### Changed — may break callers
+
+- **`messages list|show|context|comments|scheduled|link` answer in the envelope**, CLI and MCP alike: each message
+  is the `message` entity (snake_case, `ref` is its `msg:` locator, `transcript` once heard, `anchor` on the one asked
+  for), `link` is `message_link`. `messages list` and `messages comments` take a query instead of filter flags:
+  `id<42`, `id>42`, `date<2h`, `date>2026-10-01`, `topic:12`, all terms together; `--before-id`, `--after-id`,
+  `--before-time`, `--after-time` and `--topic` are gone, and MCP `before_id`… become `query`. More pages are a
+  `page.next` step with `--cursor`. Voice messages left unheard are a `missing` entry; `--mark-read` names its
+  operation on stderr. MCP `messages_list` and `messages_context` no longer add `next_steps`; the server instructions
+  carry the save hint.
 
 ### Added
 
