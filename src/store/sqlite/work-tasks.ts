@@ -397,7 +397,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
     claim: async (id, holder, until) => {
       const task = required(id)
       const at = now()
-      const won = atomic(database, () =>
+      const won = write(database, () =>
         database
           .prepare(
             "UPDATE tasks SET claimed_by = ?, claimed_until = ?, updated_at = ? " +
@@ -423,7 +423,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
     },
     release: async (id, holder) => {
       const task = required(id)
-      atomic(database, () => {
+      write(database, () => {
         const row = rowById(task)
         const { claimedBy } = claimOf(row, now())
         if (claimedBy !== null && claimedBy !== holder && holder !== "owner")
