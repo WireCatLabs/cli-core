@@ -22,8 +22,8 @@ That column comes from the provider; the `mentions` table comes from our rules.
 | `src/store/sqlite/mentions.ts` | `rebuildMentions`, list, show, confirm, reject, `newMentions`; `MENTION_QUERY` |
 | `src/cli/messenger/mention-points.ts` | where `mentions list --new` stopped, per profile |
 | `src/store/sqlite/lucene.ts` | the search fields `phone:` `email:` `url:` `domain:` `mentions:` |
-| `src/services/mentions.ts` | the service the commands call |
-| `src/cli/messenger/mentions-command.ts` | `mentions list|show|confirm|reject|rebuild` |
+| `src/services/mentions.ts` | the service the commands call; `domains` groups the account's links by site |
+| `src/cli/messenger/mentions-command.ts` | `mentions list|domains|show|confirm|reject|rebuild` |
 | `src/cli/author.ts` | who decided: the agent from `AI_AGENT`/`CLAUDECODE`, else the owner, `--as-owner` |
 
 ## Tables

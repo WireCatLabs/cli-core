@@ -61,6 +61,7 @@ tg work mentions list kind:phone
 tg work mentions list domain:google.com status:found
 tg work mentions list value:"8 900 000-00-01"
 tg work mentions show 12
+tg work mentions domains                      # sites by number of links, with chats and first and last time
 ```
 
 `list` shows the newest first: the id, when the message was sent, the kind, the value, its status and the
@@ -150,6 +151,5 @@ log, an error message or a run record. Nothing is fetched from an outside servic
 ## Not yet
 
 - Mentions in notes, Drive documents and mail.
-- Links to anything but a Telegram chat or account resolved to what they name, and a list of sites by number of
-  links.
+- Links to anything but a Telegram chat or account resolved to what they name.
 - Names of people the store does not know, and addresses.

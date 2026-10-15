@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- **`mentions domains`**: the sites this account's links point to, most linked first, with how many chats and the
+  first and last time a link was sent; dismissed links are not counted, and the query narrows the links.
 - **A `t.me` link names its chat or person**: a mention of `t.me/<username>` (or a post under it) is linked by rule to
   the stored chat with that username, else the Telegram account; `t.me/c/<id>/<post>` to the chat `-100<id>`.
   `mentions confirm <id>` links such a link too; invites and sticker links name nothing. `mentions rebuild url` links
