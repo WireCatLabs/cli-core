@@ -5,17 +5,6 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
-
-### Fixed
-
-- **A corrupt message store fails the command**: online reads skip the store only when there is none, the account is
-  not recorded yet, or another process holds it past the 5-second wait.
-
-### Removed
-
-- **Opening the store no longer deletes the old `messages.db`** or prints "Deleted the old message store" to stderr.
-
 ## 0.286.0 — 15.10.2026
 
 ### Added
@@ -25,6 +14,15 @@ shape of this file.
   section cites each fact, identifies its association and reports lookahead and output truncation
   inside `knowledge.coverage`, retained even when selecting only fact-reference fields.
   Meeting evidence keeps priority; notes, mail, alias candidates and fact evidence remain unqueried.
+
+### Fixed
+
+- **A corrupt message store fails the command**: online reads skip the store only when there is none, the account is
+  not recorded yet, or another process holds it past the 5-second wait.
+
+### Removed
+
+- **Opening the store no longer deletes the old `messages.db`** or prints "Deleted the old message store" to stderr.
 
 ## 0.285.0 — 15.10.2026
 
