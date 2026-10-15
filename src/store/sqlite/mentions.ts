@@ -4,7 +4,16 @@ import { type Decider, MENTION_KINDS, type MentionKind, siteOf } from "../../dom
 import { findNames, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
-import { knownPeople, participants, SOURCE_TYPES, SOURCES, type SourceType, sourceOf, writer } from "./mention-drain.js"
+import {
+  knownPeople,
+  participants,
+  SOURCE_TYPES,
+  SOURCES,
+  type SourceType,
+  sourceOf,
+  telegramLink,
+  writer,
+} from "./mention-drain.js"
 import type { StoreContext } from "./open.js"
 import { linkIdentityToPerson } from "./person-links.js"
 import { valueMatch } from "./phone-countries.js"
@@ -336,7 +345,20 @@ export const confirmMention = (
       throw new CliError("validation_error", "a name is confirmed to the person it means — person:<uid>")
     return decide(database, mention, "linked", { type: "person", id: owner.person }, by, now)
   }
-  throw new CliError("validation_error", "a link has nothing to be linked to yet; reject it if it is not worth keeping")
+  const named = mention.kind === "url" ? telegramLink(database)(mention.value) : undefined
+  if (named)
+    return decide(
+      database,
+      mention,
+      "linked",
+      { type: String(named.target_type), id: Number(named.target_id) },
+      by,
+      now,
+    )
+  throw new CliError(
+    "validation_error",
+    "a link is linked only to a stored Telegram chat or account it names (t.me/…); reject it if it is not worth keeping",
+  )
 }
 
 /** Not a real mention, or not worth keeping: every place the value is written, now and on later syncs. */

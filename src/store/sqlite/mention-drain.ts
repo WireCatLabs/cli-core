@@ -1,4 +1,10 @@
-import { findMentions, MENTION_KINDS, MENTION_VERSIONS, type MentionKind } from "../../domain/mentions.js"
+import {
+  findMentions,
+  MENTION_KINDS,
+  MENTION_VERSIONS,
+  type MentionKind,
+  telegramTarget,
+} from "../../domain/mentions.js"
 import { findNames, type KnownPerson, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
@@ -9,6 +15,25 @@ export const DRAIN_ON_WRITE = 500
 const METHOD = "rules"
 
 type Decision = { status: unknown; target_type: unknown; target_id: unknown; author: unknown }
+
+/** The stored chat or Telegram account a `t.me` link names, as a rules decision; nothing for any other link. */
+export const telegramLink = (database: CacheDatabase) => {
+  const chat = database.prepare(
+    "SELECT 'linked' AS status, 'chat' AS target_type, id AS target_id, 'rules' AS author FROM chats " +
+      "WHERE (? IS NOT NULL AND lower(username) = lower(?)) OR external_id = ? ORDER BY id LIMIT 1",
+  )
+  const account = database.prepare(
+    "SELECT 'linked' AS status, 'identity' AS target_type, id AS target_id, 'rules' AS author FROM identities " +
+      "WHERE provider = 'telegram' AND lower(username) = lower(?) ORDER BY id LIMIT 1",
+  )
+  return (value: string): Decision | undefined => {
+    const target = telegramTarget(value)
+    if (!target) return undefined
+    const username = "username" in target ? target.username : null
+    return (chat.get(username, username, "chatId" in target ? target.chatId : null) ??
+      (username ? account.get(username) : undefined)) as Decision | undefined
+  }
+}
 
 /**
  * What a new mention starts as when nothing was decided where it was written: dismissed if its value was
@@ -25,6 +50,7 @@ const originalOf = (database: CacheDatabase) => {
       "WHERE i.provider = ? AND i.external_id = ? AND (EXISTS (SELECT 1 FROM identity_links l WHERE l.identity_id = i.id) " +
       "OR EXISTS (SELECT 1 FROM organization_identities o WHERE o.identity_id = i.id))",
   )
+  const telegram = telegramLink(database)
   const document = database.prepare(
     "SELECT 'linked' AS status, 'document' AS target_type, id AS target_id, 'rules' AS author FROM documents " +
       "WHERE json_extract(front_matter, '$.fileId') = ? AND deleted_at IS NULL ORDER BY id LIMIT 1",
@@ -35,7 +61,9 @@ const originalOf = (database: CacheDatabase) => {
       ? identity.get(kind, value)
       : kind === "document"
         ? document.get(value)
-        : undefined) as Decision | undefined)
+        : kind === "url"
+          ? telegram(value)
+          : undefined) as Decision | undefined)
 }
 
 /**

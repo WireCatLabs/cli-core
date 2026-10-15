@@ -22,6 +22,31 @@ export const MENTION_VERSIONS: Record<MentionKind, number> = {
   "person-name": 1,
 }
 
+// Paths of t.me that are not a chat or a person: invites, stickers, proxies, the instant view.
+const TELEGRAM_SERVICE_PATHS = new Set([
+  "joinchat",
+  "addstickers",
+  "addemoji",
+  "addtheme",
+  "share",
+  "proxy",
+  "socks",
+  "iv",
+  "login",
+])
+
+/**
+ * What a Telegram link names, from its stored value: `t.me/<username>` (also `s/<username>` and a post under it) a
+ * public chat or a person, `t.me/c/<id>/<post>` a private group or channel by its id. Invites name nothing.
+ */
+export const telegramTarget = (url: string): { username: string } | { chatId: string } | undefined => {
+  const match = /^https?:\/\/(?:t\.me|telegram\.me)\/(?:s\/)?([^/?#]+)(?:\/([^/?#]+))?/i.exec(url)
+  const [, first = "", second] = match ?? []
+  if (first === "c" && second && /^\d+$/.test(second)) return { chatId: `-100${second}` }
+  if (!/^[a-z][a-z0-9_]{3,31}$/i.test(first) || TELEGRAM_SERVICE_PATHS.has(first.toLowerCase())) return undefined
+  return { username: first }
+}
+
 /** One value found in a text, before it is stored. */
 export interface FoundMention {
   kind: MentionKind

@@ -59,7 +59,10 @@ adds; older builds keep reading the store.
 
 **The original of a value.** A value starts as `dismissed` when it is dismissed anywhere, as `linked` to an
 identity when a phone or an address has one with an owner, as `linked` to a document when a document id is a
-stored Drive file (`documents.front_matter.fileId`). All three have the author `rules`.
+stored Drive file (`documents.front_matter.fileId`), as `linked` to a chat or a Telegram account when a `t.me`
+link names a stored one (`telegramTarget`, `telegramLink`: `t.me/<username>` by `chats.username` then
+`identities.username`, `t.me/c/<id>` by the chat id `-100<id>`; invites and sticker links name nothing). All have
+the author `rules`. Few chats hold a username yet: it is saved when a chat's details are read.
 
 **Decisions.** `confirm` and `reject` of a `phone`, `email`, `url` or `document` update every row with that kind
 and value. A `person-name` is decided on its own row, and with `--all-in-chat` (`Decider.inChat`) also on every row of the same value in the same chat that is still `found` or decided only by the rules. Rules-authored decisions are not kept across a
@@ -132,7 +135,7 @@ per sync and names nothing; its mentions show up on the next `--new`.
 ## Known limits
 
 - Only messages and their attachments are read: not notes, Drive documents or mail.
-- A `url` cannot be confirmed: links are not yet resolved to a stored document or chat.
+- A `url` is confirmed only to the stored Telegram chat or account it names; other links can only be rejected.
 - Names are known people only. Words under four letters are skipped, so «Оля» or «Ира» are missed.
 - Builds 0.264–0.270 delete a text's `person-name` rows when they read the text again; `mentions rebuild
   person-name` with a newer build finds them again.

@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- **A `t.me` link names its chat or person**: a mention of `t.me/<username>` (or a post under it) is linked by rule to
+  the stored chat with that username, else the Telegram account; `t.me/c/<id>/<post>` to the chat `-100<id>`.
+  `mentions confirm <id>` links such a link too; invites and sticker links name nothing. `mentions rebuild url` links
+  the ones already stored.
 - **`mentions confirm|reject <id> --all-in-chat`**: a name is decided in every undecided place of it in the same
   chat too, «Ольга» once for the whole chat; places someone already decided keep their decision.
 - **`tasks similar <task>`** (MCP `tasks_similar`, read-only, permission key `tasks.similar`): the tasks of the

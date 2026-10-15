@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { findMentions, type MentionKind } from "./mentions.js"
+import { findMentions, type MentionKind, telegramTarget } from "./mentions.js"
 
 const values = (text: string, kind: MentionKind) =>
   findMentions(text)
@@ -147,5 +147,20 @@ describe("findMentions: offsets", () => {
       "+7 900 000-00-01",
       "olga@example.com",
     ])
+  })
+})
+
+describe("what a Telegram link names", () => {
+  it.each([
+    ["https://t.me/book_club", { username: "book_club" }],
+    ["https://t.me/s/book_club", { username: "book_club" }],
+    ["https://t.me/book_club/42", { username: "book_club" }],
+    ["https://t.me/c/1234567890/5", { chatId: "-1001234567890" }],
+    ["https://t.me/joinchat/AbCdEf", undefined],
+    ["https://t.me/+AbCdEf", undefined],
+    ["https://t.me/addstickers/pack", undefined],
+    ["https://example.com/book_club", undefined],
+  ])("%s", (url, target) => {
+    expect(telegramTarget(url)).toEqual(target)
   })
 })
