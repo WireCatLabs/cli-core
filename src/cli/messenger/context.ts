@@ -54,6 +54,8 @@ export interface Messenger extends ServiceMessenger {
   pollCloseSeconds?: readonly [min: number, max: number]
   /** Whether `polls voters` lists who voted for what; no when unset. */
   pollVoters?: boolean
+  /** Whether the messenger has forum topics, so the MCP server offers the `topics_*` tools; yes when unset. */
+  topics?: boolean
   /** Whether `topics show` reads one forum topic; no when unset. */
   topicShow?: boolean
   /** Whether the messenger reads HTML in `--html`; no when unset. */

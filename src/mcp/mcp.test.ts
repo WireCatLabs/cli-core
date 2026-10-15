@@ -2237,6 +2237,22 @@ describe("the MCP server", () => {
   })
 })
 
+describe("a messenger without forum topics", () => {
+  it("is offered no topics tool", () => {
+    const messenger: Messenger = {
+      app,
+      provider: "fixture",
+      chatArgument: "chat id",
+      resolveSettings: settingsFor(app).resolveSettings,
+      connect: async () => scripted({}).connect(),
+    }
+    const topicTools = (one: Messenger) =>
+      Object.keys(personalMcpTools(one)).filter((name) => name.startsWith("topics_"))
+    expect(topicTools(messenger)).not.toEqual([])
+    expect(topicTools({ ...messenger, topics: false })).toEqual([])
+  })
+})
+
 describe("the photo tool", () => {
   const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])
   const holding = (...files: { kind: string; size?: number; body?: Uint8Array }[]) =>
