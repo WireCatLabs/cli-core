@@ -232,6 +232,23 @@ describe("search mail over the mail tables", () => {
     await expect(searchStore(store, TG, { text: "is:unread", limit: 5 })).rejects.toThrow("is: is a mail field")
   })
 
+  it("finds a letter by its whole tracking link and by a quoted part of a link", async () => {
+    const { store, accountId } = await seeded()
+    await store.mail.saveThread({
+      accountId,
+      externalId: "thread-3",
+      now: at(10),
+      emails: [email("<news@example.com>", { bodyText: "Read https://news.example.com/click?id=1&utm_source=mail" })],
+    })
+    await store.rebuildMentions({ kinds: ["url"] })
+
+    expect(await found(store, 'url:"https://news.example.com/click?id=1"')).toEqual(["<news@example.com>"])
+    expect(await found(store, 'link:"/click?id=1"')).toEqual(["<news@example.com>"])
+    expect(await found(store, 'link:"budget"')).toEqual(["<two@example.com>"])
+    expect(await found(store, "domain:example.com")).toHaveLength(2)
+    await expect(found(store, "link:click?id=1")).rejects.toThrow(/invalid-syntax/)
+  })
+
   it("refuses messenger-only fields", async () => {
     const { store } = await seeded()
     await expect(search(store, "kind:group")).rejects.toThrow("mail has no kind")

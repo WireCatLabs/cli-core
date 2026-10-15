@@ -21,7 +21,7 @@ That column comes from the provider; the `mentions` table comes from our rules.
 | `src/store/sqlite/mention-drain.ts` | the writer and the queue drain |
 | `src/store/sqlite/mentions.ts` | `rebuildMentions`, list, show, confirm, reject, `newMentions`; `MENTION_QUERY` |
 | `src/cli/messenger/mention-points.ts` | where `mentions list --new` stopped, per profile |
-| `src/store/sqlite/lucene.ts` | the search fields `phone:` `email:` `url:` `domain:` `mentions:` |
+| `src/store/sqlite/lucene.ts` | the search fields `phone:` `email:` `domain:` `mentions:`; `url:` and `link:` in `mention-links.ts` |
 | `src/services/mentions.ts` | the service the commands call; `domains` groups the account's links by site |
 | `src/cli/messenger/mentions-command.ts` | `mentions list|domains|show|confirm|reject|rebuild` |
 | `src/cli/author.ts` | who decided: the agent from `AI_AGENT`/`CLAUDECODE`, else the owner, `--as-owner` |
@@ -72,7 +72,7 @@ the author `rules`. Few chats hold a username yet: it is saved when a chat's det
 **Links in mail.** A link in an email with a query string or a long opaque token (24+ of `[A-Za-z0-9_-]`) is a
 tracking redirect nearly always: one letter each, hundreds of thousands per mailbox. The writer keeps one row per
 letter and origin, with the origin as its value (`oneTrackedLinkPerSite`); offsets point at the first such link, so
-`written` shows it as sent. Other texts keep every link.
+`written` shows it as sent. Other texts keep every link. Search reads the letter's text for the rest (below).
 
 **Decisions.** `confirm` and `reject` of a `phone`, `email`, `url` or `document` update every row with that kind
 and value. A `person-name` is decided on its own row, and with `--all-in-chat` (`Decider.inChat`) also on every row of the same value in the same chat that is still `found` or decided only by the rules. Rules-authored decisions are not kept across a
@@ -115,6 +115,12 @@ them.
 linked to that person, or a phone or an address whose identity is theirs; `organization:<id>` goes through
 `organization_identities`; `document:<id>` through the target. Another type is `query.invalid-reference`. A
 mention in an attachment finds its message. Mail search takes the same fields (store version 16).
+
+`url:` and `link:` compile in `mention-links.ts`. `link:` matches a part of a stored link with `LIKE` (`%`, `_`
+escaped), so only ASCII letters ignore case; the value must be quoted, since `?`, `/` and `=` are query syntax.
+In mail a tracking link is stored as its origin (`trackedOrigin`), so a letter with a row of that origin is also
+matched by its body: `instr` with the link as typed or normalized for `url:`, `LIKE` with the part for `link:`.
+That check reads the whole body, so `link:` may find a part outside a link in a letter that has a tracking link.
 
 ## Review after a sync
 

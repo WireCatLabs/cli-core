@@ -23,11 +23,15 @@ tg work search messages phone:"8 900 000-00-01"     # any spelling: +7…, 8…,
 tg work search messages email:"ana@example.com"     # quoted: @ is an operator in the query language
 tg work search messages domain:google.com           # docs.google.com, drive.google.com, google.com
 tg work search messages url:"https://example.com/a" # the link without utm_*, fbclid and the #part
+tg work search messages link:"/price"              # any link that contains this text
 tg work search messages mentions:"person:12"        # messages that mention person 12 by name, phone or address
 ```
 
 `mentions:` also takes `organization:<id>` and `document:<id>`. It finds only mentions somebody linked (see
 below). A phone or a link in a file's text or in a voice note's transcript finds the message the file came with.
+
+Put a link or a part of one in quotes: `?`, `/` and `=` mean something else in a query. `link:` ignores the case
+of Latin letters only.
 
 The fields work with the rest of the [query language](search/query-language.md):
 `domain:google.com AND date>=2026-09-01`.
@@ -152,6 +156,7 @@ log, an error message or a run record. Nothing is fetched from an outside servic
 
 - Mentions in notes, Drive documents and mail are found, and `phone:` and the other fields find an email in memo's
   mail search, but they are not listed by `mentions list`: that is memo's to list, and it has no command yet. In
-  mail, a tracking link (a query string or a long code in its path) is kept once per letter as its site.
+  mail, a tracking link (a query string or a long code in its path) is kept once per letter as its site; `url:` and
+  `link:` still find the letter by that link, from its text.
 - Links to anything but a Telegram chat or account resolved to what they name.
 - Names of people the store does not know, and addresses.

@@ -20,6 +20,7 @@ import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import type { ScoredHit } from "../store.js"
 import { emailHitsByPk } from "./emails.js"
+import { linkMatch } from "./mention-links.js"
 import type { StoreContext } from "./open.js"
 import { valueMatch } from "./phone-countries.js"
 import { hitsByPk } from "./search.js"
@@ -390,7 +391,9 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       const target = linked[type ?? ""]
       if (target === undefined) searchError("query.invalid-reference", node.span)
       else fragment = mentioned(`mn.status = 'linked' AND (${target[0]})`, target[1])
-    } else if (field === "phone" || field === "email" || field === "url" || field === "domain") {
+    } else if (field === "url" || field === "link")
+      fragment = { ...linkMatch(field, value, mail, mentioned), exact: true }
+    else if (field === "phone" || field === "email" || field === "domain") {
       const match = field === "domain" ? undefined : valueMatch(database, value)
       fragment =
         match === undefined

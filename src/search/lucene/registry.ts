@@ -371,11 +371,16 @@ export const QUERY_FIELDS: readonly MessageField[] = [
       ["email", 'email:"ana@example.com"', "an address found in the text, lower-cased; quoted, since @ is an operator"],
       ["url", 'url:"https://example.com/a"', "a link found in the text, without utm_*, fbclid and the fragment"],
       ["domain", "domain:google.com", "the site of a link or an address in the text; docs.google.com means google.com"],
+      [
+        "link",
+        'link:"click?id=1"',
+        "a part of a link, quoted; Latin letters in any case; in mail also the body of a letter with a tracking link",
+      ],
     ] as const
   ).map(([name, example, normalization]) => ({
     name,
     example,
-    index: "mentions (kind, value) / (domain); messages only, not mail yet",
+    index: "mentions (kind, value) / (domain); in mail a tracking link is kept as its site",
     aliases: [],
     type: "kw" as const,
     operators: terms,
@@ -386,7 +391,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
   {
     name: "mentions",
     example: 'mentions:"person:12"',
-    index: "mentions (target_type, target_id); messages only, not mail yet",
+    index: "mentions (target_type, target_id)",
     aliases: [],
     type: "kw" as const,
     operators: terms,

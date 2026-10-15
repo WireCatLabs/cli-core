@@ -211,18 +211,23 @@ const OPAQUE = /[A-Za-z0-9_-]{24,}/
 export const oneTrackedLinkPerSite = <T extends { kind: MentionKind; value: string }>(found: T[]): T[] => {
   const sites = new Set<string>()
   return found.flatMap((one) => {
-    if (one.kind !== "url") return [one]
-    let url: URL
-    try {
-      url = new URL(one.value)
-    } catch {
-      return [one]
-    }
-    if (!url.search && !OPAQUE.test(url.pathname)) return [one]
-    if (sites.has(url.origin)) return []
-    sites.add(url.origin)
-    return [{ ...one, value: url.origin }]
+    const origin = one.kind === "url" ? trackedOrigin(one.value) : undefined
+    if (origin === undefined) return [one]
+    if (sites.has(origin)) return []
+    sites.add(origin)
+    return [{ ...one, value: origin }]
   })
+}
+
+/** The origin mail stores a stored link's value as, when it keeps only one row per letter and site for it. */
+export const trackedOrigin = (value: string): string | undefined => {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return undefined
+  }
+  return url.search || OPAQUE.test(url.pathname) ? url.origin : undefined
 }
 
 /** A value as a person types it, in the form mentions store: `8 900 000-00-01` → `+79000000001`. */
