@@ -71,9 +71,11 @@ land() {
 }
 
 # A session that merges after the version was dated, but before it was published, adds Unreleased above it.
+# --land folds on a fresh main through its own pull request, and folds again once if main moves under it.
 folded=""
 # cli-dev is pinned rather than taken from the dependencies: the peer range accepts only an older cli-base.
-published || folded=$(npx -y -p @wirecat/cli-base@0.34.0 cli-dev changelog fold --version "$version")
+published || folded=$(npx -y -p @wirecat/cli-base@0.36.0 cli-dev changelog fold --land --version "$version")
+[ -z "$folded" ] || echo "$folded"
 
 # Two sessions preparing the same number is normal; the second takes the next free one (2026-09-29).
 latest=$(npm view "$package" version --prefer-online 2>/dev/null || true)
@@ -92,13 +94,8 @@ if [ "$next" != "$version" ]; then
     if (taken) swap("CHANGELOG.md", "\n## Unreleased\n", `\n## Unreleased\n\n## ${n} — ${today}\n`)
     else swap("CHANGELOG.md", `\n## ${o} — `, `\n## ${n} — `)' "$version" "$next" "$taken"
   body="bin/release: $why. Only the number changes: package.json and the CHANGELOG heading."
-  [ -z "$folded" ] || body="bin/release: $why. The number changes, and Unreleased is folded into its section."
   land "release/$next" "chore: release $next" "$body"
   version=$next
-elif [ -n "$folded" ]; then
-  echo "$folded"
-  land "release/fold-$version" "chore(release): fold Unreleased into $version" \
-    "bin/release: $version is dated but not on npm, and Unreleased sat above it. Only CHANGELOG.md changes."
 fi
 if published; then
   echo "$version is already on npm — raise the version first" >&2
