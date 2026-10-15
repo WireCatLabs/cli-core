@@ -14,6 +14,13 @@ shape of this file.
   a command declares. A field the entity lacks is refused with the same `validation_error` as a cli-core entity.
   Fields are a list of names or an object schema's `entries`; a name cli-core already uses is refused.
 
+### Fixed
+
+- **A label stored with capitals or a slash is found again.** `addTags` looked labels up by their folded name
+  only, while a label is stored as given, so the second `addTags` of `Clients/Acme` saw no label, tried to create
+  one and was refused as too similar to itself. memo's mail rules hit this with Gmail label names and stopped the
+  whole mail sync.
+
 ## 0.290.0 — 15.10.2026
 
 ### Fixed
