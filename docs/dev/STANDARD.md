@@ -702,9 +702,10 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 
 **Every command whose primary result is a search lives under `search`, then its resource**
 (owner, 2026-10-08), as statistics live under `stats`: `search all`, `search messages`,
-`search mail`, `search notes`, `search conversations`, `search topics`; for the bot account
-`bot search messages`. `search all` covers every resource the store holds and is the one an agent
-should reach for first. A resource's own `search` leaf (`messages search`) does not exist beside it.
+`search notes`, `search conversations`, `search topics`; for the bot account `bot search messages`.
+`search all` covers messages and notes, and a meeting account `--source` names, and is the one an agent
+should reach for first. Mail is the knowledge tool's: a source tool has no `search mail`, and `search all`
+there never reads mail (owner, 2026-10-14; [TOOL-BOUNDARIES.md](TOOL-BOUNDARIES.md)). A resource's own `search` leaf (`messages search`) does not exist beside it.
 `searches` stays: it is the owner's saved searches, a resource, not a search.
 
 ### Where a search word is looked for
@@ -924,7 +925,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--confirm-send` |  | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `bot mcp`, `bot mcp config`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
 | `--contact` | `<person>` | the person to tag or untag: their id, @username or name, as the local store knows them |  | `tags add`, `tags remove` |
 | `--contacts-only` |  | match only contacts |  | `replies edit` |
-| `--context` | `<n>` | messages before and after each hit |  | `search mail`, `search messages`, `searches create` |
+| `--context` | `<n>` | messages before and after each hit |  | `search messages`, `searches create` |
 | `--correct` | `<n>` | with --quiz: the right answer's position, from 1 |  | `polls create` (tg-only) |
 | `--counters` | `<names>` | the counter fields: views,reactions,comments |  | `stats messages counters refresh`, `stats messages counters show` |
 | `--cursor` | `<cursor>` | continue from the extraction or ranking-evidence cursor |  | `attachments extract`, `chats media` (planned), `contacts timeline`, `messages comments` (tg-only), `messages evidence`, `messages list`, `stats contacts evidence`, `stats messages evidence` |
@@ -947,7 +948,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--estimate` |  | only say what the fetch would cost, from this machine's copy; nothing is sent. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `messages sync` |
 | `--events` |  | also print edits, deletions and reactions; every line then names its event. **watch updates use this flag independently of the group event --type filter** |  | `bot watch`, `watch` |
 | `--every` | `<duration>` | repeat at this interval: 30m, 2h, 1d |  | `schedule agent`, `schedule command` |
-| `--exact` |  | bare words and quotes match their exact form only, as exact:word does; text: still matches every form |  | `search all`, `search mail`, `search messages`, `search notes`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
+| `--exact` |  | bare words and quotes match their exact form only, as exact:word does; text: still matches every form |  | `search all`, `search messages`, `search notes`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
 | `--exclude-chat` | `<chat>` | never show this chat in the folder; repeat it for more |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--expire-time` | `<time>` | it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now |  | `chats link create` (tg-only), `chats link update` (tg-only) |
 | `--extract` |  | extract text from files mapped by this download |  | `messages download` |
@@ -983,7 +984,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch`, `messages sync` |
 | `--last-name` | `<name>` | your last name |  | `account update` |
 | `--left` |  | only the chats this account has left |  | `store clear` |
-| `--limit` | `<n>` | how many: rows to show, or messages one run fetches. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `attachments extract`, `attachments list`, `bot chats members list` (max-only), `bot contacts show`, `bot messages between`, `bot messages list`, `bot search messages`, `bot store fetch`, `calls list` (planned), `chats documents list` (planned), `chats link list` (tg-only), `chats list`, `chats media` (planned), `chats members list`, `chats requests list`, `contacts context`, `contacts list`, `contacts timeline`, `conversations list`, `conversations related`, `images embed`, `inbox`, `mentions domains` (planned), `mentions list` (planned), `messages comments` (tg-only), `messages evidence`, `messages list`, `messages sync`, `metadata refresh`, `polls voters` (tg-only), `runs list`, `runs search`, `search all`, `search conversations`, `search mail`, `search messages`, `search notes`, `searches create`, `searches history`, `sends list`, `stats chats newcomers`, `stats chats retention`, `stats contacts evidence`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages evidence`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `store gaps repair`, `store jobs list`, `tags auto`, `tasks duplicates`, `tasks list`, `tasks similar` |
+| `--limit` | `<n>` | how many: rows to show, or messages one run fetches. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `attachments extract`, `attachments list`, `bot chats members list` (max-only), `bot contacts show`, `bot messages between`, `bot messages list`, `bot search messages`, `bot store fetch`, `calls list` (planned), `chats documents list` (planned), `chats link list` (tg-only), `chats list`, `chats media` (planned), `chats members list`, `chats requests list`, `contacts context`, `contacts list`, `contacts timeline`, `conversations list`, `conversations related`, `images embed`, `inbox`, `mentions domains` (planned), `mentions list` (planned), `messages comments` (tg-only), `messages evidence`, `messages list`, `messages sync`, `metadata refresh`, `polls voters` (tg-only), `runs list`, `runs search`, `search all`, `search conversations`, `search messages`, `search notes`, `searches create`, `searches history`, `sends list`, `stats chats newcomers`, `stats chats retention`, `stats contacts evidence`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages evidence`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `store gaps repair`, `store jobs list`, `tags auto`, `tasks duplicates`, `tasks list`, `tasks similar` |
 | `--lines` | `<n>` | how many lines | `50` | `server logs` |
 | `--link` | `<link>` | an invite link: only the requests made through it. **accept and decline take it with --all — one link, worded for each command (Help text rule 4)** |  | `chats requests accept`, `chats requests decline` |
 | `--local` |  | use the model on this machine, never the messenger |  | `messages transcribe` (tg-only) |
@@ -1016,7 +1017,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--model` | `<id>` | which downloaded speech model hears them; `models audio list` shows them. **max's own copy is worded differently until T6 moves the command onto the shared one (e13); replies edit uses this option for legacy template mode: fill-only or may-reword; use ai blocks instead** |  | `conversations build`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations related`, `conversations status`, `inbox`, `messages list`, `messages transcribe`, `replies edit`, `review`, `search conversations` |
 | `--multiple` |  | people may pick several answers |  | `polls create` |
 | `--new` |  | what arrived since the last check, each message once — for scheduled runs. **tasks add instead opens the task although tasks that may be the same job were listed** |  | `inbox`, `mentions list` (planned), `review`, `tasks add` |
-| `--newest` |  | newest first instead of best first |  | `bot search messages`, `search mail`, `search messages`, `searches create` |
+| `--newest` |  | newest first instead of best first |  | `bot search messages`, `search messages`, `searches create` |
 | `--no-approval` |  | anyone with it joins at once |  | `chats link update` (tg-only) |
 | `--no-as-reply` |  | send without linking to the matched message |  | `replies edit` |
 | `--no-backup` |  | delete the store without backing it up first |  | `store reset` |
@@ -1042,7 +1043,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--older-than` | `<duration>` | minimum age of a question without an observed qualifying answer |  | `stats messages unanswered` |
 | `--once` | `<when>` | one run: a duration from now or an ISO 8601 time |  | `schedule agent`, `schedule command` |
 | `--online` |  | also log in once, read one chat and start the MCP server; sends nothing. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `doctor` |
-| `--only` | `<resources>` | only these resources, separated by commas: messages, mail, notes; meetings when --source names a meeting account |  | `search all` |
+| `--only` | `<resources>` | only these resources, separated by commas: messages, notes; meetings when --source names a meeting account |  | `search all` |
 | `--only-admins-add` | `<on\|off>` | only admins may add members |  | `chats update` |
 | `--only-admins-call` | `<on\|off>` | only admins may start a call |  | `chats update` (max-only) |
 | `--only-missing` |  | only chats with no metadata yet; without --chat, every stored group/channel |  | `metadata refresh` |
@@ -1054,7 +1055,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--output` |  | where to write: a directory for `messages download`, a file for `store export`. **`store export` and other commands use --output for a file; `messages download` takes --output-dir — e10** | `.` | `doctor report create`, `stats charts`, `store decrypt`, `store export` |
 | `--output-dir` | `<dir>` | the folder to write into, created if missing. **`attachments extract` takes it only with --download, and has no default there, so extraction never fills the working folder unasked** | `.` | `attachments extract`, `messages download` |
 | `--outside` | `<hours>` | answer outside this 24-hour window, such as 09:00-19:00 |  | `replies edit` |
-| `--page` | `<n>` | which page, starting at 1 |  | `attachments list`, `attachments show`, `bot search messages`, `chats documents list` (planned), `chats list`, `chats members list`, `chats requests list`, `contacts list`, `mentions domains` (planned), `mentions list` (planned), `runs list`, `runs search`, `search all`, `search mail`, `search messages`, `search notes`, `searches history`, `sends list`, `store jobs list` |
+| `--page` | `<n>` | which page, starting at 1 |  | `attachments list`, `attachments show`, `bot search messages`, `chats documents list` (planned), `chats list`, `chats members list`, `chats requests list`, `contacts list`, `mentions domains` (planned), `mentions list` (planned), `runs list`, `runs search`, `search all`, `search messages`, `search notes`, `searches history`, `sends list`, `store jobs list` |
 | `--page-size` | `<n>` | how many items one request to the messenger asks for; the messenger's own if not given. **the default is each messenger's own page: 30 on MAX, 100 on Telegram** |  | `bot store fetch`, `messages sync`, `store gaps repair` |
 | `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `bot store fetch`, `messages download`, `messages sync`, `store gaps repair` |
 | `--payload` | `<text>` | the start parameter the bot reads; a link's own ?start= when not given |  | `chats start` (planned) |
@@ -1107,7 +1108,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--skip` | `<which>` | a folder leaves out chats that are muted, read or archived |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--sms` |  | phone login: ask Telegram to send the code by SMS, not to the app; Telegram may still refuse |  | `session start` (tg-only) |
 | `--solution` | `<text>` | with --quiz: what people see once they answered |  | `polls create` (tg-only) |
-| `--source` | `<accounts>` | which accounts: personal, bots or all, a provider, or a list of provider:account as a hit shows it, a provider, a kind (messages, mail, notes, documents, meetings) or group:<name> — the same as in: in the query. **each search reads the accounts of its own kinds and names the rest in skipped — source-everywhere-plan.md** |  | `search all` (planned), `search conversations`, `search mail` (planned), `search messages`, `search notes` (planned), `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `tags remove` |
+| `--source` | `<accounts>` | which accounts: personal, bots or all, a provider, or a list of provider:account as a hit shows it, a provider, a kind (messages, mail, notes, documents, meetings) or group:<name> — the same as in: in the query. **each search reads the accounts of its own kinds and names the rest in skipped — source-everywhere-plan.md** |  | `search all` (planned), `search conversations`, `search messages`, `search notes` (planned), `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `tags remove` |
 | `--spoiler` |  | hide the --photo or video behind a spoiler until tapped |  | `messages send` (tg-only) |
 | `--start` | `<param>` | the start parameter the app reads |  | `chats app` (planned) |
 | `--status` | `<status>` | filter diagnostic runs by outcome |  | `runs search` |
@@ -1126,7 +1127,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--thread-within` | `<duration>` | messages within this long either side of the hit (default: 1d) |  | `messages context`, `search messages` |
 | `--threads` | `<n>` | threads in all | `min(8, cores)` | `conversations embed` |
 | `--timeout` | `<duration>` | give up on the whole command after this — 30s, 2m, 500ms |  | every command |
-| `--timezone` | `<zone>` | the IANA timezone for calendar date boundaries. **replies edit uses this option for the IANA timezone for the working window** | `system IANA timezone` | `replies edit`, `search all`, `search conversations`, `search mail`, `search messages`, `search notes`, `searches create`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
+| `--timezone` | `<zone>` | the IANA timezone for calendar date boundaries. **replies edit uses this option for the IANA timezone for the working window** | `system IANA timezone` | `replies edit`, `search all`, `search conversations`, `search messages`, `search notes`, `searches create`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
 | `--title` | `<title>` | the new name — of a chat, a folder or a forum topic. **tasks add and tasks plan use this for the action and its object, in one line** |  | `bot chats admins add`, `chats folders update`, `chats update`, `tasks add`, `tasks plan`, `topics edit` (tg-only) |
 | `--to` | `<chat>` | the chat to forward it to: an id, or part of a chat name. **the sentence says how to name a chat the messenger's way, so it differs on purpose (Help text rule 4)** |  | `messages forward`, `store export` |
 | `--topic` | `<id>` | address this forum topic: send or forward to it, read only it, or mark only it read. **Telegram group forums only; MAX explicitly refuses this option before sending** |  | `chats mark-read`, `messages forward` (tg-only), `messages send`, `polls create` |
@@ -1262,7 +1263,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 8. **A search says which accounts it read** ([source-everywhere-plan.md](source-everywhere-plan.md)).
    Every stored thing has a kind (`messages`, `mail`, `notes`, `documents`, `meetings`), a provider
    and an account; `--source` takes `provider:account`, a bare provider, a bare kind or
-   `group:<name>`, and a positive `in:` a bare provider or kind. `search all`, `search mail` and `search notes` answer
+   `group:<name>`, and a positive `in:` a bare provider or kind. `search all`, memo's `search mail` and `search notes` answer
    `accounts: [{ resource, provider, account }]` beside `searched` and `skipped`; `search messages`
    answers the same list as `coverage.accounts`. A `--source` entry a search cannot use is named in
    `meta.issues` as `{ code, source }`, its reason on stderr. A hit's `provider:account` is a valid

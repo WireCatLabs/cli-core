@@ -205,7 +205,7 @@ export interface SkippedSource {
 
 const READS: Record<Kind, string> = {
   messages: "messenger messages — search messages reads them",
-  mail: "a mailbox — search mail reads it",
+  mail: "a mailbox — memo search mail reads it",
   notes: "notes — search notes reads them",
   documents: "documents — search notes reads them",
   meetings: "meetings — search all reads them",

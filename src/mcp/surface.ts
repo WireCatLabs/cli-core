@@ -3,6 +3,7 @@ import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { answerSchema } from "../cli/envelope.js"
+import { movedPath, movedPointer } from "../cli/moved.js"
 import type { AppErrors } from "../cli/reasons.js"
 import { agentArguments } from "./text.js"
 import {
@@ -149,6 +150,9 @@ export const registerCommands = (
         const command = byNormal.get(normal(asked))
         const one = command === undefined ? undefined : commands[command]
         if (command === undefined || !one) {
+          const moved = movedPath(normal(asked).split(" "), (path) => byNormal.has(path))
+          if (moved !== undefined)
+            throw new CliError("validation_error", `no command "${asked}" here — ${movedPointer(moved)}`)
           const near = nearest(commands, asked)
           throw new CliError(
             "validation_error",

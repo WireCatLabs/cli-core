@@ -103,7 +103,6 @@ const json = (result: { stdout: string[] }) => JSON.parse(result.stdout[0] ?? "n
 describe("search answers", () => {
   it.each([
     [["search", "messages", "chapter"], "message.hit"],
-    [["search", "mail", "chapter"], "message.hit"],
     [["search", "notes", "chapter"], "note.hit"],
     [["search", "all", "chapter"], "hit"],
   ] as const)("%j answers the %s list envelope", async (argv, entity) => {

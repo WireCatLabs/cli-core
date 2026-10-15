@@ -14,6 +14,10 @@ import { type ListBody, listOf } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { archiveSummary } from "./archive-summary.js"
 
+/** What a source tool's `search all` reads: never mail, which is memo's (docs/dev/TOOL-BOUNDARIES.md). */
+export const SOURCE_SEARCHED = ["messages", "notes", "meetings"] as const
+export type SourceSearched = (typeof SOURCE_SEARCHED)[number]
+
 export type MessageHitItem = InferOutput<(typeof ENTITIES)["message.hit"]>
 export type NoteHitItem = InferOutput<(typeof ENTITIES)["note.hit"]>
 export type HitItem = InferOutput<(typeof ENTITIES)["hit"]>

@@ -12,9 +12,9 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 см. «Формы слов»; `--exact` делает полем по умолчанию `exact`).
 Это ограниченный профиль языка, а не полный Lucene search engine.
 
-Этот профиль — для всех команд `search`: `search all` (сообщения, почта и заметки сразу — с неё
-начинать, если неизвестно, где написано), `search messages` (только сообщения мессенджеров), `search mail`
-(только почта, импортированная `memo sync --mail`, во всех почтовых аккаунтах сразу, а `--source email:<адрес>` —
+Этот профиль — для всех команд `search`: `search all` (в tg и max — сообщения и заметки сразу, без почты;
+в memo — ещё и почта; с неё начинать, если неизвестно, где написано), `search messages` (только сообщения
+мессенджеров), `memo search mail` (только почта, у tg и max этой команды нет; импортированная `memo sync --mail`, во всех почтовых аккаунтах сразу, а `--source email:<адрес>` —
 в одном; `chat:` и `--chat` там — тред по id или теме, полей `kind` и
 `topic` нет; только у почты — `to:`, `cc:`, `bcc:` (человек, как в `from:`), `subject:` (слова темы) и
 `mailbox:` (папка или ярлык по id или имени; `label:` — то же самое), `is:unread`, `is:read` и `is:starred`
@@ -411,7 +411,7 @@ MAX — нет, там ищите по расширению (`filename:*.pdf`). 
 `--timezone`; `date:7d` — с момента 7 дней назад (также `30m`, `2h`); `date>=7d` и
 `date:[30d TO 7d}` — то же в сравнении и диапазоне. Отсчёт идёт от момента запроса.
 
-Default scope `search messages` — активный account; `search mail` читает все почтовые аккаунты, `search notes` —
+Default scope `search messages` — активный account; `memo search mail` читает все почтовые аккаунты, `search notes` —
 все папки заметок. `in:` с положительным условием или `--source` явно выбирает
 accounts провайдера/класса, включая `all`; `in:` берёт и псевдоним провайдера (`in:tg`) и вид (`in:messages`,
 `in:mail`), как голое слово `--source`. Отрицательный `in:` не расширяет scope.
@@ -428,7 +428,7 @@ accounts провайдера/класса, включая `all`; `in:` берё
 записи оно отмечает в хранилище (`store_settings`, ключ `profiles`), какой аккаунт у профиля.
 Группа хранится в хранилище для всех приложений: `config set account_groups.work tg:tg2,max:Alice,email:me@work.example`,
 `config unset account_groups.work`, видна в `config show`. Группа не включает другие группы.
-Из списка `search messages` и `search conversations` берут аккаунты сообщений, `search mail` — только почтовые
+Из списка `search messages` и `search conversations` берут аккаунты сообщений, `memo search mail` — только почтовые
 ящики, `search notes` — `notes:internal` и папки заметок одним запросом (страницы `--page` идут по одному списку);
 остальные элементы названы в ответе в `skipped: [{ source, reason }]`. Если подходящих не осталось — ошибка. Список и положительный `in:` вместе
 отвергаются. Неизвестная группа или аккаунт — ошибка со списком того, что есть.
@@ -437,7 +437,7 @@ accounts провайдера/класса, включая `all`; `in:` берё
 список не называет, не читается и есть в `skipped` (`--source names no notes account`), а элемент, чей вид `--only`
 оставил за бортом, — тоже в `skipped`. Встречи читаются, только если список называет аккаунт встреч (`zoom:<id>`,
 `zoom`, `meetings`; `all` — все аккаунты и встречи), и только один; голое `zoom` или `meetings` берёт тот аккаунт, где
-встречи есть. Без такого элемента `skipped` говорит, что встречи не искались. Ответы `search all`, `search mail` и
+встречи есть. Без такого элемента `skipped` говорит, что встречи не искались. Ответы `search all`, `memo search mail` и
 `search notes` называют каждый прочитанный аккаунт: `accounts: [{ resource, provider, account }]`; в обычном режиме —
 строка `searched: …` в stderr.
 

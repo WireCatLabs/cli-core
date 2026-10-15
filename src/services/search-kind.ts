@@ -64,11 +64,11 @@ export const accountsOfKind = (
   listed = false,
 ): AccountKey[] => {
   if (mailAccount !== undefined && kind !== "mail")
-    throw new CliError("validation_error", "--account names a mail account — search mail reads it")
+    throw new CliError("validation_error", "--account names a mail account — memo search mail reads it")
   if (kind === undefined) return chosen
   if (kind === "messages") {
     if (explicit === MAIL)
-      throw new CliError("validation_error", `mail is searched with \`${command} search mail\`, not search messages`)
+      throw new CliError("validation_error", "mail is searched with `memo search mail`, not search messages")
     return chosen.filter(({ provider }) => kindOf(provider) === "messages")
   }
   if (explicit !== undefined && explicit !== MAIL && explicit !== "all")

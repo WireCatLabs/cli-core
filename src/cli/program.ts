@@ -22,6 +22,7 @@ import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "
 import { isCliFailure, isCommanderFailure } from "./failures.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
+import { movedPath, movedPointer } from "./moved.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile } from "./profile.js"
 import { failureContext } from "./reasons.js"
@@ -271,6 +272,14 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
   }
 
+  const words = rest.filter((word) => !word.startsWith("-"))
+  const moved = movedPath(words, (path) => mountedOrArgument(program, path))
+  if (moved !== undefined) {
+    const failure = new CliError("validation_error", `\`${command} ${moved}\` is not here — ${movedPointer(moved)}`)
+    const settled = await settleFailure(failure, { definition, program, rest, profile, options })
+    return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
+  }
+
   try {
     await control.race(() => program.parseAsync(rest, { from: "user" }))
     const code = process.exitCode === undefined ? 0 : Number(process.exitCode)
@@ -417,6 +426,15 @@ const keepFailure = async (
       throw failure
     },
   ).catch(() => {})
+}
+
+/** Mounted, or reached through a command that takes no subcommand, where the rest of the path is its argument. */
+const mountedOrArgument = (program: Command, path: string): boolean => {
+  const words = path.split(" ")
+  return words.some((_, at) => {
+    const command = commandAt(program, words.slice(0, at + 1).join(" "))
+    return command !== undefined && (at === words.length - 1 || command.commands.length === 0)
+  })
 }
 
 /** `messages list` from `messages list 111 --limit 5`: the words that name commands, up to the first that does not. */

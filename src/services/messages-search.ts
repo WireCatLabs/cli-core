@@ -168,7 +168,11 @@ export const prepareLucene = async (
   const chatLookup = scopeAccounts.some(({ provider }) => provider === MAIL) ? withMailThreads(store) : store
   const mailField = leaves.find(({ field }) => MAIL_FIELDS.has(field))
   if (mailField && !scopeAccounts.some(({ provider }) => provider === MAIL))
-    searchError("query.unsupported-field", mailField.span, `${mailField.field}: is a mail field — search mail reads it`)
+    searchError(
+      "query.unsupported-field",
+      mailField.span,
+      `${mailField.field}: is a mail field — memo search mail reads it`,
+    )
   const globalChat =
     request.chat === undefined ? undefined : await chatAmong(messenger, chatLookup, scopeAccounts, request.chat)
   const resolve = async (node: QueryNode): Promise<ResolvedNode> => {

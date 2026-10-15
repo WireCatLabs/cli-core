@@ -190,7 +190,6 @@ it("tells in each search's help what transcript:, content: and filename: narrow 
   expect(messages).toContain("transcript:")
   expect(messages).toContain("chat search messages 'content:invoice'")
   expect(messages).toContain("each hit's reference is ref")
-  expect(await help("mail")).toContain("each email's reference is ref")
   const all = await help("all")
   expect(all).toContain("transcript: narrows a message search to voice transcripts")
   expect(all).toContain("each result's reference is ref")

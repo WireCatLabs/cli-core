@@ -59,6 +59,14 @@ shape of this file.
 
 - **`nativeTerms` reads typed AND terms beside a list's defaults**; it refused them as a nested group. An MCP list
   whose provider filters by itself describes its `query` as terms joined by AND, no longer offering OR and ranges.
+- **tg and max no longer search mail** (owner, 2026-10-14): `searchCommand` mounts no `search mail`, the MCP
+  server offers no `search_mail`, and `search all` (CLI and MCP) reads messages and notes — and a meeting account
+  `--source` names — but never mail; `--only mail` is refused. memo keeps `memo search mail` and its own `search all`
+  with mail. `tg search mail …` and an MCP call of `search mail` answer, in place of "unknown command":
+  ``mail is memo's: install @wirecat/cli-memo, then `memo search mail …` ``. The list of such commands is
+  `MOVED_TO_MEMO` in `src/cli/moved.ts`; `run()` and the MCP runner read it, and `parity:check` refuses a manifest
+  row under a moved path. Hints that named `search mail` name `memo search mail`. The mail search services stay
+  for memo.
 - **`phone:` and `value:` also match a stored number ending with the typed number's national digits** (8 or more), so
   a number saved before `phone_countries` is found either way. A Russian landline in groups, `(812) 000-00-01`, is now
   `+78120000001`, not the bare digits.
