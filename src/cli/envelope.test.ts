@@ -85,9 +85,14 @@ describe("the answer envelope", () => {
     expect(v.safeParse(itemEnvelopeSchema(ENTITIES.chat), item).issues).toBeUndefined()
   })
 
-  it("leaves an answer in its old shape alone", () => {
-    const old = { items: [chat], page: 1, limit: 20, hasMore: false }
-    expect(sealed(old)).toBe(old)
+  it("refuses an answer that is not an envelope", () => {
+    expect(() => sealed({ items: [chat], page: 1, limit: 20, hasMore: false })).toThrow("not an answer envelope")
+    expect(() => sealed({ items: [chat], more: true })).toThrow("not an answer envelope")
+  })
+
+  it("seals an envelope an app reshaped or another command printed", () => {
+    const printed = JSON.parse(JSON.stringify(sealed(itemOf(chat))))
+    expect(sealed({ ...printed, meta: { ...printed.meta, run_id: "run-2" } }).meta?.run_id).toBe("run-2")
   })
 
   it("prints the whole envelope for a machine, with only the steps this CLI has", () => {

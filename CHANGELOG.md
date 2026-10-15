@@ -18,6 +18,15 @@ shape of this file.
   `src/embeddings/keys.ts`; `Upload`, `UploadSource`, `UploadKind` to `src/domain/attachments.ts`; the fact, memory
   and task value sets to `src/domain/knowledge.ts`. The package entry points export the same names. `guardFor`
   takes the five settings it reads (`GuardSettings`) instead of the whole `Settings`.
+- **No answer bypasses the envelope.** `sealed`, `judgedAnswer`, `renderAnswer` and MCP's `answered` throw on a
+  body that is not `item` or `items` + `page`, instead of passing it through untouched; `isBody` checks that shape,
+  so an envelope an app reshaped (snake_case, `--json=a,b`) or parsed from another command still passes. A `Picture`
+  or `BinaryResource`'s `about` must be an envelope too. Answers that bypassed it now have one: `tools_search` over
+  MCP (`{ items, more }` → `{ items, page, meta }`), `mentions confirm|reject` and `images embed --json` (the bare
+  record → `{ item, meta }`), and `--dry-run --json` (the preview → `{ item, meta }` with snake_case keys:
+  `business_rules`, `action_invoked`, `write_reserved`, `messenger_contacted`, `configuration_read`). `commands`
+  and `commands schema` print the registry document through the named `renderDocument`. A run over MCP whose
+  answer's `item` carries failed batch IDs is recorded as partial again.
 - An empty topic id says "the topic id is empty — give the id of a forum topic": MCP calls reach that check too, and
   have no `--topic`.
 - **Shared commands take cli-base's flag names**; the old names are gone, with no alias:

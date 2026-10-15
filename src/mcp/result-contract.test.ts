@@ -4,6 +4,7 @@ import { join } from "node:path"
 import type { ServerContext } from "@modelcontextprotocol/server"
 import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
+import { itemOf } from "../cli/envelope.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import { findRun, listRuns, runsDirFor } from "../runs/run.js"
 import { answered, BinaryResource, entryRunner, failed, Picture, type Registration } from "./tool.js"
@@ -16,35 +17,35 @@ describe("MCP result contract", () => {
     const hidden = "a\u{e0041}\u0085\u202e\ufeffb"
     const visible = "a\\u{e0041}\\x85\\u202e\\ufeffb"
     const flag = "\u{1f3f4}\u{e0067}\u{e0062}\u{e0065}\u{e006e}\u{e0067}\u{e007f}"
-    const original = { items: [{ [hidden]: hidden }], flag }
+    const original = itemOf({ [hidden]: hidden, flag })
     const result = answered(original)
-    expect(result.structuredContent).toEqual({ items: [{ [visible]: visible }], flag })
+    expect(result.structuredContent).toMatchObject({ item: { [visible]: visible, flag } })
     expect(result.content[0]).toEqual({ type: "text", text: JSON.stringify(result.structuredContent) })
-    expect(original.items).toEqual([{ [hidden]: hidden }])
+    expect(original.item).toEqual({ [hidden]: hidden, flag })
     expect(JSON.stringify(original)).toContain(hidden)
     for (const value of [
-      new Picture(new Uint8Array([1]), "image/png", { text: hidden }),
-      new BinaryResource("AQ==", "application/octet-stream", "attachment://fixture", { text: hidden }),
+      new Picture(new Uint8Array([1]), "image/png", itemOf({ text: hidden })),
+      new BinaryResource("AQ==", "application/octet-stream", "attachment://fixture", itemOf({ text: hidden })),
     ]) {
       const response = answered(value)
-      expect(response.structuredContent).toEqual({ text: visible })
-      expect(response.content[1]).toEqual({ type: "text", text: JSON.stringify({ text: visible }) })
+      expect(response.structuredContent).toMatchObject({ item: { text: visible } })
+      expect(response.content[1]).toEqual({ type: "text", text: JSON.stringify(response.structuredContent) })
     }
     expect(failed(new CliError("validation_error", hidden, { name: hidden })).structuredContent).toMatchObject({
       error: { message: visible, details: { name: visible } },
     })
   })
-  it("advertises only objects that it can return as structured content", () => {
-    const body = { items: [], page: 1, limit: 0, hasMore: false }
-    const result = answered(body)
-    expect(result.structuredContent).toEqual(body)
-    expect(result.content).toEqual([{ type: "text", text: JSON.stringify(body) }])
+  it("advertises only envelopes that it can return as structured content", () => {
+    const result = answered(itemOf({ id: "1" }))
+    expect(result.structuredContent).toMatchObject({ item: { id: "1" } })
+    expect(result.content).toEqual([{ type: "text", text: JSON.stringify(result.structuredContent) }])
+    expect(() => answered({ items: [], page: 1, limit: 0, hasMore: false })).toThrow("not an answer envelope")
     for (const value of [null, [], "invalid"]) expect(() => answered(value as never)).toThrow("must be an object")
   })
   it("counts the complete response, including duplicated structured content and image bytes", () => {
-    expect(() => answered({ text: "é".repeat(100) }, 200)).toThrow("byte limit")
-    const image = new Picture(new Uint8Array(100), "image/png", { chart: "synthetic" })
-    expect(answered(image, 0).structuredContent).toEqual({ chart: "synthetic" })
+    expect(() => answered(itemOf({ text: "é".repeat(100) }), 200)).toThrow("byte limit")
+    const image = new Picture(new Uint8Array(100), "image/png", itemOf({ chart: "synthetic" }))
+    expect(answered(image, 0).structuredContent).toMatchObject({ item: { chart: "synthetic" } })
     expect(() => answered(image, 100)).toThrow("byte limit")
   })
   it("keeps explicit retry guidance and never shows the text of an unexpected failure", () => {
@@ -72,13 +73,11 @@ describe("MCP result contract", () => {
   })
 })
 
-it("validates the serialized root and picture metadata, preserving nested ISO dates", () => {
-  expect(() => answered(new Date())).toThrow("serialized tool result must be an object")
-  expect(() => answered(new Picture(new Uint8Array(), "image/png", []))).toThrow(
-    "serialized tool result must be an object",
-  )
-  expect(answered({ at: new Date("2026-10-06T00:00:00.000Z") }).structuredContent).toEqual({
-    at: "2026-10-06T00:00:00.000Z",
+it("refuses a root or picture metadata that is not an envelope, preserving nested ISO dates", () => {
+  expect(() => answered(new Date())).toThrow("not an answer envelope")
+  expect(() => answered(new Picture(new Uint8Array(), "image/png", []))).toThrow("not an answer envelope")
+  expect(answered(itemOf({ at: new Date("2026-10-06T00:00:00.000Z") })).structuredContent).toMatchObject({
+    item: { at: "2026-10-06T00:00:00.000Z" },
   })
 })
 
@@ -86,7 +85,7 @@ it("returns large previews within their configured budget without lifting other 
   const messenger = { app: { command: "chat" } } as Messenger
   const definition = attachmentsTools(messenger).attachments_show
   if (!definition) throw new Error("attachment tool missing")
-  const image = new Picture(new Uint8Array(4 * 1024 * 1024), "image/png", { page: 1 })
+  const image = new Picture(new Uint8Array(4 * 1024 * 1024), "image/png", itemOf({ page: 1 }))
   const fixture = { ...definition, local: async () => image }
   const ctx = { mcpReq: { signal: new AbortController().signal } } as unknown as ServerContext
   const run = (env: NodeJS.ProcessEnv) =>
@@ -113,15 +112,16 @@ it("keeps partial MCP identifiers without payloads and honors explicitly disable
   if (!definition) throw new Error("attachment tool missing")
   const fixture = {
     ...definition,
-    local: async () => ({
-      complete: false,
-      batch: {
-        failed: 1,
-        failures: [
-          { id: "50", stage: "download", error: { code: "rate_limited", message: "synthetic private payload" } },
-        ],
-      },
-    }),
+    local: async () =>
+      itemOf({
+        complete: false,
+        batch: {
+          failed: 1,
+          failures: [
+            { id: "50", stage: "download", error: { code: "rate_limited", message: "synthetic private payload" } },
+          ],
+        },
+      }),
   }
   const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "mcp-partial-record-")) }
   const ctx = { mcpReq: { signal: new AbortController().signal } } as unknown as ServerContext

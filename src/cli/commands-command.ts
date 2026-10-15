@@ -6,6 +6,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { commandContract, findCommand } from "./command-contract.js"
 import { outputFor } from "./context.js"
 import { NO_EFFECTS } from "./effects.js"
+import { renderDocument } from "./envelope.js"
 import { rootOf } from "./profile.js"
 
 /**
@@ -24,7 +25,8 @@ export const commandsCommand = (app: AppIdentity): Command => {
     .argument("[path...]", "one command path, for example: search messages; inspect other groups in separate calls")
     .action(function (this: Command, path: string[]) {
       const root = rootOf(this)
-      const { renderer, format } = outputFor(this)
+      const output = outputFor(this)
+      const { renderer, format } = output
       const all = describeProgram(root)
       const scoped = path.length > 0 ? scopeOf(root, all, path) : undefined
       const commands = scoped ? [scoped.command] : all
@@ -41,7 +43,7 @@ export const commandsCommand = (app: AppIdentity): Command => {
         return
       }
 
-      renderer.result({
+      renderDocument(output, {
         cli: app.command,
         version: app.version,
         contract: CONTRACT,
@@ -57,8 +59,7 @@ export const commandsCommand = (app: AppIdentity): Command => {
       .description("one command's argv and result schemas, effects, permissions and retry guidance")
       .argument("<path...>", "one command path, for example: stats messages show")
       .action(function (this: Command, path: string[]) {
-        const { renderer } = outputFor(this)
-        renderer.result({
+        renderDocument(outputFor(this), {
           cli: app.command,
           version: app.version,
           contract: CONTRACT,

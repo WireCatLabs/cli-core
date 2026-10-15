@@ -22,6 +22,7 @@ import { recorded, wasSettled } from "../runs/recording.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { changesAuthority, judgedEffects, judgedTargets } from "./effects.js"
+import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
@@ -240,7 +241,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
         readOnly: true,
       })
       const permissions = "permissions" in resolved ? (resolved.permissions as Settings["permissions"]) : {}
-      outputFor(action).renderer.result(preview(action, permissions))
+      renderAnswer(action, outputFor(action), itemOf(snakeKeys(preview(action, permissions))))
       throw new PreviewComplete()
     }
     // Not inside the scheduled run itself: its own failure is already on its way to last.json.

@@ -129,7 +129,7 @@ describe("mentions", () => {
 
     const rejected = await chat("mentions", "reject", String(link.id), "--json")
     expect(rejected.code, rejected.stderr).toBe(0)
-    expect(JSON.parse(rejected.stdout)).toMatchObject({ status: "dismissed", mentions: 1 })
+    expect(JSON.parse(rejected.stdout)).toMatchObject({ item: { status: "dismissed", mentions: 1 } })
     const shown = JSON.parse((await chat("mentions", "list", "status:dismissed", "--json")).stdout)
     expect(shown.items).toMatchObject([{ author: "claude-code" }])
 

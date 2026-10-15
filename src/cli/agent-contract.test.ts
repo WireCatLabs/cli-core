@@ -90,8 +90,7 @@ describe("agent CLI contract", () => {
     expect(result.performed).not.toHaveBeenCalled()
     expect(result.stdout.join()).not.toContain("synthetic payload")
     expect(JSON.parse(result.stdout[0] ?? "")).toMatchObject({
-      preview: true,
-      effects: { actionInvoked: false, writeReserved: false },
+      item: { preview: true, effects: { action_invoked: false, write_reserved: false } },
     })
   })
 

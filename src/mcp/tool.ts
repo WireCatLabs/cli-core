@@ -484,7 +484,6 @@ export const answered = (
   maxBytes = DEFAULT_OUTPUT_BYTES,
   targets?: NonNullable<StepInput["targets"]>,
 ): CallToolResult => {
-  const value = sealed(targets ? judgedAnswer(answer, targets) : answer)
   const bounded = (result: CallToolResult): CallToolResult => {
     if (maxBytes !== 0 && Buffer.byteLength(JSON.stringify(result)) > maxBytes)
       throw new CliError(
@@ -494,7 +493,7 @@ export const answered = (
       )
     return result
   }
-  if (value === null || Array.isArray(value) || typeof value !== "object")
+  if (answer === null || Array.isArray(answer) || typeof answer !== "object")
     throw new CliError("invalid_response", "tool result must be an object", { retryable: false })
   const objectBody = (value: object): Record<string, unknown> => {
     const serialized = JSON.parse(agentJson(value)) as unknown
@@ -502,27 +501,27 @@ export const answered = (
       throw new CliError("invalid_response", "serialized tool result must be an object", { retryable: false })
     return serialized as Record<string, unknown>
   }
-  if (value instanceof BinaryResource) {
-    const about = sealed(value.about)
+  if (answer instanceof BinaryResource) {
+    const about = sealed(answer.about)
     return bounded({
       structuredContent: objectBody(about),
       content: [
-        { type: "resource", resource: { uri: value.uri, mimeType: value.mimeType, blob: value.base64 } },
+        { type: "resource", resource: { uri: answer.uri, mimeType: answer.mimeType, blob: answer.base64 } },
         { type: "text", text: agentJson(about) },
       ],
     })
   }
-  if (value instanceof Picture) {
-    const about = sealed(value.about)
+  if (answer instanceof Picture) {
+    const about = sealed(answer.about)
     return bounded({
       structuredContent: objectBody(about),
       content: [
-        { type: "image", data: Buffer.from(value.bytes).toString("base64"), mimeType: value.mimeType },
+        { type: "image", data: Buffer.from(answer.bytes).toString("base64"), mimeType: answer.mimeType },
         { type: "text", text: agentJson(about) },
       ],
     })
   }
-  const body = objectBody(value)
+  const body = objectBody(sealed(targets ? judgedAnswer(answer, targets) : answer))
   return bounded({ content: [{ type: "text", text: JSON.stringify(body) }], structuredContent: body })
 }
 
