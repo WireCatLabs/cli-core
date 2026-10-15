@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 # Publishes the version in package.json and tags it. Run on a clean `main`. When npm already has that
 # version, or a higher one, it raises it to the next free one through a pull request and publishes that.
+# An Unreleased section left above the dated, unpublished version is folded into it the same way.
 #
 #   bin/release           # publishes from GitHub Actions (.github/workflows/release.yml)
 #   bin/release --local   # publishes from this machine: NPM_TOKEN if exported, else the keyring
@@ -47,6 +48,32 @@ published() {
   npm view "$package@$version" version --prefer-online >/dev/null 2>&1
 }
 
+# main takes changes only through a pull request (the repository's ruleset), as in tg-cli and max-cli.
+land() {
+  branch=$1 title=$2 body=$3
+  git switch -q -c "$branch"
+  git commit -q -am "$title" -m "$body"
+  git push -q origin "$branch"
+  git switch -q main
+  pr=$(gh pr create --base main --head "$branch" --title "$title" --body "$body")
+  # Checks register a few seconds after the pull request; --watch with none exits at once.
+  for _ in $(seq 30); do
+    [ "$(gh pr checks "$pr" --json name --jq length 2>/dev/null || echo 0)" -gt 0 ] && break
+    sleep 2
+  done
+  gh pr checks "$pr" --watch --fail-fast >/dev/null ||
+    { echo "checks failed on $pr — nothing is published" >&2; exit 1; }
+  gh pr merge "$pr" --squash --delete-branch --subject "$title (#${pr##*/})"
+  git fetch -q origin
+  git merge -q --ff-only origin/main
+  [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] ||
+    { echo "main is not origin/main after $pr" >&2; exit 1; }
+}
+
+# A session that merges after the version was dated, but before it was published, adds Unreleased above it.
+folded=""
+published || folded=$(node --experimental-strip-types scripts/release/fold-changelog.ts CHANGELOG.md "$version")
+
 # Two sessions preparing the same number is normal; the second takes the next free one (2026-09-29).
 latest=$(npm view "$package" version --prefer-online 2>/dev/null || true)
 versions=$(npm view "$package" versions --json --prefer-online 2>/dev/null || true)
@@ -63,27 +90,14 @@ if [ "$next" != "$version" ]; then
     const today = new Date().toLocaleDateString("en-GB").replaceAll("/", ".")
     if (taken) swap("CHANGELOG.md", "\n## Unreleased\n", `\n## Unreleased\n\n## ${n} — ${today}\n`)
     else swap("CHANGELOG.md", `\n## ${o} — `, `\n## ${n} — `)' "$version" "$next" "$taken"
-  branch="release/$next"
-  git switch -q -c "$branch"
-  git commit -q -am "chore: release $next" -m "bin/release: $why."
-  git push -q origin "$branch"
-  git switch -q main
-  # main takes changes only through a pull request (the repository's ruleset), as in tg-cli and max-cli.
-  pr=$(gh pr create --base main --head "$branch" --title "chore: release $next" \
-    --body "bin/release: $why. Only the number changes: package.json and the CHANGELOG heading.")
-  # Checks register a few seconds after the pull request; --watch with none exits at once.
-  for _ in $(seq 30); do
-    [ "$(gh pr checks "$pr" --json name --jq length 2>/dev/null || echo 0)" -gt 0 ] && break
-    sleep 2
-  done
-  gh pr checks "$pr" --watch --fail-fast >/dev/null ||
-    { echo "checks failed on $pr — nothing is published" >&2; exit 1; }
-  gh pr merge "$pr" --squash --delete-branch --subject "chore: release $next (#${pr##*/})"
-  git fetch -q origin
-  git merge -q --ff-only origin/main
-  [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] ||
-    { echo "main is not origin/main after $pr" >&2; exit 1; }
+  body="bin/release: $why. Only the number changes: package.json and the CHANGELOG heading."
+  [ -z "$folded" ] || body="bin/release: $why. The number changes, and Unreleased is folded into its section."
+  land "release/$next" "chore: release $next" "$body"
   version=$next
+elif [ -n "$folded" ]; then
+  echo "$folded"
+  land "release/fold-$version" "chore(release): fold Unreleased into $version" \
+    "bin/release: $version is dated but not on npm, and Unreleased sat above it. Only CHANGELOG.md changes."
 fi
 if published; then
   echo "$version is already on npm — raise the version first" >&2
