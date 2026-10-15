@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Mentions in documents, notes and mail (store version 16)**: triggers queue a document's and a note's body and an
+  email's text, as messages are; `mentions rebuild` reads the ones stored before (`documents`, `notes`, `emails` in
+  its answer). Mail search takes `phone:`, `email:`, `url:`, `domain:` and `mentions:`. `mentions list` still lists
+  message sources only. Migration 16 adds triggers only: older builds keep working.
+
 ## 0.285.0 — 15.10.2026
 
 ### Added

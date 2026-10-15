@@ -29,7 +29,8 @@ That column comes from the provider; the `mentions` table comes from our rules.
 ## Tables
 
 - `mentions` — one row per kind per place: `(source_type, source_id, source_field, start_offset, kind)` is unique.
-  `source_type` is `message` or `attachment`; `source_field` is `text`, `file_text` or `transcript`. Offsets are
+  `source_type` is `message`, `attachment`, `document`, `note` or `email`; `source_field` is `text`, `file_text` or
+  `transcript`. Offsets are
   UTF-16, as JavaScript counts them. The written spelling is not copied; it is read back from the source.
 - `mention_pending` — texts written or edited since their mentions were found. Triggers on `messages` and
   `attachments` fill it; JavaScript empties it.
@@ -38,7 +39,10 @@ That column comes from the provider; the `mentions` table comes from our rules.
 - `identities` with `provider` `phone` or `email` — made only when a number or an address gets an owner.
   `identity_links` gives it a person, `organization_identities` an organization.
 
-Store versions: 7 added the tables, 10 the attachment sources, 11 `organization_identities`. Each migration only
+Store versions: 7 added the tables, 10 the attachment sources, 11 `organization_identities`, 16 documents (`body`),
+notes (`body`) and mail (`body_text`, not the subject) as sources. Those have no chat, so a name in them is never
+linked by rule; `mentions list` and `show` read message sources only, and mail search (`search mail` in memo) finds
+an email by `phone:`, `email:`, `url:`, `domain:` and `mentions:`. Each migration only
 adds; older builds keep reading the store.
 
 ## The flow
@@ -52,7 +56,8 @@ adds; older builds keep reading the store.
      text again does not drop a newer build's kinds;
    - finds the mentions and inserts each with its decision: the kept one, else the rule's own, else the value's
      original (below), else `found`.
-4. A deleted message or attachment row takes its mentions and its queue entry with it (a trigger).
+4. A deleted message, attachment, document, note or email row takes its mentions and its queue entry with it (a
+   trigger); a soft delete of a document, note or email queues it, and the writer finds nothing to keep.
 5. `mentions rebuild [kind]` runs the same writer over every message and attachment text, 1,000 per short write
    transaction, with progress. With a kind it redoes that kind only and leaves the queue and `mentionsRebuiltAt`
    alone.
@@ -134,7 +139,8 @@ per sync and names nothing; its mentions show up on the next `--new`.
 
 ## Known limits
 
-- Only messages and their attachments are read: not notes, Drive documents or mail.
+- Notes, documents and mail are read (store version 16) but listed nowhere yet: `mentions list` shows message
+  sources only, and memo has no `mentions` command.
 - A `url` is confirmed only to the stored Telegram chat or account it names; other links can only be rejected.
 - Names are known people only. Words under four letters are skipped, so «Оля» or «Ира» are missed.
 - Builds 0.264–0.270 delete a text's `person-name` rows when they read the text again; `mentions rebuild

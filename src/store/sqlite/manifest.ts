@@ -35,6 +35,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261014222837_version-14-task-words", version: 14, minCompatible: 1 },
   { name: "20261014222841_version-14-task-words-triggers", version: 14, minCompatible: 1 },
   { name: "20261015010543_version-15-task-pairs", version: 15, minCompatible: 1 },
+  { name: "20261015014428_version-16-mentions-in-other-texts", version: 16, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

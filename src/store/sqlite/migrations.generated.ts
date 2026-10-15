@@ -456,5 +456,19 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE INDEX `task_pairs_by_other_id` ON `task_pairs` (`other_id`);",
       "CREATE INDEX `task_pairs_by_decided_by_type_decided_by_id` ON `task_pairs` (`decided_by_type`,`decided_by_id`);"
     ]
+  },
+  {
+    "name": "20261015014428_version-16-mentions-in-other-texts",
+    "statements": [
+      "-- Documents, notes and mail have text of their own: queue it for mentions as a message's text is, again when it\n-- changes or is deleted (a soft delete too, so its mentions go), and drop its mentions with the row. Rows stored\n-- before version 16 wait for `mentions rebuild`, as messages stored before version 7 do.\nCREATE TRIGGER mention_pending_document_ai AFTER INSERT ON documents WHEN coalesce(new.body, '') <> '' BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('document', new.id);\nEND;",
+      "CREATE TRIGGER mention_pending_document_au AFTER UPDATE OF body, deleted_at ON documents\n  WHEN old.body IS NOT new.body OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('document', new.id);\nEND;",
+      "CREATE TRIGGER mentions_document_ad AFTER DELETE ON documents BEGIN\n  DELETE FROM mentions WHERE source_type = 'document' AND source_id = old.id;\n  DELETE FROM mention_pending WHERE source_type = 'document' AND source_id = old.id;\nEND;",
+      "CREATE TRIGGER mention_pending_note_ai AFTER INSERT ON notes WHEN coalesce(new.body, '') <> '' BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('note', new.id);\nEND;",
+      "CREATE TRIGGER mention_pending_note_au AFTER UPDATE OF body, deleted_at ON notes\n  WHEN old.body IS NOT new.body OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('note', new.id);\nEND;",
+      "CREATE TRIGGER mentions_note_ad AFTER DELETE ON notes BEGIN\n  DELETE FROM mentions WHERE source_type = 'note' AND source_id = old.id;\n  DELETE FROM mention_pending WHERE source_type = 'note' AND source_id = old.id;\nEND;",
+      "CREATE TRIGGER mention_pending_email_ai AFTER INSERT ON emails WHEN coalesce(new.body_text, '') <> '' BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('email', new.id);\nEND;",
+      "CREATE TRIGGER mention_pending_email_au AFTER UPDATE OF body_text, deleted_at ON emails\n  WHEN old.body_text IS NOT new.body_text OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('email', new.id);\nEND;",
+      "CREATE TRIGGER mentions_email_ad AFTER DELETE ON emails BEGIN\n  DELETE FROM mentions WHERE source_type = 'email' AND source_id = old.id;\n  DELETE FROM mention_pending WHERE source_type = 'email' AND source_id = old.id;\nEND;"
+    ]
   }
 ]

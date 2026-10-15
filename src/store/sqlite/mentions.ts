@@ -89,6 +89,9 @@ export interface MentionsRebuild {
   messages: number
   /** Files and voice notes of messages whose text was read. */
   attachments: number
+  documents: number
+  notes: number
+  emails: number
   mentions: number
 }
 
@@ -109,7 +112,7 @@ export const rebuildMentions = (
   }: { now: number; kinds?: readonly MentionKind[]; onBatch?: (done: number, total: number) => void },
 ): MentionsRebuild => {
   const total = SOURCE_TYPES.reduce((sum, type) => sum + Number(database.prepare(SOURCES[type].count).get()?.n), 0)
-  const read: Record<SourceType, number> = { message: 0, attachment: 0 }
+  const read: Record<SourceType, number> = { message: 0, attachment: 0, document: 0, note: 0, email: 0 }
   let mentions = 0
   for (const type of SOURCE_TYPES) {
     const batch = database.prepare(SOURCES[type].page)
@@ -127,7 +130,10 @@ export const rebuildMentions = (
       })
       read[type] += rows.length
       after = Number(rows.at(-1)?.id)
-      onBatch?.(read.message + read.attachment, total)
+      onBatch?.(
+        Object.values(read).reduce((sum, one) => sum + one, 0),
+        total,
+      )
     }
   }
   if (!kinds) {
@@ -138,7 +144,14 @@ export const rebuildMentions = (
       )
       .run(REBUILT_AT, JSON.stringify(new Date(now).toISOString()), now)
   }
-  return { messages: read.message, attachments: read.attachment, mentions }
+  return {
+    messages: read.message,
+    attachments: read.attachment,
+    documents: read.document,
+    notes: read.note,
+    emails: read.email,
+    mentions,
+  }
 }
 
 export const mentionsState = (database: CacheDatabase): MentionsState => {
