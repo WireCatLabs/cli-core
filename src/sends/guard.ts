@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
-import type { Settings } from "../cli/settings.js"
 import type { Id } from "../domain/models.js"
+import type { AppIdentity } from "../ports/app.js"
 import { FloodMemory, floodPathFor } from "./flood.js"
 import {
   type AccountAction,
@@ -339,13 +338,22 @@ const refuseToAsk: Asker = async (key) => {
   )
 }
 
+/** What a guard reads of a profile's settings. */
+export interface GuardSettings {
+  profile: string
+  readOnlyLock?: string
+  permissions: Readonly<Record<PermissionKey, Level>>
+  permissionSources: Readonly<Record<PermissionKey, string>>
+  sendsPerHour: number
+}
+
 /**
  * The guard a profile's configuration asks for — the command's, and a background server's for every
  * write it forwards. Built per request there, so `config set permissions.messages readonly` needs no restart.
  */
 export const guardFor = (
   app: AppIdentity,
-  settings: Settings,
+  settings: GuardSettings,
   warn: (message: string) => void,
   env: NodeJS.ProcessEnv = process.env,
   ask?: Asker,

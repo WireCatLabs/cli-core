@@ -2,22 +2,9 @@ import { openAsBlob, realpathSync } from "node:fs"
 import { stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
+import type { Upload, UploadKind, UploadSource } from "../domain/attachments.js"
+import type { AppIdentity } from "../ports/app.js"
 import { storePath, wirecatDirectory } from "../store/path.js"
-
-export type UploadKind = "photo" | "file" | "voice"
-
-/** Where an upload's bytes are: a file read only when it is sent, or bytes made in memory (a converted voice). */
-export type UploadSource = { kind: "file"; path: string; size: number } | { kind: "bytes"; bytes: Uint8Array }
-
-/** A file checked for sending. Its name goes to the messenger and never to the journal. */
-export interface Upload {
-  kind: UploadKind
-  name: string
-  source: UploadSource
-  /** A `file` that goes as a file to download even where the messenger would play it — a video. */
-  asFile?: true
-}
 
 /** The most `uploadBytes` holds in memory; an adapter that can stream uses `uploadBlob` and has no such cap. */
 export const MAX_BUFFERED_UPLOAD_BYTES = 256 * 1024 * 1024

@@ -1,3 +1,4 @@
+export type { Upload, UploadKind, UploadSource } from "../domain/attachments.js"
 export {
   type FloodDeadline,
   FloodMemory,
@@ -50,9 +51,6 @@ export {
   MAX_BUFFERED_UPLOAD_BYTES,
   readUpload,
   refusedPlace,
-  type Upload,
-  type UploadKind,
-  type UploadSource,
   uploadBlob,
   uploadBytes,
   uploadSize,

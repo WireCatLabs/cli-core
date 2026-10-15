@@ -1,7 +1,7 @@
 import { CliError, pathsAreOverridden } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { type AppIdentity, envName } from "./app.js"
+import { type AppIdentity, envName } from "../ports/app.js"
 import { loadSnakeCaseConfig } from "./config-keys.js"
 import { baseContext } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"

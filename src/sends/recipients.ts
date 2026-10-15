@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
 import type { Id } from "../domain/models.js"
+import type { AppIdentity } from "../ports/app.js"
 
 export interface Recipient {
   id: Id

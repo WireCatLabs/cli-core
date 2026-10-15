@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Messenger } from "../cli/messenger/context.js"
 import { calendarKey } from "../domain/calendar.js"
 import { parseLocator } from "../domain/locator.js"
+import type { MessengerTraits } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
 import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
@@ -98,7 +98,7 @@ export const prepareLucene = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app">>,
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">>,
 ): Promise<Prepared> => {
   if (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > QUERY_PAGE_LIMIT)
     searchError("query.invalid-limit", { start: 0, end: 0 }, `use 1–${QUERY_PAGE_LIMIT} results`)
@@ -339,7 +339,7 @@ const indexNotReady = async (store: MessageStore, command: string | undefined): 
 export const coverageOf = async (
   store: MessageStore,
   { scopeAccounts, selectedChat }: Prepared,
-  messenger: Partial<Pick<Messenger, "app" | "history" | "provider">> = {},
+  messenger: Partial<Pick<MessengerTraits, "app" | "history" | "provider">> = {},
 ): Promise<{ completeness: (ChatCompleteness & AccountKey)[]; coverage: SearchCoverage }> => {
   const completeness: (ChatCompleteness & AccountKey)[] = []
   const stats = new Map<string, ChatStats>()
@@ -432,7 +432,7 @@ export const searchLucene = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app" | "history" | "provider">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
 ): Promise<SearchFound> => {
   const prepared = await prepareLucene(store, account, request, messenger)
   const execute = store.matchQuery.bind(store)
@@ -517,7 +517,7 @@ export const statsLucene = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery & { by: StatsGrouping },
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app" | "history" | "provider">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
 ): Promise<MessageStats> => {
   const prepared = await prepareLucene(store, account, request, messenger)
   const count = store.countQuery.bind(store)

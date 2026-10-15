@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { canonicalMeetingReference, formatMeetingReference } from "../domain/meeting-reference.js"
+import { canonicalMeetingReference, formatMeetingReference } from "../meetings/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import {
   createTaskService,

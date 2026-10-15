@@ -1,6 +1,6 @@
 import { logRecordOf } from "@wirecat/cli-base"
 import type { LogRecord } from "@wirecat/cli-base/standards"
-import { LOG_ATTRIBUTES } from "../cli/runs/log-attributes.js"
+import { LOG_ATTRIBUTES } from "../runs/log-attributes.js"
 import type { AgentAction } from "../store/index.js"
 import type { MessageStore } from "../store/store.js"
 

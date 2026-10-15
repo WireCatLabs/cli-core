@@ -4,10 +4,10 @@ import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import { Command, Option } from "commander"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { startRecording } from "../runs/recording.js"
+import { listRuns } from "../runs/run.js"
 import { baseContext, environmentOf } from "./context.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
-import { startRecording } from "./runs/recording.js"
-import { listRuns } from "./runs/run.js"
 import { settingsFor } from "./settings.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "A test CLI", version: "1.2.3" }

@@ -3,9 +3,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
+import { listRuns, runsDirFor, startRun } from "../../runs/run.js"
 import { run } from "../program.js"
 import { runsCommand } from "./command.js"
-import { listRuns, runsDirFor, startRun } from "./run.js"
 
 describe.each(["max", "tg"])("recorded run truncation for %s", (command) => {
   it.each(["pretty", "jsonl", "json"])("offers a supported continuation in %s", async (format) => {

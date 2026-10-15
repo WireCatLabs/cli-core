@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { TASK_TYPES } from "../store/sqlite/work-tasks.js"
+import { TASK_TYPES } from "../domain/knowledge.js"
 import { TASK_ORIGINS, TASK_STATES } from "../tasks/index.js"
 import { id, reference, text, time } from "./fields.js"
 

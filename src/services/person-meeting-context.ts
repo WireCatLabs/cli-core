@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { formatMeetingReference } from "../domain/meeting-reference.js"
+import { formatMeetingReference } from "../meetings/index.js"
 import type { MessageStore } from "../store/store.js"
 import { checkMeetingCancelled, type MeetingEvidenceCue, readMeetingEvidence } from "./meeting-evidence.js"
 import type { MeetingReadStore } from "./meeting-reference.js"

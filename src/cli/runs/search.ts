@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
+import { findRun, listRuns, readEvents } from "../../runs/run.js"
 import { momentOf } from "../../services/moment.js"
 import { listOf, snakeKeys } from "../envelope.js"
-import { findRun, listRuns, readEvents } from "./run.js"
 
 export interface RunSearch {
   query?: string

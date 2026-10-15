@@ -1,14 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
+import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import type { Actor } from "./actors.js"
 import { linkKind } from "./link-kinds.js"
-import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, MEMORY_SCOPES } from "./memories.js"
+import { type Author, authorActor, authorOf, evidenceOf, linkEvidence } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { write } from "./transaction.js"
-
-export const FACT_TYPES = ["fact", "statement", "question", "decision", "promise"] as const
-export const FACT_STATUSES = ["proposed", "accepted", "superseded", "reversed"] as const
 
 /** What happened, as its evidence shows; its evidence is `links` of kind `evidence`. */
 export interface Fact {

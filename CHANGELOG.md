@@ -5,6 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **The layers below the commands no longer import `src/cli/`**, and `biome.json` refuses it with no exceptions:
+  services, sends, replies, attachments, moderation, models, analysis, domain and ports. A service sees the messenger
+  as `MessengerTraits` (exported from `./cli`), the fields it reads; `Messenger` extends it. The helpers they used
+  moved down: `AppIdentity`, `envName`, `readOnlyLockOf` to `src/ports/app.ts`; `isCliFailure` and the error
+  reasons to `src/errors/`; run records, run scope and log keys to `src/runs/`; `withRecovery` beside
+  `ActionableError` in `src/domain/recovery.ts`; `parseDuration` to `src/domain/duration.ts`; embedding keys to
+  `src/embeddings/keys.ts`; `Upload`, `UploadSource`, `UploadKind` to `src/domain/attachments.ts`; the fact, memory
+  and task value sets to `src/domain/knowledge.ts`. The package entry points export the same names. `guardFor`
+  takes the five settings it reads (`GuardSettings`) instead of the whole `Settings`.
+- An empty topic id says "the topic id is empty — give the id of a forum topic": MCP calls reach that check too, and
+  have no `--topic`.
+
 ## 0.286.0 — 15.10.2026
 
 ### Added

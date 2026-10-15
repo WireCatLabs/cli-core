@@ -1,9 +1,9 @@
 import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
-import type { Fetching } from "../cli/messenger/context.js"
-import type { ActionableError } from "../cli/recovery.js"
 import type { Chat, ChatKind, Id, Message } from "../domain/models.js"
+import type { ActionableError } from "../domain/recovery.js"
 import { capability } from "../ports/messenger.js"
+import type { Fetching } from "../ports/traits.js"
 import {
   type AccountKey,
   type ChatStats,

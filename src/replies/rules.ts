@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import * as v from "valibot"
-import type { AppIdentity } from "../cli/app.js"
+import type { AppIdentity } from "../ports/app.js"
 
 export const REPLY_ACTIONS = ["reply", "task"] as const
 export const REPLY_MODELS = ["fill-only", "may-reword"] as const

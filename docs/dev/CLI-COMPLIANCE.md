@@ -27,7 +27,7 @@ Google product and was not installed or exercised in this audit.
 
 | Control | Evidence | Result and limits |
 |---|---|---|
-| Machine errors | `src/cli/program.ts`, `src/cli/failures.ts`, shell and consumer integration tests | Commander usage errors become validation_error/exit 2. Explicit JSON/JSONL overrides TTY error rendering; one JSON error goes to stderr without appended help. |
+| Machine errors | `src/cli/program.ts`, `src/errors/failures.ts`, shell and consumer integration tests | Commander usage errors become validation_error/exit 2. Explicit JSON/JSONL overrides TTY error rendering; one JSON error goes to stderr without appended help. |
 | Discovery purity | shared shell tests, consumer update hooks | Requested help/version and scoped discovery run without business preparation or update/network notices. Help/version remain successful text output. |
 | Command hierarchy | `src/cli/messenger/stats-command.ts`, STANDARD command checklist | Statistics use `stats messages show`, `stats chats show`, `stats tasks show`; charts remain `stats charts`. Old resource stats paths have no aliases. Permission migration is explicit and fails closed on stale keys. |
 | Headless input | `src/cli/input-policy.ts`, `src/terminal/prompt.ts`, consumer login/setup seams | `--no-input`, JSON/JSONL, CI and off-TTY execution suppress terminal prompts and interactive browser login. Explicit piped input remains available. Setup may verify existing credentials; provider-specific noninteractive login requires explicit inputs. |

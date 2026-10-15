@@ -1,6 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
-import { canonicalMeetingReference } from "../domain/meeting-reference.js"
-import { type MeetingPassageRequest, type MeetingPassageResult, validateMeetingPassage } from "../meetings/index.js"
+import {
+  canonicalMeetingReference,
+  type MeetingPassageRequest,
+  type MeetingPassageResult,
+  validateMeetingPassage,
+} from "../meetings/index.js"
 import type { MeetingEvidencePacket } from "./meeting-evidence.js"
 import { type MeetingHitContextPacket, readMeetingHitContext } from "./meeting-hit-context.js"
 

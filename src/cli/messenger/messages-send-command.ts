@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { sendTime } from "../../domain/send-time.js"
+import { threadIdOf } from "../../domain/thread.js"
 import { typedSendAs } from "../../sends/send-as.js"
 import { readAttachments } from "../../sends/upload.js"
 import { REMOTE_WRITE } from "../effects.js"
@@ -9,7 +10,6 @@ import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { afterWrite, writtenAnswer } from "./message-writes.js"
 import { readAll } from "./stdin.js"
-import { threadIdOf } from "./thread.js"
 
 /**
  * **Asked before it goes, told after, on every outcome** — the guard's journal is the only record

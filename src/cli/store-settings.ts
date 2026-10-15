@@ -7,11 +7,11 @@ import {
   taskCategoryValue,
   withTaskCategory,
 } from "../domain/task-categories.js"
+import type { AppIdentity } from "../ports/app.js"
 import { ACCOUNT_GROUPS_SETTING, type AccountGroups, groupMembers, groupName } from "../search/account-list.js"
 import { DEFAULT_STEMMERS, parseStemmers, type Stemmers } from "../search/stem.js"
 import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
-
 import {
   accountGroupsOf,
   openStore,
@@ -21,7 +21,6 @@ import {
   saveStorePhoneCountries,
   stemmersOrigin,
 } from "../store/store.js"
-import type { AppIdentity } from "./app.js"
 
 const SCRIPTS: Record<string, keyof Stemmers> = {
   "search_stemmers.cyrillic": "cyrillic",

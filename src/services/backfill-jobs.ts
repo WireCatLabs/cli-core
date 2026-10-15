@@ -5,10 +5,10 @@ import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { progressOf } from "../background/checkpoints.js"
 import { carries } from "../background/processes.js"
-import type { AppIdentity } from "../cli/app.js"
-import { envName } from "../cli/app.js"
-import { recordLogFor } from "../cli/runs/record-log.js"
-import { childTrace } from "../cli/runs/scope.js"
+import type { AppIdentity } from "../ports/app.js"
+import { envName } from "../ports/app.js"
+import { recordLogFor } from "../runs/record-log.js"
+import { childTrace } from "../runs/scope.js"
 
 export interface Job {
   id: string

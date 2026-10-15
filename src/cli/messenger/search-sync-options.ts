@@ -1,8 +1,8 @@
 import type { Command } from "commander"
+import { parseDuration } from "../../domain/duration.js"
 import type { SyncOptions } from "../../services/search-refresh.js"
 import { environmentOf } from "../context.js"
 import { positiveCount } from "../paging.js"
-import { parseDuration } from "../settings.js"
 import { type MessengerContext, refuseLocalWrite } from "./context.js"
 
 export const syncOptions = (command: Command): Command => {

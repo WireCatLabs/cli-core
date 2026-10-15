@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { runsDirFor, startRun } from "../../cli/runs/run.js"
+import { runsDirFor, startRun } from "../../runs/run.js"
 import type { Defaults } from "../tool.js"
 import { runsTools } from "./runs.js"
 

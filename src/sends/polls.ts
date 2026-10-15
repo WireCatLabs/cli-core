@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { threadIdOf } from "../cli/messenger/thread.js"
 import type { Id, Page, Poll, PollVote } from "../domain/models.js"
+import { threadIdOf } from "../domain/thread.js"
 import type { MessengerAdapter, NewPoll, Sent } from "../ports/messenger.js"
 import { capability } from "../ports/messenger.js"
 import type { SendGuard } from "./guard.js"

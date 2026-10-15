@@ -1,7 +1,7 @@
 import * as v from "valibot"
 import type { Messenger } from "../../cli/messenger/context.js"
-import { runsDirFor } from "../../cli/runs/run.js"
 import { runsFound, searchRuns } from "../../cli/runs/search.js"
+import { runsDirFor } from "../../runs/run.js"
 import { type AnyTool, READ, tool } from "../tool.js"
 
 export const runsTools = (messenger: Messenger): Record<string, AnyTool> => ({

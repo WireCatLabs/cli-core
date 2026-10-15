@@ -3,9 +3,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { endpoint } from "../analysis/settings.js"
+import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { analysisChoice } from "./analysis-choice.js"
 import { embeddingChoice } from "./embedding-choice.js"
-import { embeddingKeys, endpointKeyName } from "./embedding-keys.js"
 import { settingsFor } from "./settings.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "1.0.0" }

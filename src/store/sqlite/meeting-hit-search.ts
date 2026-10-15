@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import { formatMeetingReference } from "../../domain/meeting-reference.js"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
+import { formatMeetingReference } from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { indexedText } from "./meeting-index-values.js"

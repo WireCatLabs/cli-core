@@ -2,6 +2,8 @@ import { existsSync } from "node:fs"
 import { CliError, configFilePath, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
+import { parseDuration } from "../domain/duration.js"
+import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import {
   LEVELS,
   type Level,
@@ -10,7 +12,6 @@ import {
   permissionOverrides,
   RESOURCES,
 } from "../sends/permissions.js"
-import { type AppIdentity, envName, readOnlyLockOf } from "./app.js"
 import { loadSnakeCaseConfig } from "./config-keys.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
@@ -656,23 +657,6 @@ const namedProfiles = (config: Config): string[] =>
       ...Object.keys(config.bot?.profiles ?? {}),
     ]),
   ].sort()
-
-const DURATION = /^(\d+)(ms|s|m|h|d)$/
-const UNIT_MS: Record<string, number> = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }
-
-/** Named by where it came from, so somebody who set the variable weeks ago is told which thing is wrong. */
-export const parseDuration = (value: string, source: string): number => {
-  const match = DURATION.exec(value.trim())
-  if (!match?.[1] || !match[2]) {
-    throw new CliError(
-      "validation_error",
-      `${source} takes a duration with a unit — 500ms, 30s, 2m, 4h or 1d — not "${value}"`,
-    )
-  }
-  const ms = Number(match[1]) * (UNIT_MS[match[2]] ?? 0)
-  if (ms <= 0) throw new CliError("validation_error", `${source} has to be more than zero, and "${value}" is not`)
-  return ms
-}
 
 /** A list is written `a,b` on the command line and kept as an array; everything else is JSON or a string. */
 const parseValue = (value: string): unknown => {

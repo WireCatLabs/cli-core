@@ -1191,7 +1191,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 4. **An error is one JSON object on stderr** in the machine modes —
    `{ "error": { "code", "reason", "message", "param"?, "details"?, "next"?, "retry", "run_id"? } }`, the same
    object MCP answers with `isError` — stdout stays empty, and the exit code says which kind of
-   failure it was. `reason` is a registered id (`query.too-large`, `src/cli/reasons.ts`, or the code's
+   failure it was. `reason` is a registered id (`query.too-large`, `src/errors/reasons.ts`, or the code's
    own from cli-base); branch on `code` and `reason`, never on `message`. `details` holds only
    registered keys and never a cause. A person sees `✗ message` and at most one `→ next step` line;
    `--debug` adds the failure's whole record, cause and stack included. A failure that is not ours

@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { MEMORY_KINDS, MEMORY_SCOPES, MEMORY_STATUSES } from "../store/sqlite/memories.js"
+import { MEMORY_KINDS, MEMORY_SCOPES, MEMORY_STATUSES } from "../domain/knowledge.js"
 import { author, id, reference, text, time } from "./fields.js"
 
 export const memory = v.strictObject({

@@ -5,7 +5,7 @@ import type { ServerContext } from "@modelcontextprotocol/server"
 import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
-import { findRun, listRuns, runsDirFor } from "../cli/runs/run.js"
+import { findRun, listRuns, runsDirFor } from "../runs/run.js"
 import { answered, BinaryResource, entryRunner, failed, Picture, type Registration } from "./tool.js"
 import { attachmentsTools } from "./tools/attachments.js"
 

@@ -1,5 +1,5 @@
 import { type CredentialSource, Credentials, pathsAreOverridden, resolvePaths } from "@wirecat/cli-base"
-import { type AppIdentity, envName } from "./app.js"
+import { type AppIdentity, envName } from "../ports/app.js"
 
 export const endpointKeyName = (baseUrl: string): string => {
   const host = new URL(baseUrl).host

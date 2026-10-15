@@ -1,9 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
+import { isCliFailure } from "../../errors/failures.js"
 import { type AccountStanding, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
+import { providerErrorKey } from "../../runs/events.js"
 import type { FloodMemory } from "../../sends/flood.js"
 import type { Pacer } from "../../sends/pace.js"
-import { isCliFailure } from "../failures.js"
-import { providerErrorKey } from "../runs/events.js"
 
 const LONG_LIVED = new Set(["watch", "feed", "self", "newSendId", "close", "formatMarkdown", "formatHtml"])
 const BLOCKING = new Set<AccountStanding["state"]>(["frozen", "limited"])

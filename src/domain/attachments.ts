@@ -43,3 +43,17 @@ export const matchDownloads = (stored: readonly StoredAttachment[], files: reado
     return named.length === 1 ? named[0]?.position : undefined
   })
 }
+
+export type UploadKind = "photo" | "file" | "voice"
+
+/** Where an upload's bytes are: a file read only when it is sent, or bytes made in memory (a converted voice). */
+export type UploadSource = { kind: "file"; path: string; size: number } | { kind: "bytes"; bytes: Uint8Array }
+
+/** A file checked for sending. Its name goes to the messenger and never to the journal. */
+export interface Upload {
+  kind: UploadKind
+  name: string
+  source: UploadSource
+  /** A `file` that goes as a file to download even where the messenger would play it — a video. */
+  asFile?: true
+}

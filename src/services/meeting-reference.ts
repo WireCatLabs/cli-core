@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { formatMeetingReference, type MeetingReference, parseMeetingReference } from "../domain/meeting-reference.js"
 import type { Meeting, Transcript, TranscriptRow } from "../meetings/index.js"
+import { formatMeetingReference, type MeetingReference, parseMeetingReference } from "../meetings/index.js"
 import type { MeetingReadCapabilities } from "../store/store.js"
 
 export type MeetingReadStore = MeetingReadCapabilities

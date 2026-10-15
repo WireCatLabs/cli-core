@@ -1,3 +1,12 @@
+export {
+  FACT_STATUSES,
+  FACT_TYPES,
+  MEMORY_KINDS,
+  MEMORY_SCOPES,
+  MEMORY_STATUSES,
+  TASK_TYPES,
+  WORK_TASK_TYPES,
+} from "../domain/knowledge.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
 export type { CacheDatabase, CacheStatement, OpenDatabase, SqlValue } from "./driver.js"
 export { PRAGMAS } from "./driver.js"
@@ -30,7 +39,6 @@ export type {
   ThreadSave,
 } from "./sqlite/emails.js"
 export type { Fact, FactInput, FactsStore } from "./sqlite/facts.js"
-export { FACT_STATUSES, FACT_TYPES } from "./sqlite/facts.js"
 export type { Involvement, InvolvementStore } from "./sqlite/involvements.js"
 export type {
   Annotation,
@@ -58,7 +66,6 @@ export type {
 export type { MeetingVectorHit, MeetingVectors } from "./sqlite/meeting-vectors.js"
 export type { AttachmentInput } from "./sqlite/meetings.js"
 export type { Author, MemoriesStore, Memory, MemoryInput } from "./sqlite/memories.js"
-export { MEMORY_KINDS, MEMORY_SCOPES, MEMORY_STATUSES } from "./sqlite/memories.js"
 export type { NoteIndexState } from "./sqlite/note-index.js"
 export {
   type NearestNote,
@@ -119,7 +126,7 @@ export type {
   TaskType,
   WorkTaskType,
 } from "./sqlite/work-tasks.js"
-export { TASK_EVENT_KINDS, TASK_ROLES, TASK_TYPES, WORK_TASK_TYPES } from "./sqlite/work-tasks.js"
+export { TASK_EVENT_KINDS, TASK_ROLES } from "./sqlite/work-tasks.js"
 export {
   type AccountKey,
   type AccountMessageFilter,

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
+import { parseDuration } from "../../domain/duration.js"
 import type { Backend, ServerOptions, ServerSearched } from "../../services/server-search.js"
-import { parseDuration } from "../settings.js"
 import type { Messenger, MessengerContext } from "./context.js"
 
 const backendOf = (value: string): Backend => {

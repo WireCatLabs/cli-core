@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import type { AnalysisProvider } from "../analysis/provider.js"
 import { endpoint } from "../analysis/settings.js"
-import type { AppIdentity } from "./app.js"
-import { embeddingKeys, endpointKeyName } from "./embedding-keys.js"
+import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
+import type { AppIdentity } from "../ports/app.js"
 import type { Settings } from "./settings.js"
 
 export interface AnalysisOptions {

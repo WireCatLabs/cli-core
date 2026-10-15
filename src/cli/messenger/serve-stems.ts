@@ -1,5 +1,5 @@
+import { failureKey } from "../../errors/failures.js"
 import type { MessageStore } from "../../store/store.js"
-import { failureKey } from "../failures.js"
 import type { ServeNotice } from "./serve-notice.js"
 
 export const STEMS_EVERY_MS = 30_000

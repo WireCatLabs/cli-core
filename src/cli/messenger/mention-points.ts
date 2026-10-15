@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { resolvePaths, writeSecurely } from "@wirecat/cli-base"
-import type { AppIdentity } from "../app.js"
+import type { AppIdentity } from "../../ports/app.js"
 
 export interface ReviewPoint {
   /** ms: the newest mention a `--new` run showed; `undefined` before the first, so every undecided one is new. */

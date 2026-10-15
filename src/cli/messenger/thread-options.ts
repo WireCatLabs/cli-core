@@ -1,9 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
+import { parseDuration } from "../../domain/duration.js"
 import type { ThreadOptions } from "../../services/thread-context.js"
 import { environmentOf } from "../context.js"
 import { positiveCount } from "../paging.js"
-import { parseDuration } from "../settings.js"
 
 export const threadOptions = (command: Command): Command =>
   command

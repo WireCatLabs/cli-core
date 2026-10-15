@@ -1,8 +1,8 @@
 import type { Renderer, RenderFormat, Streams } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import type { AppIdentity } from "../ports/app.js"
 import { type PackageUpgradePorts, type PackageUpgradeResult, upgradePackage } from "../services/package-upgrade.js"
-import type { AppIdentity } from "./app.js"
 import { grantsAuthority, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 

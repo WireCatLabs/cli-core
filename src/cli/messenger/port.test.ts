@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { capability, type MessengerAdapter } from "../../ports/messenger.js"
-import type { DiagnosticEvent } from "../runs/events.js"
+import type { DiagnosticEvent } from "../../runs/events.js"
 import { observed } from "./observed.js"
 import { stored } from "./stored.js"
 

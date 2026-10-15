@@ -4,9 +4,9 @@ import { CliError, captureStreams, errorObjectOf } from "@wirecat/cli-base"
 import { BASE_REASONS, defineReasons } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { run } from "../cli/program.js"
 import { CORE_DETAILS, CORE_REASONS } from "../index.js"
 import { failed } from "../mcp/tool.js"
-import { run } from "./program.js"
 import { DETAILS, failureContext, REASONS } from "./reasons.js"
 
 const sources = (dir: string): string[] =>

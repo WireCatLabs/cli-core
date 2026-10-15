@@ -6,7 +6,7 @@ import {
   pathsAreOverridden,
   resolvePaths,
 } from "@wirecat/cli-base"
-import { type AppIdentity, envName } from "../app.js"
+import { type AppIdentity, envName } from "../../ports/app.js"
 
 export interface BotTokenStoreOptions {
   app: AppIdentity

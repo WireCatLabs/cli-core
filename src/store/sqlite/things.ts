@@ -1,10 +1,6 @@
 import { formatLocator } from "../../domain/locator.js"
-import {
-  canonicalMeetingReference,
-  formatMeetingReference,
-  parseMeetingReference,
-} from "../../domain/meeting-reference.js"
 import { canonicalReference, formatReference, parseReference, type Reference } from "../../domain/references.js"
+import { canonicalMeetingReference, formatMeetingReference, parseMeetingReference } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { ENTITY_TABLES, type EntityType, isEntityType } from "./entity-types.js"
 

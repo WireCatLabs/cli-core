@@ -1,6 +1,6 @@
 import { processStreams, type RenderFormat, type Streams } from "@wirecat/cli-base"
-import type { AppIdentity } from "../app.js"
-import { isCliFailure } from "../failures.js"
+import { isCliFailure } from "../errors/failures.js"
+import type { AppIdentity } from "../ports/app.js"
 import { type DiagnosticEvent, type EventSink, providerErrorKey, renderEvent } from "./events.js"
 import { DIAGNOSTIC_LOG_EVENTS } from "./log-events.js"
 import { logAttributes } from "./log-keys.js"

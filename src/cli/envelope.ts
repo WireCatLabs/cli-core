@@ -14,7 +14,7 @@ import {
 } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import * as v from "valibot"
-import { currentRun } from "./runs/scope.js"
+import { currentRun } from "../runs/scope.js"
 import { nextStep, rootOf, runnable, stepLine, withSafety } from "./steps.js"
 
 export type ListBody<T> = Omit<ListEnvelope<T>, "meta"> & { meta?: Partial<Meta> }

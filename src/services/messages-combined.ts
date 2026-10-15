@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { implicitTextTerms, walkQuery } from "@wirecat/cli-base/query"
-import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
 import type { Page } from "../domain/models.js"
+import type { MessengerTraits } from "../ports/traits.js"
 import { correctWords } from "../search/correct.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
 import { FIELD_VERSION } from "../search/lucene/registry.js"
@@ -34,7 +34,7 @@ export const searchCombined = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app" | "history" | "provider">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
   options: CombinedOptions = COMBINED_DEFAULTS,
 ): Promise<CombinedFound> => {
   if (request.thread) throw new CliError("validation_error", "internal combined evaluation does not hydrate threads")

@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { Chat } from "../../domain/models.js"
-import type { AppIdentity } from "../app.js"
+import type { AppIdentity } from "../../ports/app.js"
 
 export interface SeenChat extends Chat {
   firstSeenAt: string

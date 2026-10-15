@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { TASK_KINDS, TASK_STATES, type TaskState, type TaskVerdict } from "../../tasks/index.js"
+import { TASK_TYPES, WORK_TASK_TYPES } from "../../domain/knowledge.js"
+import { TASK_STATES, type TaskState, type TaskVerdict } from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { Actor } from "./actors.js"
 import { folded } from "./folded.js"
@@ -10,9 +11,6 @@ import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relation
 import { taskIdOf, taskRowOf } from "./things.js"
 import { write } from "./transaction.js"
 
-/** What the store writes itself; the task package finds only `TASK_KINDS`, in messages. */
-export const WORK_TASK_TYPES = ["bug", "feature", "chore"] as const
-export const TASK_TYPES = [...WORK_TASK_TYPES, ...TASK_KINDS] as const
 export const TASK_ROLES = ["assignee", "reviewer", "watcher"] as const
 export const TASK_EVENT_KINDS = [
   "created",

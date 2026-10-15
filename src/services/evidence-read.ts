@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Messenger } from "../cli/messenger/context.js"
+import type { MessengerTraits } from "../ports/traits.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { type EvidencePacket, prepareEvidencePacket } from "./evidence.js"
 import { storedChatId } from "./message-resolution.js"
@@ -19,7 +19,7 @@ export const readEvidencePacket = async (
   store: MessageStore,
   account: AccountKey,
   { chat, limit, before }: EvidenceReadQuery,
-  messenger: Partial<Pick<Messenger, "savedChatId">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId">> = {},
 ): Promise<StoredEvidencePacket> => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
     throw new CliError("validation_error", "evidence message limit must be an integer from 1 to 100")

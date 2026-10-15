@@ -1,8 +1,8 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
-import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
 import type { MailFields } from "../domain/models.js"
 import { INTERNAL_NOTES, kindOf } from "../domain/providers.js"
+import type { MessengerTraits } from "../ports/traits.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
 import type { SearchFound, SearchQuery } from "./messages.js"
@@ -93,7 +93,7 @@ export const searchAll = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchAllRequest,
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">> = {},
   searchMessages: (query: SearchQuery) => Promise<SearchFound> = (query) =>
     searchStore(store, account, query, messenger),
 ): Promise<SearchAllFound> => {

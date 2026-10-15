@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { implicitTextTerms, walkQuery } from "@wirecat/cli-base/query"
-import type { Messenger } from "../cli/messenger/context.js"
 import { parseLocator } from "../domain/locator.js"
+import type { MessengerTraits } from "../ports/traits.js"
 import { exhausted, QUERY_LIMITS } from "../search/lucene/types.js"
 import { planQuestion, words } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -13,7 +13,7 @@ export const searchDiscovery = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app" | "history" | "provider">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
 ): Promise<SearchFound> => {
   const original = await prepareLucene(store, account, request, messenger)
   const text = request.text ?? ""
