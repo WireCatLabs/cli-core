@@ -37,7 +37,8 @@ it("returns bounded meeting context and source links without exposing the join U
   })
 })
 it("preflights source URL bytes before hydrating summary context", async () => {
-  const { store, accountId, db } = await fixture()
+  const { store, accountId, input, db } = await fixture()
+  await store.meetings.saveMeeting(input)
   await store.meetings.indexSearch({ accountId })
   db.prepare("UPDATE meeting_summaries SET doc_url=?").run(`https://example.invalid/${"x".repeat(2000000)}`)
   await expect(store.meetings.searchHits("example", { accountId, maxReadBytes: 4096 })).rejects.toMatchObject({
