@@ -19,6 +19,7 @@ provider applications own vendor translation and account/resource binding.
 | Module | Responsibility |
 |---|---|
 | Domain modules such as `src/meetings/` and `src/tasks/` | Models, references, validation and capability ports; no transport runtime or SQL implementation |
+| `src/files/` | Ordinary-file validation and native writer leases behind narrow ownership contracts; hosts supply archive layout ([guide](FILE-LEASES.md)) |
 | `src/services/` | Use-case orchestration over injected narrow ports; no provider SDK or concrete store imports |
 | `src/store/sqlite/` and store drivers | Persistence adapters, SQL and transaction boundaries |
 | `src/cli/`, `src/mcp/`, domain `/cli` and `/mcp` entries | Transport parsing and result presentation; call shared policy rather than copying it |
