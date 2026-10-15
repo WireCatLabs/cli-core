@@ -18,19 +18,10 @@ shape of this file.
 
 ### Added
 
-- **`Messenger.guard` takes an optional `ask`**: the MCP server passes one that lets a write at level `ask` go
-  ahead, as it already did for a messenger without its own guard — no terminal is there to answer a prompt.
-
-## 0.291.0 — 15.10.2026
-
-### Added
-
 - **`Messenger.topics: false`** hides the `topics_*` MCP tools from a messenger without forum topics, as max needs
   to mount the shared MCP command.
-- **`entityFields({ name: fields })` lets an app check `--json=a,b` against its own entities.** It builds the
-  `JsonFieldsResolver` that `liftJson` and `checkJson` already take, keyed by the `output` entity (or `entity.view`)
-  a command declares. A field the entity lacks is refused with the same `validation_error` as a cli-core entity.
-  Fields are a list of names or an object schema's `entries`; a name cli-core already uses is refused.
+- **`Messenger.guard` takes an optional `ask`**: the MCP server passes one that lets a write at level `ask` go
+  ahead, as it already did for a messenger without its own guard — no terminal is there to answer a prompt.
 - **`store.sourceMentions`: mentions in documents, notes and mail, for memo.** `list(source, query, window, mail)`
   lists one kind of text's mentions, newest text first, with its title, an email's sender and date; mail only of the
   accounts the caller names. `show`, `confirm` and `reject` decide them as `mentions` does; `--all-in-chat` is
@@ -54,6 +45,14 @@ shape of this file.
   mail** (since 0.285.0): such a row whose text id equalled a message's id was listed as that message's mention, with
   a wrong `written`, and counted in the review after `messages sync`. Search was not affected.
 
+## 0.291.0 — 15.10.2026
+
+### Added
+
+- **`entityFields({ name: fields })` lets an app check `--json=a,b` against its own entities.** It builds the
+  `JsonFieldsResolver` that `liftJson` and `checkJson` already take, keyed by the `output` entity (or `entity.view`)
+  a command declares. A field the entity lacks is refused with the same `validation_error` as a cli-core entity.
+  Fields are a list of names or an object schema's `entries`; a name cli-core already uses is refused.
 ### Fixed
 
 - **A label stored with capitals or a slash is found again.** `addTags` looked labels up by their folded name
