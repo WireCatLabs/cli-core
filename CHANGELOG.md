@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.284.0 — 15.10.2026
+
 ### Added
 
 - Meeting preparation includes bounded, cited stored meetings outside the selected series when
