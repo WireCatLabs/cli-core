@@ -82,6 +82,7 @@ tg work mentions confirm 12 person:7          # this number is person 7's
 tg work mentions confirm 12 organization:3    # this number is the company's
 tg work mentions confirm 15                   # a document link: the stored document
 tg work mentions confirm 31 person:7          # this «Ольга» is person 7
+tg work mentions confirm 31 person:7 --all-in-chat  # every undecided «Ольга» of that chat
 tg work mentions reject 12                    # not a phone: an order number
 ```
 
@@ -89,7 +90,8 @@ tg work mentions reject 12                    # not a phone: an order number
   place the number is written follows, now and in messages that arrive later. Reject one and the value is
   dismissed everywhere.
 - **A name is decided where it is written.** «Ольга» in two chats can be two people, so a name is confirmed or
-  rejected one mention at a time.
+  rejected one mention at a time. `--all-in-chat` decides every undecided «Ольга» of the same chat with it; places
+  you or an agent already decided keep their decision.
 - **A link has nothing to be linked to yet.** Reject it if it is not worth keeping.
 - A document is confirmed only when it is in the store; sync it from Drive first.
 
@@ -149,4 +151,3 @@ log, an error message or a run record. Nothing is fetched from an outside servic
 - Mentions in notes, Drive documents and mail.
 - Links resolved to a stored chat or document, and a list of sites by number of links.
 - Names of people the store does not know, and addresses.
-- Linking every «Ольга» of one chat in one step.

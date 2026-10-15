@@ -30,6 +30,9 @@
       "value": "<on|off>",
       "meaning": "every member may pin messages"
     },
+    "--all-in-chat": {
+      "meaning": "decide a name in every undecided place of it in the same chat too"
+    },
     "--allow-any-file": {
       "meaning": "send a --file even from credential folders or the tool's own folders"
     },
@@ -2656,6 +2659,13 @@
         "tg": "mentions (docs/dev/mentions-plan.md)"
       },
       "options": {
+        "--all-in-chat": {
+          "in": [],
+          "planned": {
+            "max": "mentions (docs/dev/mentions-plan.md)",
+            "tg": "mentions (docs/dev/mentions-plan.md)"
+          }
+        },
         "--as-owner": {
           "in": [],
           "planned": {
@@ -2709,6 +2719,13 @@
         "tg": "mentions (docs/dev/mentions-plan.md)"
       },
       "options": {
+        "--all-in-chat": {
+          "in": [],
+          "planned": {
+            "max": "mentions (docs/dev/mentions-plan.md)",
+            "tg": "mentions (docs/dev/mentions-plan.md)"
+          }
+        },
         "--as-owner": {
           "in": [],
           "planned": {

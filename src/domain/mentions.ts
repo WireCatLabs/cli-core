@@ -7,6 +7,12 @@ import { DEFAULT_PHONE_COUNTRIES, nationalPhone } from "./phones.js"
 export const MENTION_KINDS = ["phone", "email", "url", "document", "person-name"] as const
 export type MentionKind = (typeof MENTION_KINDS)[number]
 
+/** Who decides, and for a name whether every undecided place of it in the same chat follows. */
+export interface Decider {
+  by: string
+  inChat?: boolean
+}
+
 /** Bumped when a kind's rule changes, so `mentions rebuild` can redo that kind alone. */
 export const MENTION_VERSIONS: Record<MentionKind, number> = {
   phone: 1,

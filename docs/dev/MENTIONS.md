@@ -62,7 +62,7 @@ identity when a phone or an address has one with an owner, as `linked` to a docu
 stored Drive file (`documents.front_matter.fileId`). All three have the author `rules`.
 
 **Decisions.** `confirm` and `reject` of a `phone`, `email`, `url` or `document` update every row with that kind
-and value. A `person-name` is decided on its own row only. Rules-authored decisions are not kept across a
+and value. A `person-name` is decided on its own row, and with `--all-in-chat` (`Decider.inChat`) also on every row of the same value in the same chat that is still `found` or decided only by the rules. Rules-authored decisions are not kept across a
 rebuild; they are derived again, so a better rule can change them.
 
 ## The rules
