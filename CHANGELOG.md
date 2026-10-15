@@ -14,6 +14,12 @@ shape of this file.
   its answer). Mail search takes `phone:`, `email:`, `url:`, `domain:` and `mentions:`. `mentions list` still lists
   message sources only. Migration 16 adds triggers only: older builds keep working.
 
+### Security
+
+- **A hostile HTML attachment no longer stalls the reader**: when the HTML reader falls back to plain text, a
+  page of unclosed tags, comments or long blank runs (`<<<<…`, `<p<p…`, `<!--<!--…`) is read in time linear in
+  its size; a 200,000-character one took up to 50 seconds. Ordinary pages read exactly as before.
+
 ## 0.285.0 — 15.10.2026
 
 ### Added

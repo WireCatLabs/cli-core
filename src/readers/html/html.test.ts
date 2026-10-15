@@ -100,4 +100,17 @@ describe("the HTML reader", () => {
     })
     if (result.status === "extracted") expect(result.text).toContain("Revenue grew")
   })
+
+  it("reads a hostile page of unclosed tags in linear time when the engine will not load", async () => {
+    const broken: LoadEngine = async (name) => {
+      if (name === "defuddle/node") throw new Error("boom")
+      return importEngine(name)
+    }
+    // The plain reader and its title lookup once rescanned to the end from every `<`: seconds at this size.
+    const hostile = `<title>${"<title".repeat(20_000)}${"<p".repeat(50_000)}${"<!--".repeat(25_000)}${"<".repeat(100_000)}`
+    const started = performance.now()
+    const result = await read(hostile, broken)
+    expect(performance.now() - started).toBeLessThan(2_000)
+    expect(result).toMatchObject({ status: "extracted", extractor: "html:v1" })
+  })
 })

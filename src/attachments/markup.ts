@@ -117,27 +117,65 @@ export const rtfText = (source: string): string => {
   return out.join("").trim()
 }
 
-const HTML_DROPPED = /<(script|style|head|noscript|template|svg)\b[^>]*>[\s\S]*?<\/\1\s*>/gi
+const HTML_DROPPED_OPEN = /<(script|style|head|noscript|template|svg)\b/gi
+const HTML_DROPPED_CLOSE = new Map(
+  ["script", "style", "head", "noscript", "template", "svg"].map((name) => [
+    name,
+    new RegExp(`<\\/${name}\\s*>`, "gi"),
+  ]),
+)
 const HTML_BLOCK = /<\/?(p|div|br|li|ul|ol|tr|h[1-6]|blockquote|pre|section|article|header|footer|table|hr)\b[^>]*>/gi
-const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " }
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" }
+
+// Past the last `>` no tag can close, yet `[^>]*` would rescan to the end from every `<` there: quadratic on `<<<<…`.
+const replaceTags = (source: string, tag: RegExp, replacement: string): string => {
+  const end = source.lastIndexOf(">") + 1
+  return source.slice(0, end).replace(tag, replacement) + source.slice(end)
+}
+
+// `<script>[\s\S]*?</script>` as one regex rescans to the end from every unclosed opener; a tag found
+// unclosed once stays unclosed for every later opener, so each close is searched for at most once.
+const dropHidden = (source: string): string => {
+  const unclosed = new Set<string>()
+  let out = ""
+  let kept = 0
+  for (const open of source.matchAll(HTML_DROPPED_OPEN)) {
+    const name = (open[1] as string).toLowerCase()
+    if (open.index < kept || unclosed.has(name)) continue
+    const gt = source.indexOf(">", open.index + open[0].length)
+    if (gt < 0) break
+    const close = HTML_DROPPED_CLOSE.get(name) as RegExp
+    close.lastIndex = gt + 1
+    const end = close.exec(source)
+    if (!end) {
+      unclosed.add(name)
+      continue
+    }
+    out += source.slice(kept, open.index)
+    kept = end.index + end[0].length
+  }
+  return out + source.slice(kept)
+}
 
 /** The visible text of an HTML page: no scripts, styles or tags, blocks on their own lines, entities decoded. */
-export const htmlText = (source: string): string =>
-  source
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(HTML_DROPPED, "")
-    .replace(/<\/t[dh]\s*>/gi, "\t")
-    .replace(HTML_BLOCK, "\n")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (entity, body: string) => {
-      const lower = body.toLowerCase()
-      if (lower.startsWith("#x")) return safeChar(Number.parseInt(lower.slice(2), 16), entity)
-      if (lower.startsWith("#")) return safeChar(Number(lower.slice(1)), entity)
-      return ENTITIES[lower] ?? entity
-    })
-    .replace(/[ \t ]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
+export const htmlText = (source: string): string => {
+  // An unclosed comment eats the rest unchanged, as the plain `<!--[\s\S]*?-->` left it, without a rescan per `<!--`.
+  const uncommented = source.replace(/<!--[\s\S]*?(-->|$)/g, (comment, close: string) => (close ? "" : comment))
+  const blocks = replaceTags(dropHidden(uncommented).replace(/<\/t[dh]\s*>/gi, "\t"), HTML_BLOCK, "\n")
+  return (
+    replaceTags(blocks, /<[^>]*>/g, "")
+      .replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (entity, body: string) => {
+        const lower = body.toLowerCase()
+        if (lower.startsWith("#x")) return safeChar(Number.parseInt(lower.slice(2), 16), entity)
+        if (lower.startsWith("#")) return safeChar(Number(lower.slice(1)), entity)
+        return ENTITIES[lower] ?? entity
+      })
+      // From the start of a run only: `[ \t]+\n` alone rescans a long run of spaces from each of them.
+      .replace(/(?<![ \t\u00a0])[ \t\u00a0]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  )
+}
 
 const safeChar = (code: number, fallback: string) =>
   code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : fallback
