@@ -1329,13 +1329,13 @@ The history of a task: created, status changed, assigned, due date moved.
 
 ### `task_pairs`
 
-Two tasks that may be one job, and what was decided about them: the review list the duplicate check leaves, and every merge, rejection, `--attach` and `--new` as a labelled pair. A merge never deletes; `tasks unmerge` undoes one.
+Two tasks that may be one job, and what was decided about them: the review list the duplicate check leaves, and every merge, rejection, `--into` and `--new` as a labelled pair. A merge never deletes; `tasks unmerge` undoes one.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `task_id` | integer |  | → `tasks.id` | the newer task, the one that would be the duplicate; null for an `--attach`, which made none |
-| `source_locator` | text |  |  | the message an `--attach` linked to `other_id` instead of opening a task |
+| `task_id` | integer |  | → `tasks.id` | the newer task, the one that would be the duplicate; null for an `--into`, which made none |
+| `source_locator` | text |  |  | the message an `--into` linked to `other_id` instead of opening a task |
 | `other_id` | integer | not null | → `tasks.id` | the task it may duplicate |
 | `score` | integer | not null |  | the comparison's sum of weights when the pair was recorded |
 | `band` | text | not null |  | likely, maybe or different |

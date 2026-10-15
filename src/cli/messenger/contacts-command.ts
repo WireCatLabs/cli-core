@@ -193,7 +193,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
         "mentioned in, chats, mail, meetings, tasks — newest first, from the store; never connects",
     )
     .argument("<person>", "their id, @username, or part of their name")
-    .option("--scope <personal|work>", "only what belongs to personal or to work accounts")
+    .option("--scope <scope>", "only what belongs to personal or to work accounts: personal or work")
     .option("--since-time <time>", "nothing older than this ISO 8601 time, or 2h / 1d ago")
     .option("--until-time <time>", "through this ISO 8601 time, or 2h / 1d ago")
     .option("--limit <n>", `at most this many; ${TIMELINE_ITEMS} if not given`, positiveCount("--limit"))

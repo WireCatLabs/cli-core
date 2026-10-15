@@ -28,9 +28,9 @@ export interface TaskPairSide {
 }
 
 export interface TaskPair {
-  /** The newer task, the would-be duplicate; null when an `--attach` made none. */
+  /** The newer task, the would-be duplicate; null when an `--into` made none. */
   task: TaskPairSide | null
-  /** The message an `--attach` linked instead of opening a task. */
+  /** The message an `--into` linked instead of opening a task. */
   source: string | null
   other: TaskPairSide
   score: number

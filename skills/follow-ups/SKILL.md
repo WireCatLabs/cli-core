@@ -19,14 +19,14 @@ forwards, deletes or marks read. A draft is text in your answer to the owner, no
 
 ```sh
 {{command}} review --new --json                       # every message since the last run, both sides: the day's only full read
-{{command}} tasks agenda --json                       # defaults: --due 1d --unanswered 1d --waiting 7d --within 30d
+{{command}} tasks agenda --json                       # defaults: --due-within 1d --unanswered 1d --waiting 7d --within 30d
 ```
 
 `review --new` also saves what it reads, so the agenda after it knows who wrote last. The agenda holds
 no message text — read all of it:
 
 - `stale: true` — the store saved nothing for a day. Say so first: quiet chats may only be unsynced.
-- `tasks` — open tasks with `reasons`: `overdue`, `due` (within `--due`), `check` (their next check
+- `tasks` — open tasks with `reasons`: `overdue`, `due` (within `--due-within`), `check` (their next check
   passed), `unplanned` (no due date and no next check: plan it now).
 - `owed` — someone else wrote last and the owner has not answered for `--unanswered`.
 - `waiting` — the owner wrote last and nobody answered for `--waiting`.
@@ -54,8 +54,8 @@ For a chat in `owed` or `waiting`: read around its `lastMessage` the same way.
 |---|---|
 | A promise, a request, a question someone waits on | `tasks add <msg> --type promise\|request\|question --category <name>` with a plan; `tasks categories` lists the names |
 | `tasks add` answers `created: false` | the message already has that task (a rule made it): `tasks plan` that one |
-| `tasks add` refuses with `task.duplicate-candidates` | read the listed tasks: the same job → repeat with `--attach <key>`; a different one → repeat with `--new` |
-| `tasks duplicates` lists pairs a rule opened | one job → `tasks merge <task> --into <other>`; two jobs → `tasks duplicates reject <task> <other>`; the meaning cannot tell (mum's gift or dad's) → `tasks duplicates unsure <task> <other>` for the owner. A wrong merge: `tasks unmerge <task>` |
+| `tasks add` refuses with `task.duplicate-candidates` | read the listed tasks: the same job → repeat with `--into <key>`; a different one → repeat with `--new` |
+| `tasks duplicates` lists pairs a rule opened | one job → `tasks merge <task> --into <other>`; two jobs → `tasks duplicates reject <task> <other>`; the meaning cannot tell (mum's gift or dad's) → `tasks duplicates defer <task> <other>` for the owner. A wrong merge: `tasks unmerge <task>` |
 | A task that is done (the reply came, the file was sent) | `tasks close <key> --as done --reason "<one line>"` |
 | A task still open, nothing new | `tasks plan <key> --remind-time <when>` — 1d if hot, 3d–7d if not |
 | A task with the wrong category | `tasks plan <key> --category <name>` |

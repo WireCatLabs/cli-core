@@ -97,10 +97,10 @@ const durationOf = (flag: string) => (typed: string) => {
 
 const planOptions = (command: Command, verb: string) =>
   command
-    .option("--title <text>", `one line: the action and its object — ${verb}`)
+    .option("--title <title>", `one line: the action and its object — ${verb}`)
     .option("--description <text>", "the detail, in Markdown: who owes whom, done when, next step, keywords")
     .option(
-      "--due <when>",
+      "--due <time>",
       "when it must be done: an ISO 8601 time or 2h, 3d from now; none clears it",
       dateOrNone("--due"),
     )
@@ -136,6 +136,7 @@ const planFrom = (options: {
 
 /** What waits on the owner — kept in the local store by `src/tasks/`; nothing here reaches the messenger. */
 export const tasksCommand = (messenger: Messenger): Command => {
+  const tool = messenger.app.command
   const tasks = new Command("tasks").description(
     "what waits on you — unanswered questions, mentions, requests, promises — kept in the local store; review and serve add them",
   )
@@ -170,10 +171,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
     annotate(tasks.command("add"), { effects: LOCAL_WRITE })
       .description("add a task for a stored message or note — a promise, a request")
       .argument("<message>", "a message locator, msg:<provider>/<account>/<chat>/<message>, or note:<id>")
-      .requiredOption("--type <name>", "the task's type: question, request, mention or promise", taskTypeOf)
+      .requiredOption("--type <type>", "the task's type: question, request, mention or promise", taskTypeOf)
       .requiredOption("--category <name>", categoryHelp)
       .option(
-        "--attach <task>",
+        "--into <id>",
         "when tasks add listed tasks that may be the same job: link the message to this one instead of opening a task",
       )
       .option("--new", "when tasks add listed tasks that may be the same job: open the task anyway"),
@@ -187,10 +188,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
       title?: string
       description?: string
       due?: Date | "none"
-      attach?: string
+      into?: string
       new?: boolean
     }>()
-    const { attach, new: anyway, ...rest } = options
+    const { into, new: anyway, ...rest } = options
     const plan = planFrom(rest)
     const {
       task,
@@ -199,7 +200,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       card: planned,
     } = await context.withServices((services) =>
       services.tasks.add(message, options.type, "owner", plan, {
-        ...(attach === undefined ? {} : { attach }),
+        ...(into === undefined ? {} : { attach: into }),
         ...(anyway ? { new: true } : {}),
       }),
     )
@@ -217,6 +218,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   planOptions(
     annotate(tasks.command("plan"), { effects: LOCAL_WRITE })
+      .summary("set a task's title, description, due date, next check and category")
       .description("set a task's title, description, due date, next check and category; nothing reaches the messenger")
       .argument("<task>", "the task's id or key, as tasks list shows it")
       .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`),
@@ -276,7 +278,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(shown)), () => `${card(shown)}\n`)
     })
 
-  annotate(tasks.command("similar"), { effects: LOCAL_READ })
+  annotate(tasks.command("related"), { effects: LOCAL_READ, examples: [`${tool} tasks related PR-12`] })
+    .summary("tasks that may be the same job as this one, best first; merges nothing")
     .description(
       "tasks that may be the same job as this one, best first, each with a band — likely, maybe, different — and the " +
         "reasons; merges nothing",
@@ -290,7 +293,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(
         this,
         context,
-        listOf("tasks similar", { items: found.map(snakeKeys), limit, has_more: false }),
+        listOf("tasks related", { items: found.map(snakeKeys), limit, has_more: false }),
         () =>
           found.length === 0
             ? ""
@@ -310,11 +313,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   const duplicates = annotate(tasks.command("duplicates"), { effects: LOCAL_READ })
+    .summary("pairs of tasks a rule opened that may be one job, newest first")
     .description(
       "pairs of tasks a rule opened that may be one job, newest first, with score and reasons: merge, reject or " +
-        "mark each unsure; --unsure lists the ones left for the owner",
+        "defer each; --unsure lists the ones deferred to the owner",
     )
-    .option("--unsure", "only the pairs the reviewing agent marked unsure")
+    .option("--unsure", "only the pairs the reviewing agent deferred to the owner")
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -337,10 +341,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
         context.renderer.note(unsure ? "no pair waits for the owner" : "no pair waits for review")
     })
 
-  const decided = (
-    decision: "rejected" | "unsure",
-    permission: "tasks.duplicates.reject" | "tasks.duplicates.unsure",
-  ) =>
+  const decided = (decision: "rejected" | "unsure", permission: "tasks.duplicates.reject" | "tasks.duplicates.defer") =>
     async function (this: Command, dup: string, task: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, permission)
@@ -350,25 +351,34 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(pair)), () => `${pair.decision}  ${pairLine(pair)}\n`)
     }
 
-  annotate(duplicates.command("reject"), { effects: LOCAL_WRITE })
+  annotate(duplicates.command("reject"), {
+    effects: LOCAL_WRITE,
+    examples: [`${tool} tasks duplicates reject PR-14 PR-12`],
+  })
+    .summary("two tasks are not the same job: the pair is never offered again")
     .description("two tasks are not the same job: the pair leaves the list and is never offered again")
     .argument("<dup>", "the task listed as the duplicate, by its id or key")
     .argument("<task>", "the task it was paired with")
     .action(decided("rejected", "tasks.duplicates.reject"))
 
-  annotate(duplicates.command("unsure"), { effects: LOCAL_WRITE })
+  annotate(duplicates.command("defer"), {
+    effects: LOCAL_WRITE,
+    examples: [`${tool} tasks duplicates defer PR-14 PR-12`],
+  })
+    .summary("the fields and the text cannot tell: leave the pair to the owner")
     .description("the fields and the text cannot tell: leave the pair to the owner, who lists it with --unsure")
     .argument("<dup>", "the task listed as the duplicate, by its id or key")
     .argument("<task>", "the task it was paired with")
-    .action(decided("unsure", "tasks.duplicates.unsure"))
+    .action(decided("unsure", "tasks.duplicates.defer"))
 
-  annotate(tasks.command("merge"), { effects: LOCAL_WRITE })
+  annotate(tasks.command("merge"), { effects: LOCAL_WRITE, examples: [`${tool} tasks merge PR-14 --into PR-12`] })
+    .summary("one job seen twice: fold the duplicate into the task that stays")
     .description(
       "one job seen twice: link every message of the duplicate to the task and close the duplicate dismissed, " +
         "duplicate-of the task; nothing is deleted, and tasks unmerge undoes it",
     )
     .argument("<dup>", "the duplicate, by its id or key; it must be open")
-    .requiredOption("--into <task>", "the task that stays")
+    .requiredOption("--into <id>", "the task that stays, by its id or key")
     .action(async function (this: Command, dup: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.merge")
@@ -382,7 +392,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(tasks.command("unmerge"), { effects: LOCAL_WRITE })
+  annotate(tasks.command("unmerge"), { effects: LOCAL_WRITE, examples: [`${tool} tasks unmerge PR-14`] })
+    .summary("undo a merge: reopen the task and remove its duplicate-of relation")
     .description(
       "undo a merge: reopen the task and remove its duplicate-of relation; messages the merge linked stay linked",
     )
@@ -395,19 +406,29 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   withQuery(
-    annotate(tasks.command("agenda"), { effects: LOCAL_READ }).description(
-      "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
-        "chats where you owe an answer, chats where you wait for one",
-    ),
+    annotate(tasks.command("agenda"), { effects: LOCAL_READ })
+      .summary("what needs a look today: tasks due, chats you owe an answer, chats you wait on")
+      .description(
+        "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
+          "chats where you owe an answer, chats where you wait for one",
+      ),
     AGENDA_QUERY,
   )
-    .option("--due <span>", "list tasks due within this: 30m, 2h, 1d (default 1d)", durationOf("--due"))
     .option(
-      "--unanswered <span>",
+      "--due-within <duration>",
+      "list tasks due within this: 30m, 2h, 1d (default 1d)",
+      durationOf("--due-within"),
+    )
+    .option(
+      "--unanswered <duration>",
       "list chats where someone else wrote last this long ago (default 1d)",
       durationOf("--unanswered"),
     )
-    .option("--waiting <span>", "list chats where you wrote last this long ago (default 7d)", durationOf("--waiting"))
+    .option(
+      "--waiting <duration>",
+      "list chats where you wrote last this long ago (default 7d)",
+      durationOf("--waiting"),
+    )
     .option(
       "--within <duration>",
       "leave out chats silent longer than this: they ended (default 30d)",
@@ -420,7 +441,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
       const options = this.opts<{
-        due?: number
+        dueWithin?: number
         unanswered?: number
         waiting?: number
         within?: number
@@ -431,7 +452,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const query = listQuery(typedQuery(words), AGENDA_QUERY, "tasks agenda")
       const agenda = await context.withServices((services) =>
         services.agenda.show({
-          ...(options.due === undefined ? {} : { dueWithin: options.due }),
+          ...(options.dueWithin === undefined ? {} : { dueWithin: options.dueWithin }),
           ...(options.unanswered === undefined ? {} : { unanswered: options.unanswered }),
           ...(options.waiting === undefined ? {} : { waiting: options.waiting }),
           ...(options.within === undefined ? {} : { within: options.within }),
@@ -445,7 +466,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(agendaItem(agenda)), () => `${agendaText(agenda)}\n`)
     })
 
-  annotate(tasks.command("categories"), { effects: LOCAL_READ })
+  annotate(tasks.command("categories"), { effects: LOCAL_READ, examples: [`${tool} tasks categories`] })
+    .summary("the categories a task takes, with what each means")
     .description("the categories a task takes, with what each means and the words a rule picks it by")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -459,24 +481,24 @@ export const tasksCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(tasks.command("claim"), { effects: LOCAL_WRITE })
+  annotate(tasks.command("claim"), { effects: LOCAL_WRITE, examples: [`${tool} tasks claim PR-12 --lease 2h`] })
     .description("take an open task so no other agent works it at once; the claim lapses by itself")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .option(
-      "--for <span>",
+      "--lease <duration>",
       "how long the claim lasts: 30m, 2h (default 30m); claiming again extends it",
-      durationOf("--for"),
+      durationOf("--lease"),
     )
     .option("--holder <name>", HOLDER_HELP)
     .action(async function (this: Command, id: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.claim")
-      const { for: forMs = CLAIM_LEASE_MS } = this.opts<{ for?: number }>()
-      const claimed = await context.withServices((services) => services.tasks.claim(id, holderOf(this), forMs))
+      const { lease = CLAIM_LEASE_MS } = this.opts<{ lease?: number }>()
+      const claimed = await context.withServices((services) => services.tasks.claim(id, holderOf(this), lease))
       renderAnswer(this, context, itemOf(snakeKeys(claimed)), () => `${card(claimed)}\n`)
     })
 
-  annotate(tasks.command("release"), { effects: LOCAL_WRITE })
+  annotate(tasks.command("release"), { effects: LOCAL_WRITE, examples: [`${tool} tasks release PR-12`] })
     .description("give back a task you claimed, before the claim lapses; the owner may release any")
     .argument("<task>", "the task's id or key, as tasks list shows it")
     .option("--holder <name>", HOLDER_HELP)
@@ -511,7 +533,7 @@ export const tasksStatsCommand = (messenger: Messenger): Command => {
   return annotate(new Command("show"), { effects: LOCAL_READ, output: { entity: "task_stats" } })
     .description("per chat: how many tasks are open, the oldest open one, the median time to close")
     .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
-    .option("--type <name>", "only this type: question, request, mention or promise", taskTypeOf)
+    .option("--type <type>", "only this type: question, request, mention or promise", taskTypeOf)
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       const { chat, type } = this.opts<{ chat?: string; type?: TaskView["kind"] }>()

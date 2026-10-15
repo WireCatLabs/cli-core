@@ -15,7 +15,11 @@ const DEFAULT_LIMIT = 100
 export const imagesCommand = (messenger: Messenger): Command => {
   const images = new Command("images").description("search pictures by what they show, with a model on this machine")
 
-  annotate(images.command("embed"), { effects: LOCAL_WRITE })
+  annotate(images.command("embed"), {
+    effects: LOCAL_WRITE,
+    examples: [`${messenger.app.command} images embed`, `${messenger.app.command} images embed --limit 500`],
+  })
+    .summary("compute a vector for each stored picture that has none; resumes where it stopped")
     .description(
       "compute a vector for each picture the store knows and has none for — downloading it through the messenger, " +
         "keeping only the vector; needs `picture_search` on in the profile and `images models download clip-b32`; " +

@@ -1155,14 +1155,14 @@ const NEW = {
     },
     {
       name: "task_pairs",
-      doc: "Two tasks that may be one job, and what was decided about them: the review list the duplicate check leaves, and every merge, rejection, `--attach` and `--new` as a labelled pair. A merge never deletes; `tasks unmerge` undoes one.",
+      doc: "Two tasks that may be one job, and what was decided about them: the review list the duplicate check leaves, and every merge, rejection, `--into` and `--new` as a labelled pair. A merge never deletes; `tasks unmerge` undoes one.",
       cols: [
         id(),
         fk("task_id", "tasks", {
-          note: "the newer task, the one that would be the duplicate; null for an `--attach`, which made none",
+          note: "the newer task, the one that would be the duplicate; null for an `--into`, which made none",
         }),
         c("source_locator", "text", {
-          note: "the message an `--attach` linked to `other_id` instead of opening a task",
+          note: "the message an `--into` linked to `other_id` instead of opening a task",
         }),
         fk("other_id", "tasks", { notnull: true, note: "the task it may duplicate" }),
         c("score", "integer", { notnull: true, note: "the comparison's sum of weights when the pair was recorded" }),

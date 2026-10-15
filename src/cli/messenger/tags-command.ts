@@ -14,7 +14,7 @@ const targetOptions = (command: Command, messenger: Messenger, verb: string): Co
     .option("--chat <chat>", `the chat to ${verb}, or the chat of --message; ${messenger.chatArgument}`)
     .option("--contact <person>", `the person to ${verb}: their id, @username or name, as the local store knows them`)
     .option("--message <message>", `the message to ${verb}: its id in --chat, or a msg: locator alone`)
-    .option("--task <task>", `the task to ${verb}: its id or key, as tasks list shows it`)
+    .option("--task <id>", `the task to ${verb}: its id or key, as tasks list shows it`)
 
 const describe = ({ type, chatId, personId, messageId, taskId }: TagTargetView) =>
   type === "chat"

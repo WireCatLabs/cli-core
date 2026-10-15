@@ -75,8 +75,8 @@ const allCommand = (messenger: Messenger): Command => {
         "group:<name>; each resource reads the ones of its kind, and meetings only when it names one",
     )
     .option(
-      "--max-meetings <n|all>",
-      "how many of the meeting account's meetings to look through, newest first; all looks through every one (default 100)",
+      "--max-meetings <n>",
+      "how many of the meeting account's meetings to look through, newest first, or all for every one (default 100)",
       maxMeetingsOf,
     )
     .option("--limit <n>", "how many", positiveCount("--limit"))

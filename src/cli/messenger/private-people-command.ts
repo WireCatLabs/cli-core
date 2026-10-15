@@ -71,7 +71,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
       .argument("<person>")
       .option("--file <path>", "read note text from a file; omitted or - reads stdin")
     if (name === "edit")
-      command.argument("<id>").requiredOption("--revision <number>", "the revision you read before editing")
+      command.argument("<id>").requiredOption("--revision <n>", "the revision you read before editing")
     command.action(async function (this: Command, person: string, id?: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, `contacts.notes.${name}`)

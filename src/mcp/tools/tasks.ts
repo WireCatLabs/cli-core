@@ -94,15 +94,15 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         'Adds a task for a message the rules cannot see — "I\'ll send it tomorrow" has no question mark. `message` ' +
         "accepts a msg: locator or note:<id> in the selected account. A source that already has a task of this type keeps it (`created: " +
         "false`). When an open or recent task may be the same job it refuses (reason task.duplicate-candidates) and " +
-        "lists up to 5 in `candidates` with score and reasons: read them, then call again with `attach` (that task's " +
+        "lists up to 5 in `candidates` with score and reasons: read them, then call again with `into` (that task's " +
         "key: the message is linked to it, no task opens) or `new: true` (open it anyway). Writes only to the local " +
-        `store; nothing is sent. Returns ${ROW} with created and, after attach, attached.`,
+        `store; nothing is sent. Returns ${ROW} with created and, after into, attached.`,
       input: v.object({
         message: v.pipe(v.string(), v.minLength(1), v.description("a msg: locator or note:<id>")),
         type,
         category,
         ...PLAN,
-        attach: v.optional(text(200, "a listed candidate's key: link the message to it instead of opening a task")),
+        into: v.optional(text(200, "a listed candidate's key: link the message to it instead of opening a task")),
         new: v.optional(v.pipe(v.boolean(), v.description("open the task although candidates were listed"))),
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
@@ -112,7 +112,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           args.type,
           "agent",
           planOf(args),
-          { ...(args.attach === undefined ? {} : { attach: args.attach }), ...(args.new ? { new: true } : {}) },
+          { ...(args.into === undefined ? {} : { attach: args.into }), ...(args.new ? { new: true } : {}) },
         )
         return itemOf(snakeKeys({ ...task, created, ...(attached ? { attached } : {}), ...(card ? { card } : {}) }))
       },
@@ -192,7 +192,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         itemOf(snakeKeys(await tasks(store, account, defaults.guard).show(args.task))),
     }),
 
-    tasks_similar: tool({
+    tasks_related: tool({
       title: "Tasks like this one",
       description:
         "Open tasks, and tasks closed in the last 14 days, that may be the same job as this one: found by shared " +
@@ -207,7 +207,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       stored: async (store, account, args, defaults) => {
         const size = args.limit ?? 10
         const found = await tasks(store, account, defaults.guard).similar(args.task, { limit: size })
-        return listOf("tasks similar", { items: found.map(snakeKeys), limit: size, has_more: false })
+        return listOf("tasks related", { items: found.map(snakeKeys), limit: size, has_more: false })
       },
     }),
 
@@ -216,7 +216,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         "Pairs of tasks a rule opened that may be one job, newest first: `task` is the newer one, `other` the one it " +
         "may duplicate, with score, band, levels and reasons. Decide each: tasks_merge when they are one job, " +
-        "tasks_duplicates_reject when they are not, tasks_duplicates_unsure when the meaning cannot tell — the owner " +
+        "tasks_duplicates_reject when they are not, tasks_duplicates_defer when the meaning cannot tell — the owner " +
         "then sees it under `unsure: true`. Returns { items: [{ task, source, other, score, band, levels, reasons, " +
         "decision, decided_at, created_at }] }.",
       input: v.object({
@@ -256,7 +256,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         ),
     }),
 
-    tasks_duplicates_unsure: tool({
+    tasks_duplicates_defer: tool({
       title: "Leave a pair to the owner",
       description:
         "Marks a pair the fields and the text cannot decide — a gift for mum or for dad — so the owner decides it; " +
@@ -321,7 +321,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         `Claude Code's session, else the agent's name. Writes only to the local store. Returns ${CARD}.`,
       input: v.object({
         task: text(200, "the task's id or key"),
-        for: span("how long the claim lasts (default 30m)"),
+        lease: span("how long the claim lasts (default 30m)"),
         holder: v.optional(text(200, "who you are for claims: a session or chat id")),
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
@@ -331,7 +331,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
             await tasks(store, account, defaults.guard).claim(
               args.task,
               holderOf(defaults.env, args.holder),
-              spanMs(args.for) ?? CLAIM_LEASE_MS,
+              spanMs(args.lease) ?? CLAIM_LEASE_MS,
             ),
           ),
         ),
@@ -366,7 +366,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "chats' kinds: chat_kind:channel (default chat_kind:(dialog OR group)). A task someone else claimed is " +
         "hidden unless `claimed` is true; `holder` says who you are.",
       input: v.object({
-        due: span("list tasks due within this (default 1d)"),
+        due_within: span("list tasks due within this (default 1d)"),
         unanswered: span("list chats someone else wrote last in this long ago (default 1d)"),
         waiting: span("list chats the owner wrote last in this long ago (default 7d)"),
         within: span("leave out chats silent longer than this (default 30d)"),
@@ -379,9 +379,12 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "agenda", list: false },
       stored: async (store, account, args, defaults) => {
-        const [dueWithin, unanswered, waiting, within] = [args.due, args.unanswered, args.waiting, args.within].map(
-          spanMs,
-        )
+        const [dueWithin, unanswered, waiting, within] = [
+          args.due_within,
+          args.unanswered,
+          args.waiting,
+          args.within,
+        ].map(spanMs)
         const query = listQuery(args.query ?? "", AGENDA_QUERY, "tasks agenda")
         const shown = await servicesFor(storedDeps(messenger, store, account, defaults.guard)).agenda.show({
           ...(dueWithin === undefined ? {} : { dueWithin }),

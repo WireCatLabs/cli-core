@@ -32,6 +32,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       `${tool} mentions list --new`,
     ],
   })
+    .summary("this account's mentions matching the query, newest first")
     .description(
       "this account's mentions matching the query, newest first; --new for those found since the last review",
     )
@@ -79,6 +80,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     query: MENTION_QUERY,
     examples: [`${tool} mentions domains`, `${tool} mentions domains status:found`],
   })
+    .summary("the sites this account's links point to, most linked first")
     .description("the sites this account's links point to, most linked first, with chats and first and last time")
     .argument("[query...]", "narrows the links counted: the fields below; dismissed links are never counted")
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
