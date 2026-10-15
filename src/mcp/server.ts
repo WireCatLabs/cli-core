@@ -15,12 +15,12 @@ import { openStore } from "../store/store.js"
 import { agentLog } from "./agent-log.js"
 import type { HttpOptions } from "./http/serve.js"
 import { instructions } from "./instructions.js"
-import { personalMcpTools } from "./personal.js"
 import { registerPrompts } from "./prompts.js"
 import { registerResources } from "./resources.js"
 import { MessengerSession, type SessionOptions } from "./session.js"
 import { commandOf, registerSurface } from "./surface.js"
 import { READ, tool, toolKey } from "./tool.js"
+import { personalMcpTools } from "./tools.js"
 
 export type ServerOptions = SessionOptions & { spawnJob?: import("../services/backfill-jobs.js").SpawnJob }
 

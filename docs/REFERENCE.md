@@ -174,13 +174,9 @@ before sending, after the permission gate. Telegram group forums support it; MAX
 Journal records carry only the thread id. A retry keeps the same send id, chat and topic; scheduled
 sends must be checked in the queue instead of repeated.
 
-Consumers retaining their own personal MCP session can import `personalMcpTools`,
-`registerPersonalMcpTools`, `personalMcpConfirmer` and the `PersonalMcpRegistration` types from
-`./cli`. Filter unsupported provider capabilities before mounting. The host supplies its held
-session, account-scoped store, defaults and permission scope (`around`); `withServices` and
-`resolveChat` bind its service overrides and confirmation titles. Session callbacks receive a
-`release` function for local inference. The host closes `warmEmbedders()` on shutdown. The same
-strict catalogue is mounted by the built-in server; unknown arguments fail before execution.
+A CLI serves MCP by mounting `mcpCommand(messenger)`; what differs per messenger is on the `Messenger`
+(`topics`, `skill`, `diagnose`, the `guard` hook). The server mounts one strict catalogue: unknown arguments fail
+before execution.
 
 ## Media options
 
