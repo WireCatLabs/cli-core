@@ -50,6 +50,14 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
       updatedAt: at(packet.series.updatedAt),
     },
     historyWindow: { after: at(packet.historyWindow.after), before: at(packet.historyWindow.before) },
+    ...(packet.knowledge
+      ? {
+          knowledge: {
+            ...packet.knowledge,
+            items: packet.knowledge.items.map((fact) => ({ ...fact, updatedAt: at(fact.updatedAt) })),
+          },
+        }
+      : {}),
     related: {
       ...packet.related,
       items: packet.related.items.map(({ reference, ...entry }) => ({
@@ -87,6 +95,14 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   for (const entry of [...item.meetings, ...item.related.items])
     entry.evidence.content_bytes = Buffer.byteLength(JSON.stringify(entry.evidence.items), "utf8")
   const size = () => Buffer.byteLength(JSON.stringify(item), "utf8")
+  while (size() > item.limits.bytes && item.knowledge?.items.length) {
+    item.knowledge.items.pop()
+    item.knowledge.output_limited = item.coverage.output_limited = true
+  }
+  if (size() > item.limits.bytes && item.knowledge) {
+    delete item.knowledge
+    item.coverage.output_limited = true
+  }
   while (size() > item.limits.bytes && item.related.items.length) {
     item.related.items.pop()
     item.related.output_limited = item.coverage.output_limited = true

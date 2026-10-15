@@ -103,6 +103,11 @@ export {
   validateMeetingPreparationContext,
 } from "./preparation-context.js"
 export type {
+  MeetingPreparationFact,
+  MeetingPreparationKnowledgeRequest,
+  MeetingPreparationKnowledgeStore,
+} from "./preparation-knowledge.js"
+export type {
   MeetingProjectDiscoveryOptions,
   MeetingProjectDiscoveryPage,
   MeetingProjectDiscoveryReader,

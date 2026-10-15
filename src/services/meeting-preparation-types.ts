@@ -3,6 +3,8 @@ import type {
   MeetingHistoryEntry,
   MeetingPreparationContext,
   MeetingPreparationContextStore,
+  MeetingPreparationFact,
+  MeetingPreparationKnowledgeStore,
   MeetingReadCapabilities,
   MeetingRelatedHistoryEntry,
   MeetingRelatedHistoryStore,
@@ -29,7 +31,8 @@ export interface MeetingPreparationPorts {
     MeetingReadCapabilities &
     MeetingSeriesHistoryStore &
     MeetingPreparationContextStore &
-    MeetingRelatedHistoryStore
+    MeetingRelatedHistoryStore &
+    Partial<MeetingPreparationKnowledgeStore>
   upcoming: ReturnType<typeof createUpcomingMeetingReader>
 }
 export interface MeetingPreparationEntry {
@@ -51,6 +54,15 @@ export interface MeetingPreparation {
     hasMore: boolean
     outputLimited: boolean
     selection: "explicit-person-links/confirmed-project-links"
+  }
+  knowledge?: {
+    anchors: string[]
+    items: MeetingPreparationFact[]
+    hasMore: boolean
+    outputLimited: boolean
+    selection: "accepted-global-person/project-facts"
+    factEvidence: "not-revalidated"
+    otherSources: "not-queried"
   }
   limits: { meetings: number; cues: number; contextLimit: number; maxReadBytes: number; bytes: number }
   coverage: {
