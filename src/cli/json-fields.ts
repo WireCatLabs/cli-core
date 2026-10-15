@@ -6,14 +6,40 @@ import { ENTITIES, type EntityName } from "../entities/index.js"
 /** Provider adapters may describe a result whose fields differ from the shared entity. */
 export type JsonFieldsResolver = (command: Command | undefined) => readonly string[] | undefined
 
+/** An entity's fields: a list of names, or an object schema whose entries are the fields. */
+export type EntityFields = readonly string[] | { readonly entries: Readonly<Record<string, unknown>> }
+
+const declaredEntity = (command: Command | undefined): string | undefined => {
+  const output = command ? metaOf(command).output : undefined
+  return output && (output.view ? `${output.entity}.${output.view}` : output.entity)
+}
+
+const isNames = (fields: EntityFields): fields is readonly string[] => Array.isArray(fields)
+
+const namesOf = (fields: EntityFields | undefined): string[] | undefined =>
+  fields === undefined ? undefined : isNames(fields) ? [...fields] : Object.keys(fields.entries)
+
+/**
+ * An app's own entities, by the name (or `name.view`) its commands declare in `annotate(…, { output })`, so
+ * `--json=a,b` is checked against them as against cli-core's. Pass the result as `resolve` to `liftJson` and
+ * `checkJson`. A shared entity's name is refused: two meanings for one name would part the CLIs.
+ */
+export const entityFields = (table: Readonly<Record<string, EntityFields>>): JsonFieldsResolver => {
+  const shared = Object.keys(table).filter((name) => name in ENTITIES)
+  if (shared.length > 0) throw new Error(`entityFields: ${shared.join(", ")} is cli-core's entity; name yours apart`)
+  return (command) => {
+    const name = declaredEntity(command)
+    return name !== undefined && Object.hasOwn(table, name) ? namesOf(table[name]) : undefined
+  }
+}
+
 /** The fields of the answer a command declares (`annotate(…, { output })`); nothing until it declares one. */
 export const answerFields = (command: Command | undefined, resolve?: JsonFieldsResolver): string[] | undefined => {
   const own = resolve?.(command)
   if (own !== undefined) return [...own]
-  const output = command ? metaOf(command).output : undefined
-  if (!output) return undefined
-  const schema = ENTITIES[(output.view ? `${output.entity}.${output.view}` : output.entity) as EntityName]
-  return schema && "entries" in schema ? Object.keys(schema.entries) : undefined
+  const name = declaredEntity(command)
+  const schema = name === undefined ? undefined : ENTITIES[name as EntityName]
+  return schema && "entries" in schema ? namesOf(schema) : undefined
 }
 
 const PATHS = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*(,[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*)*$/
