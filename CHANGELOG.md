@@ -7,11 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-### Added
-
-- **`store.mail.emails` and `emailRefs` take `attachmentErrors`**: only emails with an attachment whose text
-  extraction failed with one of those errors, so a retry reads those emails again instead of a whole mailbox.
-
 ## 0.293.0 — 15.10.2026
 
 ### Added
@@ -20,6 +15,8 @@ shape of this file.
   passage handlers, keeps independent answers/cursors/errors, reserves stored-text read ceilings and performs
   one bounded index pass. The host selects one account and owns input, cancellation and final output; no model
   or remote write is dispatched. The existing single-input commands keep their grammar and behavior.
+- **`store.mail.emails` and `emailRefs` take `attachmentErrors`**: only emails with an attachment whose text
+  extraction failed with one of those errors, so a retry reads those emails again instead of a whole mailbox.
 
 ### Changed — may break callers
 
