@@ -18,6 +18,22 @@ shape of this file.
   groups joined (`15 000` → `15000`) and stop words left out; a rule's `<kind> — <source>` title is not indexed.
   Task writes queue the task and the next lookup indexes it, as for notes; the upgrade queues every stored task, and
   `store reindex` queues them again. Message and note indexing are unchanged.
+- **Phone numbers of most of Europe, the US and Canada, written the local way** (`phone_countries`):
+  `config set phone_countries es,ru` is store-wide; a number without `+` is read in those countries, the first that
+  fits, with its trunk prefix (`0`, `06`, `8 0`) or as written. Grouped or after a phone word any valid number, bare
+  digits only a mobile. The plans of 47 countries come from libphonenumber's metadata (a generated 13 KB table; the
+  library is a dev dependency only). `00` reads as `+`, `+44 (0)20 …` drops the `(0)`, and phone and not-phone words
+  are in seven languages. Unset, numbers without `+` are read as Russian, as before. `mentions rebuild phone` reads
+  stored numbers again; a decision moves with its place and the confirmed identity takes the new value.
+- **`mentions list --new`**: undecided mentions found since the last run that showed them all,
+  per profile. `messages sync` names how many there are, with the `mentions.review` step. Mentions carry `found_at`,
+  which a rebuild keeps.
+
+### Changed — may break callers
+
+- **`phone:` and `value:` also match a stored number ending with the typed number's national digits** (8 or more), so
+  a number saved before `phone_countries` is found either way. A Russian landline in groups, `(812) 000-00-01`, is now
+  `+78120000001`, not the bare digits.
 
 ## 0.284.0 — 15.10.2026
 
@@ -63,16 +79,6 @@ shape of this file.
 
 ### Added
 
-- **Phone numbers of most of Europe, the US and Canada, written the local way** (`phone_countries`):
-  `config set phone_countries es,ru` is store-wide; a number without `+` is read in those countries, the first that
-  fits, with its trunk prefix (`0`, `06`, `8 0`) or as written. Grouped or after a phone word any valid number, bare
-  digits only a mobile. The plans of 47 countries come from libphonenumber's metadata (a generated 13 KB table; the
-  library is a dev dependency only). `00` reads as `+`, `+44 (0)20 …` drops the `(0)`, and phone and not-phone words
-  are in seven languages. Unset, numbers without `+` are read as Russian, as before. `mentions rebuild phone` reads
-  stored numbers again; a decision moves with its place and the confirmed identity takes the new value.
-- **`mentions list --new`**: undecided mentions found since the last run that showed them all,
-  per profile. `messages sync` names how many there are, with the `mentions.review` step. Mentions carry `found_at`,
-  which a rebuild keeps.
 - **Task fields (store version 13)**: a task found in a message now gets a readable key by its type — `Q-15`
   question, `REQ-22` request, `M-7` mention, `PR-4` promise — from a counter per type taken in the same write as
   the task. Tasks made before keep their `IN…-n` key; that key, the new one and the id all resolve. `REQ` is no
@@ -113,9 +119,6 @@ shape of this file.
   (`--remind-time`). `skill show` and `skill install` take their effects from cli-base now; `skill install` still
   counts as a change to what later runs may do.
 
-- **`phone:` and `value:` also match a stored number ending with the typed number's national digits** (8 or more), so
-  a number saved before `phone_countries` is found either way. A Russian landline in groups, `(812) 000-00-01`, is now
-  `+78120000001`, not the bare digits.
 - **`tasks add` needs `--category <name>`**, and the MCP tool `tasks_add` needs `category`: an agent names what a
   task is about from the list, and an unknown name is refused with the list, so "finance" and "payments" never
   coexist. Add `--category other` where nothing fits. `TasksService.add` without one picks it by the rule's trigger
