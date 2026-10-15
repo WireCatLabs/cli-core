@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../cli/app.js"
+import { isCliFailure } from "../cli/failures.js"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
@@ -53,27 +54,50 @@ export const accountStore = async (deps: Pick<ServiceDeps, "store" | "account">)
  */
 export const crossAccount = (deps: Pick<ServiceDeps, "store">, _reason: string): Promise<MessageStore> => deps.store()
 
-/** `accountStore`, or nothing when the store will not open or the account is not known yet. */
-export const accountStoreIfOpen = async (deps: ServiceDeps): Promise<AccountStore | undefined> => {
+const NO_LOCAL_STORE = "this answer comes from the messenger, not from the local store"
+
+/**
+ * Busy: another process (`serve`) held the write lock past `busy_timeout`. Node's `node:sqlite` sets `errcode`,
+ * Bun's `bun:sqlite` sets `errno`; the low byte is the primary code, so the extended BUSY codes match too.
+ */
+const SQLITE_BUSY = 5
+
+const storeAbsent = (error: unknown): boolean => {
+  if (isCliFailure(error)) return error.code === "validation_error" && error.message === NO_LOCAL_STORE
+  const { errcode, errno } = (error ?? {}) as { errcode?: unknown; errno?: unknown }
+  const code = errcode ?? errno
+  return error instanceof Error && typeof code === "number" && (code & 0xff) === SQLITE_BUSY
+}
+
+/** `not_found`: nothing has recorded whose account this profile is; `authentication_error`: the connection has no self. */
+const accountUnknown = (error: unknown): boolean =>
+  isCliFailure(error) && (error.code === "not_found" || error.code === "authentication_error")
+
+const unless = async <T>(work: () => Promise<T>, expected: (error: unknown) => boolean): Promise<T | undefined> => {
   try {
-    return await accountStore(deps)
-  } catch {
-    return undefined
+    return await work()
+  } catch (error) {
+    if (expected(error)) return undefined
+    throw error
   }
 }
 
+/** `accountStore`, or nothing when there is no store to read or the account is not known yet. */
+export const accountStoreIfOpen = async (deps: ServiceDeps): Promise<AccountStore | undefined> => {
+  const held = await storeIfOpen(deps)
+  return held?.store.forAccount(held.account)
+}
+
 /**
- * Online, the store only adds to an answer the messenger already gave, so a store that will not open,
- * or that does not know whose account this is yet, loses nothing.
+ * Online, the store only adds to an answer the messenger already gave, so no store, a busy one, or one that
+ * does not know whose account this is yet loses nothing. A store that is broken is an error.
  */
 export const storeIfOpen = async (
   deps: ServiceDeps,
 ): Promise<{ store: MessageStore; account: AccountKey } | undefined> => {
-  try {
-    return { store: await deps.store(), account: await deps.account() }
-  } catch {
-    return undefined
-  }
+  const store = await unless(() => deps.store(), storeAbsent)
+  const account = store && (await unless(() => deps.account(), accountUnknown))
+  return store && account ? { store, account } : undefined
 }
 
 /** Whether `chats`, `messages list|context` and `contacts` answer from the store instead of the messenger. */
@@ -108,7 +132,7 @@ export const onlineDeps = (
     return { provider: messenger.provider, account: self }
   },
   store: async () => {
-    throw new CliError("validation_error", "this answer comes from the messenger, not from the local store")
+    throw new CliError("validation_error", NO_LOCAL_STORE)
   },
 })
 
