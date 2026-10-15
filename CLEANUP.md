@@ -42,17 +42,4 @@
 
 - 2026-10-14: retain `feat/public-answer-policy` and its worktree plus isolated validation artifacts until owner-approved cleanup; public exports for standalone CLI/MCP consumers.
 - 2026-10-14: `../cli-core-wt-account-from-command`, branch `feat/account-from-command` — Messenger.accountOf for memo; remove after its PR merges.
-- 2026-10-14: `../cli-core-wt-task-link`, branch `feat/task-link-relations` — task: target is a task relation; remove after its PR merges.
-- 2026-10-14: `../cli-core-wt-tasks-plan`, branch `docs/tasks-plan` — tasks design plan; remove after its PR merges.
-- 2026-10-14: `../cli-core-wt-task-similarity`, branch `feat/task-similarity` — task similarity scoring module; remove after its PR merges.
 - `bench/search/store-chain.ts` — times the legacy word-search chain (`search/search.js`, `matchWords`, `SCOPE_TOKEN_LIMIT`), all removed in refactor/drop-legacy-search; it no longer runs. Keep `bench/search/results.md` as the record. 2026-10-14
-- 2026-10-14: `../cli-core-wt-reserve-13`, branch `docs/reserve-migration-13` — reserves store migration 13 for task fields; remove after its PR merges.
-- 2026-10-14: `../cli-core-wt-task-fields`, branch `feat/task-fields` — tasks plan step 2 (task fields, store version 13); remove after its PR merges.
-- 2026-10-15: `../cli-core-wt-rules-on-sync`, branch `feat/rules-on-sync` — tasks plan step 7; remove after its PR merges.
-- `~/Projects/AI/cli-core-wt-task-search` and `~/Projects/AI/cli-core-wt-reserve-14` — worktrees of tasks plan step 3 (#1245 merged); remove once feat/task-search merges. 2026-10-15
-- 2026-10-15: `~/Projects/AI/cli-core-wt-reserve-15`, branch `docs/reserve-migration-15` — worktree for the store migration 15 reservation; remove once the PR is merged.
-- 2026-10-15: `../cli-core-wt-tasks-handoff`, branch `docs/tasks-handoff` — tasks handoff; remove after its PR merges.
-- 2026-10-15: `~/Projects/AI/cli-core-wt-task-duplicates`, branch `feat/task-duplicates` — tasks plan step 5; remove after its PR merges.
-- 2026-10-15: `~/Projects/AI/cli-core-wt-search-mail`, local branches `feat/source-search-own` and `search-mail-rebase` — #1121 (tg and max stop searching mail); remove after it merges.
-- 2026-10-14: local branch `backup/source-search-own-159de861` in cli-core — the notes-and-tasks version of feat/source-search-own before the owner reversed it; remove once #1121 merges.
-- 2026-10-15: `~/Projects/AI/cli-core-wt-task-follow-ups`, branch `feat/task-follow-ups` — tasks plan step 6; remove after its PR merges.
