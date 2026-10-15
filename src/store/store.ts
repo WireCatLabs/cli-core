@@ -66,12 +66,15 @@ import * as lucene from "./sqlite/lucene.js"
 import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
 import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
+import { type SourceMentionStore, sourceMentionStoreOver } from "./sqlite/mention-sources.js"
 import {
   confirmMention,
   listMentions,
   type MentionDecision,
   type MentionsRebuild,
   type MentionsState,
+  mentionOfAccount,
+  mentionOwner,
   mentionsState,
   rebuildMentions,
   rejectMention,
@@ -674,6 +677,8 @@ export interface MessageStore {
   readonly botUpdates: BotUpdateStore
   readonly involvements: InvolvementStore
   readonly tasks: StoreTaskStore
+  /** Mentions in documents, notes and mail: memo lists and decides them. */
+  readonly sourceMentions: SourceMentionStore
   readonly knowledge: KnowledgeStore
   /** Notes, the links between anything and anything, and the owner's organisations and projects. */
   readonly notes: NotesStore
@@ -912,6 +917,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   let botUpdates: BotUpdateStore | undefined
   let involvements: InvolvementStore | undefined
   let tasks: MessageStore["tasks"] | undefined
+  let sourceMentions: SourceMentionStore | undefined
   let knowledge: MessageStore["knowledge"] | undefined
   let notes: MessageStore["notes"] | undefined
   let catalog: CatalogStore | undefined
@@ -1486,28 +1492,14 @@ const storeOver = (context: StoreContext): MessageStore => {
     confirmMention: async (key, id, ownerRef, by) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) throw new CliError("not_found", `no mention ${id} in this account`)
-      let owner: { person: number } | { organization: number } | undefined
-      if (ownerRef !== undefined) {
-        const [type, uid = ""] = ownerRef.split(":")
-        if (type === "person") {
-          const person = personLinks.personByUid(context, uid)
-          if (!person) throw new CliError("not_found", `no ${ownerRef} in the store`)
-          owner = { person: Number(person.uid) }
-        } else {
-          const found = database
-            .prepare("SELECT id FROM organizations WHERE id = ? AND deleted_at IS NULL")
-            .get(Number(uid) || 0)
-          if (!found) throw new CliError("not_found", `no ${ownerRef} in the store`)
-          owner = { organization: Number(found.id) }
-        }
-      }
-      return write(database, () => confirmMention(context, accountKey, id, owner, by))
+      const mention = mentionOfAccount(database, accountKey, id)
+      return write(database, () => confirmMention(context, mention, mentionOwner(context, ownerRef), by))
     },
 
     rejectMention: async (key, id, by) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) throw new CliError("not_found", `no mention ${id} in this account`)
-      return write(database, () => rejectMention(context, accountKey, id, by))
+      return write(database, () => rejectMention(context, mentionOfAccount(database, accountKey, id), by))
     },
 
     rebuildMentions: async (options = {}) => rebuildMentions(database, { now: context.now(), ...options }),
@@ -1821,6 +1813,10 @@ const storeOver = (context: StoreContext): MessageStore => {
       tasks ??= taskStoreOver(context)
       return tasks
     },
+    get sourceMentions() {
+      sourceMentions ??= sourceMentionStoreOver(context)
+      return sourceMentions
+    },
     get knowledge() {
       knowledge ??= knowledgeStoreOver(context)
       return knowledge
@@ -1894,6 +1890,7 @@ export type {
   TranscriptContextPage,
 } from "./sqlite/meeting-reads.js"
 export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
+export { OTHER_SOURCES, type OtherSource, type SourceMention } from "./sqlite/mention-sources.js"
 export {
   MENTION_QUERY,
   MENTION_STATUSES,

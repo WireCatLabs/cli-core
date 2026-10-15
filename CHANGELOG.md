@@ -13,6 +13,19 @@ shape of this file.
   `JsonFieldsResolver` that `liftJson` and `checkJson` already take, keyed by the `output` entity (or `entity.view`)
   a command declares. A field the entity lacks is refused with the same `validation_error` as a cli-core entity.
   Fields are a list of names or an object schema's `entries`; a name cli-core already uses is refused.
+- **`store.sourceMentions`: mentions in documents, notes and mail, for memo.** `list(source, query, window, mail)`
+  lists one kind of text's mentions, newest text first, with its title, an email's sender and date; mail only of the
+  accounts the caller names. `show`, `confirm` and `reject` decide them as `mentions` does; `--all-in-chat` is
+  refused outside a chat. `OTHER_SOURCES`, `OtherSource`, `SourceMention` are exported.
+- **`mentions show` offers the sender of the mail that carries a phone or an address**: `candidates` lists the people
+  whose received mail holds the value, most letters first (a signature, mostly), for a message's mention and a mail
+  one alike. Offered only; nothing is linked by this rule.
+
+### Fixed
+
+- **`mentions list`, `show`, `--new`, `domains` and `--all-in-chat` no longer pick up mentions of documents, notes and
+  mail** (since 0.285.0): such a row whose text id equalled a message's id was listed as that message's mention, with
+  a wrong `written`, and counted in the review after `messages sync`. Search was not affected.
 
 ## 0.290.0 — 15.10.2026
 

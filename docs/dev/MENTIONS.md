@@ -139,8 +139,10 @@ per sync and names nothing; its mentions show up on the next `--new`.
 
 ## Known limits
 
-- Notes, documents and mail are read (store version 16) but listed nowhere yet: `mentions list` shows message
-  sources only, and memo has no `mentions` command.
+- Notes, documents and mail are read (store version 16) and listed by `store.sourceMentions` (mail only of the
+  accounts the caller names), but memo has no `mentions` command yet; `mentions list` shows message sources only.
+- A phone or an address in received mail is offered as its sender's (`candidates` in `show`), never linked by rule:
+  most mail numbers are signatures, but a forwarded letter carries someone else's.
 - A `url` is confirmed only to the stored Telegram chat or account it names; other links can only be rejected.
 - Names are known people only. Words under four letters are skipped, so «Оля» or «Ира» are missed.
 - Builds 0.264–0.270 delete a text's `person-name` rows when they read the text again; `mentions rebuild
