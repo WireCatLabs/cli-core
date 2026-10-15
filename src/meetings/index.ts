@@ -189,6 +189,12 @@ export {
   type MeetingReference,
   parseMeetingReference,
 } from "./reference.js"
+export {
+  type MeetingRelatedHistoryEntry,
+  type MeetingRelatedHistoryRequest,
+  type MeetingRelatedHistoryStore,
+  validateMeetingRelatedHistory,
+} from "./related-history.js"
 export { SAVE_HELP, SAVE_INSTRUCTION } from "./save-hints.js"
 export type {
   MeetingHitSearchRequest,

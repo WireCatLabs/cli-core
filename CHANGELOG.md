@@ -5,6 +5,25 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- Meeting preparation includes bounded, cited stored meetings outside the selected series when
+  explicit person links or confirmed global project memberships connect them to included prior
+  occurrences. Related meetings stay in the selected account and history window; separate
+  association flags, anchor references and lookahead distinguish them from exact-series history.
+  Exact-series evidence has priority within the shared output budget. No index refresh, inference
+  from names, cross-account search or writes occur.
+
+### Changed — may break callers
+
+- Custom meeting preparation stores must implement the new bounded `relatedHistory` capability.
+  The shared SQLite store implements it without a migration. Preparation answers add `related`;
+  after related history is queried, `coverage.unqueried` lists person/project nonmeeting context and
+  alias candidates, rather than person history and all project context. Hosts keep the existing
+  CLI/MCP arguments and account binding.
+
 ## 0.283.0 — 15.10.2026
 
 ### Added
@@ -18,6 +37,7 @@ shape of this file.
 ### Fixed
 
 - **Nested `--json` paths accept the `items.ref` list shorthand.** Array order and report coverage, pagination, missing data and execution metadata are retained across CLIs.
+
 
 ## 0.282.0 — 15.10.2026
 

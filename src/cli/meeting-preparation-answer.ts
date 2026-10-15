@@ -7,6 +7,30 @@ import { itemOf, metaNow, sealed, snakeKeys } from "./envelope.js"
 const id = (value: number | null) => (value === null ? null : String(value))
 const at = (value: number | null) => (value === null ? null : new Date(value).toISOString())
 
+const mapMeeting = (meeting: MeetingPreparation["items"][number]["meeting"]) => {
+  return {
+    ...meeting,
+    id: id(meeting.id),
+    eventId: id(meeting.eventId),
+    startedAt: at(meeting.startedAt),
+    endedAt: at(meeting.endedAt),
+    updatedAt: at(meeting.updatedAt),
+  }
+}
+const mapEvidence = (evidence: MeetingPreparation["items"][number]["evidence"]) => {
+  return {
+    ...evidence,
+    coverage: { ...evidence.coverage, nextTranscriptId: id(evidence.coverage.nextTranscriptId) },
+    items: evidence.items.map(({ reference, startMs, ...cue }) => ({
+      ...cue,
+      ref: reference,
+      offsetMs: startMs,
+      transcriptId: id(cue.transcriptId),
+      speakerParticipantId: id(cue.speakerParticipantId),
+    })),
+  }
+}
+
 export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   const candidate = packet.upcoming.candidate
   const mapped = snakeKeys({
@@ -26,27 +50,19 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
       updatedAt: at(packet.series.updatedAt),
     },
     historyWindow: { after: at(packet.historyWindow.after), before: at(packet.historyWindow.before) },
+    related: {
+      ...packet.related,
+      items: packet.related.items.map(({ reference, ...entry }) => ({
+        ...entry,
+        ref: reference,
+        meeting: mapMeeting(entry.meeting),
+        evidence: mapEvidence(entry.evidence),
+      })),
+    },
     meetings: packet.items.map((entry) => ({
       ref: entry.reference,
-      meeting: {
-        ...entry.meeting,
-        id: id(entry.meeting.id),
-        eventId: id(entry.meeting.eventId),
-        startedAt: at(entry.meeting.startedAt),
-        endedAt: at(entry.meeting.endedAt),
-        updatedAt: at(entry.meeting.updatedAt),
-      },
-      evidence: {
-        ...entry.evidence,
-        coverage: { ...entry.evidence.coverage, nextTranscriptId: id(entry.evidence.coverage.nextTranscriptId) },
-        items: entry.evidence.items.map(({ reference, startMs, ...cue }) => ({
-          ...cue,
-          ref: reference,
-          offsetMs: startMs,
-          transcriptId: id(cue.transcriptId),
-          speakerParticipantId: id(cue.speakerParticipantId),
-        })),
-      },
+      meeting: mapMeeting(entry.meeting),
+      evidence: mapEvidence(entry.evidence),
       context: {
         participants: {
           ...entry.context.participants,
@@ -68,9 +84,13 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   const parsed = v.safeParse(meetingPreparation, mapped)
   if (!parsed.success) throw new CliError("invalid_response", "Meeting preparation does not match its answer contract")
   const item = parsed.output
-  for (const entry of item.meetings)
+  for (const entry of [...item.meetings, ...item.related.items])
     entry.evidence.content_bytes = Buffer.byteLength(JSON.stringify(entry.evidence.items), "utf8")
   const size = () => Buffer.byteLength(JSON.stringify(item), "utf8")
+  while (size() > item.limits.bytes && item.related.items.length) {
+    item.related.items.pop()
+    item.related.output_limited = item.coverage.output_limited = true
+  }
   while (size() > item.limits.bytes && item.meetings.length) {
     item.meetings.pop()
     item.coverage.output_limited = true

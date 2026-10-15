@@ -16,7 +16,7 @@ const outputSchema: Record<string, unknown> = {
 export const meetingPreparationTool = {
   name: "meeting_prepare",
   description:
-    "Prepare cited context for one exact provider series in the server's selected account. Reads remote upcoming proof and bounded stored history, people/project links, accepted meeting facts and directly sourced tasks; performs no writes. Optional ISO windows default to now, seven days ahead and thirty days of history. Coverage identifies incomplete and unqueried context.",
+    "Prepare cited context for one exact provider series in the server's selected account. Reads remote upcoming proof and bounded stored history, related meeting transcripts through explicit people/confirmed project links, accepted meeting facts and directly sourced tasks; performs no writes. Optional ISO windows default to now, seven days ahead and thirty days of history. Coverage identifies incomplete and unqueried context.",
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   inputSchema: { ...inputSchema, type: "object" as const },
   outputSchema: { ...outputSchema, type: "object" as const },

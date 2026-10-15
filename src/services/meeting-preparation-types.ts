@@ -4,6 +4,8 @@ import type {
   MeetingPreparationContext,
   MeetingPreparationContextStore,
   MeetingReadCapabilities,
+  MeetingRelatedHistoryEntry,
+  MeetingRelatedHistoryStore,
   MeetingSeriesContext,
   MeetingSeriesHistoryStore,
   MeetingStore,
@@ -26,7 +28,8 @@ export interface MeetingPreparationPorts {
   meetings: Pick<MeetingStore, "account"> &
     MeetingReadCapabilities &
     MeetingSeriesHistoryStore &
-    MeetingPreparationContextStore
+    MeetingPreparationContextStore &
+    MeetingRelatedHistoryStore
   upcoming: ReturnType<typeof createUpcomingMeetingReader>
 }
 export interface MeetingPreparationEntry {
@@ -42,6 +45,13 @@ export interface MeetingPreparation {
   series: MeetingSeriesContext | null
   historyWindow: { after: number; before: number }
   items: MeetingPreparationEntry[]
+  related: {
+    anchors: string[]
+    items: (MeetingRelatedHistoryEntry & { reference: string; evidence: MeetingEvidencePacket })[]
+    hasMore: boolean
+    outputLimited: boolean
+    selection: "explicit-person-links/confirmed-project-links"
+  }
   limits: { meetings: number; cues: number; contextLimit: number; maxReadBytes: number; bytes: number }
   coverage: {
     archiveCompleteness: "unknown"
@@ -52,6 +62,12 @@ export interface MeetingPreparation {
     outputLimited: boolean
     context: "observed-participants/confirmed-projects/accepted-meeting-subject-facts/direct-source-tasks"
     factEvidence: "not-revalidated"
-    unqueried: readonly ["person-history", "project-wide-context", "project-alias-candidates"]
+    unqueried: readonly (
+      | "person-history"
+      | "project-wide-context"
+      | "person-nonmeeting-context"
+      | "project-nonmeeting-context"
+      | "project-alias-candidates"
+    )[]
   }
 }

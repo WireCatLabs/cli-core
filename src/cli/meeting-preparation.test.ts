@@ -148,7 +148,7 @@ describe("meeting preparation adapters", () => {
     expect(answer.item.coverage).toMatchObject({
       archive_completeness: "unknown",
       fact_evidence: "not-revalidated",
-      unqueried: ["person-history", "project-wide-context", "project-alias-candidates"],
+      unqueried: ["person-nonmeeting-context", "project-nonmeeting-context", "project-alias-candidates"],
     })
     const evidence = answer.item.meetings[0]?.evidence
     expect(evidence?.content_bytes).toBe(Buffer.byteLength(JSON.stringify(evidence?.items)))

@@ -18,7 +18,8 @@ production adapter; the providers below are invented fixtures, not available Mee
 | `MeetingContextStore` | typed event and participant link receipts | atomic scoped ownership, compare-and-set and identity association audit |
 | `MeetingReadCapabilities` / `MeetingContextReadCapabilities` | bounded metadata, transcript pages and atomic cue-centered snapshots | account ownership, read-byte preflight and revision-aware reads |
 | `MeetingPreparationContextStore` | bounded context for a selected occurrence, without accepting findings | shared stored person/project links, accepted facts and directly sourced tasks |
-| `createMeetingPreparationService` | selected upcoming proof, exact-series history and cited local context | bind the authorized numeric account, shared store and account-bound upcoming reader |
+| `MeetingRelatedHistoryStore` | bounded other-series history through explicit people/confirmed project links | same-account, dated live meeting metadata and independent lookahead |
+| `createMeetingPreparationService` | selected upcoming proof, exact-series and related history with cited local context | bind the authorized numeric account, shared store and account-bound upcoming reader |
 | `MeetingParticipantSearchStore` | shared CLI/MCP participant discovery and continuation steps | account/query-bound candidate pages, Unicode literal matching and read budgets |
 | `readMeetingProjectDiscovery` | one bounded canonical/key/alias page with cited unconfirmed evidence | the existing vocabulary resolver and account-scoped `MeetingSearchStore`; no provider-specific project catalog |
 | Project-evidence CLI/MCP adapters | query validation, complete registered entity and frozen continuation | an account-bound `MeetingProjectDiscoveryReader`; host owns lifetime and final output limits |

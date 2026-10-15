@@ -5,7 +5,7 @@ import {
   preparationId as id,
   preparationContext,
   preparationEvidence,
-  preparationTime,
+  preparationMeeting,
   preparationUpcoming,
 } from "./meeting-preparation-parts.js"
 
@@ -27,19 +27,26 @@ export const meetingPreparation = v.strictObject({
   meetings: v.array(
     v.strictObject({
       ref: reference,
-      meeting: v.strictObject({
-        id,
-        external_id: id,
-        title: v.nullable(v.string()),
-        event_id: v.nullable(id),
-        started_at: preparationTime,
-        ended_at: preparationTime,
-        updated_at: isoTime,
-      }),
+      meeting: preparationMeeting,
       evidence: preparationEvidence,
       context: preparationContext,
     }),
   ),
+  related: v.strictObject({
+    anchors: v.array(reference),
+    items: v.array(
+      v.strictObject({
+        ref: reference,
+        meeting: preparationMeeting,
+        evidence: preparationEvidence,
+        shared_person: v.boolean(),
+        shared_project: v.boolean(),
+      }),
+    ),
+    has_more: v.boolean(),
+    output_limited: v.boolean(),
+    selection: v.literal("explicit-person-links/confirmed-project-links"),
+  }),
   limits: v.strictObject({ meetings: count, cues: count, context_limit: count, max_read_bytes: count, bytes: count }),
   coverage: v.strictObject({
     archive_completeness: v.literal("unknown"),
@@ -50,11 +57,15 @@ export const meetingPreparation = v.strictObject({
     output_limited: v.boolean(),
     context: v.literal("observed-participants/confirmed-projects/accepted-meeting-subject-facts/direct-source-tasks"),
     fact_evidence: v.literal("not-revalidated"),
-    unqueried: v.tuple([
-      v.literal("person-history"),
-      v.literal("project-wide-context"),
-      v.literal("project-alias-candidates"),
-    ]),
+    unqueried: v.array(
+      v.picklist([
+        "person-history",
+        "project-wide-context",
+        "person-nonmeeting-context",
+        "project-nonmeeting-context",
+        "project-alias-candidates",
+      ]),
+    ),
   }),
 })
 export type MeetingPreparationItem = v.InferOutput<typeof meetingPreparation>
