@@ -1014,7 +1014,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--min-views` | `<n>` | minimum known cumulative views |  | `stats messages discussion` |
 | `--model` | `<id>` | which downloaded speech model hears them; `models audio list` shows them. **max's own copy is worded differently until T6 moves the command onto the shared one (e13); replies edit uses this option for legacy template mode: fill-only or may-reword; use ai blocks instead** |  | `conversations build`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations related`, `conversations status`, `inbox`, `messages list`, `messages transcribe`, `replies edit`, `review`, `search conversations` |
 | `--multiple` |  | people may pick several answers |  | `polls create` |
-| `--new` |  | what arrived since the last check, each message once — for scheduled runs |  | `inbox`, `mentions list` (planned), `review` |
+| `--new` |  | what arrived since the last check, each message once — for scheduled runs. **tasks add instead opens the task although tasks that may be the same job were listed** |  | `inbox`, `mentions list` (planned), `review`, `tasks add` |
 | `--newest` |  | newest first instead of best first |  | `bot search messages`, `search mail`, `search messages`, `searches create` |
 | `--no-approval` |  | anyone with it joins at once |  | `chats link update` (tg-only) |
 | `--no-as-reply` |  | send without linking to the matched message |  | `replies edit` |

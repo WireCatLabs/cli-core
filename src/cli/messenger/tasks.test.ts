@@ -436,7 +436,11 @@ describe("tasks that may be one job", () => {
 
     const merged = item(await call("tasks", "merge", again, "--into", invoice, "--json"))
     expect(merged).toMatchObject({ pair: { decision: "merged" }, linked: 1, task: { key: invoice } })
-    expect(item(await call("tasks", "show", again, "--json"))).toMatchObject({ status: "dismissed" })
+    expect(merged.pair).toHaveProperty("decided_at")
+    expect(merged.task).toHaveProperty("created_at")
+    const shown = item(await call("tasks", "show", again, "--json"))
+    expect(shown).toMatchObject({ status: "dismissed" })
+    expect(shown.links).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "duplicate-of" })]))
     expect(json(await call("tasks", "duplicates", "--unsure", "--json")).items).toEqual([])
 
     const unmerged = item(await call("tasks", "unmerge", again, "--json"))
@@ -447,6 +451,9 @@ describe("tasks that may be one job", () => {
     })
     const missing = await call("tasks", "merge", again, "--json")
     expect(missing.code).toBe(2)
+
+    const related = item(await call("tasks", "link", again, `task:${invoice}`, "--kind", "duplicate-of", "--json"))
+    expect(related.relations).toMatchObject([{ kind: "duplicate-of" }])
   })
 
   it("asks for the write permission of each decision", async () => {
