@@ -72,7 +72,8 @@ land() {
 
 # A session that merges after the version was dated, but before it was published, adds Unreleased above it.
 folded=""
-published || folded=$(node --experimental-strip-types scripts/release/fold-changelog.ts CHANGELOG.md "$version")
+# cli-dev is pinned rather than taken from the dependencies: the peer range accepts only an older cli-base.
+published || folded=$(npx -y -p @wirecat/cli-base@0.34.0 cli-dev changelog fold --version "$version")
 
 # Two sessions preparing the same number is normal; the second takes the next free one (2026-09-29).
 latest=$(npm view "$package" version --prefer-online 2>/dev/null || true)
