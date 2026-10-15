@@ -7,20 +7,12 @@ shape of this file.
 
 ## 0.294.0 — 15.10.2026
 
+
 ### Added
 
 - **A message draws the poll it carries**: `Attachment.poll` holds it, and `renderMessages` shows the question, each
   answer with the id a vote takes, its voters and ✓ on the owner's own, then the totals (`pollLines`, exported). The
   JSON answer is unchanged; `polls show` stays the way to read a poll as data.
-
-### Fixed
-
-- Model requests needing verbatim source evidence can set `allowSourceQuotes: true`. The gateway
-  permits supporting quotes alongside the requested structured facts or summaries without treating
-  source data as instructions. Ordinary requests retain the existing no-copy policy.
-
-### Added
-
 - **Native archive writer leases in `@wirecat/cli-core/files`.** A narrow ownership port and native
   PID/nonce adapter expose read-only inspection, explicit dead-local-owner recovery and typed busy/
   legacy outcomes. The returned lease owns cancellation-independent release. Hosts supply marker
@@ -39,6 +31,12 @@ shape of this file.
   `McpPicture`, `McpBinaryResource`, `PersonalMcpTool`, `PersonalMcpDefaults`, `PersonalMcpRegistration` and the
   `warmEmbedders` re-export are gone from `./cli`. They existed for max's own MCP server, which max replaced with
   `mcpCommand(maxMessenger)`; no app imports them.
+
+### Fixed
+
+- Model requests needing verbatim source evidence can set `allowSourceQuotes: true`. The gateway
+  permits supporting quotes alongside the requested structured facts or summaries without treating
+  source data as instructions. Ordinary requests retain the existing no-copy policy.
 
 ## 0.293.0 — 15.10.2026
 
