@@ -22,7 +22,8 @@ shape of this file.
 
 - Meeting preparation includes bounded accepted facts about explicitly linked people and confirmed
   global projects through the optional `preparationKnowledge` store capability. The `knowledge`
-  section cites each fact, identifies its association and reports lookahead and output truncation.
+  section cites each fact, identifies its association and reports lookahead and output truncation
+  inside `knowledge.coverage`, retained even when selecting only fact-reference fields.
   Meeting evidence keeps priority; notes, mail, alias candidates and fact evidence remain unqueried.
 
 ## 0.285.0 — 15.10.2026

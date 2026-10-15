@@ -58,11 +58,13 @@ export interface MeetingPreparation {
   knowledge?: {
     anchors: string[]
     items: MeetingPreparationFact[]
-    hasMore: boolean
-    outputLimited: boolean
     selection: "accepted-global-person/project-facts"
-    factEvidence: "not-revalidated"
-    otherSources: "not-queried"
+    coverage: {
+      hasMore: boolean
+      outputLimited: boolean
+      factEvidence: "not-revalidated"
+      otherSources: "not-queried"
+    }
   }
   limits: { meetings: number; cues: number; contextLimit: number; maxReadBytes: number; bytes: number }
   coverage: {

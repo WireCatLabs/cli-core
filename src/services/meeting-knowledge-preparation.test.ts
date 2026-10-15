@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, projectFields } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { meetingPreparationAnswer } from "../cli/meeting-preparation-answer.js"
 import type { MeetingPreparationFact } from "../meetings/index.js"
@@ -31,11 +31,13 @@ describe("meeting knowledge preparation", () => {
       expect(result.knowledge).toMatchObject({
         anchors: [f.reference],
         items: [{ ref: f.fact.ref, subject: f.project.ref, sharedProject: true, sharedPerson: false }],
-        hasMore: false,
-        outputLimited: false,
         selection: "accepted-global-person/project-facts",
-        factEvidence: "not-revalidated",
-        otherSources: "not-queried",
+        coverage: {
+          hasMore: false,
+          outputLimited: false,
+          factEvidence: "not-revalidated",
+          otherSources: "not-queried",
+        },
       })
       const answer = meetingPreparationAnswer(result)
       expect(answer.item.knowledge?.items[0]).toMatchObject({
@@ -44,6 +46,17 @@ describe("meeting knowledge preparation", () => {
         updated_at: "1970-01-01T00:00:05.000Z",
       })
       expect(JSON.stringify(answer)).not.toContain("updatedAt")
+      expect(projectFields(answer.item, ["knowledge.items.ref"])).toMatchObject({
+        knowledge: {
+          items: [{ ref: f.fact.ref }],
+          coverage: {
+            has_more: false,
+            output_limited: false,
+            fact_evidence: "not-revalidated",
+            other_sources: "not-queried",
+          },
+        },
+      })
       expect(result.coverage.unqueried).toContain("project-alias-candidates")
     },
   )
@@ -91,7 +104,7 @@ describe("meeting knowledge preparation", () => {
     f.db.prepare("UPDATE facts SET statement=? WHERE id=?").run("界".repeat(2000), Number(f.fact.id))
     const result = await f.service.prepare("example-series", { ...f.request, bytes: 8192 })
     expect(result.items).toHaveLength(1)
-    expect(result.knowledge).toMatchObject({ items: [], outputLimited: true })
+    expect(result.knowledge).toMatchObject({ items: [], coverage: { outputLimited: true } })
     expect(result.coverage.outputLimited).toBe(true)
     const answer = meetingPreparationAnswer(result)
     expect(answer.item.meetings).toHaveLength(1)
@@ -108,7 +121,7 @@ describe("meeting knowledge preparation", () => {
       meetings: { ...f.store.meetings, preparationKnowledge },
     })
     const result = await service.prepare("example-series", { ...f.request, contextLimit: 1 })
-    expect(result.knowledge?.hasMore).toBe(true)
+    expect(result.knowledge?.coverage.hasMore).toBe(true)
     expect(result.knowledge?.items).toHaveLength(1)
     expect(preparationKnowledge).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
