@@ -14,6 +14,10 @@ shape of this file.
   legacy outcomes. The returned lease owns cancellation-independent release. Hosts supply marker
   layout; existing ordinary-file validation is shared. No provider client, migration or dependency
   is added.
+- **Search finds a letter by a whole tracking link and by a part of a link.** Mail keeps a tracking link only as
+  its site, so `url:"<link>"` now also matches a letter with that site whose text holds the link, as typed or
+  without `utm_*`. The new field `link:` matches a part of a link in any case (`link:"click?id=1"`, `link:"/price"`),
+  in messages and in mail. No new rows: the letter's stored text is read.
 
 ### Changed — may break callers
 

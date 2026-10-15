@@ -626,4 +626,62 @@ describe("links in mail", () => {
       "https://news.example.com/click?id=1",
     ])
   })
+
+  it("finds a letter by its whole tracking link, by a part of a link and by site", async () => {
+    const { path, store } = await fresh()
+    const raw = new DatabaseSync(path)
+    raw.exec(`INSERT INTO accounts (id, provider, external_id, created_at, updated_at) VALUES (90, 'email', 'a@x.org', 1, 1);
+      INSERT INTO email_threads (id, account_id, external_id, created_at, updated_at) VALUES (1, 90, 't1', 1, 1);
+      INSERT INTO emails (id, account_id, email_thread_id, external_id, body_text, created_at, updated_at) VALUES
+        (1, 90, 1, 'e1', 'read https://news.example.com/click?id=1&utm_source=mail', 1, 1),
+        (2, 90, 1, 'e2', 'read https://news.example.com/click?id=2 or https://example.org/Price/list', 1, 1),
+        (3, 90, 1, 'e3', 'no link here, id=1', 1, 1);`)
+    raw.close()
+    await store.rebuildMentions({ kinds: ["url"] })
+    const found = async (field: string, value: string) =>
+      (
+        await store.matchQuery({
+          root: { kind: "predicate", field, operator: "phrase", value, span: { start: 0, end: 1 } } as never,
+          accounts: [{ provider: "email", account: "a@x.org" }],
+          limit: 10,
+          corpus: "mail",
+        })
+      ).items
+        .map(({ id }) => id)
+        .sort()
+
+    expect(await found("url", "https://news.example.com/click?id=1")).toEqual(["e1"])
+    expect(await found("url", "https://news.example.com/click?id=1&utm_source=mail")).toEqual(["e1"])
+    expect(await found("url", "https://news.example.com")).toEqual(["e1", "e2"])
+    expect(await found("url", "https://example.org/Price/list")).toEqual(["e2"])
+    expect(await found("link", "click?id=2")).toEqual(["e2"])
+    expect(await found("link", "price/LIST")).toEqual(["e2"])
+    expect(await found("link", "/click")).toEqual(["e1", "e2"])
+    expect(await found("link", "id=1")).toEqual(["e1"])
+    expect(await found("domain", "example.com")).toEqual(["e1", "e2"])
+    await store.close()
+  })
+
+  it("finds a message by a part of its link", async () => {
+    const { store } = await fresh()
+    await store.saveMessages(
+      OWNER,
+      "-1",
+      [
+        message("1", "https://news.example.com/click?id=1"),
+        message("2", "https://example.org/a"),
+        message("3", "https://example.org/a_b and https://example.org/axb"),
+      ],
+      { via: "history" },
+    )
+    const found = async (text: string) =>
+      (await searchStore(store, OWNER, { text, limit: 10 })).items.map(({ id }) => id).sort()
+
+    expect(await found('link:"click?id=1"')).toEqual(["1"])
+    expect(await found("link:example")).toEqual(["1", "2", "3"])
+    expect(await found('link:"a_b"')).toEqual(["3"])
+    expect(await found('link:"x_b"')).toEqual([])
+    expect(await found("link:nothing")).toEqual([])
+    await store.close()
+  })
 })

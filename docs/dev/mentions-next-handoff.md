@@ -58,30 +58,14 @@ site page is current (cli-docs#252, MAX pin v0.54.0).
    document|note|email [query]`, `show`, `confirm`, `reject` over `store.sourceMentions`. The mail profile names
    the accounts (`memo mail <profile> …` style): never all mailboxes by default. Check: a memo command test per
    source and `--json` of `show` with `candidates`.
-2. **Find a letter by its full link and by part of a link, not only by site** (the owner's requirement). Why mail
-   keeps less: storing every mail link whole cost most of the `mentions` table — on the owner's copy 733k rows,
-   428 MB with indexes, and 93% of the distinct links were in one letter only (one-off tracking redirects). Since
-   `url` rule version 2 a mail link with a query string or a 24+ character token is one row per letter and site,
-   valued as the origin: 450k rows, 172 MB, every letter and site still found by `domain:`
-   ([totals](https://github.com/WireCatLabs/cli-testing/blob/main/performance/search/mentions/README.md), fourth
-   run). The cost: in mail, `url:"<full link>"` finds nothing for such a link. Do not fix it by storing every link
-   again. Must work in mail search, each with a test:
-   - `url:"https://news.example.com/click?id=1"` — the letter that has that link;
-   - a part of a link (`/click?id=1`, `id=1`, a path segment) — the letters whose links contain it;
-   - `domain:example.com` and `url:"https://news.example.com"` — as now.
-
-   The plan leans: the letter's text is stored already (`emails.body_text`), so a typed link narrows to letters
-   with a row of its origin (`mn.value = <origin>`, indexed), then `instr(body_text, ?)` checks the link itself —
-   no new rows, no new index. Match the link as typed and in its normalized form (tracking parameters removed),
-   since the text keeps `utm_…`. Decision yours: how a part is asked for — a wildcard in `url:` (check what the
-   query parser in cli-base allows) or a new field — and whether message search gets the same (messages keep
-   whole links, so `mn.value LIKE` would do). Where: the field compiles at `src/store/sqlite/lucene.ts:393-398`;
-   `lucene.ts` has 7 lines left before its cap, so build the SQL in the mentions module and call it from there.
-   Check: the store tests above, then the totals and query time on a copy of the owner's store (section 5, rule 1)
-   added to the same cli-testing page.
+2. **Mail link search is built** (`src/store/sqlite/mention-links.ts`): `url:` finds a letter by a whole tracking
+   link through its site's row and the body, `link:` by a part of a link
+   ([timing](https://github.com/WireCatLabs/cli-testing/blob/main/performance/search/mentions/README.md), fifth run).
+   Left open: `link:` reads a whole body, so it can match a part outside a link in a letter that holds a tracking
+   link — narrow it only if the owner reports such noise.
 3. **After tg and max release on the cli-core with #1310**: on the owner's store, with the released tg only,
    `mentions rebuild url` (shrinks the table; count rows before and after, totals only), then the site pin move
-   and a line on the mentions page that mail links are kept per site.
+   and on the mentions page: mail links kept per site, `link:` for a part of a link (needs the release with it).
 4. **Phase 3, unknown names and places** — only with the owner: it needs a labelled sample of the owner's chats
    to measure precision. Ask before starting.
 
