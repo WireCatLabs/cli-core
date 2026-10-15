@@ -212,6 +212,10 @@ describe("mail store", () => {
     await mail.saveThread(
       thread([email({ attachments: [file(0, "plan.pdf", "Café budget"), file(1, "scan.pdf", null)] })]),
     )
+    expect(
+      (await mail.emailRefs({ accountId: 1, attachmentErrors: ["no_text"] })).map(({ externalId }) => externalId),
+    ).toEqual(["<first@example.com>"])
+    expect(await mail.emailRefs({ accountId: 1, attachmentErrors: ["engine-missing"] })).toEqual([])
     const saved = await mail.email(1, "<first@example.com>")
     expect(
       saved?.attachments.map(({ name, normalizedText, providerRef }) => [name, normalizedText, providerRef]),
