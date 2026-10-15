@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { chunkHash } from "../conversations/chunks.js"
 import type { Message } from "../domain/models.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
+import { purgeUnused } from "./sqlite/email-index.js"
 import { openSqlite } from "./sqlite/open.js"
 import { purgeVectorHashes } from "./sqlite/vectors.js"
 import { openStore } from "./store.js"
@@ -109,4 +110,26 @@ describe("shared vector hash survival", () => {
         0,
       )
     })
+
+  it("drops every model's vector of a mail piece no chunk holds any more, and keeps one a chunk still holds", async () => {
+    const { store, context } = await fixture()
+    const used = "invented-used-hash"
+    const unused = "invented-unused-hash"
+    context.database
+      .prepare(
+        "INSERT INTO chunks (chunkable_type, chunkable_id, position, start_offset, end_offset, content_hash, created_at, updated_at) VALUES ('email_thread', 1, 0, 0, 20, ?, 1, 1)",
+      )
+      .run(used)
+    for (const model of ["invented-model-one", "invented-model-two"])
+      await store.saveVectors(model, 2, [
+        { hash: used, vector: new Float32Array([1, 0]) },
+        { hash: unused, vector: new Float32Array([0, 1]) },
+      ])
+    purgeUnused(context.database, [used, unused, unused])
+    const left = context.database.prepare("SELECT model, content_hash AS hash FROM embeddings ORDER BY model").all()
+    expect(left).toEqual([
+      { model: "invented-model-one", hash: used },
+      { model: "invented-model-two", hash: used },
+    ])
+  })
 })

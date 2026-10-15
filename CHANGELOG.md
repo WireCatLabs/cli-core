@@ -88,6 +88,14 @@ shape of this file.
 - **`mcpCommandsClient` is removed from `./testing`.** Tests call `<app>_tools_search`, `<app>_read` and
   `<app>_write` with a command path.
 
+### Fixed
+
+- **Re-indexing mail no longer scans every vector for each dropped piece.** Dropping a thread's old pieces looked
+  up their vectors by text hash alone, which the vector table's key (model, hash) cannot serve, so each lookup read
+  the whole table. On a 1.6 GB store with 28,000 vectors a queued thread took 47 ms and an email with text 36 ms;
+  naming each model makes it 0.2 ms and 1.5 ms. A memo `rules apply` that cut 44,000 emails had left a queue the
+  scheduled sync worked through for hours.
+
 ## 0.281.0 — 15.10.2026
 
 ### Changed — may break callers
