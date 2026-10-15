@@ -1,7 +1,7 @@
 /**
  * Every relative link and anchor in every document resolves, and the changelog has its shape — on
- * every pull request, so a stale link fails the change that made it. Adapted from max-cli's
- * `scripts/docs-check.ts` and `scripts/release/checks.ts`.
+ * every pull request, so a stale link fails the change that made it. The same checks now live in
+ * `@wirecat/cli-base/release` (`cli-dev docs-check`), which max-cli runs.
  *
  *   pnpm docs:check
  */
