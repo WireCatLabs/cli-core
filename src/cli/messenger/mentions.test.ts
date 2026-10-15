@@ -146,4 +146,21 @@ describe("mentions", () => {
     expect(await values("--new")).toEqual([])
     expect(await values("kind:phone")).toEqual(["+79000000001"])
   })
+
+  it("counts the links per site, most linked first", async () => {
+    const chat = await setup()
+
+    const { code, stdout } = await chat("mentions", "domains", "--json")
+
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout).items).toEqual([
+      {
+        domain: "google.com",
+        links: 1,
+        chats: 1,
+        first_at: "2026-10-02T10:00:00.000Z",
+        last_at: "2026-10-02T10:00:00.000Z",
+      },
+    ])
+  })
 })

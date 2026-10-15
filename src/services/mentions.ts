@@ -32,7 +32,18 @@ export interface Mentions extends Page<Mention> {
   state: MentionsState
 }
 
+/** A site the account's links point to: how many links, in how many chats, first and last sent. */
+export interface MentionSite {
+  domain: string
+  links: number
+  chats: number
+  firstAt: string
+  lastAt: string
+}
+
 export interface MentionsService {
+  /** Sites of the links matching `query`, most linked first; dismissed links are left out. */
+  domains(query: string, window: { limit?: number; offset: number }): Promise<Page<MentionSite>>
   /** `query` empty lists every mention; a bare word is a value. */
   list(query: string, window: { limit?: number; offset: number; foundAfter?: number }): Promise<Mentions>
   /** Undecided mentions found after `foundAfter` (ms), or at all: up to `REVIEW_COUNT`, and whether more wait. */
@@ -63,6 +74,33 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
     }
   }
   return {
+    domains: async (query, window) => {
+      const asked = `kind:url NOT status:dismissed${query.trim() ? ` AND (${query})` : ""}`
+      const ast = validateQuery(parseLucene(asked, { ...MENTION_QUERY, defaultField: "value" }), MENTION_QUERY)
+      const links = (await (await accountStore(deps)).mentions(ast, { offset: 0 })).items
+      const sites = new Map<string, MentionSite & { chatIds: Set<string> }>()
+      for (const { domain, chatId, sentAt } of links) {
+        if (!domain) continue
+        const site = sites.get(domain) ?? {
+          domain,
+          links: 0,
+          chats: 0,
+          firstAt: sentAt,
+          lastAt: sentAt,
+          chatIds: new Set(),
+        }
+        site.links++
+        site.chatIds.add(chatId)
+        if (sentAt < site.firstAt) site.firstAt = sentAt
+        if (sentAt > site.lastAt) site.lastAt = sentAt
+        sites.set(domain, site)
+      }
+      const ranked = [...sites.values()]
+        .map(({ chatIds, ...site }) => ({ ...site, chats: chatIds.size }))
+        .sort((a, b) => b.links - a.links || a.domain.localeCompare(b.domain))
+      const end = window.limit === undefined ? undefined : window.offset + window.limit
+      return { items: ranked.slice(window.offset, end), hasMore: end !== undefined && ranked.length > end }
+    },
     list: async (query, window) => {
       const ast = query.trim()
         ? validateQuery(parseLucene(query, { ...MENTION_QUERY, defaultField: "value" }), MENTION_QUERY)

@@ -232,7 +232,8 @@ an index lookup.
    **1c** — organizations own identities: built (store version 11, `organization_identities`).
    **1d** — fields `phone:`, `email:`, `url:`, `domain:` in `search messages`: built. Links resolved: a Google
    document link through its `document` row, a `t.me` link to the stored chat (by username or `t.me/c/<id>`) or the
-   Telegram account it names — built. Still to come: `links domains list` (sites by number of links).
+   Telegram account it names — built. `mentions domains` (sites by number of links, in how many chats, first and last time; named under `mentions`,
+   since `links` is the table of relations between records) — built.
    **1e** — the other texts: file texts and voice transcripts built (store version 10); notes, documents and mail
    to come.
 2. `person-name` for known people (stems against names and aliases); `mentions:<reference>` — built: people met

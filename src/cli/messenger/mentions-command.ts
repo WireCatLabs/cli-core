@@ -74,6 +74,40 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       else if (point) context.renderer.note("more remain — a larger --limit shows them all and moves the --new point")
     })
 
+  annotate(mentions.command("domains"), {
+    effects: LOCAL_READ,
+    query: MENTION_QUERY,
+    examples: [`${tool} mentions domains`, `${tool} mentions domains status:found`],
+  })
+    .description("the sites this account's links point to, most linked first, with chats and first and last time")
+    .argument("[query...]", "narrows the links counted: the fields below; dismissed links are never counted")
+    .option("--limit <n>", "how many to show", positiveCount("--limit"))
+    .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
+    .addHelpText("after", queryHelp(MENTION_QUERY))
+    .action(async function (this: Command, query: string[]) {
+      const context = messengerContext(this, messenger)
+      const sites = await context.withServices((services) =>
+        services.mentions.domains(query.join(" "), window(context.settings)),
+      )
+      renderAnswer(
+        this,
+        context,
+        pagedList("mentions domains", context.settings, {
+          items: sites.items.map(snakeKeys),
+          has_more: sites.hasMore,
+          args: { query: query.join(" ") },
+        }),
+        () =>
+          sites.items
+            .map(
+              ({ domain, links, chats, firstAt, lastAt }) =>
+                `${domain}  ${links} link${links === 1 ? "" : "s"} in ${chats} chat${chats === 1 ? "" : "s"}  ` +
+                `${firstAt.slice(0, 10)}…${lastAt.slice(0, 10)}\n`,
+            )
+            .join(""),
+      )
+    })
+
   annotate(mentions.command("show"), { effects: LOCAL_READ, examples: [`${tool} mentions show 12`] })
     .description("one mention, the text around it, and how many other places hold its value")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
