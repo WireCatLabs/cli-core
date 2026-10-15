@@ -50,3 +50,4 @@
 - 2026-10-14: `../cli-core-wt-task-fields`, branch `feat/task-fields` — tasks plan step 2 (task fields, store version 13); remove after its PR merges.
 - 2026-10-15: `../cli-core-wt-rules-on-sync`, branch `feat/rules-on-sync` — tasks plan step 7; remove after its PR merges.
 - `~/Projects/AI/cli-core-wt-task-search` and `~/Projects/AI/cli-core-wt-reserve-14` — worktrees of tasks plan step 3 (#1245 merged); remove once feat/task-search merges. 2026-10-15
+- 2026-10-15: `~/Projects/AI/cli-core-wt-reserve-15`, branch `docs/reserve-migration-15` — worktree for the store migration 15 reservation; remove once the PR is merged.
