@@ -224,6 +224,13 @@ const samples: Record<EntityName, unknown> = {
     series: null,
     history_window: { after: at, before: at },
     meetings: [],
+    related: {
+      anchors: [],
+      items: [],
+      has_more: false,
+      output_limited: false,
+      selection: "explicit-person-links/confirmed-project-links",
+    },
     limits: { meetings: 5, cues: 10, context_limit: 20, max_read_bytes: 262144, bytes: 65536 },
     coverage: {
       archive_completeness: "unknown",

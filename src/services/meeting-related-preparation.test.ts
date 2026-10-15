@@ -121,6 +121,20 @@ describe("meeting preparation across series", () => {
     expect((await f.service.prepare("example-series", f.request)).related.items).toEqual([])
   })
 
+  it("observes revoked links without rebuilding the derived involvement index", async () => {
+    const f = await fixture()
+    const person = await f.add("person-link", { person: true })
+    const project = await f.add("project-link", { project: true })
+    expect((await f.store.meetings.relatedHistory(f.relatedRequest)).items).toHaveLength(2)
+    f.db.prepare("DELETE FROM identity_links").run()
+    expect((await f.store.meetings.relatedHistory(f.relatedRequest)).items.map((item) => item.meeting.id)).toEqual([
+      project.meeting.id,
+    ])
+    f.db.prepare("UPDATE links SET confirmed=0 WHERE from_type='meeting' AND from_id=?").run(project.meeting.id)
+    expect((await f.store.meetings.relatedHistory(f.relatedRequest)).items).toEqual([])
+    expect(person.meeting.id).not.toBe(project.meeting.id)
+  })
+
   it("excludes deleted records, invalid anchors and out-of-window anchors", async () => {
     const f = await fixture()
     const saved = await f.add("deleted", { person: true, project: true })
