@@ -34,6 +34,8 @@ nothing now.
   comments and `gh run list --workflow release.yml`. Two sessions merge and release here, and on 2026-10-10
   one released 0.219.0 from a `main` one merge short of the other's work (owner's rule, 2026-10-11).
 - Release only through `bin/release`: `gh workflow run release.yml` started by hand skips the lock below.
+  When you must start it by hand, pass the `main` you checked: `-f commit=<its full 40-character sha>`.
+  The run refuses any other commit, so a merge that lands after your checks is not published.
 - Each session releases its own merged work: `git fetch`, `npm view`, a `chore: release` pull request
   that raises the version from what npm really has, then `bin/release`.
 - `bin/release` in every repository takes one machine-wide lock (`$XDG_RUNTIME_DIR/leemour-release.lock`),
