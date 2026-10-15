@@ -60,8 +60,21 @@ const readPage = async (source: string, load: LoadEngine): Promise<Extraction | 
   }
 }
 
-const titleOf = (source: string) =>
-  /<title[^>]*>([\s\S]*?)<\/title\s*>/i.exec(source)?.[1]?.replace(/\s+/g, " ").trim() ?? ""
+// The first `<title` decides: a later one has no `>` or close the first lacked, and one regex retried from each was quadratic.
+const titleOf = (source: string) => {
+  const open = /<title/i.exec(source)
+  const gt = open ? source.indexOf(">", open.index + open[0].length) : -1
+  if (gt < 0) return ""
+  const close = /<\/title\s*>/gi
+  close.lastIndex = gt + 1
+  const end = close.exec(source)
+  return end
+    ? source
+        .slice(gt + 1, end.index)
+        .replace(/\s+/g, " ")
+        .trim()
+    : ""
+}
 
 export const html: Reader = {
   id: "html",

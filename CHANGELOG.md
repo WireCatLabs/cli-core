@@ -14,6 +14,12 @@ shape of this file.
   its answer). Mail search takes `phone:`, `email:`, `url:`, `domain:` and `mentions:`. `mentions list` still lists
   message sources only. Migration 16 adds triggers only: older builds keep working.
 
+### Security
+
+- **A hostile HTML attachment no longer stalls the reader**: when the HTML reader falls back to plain text, a
+  page of unclosed tags, comments or long blank runs (`<<<<…`, `<p<p…`, `<!--<!--…`) is read in time linear in
+  its size; a 200,000-character one took up to 50 seconds. Ordinary pages read exactly as before.
+
 ## 0.285.0 — 15.10.2026
 
 ### Added
@@ -103,7 +109,7 @@ shape of this file.
 
 ### Fixed
 
-- **Meeting MCP answers show hidden characters, as tg's and max's do** (FIND-1298): `meetings_list`, `meeting_show`,
+- **Meeting MCP answers show hidden characters, as tg's and max's do**: `meetings_list`, `meeting_show`,
   `meeting_transcript`, `meeting_summary`, `meeting_export`, `meeting_people`, `search_meetings`,
   `meeting_passage`, `meeting_project_evidence` and `meeting_prepare` escape tag characters, direction overrides,
   zero-width spaces, U+FEFF, C1 and other control characters (an ANSI escape reads `\x1b`) in their text and
