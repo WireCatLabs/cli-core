@@ -1,4 +1,4 @@
-# Handoff — mentions: next steps after 0.284–0.288 (2026-10-15)
+# Handoff — mentions: next steps after 0.284–0.291 (2026-10-15)
 
 The trail, optional, grep by id: the cli-private journal `docs_ai/journal/2026-10-13-field-test-followups.md`
 (NEED-1122, NEED-1123, NEED-1129, RISK-1229 — real-store totals live there, never here).
@@ -21,7 +21,7 @@ Released: cli-core ≥ 0.284.0, tg 0.60.0 and max 0.54.0 carry it.
   echo "== plan: phases";            git show origin/main:docs/dev/mentions-plan.md | sed -n '229,256p'
   echo "== MENTIONS: flow, review";  git show origin/main:docs/dev/MENTIONS.md | sed -n '48,75p;114,123p;140,150p'
   echo "== writer: original, sources"; git show origin/main:src/store/sqlite/mention-drain.ts | sed -n '43,72p;108,151p'
-  echo "== decide, confirm";         git show origin/main:src/store/sqlite/mentions.ts | sed -n '276,330p'
+  echo "== memo's store reads";      git show origin/main:src/store/sqlite/mention-sources.ts | sed -n '20,58p'
   echo "== service: domains, list";  git show origin/main:src/services/mentions.ts | sed -n '77,125p'
   echo "== versions"; for p in cli-core tg-cli max-cli; do echo "$p $(npm view @wirecat/$p version 2>/dev/null)"; done
   git -C /home/leemour/Projects/AI/cli-docs fetch -q origin
@@ -36,44 +36,32 @@ released versions and the versions the site pins.
 
 ## 3. Read in this order (only if the orient output is not enough)
 
-1. `src/store/sqlite/mention-drain.ts:155-260` (`writer`) — what is kept, deleted and inserted when a text is read
-   again; the place a sender rule (task 1) or a link filter (task 2) goes.
-2. `src/store/sqlite/mentions.ts:164-230` (`SELECT`, `listMentions`) — why `list` and `show` see message sources
-   only: the inner join to `messages`.
-3. `src/cli/messenger/mentions-command.ts` — the command surface tg and max share.
-4. `docs/dev/COORDINATION.md:5-10` — the next free store migration number and how to take it.
-5. `/home/leemour/Projects/AI/cli-docs/docs/REVIEWING.md` (section "Review the whole corpus before a release
-   update") — only for task 4.
+1. `src/store/sqlite/mention-sources.ts` — what memo gets: `list`, `show`, `confirm`, `reject` and how mail is
+   scoped to named accounts (task 1).
+2. `src/cli/messenger/mentions-command.ts` — the messenger command a memo group should read like (options,
+   `next` steps, `--all-in-chat`).
+3. `src/store/sqlite/mention-drain.ts:156-262` (`writer`) — what is kept, deleted and inserted when a text is read
+   again; where mail links are cut to one per site.
+4. `/home/leemour/Projects/AI/cli-docs/docs/REVIEWING.md` (section "Review the whole corpus before a release
+   update") — only for the site pin in task 2.
 
 ## 4. Do
 
-1. **A phone seen in one sender's mail only is offered as that sender's.** Most mail phones are signatures:
-   one value repeated across one sender's letters. Offer, don't link: put the sender's person (through
-   `emails.from_identity_id` → `identity_links`) into `mentions show`'s `candidates`, and let `mentions confirm`
-   decide. Decision yours: a rule link with author `rules` (fast, but the owner ruled an agent's or a rule's
-   phone link final only on an exact match, NEED-1026 in the plan's "Review" section) or a candidate only (the
-   plan leans this way). Also yours: whether `mentions list` shows one row per value for such repeats (a
-   `--by-value` view) or leaves rows as they are. Check: `pnpm vitest run src/store/mentions.test.ts` with a new
-   case — two emails from one sender with one number, `show` names that person first.
-2. **Mail links are mostly one-off tracking links.** Decide what to keep: e.g. drop a mail `url` whose query
-   string carries a tracking id and whose domain is a known sender of mailing lists, or keep only `domain` for
-   such rows. Measure first on a copy of the owner's store (section 5, rule 2) and put totals in cli-testing
-   `performance/search/mentions/`. Check: the totals before and after, and `mentions domains` unchanged for the
-   top sites.
-3. **List and decide mentions of documents, notes and mail in memo.** `list`/`show` join `messages`, so these
-   rows are never shown. Add a listing that reads the source by `source_type` (a document's title, a note's
-   subject, an email's sender and date) and a `mentions` group in memo (repository `WireCatLabs/cli-memo`, owned
-   by the memo session — agree in [#849](https://github.com/WireCatLabs/cli-core/issues/849) first). `store.ts`
-   is at its line cap: put the reads in `src/store/sqlite/mentions.ts` and reach them through an existing
-   method or a small sub-store, as `store.tasks` is. Check: a store test listing one row of each source type.
-4. **The site page.** The orient output shows the site's pins; move whichever is older than its release that
-   carries cli-core ≥ 0.285.0 (max 0.54.0, tg 0.60.0) in `cli-docs/tools.json`, then update
-   `content/docs/mentions{,.ru,.es}.md`: `phone_countries`, `mentions list --new` and the sync step,
-   `--all-in-chat`, `mentions domains`, `t.me` links, mail search fields. A pin move makes every tg and max
-   translation stale; update each against the source diff and `pnpm docs:translation accept` them. Check:
-   `pnpm sync && pnpm docs:release-notes && pnpm docs:check && pnpm test && pnpm exec next build && pnpm check:links`
-   — all pass, `docs:check` reports 0 invalid examples.
-5. **Phase 3, unknown names and places** — only with the owner: it needs a labelled sample of the owner's chats
+Built (#1310): `store.sourceMentions` (list/show/confirm/reject of document, note and mail mentions; mail only of
+the accounts the caller names), `candidates` in `show` from the senders of received mail that carries a phone or
+an address (offered, never linked), mail tracking links kept once per letter and site (`url` rule version 2,
+totals in cli-testing `performance/search/mentions/`), and the messenger list no longer picking up those rows. The
+site page is current (cli-docs#252, MAX pin v0.54.0).
+
+1. **A `mentions` group in memo** (repository `WireCatLabs/cli-memo`, owned by the memo session — agree in
+   [#849](https://github.com/WireCatLabs/cli-core/issues/849) first): `memo mentions list --source
+   document|note|email [query]`, `show`, `confirm`, `reject` over `store.sourceMentions`. The mail profile names
+   the accounts (`memo mail <profile> …` style): never all mailboxes by default. Check: a memo command test per
+   source and `--json` of `show` with `candidates`.
+2. **After tg and max release on the cli-core with #1310**: on the owner's store, with the released tg only,
+   `mentions rebuild url` (shrinks the table; count rows before and after, totals only), then the site pin move
+   and a line on the mentions page that mail links are kept per site.
+3. **Phase 3, unknown names and places** — only with the owner: it needs a labelled sample of the owner's chats
    to measure precision. Ask before starting.
 
 ## 5. What bites
