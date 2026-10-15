@@ -31,7 +31,13 @@ const topicsPage = async (
   })
 }
 
-export const topicsTools = (messenger: Messenger): Record<string, AnyTool> => ({
+export const topicsTools = (messenger: Messenger): Record<string, AnyTool> =>
+  messenger.topics === false ? {} : readTopicTools(messenger)
+
+export const topicWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
+  messenger.topics === false ? {} : writeTopicTools(messenger)
+
+const readTopicTools = (messenger: Messenger): Record<string, AnyTool> => ({
   topics_list: tool({
     title: "A forum group's topics",
     description:
@@ -75,7 +81,7 @@ export const topicsTools = (messenger: Messenger): Record<string, AnyTool> => ({
     : {}),
 })
 
-export const topicWriteTools = (messenger: Messenger): Record<string, AnyTool> => ({
+const writeTopicTools = (messenger: Messenger): Record<string, AnyTool> => ({
   topics_enable: tool({
     title: "Enable forum topics",
     description:

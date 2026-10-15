@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- **`Messenger.topics: false`** hides the `topics_*` MCP tools from a messenger without forum topics, as max needs
+  to mount the shared MCP command.
 - **`entityFields({ name: fields })` lets an app check `--json=a,b` against its own entities.** It builds the
   `JsonFieldsResolver` that `liftJson` and `checkJson` already take, keyed by the `output` entity (or `entity.view`)
   a command declares. A field the entity lacks is refused with the same `validation_error` as a cli-core entity.
