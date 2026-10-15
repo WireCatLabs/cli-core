@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.292.0 — 15.10.2026
+
 ### Added
 
 - **`Messenger.guard` takes an optional `ask`**: the MCP server passes one that lets a write at level `ask` go
