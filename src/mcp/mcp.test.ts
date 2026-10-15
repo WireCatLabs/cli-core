@@ -41,14 +41,9 @@ import { surfaceOf } from "../testing/mcp-surface.js"
 import { searchRecipes, seedSearchRecipes } from "../testing/search-recipes.js"
 import { serveOverHttp } from "./http/serve.js"
 import { instructions } from "./instructions.js"
-import {
-  type PersonalMcpRegistration,
-  personalMcpToolKey,
-  personalMcpTools,
-  registerPersonalMcpTools,
-} from "./personal.js"
 import { createServer, type ServerOptions } from "./server.js"
-import { type AnyTool, inputOf, type ToolCall } from "./tool.js"
+import { type AnyTool, inputOf, type Registration, registerTools, type ToolCall, toolKey } from "./tool.js"
+import { personalMcpTools } from "./tools.js"
 
 describe("public personal MCP mounting", () => {
   it("encloses online, stored and host-service reads in the host's permission scope", async () => {
@@ -77,7 +72,7 @@ describe("public personal MCP mounting", () => {
     let allowed = false
     let reads = 0
     const keys: (string | null | undefined)[] = []
-    const withStore: PersonalMcpRegistration["withStore"] = async (work) => {
+    const withStore: Registration["withStore"] = async (work) => {
       reads += 1
       const store = await openStore({ env })
       try {
@@ -87,7 +82,7 @@ describe("public personal MCP mounting", () => {
       }
     }
     const calls: ToolCall[] = []
-    registerPersonalMcpTools(
+    registerTools(
       server,
       {
         account_sessions: pick("account_sessions"),
@@ -130,7 +125,7 @@ describe("public personal MCP mounting", () => {
           calls.push(call)
         },
         around: async (name, definition, work) => {
-          keys.push(personalMcpToolKey(name, definition))
+          keys.push(toolKey(name, definition))
           if (!allowed) throw new CliError("permission_error", "host denies this operation")
           return work()
         },

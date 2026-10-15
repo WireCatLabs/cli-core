@@ -21,21 +21,6 @@ export {
 export { revokeAll } from "../mcp/http/oauth.js"
 export { type HttpOptions, MCP_PATH, serveOverHttp } from "../mcp/http/serve.js"
 export { callMeetingPreparationTool, meetingPreparationTool } from "../mcp/meeting-preparation.js"
-export {
-  answerMcpTool,
-  failMcpTool,
-  McpBinaryResource,
-  McpPicture,
-  type PersonalMcpDefaults,
-  type PersonalMcpRegistration,
-  type PersonalMcpTool,
-  personalMcpCommand,
-  personalMcpToolKey,
-  personalMcpTools,
-  registerPersonalMcpSurface,
-  registerPersonalMcpTools,
-  warmEmbedders,
-} from "../mcp/personal.js"
 export { registerLinkConversationsPrompt } from "../mcp/prompts.js"
 export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION } from "../mcp/text.js"
 export {

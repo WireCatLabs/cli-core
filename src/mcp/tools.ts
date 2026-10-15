@@ -1,3 +1,4 @@
+import * as v from "valibot"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { AnyTool } from "./tool.js"
 import { accountTools } from "./tools/account.js"
@@ -83,3 +84,15 @@ export const localTools = (messenger: Messenger): Record<string, AnyTool> => ({
   ...tasksTools(messenger),
   ...attachmentsTools(messenger),
 })
+
+/** Every tool a personal server mounts, its input strict: an obsolete argument fails instead of being dropped. */
+export const personalMcpTools = (messenger: Messenger): Record<string, AnyTool> =>
+  Object.fromEntries(
+    Object.entries({
+      ...readTools(messenger),
+      ...localTools(messenger),
+      ...sendTools(messenger),
+      ...markReadTools(messenger),
+      ...deleteTools(messenger),
+    }).map(([name, definition]) => [name, { ...definition, input: v.strictObject(definition.input.entries) }]),
+  )

@@ -3,9 +3,9 @@ import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server"
 import { describe, expect, it } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
 import { settingsFor } from "../cli/settings.js"
-import { personalMcpTools } from "./personal.js"
 import { registerPrompts } from "./prompts.js"
 import { inputOf } from "./tool.js"
+import { personalMcpTools } from "./tools.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "synthetic", version: "1.0.0" }
 const messenger: Messenger = {

@@ -1450,8 +1450,7 @@ it writes no file and uses the same `messages` read permission.
    `deny` hides it, `readonly` hides the writing ones, `ask` and `allow` act — no form, since nobody
    is at a terminal to answer (NEED-772, NEED-773). `mcp` takes no flag that grants or confirms access.
 5. **Unknown arguments are refused before execution.** A retired schedule field must never turn
-   a scheduled write into an immediate one. Consumers retaining their own session use the public
-   personal MCP catalogue and registration seam, filtering only unsupported capabilities.
+   a scheduled write into an immediate one.
 6. **A tool and its command run the same service method**, so they answer the same result and the
    same error for the same input.
 

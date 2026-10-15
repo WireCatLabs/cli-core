@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **The personal MCP catalogue is no longer exported**: `personalMcpTools`, `registerPersonalMcpTools`,
+  `registerPersonalMcpSurface`, `personalMcpCommand`, `personalMcpToolKey`, `answerMcpTool`, `failMcpTool`,
+  `McpPicture`, `McpBinaryResource`, `PersonalMcpTool`, `PersonalMcpDefaults`, `PersonalMcpRegistration` and the
+  `warmEmbedders` re-export are gone from `./cli`. They existed for max's own MCP server, which max replaced with
+  `mcpCommand(maxMessenger)`; no app imports them.
+
 ## 0.293.0 — 15.10.2026
 
 ### Added
