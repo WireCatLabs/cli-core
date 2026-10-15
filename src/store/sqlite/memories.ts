@@ -65,7 +65,7 @@ export interface MemoriesStore {
   /** Its evidence no longer holds. */
   markStale(reference: string): Promise<Memory>
   /** Indexes what was written since, then finds memories holding every word or a longer one it starts, best first. */
-  search(text: string, options?: { scope?: Memory["scope"]; limit?: number }): Promise<Memory[]>
+  search(text: string, options?: { subject?: string; scope?: Memory["scope"]; limit?: number }): Promise<Memory[]>
   indexState(): Promise<NoteIndexState>
 }
 
@@ -242,7 +242,8 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
     },
     confirm: async (reference) => setStatus(reference, "confirmed", true),
     markStale: async (reference) => setStatus(reference, "stale", false),
-    search: async (text, { scope, limit = 20 } = {}) => {
+    search: async (text, { subject: subjectRef, scope, limit = 20 } = {}) => {
+      const subject = subjectRef === undefined ? undefined : requiredThing(database, subjectRef)
       drainCorpus(database, CORPORA.memory, stemmerFor)
       const words = normalize(text)
         .split(/\s+/)
@@ -253,9 +254,18 @@ export const memoriesStoreOver = (context: StoreContext): MemoriesStore => {
         .prepare(
           "SELECT m.*, b.name AS author_name FROM memory_words w JOIN memories m ON m.id = w.rowid " +
             "LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id WHERE memory_words MATCH ? " +
-            "AND m.deleted_at IS NULL AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ?",
+            "AND m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id = ?)) " +
+            "AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ?",
         )
-        .all(match, scope ?? null, scope ?? null, Math.min(Math.max(limit, 1), 200))
+        .all(
+          match,
+          subject?.type ?? null,
+          subject?.type ?? null,
+          subject?.id ?? null,
+          scope ?? null,
+          scope ?? null,
+          Math.min(Math.max(limit, 1), 200),
+        )
         .map(memoryOf)
     },
     indexState: async () => corpusIndexState(database, CORPORA.memory),

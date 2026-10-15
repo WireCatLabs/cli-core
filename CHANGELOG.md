@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`store.memories.search(text, { subject })` searches one subject's memories, filtered in SQL before the limit.**
+  `subject` is a reference such as `note:12`; an unknown one is `not_found`. A subject whose matches rank below
+  the limit among every memory is still found. drive's `memories search` can drop its in-memory filter of the best
+  200.
+
 ## 0.289.0 — 15.10.2026
 
 ### Added

@@ -71,6 +71,33 @@ describe("memories", () => {
     expect((await store.memories.search("review")).map(({ id }) => id)).toEqual([newer.id])
     expect(await store.memories.indexState()).toMatchObject({ pending: 0 })
   })
+
+  it("search one subject before the limit, so its memory is found below the others' best", async () => {
+    const store = await open()
+    const busy = await store.notes.addNote({ text: "Planning notes" })
+    const quiet = await store.notes.addNote({ text: "Retro notes" })
+    const remember = (subject: string) =>
+      store.memories.add({
+        kind: "summary",
+        body: "The review is on Fridays",
+        scope: "work",
+        subject,
+        evidence: [subject],
+        author: agent,
+      })
+    for (let index = 0; index < 3; index += 1) await remember(busy.ref)
+    const mine = await remember(quiet.ref)
+
+    expect((await store.memories.search("review", { limit: 3 })).map(({ subject }) => subject)).toEqual([
+      busy.ref,
+      busy.ref,
+      busy.ref,
+    ])
+    expect((await store.memories.search("review", { subject: quiet.ref, limit: 1 })).map(({ id }) => id)).toEqual([
+      mine.id,
+    ])
+    await expect(store.memories.search("review", { subject: "note:999" })).rejects.toMatchObject({ code: "not_found" })
+  })
 })
 
 describe("facts", () => {
