@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.292.0 — 15.10.2026
 
 ### Changed — may break callers
 
@@ -13,8 +13,12 @@ shape of this file.
   `--allow-delete`, `--allow-moderate`, `--confirm-send`, `--allow-dangerous` and `--http-confirmation`: an agent set
   up with one now fails to start with "unknown option" instead of a warning. The profile's permissions decide, as
   they already did.
-
-## 0.292.0 — 15.10.2026
+- **Mail keeps a tracking link once per letter and site, as the site** (`url` rule version 2): a link in an email
+  with a query string or a run of 24 or more letters, digits, `-` or `_` is stored as its origin
+  (`https://news.example.com`), once per letter and origin; `written` still reads the link as sent, and `domain:` and
+  `url:"https://news.example.com"` find the letter. Messages, files and notes keep every link whole. On a copy of a
+  real mailbox: mail link rows −39%, distinct values −76%, the `mentions` table and its indexes −60%, every letter
+  and site still found. `mentions rebuild url` applies it to stored mail.
 
 ### Added
 
@@ -29,15 +33,6 @@ shape of this file.
 - **`mentions show` offers the sender of the mail that carries a phone or an address**: `candidates` lists the people
   whose received mail holds the value, most letters first (a signature, mostly), for a message's mention and a mail
   one alike. Offered only; nothing is linked by this rule.
-
-### Changed — may break callers
-
-- **Mail keeps a tracking link once per letter and site, as the site** (`url` rule version 2): a link in an email
-  with a query string or a run of 24 or more letters, digits, `-` or `_` is stored as its origin
-  (`https://news.example.com`), once per letter and origin; `written` still reads the link as sent, and `domain:` and
-  `url:"https://news.example.com"` find the letter. Messages, files and notes keep every link whole. On a copy of a
-  real mailbox: mail link rows −39%, distinct values −76%, the `mentions` table and its indexes −60%, every letter
-  and site still found. `mentions rebuild url` applies it to stored mail.
 
 ### Fixed
 
