@@ -110,7 +110,14 @@ describe("mentions", () => {
     raw.close()
 
     const reopened = await openStore({ path, now: () => Date.parse("2026-10-13T21:00:00Z") })
-    expect(await reopened.rebuildMentions()).toEqual({ messages: 2, attachments: 0, mentions: 2 })
+    expect(await reopened.rebuildMentions()).toEqual({
+      messages: 2,
+      attachments: 0,
+      documents: 0,
+      notes: 0,
+      emails: 0,
+      mentions: 2,
+    })
     const items = (await reopened.mentions(OWNER, undefined, { offset: 0 })).items
     expect(items.map(({ kind, status }) => `${kind} ${status}`).sort()).toEqual(["email dismissed", "phone found"])
     expect(await reopened.mentionsState()).toEqual({ pending: 0, rebuiltAt: "2026-10-13T21:00:00.000Z" })
