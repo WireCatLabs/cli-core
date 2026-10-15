@@ -478,6 +478,16 @@
       }
     },
     {
+      "includes": ["src/domain/phone-plans.generated.ts"],
+      "linter": {
+        "rules": {
+          "security": {
+            "noSecrets": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["scripts/schema/spec.mjs"],
       "linter": {
         "rules": {

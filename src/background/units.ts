@@ -178,6 +178,7 @@ export const launchd = (app: AppIdentity, system: ServerSystem, env: NodeJS.Proc
         "  </dict>",
         // launchd loads every agent here at login; disabled, it waits for `server start` to enable it.
         "  <key>Disabled</key><true/>",
+        // biome-ignore lint/security/noSecrets: launchd plist template, not a key
         "  <key>RunAtLoad</key><true/>",
         ...(unit.noRestartOn?.length ? [] : ["  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>"]),
         "  <key>ThrottleInterval</key><integer>30</integer>",

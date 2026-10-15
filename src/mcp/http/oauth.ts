@@ -16,6 +16,7 @@ const LOGIN_CODE_MS = 10 * 60 * 1000
 const WRONG_TRIES = 5
 const WRONG_CODE_WAIT_MS = 30_000
 const MAX_CLIENTS = 10
+// biome-ignore lint/security/noSecrets: pairing-code alphabet, not a key
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 type AuthMethod = "none" | "client_secret_post" | "client_secret_basic"
