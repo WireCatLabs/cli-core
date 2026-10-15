@@ -9,6 +9,7 @@ import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
+import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, linkKind } from "./link-kinds.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
@@ -99,7 +100,7 @@ export interface MessageDocument {
   fileId: string
 }
 
-export interface NotesStore extends NoteSearch {
+export interface NotesStore extends NoteSearch, ImportedDocuments {
   addFolder(input: { name: string; format?: NoteFolder["format"] }): Promise<NoteFolder>
   folders(): Promise<NoteFolder[]>
   saveFileNote(input: FileNoteInput): Promise<{ note: Note; changed: boolean }>
@@ -575,6 +576,20 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         (a, b) => b.createdAt.localeCompare(a.createdAt) || b.ref.localeCompare(a.ref),
       )
       return { items: all.slice(offset, offset + limit), hasMore: all.length > offset + limit }
+    },
+    importedDocuments: async (folderId, query, { limit, offset }) => {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000 || !Number.isInteger(offset) || offset < 0)
+        throw new CliError("validation_error", "limit takes 1–1000 and offset 0 or more")
+      const folder = Number(folderRow(folderId).id)
+      const where = query ? importedDocumentWhere(database, query) : undefined
+      const rows = database
+        .prepare(
+          "SELECT d.* FROM documents d WHERE d.account_id = ? AND d.body IS NOT NULL AND d.deleted_at IS NULL " +
+            "AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1) = 1 " +
+            `AND (${where?.sql || "1"}) ORDER BY d.created_at, d.id LIMIT ? OFFSET ?`,
+        )
+        .all(folder, ...(where?.params ?? []), limit + 1, offset)
+      return { items: rows.slice(0, limit).map(documentOf), hasMore: rows.length > limit }
     },
     editNote: async (id, text, revision) =>
       write(database, () => {

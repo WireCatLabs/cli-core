@@ -23,6 +23,14 @@ shape of this file.
     It must also rename the commands and flags in its own docs and examples.
 - **Peer `@wirecat/cli-base` is `>=0.33.0 <0.34.0`.**
 
+### Added
+
+- **`store.notes.importedDocuments(folderId, query, { limit, offset })` lists one account's imported documents,
+  filtered in SQL.** The query is a list query over `IMPORTED_DOCUMENT_QUERY` (exported from `./store`): `tag:` is an
+  owner tag, by name or alias; `person:` is a person the document is linked to, by uid or `person:<uid>`. Catalog-only
+  entries (folders, files not read), deleted, retired and other accounts' documents are left out. Answers in import
+  order, with `hasMore`. drive's `documents list` can drop its per-document check for it.
+
 ### Fixed
 
 - **The new shared commands pass the help lint.** `images embed`, `mentions list|domains`, `tasks agenda`, `plan`,
