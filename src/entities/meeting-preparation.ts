@@ -47,6 +47,28 @@ export const meetingPreparation = v.strictObject({
     output_limited: v.boolean(),
     selection: v.literal("explicit-person-links/confirmed-project-links"),
   }),
+  knowledge: v.optional(
+    v.strictObject({
+      anchors: v.array(reference),
+      items: v.array(
+        v.strictObject({
+          ref: reference,
+          type: v.picklist(["fact", "statement", "question", "decision", "promise"]),
+          statement: v.string(),
+          subject: v.nullable(reference),
+          project: v.nullable(reference),
+          updated_at: isoTime,
+          shared_person: v.boolean(),
+          shared_project: v.boolean(),
+        }),
+      ),
+      has_more: v.boolean(),
+      output_limited: v.boolean(),
+      selection: v.literal("accepted-global-person/project-facts"),
+      fact_evidence: v.literal("not-revalidated"),
+      other_sources: v.literal("not-queried"),
+    }),
+  ),
   limits: v.strictObject({ meetings: count, cues: count, context_limit: count, max_read_bytes: count, bytes: count }),
   coverage: v.strictObject({
     archive_completeness: v.literal("unknown"),

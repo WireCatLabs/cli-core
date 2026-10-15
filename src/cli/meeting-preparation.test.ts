@@ -227,9 +227,14 @@ describe("meeting preparation adapters", () => {
     const full = meetingPreparationAnswer(packet)
     packet.limits.bytes = Buffer.byteLength(JSON.stringify(full.item)) - 100
     const answer = meetingPreparationAnswer(packet)
-    expect(answer.item.meetings).toEqual([])
+    expect(answer.item.meetings).toHaveLength(1)
+    expect(answer.item.knowledge).toBeUndefined()
     expect(answer.item.coverage.output_limited).toBe(true)
     expect(Buffer.byteLength(JSON.stringify(answer.item))).toBeLessThanOrEqual(packet.limits.bytes)
+    delete packet.knowledge
+    const withoutKnowledge = meetingPreparationAnswer({ ...packet, limits: { ...packet.limits, bytes: 65536 } })
+    packet.limits.bytes = Buffer.byteLength(JSON.stringify(withoutKnowledge.item)) - 100
+    expect(meetingPreparationAnswer(packet).item.meetings).toEqual([])
     packet.limits.bytes = 1
     expect(() => meetingPreparationAnswer(packet)).toThrow("increase the output budget")
     packet.upcoming.meetingId = ""

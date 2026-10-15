@@ -47,6 +47,7 @@ Automatic findings intake remains separate.
 | Facts | Accepted facts whose subject is this meeting, including decisions and promises | Proposed/reversed facts and facts about other subjects are excluded; evidence is not revalidated |
 | Tasks | Existing tasks with this exact meeting source group and a source beneath its reference | Includes current task status; excludes other-account projects and unrelated project tasks |
 | Related meetings | Other series joined through existing person links or confirmed global project memberships shared with included history | Same account and history window; dated live meetings only; no name, email or alias matching |
+| Accepted knowledge | Global person/project facts through those explicit associations, with fact references and association flags | Optional port, accepted status only; no mail, messages or notes; source evidence is not revalidated |
 
 Related history records its anchor meeting references and separate `sharedPerson`/`sharedProject`
 flags. The SQLite `relatedHistory` port derives these links from current stored anchors in one read
@@ -58,6 +59,36 @@ project-wide coverage are replaced in `unqueried` by the narrower `person-nonmee
 project-alias candidates always remain unqueried. This covers related meeting transcripts, not
 mail, messages, project notes or every source about a person. The result is a factual context bundle for an agent, not an AI-generated summary.
 Stored facts and task provenance do not establish that their underlying evidence still holds.
+
+### Accepted person and project facts
+
+`store.meetings.preparationKnowledge` adds an optional `knowledge` section after exact-series and
+related evidence. Custom hosts without that method remain compatible; the section is absent and
+existing nonmeeting coverage gaps remain visible. The method uses `MeetingPreparationKnowledgeRequest`
+from `./meetings`: account/series, at most twenty included anchor IDs, history bounds, `limit`,
+`maxReadBytes` and `signal`. It accepts the same validated bounds as `relatedHistory`.
+
+The native adapter rechecks live same-account/series anchors within the history window, current
+person links and confirmed global project memberships in one read snapshot. It selects accepted,
+undeleted facts whose subject is an explicitly linked person, whose subject is a confirmed project,
+or whose project is a confirmed project. Account-scoped subjects and projects are excluded even
+when another association qualifies. A fact attached to a meeting is handled by meeting context,
+not repeated here. Facts updated after the preparation start are excluded; older accepted
+facts may predate the meeting history window. This is current accepted knowledge, not an historical
+snapshot or proof of when the asserted event occurred.
+
+The page returns at most `min(contextLimit, 20)` facts, newest update then ID descending, with
+deduplication and independent lookahead. UTF-8 type/statement bytes, including lookahead, are checked
+before hydration. Database scan/sort work remains unbounded by row limits. Each item includes `ref`,
+`type`, `statement`, `subject`, `project`, `updatedAt`, `sharedPerson` and `sharedProject`. The fact
+reference lets an agent retrieve the full record and evidence separately. No full evidence graph,
+annotation body, model output or source message is read by this capability.
+
+`knowledge` records included anchor references, `hasMore`, `outputLimited`, the selection
+`accepted-global-person/project-facts`, `factEvidence: not-revalidated` and `otherSources: not-queried`.
+Existing nonmeeting coverage gaps remain because notes and communications were not searched.
+Its optional data is trimmed before related or exact-series evidence when the public mapper's
+normalized output exceeds `bytes`. Public fields use snake_case and ISO update timestamps.
 
 Defaults: five exact-series history meetings and up to five related meetings, ten cues per occurrence, twenty entries per context category,
 256 KiB stored text per read and 64 KiB for the serialized result. Hard limits are twenty meetings,
