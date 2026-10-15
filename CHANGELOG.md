@@ -7,6 +7,7 @@ shape of this file.
 
 ## 0.294.0 — 15.10.2026
 
+
 ### Added
 
 - **A message draws the poll it carries**: `Attachment.poll` holds it, and `renderMessages` shows the question, each
