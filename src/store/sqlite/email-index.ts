@@ -115,10 +115,21 @@ export const dropAttachmentChunks = (database: CacheDatabase, emailId: number): 
 
 /** Vectors are keyed by text alone, so one goes only when no piece of anything holds that text any more. */
 export const purgeUnused = (database: CacheDatabase, hashes: string[]) => {
+  const unique = new Set(hashes)
+  if (unique.size === 0) return
+  // The key is (model, content_hash): naming the model reaches the row by the key; the hash alone scans every vector.
+  const models = database
+    .prepare(
+      `WITH RECURSIVE m(model) AS (SELECT min(model) FROM embeddings
+         UNION ALL SELECT (SELECT min(model) FROM embeddings WHERE model > m.model) FROM m WHERE m.model IS NOT NULL)
+       SELECT model FROM m WHERE model IS NOT NULL`,
+    )
+    .all()
+    .map(({ model }) => String(model))
   const purge = database.prepare(
-    "DELETE FROM embeddings WHERE content_hash = ? AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ?)",
+    "DELETE FROM embeddings WHERE model = ? AND content_hash = ? AND NOT EXISTS (SELECT 1 FROM chunks WHERE content_hash = ?)",
   )
-  for (const hash of new Set(hashes)) purge.run(hash, hash)
+  for (const hash of unique) for (const model of models) purge.run(model, hash, hash)
 }
 
 /** Each attachment's extracted text, in pieces for search by meaning, as an email's own text is. */
