@@ -18,6 +18,7 @@ import { messagesCommand } from "./messenger/messages-command.js"
 import { modelsCommand } from "./messenger/models-command.js"
 import { reviewCommand } from "./messenger/review.js"
 import { serverCommand } from "./messenger/server-command.js"
+import { commandWords, liftProfile } from "./profile.js"
 import { createProgram } from "./program.js"
 import { REASONS } from "./reasons.js"
 import { settingsFor } from "./settings.js"
@@ -116,6 +117,14 @@ describe("the next-step registry", () => {
     expect(runnable(bare, [download])).toEqual([])
     expect(runnable(program, [download, download, download])).toHaveLength(2)
     expect(stepLine(program, download)).toBe("chat models text download e5-small")
+  })
+
+  it("names the profile the command ran with, so the printed step runs as pasted", () => {
+    const withProfile = createProgram({ app, commands: () => [messagesCommand(messenger), modelsCommand(messenger)] })
+    withProfile.setOptionValue("profile", "work")
+    const line = stepLine(withProfile, nextStep("models.download", { args: { model: "e5-small" } }) as CommandStep)
+    expect(line).toBe("chat work models text download e5-small")
+    expect(liftProfile(line.split(" ").slice(1), commandWords(withProfile))).toMatchObject({ profile: "work" })
   })
 
   it("lets a step run unasked only when its command writes nothing to the messenger", () => {

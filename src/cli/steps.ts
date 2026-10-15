@@ -266,13 +266,18 @@ const quoted = (value: unknown) => {
   return /^[\w@:./+-]+$/.test(text) ? text : JSON.stringify(text)
 }
 
-/** The step as a person types it: positional arguments in their place, then the options. */
+/**
+ * The step as a person types it: the profile the command ran with, positional arguments in their place, then the
+ * options. A CLI that assumes no profile refuses the line without it.
+ */
 export const stepLine = (root: Command, step: CommandStep): string => {
   const command = commandAt(root, step.command)
   const positional = new Set(command?.registeredArguments.map((argument) => argument.name()) ?? [])
   const args = Object.entries(step.args).filter(([, value]) => value !== undefined && value !== false)
+  const profile: unknown = root.getOptionValue("profile")
   return [
     root.name(),
+    ...(typeof profile === "string" && profile !== "" ? [quoted(profile)] : []),
     step.command,
     ...(command?.registeredArguments ?? []).flatMap((argument) =>
       step.args[argument.name()] === undefined ? [] : [quoted(step.args[argument.name()])],

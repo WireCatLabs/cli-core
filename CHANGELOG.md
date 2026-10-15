@@ -9,6 +9,8 @@ shape of this file.
 
 ### Fixed
 
+- **A printed next step carries the profile the command ran with**: `drive personal files list` ends with
+  `→ …: drive personal files list --cursor …`, not a line that stops at "choose a profile explicitly" when pasted.
 - **A corrupt message store fails the command**: online reads skip the store only when there is none, the account is
   not recorded yet, or another process holds it past the 5-second wait.
 

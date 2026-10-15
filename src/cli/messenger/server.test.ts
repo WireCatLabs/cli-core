@@ -226,7 +226,7 @@ describe("server without a unit", () => {
     const json = await call(["status", "--json"], env, machine("linux").system)
     expect(json.answer).toMatchObject({ running: true, version: "0.9.9" })
     expect(json.body.next).toMatchObject([{ step: "server.restart", command: "server restart" }])
-    expect((await call(["status"], env, machine("linux").system, true)).stderr).toContain("chat server restart")
+    expect((await call(["status"], env, machine("linux").system, true)).stderr).toContain("chat default server restart")
 
     expect(servingProfiles(app, env)).toEqual(["default"])
     stale.kill()
