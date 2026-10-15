@@ -216,6 +216,7 @@ export type {
   IdentityInput,
   MeetingDetails,
   MeetingFilter,
+  MeetingHitSource,
   MeetingInput,
   MeetingSave,
   MeetingStore,

@@ -109,10 +109,11 @@ provider has travels in `providerMetadata`.
 development brings its own copy of cli-base, and an error built by one copy is not an `instanceof`
 the other's class.
 
-Field selection uses cli-base's `fieldsOf` and `projectFields`; list envelopes and operation IDs
-stay intact. Direct empty field lists keep only operation metadata, preserving the existing helper
-contract. Direct invalid or unsafe paths are rejected before projection. cli-base 0.19.2 or newer
-within the 0.19 series is required.
+Field selection uses cli-base's `fieldsOf` and `projectFields`. Dotted paths traverse nested
+objects and arrays; `items.ref` selects each list row's reference. Item/list envelopes, coverage,
+continuation, missing data and execution metadata and operation identifiers stay intact. Parent
+selections retain entire subtrees. Empty, invalid or unsafe paths are rejected before projection.
+The runtime peer requires cli-base 0.31.1 or newer within the 0.31 series.
 
 `searchAllIncludingMeetings` from `./services` adds one selected meeting account to the existing
 message, mail and notes search. It leaves `searchAll` and its item references unchanged. The CLI

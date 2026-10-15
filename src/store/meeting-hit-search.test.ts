@@ -7,6 +7,44 @@ import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 
 const opened: { close(): unknown }[] = []
+it("returns bounded meeting context and source links without exposing the join URL", async () => {
+  const { store, accountId, input, db } = await fixture()
+  input.meeting.title = "Alice Example review"
+  input.meeting.joinUrl = "https://example.test/join-private"
+  const summary = input.summaries?.[0]
+  if (!summary) throw new Error("missing synthetic summary")
+  summary.docUrl = "https://example.test/summary"
+  const saved = await store.meetings.saveMeeting(input)
+  await store.meetings.indexSearch({ accountId })
+  const page = await store.meetings.searchHits("example", { accountId })
+  expect(page.items.some((hit) => hit.scope === "summary")).toBe(true)
+  for (const hit of page.items) {
+    expect(hit.source).toEqual({
+      title: "Alice Example review",
+      startedAt: saved.meeting.startedAt,
+      url: hit.scope === "summary" ? "https://example.test/summary" : null,
+    })
+  }
+  expect(JSON.stringify(page)).not.toContain("join-private")
+  db.prepare("UPDATE meetings SET title=?,started_at=NULL WHERE id=?").run("é".repeat(5000), saved.meeting.id)
+  await expect(store.meetings.searchHits("example", { accountId, maxReadBytes: 1000 })).rejects.toMatchObject({
+    code: "validation_error",
+  })
+  db.prepare("UPDATE meetings SET title=NULL WHERE id=?").run(saved.meeting.id)
+  expect((await store.meetings.searchHits("example", { accountId })).items[0]?.source).toMatchObject({
+    title: null,
+    startedAt: null,
+  })
+})
+it("preflights source URL bytes before hydrating summary context", async () => {
+  const { store, accountId, input, db } = await fixture()
+  await store.meetings.saveMeeting(input)
+  await store.meetings.indexSearch({ accountId })
+  db.prepare("UPDATE meeting_summaries SET doc_url=?").run(`https://example.invalid/${"x".repeat(2000000)}`)
+  await expect(store.meetings.searchHits("example", { accountId, maxReadBytes: 4096 })).rejects.toMatchObject({
+    code: "validation_error",
+  })
+})
 afterEach(async () => {
   for (const item of opened.splice(0)) await item.close()
 })

@@ -76,7 +76,15 @@ export interface EventCandidateFilter {
   startsAt: number
   endsAt: number
 }
+export interface MeetingHitSource {
+  title: string | null
+  startedAt: number | null
+  /** A stored source-document permalink, never a meeting join or signed download URL. */
+  url: string | null
+}
+
 export interface SearchHit {
+  source?: MeetingHitSource
   /** A retained cue reference for transcript hits, or the parent meeting for other sources. */
   ref?: string
   meetingId: number

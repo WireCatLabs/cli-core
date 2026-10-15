@@ -5,6 +5,20 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.283.0 — 15.10.2026
+
+### Added
+
+- **Meeting search hits include nested source context.** Shared CLI/MCP results carry the meeting title, start date and evidence reference, plus a stored source-document URL when available. Context reads share the text byte budget; absent URLs stay null.
+
+### Changed — may break callers
+
+- **Requires cli-base 0.31.1 within the 0.31 series.** Nested JSON field projection and skill command effects come from the shared implementation. Upgrade the CLI’s Base pin together with Core.
+
+### Fixed
+
+- **Nested `--json` paths accept the `items.ref` list shorthand.** Array order and report coverage, pagination, missing data and execution metadata are retained across CLIs.
+
 ## 0.282.0 — 15.10.2026
 
 ### Added

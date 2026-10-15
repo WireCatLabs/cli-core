@@ -17,7 +17,12 @@ export const answerFields = (command: Command | undefined, resolve?: JsonFieldsR
 }
 
 const PATHS = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*(,[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*)*$/
-const topOf = (fields: string) => fields.split(",").map((path) => path.split(".")[0] ?? path)
+const topOf = (fields: string, known: readonly string[]) =>
+  fields.split(",").map((path) => {
+    const parts = path.trim().split(".")
+    if (parts[0] === "items" && parts.length > 1 && !known.includes("items")) parts.shift()
+    return parts[0] ?? path
+  })
 
 export interface JsonRequest {
   argv: string[]
@@ -62,7 +67,7 @@ export const liftJson = (
     const following = argv[index + 1]
     if (following === undefined || !PATHS.test(following) || (end >= 0 && index + 1 >= end)) continue
     const known = answerFields(target([...argv.slice(0, index), ...argv.slice(index + 2)]), resolve)
-    if (known && topOf(following).every((name) => known.includes(name))) {
+    if (known && topOf(following, known).every((name) => known.includes(name))) {
       fields = following
       index++
     }
@@ -81,7 +86,7 @@ export const checkJson = (
   if (!json || !known) return
   const list = known.join(", ")
   if (fields !== undefined) {
-    const unknown = topOf(fields).filter((name) => !known.includes(name))
+    const unknown = topOf(fields, known).filter((name) => !known.includes(name))
     if (unknown.length > 0)
       throw new CliError("validation_error", `--json: no field ${unknown.join(", ")} here; the fields are ${list}`, {
         reason: "output.unknown-field",

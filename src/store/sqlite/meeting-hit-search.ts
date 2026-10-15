@@ -193,7 +193,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
           params.push(input.tagId)
         }
         const seek = after
-          ? "WHERE started<? OR (started=? AND (meeting_id>? OR (meeting_id=? AND (kind>? OR (kind=? AND id>?)))))"
+          ? "WHERE h.started<? OR (h.started=? AND (h.meeting_id>? OR (h.meeting_id=? AND (h.kind>? OR (h.kind=? AND h.id>?)))))"
           : ""
         if (after)
           params.push(after.started, after.started, after.meeting, after.meeting, after.kind, after.kind, after.id)
@@ -201,11 +201,17 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         SELECT m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text"])} AS bytes,t.id AS transcript_id,r.position FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
         UNION ALL SELECT m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])},NULL,NULL FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
         UNION ALL SELECT m.started,m.id,2,s.id,NULL,${bytes("s", fields)},NULL,NULL FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
-        SELECT * FROM hits ${seek} ORDER BY started DESC,meeting_id,kind,id LIMIT ?`
+        SELECT h.*,${bytes("m", ["title"])}+${bytes("s", ["doc_url"])} AS context_bytes FROM hits h
+        JOIN meetings m ON m.id=h.meeting_id LEFT JOIN meeting_summaries s ON h.kind=2 AND s.id=h.id
+        ${seek} ORDER BY h.started DESC,h.meeting_id,h.kind,h.id LIMIT ?`
         const rows = database.prepare(sql).all(...queryParams, ...params, limit + 1)
         let total = 0
+        const meetingMetadata = database.prepare(
+          "SELECT title,started_at FROM meetings WHERE id=? AND account_id=? AND deleted_at IS NULL",
+        )
+        const sourceUrl = database.prepare("SELECT doc_url FROM meeting_summaries WHERE id=?")
         for (const row of rows) {
-          const size = Number(row.bytes)
+          const size = Number(row.bytes) + Number(row.context_bytes)
           if (!Number.isSafeInteger(size) || size < 0) fail("Invalid stored meeting search text size")
           total += size
           if (total > maxReadBytes) fail("Meeting search exceeds its stored text byte budget")
@@ -224,7 +230,17 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             const table = kind === 0 ? "meeting_transcript_rows" : "meeting_chat_messages"
             text = String(database.prepare(`SELECT text FROM ${table} WHERE id=?`).get(Number(row.id))?.text)
           }
+          const metadata = meetingMetadata.get(Number(row.meeting_id), input.accountId)
+          const url = kind === 2 ? sourceUrl.get(Number(row.id))?.doc_url : null
           return {
+            source: {
+              title: metadata?.title === null || metadata?.title === undefined ? null : String(metadata.title),
+              startedAt:
+                metadata?.started_at === null || metadata?.started_at === undefined
+                  ? null
+                  : Number(metadata.started_at),
+              url: url === null || url === undefined ? null : String(url),
+            },
             ref: formatMeetingReference({
               type: "meeting",
               accountId: input.accountId,

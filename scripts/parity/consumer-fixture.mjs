@@ -95,24 +95,11 @@ try {
     return { isError: result.isError === true, body: result.structuredContent ?? JSON.parse(first?.text ?? "null") }
   }
   const results = []
-  const cases = [...recipes.recipes, ...recipes.negative].flatMap((recipe) => [
-    { ...recipe, explicit: true },
-    { ...recipe, explicit: false },
-  ])
+  const cases = [...recipes.recipes, ...recipes.negative]
   for (const recipe of cases) {
     const streams = captureStreams()
     const code = await run(
-      [
-        "messages",
-        "search",
-        recipe.query,
-        ...(recipe.explicit ? ["--language", "lucene"] : []),
-        "--timezone",
-        "UTC",
-        "--json",
-        "--offline",
-        "--no-record",
-      ],
+      ["messages", "search", recipe.query, "--timezone", "UTC", "--json", "--offline", "--no-record"],
       {
         env: process.env,
         streams,
@@ -135,13 +122,11 @@ try {
       assert.ok(a.coverage)
       const direct = await service.messages.search({
         text: recipe.query,
-        ...(recipe.explicit ? { language: "lucene" } : {}),
         timezone: "UTC",
         limit: 20,
       })
       const mcp = await callTool("messages search", {
         text: recipe.query,
-        ...(recipe.explicit ? { language: "lucene" } : {}),
         timezone: "UTC",
         limit: 20,
       })
@@ -175,7 +160,6 @@ try {
       await assert.rejects(
         service.messages.search({
           text: recipe.query,
-          ...(recipe.explicit ? { language: "lucene" } : {}),
           timezone: "UTC",
           limit: 20,
         }),
@@ -183,7 +167,6 @@ try {
       )
       const mcp = await callTool("messages search", {
         text: recipe.query,
-        ...(recipe.explicit ? { language: "lucene" } : {}),
         timezone: "UTC",
         limit: 20,
       })

@@ -14,12 +14,5 @@ const named = <T>(work: () => T): T => {
 
 export const fieldsOf = (value: string): string[] => named(() => coreFieldsOf(value))
 
-const isItemAnswer = (value: unknown): value is { item: unknown } =>
-  typeof value === "object" && value !== null && !Array.isArray(value) && "item" in value && "meta" in value
-
-/** An item answer keeps its `next`, `missing` and `meta`; only the item is cut down. */
-export const projectFields = (value: unknown, fields: readonly string[]): unknown => {
-  return named(() =>
-    isItemAnswer(value) ? { ...value, item: coreProjectFields(value.item, fields) } : coreProjectFields(value, fields),
-  )
-}
+export const projectFields = (value: unknown, fields: readonly string[]): unknown =>
+  named(() => coreProjectFields(value, fields))
