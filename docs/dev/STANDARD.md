@@ -196,6 +196,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `list` | show many | `ls` |
 | `show` | show one | `get`, `view` |
 | `search` | find by text; the description says where it looks | `find`, `query` |
+| `prepare` | assemble bounded cited context for a selected upcoming activity without applying findings |  |
 | `related` | what is nearest in meaning to one thing, without a query |  |
 | `info` | facts about a singular thing itself: where it is, its size, its version, its schema |  |
 | `status` | how a thing stands right now | `readiness` |
@@ -361,29 +362,17 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 
 | Flag | Value | Kind | Meaning | Unit |
 |---|---|---|---|---|
-| `--scan-limit` | `<n>` | count | at most this many stored candidates inspected for one bounded read | items |
-| `--bytes` | `<bytes>` | count | at most this many bytes of included evidence content | bytes |
-| `--max-read-bytes` | `<bytes>` | count | at most this many stored text bytes read for one bounded evidence window | bytes |
-| `--expected-fingerprint` | `<hash>` | string | require the selected evidence anchor to match this previously read fingerprint |  |
-| `--depth` | `<n>` | count | maximum descendant depth in a hierarchy | levels |
 | `--limit` | `<n>` | count | how many items | items |
 | `--page` | `<n>` | count | which page, from 1, where the source has no cursor |  |
 | `--page-size` | `<n>` | count | how many items one request to the source asks for | items |
+| `--all` |  | switch | every item at once, instead of one page or one target |  |
 | `--cursor` | `<cursor>` | cursor | continue from where the previous page ended |  |
 | `--before-id` | `<id>` | id | read what came before this message id |  |
 | `--after-id` | `<id>` | id | read what came after this message id |  |
-| `--before-time` | `<time>` | time | read what came before this time |  |
-| `--after-time` | `<time>` | time | read what came after this time |  |
-| `--since-time` | `<time>` | time | only what came since this time |  |
-| `--until-time` | `<time>` | time | only what came up to and including this time |  |
-| `--at-time` | `<time>` | time | do it at this time |  |
+| `--chunk-bytes` | `<n>` | count | how many bytes one chunk returns | bytes |
+| `--offset-bytes` | `<n>` | count | where the chunk starts, in bytes from 0 | bytes |
 | `--before-n` | `<n>` | count | how many messages or transcript lines before it | items |
 | `--after-n` | `<n>` | count | how many messages or transcript lines after it | items |
-| `--timeout` | `<duration>` | duration | give up after this long |  |
-| `--account` | `<account>` | string | the account to use; never assumed |  |
-| `--provider` | `<provider>` | choice | read every account of this provider |  |
-| `--source` | `<accounts>` | list | what to read: provider:account, a provider, a kind or group:<name>; comma-separated |  |
-| `--dry-run` |  | switch | judge and plan; do nothing |  |
 | `--debug` |  | switch | on failure, show the full error record: cause and stack |  |
 | `--agent-json` |  | switch | JSON with control and direction characters made visible in strings and keys |  |
 | `--brief` |  | switch | each item as its reference, title, time and excerpt only |  |
@@ -396,6 +385,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--jsonl` |  | switch | machine-readable output: one JSON object per line |  |
 | `--output` | `<file>` | path | the file to write |  |
 | `--output-dir` | `<dir>` | path | the folder to write into, created if missing |  |
+| `--problems` |  | switch | only what went wrong: failures, warnings and crashes |  |
 | `--quiet` |  | switch | no diagnostics on stderr |  |
 | `--show-phone` |  | switch | print the whole phone number |  |
 | `--thread-within` | `<duration>` | duration | messages within this long either side of the hit |  |
@@ -403,15 +393,22 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--verbose` |  | switch | more detail in what is shown; repeat for more |  |
 | `--version` |  | switch | print the version number |  |
 | `--with-notes` |  | switch | include the owner's private notes |  |
+| `--by` | `<group>` | choice | what the answer counts or groups by: a field or a calendar unit |  |
+| `--context` | `<n>` | count | how many messages before and after each hit | messages |
+| `--events` |  | switch | also print edits, deletions and other changes; every line names its event |  |
+| `--qr-file` | `<png>` | path | write the login QR code to this PNG instead of drawing it |  |
 | `--measure` | `<name>` | choice | the metric a ranking is ordered by |  |
 | `--newest` |  | switch | newest first instead of best first |  |
 | `--order` | `<recent\|name>` | choice | the order of a list: most recent first, or by name |  |
 | `--score` | `<preset>` | choice | the named ranking score preset |  |
 | `--weights` | `<json>` | string | the ranking component weights, all of them |  |
+| `--meeting-preparation` |  | switch | expose meeting preparation tools, including their remote schedule reads |  |
+| `--dry-run` |  | switch | judge and plan; do nothing |  |
 | `--accept-terms` |  | switch | accept the model's licence terms |  |
+| `--as-owner` |  | switch | record the action as the owner's although an agent's terminal runs the tool |  |
 | `--allow-any-file` |  | switch | send a file even from a credential folder or the tool's own folders |  |
 | `--allow-dangerous` |  | switch | go ahead without the question an ask level puts before a deletion |  |
-| `--allow-writes` |  | switch | acknowledge that the profile offers writing tools |  |
+| `--allow-writes` |  | switch | permit writing: offer the profile's writing tools, or let a generic call change the source |  |
 | `--as-file` |  | switch | send every file as a plain file to download |  |
 | `--background` |  | switch | run as a job that outlives this command |  |
 | `--base-url` | `<url>` | string | the address of an OpenAI-compatible model API |  |
@@ -419,7 +416,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--discover` |  | switch | also find partial matches; the results are evidence, not answers |  |
 | `--encrypt` |  | switch | compress and encrypt with a password that is never kept |  |
 | `--exact` |  | switch | bare words and quotes match their exact form only |  |
-| `--fingerprint` | `<hash>` | string | refuse if the plan it names has changed |  |
+| `--fingerprint` | `<hash>` | string | refuse if what it names has changed since it was read |  |
 | `--for-everyone` |  | switch | delete for everyone in the chat, not only for the owner |  |
 | `--http` |  | switch | serve over HTTP on 127.0.0.1 |  |
 | `--language` | `<lucene\|legacy>` | choice | the query language |  |
@@ -433,17 +430,47 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--no-registries` |  | switch | do not ask the public ban lists |  |
 | `--notify` |  | switch | tell the chat's members about it |  |
 | `--offline` |  | switch | answer from what was recorded and never connect |  |
+| `--operation-id` | `<id>` | id | the write attempt this repeats, from an unknown outcome; a retry with it cannot write twice |  |
 | `--port` | `<port>` | number | the local port for --http |  |
 | `--public-url` | `<url>` | string | the public https address of the tunnel |  |
 | `--record` |  | switch | keep this run under runs: ids and timings, never content |  |
 | `--regex` |  | switch | the words are one regular expression |  |
-| `--send-id` | `<id>` | id | identify a send attempt, so a retry reuses it |  |
 | `--silent` |  | switch | deliver without a notification |  |
 | `--thread` |  | switch | the stored reply chain instead of time neighbours |  |
 | `--timezone` | `<zone>` | string | the IANA timezone dates and times are read in |  |
 | `--yes` |  | switch | go ahead with the write without asking or previewing first |  |
+| `--allow-delete` |  | switch | permit a call that deletes for good |  |
+| `--allow-remote` |  | switch | consent to sending the stored data to the configured remote model |  |
+| `--answerer` | `<person>` | string | a person whose reply counts as an answer; repeat it for more |  |
+| `--browser` | `<program>` | string | the browser program to open for sign-in |  |
+| `--checkpoint` | `<file>` | path | keep resume progress in this file |  |
+| `--expected-event-id` | `<id>` | id | refuse unless the linked event is still this one, or none |  |
+| `--expected-person` | `<uid>` | id | refuse unless the linked person is still this one, or none |  |
+| `--html` |  | switch | the text is HTML |  |
+| `--idle` | `<duration>` | duration | stop after this long with nobody using it |  |
+| `--interactive` |  | switch | allow approving in a browser from an interactive terminal |  |
+| `--meeting-context` |  | switch | expose meeting evidence, person context and task proposal tools |  |
+| `--method` | `<method>` | choice | how to log in when there is no session |  |
+| `--model` | `<model>` | string | the model that does the work: a local model's id or the provider's model name |  |
+| `--models-dir` | `<dir>` | path | the folder installed models are read from |  |
+| `--no-browser` |  | switch | print the sign-in address instead of opening a browser |  |
+| `--no-resume` |  | switch | start over, keeping no resume state |  |
+| `--no-serve` |  | switch | do not start the long-running process; use this command's own connection |  |
+| `--pause` | `<duration>` | duration | wait this long between requests to the source, to stay under its limits |  |
+| `--permission` | `<key=level>` | string | override one permission for this run; repeat it for more |  |
+| `--read-only` |  | switch | refuse every write, local and remote |  |
+| `--replace` |  | switch | overwrite an existing one of the same name |  |
+| `--rescan` |  | switch | list everything again, not only what changed since the last run |  |
+| `--resume` |  | switch | continue verified partial work from the last run |  |
+| `--revision` | `<n>` | count | the revision read before this edit; a change made meanwhile refuses it |  |
+| `--secret-stdin` |  | switch | read a secret from a pipe, or ask for it; never from the command line |  |
+| `--semantic` |  | switch | expose read-only search by meaning, with an explicit query model |  |
+| `--serve` |  | switch | start the long-running process in the background when it is not running |  |
+| `--size` | `<n>` | count | how many messages in one batch | messages |
+| `--unified-search` |  | switch | expose search across resources for the selected profile |  |
+| `--within` | `<duration>` | duration | the window after an event that counts |  |
 | `--analyze` |  | switch | also analyze with the configured provider |  |
-| `--catch-up` |  | switch | prepare local search after this run |  |
+| `--catch-up` |  | switch | prepare local search: after this run, or before a search reads it |  |
 | `--extract` |  | switch | also read the text inside the files written |  |
 | `--mark-read` |  | switch | also mark the chat read up to the newest message shown; the other person sees it |  |
 | `--no-catch-up` |  | switch | skip local preparation after this run |  |
@@ -451,6 +478,25 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--revoke` |  | switch | forget every login given to a browser app |  |
 | `--track` |  | switch | also do it daily while serve runs |  |
 | `--transcribe` |  | switch | also transcribe voice messages not transcribed yet, on this machine |  |
+| `--block` |  | switch | also keep them from coming back by the chat's link |  |
+| `--check` |  | switch | also ask the source and say what it answers: a newer version, who a bot is, whether a login works |  |
+| `--download` |  | switch | first download the files not downloaded yet |  |
+| `--embed` |  | switch | also embed what is pending, for search by meaning |  |
+| `--export` | `<dir>` | path | also write it as a file, to this folder or the configured one |  |
+| `--no-block` |  | switch | remove without keeping them from coming back |  |
+| `--no-embed` |  | switch | skip embedding for search by meaning this run |  |
+| `--no-mark-read` |  | switch | do not mark read, whatever the configuration says |  |
+| `--ocr` |  | switch | also read the text in images and scanned PDFs with the configured OCR model |  |
+| `--online` |  | switch | also connect once and read the account; sends nothing |  |
+| `--sync-first` |  | switch | first bring what it reads up to date from the source |  |
+| `--meetings` | `<n>` | count | at most this many stored meeting occurrences in context | meetings |
+| `--cues` | `<n>` | count | at most this many transcript cues per selected occurrence | cues |
+| `--context-limit` | `<n>` | count | at most this many entries per context category | items |
+| `--scan-limit` | `<n>` | count | at most this many stored candidates inspected for one bounded read | items |
+| `--bytes` | `<bytes>` | count | at most this many bytes of included evidence content | bytes |
+| `--max-read-bytes` | `<bytes>` | count | at most this many stored text bytes read for one bounded evidence window | bytes |
+| `--depth` | `<n>` | count | maximum descendant depth in a hierarchy | levels |
+| `--timeout` | `<duration>` | duration | give up after this long |  |
 | `--catch-up-chunks` | `<n>` | count | at most this many chunks prepared after the run | chunks |
 | `--catch-up-messages` | `<n>` | count | skip the graph rebuild above this many messages | messages |
 | `--concurrency` | `<n>` | count | requests to the source at once | requests |
@@ -466,6 +512,42 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--thread-bytes` | `<n>` | count | at most this many bytes in each thread context | bytes |
 | `--thread-hops` | `<n>` | count | at most this many links from the hit | links |
 | `--thread-messages` | `<n>` | count | at most this many messages in each thread context | messages |
+| `--catch-up-time` | `<duration>` | duration | how long local preparation after the run may take |  |
+| `--max-bytes` | `<bytes>` | count | at most this many bytes of one file read or downloaded | bytes |
+| `--max-comparisons` | `<n>` | count | at most this many name comparisons | comparisons |
+| `--max-cost` | `<usd>` | number | stop a run that costs more than this | US dollars |
+| `--max-duration` | `<duration>` | duration | the longest audio it takes on |  |
+| `--max-entries` | `<n>` | count | at most this many entries read | entries |
+| `--max-meetings` | `<n>` | count | at most this many meetings looked through, newest first | meetings |
+| `--max-output-bytes` | `<bytes>` | count | at most this many bytes of machine output; 0 means no limit | bytes |
+| `--max-pages` | `<pages>` | count | at most this many pages read from the source | pages |
+| `--max-rows` | `<n>` | count | at most this many transcript lines read | lines |
+| `--max-segments` | `<n>` | count | at most this many recognized segments | segments |
+| `--max-subscriber-buffer-bytes` | `<bytes>` | count | at most this many bytes buffered for one watcher before it is cut off; 0 means no limit | bytes |
+| `--max-subscriber-total-buffer-bytes` | `<bytes>` | count | at most this many bytes buffered for all watchers together; 0 means no limit | bytes |
+| `--max-text-bytes` | `<bytes>` | count | at most this many bytes of transcript text read | bytes |
+| `--max-total-bytes` | `<bytes>` | count | at most this many bytes in all, checked before any write | bytes |
+| `--max-transcript-pages` | `<n>` | count | at most this many transcript pages read | pages |
+| `--repair-time` | `<duration>` | duration | how long a repair may take |  |
+| `--server-time` | `<duration>` | duration | stop waiting for the server's answer after this long |  |
+| `--sync-time` | `<duration>` | duration | stop fetching from the source after this long |  |
+| `--threads` | `<n>` | count | threads on this machine, in all | threads |
+| `--workers` | `<n>` | count | sessions in parallel on this machine, each with its own copy of the model | sessions |
+| `--account` | `<account>` | string | the account to use; never assumed |  |
+| `--provider` | `<provider>` | choice | read every account of this provider |  |
+| `--source` | `<accounts>` | list | what to read: provider:account, a provider, a kind or group:<name>; comma-separated |  |
+| `--all-bots` |  | switch | also read every other bot's copy on this machine that the configuration allows |  |
+| `--archive` | `<dir>` | path | also read the transcripts in this archive folder |  |
+| `--backend` | `<archive\|server\|both>` | choice | where to search: the local archive, the source's server, or both |  |
+| `--bots` | `<profiles>` | list | also read these bots' copies, comma-separated, each allowed by the configuration |  |
+| `--only` | `<resources>` | list | only these resources, comma-separated |  |
+| `--profile` | `<name>` | string | the profile to use, instead of the first word |  |
+| `--history-since-time` | `<time>` | time | inclusive start of the stored history window used for preparation |  |
+| `--expected-fingerprint` | `<hash>` | string | require what it reads to match this fingerprint from an earlier read |  |
+| `--before-time` | `<time>` | time | read what came before this time |  |
+| `--after-time` | `<time>` | time | read what came after this time |  |
+| `--since-time` | `<time>` | time | only what came since this time |  |
+| `--until-time` | `<time>` | time | only what came up to and including this time |  |
 | `--batch` | `<id>` | id | the batch to act on, by the id that listed it |  |
 | `--component` | `<name>` | string | the ranking component to read the evidence of |  |
 | `--counters` | `<names>` | list | the counters to read: views, reactions, comments |  |
@@ -474,6 +556,41 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--others` |  | switch | every session but this one |  |
 | `--saved` | `<name\|id>` | string | run a saved search, or an earlier run by its id |  |
 | `--selection` | `<json>` | string | the resolved ranking selection a drilldown returned |  |
+| `--attachment` | `<n>` | count | which file of the message, from 1; needed when it has more than one |  |
+| `--bot` |  | switch | the bot section of the configuration, not the personal account's |  |
+| `--chat` | `<chat>` | id | the chat it acts on: its id or name; repeat it where several are taken |  |
+| `--contact` | `<person>` | id | a contact: their id, @username or name, as the store knows them |  |
+| `--defaults` |  | switch | what every profile gets, not only this profile |  |
+| `--file-ids` | `<ids>` | list | only these files, by comma-separated ids |  |
+| `--folder` | `<folder>` | string | a notes folder, by its id or path; repeat it for more |  |
+| `--for` | `<agents>` | list | the agents to install for, comma-separated |  |
+| `--from-dir` | `<dir>` | path | match files in this folder, not its subfolders |  |
+| `--last` | `<n>` | count | stop once the newest n messages are held | messages |
+| `--link` | `<link>` | string | an invite link |  |
+| `--lookback-days` | `<days>` | count | look again at this many recent days, for what arrived late | days |
+| `--meeting` | `<id>` | id | a meeting, by its store id |  |
+| `--message` | `<message>` | id | a message: its id in --chat, or a msg: locator alone |  |
+| `--new` |  | switch | only what is new since this command last ran, each once; for scheduled runs |  |
+| `--note` | `<reference>` | string | a note: note:<id>, or a file in a notes folder: document:<id> |  |
+| `--occurrence-id` | `<id>` | id | one occurrence of a recurring meeting |  |
+| `--old-parent` | `<id>` | id | the folder to take it out of, by id |  |
+| `--only-missing` |  | switch | only what has none yet |  |
+| `--organization` | `<organization>` | string | an organization: its id or organization:<id> |  |
+| `--parent` | `<id>` | id | the folder or task it sits under, by id |  |
+| `--participant-id` | `<id>` | id | a participant of the meeting, by id |  |
+| `--person` | `<uid>` | id | a person, by their stored UID |  |
+| `--personal` |  | switch | the personal-account section of the configuration |  |
+| `--project` | `<project>` | string | a project: its key or project:<id> |  |
+| `--recheck-since-time` | `<time>` | time | look again from this day, for what arrived late |  |
+| `--run` | `<id>` | id | the run it is about |  |
+| `--target` | `<ref>` | string | what it acts on, as a reference: msg:, chat:, person:, task:, … |  |
+| `--task` | `<id>` | id | a task, by id |  |
+| `--to` | `<chat>` | id | the chat it goes to |  |
+| `--topic` | `<id>` | id | the forum topic, in a chat that has topics |  |
+| `--transcript-id` | `<id>` | id | one transcript version, by id |  |
+| `--until-id` | `<id>` | id | up to and including this message id |  |
+| `--uuid` | `<uuid>` | string | one meeting occurrence, by its UUID |  |
+| `--at-time` | `<time>` | time | do it at this time |  |
 | `--add` | `<chat>` | id | put this chat into the set being changed; repeat it for more |  |
 | `--all-can-pin` | `<on\|off>` | choice | every member may pin messages |  |
 | `--anonymous` |  | switch | nobody sees who voted for what |  |
@@ -500,6 +617,56 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--revote` |  | switch | people may change their vote |  |
 | `--send-as` | `<id>` | id | send as this identity of the chat |  |
 | `--voice` | `<file>` | path | an Ogg Opus file sent as a voice message |  |
+| `--agenda` | `<text>` | string | the meeting's agenda |  |
+| `--allow-chats` | `<ids>` | list | the chats allowed, by comma-separated ids; empty clears |  |
+| `--allow-people` | `<ids>` | list | the senders allowed, by comma-separated ids; empty clears |  |
+| `--as` | `<state>` | choice | how it is closed: done, or dismissed when it needs no answer |  |
+| `--assignee` | `<person...>` | list | who does it, by UID |  |
+| `--at` | `<hh:mm>` | string | every day at this local time |  |
+| `--body` | `<json>` | string | the request body, as JSON |  |
+| `--caption-above` |  | switch | show the text above the photo or file, not below it |  |
+| `--close-time` | `<delay>` | duration | it closes by itself this long after sending |  |
+| `--correct` | `<n>` | count | with --quiz, the right answer's position, from 1 |  |
+| `--deny-chats` | `<ids>` | list | the chats left out, by comma-separated ids; empty clears; deny wins |  |
+| `--deny-people` | `<ids>` | list | the senders left out, by comma-separated ids; empty clears; deny wins |  |
+| `--due` | `<time>` | time | when it must be done |  |
+| `--duration-minutes` | `<minutes>` | count | how long the meeting lasts, in minutes | minutes |
+| `--emoji` | `<emoji>` | string | the icon |  |
+| `--event-id` | `<id>` | id | the stored calendar event it is linked to, or none to unlink |  |
+| `--every` | `<duration>` | duration | repeat this often |  |
+| `--evidence` | `<ref...>` | list | what shows it: msg:, note:, meeting:, person: or another reference |  |
+| `--exclude-chat` | `<chat>` | id | never show this chat in it; repeat it for more |  |
+| `--file` | `<file>` | path | a file to send with the message; the text becomes its caption |  |
+| `--filename` | `<name>` | string | the name others see for the file, instead of its name on disk |  |
+| `--history` |  | switch | the people added also see the messages from before they came |  |
+| `--include` | `<kinds>` | list | every chat of these kinds, comma-separated |  |
+| `--join-approval` | `<on\|off>` | choice | people ask to join the chat, and an admin lets them in |  |
+| `--key` | `<key>` | string | the short key, 3–4 letters and digits; made from the name when left out |  |
+| `--kind` | `<kind>` | choice | what kind of thing it is; the command lists the kinds |  |
+| `--name` | `<name>` | string | the name to give it |  |
+| `--no-approval` |  | switch | anyone with the link joins at once |  |
+| `--notification` | `<text>` | string | a note only the person who pressed sees |  |
+| `--params` | `<json>` | string | the request's query and path parameters, as JSON |  |
+| `--payload` | `<json>` | string | the data of what to do, as JSON |  |
+| `--pin` | `<chat>` | id | pin this chat at the top of it; repeat it for more |  |
+| `--priority` | `<n>` | count | 0 urgent … 4 low |  |
+| `--quiz` |  | switch | a quiz: one answer is right, and a vote is final |  |
+| `--reason` | `<text>` | string | why, in a few words; kept with it |  |
+| `--remind-time` | `<time>` | time | when to look at it again |  |
+| `--role` | `<role>` | string | the part it plays, in a word or two |  |
+| `--scope` | `<scope>` | choice | personal or work: which side of the owner's life it belongs to |  |
+| `--solution` | `<text>` | string | with --quiz, what people see once they answered |  |
+| `--spoiler` |  | switch | hide the photo or video behind a spoiler until tapped |  |
+| `--start` | `<param>` | string | the start parameter the bot or app reads |  |
+| `--start-time` | `<time>` | time | when it starts |  |
+| `--sticker` | `<id>` | id | send this sticker, alone |  |
+| `--subject` | `<ref>` | string | what it is about, as a reference |  |
+| `--supersedes` | `<ref>` | string | the earlier one this replaces, as a reference |  |
+| `--text` | `<text>` | string | the text |  |
+| `--text-file` | `<path>` | path | read the text from this file; - reads stdin |  |
+| `--title` | `<title>` | string | the title or name to give it |  |
+| `--type` | `<type>` | choice | what type of thing it is; the command lists the types |  |
+| `--types` | `<types>` | list | the update types, comma-separated, in the messenger's words |  |
 | `--filter` | `<query>` | string | a query every result must also match, beside the search's own words |  |
 
 <!-- flags: end -->
