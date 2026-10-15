@@ -109,7 +109,7 @@ shape of this file.
 
 ### Fixed
 
-- **Meeting MCP answers show hidden characters, as tg's and max's do** (FIND-1298): `meetings_list`, `meeting_show`,
+- **Meeting MCP answers show hidden characters, as tg's and max's do**: `meetings_list`, `meeting_show`,
   `meeting_transcript`, `meeting_summary`, `meeting_export`, `meeting_people`, `search_meetings`,
   `meeting_passage`, `meeting_project_evidence` and `meeting_prepare` escape tag characters, direction overrides,
   zero-width spaces, U+FEFF, C1 and other control characters (an ANSI escape reads `\x1b`) in their text and
