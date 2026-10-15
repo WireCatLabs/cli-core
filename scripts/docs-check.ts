@@ -8,46 +8,11 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+import { changelogProblems, taggedVersions } from "./changelog-shape.ts"
 
-const HEADINGS = ["Added", "Changed — may break callers", "Fixed", "Security", "Removed"]
-const UNRELEASED = "Unreleased"
-const VERSION_HEADING = /^## (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?) — (\d{2})\.(\d{2})\.(\d{4})$/
-const ID = /\b(?:CLI|MAX|OPS|CORE|NEED|BUG|FIND|SEC|PERF|UX|IDEA|DEBT|RISK|ASK|TASK)-\d+\b/g
 const SKIPPED = new Set(["node_modules", "dist", "coverage", ".git", ".worktrees", "docs_ai"])
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
-
-const changelogProblems = (text: string): string[] => {
-  const problems: string[] = []
-  let section = ""
-  let subheadings = new Set<string>()
-  let first = true
-  text.split("\n").forEach((line, index) => {
-    const where = `CHANGELOG.md:${index + 1}`
-    if (line.startsWith("## ")) {
-      section = line.slice(3)
-      subheadings = new Set()
-      if (section === UNRELEASED) {
-        if (!first) problems.push(`${where}: «${UNRELEASED}» must be the top section`)
-      } else {
-        const found = VERSION_HEADING.exec(line)
-        if (!found) problems.push(`${where}: "${line}" is not "## <version> — DD.MM.YYYY"`)
-        else if (Number(found[2]) < 1 || Number(found[2]) > 31 || Number(found[3]) < 1 || Number(found[3]) > 12)
-          problems.push(`${where}: "${line}" has no such date`)
-      }
-      first = false
-      return
-    }
-    if (line.startsWith("### ")) {
-      const heading = line.slice(4)
-      if (!HEADINGS.includes(heading)) problems.push(`${where}: "${heading}" is not one of: ${HEADINGS.join(", ")}`)
-      if (subheadings.has(heading)) problems.push(`${where}: "${heading}" twice in "${section}"`)
-      subheadings.add(heading)
-    }
-    for (const id of line.match(ID) ?? []) problems.push(`${where}: internal id ${id} — say what changed instead`)
-  })
-  return problems
-}
 
 /** GitHub's heading anchor: lower case, only letters, digits, `-`, `_` and spaces kept, spaces to `-`. */
 const slug = (heading: string) =>
@@ -135,7 +100,10 @@ const linkProblems = (base: string): string[] => {
   return problems
 }
 
-const problems = [...changelogProblems(readFileSync(join(root, "CHANGELOG.md"), "utf8")), ...linkProblems(root)]
+const problems = [
+  ...changelogProblems(readFileSync(join(root, "CHANGELOG.md"), "utf8"), taggedVersions(root)),
+  ...linkProblems(root),
+]
 for (const problem of problems) console.error(problem)
 if (problems.length > 0) process.exit(1)
 console.log("docs: ok")
