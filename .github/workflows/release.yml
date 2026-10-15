@@ -17,6 +17,10 @@ on:
         description: "Branch of tg-cli and max-cli that Parity builds"
         type: string
         default: main
+      commit:
+        description: "The commit bin/release checked; the run refuses any other"
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -25,7 +29,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Every job builds github.sha, the tip of main when the run started — which a merge can move past the commit
+  # bin/release checked.
+  checked-commit:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - env:
+          COMMIT: ${{ inputs.commit }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          [ "$COMMIT" = "$GITHUB_SHA" ] && exit 0
+          [ "$DRY_RUN" = "true" ] && [ -z "$COMMIT" ] && exit 0
+          echo "::error::this run is at $GITHUB_SHA, but bin/release checked '${COMMIT}' — nothing is published"
+          exit 1
+
   validation:
+    needs: checked-commit
     if: github.ref == 'refs/heads/main' || inputs.dry_run
     permissions:
       contents: read
@@ -35,6 +55,7 @@ jobs:
       app_ref: ${{ inputs.app_ref }}
 
   checks:
+    needs: checked-commit
     if: github.ref == 'refs/heads/main' || inputs.dry_run
     permissions:
       contents: read

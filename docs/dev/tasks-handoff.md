@@ -55,9 +55,10 @@ learned the hard way.
 3. **Rebase and merge cli-core#1121** (`search mail` and MCP `search_mail` leave tg/max with a pointer to memo;
    `search all` excludes mail). Search code moved a lot on main; expect real conflicts. Check: full suite.
 4. **Release cli-core** with all of the above: `bin/release` from a clean `main` checkout, or — when the main
-   checkout holds others' files — a `chore: release X` PR, then `gh workflow run release.yml --ref main` while
-   holding `/run/user/1000/leemour-release.lock` with a `.who` note; announce on #849 before and "run started"
-   after. Check: `npm view @wirecat/cli-core version` shows it and tag `vX` exists.
+   checkout holds others' files — a `chore: release X` PR, then
+   `gh workflow run release.yml --ref main -f commit=<full sha of the main you checked>` while holding
+   `/run/user/1000/leemour-release.lock` with a `.who` note; announce on #849 before and "run started" after.
+   Check: `npm view @wirecat/cli-core version` shows it and tag `vX` exists.
 5. **tg, then max** move their cli-core pin (tg-cli#487, max-cli#612 carry the `search mail` change): rebase, bump
    the pin, update docs and test matrices for the breaking `tasks add --category`, `pnpm contracts:upgrade`,
    `parity:check`, release with `bin/release`. tg: two hours between releases. max: write
