@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.293.0 — 15.10.2026
+
 ### Added
 
 - **Meeting reads can run as an explicit bounded batch.** The shared CLI builder registers word search and
