@@ -38,6 +38,17 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **cli-core needs `@wirecat/cli-base` 0.31.0** (peer range `>=0.31.0 <0.32.0`, was 0.28.x). An app on cli-base 0.31.0
+  no longer installs a second copy beside cli-core's. Move the app to 0.31.0 with it. That version's vocabulary
+  registers 158 more flags, so the app's `option-role` baseline loses the entries it clears, and its command lint
+  gains `flag-synonym` findings for shared commands that keep their old names for now: `--budget` (`--max-pages`),
+  `--estimate` (`--dry-run`), `--refresh` (`--sync-first`, or `--catch-up` in `search conversations`),
+  `--if-sha256` (`--expected-fingerprint`), `replies edit --chats/--not-chats/--people/--not-people`
+  (`--allow-chats`, `--deny-chats`, `--allow-people`, `--deny-people`), `schedule --once` (`--at-time`),
+  `bot chats moderate --no-ban` (`--no-block`), `chats mark-read --until` (`--until-id`) and `tasks --check`
+  (`--remind-time`). `skill show` and `skill install` take their effects from cli-base now; `skill install` still
+  counts as a change to what later runs may do.
+
 - **`tasks add` needs `--category <name>`**, and the MCP tool `tasks_add` needs `category`: an agent names what a
   task is about from the list, and an unknown name is refused with the list, so "finance" and "payments" never
   coexist. Add `--category other` where nothing fits. `TasksService.add` without one picks it by the rule's trigger
