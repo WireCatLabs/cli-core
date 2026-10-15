@@ -15,7 +15,7 @@ import {
   writer,
 } from "./mention-drain.js"
 import type { StoreContext } from "./open.js"
-import { linkIdentityToPerson } from "./person-links.js"
+import { linkIdentityToPerson, personByUid } from "./person-links.js"
 import { valueMatch } from "./phone-countries.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 import { writeBatch } from "./transaction.js"
@@ -71,7 +71,7 @@ export const MENTION_QUERY = defineQuery({
   ],
 })
 
-const columnsOf = (database: CacheDatabase): ColumnMap => ({
+export const columnsOf = (database: CacheDatabase): ColumnMap => ({
   kind: { type: "enum", sql: "mn.kind" },
   status: { type: "enum", sql: "mn.status" },
   domain: { where: (node) => ({ sql: "mn.domain = ?", params: [siteOf(node.value.toLowerCase())] }) },
@@ -167,7 +167,8 @@ const SELECT =
   "mn.start_offset, mn.end_offset, CASE WHEN mn.source_type = 'attachment' THEN att.text ELSE m.text END AS text, " +
   "m.external_id AS message_id, m.sent_at, m.chat_id AS chat_pk, c.external_id AS chat_id FROM mentions mn " +
   "LEFT JOIN attachments att ON mn.source_type = 'attachment' AND att.id = mn.source_id AND att.attachable_type = 'message' " +
-  "JOIN messages m ON m.id = CASE WHEN mn.source_type = 'attachment' THEN att.attachable_id ELSE mn.source_id END " +
+  "JOIN messages m ON mn.source_type IN ('message', 'attachment') " +
+  "AND m.id = CASE WHEN mn.source_type = 'attachment' THEN att.attachable_id ELSE mn.source_id END " +
   "AND m.deleted_at IS NULL JOIN chats c ON c.id = m.chat_id "
 
 const stored = (row: Record<string, unknown>): StoredMention => ({
@@ -235,22 +236,41 @@ export const showMention = (
       .get(String(row.kind), String(row.value), id)?.n,
   )
   const mention = stored(row)
-  // Whom a name may mean: every known person it matches, the ones who wrote in its chat first.
-  const here = participants(database)(Number(row.chat_pk))
-  const candidates =
-    mention.kind === "person-name"
-      ? (findNames(mention.written, nameIndex(knownPeople(database), createStemmer()))[0]?.people ?? [])
-          .map((person) => ({ person, here: here.has(person) }))
-          .sort((a, b) => Number(b.here) - Number(a.here) || a.person - b.person)
-          .map(({ person }) => `person:${person}`)
-      : []
   return {
     ...mention,
     before: text.slice(Math.max(0, start - around), start),
     after: text.slice(end, end + around),
     sameValue,
-    candidates,
+    candidates: candidatesOf(database, mention, Number(row.chat_pk)),
   }
+}
+
+/**
+ * Whom a value may belong to. A name: every known person it matches, the ones who wrote in its chat first. A phone
+ * or an address: the people whose received mail carries it, most letters first — mostly a signature, so offered,
+ * never linked by rule.
+ */
+export const candidatesOf = (
+  database: CacheDatabase,
+  { kind, value, written }: { kind: MentionKind; value: string; written: string },
+  chat: number | null,
+): string[] => {
+  if (kind === "phone" || kind === "email")
+    return database
+      .prepare(
+        "SELECT l.person_id AS person FROM mentions mn JOIN emails e ON e.id = mn.source_id AND e.deleted_at IS NULL " +
+          "AND coalesce(e.outgoing, 0) = 0 JOIN identity_links l ON l.identity_id = e.from_identity_id " +
+          "JOIN persons p ON p.id = l.person_id AND p.owner = 0 WHERE mn.source_type = 'email' AND mn.kind = ? " +
+          "AND mn.value = ? GROUP BY l.person_id ORDER BY count(DISTINCT e.id) DESC, l.person_id LIMIT 5",
+      )
+      .all(kind, value)
+      .map((row) => `person:${Number(row.person)}`)
+  if (kind !== "person-name") return []
+  const here = chat === null ? new Set<number>() : participants(database)(chat)
+  return (findNames(written, nameIndex(knownPeople(database), createStemmer()))[0]?.people ?? [])
+    .map((person) => ({ person, here: here.has(person) }))
+    .sort((a, b) => Number(b.here) - Number(a.here) || a.person - b.person)
+    .map(({ person }) => `person:${person}`)
 }
 
 export interface MentionDecision {
@@ -263,7 +283,15 @@ export interface MentionDecision {
   mentions: number
 }
 
-const mentionOfAccount = (database: CacheDatabase, accountPk: number, id: number) => {
+/** A mention found and allowed to its caller; `chat` is `null` for a text outside a chat. */
+export interface LocatedMention {
+  id: number
+  kind: MentionKind
+  value: string
+  chat: number | null
+}
+
+export const mentionOfAccount = (database: CacheDatabase, accountPk: number, id: number): LocatedMention => {
   const row = database.prepare(`${SELECT}WHERE mn.id = ? AND m.account_id = ?`).get(id, accountPk)
   if (!row) throw new CliError("not_found", `no mention ${id} in this account`)
   return { id, kind: String(row.kind) as MentionKind, value: String(row.value), chat: Number(row.chat_pk) }
@@ -275,7 +303,7 @@ const mentionOfAccount = (database: CacheDatabase, accountPk: number, id: number
  */
 const decide = (
   database: CacheDatabase,
-  { id, kind, value, chat }: { id: number; kind: MentionKind; value: string; chat: number },
+  { id, kind, value, chat }: LocatedMention,
   status: MentionStatus,
   target: { type: string; id: number } | null,
   { by, inChat }: Decider,
@@ -286,9 +314,12 @@ const decide = (
   // The same name in one chat, still undecided or decided only by the rules: what someone decided stays.
   const sameChat =
     "WHERE id = ? OR id IN (SELECT mn.id FROM mentions mn LEFT JOIN attachments att ON mn.source_type = 'attachment' " +
-    "AND att.id = mn.source_id AND att.attachable_type = 'message' JOIN messages m ON m.id = CASE WHEN " +
+    "AND att.id = mn.source_id AND att.attachable_type = 'message' JOIN messages m ON mn.source_type IN ('message', " +
+    "'attachment') AND m.id = CASE WHEN " +
     "mn.source_type = 'attachment' THEN att.attachable_id ELSE mn.source_id END WHERE m.chat_id = ? " +
     "AND mn.kind = 'person-name' AND mn.value = ? AND (mn.status = 'found' OR mn.author = 'rules'))"
+  if (inChat && chat === null)
+    throw new CliError("validation_error", "--all-in-chat decides a name in a chat; this one is not in a chat")
   const changed = (
     kind !== "person-name"
       ? database.prepare(`${set}WHERE kind = ? AND value = ?`).run(...decision, kind, value)
@@ -307,13 +338,11 @@ const decide = (
  */
 export const confirmMention = (
   context: StoreContext,
-  accountPk: number,
-  id: number,
+  mention: LocatedMention,
   owner: { person: number } | { organization: number } | undefined,
   by: Decider,
 ): MentionDecision => {
   const { database } = context
-  const mention = mentionOfAccount(database, accountPk, id)
   const now = context.now()
   if (mention.kind === "phone" || mention.kind === "email") {
     if (owner === undefined)
@@ -375,5 +404,24 @@ export const confirmMention = (
 }
 
 /** Not a real mention, or not worth keeping: every place the value is written, now and on later syncs. */
-export const rejectMention = (context: StoreContext, accountPk: number, id: number, by: Decider): MentionDecision =>
-  decide(context.database, mentionOfAccount(context.database, accountPk, id), "dismissed", null, by, context.now())
+export const rejectMention = (context: StoreContext, mention: LocatedMention, by: Decider): MentionDecision =>
+  decide(context.database, mention, "dismissed", null, by, context.now())
+
+/** `person:<uid>` or `organization:<id>`, checked against the store. */
+export const mentionOwner = (
+  context: StoreContext,
+  ref: string | undefined,
+): { person: number } | { organization: number } | undefined => {
+  if (ref === undefined) return undefined
+  const [type, uid = ""] = ref.split(":")
+  if (type === "person") {
+    const person = personByUid(context, uid)
+    if (!person) throw new CliError("not_found", `no ${ref} in the store`)
+    return { person: Number(person.uid) }
+  }
+  const found = context.database
+    .prepare("SELECT id FROM organizations WHERE id = ? AND deleted_at IS NULL")
+    .get(Number(uid) || 0)
+  if (!found) throw new CliError("not_found", `no ${ref} in the store`)
+  return { organization: Number(found.id) }
+}

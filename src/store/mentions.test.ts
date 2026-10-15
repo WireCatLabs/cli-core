@@ -523,3 +523,83 @@ describe("known people's names", () => {
     await reopened.close()
   })
 })
+
+describe("mentions outside a chat", () => {
+  const by = { by: "owner" }
+  const MAIL = [{ provider: "email", account: "a@example.com" }]
+
+  const seeded = async () => {
+    const { path, store } = await fresh()
+    await store.saveMessages(OWNER, "-1", [message("1", "her number +7 900 000-00-01")], { via: "history" })
+    const raw = new DatabaseSync(path)
+    raw.exec(`INSERT INTO accounts (id, provider, external_id, created_at, updated_at) VALUES
+        (90, 'email', 'a@example.com', 1, 1), (91, 'email', 'b@example.com', 1, 1);
+      INSERT INTO email_threads (id, account_id, external_id, created_at, updated_at) VALUES (1, 90, 't1', 1, 1),
+        (2, 91, 't2', 1, 1);
+      INSERT INTO persons (id, name, created_at, updated_at) VALUES (40, 'Olga', 1, 1), (41, 'Ivan', 1, 1);
+      INSERT INTO identities (id, provider, external_id, created_at, updated_at) VALUES
+        (40, 'email', 'olga@example.org', 1, 1), (41, 'email', 'ivan@example.org', 1, 1);
+      INSERT INTO identity_links (identity_id, person_id, method, confidence, author, created_at, updated_at) VALUES
+        (40, 40, 'test', 1, 'rules', 1, 1), (41, 41, 'test', 1, 'rules', 1, 1);
+      INSERT INTO emails (id, account_id, email_thread_id, external_id, subject, from_identity_id, from_address, sent_at,
+        body_text, created_at, updated_at) VALUES
+        (1, 90, 1, 'e1', 'Invoice', 40, 'olga@example.org', 100, 'Olga, tel +7 900 000-00-01', 1, 1),
+        (2, 90, 1, 'e2', 'Again', 40, 'olga@example.org', 200, 'Olga, tel +7 900 000-00-01', 1, 1),
+        (3, 90, 1, 'e3', 'Fwd', 41, 'ivan@example.org', 300, 'see +7 900 000-00-01', 1, 1),
+        (4, 91, 2, 'e4', 'Other box', 41, 'ivan@example.org', 400, 'call +7 900 000-00-09', 1, 1);
+      INSERT INTO documents (id, account_id, external_id, kind, title, body, created_at, updated_at)
+        VALUES (5, 90, 'd1', 'file', 'Price list', 'see https://example.org/a', 1, 1);
+      INSERT INTO notes (id, notable_type, notable_id, title, body, created_at, updated_at)
+        VALUES (6, 'person', 40, 'Olga', 'ana@example.com', 1, 1);`)
+    raw.close()
+    await store.rebuildMentions()
+    return store
+  }
+
+  it("lists each kind of text with what names it, and mail only of the named accounts", async () => {
+    const store = await seeded()
+    const listed = async (source: "document" | "note" | "email", mail = MAIL) =>
+      (await store.sourceMentions.list(source, undefined, { offset: 0 }, mail)).items.map(
+        ({ kind, value, source: s }) => `${kind} ${value} ${s.title} ${s.from}`,
+      )
+    expect(await listed("document")).toEqual(["url https://example.org/a Price list null"])
+    expect(await listed("note")).toEqual(["email ana@example.com Olga null"])
+    expect(await listed("email")).toEqual([
+      "phone +79000000001 Fwd ivan@example.org",
+      "phone +79000000001 Again olga@example.org",
+      "phone +79000000001 Invoice olga@example.org",
+    ])
+    expect(await listed("email", [])).toEqual([])
+    const messenger = (await store.mentions(OWNER, undefined, { offset: 0 })).items
+    expect(messenger.map(({ messageId, written }) => `${messageId} ${written}`)).toEqual(["1 +7 900 000-00-01"])
+    const page = await store.sourceMentions.list("email", q("kind:phone"), { offset: 0, limit: 1 }, MAIL)
+    expect(page.hasMore).toBe(true)
+  })
+
+  it("offers the people whose mail carries a number, most letters first, in mail and in a message", async () => {
+    const store = await seeded()
+    const [mail] = (await store.sourceMentions.list("email", undefined, { offset: 0 }, MAIL)).items
+    const shown = await store.sourceMentions.show(Number(mail?.id), MAIL)
+    expect(shown).toMatchObject({ written: "+7 900 000-00-01", sameValue: 3, candidates: ["person:40", "person:41"] })
+    expect(await store.sourceMentions.show(Number(mail?.id), [])).toBeUndefined()
+    const [inChat] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    expect((await store.mention(OWNER, Number(inChat?.id)))?.candidates).toEqual(["person:40", "person:41"])
+  })
+
+  it("decides a value found in mail everywhere, and refuses a chat-wide decision outside a chat", async () => {
+    const store = await seeded()
+    const [mail] = (await store.sourceMentions.list("email", undefined, { offset: 0 }, MAIL)).items
+    expect(await store.sourceMentions.confirm(Number(mail?.id), "person:40", by, MAIL)).toMatchObject({
+      status: "linked",
+      mentions: 4,
+    })
+    const [inChat] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    expect(inChat?.status).toBe("linked")
+    const [note] = (await store.sourceMentions.list("note", undefined, { offset: 0 }, [])).items
+    await expect(store.sourceMentions.reject(Number(note?.id), { by: "owner", inChat: true }, [])).rejects.toThrow(
+      /not in a chat/,
+    )
+    expect(await store.sourceMentions.reject(Number(note?.id), by, [])).toMatchObject({ status: "dismissed" })
+    await expect(store.sourceMentions.reject(Number(inChat?.id), by, MAIL)).rejects.toThrow(/no mention/)
+  })
+})
