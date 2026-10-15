@@ -55,6 +55,16 @@ shape of this file.
 - **`relationship` entity**: a link between two people, organizations, projects or tasks, as the store's
   `knowledge.relations` holds it. **`fact.confirmed_by`** (optional): `{type, id}` of who accepted the fact.
 
+- **The owner edits the task category list**, one per store so tg, max, memo and `messages sync` agree:
+  `config set task_categories.<name> "<meaning> | <trigger words>"` adds or replaces one (a word may say its language,
+  `es:vuelo`; otherwise Cyrillic reads as Russian, the rest as English), `config unset task_categories.<name>` removes
+  one (`other` stays), `config unset task_categories` goes back to the default list, and `config show` lists it. Rules,
+  `tasks add`, `tasks plan` and `tasks categories` read it; tasks keep the category they have.
+- **MCP `tasks_claim`, `tasks_release` and `tasks_categories`**, as the commands. `tasks_claim` and `tasks_agenda`
+  take the same holder by default (`WIRECAT_HOLDER`, else Claude Code's session, else the agent's name), so an agent
+  sees its own claimed tasks on the agenda.
+- **`tasks agenda --category <name> --tag <name>`** (MCP `category`, `tag`): only the tasks of that category, or with
+  that tag.
 ### Changed — may break callers
 
 - **`nativeTerms` reads typed AND terms beside a list's defaults**; it refused them as a nested group. An MCP list
@@ -78,6 +88,9 @@ shape of this file.
 - A rule no longer opens a task for a message that is linked to a task as `evidence` — what `--attach` and
   `tasks merge` write. `TaskStore.findBySource` takes `{ linked: true }` for that, and an optional
   `reviewDuplicates`; `RuleResult` and the sync answer's `tasks` gain `review`.
+- MCP `tasks_add` and `tasks_plan` take `category` as text checked against the store's list, not a fixed choice;
+  `TasksService.categories()` returns a promise, and `tasksService(deps)` reads the store's list on each call. The
+  category list and `TaskCategory` moved to `src/domain/task-categories.ts` (still exported from the services).
 
 ### Fixed
 

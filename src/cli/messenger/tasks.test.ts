@@ -6,6 +6,7 @@ import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
+import { DEFAULT_TASK_CATEGORIES, withTaskCategory } from "../../domain/task-categories.js"
 import { task } from "../../entities/index.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
@@ -275,6 +276,13 @@ describe("tasks", () => {
     expect((await call("tags", "add", "urgent", "--task", "PR-1", "--json")).code).toBe(0)
     expect(json(await call("tasks", "list", "tag:urgent", "--json")).items).toMatchObject([{ key: "PR-1" }])
     expect(json(await call("tasks", "list", "tag:later", "--json")).items).toEqual([])
+    const agendaOf = async (...filter: string[]) =>
+      json(await call("tasks", "agenda", "--within", "3650d", ...filter, "--json")).item.tasks.map(
+        (task: { key: string }) => task.key,
+      )
+    expect(await agendaOf("--category", "documents", "--tag", "Urgent")).toEqual(["PR-1"])
+    expect(await agendaOf("--category", "money")).toEqual([])
+    expect(await agendaOf("--tag", "later")).toEqual([])
     expect(json(await call("tags", "list", "--json")).items).toMatchObject([
       { tag: "urgent", type: "task", target: `task:${added.id}` },
     ])
@@ -345,6 +353,24 @@ describe("tasks", () => {
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(2)
     expect((await call.pretty("tasks", "similar", again)).stdout.join("")).toContain(invoice)
   })
+})
+
+it("**takes a category from the list the owner edited in the store**, and refuses one it removed", async () => {
+  const call = await setup()
+  const store = await openStore({ path: join(call.root, "m.db") })
+  await store.tasks.saveCategories(
+    withTaskCategory(withTaskCategory(DEFAULT_TASK_CATEGORIES, "travel", "trips | flight"), "personal", undefined),
+  )
+  await store.close()
+
+  expect(
+    item(await call("tasks", "categories", "--json")).categories.map(({ name }: { name: string }) => name),
+  ).toContain("travel")
+  expect(
+    item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "Travel", "--json")),
+  ).toMatchObject({ category: "travel" })
+  const removed = await call("tasks", "plan", "PR-1", "--category", "personal", "--json")
+  expect([removed.code, removed.stderr]).toEqual([2, expect.stringContaining("--category takes money")])
 })
 
 describe("tasks that may be one job", () => {

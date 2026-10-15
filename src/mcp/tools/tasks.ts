@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { holderOf } from "../../cli/author.js"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, queryArgument } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
@@ -8,7 +9,7 @@ import { AGENDA_QUERY, agendaItem } from "../../services/agenda.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
 import { DEFAULT_TASK_CATEGORIES } from "../../services/task-categories.js"
-import { TASK_LINK_KINDS, TASK_QUERY, type TaskPlan } from "../../services/tasks.js"
+import { CLAIM_LEASE_MS, TASK_LINK_KINDS, TASK_QUERY, type TaskPlan } from "../../services/tasks.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { TASK_KINDS } from "../../tasks/index.js"
 import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.js"
@@ -29,11 +30,11 @@ const ahead = (what: string) =>
       v.pipe(v.string(), v.minLength(1), v.description(`${what}: an ISO 8601 time or 2h, 3d from now; null clears it`)),
     ),
   )
-const category = v.pipe(
-  v.picklist(DEFAULT_TASK_CATEGORIES.map(({ name }) => name)),
-  v.description(
-    `what it is about: ${DEFAULT_TASK_CATEGORIES.map(({ name, meaning }) => `${name} (${meaning})`).join("; ")}`,
-  ),
+// The owner may edit the list (config set task_categories.*), so the store checks the name, not a picklist here.
+const category = text(
+  30,
+  "what it is about, a name from tasks_categories — by default " +
+    DEFAULT_TASK_CATEGORIES.map(({ name, meaning }) => `${name} (${meaning})`).join("; "),
 )
 const PLAN = {
   title: v.optional(text(300, "one line: the action and its object — send Alex the API token")),
@@ -297,6 +298,63 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         itemOf(snakeKeys(await tasks(store, account, defaults.guard).unmerge(args.dup, "agent"))),
     }),
 
+    tasks_categories: tool({
+      title: "Task categories",
+      description:
+        "The categories a task takes, with what each means and the words a rule picks it by. The owner edits the list " +
+        "(config set task_categories.<name>); tasks_add and tasks_plan refuse a name not on it. " +
+        "Returns { item: { categories: [{ name, meaning, triggers }] } }.",
+      input: v.object({}),
+      annotations: { ...READ, openWorldHint: false },
+      stored: async (store, account, _args, defaults) => {
+        const list = await tasks(store, account, defaults.guard).categories()
+        return itemOf({ categories: list.map(({ name, meaning, triggers }) => ({ name, meaning, triggers })) })
+      },
+    }),
+
+    tasks_claim: tool({
+      title: "Claim a task",
+      description:
+        "Takes an open task so no other agent works it at once; the claim lapses by itself (default 30m), and " +
+        "claiming again extends your own. Refused, naming the holder and until when (reason task.claimed), while " +
+        "someone else holds it. `holder` is who you are — a session or chat id; left out, WIRECAT_HOLDER, else " +
+        `Claude Code's session, else the agent's name. Writes only to the local store. Returns ${CARD}.`,
+      input: v.object({
+        task: text(200, "the task's id or key"),
+        for: span("how long the claim lasts (default 30m)"),
+        holder: v.optional(text(200, "who you are for claims: a session or chat id")),
+      }),
+      annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
+      stored: async (store, account, args, defaults) =>
+        itemOf(
+          snakeKeys(
+            await tasks(store, account, defaults.guard).claim(
+              args.task,
+              holderOf(defaults.env, args.holder),
+              spanMs(args.for) ?? CLAIM_LEASE_MS,
+            ),
+          ),
+        ),
+    }),
+
+    tasks_release: tool({
+      title: "Release a task",
+      description:
+        "Gives back a task you claimed, before the claim lapses; only its holder or the owner may. Writes only to " +
+        `the local store. Returns ${CARD}.`,
+      input: v.object({
+        task: text(200, "the task's id or key"),
+        holder: v.optional(text(200, "who you are for claims, as tasks_claim named you")),
+      }),
+      annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
+      stored: async (store, account, args, defaults) =>
+        itemOf(
+          snakeKeys(
+            await tasks(store, account, defaults.guard).release(args.task, holderOf(defaults.env, args.holder)),
+          ),
+        ),
+    }),
+
     tasks_agenda: tool({
       title: "Today's agenda",
       description:
@@ -315,6 +373,8 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         query: queryArgument(AGENDA_QUERY),
         claimed: v.optional(v.pipe(v.boolean(), v.description("also list tasks someone else claimed"))),
         holder: v.optional(text(200, "who you are for claims, as tasks claim --holder names you; yours stay listed")),
+        category: v.optional(text(30, "only tasks of this category")),
+        tag: v.optional(text(100, "only tasks with this tag")),
       }),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "agenda", list: false },
@@ -330,7 +390,9 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           ...(within === undefined ? {} : { within }),
           ...(query ? { query } : {}),
           claimed: args.claimed === true,
-          ...(args.holder === undefined ? {} : { holder: args.holder }),
+          holder: holderOf(defaults.env, args.holder),
+          ...(args.category === undefined ? {} : { category: args.category }),
+          ...(args.tag === undefined ? {} : { tag: args.tag }),
         })
         return itemOf(agendaItem(shown))
       },

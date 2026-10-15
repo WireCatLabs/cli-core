@@ -857,6 +857,7 @@ describe("the MCP server", () => {
       "store jobs show",
       "tags list",
       "tasks agenda",
+      "tasks categories",
       "tasks duplicates",
       "tasks list",
       "tasks show",
@@ -1665,6 +1666,31 @@ describe("the MCP server", () => {
       decision: "unsure",
     })
     expect((await call("tasks duplicates", { unsure: true })).body.items).toHaveLength(1)
+  })
+
+  it("**claims and releases a task through MCP**, and the agenda keeps your own claim and hides another's", async () => {
+    const { call, env } = await connect(scripted())
+    await call("chats list")
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await seedSearchRecipes(store, { provider: "chat", account: "500" })
+    await store.close()
+    const { key } = (await call("tasks add", { message: "msg:chat/500/7/101", type: "promise", category: "money" }))
+      .body.item
+
+    expect((await call("tasks categories", {})).body.item.categories).toContainEqual(
+      expect.objectContaining({ name: "money" }),
+    )
+    const claimed = await call("tasks claim", { task: key, for: "2h", holder: "chat-7" })
+    expect(claimed.body.item).toMatchObject({ key, claimed_by: "chat-7", claimed_until: expect.any(String) })
+    const taken = await call("tasks claim", { task: key, holder: "chat-8" })
+    expect([taken.isError, taken.body.error.reason]).toEqual([true, "task.claimed"])
+    const agenda = async (holder: string) =>
+      (await call("tasks agenda", { within: "3650d", holder })).body.item.tasks.map((one: { key: string }) => one.key)
+    expect(await agenda("chat-7")).toEqual([key])
+    expect(await agenda("chat-8")).toEqual([])
+    expect((await call("tasks release", { task: key, holder: "chat-8" })).isError).toBe(true)
+    expect((await call("tasks release", { task: key, holder: "chat-7" })).body.item.claimed_by).toBeNull()
+    expect(await agenda("chat-8")).toEqual([key])
   })
 
   it("keeps private contact metadata local through MCP and offers only its reads on a readonly profile", async () => {

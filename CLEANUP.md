@@ -55,3 +55,4 @@
 - 2026-10-15: `~/Projects/AI/cli-core-wt-task-duplicates`, branch `feat/task-duplicates` — tasks plan step 5; remove after its PR merges.
 - 2026-10-15: `~/Projects/AI/cli-core-wt-search-mail`, local branches `feat/source-search-own` and `search-mail-rebase` — #1121 (tg and max stop searching mail); remove after it merges.
 - 2026-10-14: local branch `backup/source-search-own-159de861` in cli-core — the notes-and-tasks version of feat/source-search-own before the owner reversed it; remove once #1121 merges.
+- 2026-10-15: `~/Projects/AI/cli-core-wt-task-follow-ups`, branch `feat/task-follow-ups` — tasks plan step 6; remove after its PR merges.

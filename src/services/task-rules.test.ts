@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
 import type { Chat, Message, Review } from "../domain/models.js"
+import { DEFAULT_TASK_CATEGORIES, withTaskCategory } from "../domain/task-categories.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { SendGuard } from "../sends/guard.js"
 import { openStore } from "../store/store.js"
@@ -204,6 +205,15 @@ describe("a reply rule's task", () => {
 
     expect([first, again]).toEqual([true, false])
     expect(tasks.map((task) => [task.kind, task.state, task.origin])).toEqual([["request", "open", "rule"]])
+    await store.close()
+  })
+
+  it("**picks the category from the list the owner saved in the store**", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-rule-")), "messages.db") })
+    await store.tasks.saveCategories(withTaskCategory(DEFAULT_TASK_CATEGORIES, "travel", "trips | flight, ru:рейс"))
+
+    await openRequestTask(store, account, said("42", 1, "can you book my flight?"))
+    expect((await store.tasks.list({})).map((task) => task.category)).toEqual(["travel"])
     await store.close()
   })
 })

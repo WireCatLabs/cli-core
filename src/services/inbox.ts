@@ -356,7 +356,12 @@ export const inboxService = (deps: ServiceDeps): InboxService => {
         ...options,
         onReviewed: async (full) => {
           const held = await storeIfOpen(deps)
-          if (held) tasks = await applyTaskRules(full, { store: held.store.tasks, account: held.account })
+          if (held)
+            tasks = await applyTaskRules(full, {
+              store: held.store.tasks,
+              account: held.account,
+              categories: await held.store.tasks.categories(),
+            })
         },
       })
       return tasks ? { ...found, tasks } : found

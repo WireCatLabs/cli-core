@@ -3,7 +3,6 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { AGENDA_QUERY, type Agenda, agendaItem } from "../../services/agenda.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
-import { taskCategoryOf } from "../../services/task-categories.js"
 import {
   CLAIM_LEASE_MS,
   closedStateOf,
@@ -172,7 +171,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       .description("add a task for a stored message or note — a promise, a request")
       .argument("<message>", "a message locator, msg:<provider>/<account>/<chat>/<message>, or note:<id>")
       .requiredOption("--type <name>", "the task's type: question, request, mention or promise", taskTypeOf)
-      .requiredOption("--category <name>", categoryHelp, taskCategoryOf())
+      .requiredOption("--category <name>", categoryHelp)
       .option(
         "--attach <task>",
         "when tasks add listed tasks that may be the same job: link the message to this one instead of opening a task",
@@ -220,7 +219,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     annotate(tasks.command("plan"), { effects: LOCAL_WRITE })
       .description("set a task's title, description, due date, next check and category; nothing reaches the messenger")
       .argument("<task>", "the task's id or key, as tasks list shows it")
-      .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`, taskCategoryOf()),
+      .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`),
     "send Alex the API token",
   ).action(async function (this: Command, id: string) {
     const context = messengerContext(this, messenger)
@@ -412,6 +411,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
       durationOf("--within"),
     )
     .option("--claimed", "also list tasks someone else holds (tasks claim); hidden by default")
+    .option("--category <name>", "only tasks of this category, from the list tasks categories prints")
+    .option("--tag <name>", "only tasks with this tag (tags add --task)")
     .option("--holder <name>", HOLDER_HELP)
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
@@ -421,6 +422,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
         waiting?: number
         within?: number
         claimed?: boolean
+        category?: string
+        tag?: string
       }>()
       const query = listQuery(typedQuery(words), AGENDA_QUERY, "tasks agenda")
       const agenda = await context.withServices((services) =>
@@ -432,6 +435,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
           ...(query ? { query } : {}),
           holder: holderOf(this),
           claimed: options.claimed === true,
+          ...(options.category === undefined ? {} : { category: options.category }),
+          ...(options.tag === undefined ? {} : { tag: options.tag }),
         }),
       )
       renderAnswer(this, context, itemOf(agendaItem(agenda)), () => `${agendaText(agenda)}\n`)
