@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.289.0 — 15.10.2026
 
 ### Added
 
@@ -13,10 +13,6 @@ shape of this file.
   `subject` is a reference such as `note:12`; an unknown one is `not_found`. A subject whose matches rank below
   the limit among every memory is still found. drive's `memories search` can drop its in-memory filter of the best
   200.
-
-## 0.289.0 — 15.10.2026
-
-### Added
 
 - Meeting preparation can include bounded owner-written notes and annotations about explicitly linked
   people and confirmed global projects. Notes retain their references, revisions and separate coverage;
