@@ -88,3 +88,13 @@ export const preparationContext = v.strictObject({
     }),
   ),
 })
+
+export const preparationMeeting = v.strictObject({
+  id,
+  external_id: id,
+  title: text,
+  event_id: v.nullable(id),
+  started_at: preparationTime,
+  ended_at: preparationTime,
+  updated_at: isoTime,
+})

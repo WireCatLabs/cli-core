@@ -1,7 +1,7 @@
 # Meeting preparation SDK
 
 `createMeetingPreparationService` from `@wirecat/cli-core/services` composes the next candidate of
-one selected provider series with its stored history. It is read-only: no login, index refresh,
+one selected provider series with its stored history and related stored meetings. It is read-only: no login, index refresh,
 model invocation, project/person association, accepted finding or task is created.
 
 ```ts
@@ -46,16 +46,29 @@ Automatic findings intake remains separate.
 | Projects | Existing confirmed global project memberships | Proposed memberships are excluded; no alias-derived association |
 | Facts | Accepted facts whose subject is this meeting, including decisions and promises | Proposed/reversed facts and facts about other subjects are excluded; evidence is not revalidated |
 | Tasks | Existing tasks with this exact meeting source group and a source beneath its reference | Includes current task status; excludes other-account projects and unrelated project tasks |
+| Related meetings | Other series joined through existing person links or confirmed global project memberships shared with included history | Same account and history window; dated live meetings only; no name, email or alias matching |
 
-Person-history context, project-wide context and project-alias candidates are explicitly listed as
-unqueried. The result is a factual context bundle for an agent, not an AI-generated summary.
+Related history records its anchor meeting references and separate `sharedPerson`/`sharedProject`
+flags. The SQLite `relatedHistory` port derives these links from current stored anchors in one read
+snapshot; it excludes the selected series and deduplicates both association paths. Up to `meetings`
+additional meetings are returned newest first, with ID ties descending and independent `hasMore`.
+The service reads cited cues without refreshing the derived search index. If there are no included
+exact-series anchors, related history remains unqueried. When it is queried, person-history and
+project-wide coverage are replaced in `unqueried` by the narrower `person-nonmeeting-context` and `project-nonmeeting-context` gaps;
+project-alias candidates always remain unqueried. This covers related meeting transcripts, not
+mail, messages, project notes or every source about a person. The result is a factual context bundle for an agent, not an AI-generated summary.
 Stored facts and task provenance do not establish that their underlying evidence still holds.
 
-Defaults: five history meetings, ten cues per occurrence, twenty entries per context category,
+Defaults: five exact-series history meetings and up to five related meetings, ten cues per occurrence, twenty entries per context category,
 256 KiB stored text per read and 64 KiB for the serialized result. Hard limits are twenty meetings,
 one hundred cues, one hundred context entries per category, 4 MiB stored text per read and 4 MiB
 output. Output budgets start at 4096 bytes. `maxReadBytes` is a per-read budget, not an aggregate
 run budget. Row limits bound hydration rather than database scan/sort work.
+
+Custom preparation ports must implement `relatedHistory` in addition to the existing bounded
+meeting reads, series history and context ports. `store.meetings` implements all of them without
+a store migration. Its metadata probe includes UTF-8 titles/IDs in lookahead rows before hydration;
+row limits bound returned data, not SQL scan or sort work.
 
 `preparationContext` checks account ownership, series membership and the expected meeting revision
 in one read snapshot. UTF-8 text sizes across all four categories, including their lookahead rows,
@@ -68,7 +81,9 @@ Transcript packets retain their own availability and revision coverage. Provider
 byte-limit failures propagate; they never become a false empty success. Cancellation refuses the
 result. Recheck sources and write preconditions before accepting findings from a brief.
 
-The overall output budget stops further history entries and reports `outputLimited`. Metadata that
+The overall output budget gives exact-series entries priority, then adds related evidence with
+the remaining bytes. Omitted related entries set both `related.outputLimited` and the overall
+`outputLimited`; extra related matches retain their independent `hasMore`. Metadata that
 cannot fit is refused with an instruction to increase the budget. Archive completeness remains
 unknown even when every selected stored row fits. No source is read from another account merely
 because a participant, project alias or meeting title looks similar.
@@ -96,7 +111,9 @@ The public item uses snake_case keys, string IDs, ISO timestamps and `ref` for c
 Cue `offset_ms` is relative to its meeting. Its strict entity schema includes every coverage field;
 no source packet is replaced with an unchecked record. Evidence `content_bytes` counts its public
 cue array. The item's `limits.bytes` bounds its JSON representation, excluding the outer envelope;
-normalization can remove trailing meetings to keep that bound, reporting `output_limited`.
+normalization removes trailing related entries before exact-series entries to keep that bound,
+reporting `output_limited`. Related public fields are `anchors`, `items`, `has_more`, `output_limited`
+and `selection`; each item contains `ref`, `meeting`, `evidence`, `shared_person` and `shared_project`.
 Unfit metadata is refused. Skipped unavailable meetings set `meta.complete=false` with source issues;
 output byte truncation sets `meta.truncated`. Unknown archive coverage remains a domain coverage
 fact rather than a claim that failed sources succeeded.

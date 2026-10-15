@@ -28,7 +28,7 @@ export const addMeetingPreparationCommand = (
       .option("--since-time <time>", "window start as ISO timestamp with zone (default now)")
       .option("--before-time <time>", "exclusive window end as ISO timestamp (default seven days after start)")
       .option("--history-since-time <time>", "history start as ISO timestamp (default thirty days before start)")
-      .option("--meetings <n>", "prior occurrences, 1–20 (default 5)", integer)
+      .option("--meetings <n>", "prior occurrences and separate related-meeting limit, 1–20 (default 5)", integer)
       .option("--cues <n>", "cues per occurrence, 1–100 (default 10)", integer)
       .option("--context-limit <n>", "entries per context category, 1–100 (default 20)", integer)
       .option("--max-read-bytes <bytes>", "stored/normalized bytes per read, at most 4194304 (default 262144)", integer)

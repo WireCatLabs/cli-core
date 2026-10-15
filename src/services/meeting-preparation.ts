@@ -7,6 +7,7 @@ import type {
   MeetingPreparationRequest,
 } from "./meeting-preparation-types.js"
 import { preparationCancelled, preparationRequest } from "./meeting-preparation-validation.js"
+import { appendRelatedPreparation } from "./meeting-related-preparation.js"
 
 const size = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8")
 
@@ -24,6 +25,7 @@ export const createMeetingPreparationService = (
     [
       "account",
       "seriesHistory",
+      "relatedHistory",
       "preparationContext",
       "meetingMetadata",
       "transcriptMetadata",
@@ -67,6 +69,13 @@ export const createMeetingPreparationService = (
         series: history.series,
         historyWindow: { after: input.historyAfter, before: input.after },
         items: [],
+        related: {
+          anchors: [],
+          items: [],
+          hasMore: false,
+          outputLimited: false,
+          selection: "explicit-person-links/confirmed-project-links",
+        },
         limits: { meetings, cues, contextLimit, maxReadBytes, bytes },
         coverage: {
           archiveCompleteness: "unknown",
@@ -132,6 +141,7 @@ export const createMeetingPreparationService = (
           result.coverage.skippedUnavailable.push(reference)
         }
       }
+      await appendRelatedPreparation(store, result, input)
       preparationCancelled(signal)
       if (size(result) > bytes)
         throw new CliError("validation_error", "Preparation coverage exceeds bytes; increase the output budget")
