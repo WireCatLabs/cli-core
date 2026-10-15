@@ -339,7 +339,7 @@ describe("a messenger whose history is read from the store", () => {
 
     for (const argv of [
       ["messages", "sync", "Book"],
-      ["messages", "sync", "Book", "--estimate"],
+      ["messages", "sync", "Book", "--dry-run"],
       ["messages", "list", "Book", "id>1"],
       ["messages", "list", "Book", "date<2h"],
     ]) {

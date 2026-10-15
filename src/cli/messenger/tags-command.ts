@@ -47,19 +47,19 @@ export const tagsCommand = (messenger: Messenger): Command => {
       [],
     )
     .option("--limit <number>", "process at most 1–500 chats", positiveCount("--limit"), 50)
-    .option("--refresh-metadata", "read current descriptions from the messenger before classifying")
+    .option("--sync-first", "read current descriptions from the messenger before classifying")
     .option("--dry-run", "preview cached classification without changing the store")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
-      const { chat, limit, refreshMetadata, dryRun } = this.opts<{
+      const { chat, limit, syncFirst, dryRun } = this.opts<{
         chat: string[]
         limit: number
-        refreshMetadata?: boolean
+        syncFirst?: boolean
         dryRun?: boolean
       }>()
       if (!dryRun) refuseLocalWrite(context, messenger.app.command, "tags.auto")
       const done = await context.withServices((services) =>
-        services.metadata.auto({ chats: chat, limit: Number(limit), refresh: refreshMetadata, dryRun }),
+        services.metadata.auto({ chats: chat, limit: Number(limit), refresh: syncFirst, dryRun }),
       )
       renderAnswer(this, context, itemOf(snakeKeys(done)))
     })

@@ -229,7 +229,7 @@ since its build (or whose rules are older), the oldest build first, then builds 
 the newest message first; `conversations embed` embeds the chunks left in every built chat. Each run does at
 most `--max-chats` chats (20) and embeds at most `--max-chunks` chunks (2,000, about a minute with e5-small);
 the next run goes on from there, and `left` in the JSON names what is still to do. `conversations search
---refresh` runs both, for its scope, before it searches; MCP `conversations_refresh` does the same, at most 500
+--catch-up` runs both, for its scope, before it searches; MCP `conversations_refresh` does the same, at most 500
 chunks a call so a client does not give up on it. Only the model on this machine embeds this way:
 `--provider` and `--base-url` are refused, a model is never downloaded, and with none downloaded the build
 still runs and nothing is embedded. Dialogs, channels and chats of unknown kind (a chat seen only through its

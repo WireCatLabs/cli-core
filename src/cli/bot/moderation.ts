@@ -170,7 +170,7 @@ const yes = (answer: string) => /^\s*y(es)?\s*$/i.test(answer)
 
 /**
  * `bot chats moderate`: the personal `chats moderate`, done by the bot. Typing it is the consent for
- * what the rules name. A removal bans unless `--no-ban`.
+ * what the rules name. A removal bans unless `--no-block`.
  */
 export const botModerateCommand = (bot: BotMessenger): Command =>
   annotate(new Command("moderate"), { effects: REMOTE_WRITE })
@@ -179,7 +179,7 @@ export const botModerateCommand = (bot: BotMessenger): Command =>
     .option("--since-time <time>", "judge what came after this ISO 8601 time, or 2h / 1d ago; the saved point stays")
     .option("--dry-run", "judge and plan; do nothing")
     .option("--allow-dangerous", "yes to every action whose level in the group's rules is ask")
-    .option("--no-ban", "remove without banning; by default a removed person cannot come back by the link")
+    .option("--no-block", "remove without banning; by default a removed person cannot come back by the link")
     .option("--max-actions <n>", `at most this many actions in one run; ${MAX_ACTIONS} if not given`)
     .action(async function (this: Command, chat: string) {
       const context = online(botContext(this, bot), this)
@@ -187,7 +187,7 @@ export const botModerateCommand = (bot: BotMessenger): Command =>
         sinceTime?: string
         dryRun?: boolean
         allowDangerous?: boolean
-        ban: boolean
+        block: boolean
         maxActions?: string
       }>()
       const maxActions = options.maxActions === undefined ? MAX_ACTIONS : Number(options.maxActions)
@@ -207,7 +207,7 @@ export const botModerateCommand = (bot: BotMessenger): Command =>
           rules: rulesOf(context, bot),
           point: savedPoint(botFiles(bot.app, context.profile, context.env).checks),
           gather: gatherer(this, context, bot, adapter, botId, chatId),
-          moderator: moderatorOf(context, bot, adapter, botId, options.ban),
+          moderator: moderatorOf(context, bot, adapter, botId, options.block),
           command: bot.app.command,
           commandFor: (group, finding) =>
             finding.action === "delete"

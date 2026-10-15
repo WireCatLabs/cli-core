@@ -734,7 +734,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
     .option("--timezone <zone>", "IANA timezone for filter dates; system timezone by default")
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option(
-      "--refresh",
+      "--catch-up",
       "first build and embed, on this machine, the chats in scope that changed or were never built — within " +
         "--max-chats and --max-chunks",
     )
@@ -743,7 +743,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         ModelOptions & {
           chat?: string
           sinceTime?: string
-          refresh?: boolean
+          catchUp?: boolean
           filter?: string
           source?: string
           timezone?: string
@@ -752,13 +752,13 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
       const { chat, sinceTime: since } = options
       const context = messengerContext(this, messenger)
       const model = choiceOf(options, messenger, context)
-      if (options.refresh) {
+      if (options.catchUp) {
         if (options.filter !== undefined || options.source !== undefined)
           throw new CliError(
             "validation_error",
-            "--refresh cannot be combined with --filter or --source; build and embed the chosen chats separately",
+            "--catch-up cannot be combined with --filter or --source; build and embed the chosen chats separately",
           )
-        localOnly(model, "--refresh")
+        localOnly(model, "--catch-up")
         refuseLocalWrite(context, messenger.app.command, EMBED_KEY)
       }
       const { limit } = context.settings
@@ -766,7 +766,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         const syncing = syncRequest(this, context)
         const found = await services.embeddings.search(query, {
           ...syncing,
-          ...(options.refresh
+          ...(options.catchUp
             ? {
                 refresh: {
                   ...(chat === undefined ? {} : { chat }),

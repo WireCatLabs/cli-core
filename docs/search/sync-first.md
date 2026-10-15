@@ -26,7 +26,7 @@ second network path. Provider errors use `fetch_failed`; exhausted time/cancella
 `time_or_abort_bound`, and exhausted message bounds use `message_bound`.
 
 `search conversations --sync-first` fetches messages but does not rebuild the graph or embed them. Add the
-existing `--refresh` for that separate local work. With both flags, `refreshed` retains the existing graph
+existing `--catch-up` for that separate local work. With both flags, `refreshed` retains the existing graph
 report and `networkRefreshed` reports the network step. Fresh messages can still leave the graph stale until
 it is rebuilt. Saved searches do not save network consent: add `--sync-first` explicitly on each run.
 

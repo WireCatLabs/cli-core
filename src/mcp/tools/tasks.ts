@@ -47,22 +47,22 @@ const PLAN = {
     ),
   ),
   due: ahead("when it must be done"),
-  next_check: ahead("when to look at it again"),
+  remind_time: ahead("when to look at it again"),
 }
 const planOf = (args: {
   title?: string
   description?: string | null
   due?: string | null
-  next_check?: string | null
+  remind_time?: string | null
   category?: string
 }): TaskPlan => ({
   ...(args.category === undefined ? {} : { category: args.category }),
   ...(args.title === undefined ? {} : { title: args.title }),
   ...(args.description === undefined ? {} : { description: args.description }),
   ...(args.due === undefined ? {} : { dueAt: args.due === null ? null : new Date(aheadOf(args.due, "due")) }),
-  ...(args.next_check === undefined
+  ...(args.remind_time === undefined
     ? {}
-    : { nextCheckAt: args.next_check === null ? null : new Date(aheadOf(args.next_check, "next_check")) }),
+    : { nextCheckAt: args.remind_time === null ? null : new Date(aheadOf(args.remind_time, "remind_time")) }),
 })
 const span = (what: string) =>
   v.optional(v.pipe(v.string(), v.regex(/^\d+(m|h|d)$/), v.description(`${what}: 30m, 2h, 7d`)))
@@ -145,8 +145,8 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     tasks_plan: tool({
       title: "Plan a task",
       description:
-        "Sets a task's title, description, due date, category and next check — when you should look at it again. The next " +
-        "check is yours, not a reminder: nothing reaches the owner. Writes only to the local store; nothing is sent. " +
+        "Sets a task's title, description, due date, category and remind_time — when you should look at it again " +
+        "(next_check_at). It is yours: nothing reaches the owner. Writes only to the local store; nothing is sent. " +
         `Returns ${CARD}.`,
       input: v.object({
         task: text(200, "the task's id or key, from tasks_list or tasks_agenda"),

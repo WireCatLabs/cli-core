@@ -254,7 +254,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
         "rest. Writes only to the local store: nothing is sent, no model is downloaded and no remote model is " +
         "used. Returns { item: { model, model_available, built, embedded, left } }; `left` lists chats that still " +
         "need `build` or `embed`. model_available false means nothing was embedded, and the answer names the " +
-        `models.download step. What \`${command} search conversations --refresh\` runs first.`,
+        `models.download step. What \`${command} search conversations --catch-up\` runs first.`,
       input: v.object({
         chat: v.optional(chat),
         max_chats: v.optional(

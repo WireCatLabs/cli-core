@@ -954,7 +954,7 @@ describe("the shared read commands", () => {
     expect(lonelyModel.stderr.join("\n")).toContain("add --transcribe")
   })
 
-  it("**mark a chat read, to its newest message or --until one**, journaled as a read", async () => {
+  it("**mark a chat read, to its newest message or --until-id one**, journaled as a read", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const marks: unknown[] = []
@@ -966,7 +966,7 @@ describe("the shared read commands", () => {
     }
 
     const all = await call(["chats", "mark-read", "Book", "--json"], async () => reading, env)
-    const some = await call(["chats", "mark-read", "Book", "--until", "3", "--json"], async () => reading, env)
+    const some = await call(["chats", "mark-read", "Book", "--until-id", "3", "--json"], async () => reading, env)
 
     expect(JSON.parse(all.stdout[0] ?? "").item).toEqual({
       operation_id: expect.any(String),
@@ -2608,7 +2608,7 @@ describe("the shared read commands", () => {
     )
     expect(JSON.parse(detailed.stdout[0] ?? "null").item.chats[0].messages[0].locator).toBe("msg:telegram/500/11/1")
     const lonely = await call(
-      ["contacts", "context", "11", "--refresh", "--offline", "--json"],
+      ["contacts", "context", "11", "--sync-first", "--offline", "--json"],
       never,
       env,
       {},
@@ -3016,7 +3016,7 @@ describe("the shared read commands", () => {
     expect(related.stderr.join("\n")).toContain("conversations embed --chat 7")
   })
 
-  it("**catches up every changed chat** with build, embed and search --refresh, on this machine only", async () => {
+  it("**catches up every changed chat** with build, embed and search --catch-up, on this machine only", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -3053,7 +3053,7 @@ describe("the shared read commands", () => {
         const embed = await call(["conversations", "embed", ...remote, "--yes", "--json"], never, env)
         expect([embed.code, embed.stdout]).toEqual([2, []])
         expect(embed.stderr.join("\n")).toContain("on this machine only")
-        const search = await call(["search", "conversations", "chapter", "--refresh", ...remote, "--json"], never, env)
+        const search = await call(["search", "conversations", "chapter", "--catch-up", ...remote, "--json"], never, env)
         expect([search.code, search.stdout]).toEqual([2, []])
       }
       expect(sent).toEqual([])
@@ -3063,7 +3063,7 @@ describe("the shared read commands", () => {
       expect(embed.stderr.join("\n")).toContain("models text download e5-small")
 
       const found = await call(
-        ["search", "conversations", "chapter", "--refresh", "--max-chunks", "10", "--json"],
+        ["search", "conversations", "chapter", "--catch-up", "--max-chunks", "10", "--json"],
         never,
         env,
       )
@@ -3079,7 +3079,7 @@ describe("the shared read commands", () => {
         join(env.CHAT_CONFIG_DIR, "config.json"),
         JSON.stringify({ profiles: { default: { permissions: { "conversations.embed": "readonly" } } } }),
       )
-      const refused = await call(["search", "conversations", "chapter", "--refresh", "--json"], never, env)
+      const refused = await call(["search", "conversations", "chapter", "--catch-up", "--json"], never, env)
       expect([refused.code, refused.stdout]).toEqual([5, []])
       expect((await call(["search", "conversations", "chapter", "--json"], never, env)).code).toBe(0)
     } finally {
@@ -3340,7 +3340,7 @@ describe("the shared read commands", () => {
     }
     const dir = join(root, "export")
     const exported = async () =>
-      JSON.parse((await call(["store", "export", "7", "--to", dir, "--json"], never, env)).stdout[0] ?? "").item
+      JSON.parse((await call(["store", "export", "7", "--output-dir", dir, "--json"], never, env)).stdout[0] ?? "").item
     const lines = (file: string) =>
       readFileSync(join(dir, file), "utf8")
         .trim()
@@ -3368,7 +3368,7 @@ describe("the shared read commands", () => {
     })
   })
 
-  it("refuses an export folder it cannot add to safely, and --to with what it does not keep", async () => {
+  it("refuses an export folder it cannot add to safely, and --output-dir with what it does not keep", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
@@ -3379,9 +3379,13 @@ describe("the shared read commands", () => {
     mkdirSync(busy)
     writeFileSync(join(busy, "notes.txt"), "mine")
 
-    const intoBusy = await call(["store", "export", "7", "--to", busy], never, env)
-    const markdown = await call(["store", "export", "7", "--to", join(root, "x"), "--format", "markdown"], never, env)
-    const nothing = await call(["store", "export", "--to", join(root, "y")], never, env)
+    const intoBusy = await call(["store", "export", "7", "--output-dir", busy], never, env)
+    const markdown = await call(
+      ["store", "export", "7", "--output-dir", join(root, "x"), "--format", "markdown"],
+      never,
+      env,
+    )
+    const nothing = await call(["store", "export", "--output-dir", join(root, "y")], never, env)
     const several = await call(["store", "export", "7", "8"], never, env)
 
     const older = join(root, "older")
@@ -3390,7 +3394,7 @@ describe("the shared read commands", () => {
       join(older, "manifest.json"),
       JSON.stringify({ format: "cli-messaging-export", version: 1, chats: {} }),
     )
-    const intoOlder = await call(["store", "export", "7", "--to", older], never, env)
+    const intoOlder = await call(["store", "export", "7", "--output-dir", older], never, env)
 
     expect(intoBusy.stderr.join("\n")).toContain("holds other files")
     expect(intoOlder.stderr.join("\n")).toContain("export version 1")
@@ -3419,14 +3423,14 @@ describe("the shared read commands", () => {
   it("exports encrypted, accepts only the password and never keeps it", async () => {
     const { root, env, never, password, dir } = await encryptedArchive()
     const first = await call(
-      ["store", "export", "7", "--to", dir, "--encrypt", "--json"],
+      ["store", "export", "7", "--output-dir", dir, "--encrypt", "--json"],
       never,
       env,
       password("pw one"),
     )
     const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"))
     const run = first.stdout[0] ? JSON.parse(first.stdout[0]).item.chats[0].file : ""
-    const plainInto = await call(["store", "export", "7", "--to", dir], never, env)
+    const plainInto = await call(["store", "export", "7", "--output-dir", dir], never, env)
     const wrong = await call(
       ["store", "decrypt", join(dir, run), "--output", join(root, "x.jsonl")],
       never,
@@ -3463,20 +3467,20 @@ describe("the shared read commands", () => {
   it("checks the encrypted folder password on later exports", async () => {
     const { env, never, password, dir } = await encryptedArchive()
     const first = await call(
-      ["store", "export", "7", "--to", dir, "--encrypt", "--json"],
+      ["store", "export", "7", "--output-dir", dir, "--encrypt", "--json"],
       never,
       env,
       password("pw one"),
     )
     expect(first.code).toBe(0)
     const again = await call(
-      ["store", "export", "7", "--to", dir, "--encrypt", "--json"],
+      ["store", "export", "7", "--output-dir", dir, "--encrypt", "--json"],
       never,
       env,
       password("pw two"),
     )
     const same = await call(
-      ["store", "export", "7", "--to", dir, "--encrypt", "--json"],
+      ["store", "export", "7", "--output-dir", dir, "--encrypt", "--json"],
       never,
       env,
       password("pw one"),

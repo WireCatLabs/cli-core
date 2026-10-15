@@ -188,7 +188,7 @@ describe("attachments extract", () => {
     for (const extra of [
       ["--offset-bytes", "0"],
       ["--chunk-bytes", "20"],
-      ["--if-sha256", "0".repeat(64)],
+      ["--expected-fingerprint", "0".repeat(64)],
     ]) {
       expect((await fixture.call("attachments", "show", "7", "3", "--page", "1", ...extra, "--json")).code).not.toBe(0)
     }

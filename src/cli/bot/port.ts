@@ -272,6 +272,7 @@ export interface BotMessenger {
   /** What kind of chat a stored message came from; without it a positive id is a dialog, a negative one a group. */
   chatKindOf?: (hit: StoredHit) => ChatKind
   /** How its history pages, for `bot store fetch`, which is mounted only when this is set. */
+  /** `from`: the help of `--until-id`, the message the fetch starts at; the option is mounted only when set. */
   fetching?: Fetching & { from?: string }
   permissionFix?: (settings: Settings, request: GuardRequest) => string
   /** `bot mcp`, mounted only when this is set. */

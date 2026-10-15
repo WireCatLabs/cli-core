@@ -716,7 +716,7 @@ A conversation is eligible when **any of its current, undeleted messages matches
 
 Search uses the active account by default. `--source personal|bots|all` (or a stored provider, or a list of accounts and groups such as `group:work,telegram:Alice`) explicitly widens it, with the same account rules as message search, including `in:`. Hits include `source` and a qualified message `locator`; readiness covers only eligible chats and reports separate account scopes when widened. Vectors of different embedding models never mix. A missing local model falls back to words under the same filter.
 
-MCP `search_conversations` accepts `filter`, `source`, and `timezone` with the same semantics. `--refresh` cannot yet be combined with `--filter` or `--source`; build and embed the chosen chats separately. These SDK options reach each CLI at its next dependency bump.
+MCP `search_conversations` accepts `filter`, `source`, and `timezone` with the same semantics. `--catch-up` cannot yet be combined with `--filter` or `--source`; build and embed the chosen chats separately. These SDK options reach each CLI at its next dependency bump.
 
 ## Attachment extraction surfaces
 

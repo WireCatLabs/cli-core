@@ -86,7 +86,7 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
           `Catch me up on ${name}. Call ${call(`${command}_read`, "inbox", args)} once.`,
           "Summarise per chat, busiest first: who wrote, what they want, and whether it needs my answer.",
           "Do not send, react or forward anything. Mark nothing read unless I ask; then, for each chat shown, call",
-          `${call(`${command}_write`, "chats mark-read", { chat: "<the chat's id>", until: "<the newest message shown in it>" })} — never further.`,
+          `${call(`${command}_write`, "chats mark-read", { chat: "<the chat's id>", until_id: "<the newest message shown in it>" })} — never further.`,
           DATA,
         ].join(" "),
       )

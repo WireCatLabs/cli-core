@@ -141,18 +141,18 @@ export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool
   tags_auto: tool({
     title: "Classify cached channels",
     description:
-      "Derive local keyword tags from title, username and description, preserving manual tags. Refresh is explicit. Dry-run uses cached data only.",
+      "Derive local keyword tags from title, username and description, preserving manual tags. sync_first reads current descriptions first. Dry-run uses cached data only.",
     input: v.object({
       chats: v.optional(v.array(person)),
       limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(500))),
-      refresh_metadata: v.optional(v.boolean()),
+      sync_first: v.optional(v.boolean()),
       dry_run: v.optional(v.boolean()),
     }),
     annotations: { ...LOCAL, idempotentHint: true, destructiveHint: false },
     stored: async (store, account, args, defaults, connect) => {
       const deps = {
         ...storedDeps(messenger, store, account, defaults.guard),
-        offline: args.refresh_metadata ? (defaults.settings.offline ?? false) : true,
+        offline: args.sync_first ? (defaults.settings.offline ?? false) : true,
         withConnection: connect,
       }
       return itemOf(
@@ -160,7 +160,7 @@ export const privatePeopleTools = (messenger: Messenger): Record<string, AnyTool
           await servicesFor(deps).metadata.auto({
             chats: args.chats,
             limit: args.limit,
-            refresh: args.refresh_metadata,
+            refresh: args.sync_first,
             dryRun: args.dry_run,
           }),
         ),

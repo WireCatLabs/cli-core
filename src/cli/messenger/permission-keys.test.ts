@@ -55,7 +55,7 @@ describe("the permission key of a command", () => {
     expect(fetchOf(messenger)?.options.map((one) => one.long)).toContain("--track")
     const native = fetchOf({ ...messenger, tracksMembers: false })
     expect(native?.options.map((one) => one.long)).not.toContain("--track")
-    expect(native?.options.map((one) => one.long)).toContain("--budget")
+    expect(native?.options.map((one) => one.long)).toContain("--max-pages")
   })
 
   it("**names every shared command**, so a level cannot be walked around", () => {

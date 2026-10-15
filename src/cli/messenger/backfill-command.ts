@@ -83,7 +83,7 @@ export const syncCommand = (messenger: Messenger): Command => {
     .option("--catch-up-time <duration>", "local preparation time budget, 30s by default")
     .option("--background", "run as a job that outlives this command; `store jobs show` follows it")
     .option(
-      "--estimate",
+      "--dry-run",
       "only estimate how many messages, requests and minutes a full fetch would still take — from the store, no request",
     )
     .action(async function (this: Command, chat: string | undefined) {
@@ -93,7 +93,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         sinceTime: since,
         last,
         background,
-        estimate,
+        dryRun: estimate,
         catchUp,
         catchUpChunks,
         catchUpMessages,
@@ -107,7 +107,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         sinceTime?: string
         last?: number
         background?: boolean
-        estimate?: boolean
+        dryRun?: boolean
         catchUp?: boolean
         catchUpChunks?: number
         catchUpMessages?: number
@@ -115,7 +115,7 @@ export const syncCommand = (messenger: Messenger): Command => {
       }>()
       if ((chat === undefined) === (all !== true))
         throw new CliError("validation_error", "name a chat, or --all for every chat")
-      if (all && estimate) throw new CliError("validation_error", "--estimate prices one chat; not with --all")
+      if (all && estimate) throw new CliError("validation_error", "--dry-run prices one chat; not with --all")
       if (since !== undefined && last !== undefined) {
         throw new CliError("validation_error", "give --since-time or --last, not both: how far back the fetch goes")
       }
@@ -144,7 +144,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         if (since !== undefined || last !== undefined) {
           throw new CliError(
             "validation_error",
-            "--estimate prices a full fetch; --since-time and --last do not narrow it",
+            "--dry-run prices a full fetch; --since-time and --last do not narrow it",
           )
         }
         const named = chat as string

@@ -54,7 +54,7 @@ export const metadataService = (deps: ServiceDeps) => {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
         throw new CliError("validation_error", "--limit takes 1–500")
       if (options.dryRun && options.refresh)
-        throw new CliError("validation_error", "dry-run uses cached metadata; omit --refresh-metadata")
+        throw new CliError("validation_error", "dry-run uses cached metadata; omit --sync-first")
       const store = await deps.store()
       const account = await deps.account()
       const chats = options.chats?.length
