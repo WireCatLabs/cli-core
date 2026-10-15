@@ -224,15 +224,16 @@ const replying = (context: MessengerContext, messenger: Messenger, since: number
 /** The task rules over each message as it arrives, the owner's too — an answer closes a task. In order, one at a time. */
 const tasking = (context: MessengerContext, warn: (notice: ServeNotice) => void) => {
   let queue = Promise.resolve()
-  const total = { added: 0, closed: 0 }
+  const total = { added: 0, closed: 0, review: 0 }
   return {
     arrived: (message: Message) => {
       queue = queue.then(() =>
         context
           .withStore((store, account) => applyTaskRulesOnArrival(store, account, message), { name: "serve tasks" })
-          .then(({ added, closed }) => {
+          .then(({ added, closed, review }) => {
             total.added += added
             total.closed += closed
+            total.review += review
           })
           .catch((error) => {
             const errorCode = failureKey(error)

@@ -52,3 +52,4 @@
 - `~/Projects/AI/cli-core-wt-task-search` and `~/Projects/AI/cli-core-wt-reserve-14` — worktrees of tasks plan step 3 (#1245 merged); remove once feat/task-search merges. 2026-10-15
 - 2026-10-15: `~/Projects/AI/cli-core-wt-reserve-15`, branch `docs/reserve-migration-15` — worktree for the store migration 15 reservation; remove once the PR is merged.
 - 2026-10-15: `../cli-core-wt-tasks-handoff`, branch `docs/tasks-handoff` — tasks handoff; remove after its PR merges.
+- 2026-10-15: `~/Projects/AI/cli-core-wt-task-duplicates`, branch `feat/task-duplicates` — tasks plan step 5; remove after its PR merges.

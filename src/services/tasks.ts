@@ -8,6 +8,7 @@ import {
   type SimilarTask,
   TASK_RELATION_KINDS,
   type TaskDraft,
+  type TaskPair,
   type TaskRelation,
   type TaskRelationKind,
 } from "../store/index.js"
@@ -129,6 +130,20 @@ export const TASK_LINK_OPTION_KINDS = [
   "discovered-from",
 ] as const
 export type TaskLinkOptionKind = (typeof TASK_LINK_OPTION_KINDS)[number]
+/**
+ * What `tasks add` does when tasks like the new one exist: nothing yet (it refuses and lists them), `attach` links
+ * the message to one of them instead, `new` opens the task anyway.
+ */
+export interface DuplicateChoice {
+  attach?: string
+  new?: boolean
+}
+
+/** How many candidates a refused `tasks add` lists. */
+export const REFUSAL_CANDIDATES = 5
+
+export type DuplicateCandidate = Pick<SimilarTask, "ref" | "key" | "title" | "status" | "score" | "band" | "reasons">
+
 /** An owner-project task's id, `task:<id>` written without its prefix, or a project key such as `HRB-12`. */
 const BARE_TASK = /^(\d+|[A-Z][A-Z0-9]*-\d+)$/
 
@@ -144,12 +159,24 @@ export interface TasksService {
    * each with its band and reasons. Reads only; nothing is merged or refused here.
    */
   similar(subject: string | TaskDraft, options?: { limit?: number }): Promise<SimilarTask[]>
+  /**
+   * Refused (`task.duplicate-candidates`, with the candidates) while an open or recent task is likely or maybe the
+   * same job, unless `choice` says to attach the message to one of them or to open the task anyway.
+   */
   add(
     message: string,
     type: TaskKind,
     origin: TaskOrigin,
     plan?: TaskPlan,
-  ): Promise<{ task: TaskView; created: boolean; card?: TaskCard }>
+    choice?: DuplicateChoice,
+  ): Promise<{ task: TaskView; created: boolean; attached?: boolean; card?: TaskCard }>
+  /** Pairs a rule left for review — or, with `unsure`, the ones the reviewing agent passed to the owner — newest first. */
+  duplicates(options: { unsure: boolean; limit: number; offset: number }): Promise<TaskPair[]>
+  /** `rejected`: not the same job, never offered again. `unsure`: the owner decides. */
+  decideDuplicate(dup: string, task: string, decision: "rejected" | "unsure", by: TaskOrigin): Promise<TaskPair>
+  /** Links every message of `dup` to `into` and closes `dup` as its duplicate; `unmerge` undoes it. */
+  merge(dup: string, into: string, by: TaskOrigin): Promise<{ pair: TaskPair; linked: number; task: TaskCard }>
+  unmerge(dup: string, by: TaskOrigin): Promise<{ pair: TaskPair; task: TaskCard }>
   close(id: string, options: { as: ClosedState; reason?: string; by: TaskOrigin }): Promise<TaskView>
   stats(filter?: { chat?: string; type?: TaskKind }): Promise<GroupStats[]>
   /** Title, description, due date and next check; `null` clears one. */
@@ -255,7 +282,7 @@ export const tasksService = (
         }
       }),
 
-    add: (message, type, origin, { category: named, ...plan } = {}) =>
+    add: (message, type, origin, { category: named, ...plan } = {}, choice = {}) =>
       inStore(async (store, account) => {
         const chosen = named === undefined ? undefined : categoryOf(named)
         const source = message.trim()
@@ -282,6 +309,60 @@ export const tasksService = (
             if (existing) return { task: await taskView(store, account, existing), created: false }
           }
         }
+        const held = (await store.tasks.findBySource(taskAccount(account), note ? note.ref : source)).find(
+          (one) => one.kind === type,
+        )
+        if (held) return { task: await taskView(store, account, held), created: false }
+        if (choice.attach !== undefined && choice.new)
+          throw new CliError("validation_error", "choose one: --attach <task> or --new")
+        const draft = {
+          title: plan.title ?? "",
+          ...(plan.description === undefined ? {} : { description: plan.description }),
+          ...(note ? {} : { source }),
+          ...(chosen === undefined ? {} : { category: chosen }),
+          ...(plan.dueAt ? { due: plan.dueAt } : {}),
+        }
+        const subject = { account: taskAccount(account), draft }
+        const by = origin === "owner" ? ("owner" as const) : { bot: origin }
+        if (choice.attach !== undefined) {
+          const target = await owned(store, account, choice.attach)
+          const similarity = await store.tasks.compare(subject, target.id)
+          const link = {
+            from: (await store.tasks.details(target.id)).ref,
+            kind: "evidence" as const,
+            origin: origin === "owner" ? ("owner" as const) : ("suggested" as const),
+          }
+          try {
+            await store.notes.addLink({ ...link, to: note ? note.ref : source })
+          } catch (error) {
+            // A message the store has not saved yet is linked by its locator as written.
+            if (!(error instanceof CliError && error.code === "not_found" && !note)) throw error
+            await store.notes.addLink({ ...link, targetText: source })
+          }
+          await store.tasks.recordPair({ source, other: target.id, decision: "attached", similarity, by })
+          return { task: await taskView(store, account, target), created: false, attached: true }
+        }
+        const candidates = (await store.tasks.similar(subject, { limit: 40 })).filter((one) => one.band !== "different")
+        if (candidates.length > 0 && !choice.new) {
+          const shown: DuplicateCandidate[] = candidates
+            .slice(0, REFUSAL_CANDIDATES)
+            .map(({ ref, key, title, status, score, band, reasons }) => ({
+              ref,
+              key,
+              title,
+              status,
+              score,
+              band,
+              reasons,
+            }))
+          throw new CliError(
+            "validation_error",
+            `${candidates.length === 1 ? "a task" : `${candidates.length} tasks`} may be the same job: ` +
+              `${shown.map((one) => `${one.key} (${one.band}, ${one.score}: ${one.reasons.join(", ")})`).join("; ")}` +
+              " — attach the message to one with --attach <task>, or open it anyway with --new",
+            { reason: "task.duplicate-candidates", candidates: shown },
+          )
+        }
         const sourceText = async () =>
           note
             ? note.text
@@ -300,6 +381,9 @@ export const tasksService = (
           category: chosen ?? categorize(await sourceText(), categories),
         })
         const task = (await store.tasks.get(added.id)) ?? added
+        if (created)
+          for (const one of candidates)
+            await store.tasks.recordPair({ task: task.id, other: one.ref, decision: "new", similarity: one, by })
         // A source that already has a task keeps its plan: adding again is not editing.
         if (!created || Object.keys(plan).length === 0) return { task: await taskView(store, account, task), created }
         const card = await planOf(store, task.id, plan, origin)
@@ -307,6 +391,33 @@ export const tasksService = (
       }),
 
     categories: () => categories,
+
+    duplicates: ({ unsure, limit, offset }) =>
+      inStore(async (store, account) =>
+        store.tasks.pairs(taskAccount(account), { decision: unsure ? "unsure" : "review", limit, offset }),
+      ),
+
+    decideDuplicate: (dup, task, decision, by) =>
+      inStore(async (store, account) => {
+        await owned(store, account, dup)
+        await owned(store, account, task)
+        return store.tasks.decidePair(dup, task, decision, by === "owner" ? "owner" : { bot: by })
+      }),
+
+    merge: (dup, into, by) =>
+      inStore(async (store, account) => {
+        await owned(store, account, dup)
+        await owned(store, account, into)
+        const merged = await store.tasks.merge(dup, into, by === "owner" ? "owner" : { bot: by })
+        return { ...merged, task: await cardOf(store, into) }
+      }),
+
+    unmerge: (dup, by) =>
+      inStore(async (store, account) => {
+        await owned(store, account, dup)
+        const { pair } = await store.tasks.unmerge(dup, by === "owner" ? "owner" : { bot: by })
+        return { pair, task: await cardOf(store, dup) }
+      }),
 
     claim: (id, holder, forMs) =>
       inStore(async (store, account) => {

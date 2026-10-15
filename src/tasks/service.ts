@@ -46,15 +46,18 @@ export function createTaskService({
   return {
     /**
      * A rule never makes a second task from a source it has seen, whatever that task's state, so a
-     * dismissed one stays dismissed. A person or an agent may add a task of another kind to it.
+     * dismissed one stays dismissed — nor from a message attached or merged into a task. A person or an agent may
+     * add a task of another kind to it. A task a rule opens goes through the host's duplicate check.
      */
-    async add(input: NewTask): Promise<{ task: Task; created: boolean }> {
-      const existing = await store.findBySource(input.account, input.source)
-      const same = input.origin === "rule" ? existing[0] : existing.find((task) => task.kind === input.kind)
+    async add(input: NewTask): Promise<{ task: Task; created: boolean; review?: number }> {
+      const rule = input.origin === "rule"
+      const existing = await store.findBySource(input.account, input.source, rule ? { linked: true } : undefined)
+      const same = rule ? existing[0] : existing.find((task) => task.kind === input.kind)
       if (same) return { task: same, created: false }
       const task: Task = { ...input, id: newId(), state: "open", createdAt: now() }
       await store.insert(task)
-      return { task, created: true }
+      if (!rule || !store.reviewDuplicates) return { task, created: true }
+      return { task, created: true, review: await store.reviewDuplicates(task.id) }
     },
 
     async close(id: string, { as, by, reason }: CloseOptions): Promise<Task> {

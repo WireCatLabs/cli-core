@@ -447,5 +447,14 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version, built_at, analyzer)\n  VALUES ('task_index', 0, 0, 0, 1, NULL, NULL);",
       "INSERT OR IGNORE INTO task_index_pending (indexable_type, id) SELECT 'task', id FROM tasks;"
     ]
+  },
+  {
+    "name": "20261015010543_version-15-task-pairs",
+    "statements": [
+      "CREATE TABLE `task_pairs` (\n\t`id` integer PRIMARY KEY,\n\t`task_id` integer,\n\t`source_locator` text,\n\t`other_id` integer NOT NULL,\n\t`score` integer NOT NULL,\n\t`band` text NOT NULL,\n\t`levels` text NOT NULL,\n\t`reasons` text NOT NULL,\n\t`decision` text NOT NULL,\n\t`decided_by_type` text,\n\t`decided_by_id` integer,\n\t`decided_at` integer,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_task_pairs_task_id_tasks_id_fk` FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`),\n\tCONSTRAINT `fk_task_pairs_other_id_tasks_id_fk` FOREIGN KEY (`other_id`) REFERENCES `tasks`(`id`),\n\tCONSTRAINT `task_pairs_task_id_other_id_unique` UNIQUE(`task_id`,`other_id`)\n);",
+      "CREATE INDEX `task_pairs_by_decision_created_at` ON `task_pairs` (`decision`,`created_at`);",
+      "CREATE INDEX `task_pairs_by_other_id` ON `task_pairs` (`other_id`);",
+      "CREATE INDEX `task_pairs_by_decided_by_type_decided_by_id` ON `task_pairs` (`decided_by_type`,`decided_by_id`);"
+    ]
   }
 ]

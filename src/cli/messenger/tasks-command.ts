@@ -15,6 +15,7 @@ import {
   taskLinkKindOf,
   taskTypeOf,
 } from "../../services/tasks.js"
+import type { TaskPair } from "../../store/index.js"
 import { holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
@@ -71,6 +72,17 @@ const agendaText = (agenda: Agenda) => {
     ...agenda.unsynced.map(chat),
   ].join("\n")
 }
+
+const pairLine = (pair: TaskPair) =>
+  [
+    pair.task?.key ?? pair.source ?? "?",
+    "→",
+    pair.other.key,
+    String(pair.score).padStart(3),
+    pair.band.padEnd(9),
+    `${pair.task?.title ?? ""} | ${pair.other.title}`,
+    `(${pair.reasons.join(", ")})`,
+  ].join("  ")
 
 /** `none` clears a date; anything else is a time ahead. Not `null`: commander stores a parser's `null` as "". */
 const dateOrNone = (flag: string) => (typed: string) =>
@@ -160,7 +172,12 @@ export const tasksCommand = (messenger: Messenger): Command => {
       .description("add a task for a stored message or note — a promise, a request")
       .argument("<message>", "a message locator, msg:<provider>/<account>/<chat>/<message>, or note:<id>")
       .requiredOption("--type <name>", "the task's type: question, request, mention or promise", taskTypeOf)
-      .requiredOption("--category <name>", categoryHelp, taskCategoryOf()),
+      .requiredOption("--category <name>", categoryHelp, taskCategoryOf())
+      .option(
+        "--attach <task>",
+        "when tasks add listed tasks that may be the same job: link the message to this one instead of opening a task",
+      )
+      .option("--new", "when tasks add listed tasks that may be the same job: open the task anyway"),
     "send Alex the API token",
   ).action(async function (this: Command, message: string) {
     const context = messengerContext(this, messenger)
@@ -171,20 +188,31 @@ export const tasksCommand = (messenger: Messenger): Command => {
       title?: string
       description?: string
       due?: Date | "none"
+      attach?: string
+      new?: boolean
     }>()
-    const plan = planFrom(options)
+    const { attach, new: anyway, ...rest } = options
+    const plan = planFrom(rest)
     const {
       task,
       created,
+      attached,
       card: planned,
-    } = await context.withServices((services) => services.tasks.add(message, options.type, "owner", plan))
+    } = await context.withServices((services) =>
+      services.tasks.add(message, options.type, "owner", plan, {
+        ...(attach === undefined ? {} : { attach }),
+        ...(anyway ? { new: true } : {}),
+      }),
+    )
     renderAnswer(
       this,
       context,
-      itemOf(snakeKeys({ ...task, created, ...(planned ? { card: planned } : {}) })),
+      itemOf(snakeKeys({ ...task, created, ...(attached ? { attached } : {}), ...(planned ? { card: planned } : {}) })),
       () => `${planned ? card(planned) : line(task)}\n`,
     )
-    if (!created && context.format === "pretty")
+    if (attached && context.format === "pretty")
+      context.renderer.note(`the message is linked to ${task.key ?? task.id}; no task was opened`)
+    else if (!created && context.format === "pretty")
       context.renderer.note("this source already has a task — that one is shown, unchanged")
   })
 
@@ -279,6 +307,91 @@ export const tasksCommand = (messenger: Messenger): Command => {
       if (found.length === 0 && context.format === "pretty") context.renderer.note("no open or recent task looks alike")
     })
 
+  const duplicates = annotate(tasks.command("duplicates"), { effects: LOCAL_READ })
+    .description(
+      "pairs of tasks a rule opened that may be one job, newest first, with score and reasons: merge, reject or " +
+        "mark each unsure; --unsure lists the ones left for the owner",
+    )
+    .option("--unsure", "only the pairs the reviewing agent marked unsure")
+    .option("--limit <n>", "how many", positiveCount("--limit"))
+    .action(async function (this: Command) {
+      const context = messengerContext(this, messenger)
+      const { limit, offset } = pageOf(context.settings)
+      const unsure = this.opts<{ unsure?: boolean }>().unsure === true
+      const rows = await context.withServices((services) =>
+        services.tasks.duplicates({ unsure, limit: limit + 1, offset }),
+      )
+      const shown = rows.slice(0, limit)
+      renderAnswer(
+        this,
+        context,
+        pagedList("tasks duplicates", context.settings, {
+          items: shown.map(snakeKeys),
+          has_more: rows.length > limit,
+        }),
+        () => (shown.length === 0 ? "" : `${shown.map(pairLine).join("\n")}\n`),
+      )
+      if (shown.length === 0 && context.format === "pretty")
+        context.renderer.note(unsure ? "no pair waits for the owner" : "no pair waits for review")
+    })
+
+  const decided = (
+    decision: "rejected" | "unsure",
+    permission: "tasks.duplicates.reject" | "tasks.duplicates.unsure",
+  ) =>
+    async function (this: Command, dup: string, task: string) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, messenger.app.command, permission)
+      const pair = await context.withServices((services) =>
+        services.tasks.decideDuplicate(dup, task, decision, "owner"),
+      )
+      renderAnswer(this, context, itemOf(snakeKeys(pair)), () => `${pair.decision}  ${pairLine(pair)}\n`)
+    }
+
+  annotate(duplicates.command("reject"), { effects: LOCAL_WRITE })
+    .description("two tasks are not the same job: the pair leaves the list and is never offered again")
+    .argument("<dup>", "the task listed as the duplicate, by its id or key")
+    .argument("<task>", "the task it was paired with")
+    .action(decided("rejected", "tasks.duplicates.reject"))
+
+  annotate(duplicates.command("unsure"), { effects: LOCAL_WRITE })
+    .description("the fields and the text cannot tell: leave the pair to the owner, who lists it with --unsure")
+    .argument("<dup>", "the task listed as the duplicate, by its id or key")
+    .argument("<task>", "the task it was paired with")
+    .action(decided("unsure", "tasks.duplicates.unsure"))
+
+  annotate(tasks.command("merge"), { effects: LOCAL_WRITE })
+    .description(
+      "one job seen twice: link every message of the duplicate to the task and close the duplicate dismissed, " +
+        "duplicate-of the task; nothing is deleted, and tasks unmerge undoes it",
+    )
+    .argument("<dup>", "the duplicate, by its id or key; it must be open")
+    .requiredOption("--into <task>", "the task that stays")
+    .action(async function (this: Command, dup: string) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, messenger.app.command, "tasks.merge")
+      const { into } = this.opts<{ into: string }>()
+      const merged = await context.withServices((services) => services.tasks.merge(dup, into, "owner"))
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(merged)),
+        () => `${dup} merged into ${merged.task.key}; ${merged.linked} message(s) linked\n${card(merged.task)}\n`,
+      )
+    })
+
+  annotate(tasks.command("unmerge"), { effects: LOCAL_WRITE })
+    .description(
+      "undo a merge: reopen the task and remove its duplicate-of relation; messages the merge linked stay linked",
+    )
+    .argument("<dup>", "the merged task, by its id or key")
+    .action(async function (this: Command, dup: string) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, messenger.app.command, "tasks.unmerge")
+      const unmerged = await context.withServices((services) => services.tasks.unmerge(dup, "owner"))
+      renderAnswer(this, context, itemOf(snakeKeys(unmerged)), () => `${card(unmerged.task)}\n`)
+    })
+
   withQuery(
     annotate(tasks.command("agenda"), { effects: LOCAL_READ }).description(
       "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
@@ -367,7 +480,9 @@ export const tasksCommand = (messenger: Messenger): Command => {
     })
 
   annotate(tasks.command("close"), { effects: LOCAL_WRITE })
-    .description("close a task: done, or dismissed when it needs no answer; a closed task stays closed")
+    .description(
+      "close a task: done, or dismissed when it needs no answer; a closed task stays closed, unless tasks unmerge reopens a merged one",
+    )
     .argument("<task>", "the task's id, as tasks list shows it")
     .requiredOption("--as <state>", "how it is closed: done, or dismissed — it needs no answer", closedStateOf)
     .option("--reason <text>", "why, kept with the task — no-reply-needed, for example")

@@ -92,22 +92,28 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         'Adds a task for a message the rules cannot see — "I\'ll send it tomorrow" has no question mark. `message` ' +
         "accepts a msg: locator or note:<id> in the selected account. A source that already has a task of this type keeps it (`created: " +
-        `false\`). Writes only to the local store; nothing is sent. Returns ${ROW} with created.`,
+        "false`). When an open or recent task may be the same job it refuses (reason task.duplicate-candidates) and " +
+        "lists up to 5 in `candidates` with score and reasons: read them, then call again with `attach` (that task's " +
+        "key: the message is linked to it, no task opens) or `new: true` (open it anyway). Writes only to the local " +
+        `store; nothing is sent. Returns ${ROW} with created and, after attach, attached.`,
       input: v.object({
         message: v.pipe(v.string(), v.minLength(1), v.description("a msg: locator or note:<id>")),
         type,
         category,
         ...PLAN,
+        attach: v.optional(text(200, "a listed candidate's key: link the message to it instead of opening a task")),
+        new: v.optional(v.pipe(v.boolean(), v.description("open the task although candidates were listed"))),
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
       stored: async (store, account, args, defaults) => {
-        const { task, created, card } = await tasks(store, account, defaults.guard).add(
+        const { task, created, attached, card } = await tasks(store, account, defaults.guard).add(
           args.message,
           args.type,
           "agent",
           planOf(args),
+          { ...(args.attach === undefined ? {} : { attach: args.attach }), ...(args.new ? { new: true } : {}) },
         )
-        return itemOf(snakeKeys({ ...task, created, ...(card ? { card } : {}) }))
+        return itemOf(snakeKeys({ ...task, created, ...(attached ? { attached } : {}), ...(card ? { card } : {}) }))
       },
     }),
 
@@ -115,7 +121,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Close a task",
       description:
         "Closes a task as done, or as dismissed when it needs no answer; `reason` is kept with it. A closed task " +
-        `stays closed, and the rules never reopen it. Writes only to the local store; nothing is sent. Returns ${ROW}.`,
+        `stays closed, and the rules never reopen it; only tasks_unmerge reopens a merged one. Writes only to the local store; nothing is sent. Returns ${ROW}.`,
       input: v.object({
         task: v.pipe(v.string(), v.minLength(1), v.description("the task's id, from tasks_list")),
         as: v.picklist(["done", "dismissed"]),
@@ -202,6 +208,93 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         const found = await tasks(store, account, defaults.guard).similar(args.task, { limit: size })
         return listOf("tasks similar", { items: found.map(snakeKeys), limit: size, has_more: false })
       },
+    }),
+
+    tasks_duplicates: tool({
+      title: "Pairs to review",
+      description:
+        "Pairs of tasks a rule opened that may be one job, newest first: `task` is the newer one, `other` the one it " +
+        "may duplicate, with score, band, levels and reasons. Decide each: tasks_merge when they are one job, " +
+        "tasks_duplicates_reject when they are not, tasks_duplicates_unsure when the meaning cannot tell — the owner " +
+        "then sees it under `unsure: true`. Returns { items: [{ task, source, other, score, band, levels, reasons, " +
+        "decision, decided_at, created_at }] }.",
+      input: v.object({
+        unsure: v.optional(v.pipe(v.boolean(), v.description("only the pairs marked unsure, left for the owner"))),
+        limit,
+        page,
+      }),
+      annotations: { ...READ, openWorldHint: false },
+      stored: async (store, account, args, defaults) => {
+        const { size, number, window } = paging(args, defaults)
+        const rows = await tasks(store, account, defaults.guard).duplicates({
+          unsure: args.unsure === true,
+          limit: window.limit + 1,
+          offset: window.offset,
+        })
+        return listOf("tasks duplicates", {
+          items: rows.slice(0, window.limit).map(snakeKeys),
+          limit: size,
+          has_more: rows.length > window.limit,
+          page: number,
+        })
+      },
+    }),
+
+    tasks_duplicates_reject: tool({
+      title: "Not the same job",
+      description:
+        "Records that two tasks are different jobs: the pair leaves the review list and is never offered again. " +
+        "Writes only to the local store. Returns { item: pair }.",
+      input: v.object({ dup: text(200, "the task listed as `task`"), task: text(200, "the task listed as `other`") }),
+      annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
+      stored: async (store, account, args, defaults) =>
+        itemOf(
+          snakeKeys(
+            await tasks(store, account, defaults.guard).decideDuplicate(args.dup, args.task, "rejected", "agent"),
+          ),
+        ),
+    }),
+
+    tasks_duplicates_unsure: tool({
+      title: "Leave a pair to the owner",
+      description:
+        "Marks a pair the fields and the text cannot decide — a gift for mum or for dad — so the owner decides it; " +
+        "it leaves your list and shows under tasks_duplicates `unsure: true`. Writes only to the local store. " +
+        "Returns { item: pair }.",
+      input: v.object({ dup: text(200, "the task listed as `task`"), task: text(200, "the task listed as `other`") }),
+      annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
+      stored: async (store, account, args, defaults) =>
+        itemOf(
+          snakeKeys(
+            await tasks(store, account, defaults.guard).decideDuplicate(args.dup, args.task, "unsure", "agent"),
+          ),
+        ),
+    }),
+
+    tasks_merge: tool({
+      title: "Merge a duplicate task",
+      description:
+        "One job seen twice: links every message of `dup` to `into`, closes `dup` dismissed with a duplicate-of " +
+        "relation, and records the decision. Nothing is deleted; tasks_unmerge undoes it. Writes only to the local " +
+        "store. Returns { item: { pair, linked, task } }: `linked` counts the messages added to `into`, `task` is its card.",
+      input: v.object({
+        dup: text(200, "the duplicate's key; it must be open"),
+        into: text(200, "the task that stays"),
+      }),
+      annotations: { ...LOCAL, destructiveHint: false, idempotentHint: false },
+      stored: async (store, account, args, defaults) =>
+        itemOf(snakeKeys(await tasks(store, account, defaults.guard).merge(args.dup, args.into, "agent"))),
+    }),
+
+    tasks_unmerge: tool({
+      title: "Undo a merge",
+      description:
+        "Reopens a merged task and removes its duplicate-of relation; the messages the merge linked stay linked. " +
+        "Writes only to the local store. Returns { item: { pair, task } }.",
+      input: v.object({ dup: text(200, "the merged task's key") }),
+      annotations: { ...LOCAL, destructiveHint: false, idempotentHint: false },
+      stored: async (store, account, args, defaults) =>
+        itemOf(snakeKeys(await tasks(store, account, defaults.guard).unmerge(args.dup, "agent"))),
     }),
 
     tasks_agenda: tool({

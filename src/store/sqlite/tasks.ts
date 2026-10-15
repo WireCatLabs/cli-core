@@ -17,6 +17,7 @@ import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { type TaskSimilarity, taskSimilarityOver } from "./task-candidates.js"
 import { inboxKey, typedKey } from "./task-keys.js"
+import { type TaskPairs, taskPairsOver } from "./task-pairs.js"
 import { taskRowOf, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
@@ -25,7 +26,7 @@ export { inboxKey, linkInbox, taskAccountOf } from "./task-keys.js"
 export { taskIdOf, taskRowOf } from "./things.js"
 
 /** `TaskStore` for `src/tasks/`, plus a way from its task ids to the store's rows. */
-export interface StoreTaskStore extends TaskStore, WorkTasks, TaskSimilarity {
+export interface StoreTaskStore extends Required<TaskStore>, WorkTasks, TaskSimilarity, TaskPairs {
   /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
   rowOf(id: string): number | undefined
   /** One account's tasks a list query keeps, oldest first, each with its title and last change. */
@@ -103,9 +104,11 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     return row
   }
 
+  const similarity = taskSimilarityOver(context)
   return {
     ...workTasksOver(context),
-    ...taskSimilarityOver(context),
+    ...similarity,
+    ...taskPairsOver(context, similarity),
     rowOf: (id) => taskRowOf(database, id),
     query: async (account, where, { limit, offset }) => {
       const project = inbox(account, false)
@@ -125,11 +128,25 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
       const found = select("t.id = ?").get(row)
       return found && toTask(found)
     },
-    findBySource: async (account, source) => {
+    findBySource: async (account, source, { linked = false } = {}) => {
       const project = inbox(account, false)
       if (project === undefined) return []
-      return select("t.project_id = ? AND t.source_locator = ? ORDER BY t.created_at, t.id")
+      const own = select("t.project_id = ? AND t.source_locator = ? ORDER BY t.created_at, t.id")
         .all(project, source)
+        .map(toTask)
+      if (!linked || own.length > 0) return own
+      let message: ReturnType<typeof thingOf>
+      try {
+        message = thingOf(database, source)
+      } catch {
+        message = undefined
+      }
+      return select(
+        "t.project_id = ? AND t.deleted_at IS NULL AND EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'task' " +
+          `AND l.from_id = t.id AND l.kind = ${linkKind("evidence")} AND ((l.to_type = ? AND l.to_id = ?) ` +
+          "OR (l.to_id IS NULL AND l.target_text = ?))) ORDER BY t.created_at, t.id",
+      )
+        .all(project, message?.type ?? null, message?.id ?? null, source)
         .map(toTask)
     },
     insert: async (task) => {

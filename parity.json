@@ -102,6 +102,10 @@
       "value": "<time>",
       "meaning": "let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m"
     },
+    "--attach": {
+      "value": "<task>",
+      "meaning": "link the message to this task, one that may be the same job, instead of opening a new one"
+    },
     "--attachment": {
       "value": "<n>",
       "meaning": "which file of the message, from 1; needed when it has more than one"
@@ -443,6 +447,10 @@
       "value": "<kinds>",
       "meaning": "a folder takes every chat of these kinds: contacts, non-contacts, groups, channels, bots"
     },
+    "--into": {
+      "value": "<task>",
+      "meaning": "the task that stays when another is merged into it"
+    },
     "--join-approval": {
       "value": "<on|off>",
       "meaning": "people ask to join, and an admin lets them in"
@@ -609,7 +617,8 @@
       "meaning": "people may pick several answers"
     },
     "--new": {
-      "meaning": "what arrived since the last check, each message once — for scheduled runs"
+      "meaning": "what arrived since the last check, each message once — for scheduled runs",
+      "note": "tasks add instead opens the task although tasks that may be the same job were listed"
     },
     "--newest": {
       "meaning": "newest first instead of best first"
@@ -1071,6 +1080,9 @@
       "meaning": "only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d",
       "note": "max's own `review` still takes bare hours until T6 moves it (e2)",
       "default": "24h"
+    },
+    "--unsure": {
+      "meaning": "only the pairs the reviewing agent left to the owner"
     },
     "--until": {
       "value": "<message>",
@@ -4006,10 +4018,12 @@
     "tasks add": {
       "in": "all",
       "options": {
+        "--attach": "all",
         "--category": "all",
         "--check": "all",
         "--description": "all",
         "--due": "all",
+        "--new": "all",
         "--title": "all",
         "--type": {
           "in": "all"
@@ -4048,6 +4062,19 @@
         }
       }
     },
+    "tasks duplicates": {
+      "in": "all",
+      "options": {
+        "--limit": "all",
+        "--unsure": "all"
+      }
+    },
+    "tasks duplicates reject": {
+      "in": "all"
+    },
+    "tasks duplicates unsure": {
+      "in": "all"
+    },
     "tasks link": {
       "in": "all",
       "options": {
@@ -4061,6 +4088,12 @@
         "--limit": {
           "in": "all"
         }
+      }
+    },
+    "tasks merge": {
+      "in": "all",
+      "options": {
+        "--into": "all"
       }
     },
     "tasks plan": {
@@ -4087,6 +4120,9 @@
       "options": {
         "--limit": "all"
       }
+    },
+    "tasks unmerge": {
+      "in": "all"
     },
     "topics": {
       "in": ["tg"],

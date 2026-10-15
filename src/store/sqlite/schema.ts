@@ -1302,6 +1302,34 @@ export const taskEvents = sqliteTable(
   ],
 )
 
+export const taskPairs = sqliteTable(
+  "task_pairs",
+  {
+    id: integer("id").primaryKey(),
+    taskId: integer("task_id").references(() => tasks.id),
+    sourceLocator: text("source_locator"),
+    otherId: integer("other_id")
+      .notNull()
+      .references(() => tasks.id),
+    score: integer("score").notNull(),
+    band: text("band").notNull(),
+    levels: text("levels").notNull(),
+    reasons: text("reasons").notNull(),
+    decision: text("decision").notNull(),
+    decidedByType: text("decided_by_type"),
+    decidedById: integer("decided_by_id"),
+    decidedAt: integer("decided_at"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.taskId, table.otherId),
+    index("task_pairs_by_decision_created_at").on(table.decision, table.createdAt),
+    index("task_pairs_by_other_id").on(table.otherId),
+    index("task_pairs_by_decided_by_type_decided_by_id").on(table.decidedByType, table.decidedById),
+  ],
+)
+
 export const taskIndexPending = sqliteTable(
   "task_index_pending",
   {

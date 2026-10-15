@@ -387,7 +387,7 @@ describe("messages sync", () => {
     } as unknown as MessengerAdapter
 
     const first = await call(["messages", "sync", "7", "--json"], chat, env)
-    expect(first.answer.tasks).toEqual({ added: 1, closed: 0 })
+    expect(first.answer.tasks).toEqual({ added: 1, closed: 0, review: 0 })
     const again = await call(["messages", "sync", "7", "--json"], chat, env)
     expect(again.code).toBe(0)
     expect(again.answer.tasks).toBeUndefined()

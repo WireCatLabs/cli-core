@@ -80,7 +80,16 @@ task clear it.
 related links do not affect readiness; related pairs are symmetric. Cycles and self-links fail before
 writing, replays return `changed: false`, and actual changes append linked/unlinked task events.
 Agents propose changes for owner review. Targets must be live tasks in owner projects; inbox tasks
-need their separate account-scoped service. Parent hierarchy remains a separate field.
+need their separate account-scoped service, except `duplicate-of`, which joins any two live tasks of one project or
+account. Parent hierarchy remains a separate field.
+
+`store.tasks.compare(subject, other)` scores one pair as `similar` scores a candidate. `task_pairs` (store version
+15) keeps each pair that may be one job and what was decided: `reviewDuplicates(task)` puts a rule-made task's likely
+and maybe candidates on the review list (a rule never merges); `pairs(account, { decision })` reads it;
+`decidePair(task, other, "rejected" | "unsure", by)`, `merge(dup, into, by)` and `unmerge(dup, by)` decide. A merge
+links every message of the duplicate to the task as `evidence`, closes it `dismissed` with a `duplicate-of` relation
+and deletes nothing; the reviewing agent may merge, so these take any author. `findBySource(account, source,
+{ linked: true })` also finds the task a message was attached or merged into, so a rule opens no second one.
 
 `taskRelations(id)`, `taskReadiness(id)` and `readyTasks(project, { limit? })` read bounded coherent
 snapshots. Only a done blocker is resolved: dismissed/deleted blockers continue to require review.

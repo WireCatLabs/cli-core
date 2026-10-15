@@ -858,6 +858,7 @@ describe("the MCP server", () => {
       "store jobs show",
       "tags list",
       "tasks agenda",
+      "tasks duplicates",
       "tasks list",
       "tasks show",
       "tasks similar",
@@ -1674,6 +1675,49 @@ describe("the MCP server", () => {
     expect(names).toEqual(expect.arrayContaining(["tasks list", "stats tasks show"]))
     expect(names).not.toContain("tasks add")
     expect(names).not.toContain("tasks close")
+  })
+
+  it("**refuses a task that may be the same job with the candidates in the error**; attach, new, merge as the agent", async () => {
+    const { call, env } = await connect(scripted())
+    await call("chats list")
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await seedSearchRecipes(store, { provider: "chat", account: "500" })
+    await store.close()
+    const add = (message: string, more: object = {}) =>
+      call("tasks add", {
+        message,
+        type: "request",
+        category: "money",
+        title: "Pay the plumber 15 000 rub",
+        ...more,
+      })
+
+    const first = (await add("msg:chat/500/7/101")).body.item.key
+    const refused = await add("msg:chat/500/7/102")
+    expect(refused.isError).toBe(true)
+    expect(refused.body.error).toMatchObject({
+      code: "validation_error",
+      reason: "task.duplicate-candidates",
+      details: { candidates: [{ key: first, score: expect.any(Number) }] },
+    })
+    expect((await add("msg:chat/500/7/102", { attach: first })).body.item).toMatchObject({
+      key: first,
+      attached: true,
+    })
+    const second = (await add("msg:chat/500/7/103", { new: true })).body.item
+    expect(second).toMatchObject({ created: true })
+
+    expect((await call("tasks duplicates", {})).body).toMatchObject({ items: [] })
+    const merged = await call("tasks merge", { dup: second.key, into: first })
+    expect(merged.body.item).toMatchObject({ pair: { decision: "merged" }, task: { key: first } })
+    expect((await call("tasks unmerge", { dup: second.key })).body.item).toMatchObject({ task: { status: "open" } })
+    expect((await call("tasks duplicates reject", { dup: second.key, task: first })).body.item).toMatchObject({
+      decision: "rejected",
+    })
+    expect((await call("tasks duplicates unsure", { dup: second.key, task: first })).body.item).toMatchObject({
+      decision: "unsure",
+    })
+    expect((await call("tasks duplicates", { unsure: true })).body.items).toHaveLength(1)
   })
 
   it("keeps private contact metadata local through MCP and offers only its reads on a readonly profile", async () => {

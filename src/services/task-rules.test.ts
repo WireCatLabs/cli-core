@@ -55,8 +55,8 @@ describe("applyTaskRules", () => {
     const store = memoryTaskStore()
     const review = reviewOf([said("1", 1, "who has the keys?"), said("2", 2, "thanks")])
 
-    expect(await applyTaskRules(review, { store, account })).toEqual({ added: 1, closed: 0 })
-    expect(await applyTaskRules(review, { store, account })).toEqual({ added: 0, closed: 0 })
+    expect(await applyTaskRules(review, { store, account })).toEqual({ added: 1, closed: 0, review: 0 })
+    expect(await applyTaskRules(review, { store, account })).toEqual({ added: 0, closed: 0, review: 0 })
     expect(await states(store)).toEqual(["msg:telegram/500/-1001/1 question open"])
   })
 
@@ -85,7 +85,7 @@ describe("applyTaskRules", () => {
       said("3", 3, "is it Monday?"),
       said("4", 4, "yes", { senderId: "77", replyToId: "3" }),
     ])
-    expect(await applyTaskRules(later, { store, account })).toEqual({ added: 0, closed: 1 })
+    expect(await applyTaskRules(later, { store, account })).toEqual({ added: 0, closed: 1, review: 0 })
     expect(await states(store)).toEqual([
       "msg:telegram/500/-1001/1 question done",
       "msg:telegram/500/-1001/3 question open",
@@ -99,7 +99,7 @@ describe("applyTaskRules", () => {
     const [task] = await store.list({})
     if (task) await store.update({ ...task, state: "dismissed", reason: "no-reply-needed", closedBy: "owner" })
 
-    expect(await applyTaskRules(review, { store, account })).toEqual({ added: 0, closed: 0 })
+    expect(await applyTaskRules(review, { store, account })).toEqual({ added: 0, closed: 0, review: 0 })
     expect(await states(store)).toEqual(["msg:telegram/500/-1001/1 question dismissed"])
   })
 
@@ -117,7 +117,7 @@ describe("applyTaskRules", () => {
       mention,
       said("6", 6, "sure", { outgoing: true, replyToId: "0" }),
     ])
-    expect(await applyTaskRules(answered, { store, account })).toEqual({ added: 0, closed: 1 })
+    expect(await applyTaskRules(answered, { store, account })).toEqual({ added: 0, closed: 1, review: 0 })
     expect(await states(store)).toEqual(["msg:telegram/500/-1001/1 mention done"])
   })
 
@@ -158,8 +158,8 @@ describe("review", () => {
     const second = await inboxService(deps).review({ since: Date.parse(at(0)), unansweredAfterHours: 0 })
 
     expect([first.tasks, second.tasks]).toEqual([
-      { added: 1, closed: 0 },
-      { added: 0, closed: 0 },
+      { added: 1, closed: 0, review: 0 },
+      { added: 0, closed: 0, review: 0 },
     ])
     expect((await store.tasks.list({})).map((task) => task.source)).toEqual(["msg:telegram/500/-1001/1"])
     await store.close()
@@ -172,12 +172,12 @@ describe("serve's rule pass", () => {
     const question = said("1", 1, "who has the keys?")
     await store.saveMessages(account, "-1001", [said("0", 0, "morning"), question], { via: "test" })
 
-    expect(await applyTaskRulesOnArrival(store, account, question)).toEqual({ added: 1, closed: 0 })
-    expect(await applyTaskRulesOnArrival(store, account, question)).toEqual({ added: 0, closed: 0 })
+    expect(await applyTaskRulesOnArrival(store, account, question)).toEqual({ added: 1, closed: 0, review: 0 })
+    expect(await applyTaskRulesOnArrival(store, account, question)).toEqual({ added: 0, closed: 0, review: 0 })
 
     const answer = said("2", 2, "I do", { outgoing: true, replyToId: "1" })
     await store.saveMessages(account, "-1001", [answer], { via: "test" })
-    expect(await applyTaskRulesOnArrival(store, account, answer)).toEqual({ added: 0, closed: 1 })
+    expect(await applyTaskRulesOnArrival(store, account, answer)).toEqual({ added: 0, closed: 1, review: 0 })
     expect((await store.tasks.list({})).map((task) => task.state)).toEqual(["done"])
     await store.close()
   })
@@ -185,7 +185,11 @@ describe("serve's rule pass", () => {
   it("sees an arrival the store has not saved yet", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-arrival-")), "messages.db") })
 
-    expect(await applyTaskRulesOnArrival(store, account, said("1", 1, "anyone?"))).toEqual({ added: 1, closed: 0 })
+    expect(await applyTaskRulesOnArrival(store, account, said("1", 1, "anyone?"))).toEqual({
+      added: 1,
+      closed: 0,
+      review: 0,
+    })
     await store.close()
   })
 })
@@ -216,6 +220,7 @@ describe("the rule pass over the store", () => {
     expect(await applyTaskRulesToStored(store, account, first.until ?? undefined)).toEqual({
       added: 0,
       closed: 0,
+      review: 0,
       until: first.until,
     })
 
@@ -224,7 +229,7 @@ describe("the rule pass over the store", () => {
       via: "test",
     })
     const second = await applyTaskRulesToStored(store, account, first.until ?? undefined)
-    expect(second).toMatchObject({ added: 0, closed: 1 })
+    expect(second).toMatchObject({ added: 0, closed: 1, review: 0 })
     expect(second.until && first.until && second.until > first.until).toBe(true)
     expect((await store.tasks.list({})).map((task) => task.state)).toEqual(["done"])
     await store.close()
@@ -241,15 +246,15 @@ describe("the rule pass over the store", () => {
       { via: "test" },
     )
 
-    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 1, closed: 0 })
+    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 1, closed: 0, review: 0 })
     expect(await store.taskRulesStop(account)).toEqual(expect.any(String))
-    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 0 })
+    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 0, review: 0 })
 
     await new Promise((resolve) => setTimeout(resolve, 5))
     await store.saveMessages(account, "-1001", [said("2", 2, "I do", { outgoing: true, replyToId: "1" })], {
       via: "test",
     })
-    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 1 })
+    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 1, review: 0 })
     await store.close()
   })
 })
