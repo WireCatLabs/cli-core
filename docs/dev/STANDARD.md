@@ -352,6 +352,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 
 | Root word | Meaning |
 |---|---|
+| `batch` | run bounded explicitly registered reads with independent correlated answers |
 | `inbox` | what waits across every chat |
 | `review` | go through what needs the owner |
 | `watch` | follow new events as they come |
@@ -1169,6 +1170,36 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `mcp` (planned), `mcp config` (planned) |
 
 <!-- end of the option catalogue -->
+
+## Bounded read batches
+
+`batch <file>` reads a JSON file, or stdin when input is `-`. It dispatches only explicitly registered
+read handlers; it is not a shell or arbitrary command runner. Each request is `{id, command, args}`,
+with a unique bounded id, a command-path array and a string argument array. Discovery/help name the
+registered paths. All shapes and arguments validate before opening a selected account/store.
+
+Inputs keep independent normal answers, continuation cursors, fingerprints, coverage and errors. The
+host fixes one account/store lifetime; no request can select another account. Meeting word search and
+passage reads are the first handlers. A batch performs one bounded index pass before word searches;
+it neither merges rankings nor deduplicates overlapping passages. It never invokes a remote model.
+
+Base owns bounded input, correlation and serial orchestration. Core owns the registered meeting
+handlers, existing single-input grammar/answers and account-scoped read adapter. Hosts own file/stdin
+ports, authorization, resource close and final output. Single-input commands keep their shape/behavior.
+
+Caps are 32 inputs, 256 KiB input, 64 MiB reserved stored-text read ceilings and 4 MiB rendered output.
+Indexing reserves 4 MiB once. Each read reserves its own requested ceiling before calling the store;
+failed reads never refund it. These are conservative ceilings, not measured consumption or SQLite/disk
+I/O. Every refused input remains correlated as not_run. An input whose answer exceeded its output
+allowance is error; later inputs are not_run. Projection applies before retained-result accounting,
+inside each normal answer, preserving id, command, status and error.
+
+JSON is the standard list envelope of correlated results, each with status ok/error/not_run and complete.
+JSONL uses one item record per result and one standard end record. A batch declares partial semantics:
+valid per-input failures exit 0 with meta.complete false and issues; malformed whole requests exit 2.
+Outer cancellation/deadline, store-close and final writer failures retain the host's normal fatal
+handling; they never emit a false complete end. Text/Markdown reuse compact passage presentation,
+with coverage once per result. Budget defaults and partial status must remain the same across hosts.
 
 ## Output
 

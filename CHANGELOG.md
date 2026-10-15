@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Meeting reads can run as an explicit bounded batch.** The shared CLI builder registers word search and
+  passage handlers, keeps independent answers/cursors/errors, reserves stored-text read ceilings and performs
+  one bounded index pass. The host selects one account and owns input, cancellation and final output; no model
+  or remote write is dispatched. The existing single-input commands keep their grammar and behavior.
+
 ## 0.292.0 — 15.10.2026
 
 ### Changed — may break callers

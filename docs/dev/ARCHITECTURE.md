@@ -666,3 +666,11 @@ metadata. Stable `document:<id>` references reuse tags, notes and relationships;
 hierarchies remain distinct from notes collections. Reconciliation marks absent entries inactive
 without deleting annotations. Reads use explicit account IDs with bounded pages and metadata;
 provider adapters own hierarchy navigation. No migration or provider dependency is added.
+
+## Meeting read batches
+
+Base owns bounded input, registered-handler preparation and correlated serial execution. Core's
+`src/cli/meeting-batch.ts` reuses the pure grammar from the independent meetings module and the
+standard envelope/formatter. `src/services/meeting-batch.ts` binds the existing meeting search,
+index and passage operations to one host-selected account. The batch performs one bounded index
+pass; single searches retain their existing refresh policy. No provider or shell dispatch is introduced.

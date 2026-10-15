@@ -122,7 +122,13 @@ Field selection uses cli-base's `fieldsOf` and `projectFields`. Dotted paths tra
 objects and arrays; `items.ref` selects each list row's reference. Item/list envelopes, coverage,
 continuation, missing data and execution metadata and operation identifiers stay intact. Parent
 selections retain entire subtrees. Empty, invalid or unsafe paths are rejected before projection.
-The runtime peer requires cli-base 0.31.1 or newer within the 0.31 series.
+The runtime peer requires cli-base 0.35.0 or newer within the 0.35 series.
+
+`addMeetingBatchCommand` (`./cli`) composes the registered word-search and passage grammars over
+`MeetingBatchReader` (`./meetings`). `createMeetingBatchReader` (`./services`) fixes the existing
+store operations to one account. The host supplies bounded file/stdin input, cancellation and
+close-before-output rendering; Base supplies correlation, budgets and serial execution. See
+[bounded read batches](dev/STANDARD.md#bounded-read-batches) for caps and partial-result semantics.
 
 `searchAllIncludingMeetings` from `./services` adds one selected meeting account to the existing
 message, mail and notes search. It leaves `searchAll` and its item references unchanged. The CLI
