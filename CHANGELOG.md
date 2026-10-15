@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.285.0 — 15.10.2026
 
 ### Added
 
@@ -13,17 +13,6 @@ shape of this file.
   email's text, as messages are; `mentions rebuild` reads the ones stored before (`documents`, `notes`, `emails` in
   its answer). Mail search takes `phone:`, `email:`, `url:`, `domain:` and `mentions:`. `mentions list` still lists
   message sources only. Migration 16 adds triggers only: older builds keep working.
-
-### Security
-
-- **A hostile HTML attachment no longer stalls the reader**: when the HTML reader falls back to plain text, a
-  page of unclosed tags, comments or long blank runs (`<<<<…`, `<p<p…`, `<!--<!--…`) is read in time linear in
-  its size; a 200,000-character one took up to 50 seconds. Ordinary pages read exactly as before.
-
-## 0.285.0 — 15.10.2026
-
-### Added
-
 - **`mentions domains`**: the sites this account's links point to, most linked first, with how many chats and the
   first and last time a link was sent; dismissed links are not counted, and the query narrows the links.
 - **A `t.me` link names its chat or person**: a mention of `t.me/<username>` (or a post under it) is linked by rule to
@@ -121,6 +110,12 @@ shape of this file.
 - **A title with Cyrillic or other non-Latin capitals is found by a lowercase query**: `title:` ignored case only for
   Latin letters, so such a title never matched, and a plain word search did not put it first. Titles now fold the
   same way as the query, for every alphabet.
+
+### Security
+
+- **A hostile HTML attachment no longer stalls the reader**: when the HTML reader falls back to plain text, a
+  page of unclosed tags, comments or long blank runs (`<<<<…`, `<p<p…`, `<!--<!--…`) is read in time linear in
+  its size; a 200,000-character one took up to 50 seconds. Ordinary pages read exactly as before.
 
 ## 0.284.0 — 15.10.2026
 
