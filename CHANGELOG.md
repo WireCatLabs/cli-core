@@ -16,8 +16,9 @@ shape of this file.
   is added.
 - **Search finds a letter by a whole tracking link and by a part of a link.** Mail keeps a tracking link only as
   its site, so `url:"<link>"` now also matches a letter with that site whose text holds the link, as typed or
-  without `utm_*`. The new field `link:` matches a part of a link in any case (`link:"click?id=1"`, `link:"/price"`),
-  in messages and in mail. No new rows: the letter's stored text is read.
+  without `utm_*`. The new field `link:` matches a part of a link, Latin letters in any case, in messages and in
+  mail. Quote both: `?`, `/` and `=` are query operators (`link:"click?id=1"`, `url:"https://…"`). No new rows:
+  the letter's stored text is read.
 
 ### Changed — may break callers
 

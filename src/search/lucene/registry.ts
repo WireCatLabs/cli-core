@@ -371,7 +371,11 @@ export const QUERY_FIELDS: readonly MessageField[] = [
       ["email", 'email:"ana@example.com"', "an address found in the text, lower-cased; quoted, since @ is an operator"],
       ["url", 'url:"https://example.com/a"', "a link found in the text, without utm_*, fbclid and the fragment"],
       ["domain", "domain:google.com", "the site of a link or an address in the text; docs.google.com means google.com"],
-      ["link", 'link:"click?id=1"', "a part of a link, any case; in mail also the letter's text, for a tracking link"],
+      [
+        "link",
+        'link:"click?id=1"',
+        "a part of a link, quoted; Latin letters in any case; in mail also the body of a letter with a tracking link",
+      ],
     ] as const
   ).map(([name, example, normalization]) => ({
     name,

@@ -371,7 +371,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `email` | kw | an address found in the text, lower-cased; quoted, since @ is an operator | `email:"ana@example.com"` | term, phrase |
 | `url` | kw | a link found in the text, without utm_*, fbclid and the fragment | `url:"https://example.com/a"` | term, phrase |
 | `domain` | kw | the site of a link or an address in the text; docs.google.com means google.com | `domain:google.com` | term, phrase |
-| `link` | kw | a part of a link, any case; in mail also the letter's text, for a tracking link | `link:"click?id=1"` | term, phrase |
+| `link` | kw | a part of a link, quoted; Latin letters in any case; in mail also the body of a letter with a tracking link | `link:"click?id=1"` | term, phrase |
 | `mentions` | kw | a person (by name, phone or address), an organization or a document, linked; quoted | `mentions:"person:12"` | term, phrase |
 | `tag` | kw | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase |
 

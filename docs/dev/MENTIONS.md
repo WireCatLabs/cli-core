@@ -116,10 +116,11 @@ linked to that person, or a phone or an address whose identity is theirs; `organ
 `organization_identities`; `document:<id>` through the target. Another type is `query.invalid-reference`. A
 mention in an attachment finds its message. Mail search takes the same fields (store version 16).
 
-`url:` and `link:` compile in `mention-links.ts`. `link:` matches a part of a stored link, any case. In mail a
-tracking link is stored as its origin (`trackedOrigin`), so a letter with a row of that origin is also matched by
-`instr` on its text: the link as typed or normalized for `url:`, the lowercased part for `link:`. That second
-check reads the whole text, so `link:` may find a part outside a link in a letter that has a tracking link.
+`url:` and `link:` compile in `mention-links.ts`. `link:` matches a part of a stored link with `LIKE` (`%`, `_`
+escaped), so only ASCII letters ignore case; the value must be quoted, since `?`, `/` and `=` are query syntax.
+In mail a tracking link is stored as its origin (`trackedOrigin`), so a letter with a row of that origin is also
+matched by its body: `instr` with the link as typed or normalized for `url:`, `LIKE` with the part for `link:`.
+That check reads the whole body, so `link:` may find a part outside a link in a letter that has a tracking link.
 
 ## Review after a sync
 
