@@ -7,6 +7,7 @@ import { folded } from "./folded.js"
 import { type Author, authorActor } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import type { Where } from "./query-filter.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
 import { taskIdOf, taskRowOf } from "./things.js"
 import { write } from "./transaction.js"
@@ -106,6 +107,8 @@ export interface WorkTasks extends TaskRelationsStore {
     status?: TaskState
     /** `person:<id>`, in any role. */
     assignee?: string
+    /** A compiled list query over `tasks t`. */
+    where?: Where
     limit?: number
   }): Promise<TaskDetails[]>
   events(id: string): Promise<TaskEvent[]>
@@ -367,7 +370,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
       return details(task)
     },
     details: async (id) => details(required(id)),
-    find: async ({ project, type, status, assignee, limit = 100 }) => {
+    find: async ({ project, type, status, assignee, where, limit = 100 }) => {
       if (type !== undefined && !TASK_TYPES.includes(type))
         throw new CliError("validation_error", `a task's type is one of ${TASK_TYPES.join(", ")}`)
       const projectId = project === undefined ? null : projectOf(project)
@@ -377,7 +380,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
           "SELECT * FROM tasks t WHERE deleted_at IS NULL AND (? IS NULL OR project_id = ?) AND (? IS NULL OR type = ?) " +
             "AND (? IS NULL OR status = ?) AND (? IS NULL OR EXISTS (SELECT 1 FROM task_assignments a " +
             "WHERE a.task_id = t.id AND a.assignee_type = 'person' AND a.assignee_id = ?)) " +
-            "ORDER BY coalesce(priority, 5), created_at, id LIMIT ?",
+            `AND (${where?.sql || "1"}) ORDER BY coalesce(priority, 5), created_at, id LIMIT ?`,
         )
         .all(
           projectId,
@@ -388,6 +391,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
           status ?? null,
           person,
           person,
+          ...(where?.params ?? []),
           Math.min(Math.max(limit, 1), 500),
         )
         .map(detailsOf)

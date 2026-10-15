@@ -6,6 +6,8 @@ import { aheadOf, momentOf } from "../../services/moment.js"
 import {
   CLAIM_LEASE_MS,
   closedStateOf,
+  type PairDecision,
+  TASK_PAIR_QUERY,
   TASK_QUERY,
   type TaskCard,
   type TaskLinkOptionKind,
@@ -19,7 +21,7 @@ import { holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
+import { listQuery, pagedList, pageOf, queryTerms, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { refuseJsonl, taskStatsAnswer } from "./stats-answers.js"
@@ -312,20 +314,22 @@ export const tasksCommand = (messenger: Messenger): Command => {
       if (found.length === 0 && context.format === "pretty") context.renderer.note("no open or recent task looks alike")
     })
 
-  const duplicates = annotate(tasks.command("duplicates"), { effects: LOCAL_READ })
-    .summary("pairs of tasks a rule opened that may be one job, newest first")
-    .description(
-      "pairs of tasks a rule opened that may be one job, newest first, with score and reasons: merge, reject or " +
-        "defer each; --unsure lists the ones deferred to the owner",
-    )
-    .option("--unsure", "only the pairs the reviewing agent deferred to the owner")
+  const duplicates = withQuery(
+    annotate(tasks.command("duplicates"), { effects: LOCAL_READ })
+      .summary("pairs of tasks a rule opened that may be one job, newest first")
+      .description(
+        "pairs of tasks a rule opened that may be one job, newest first, with score and reasons: merge, reject or " +
+          "defer each; decision:unsure lists the ones deferred to the owner",
+      ),
+    TASK_PAIR_QUERY,
+  )
     .option("--limit <n>", "how many", positiveCount("--limit"))
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
       const { limit, offset } = pageOf(context.settings)
-      const unsure = this.opts<{ unsure?: boolean }>().unsure === true
+      const decision = queryTerms(words, TASK_PAIR_QUERY, "tasks duplicates").get("decision") as PairDecision
       const rows = await context.withServices((services) =>
-        services.tasks.duplicates({ unsure, limit: limit + 1, offset }),
+        services.tasks.duplicates({ decision, limit: limit + 1, offset }),
       )
       const shown = rows.slice(0, limit)
       renderAnswer(
@@ -338,7 +342,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
         () => (shown.length === 0 ? "" : `${shown.map(pairLine).join("\n")}\n`),
       )
       if (shown.length === 0 && context.format === "pretty")
-        context.renderer.note(unsure ? "no pair waits for the owner" : "no pair waits for review")
+        context.renderer.note(decision === "unsure" ? "no pair waits for the owner" : "no pair waits for review")
     })
 
   const decided = (decision: "rejected" | "unsure", permission: "tasks.duplicates.reject" | "tasks.duplicates.defer") =>
@@ -366,7 +370,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     examples: [`${tool} tasks duplicates defer PR-14 PR-12`],
   })
     .summary("the fields and the text cannot tell: leave the pair to the owner")
-    .description("the fields and the text cannot tell: leave the pair to the owner, who lists it with --unsure")
+    .description("the fields and the text cannot tell: leave the pair to the owner, who lists it with decision:unsure")
     .argument("<dup>", "the task listed as the duplicate, by its id or key")
     .argument("<task>", "the task it was paired with")
     .action(decided("unsure", "tasks.duplicates.defer"))
@@ -434,9 +438,6 @@ export const tasksCommand = (messenger: Messenger): Command => {
       "leave out chats silent longer than this: they ended (default 30d)",
       durationOf("--within"),
     )
-    .option("--claimed", "also list tasks someone else holds (tasks claim); hidden by default")
-    .option("--category <name>", "only tasks of this category, from the list tasks categories prints")
-    .option("--tag <name>", "only tasks with this tag (tags add --task)")
     .option("--holder <name>", HOLDER_HELP)
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
@@ -445,9 +446,6 @@ export const tasksCommand = (messenger: Messenger): Command => {
         unanswered?: number
         waiting?: number
         within?: number
-        claimed?: boolean
-        category?: string
-        tag?: string
       }>()
       const query = listQuery(typedQuery(words), AGENDA_QUERY, "tasks agenda")
       const agenda = await context.withServices((services) =>
@@ -458,9 +456,6 @@ export const tasksCommand = (messenger: Messenger): Command => {
           ...(options.within === undefined ? {} : { within: options.within }),
           ...(query ? { query } : {}),
           holder: holderOf(this),
-          claimed: options.claimed === true,
-          ...(options.category === undefined ? {} : { category: options.category }),
-          ...(options.tag === undefined ? {} : { tag: options.tag }),
         }),
       )
       renderAnswer(this, context, itemOf(agendaItem(agenda)), () => `${agendaText(agenda)}\n`)

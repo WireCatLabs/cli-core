@@ -1,7 +1,7 @@
 import * as v from "valibot"
 import { holderOf } from "../../cli/author.js"
 import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
-import { listQuery, queryArgument } from "../../cli/list-query.js"
+import { listQuery, queryArgument, queryTerms } from "../../cli/list-query.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { taskStatsAnswer } from "../../cli/messenger/stats-answers.js"
 import type { SendGuard } from "../../sends/guard.js"
@@ -9,7 +9,14 @@ import { AGENDA_QUERY, agendaItem } from "../../services/agenda.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
 import { DEFAULT_TASK_CATEGORIES } from "../../services/task-categories.js"
-import { CLAIM_LEASE_MS, TASK_LINK_KINDS, TASK_QUERY, type TaskPlan } from "../../services/tasks.js"
+import {
+  CLAIM_LEASE_MS,
+  type PairDecision,
+  TASK_LINK_KINDS,
+  TASK_PAIR_QUERY,
+  TASK_QUERY,
+  type TaskPlan,
+} from "../../services/tasks.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { TASK_KINDS } from "../../tasks/index.js"
 import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.js"
@@ -217,10 +224,10 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "Pairs of tasks a rule opened that may be one job, newest first: `task` is the newer one, `other` the one it " +
         "may duplicate, with score, band, levels and reasons. Decide each: tasks_merge when they are one job, " +
         "tasks_duplicates_reject when they are not, tasks_duplicates_defer when the meaning cannot tell — the owner " +
-        "then sees it under `unsure: true`. Returns { items: [{ task, source, other, score, band, levels, reasons, " +
+        "then lists it with query decision:unsure. Returns { items: [{ task, source, other, score, band, levels, reasons, " +
         "decision, decided_at, created_at }] }.",
       input: v.object({
-        unsure: v.optional(v.pipe(v.boolean(), v.description("only the pairs marked unsure, left for the owner"))),
+        query: queryArgument(TASK_PAIR_QUERY),
         limit,
         page,
       }),
@@ -228,7 +235,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       stored: async (store, account, args, defaults) => {
         const { size, number, window } = paging(args, defaults)
         const rows = await tasks(store, account, defaults.guard).duplicates({
-          unsure: args.unsure === true,
+          decision: queryTerms(args.query ?? "", TASK_PAIR_QUERY, "tasks duplicates").get("decision") as PairDecision,
           limit: window.limit + 1,
           offset: window.offset,
         })
@@ -260,7 +267,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Leave a pair to the owner",
       description:
         "Marks a pair the fields and the text cannot decide — a gift for mum or for dad — so the owner decides it; " +
-        "it leaves your list and shows under tasks_duplicates `unsure: true`. Writes only to the local store. " +
+        "it leaves your list and shows under tasks_duplicates with query decision:unsure. Writes only to the local store. " +
         "Returns { item: pair }.",
       input: v.object({ dup: text(200, "the task listed as `task`"), task: text(200, "the task listed as `other`") }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
@@ -362,19 +369,16 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "check, or never planned; chats where someone else wrote last and the owner has not answered (`owed`); " +
         "chats where the owner wrote last and nobody answered (`waiting`); chats that moved and whose newest " +
         "message is not stored (`unsynced`: read them first). Read only what it names. `stale` means the store " +
-        "saved nothing for a day, so a chat may look quiet only because nothing was synced. `query` picks the " +
-        "chats' kinds: chat_kind:channel (default chat_kind:(dialog OR group)). A task someone else claimed is " +
-        "hidden unless `claimed` is true; `holder` says who you are.",
+        "saved nothing for a day, so a chat may look quiet only because nothing was synced. `query` narrows " +
+        "the chats by chat_kind:channel (default chat_kind:(dialog OR group)) and the tasks by tag:, category: and " +
+        "claimed:none|mine|others|any (default claimed:(none OR mine)); `holder` says who you are.",
       input: v.object({
         due_within: span("list tasks due within this (default 1d)"),
         unanswered: span("list chats someone else wrote last in this long ago (default 1d)"),
         waiting: span("list chats the owner wrote last in this long ago (default 7d)"),
         within: span("leave out chats silent longer than this (default 30d)"),
         query: queryArgument(AGENDA_QUERY),
-        claimed: v.optional(v.pipe(v.boolean(), v.description("also list tasks someone else claimed"))),
         holder: v.optional(text(200, "who you are for claims, as tasks claim --holder names you; yours stay listed")),
-        category: v.optional(text(30, "only tasks of this category")),
-        tag: v.optional(text(100, "only tasks with this tag")),
       }),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "agenda", list: false },
@@ -392,10 +396,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           ...(waiting === undefined ? {} : { waiting }),
           ...(within === undefined ? {} : { within }),
           ...(query ? { query } : {}),
-          claimed: args.claimed === true,
           holder: holderOf(defaults.env, args.holder),
-          ...(args.category === undefined ? {} : { category: args.category }),
-          ...(args.tag === undefined ? {} : { tag: args.tag }),
         })
         return itemOf(agendaItem(shown))
       },

@@ -131,7 +131,7 @@ export { momentOf } from "../services/moment.js"
 export { maskedAccount } from "../services/people.js"
 export { unanswered } from "../services/questions.js"
 export { openRequestTask } from "../services/task-rules.js"
-export { TASK_QUERY } from "../services/tasks.js"
+export { TASK_PAIR_QUERY, TASK_QUERY } from "../services/tasks.js"
 export {
   type AgentPolicy,
   type AgentTask,
