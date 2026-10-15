@@ -14,8 +14,13 @@ That column comes from the provider; the `mentions` table comes from our rules.
 | file | what |
 | --- | --- |
 | `src/domain/mentions.ts` | the rules for `phone`, `email`, `url`, `document`; `MENTION_KINDS`, `MENTION_VERSIONS`, `siteOf` |
+| `src/domain/phones.ts` | `phone_countries`: the country plans, reading a national number (`nationalPhone`) |
+| `scripts/phone-plans.ts` | writes the country table from libphonenumber-js (a dev dependency only) |
 | `src/domain/person-names.ts` | `person-name`: the name index, Latin → Cyrillic, matching by stem or written form |
-| `src/store/sqlite/mentions.ts` | the writer, the queue drain, `rebuildMentions`, list, show, confirm, reject; `MENTION_QUERY` |
+| `src/store/sqlite/phone-countries.ts` | the setting in `store_settings`, and `valueMatch` for `phone:` and `value:` |
+| `src/store/sqlite/mention-drain.ts` | the writer and the queue drain |
+| `src/store/sqlite/mentions.ts` | `rebuildMentions`, list, show, confirm, reject, `newMentions`; `MENTION_QUERY` |
+| `src/cli/messenger/mention-points.ts` | where `mentions list --new` stopped, per profile |
 | `src/store/sqlite/lucene.ts` | the search fields `phone:` `email:` `url:` `domain:` `mentions:` |
 | `src/services/mentions.ts` | the service the commands call |
 | `src/cli/messenger/mentions-command.ts` | `mentions list|show|confirm|reject|rebuild` |
@@ -67,7 +72,7 @@ rebuild; they are derived again, so a better rule can change them.
 | `email` | one pattern, lower-cased; `domain` from the public suffix list ([`psl`](https://github.com/lupomontero/psl)) | 0.95 |
 | `url` | `http(s)://…`, or a bare domain with a listed suffix that does not look like code or a file name (`readme.md`, `items.parts[0]`); tracking parameters and the fragment dropped; `domain` from `psl` | 0.95 with a scheme, 0.9 with `www.`, 0.6 bare |
 | `document` | a Google Docs, Sheets or Drive link inside a `url`; the value is the file id | 0.95 |
-| `phone` | own rules, no library: a 7–15 digit candidate kept by its shape, a Russian mobile or a phone word before it; dropped as a date, an IP, a sum, a card (Luhn) or an order, invoice or tax number. `+7…` when the country is clear, else the digits alone | 0.9 / 0.7 / 0.5 |
+| `phone` | own rules over libphonenumber's numbering plans (`src/domain/phone-plans.generated.ts`, 47 countries): `+`/`00` is international; otherwise read in `phone_countries` (store-wide, default `ru`), grouped or named any valid number, bare only a mobile; dropped as a date, an IP, a sum or an order, invoice, tax or bank number. What fits no country is the digits alone | 0.9 / 0.7 / 0.5 |
 | `person-name` | see below | 0.9 full name, 0.6 one word |
 
 `MENTION_VERSIONS` holds a version per kind. Bump it when a kind's rule changes, so the rows say which rule found
@@ -97,6 +102,16 @@ them.
 linked to that person, or a phone or an address whose identity is theirs; `organization:<id>` goes through
 `organization_identities`; `document:<id>` through the target. Another type is `query.invalid-reference`. A
 mention in an attachment finds its message. Mail has no mentions yet, so these fields match nothing there.
+
+## Review after a sync
+
+`messages sync` counts the account's `found` mentions newer than the profile's review point and, when there are
+any, names them in a note and in the `mentions.review` step (`mentions list --new`). `mentions list --new` lists
+`found` mentions with `created_at` after the point and moves the point to the newest one shown, only when the answer
+was not cut by `--limit`: rows come in message order, so a cut page could skip one found earlier. The point is a file
+per profile (`<state>/mentions/<profile>.json`), one for the owner and an agent alike. `created_at` survives a
+rebuild (the writer keeps it per kind and place), so a rebuild does not make old rows new. `serve` writes no answer
+per sync and names nothing; its mentions show up on the next `--new`.
 
 ## Adding a kind
 

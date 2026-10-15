@@ -106,7 +106,14 @@ export const configCommand = (
         renderAnswer(
           this,
           context,
-          itemOf(changed.result, { next: "reindex" in changed ? [nextStep("store.reindex", { args: {} })] : [] }),
+          itemOf(changed.result, {
+            next:
+              "reindex" in changed
+                ? [nextStep("store.reindex", { args: {} })]
+                : "rebuild" in changed
+                  ? [nextStep("mentions.rebuild", { args: { kind: "phone" } })]
+                  : [],
+          }),
         )
         renderer.note(changed.note)
         return

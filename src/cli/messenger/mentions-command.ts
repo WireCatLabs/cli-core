@@ -10,6 +10,7 @@ import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList, queryHelp } from "../list-query.js"
 import { positiveCount, window } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
+import { reviewPoint } from "./mention-points.js"
 
 const line = ({ id, kind, value, domain, status, sentAt, locator, field }: Mention) =>
   `${id}  ${sentAt}  ${kind}  ${value}${domain && kind === "url" ? `  (${domain})` : ""}  ${status}  ${locator}` +
@@ -25,17 +26,34 @@ export const mentionsCommand = (messenger: Messenger): Command => {
   annotate(mentions.command("list"), {
     effects: LOCAL_READ,
     query: MENTION_QUERY,
-    examples: [`${tool} mentions list kind:phone`, `${tool} mentions list domain:google.com`],
+    examples: [
+      `${tool} mentions list kind:phone`,
+      `${tool} mentions list domain:google.com`,
+      `${tool} mentions list --new`,
+    ],
   })
-    .description("this account's mentions matching the query, newest first; local store only")
+    .description(
+      "this account's mentions matching the query, newest first; --new for those found since the last review",
+    )
     .argument("[query...]", "fields below; a bare word is a value, so a phone typed with 8 finds it written with +7")
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
+    .option(
+      "--new",
+      "undecided mentions found since the last --new run that showed them all; the first run shows every one",
+    )
     .addHelpText("after", queryHelp(MENTION_QUERY))
     .action(async function (this: Command, query: string[]) {
       const context = messengerContext(this, messenger)
+      const fresh = this.opts<{ new?: boolean }>().new === true
+      const point = fresh ? reviewPoint(messenger.app, context.settings.profile, context.env) : undefined
+      const typed = query.join(" ")
+      const asked = fresh && !/(^|\s)status:/.test(typed) ? `status:found ${typed}`.trim() : typed
       const found = await context.withServices((services) =>
-        services.mentions.list(query.join(" "), window(context.settings)),
+        services.mentions.list(asked, {
+          ...window(context.settings),
+          ...(point?.after === undefined ? {} : { foundAfter: point.after }),
+        }),
       )
       if (found.state.rebuiltAt === null)
         context.renderer.note(
@@ -51,6 +69,9 @@ export const mentionsCommand = (messenger: Messenger): Command => {
         }),
         () => found.items.map((item) => `${line(item)}\n`).join(""),
       )
+      // Moved only past a complete answer: rows are in message order, so a cut page could skip one found earlier.
+      if (point && !found.hasMore) point.save(found.items.map((item) => item.foundAt))
+      else if (point) context.renderer.note("more remain — a larger --limit shows them all and moves the --new point")
     })
 
   annotate(mentions.command("show"), { effects: LOCAL_READ, examples: [`${tool} mentions show 12`] })

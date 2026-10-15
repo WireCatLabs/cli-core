@@ -193,6 +193,7 @@
     "exceljs": "4.4.0",
     "jsqr": "1.4.0",
     "lefthook": "2.1.16",
+    "libphonenumber-js": "1.13.14",
     "markdownlint-cli2": "0.23.3",
     "pngjs": "7.0.0",
     "typescript": "^7.0.2",

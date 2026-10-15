@@ -1,12 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { defineQuery, type QueryAst } from "@wirecat/cli-base/query"
-import { MENTION_KINDS, type MentionKind, normalizedValue, siteOf } from "../../domain/mentions.js"
+import { MENTION_KINDS, type MentionKind, siteOf } from "../../domain/mentions.js"
 import { findNames, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { knownPeople, participants, SOURCE_TYPES, SOURCES, type SourceType, sourceOf, writer } from "./mention-drain.js"
 import type { StoreContext } from "./open.js"
 import { linkIdentityToPerson } from "./person-links.js"
+import { valueMatch } from "./phone-countries.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 import { writeBatch } from "./transaction.js"
 
@@ -28,6 +29,8 @@ export interface StoredMention {
   chatId: string
   messageId: string
   sentAt: string
+  /** When the rules first found it here; a rebuild keeps it. `mentions list --new` starts after the last one shown. */
+  foundAt: string
   /** What was written, read back from the message: never copied into the mention. */
   written: string
 }
@@ -59,12 +62,12 @@ export const MENTION_QUERY = defineQuery({
   ],
 })
 
-const COLUMNS: ColumnMap = {
+const columnsOf = (database: CacheDatabase): ColumnMap => ({
   kind: { type: "enum", sql: "mn.kind" },
   status: { type: "enum", sql: "mn.status" },
   domain: { where: (node) => ({ sql: "mn.domain = ?", params: [siteOf(node.value.toLowerCase())] }) },
-  value: { where: (node) => ({ sql: "mn.value = ?", params: [normalizedValue(node.value)] }) },
-}
+  value: { where: (node) => valueMatch(database, node.value) },
+})
 
 export interface MentionsState {
   /** Messages written or edited since their mentions were found. */
@@ -138,7 +141,7 @@ export const mentionsState = (database: CacheDatabase): MentionsState => {
 // A mention in a file or a voice note belongs to that attachment's message, and is listed with it.
 const SELECT =
   "SELECT mn.id, mn.kind, mn.value, mn.domain, mn.confidence, mn.status, mn.author, mn.source_field, " +
-  "mn.target_type, mn.target_id, " +
+  "mn.target_type, mn.target_id, mn.created_at, " +
   "mn.start_offset, mn.end_offset, CASE WHEN mn.source_type = 'attachment' THEN att.text ELSE m.text END AS text, " +
   "m.external_id AS message_id, m.sent_at, m.chat_id AS chat_pk, c.external_id AS chat_id FROM mentions mn " +
   "LEFT JOIN attachments att ON mn.source_type = 'attachment' AND att.id = mn.source_id AND att.attachable_type = 'message' " +
@@ -158,6 +161,7 @@ const stored = (row: Record<string, unknown>): StoredMention => ({
   chatId: String(row.chat_id),
   messageId: String(row.message_id),
   sentAt: new Date(Number(row.sent_at)).toISOString(),
+  foundAt: new Date(Number(row.created_at)).toISOString(),
   written: String(row.text).slice(Number(row.start_offset), Number(row.end_offset)),
 })
 
@@ -166,12 +170,16 @@ export const listMentions = (
   database: CacheDatabase,
   accountPk: number,
   query: QueryAst | undefined,
-  { limit, offset }: { limit?: number; offset: number },
+  { limit, offset, foundAfter }: { limit?: number; offset: number; foundAfter?: number },
 ): { items: StoredMention[]; hasMore: boolean } => {
   const where = ["m.account_id = ?"]
   const params: SqlValue[] = [accountPk]
+  if (foundAfter !== undefined) {
+    where.push("mn.created_at > ?")
+    params.push(foundAfter)
+  }
   if (query) {
-    const compiled = queryFilter(query, COLUMNS)
+    const compiled = queryFilter(query, columnsOf(database))
     if (compiled.sql) {
       where.push(`(${compiled.sql})`)
       params.push(...compiled.params)

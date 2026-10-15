@@ -30,7 +30,29 @@ tg work search messages mentions:"person:12"        # messages that mention pers
 below). A phone or a link in a file's text or in a voice note's transcript finds the message the file came with.
 
 The fields work with the rest of the [query language](search/query-language.md):
-`domain:google.com AND from:me after:2026-09-01`.
+`domain:google.com AND date>=2026-09-01`.
+
+## Numbers from other countries
+
+A number written with `+` or `00` is read as international, from any country. A number without them has no country
+written in it, so the store reads it in the countries you name, the first that fits:
+
+```sh
+tg work config set phone_countries es,ru   # store-wide: every profile, tg and MAX
+tg work mentions rebuild phone             # read the numbers already stored again
+```
+
+With `es,ru`, `612 345 678` and `612345678` are `+34 612 345 678`, and `8 900 000-00-01` is still Russian. The
+countries are most of Europe, the US and Canada, Russia and its neighbours; `config set` lists them when one is not
+known. Without the setting only Russian numbers are read without `+`, as before.
+
+- Digits in groups, or after a word such as `tel`, `móvil`, `Handy` or `téléphone`, may be any number of the country.
+- Digits alone count only when they are a mobile number: bare landline-shaped digits are more often an order or an
+  account number.
+- Digits after `pedido`, `factura`, `nº`, `DNI`, `IBAN`, `Rechnung` and similar words are never a phone.
+
+A number you confirmed before setting the countries stays confirmed after the rebuild, now with its country code.
+`phone:` finds it written either way.
 
 ## List and look at mentions
 
@@ -102,6 +124,20 @@ tg work mentions rebuild person-name   # names only: after you added a person or
 
 A rebuild keeps every decision: a linked or dismissed value stays so. It prints its progress and can be run
 again at any time.
+
+## Review what is new
+
+`messages sync` says how many mentions it found that nobody has decided yet, and names the command that lists them:
+
+```sh
+tg work mentions list --new
+```
+
+`--new` shows the undecided mentions found since the last `--new` run, the first time every one. The next run starts
+after them, but only when this one showed them all: with `--limit` cutting the list, it stays where it was. The point
+is kept per profile, for you and an agent alike, so ask your agent to go through them with you:
+
+> Go through the new mentions in my Telegram. Suggest who each phone is, and confirm only what I agree with.
 
 ## Privacy
 

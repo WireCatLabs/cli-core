@@ -59,7 +59,6 @@ import { fillFolded } from "./sqlite/folded.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import * as imageChunks from "./sqlite/image-chunks.js"
-
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
@@ -440,7 +439,7 @@ export interface MessageStore {
   mentions(
     key: AccountKey,
     query: QueryAst | undefined,
-    window: { limit?: number; offset: number },
+    window: { limit?: number; offset: number; foundAfter?: number },
   ): Promise<{ items: StoredMention[]; hasMore: boolean }>
   /** One mention of the account, with the text around it; `undefined` for another account's or a missing id. */
   mention(
@@ -1911,6 +1910,7 @@ export {
 } from "./sqlite/mentions.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
+export { savedPhoneCountries, saveStorePhoneCountries } from "./sqlite/phone-countries.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 export type { ProposedAction } from "./sqlite/proposed-actions.js"
 export { type ColumnMap, queryFilter, type Where } from "./sqlite/query-filter.js"

@@ -130,4 +130,20 @@ describe("mentions", () => {
     expect(unstored.code).not.toBe(0)
     expect(unstored.stderr).toContain("not in the store yet")
   })
+
+  it("lists only undecided mentions found since the last --new run that showed them all", async () => {
+    const chat = await setup()
+    const values = async (...argv: string[]) =>
+      (
+        JSON.parse((await chat("mentions", "list", ...argv, "--json")).stdout) as { items: { value: string }[] }
+      ).items.map((item) => item.value)
+
+    expect(await values("--new")).toEqual([
+      "https://docs.google.com/spreadsheets/d/1SyntheticFileId_abc/edit",
+      "1SyntheticFileId_abc",
+      "+79000000001",
+    ])
+    expect(await values("--new")).toEqual([])
+    expect(await values("kind:phone")).toEqual(["+79000000001"])
+  })
 })

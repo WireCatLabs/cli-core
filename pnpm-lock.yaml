@@ -156,6 +156,9 @@ importers:
       lefthook:
         specifier: 2.1.16
         version: 2.1.16
+      libphonenumber-js:
+        specifier: 1.13.14
+        version: 1.13.14
       markdownlint-cli2:
         specifier: 0.23.3
         version: 0.23.3
@@ -2226,6 +2229,9 @@ packages:
   lefthook@2.1.16:
     resolution: {integrity: sha512-U69YGDNsZ7R+umeSzdLzORNCHQFz/w4LKyNTjJQcGrQRQCr8hlCJfJwwm9sqq9Uc5N6dImS58ywURA0FkqoHlg==}
     hasBin: true
+
+  libphonenumber-js@1.13.14:
+    resolution: {integrity: sha512-llihgCcx0BFLksecLP+x1J+6JDE1GsXS1RN/LoPF6qcwpeQcnjj0lcvZxY8AzbEpYwyZWPZW/nDuqkqzm3amiw==}
 
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
@@ -4518,6 +4524,8 @@ snapshots:
       lefthook-openbsd-x64: 2.1.16
       lefthook-windows-arm64: 2.1.16
       lefthook-windows-x64: 2.1.16
+
+  libphonenumber-js@1.13.14: {}
 
   lie@3.3.0:
     dependencies:

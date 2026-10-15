@@ -13,6 +13,7 @@ import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
 import type { Messenger } from "./context.js"
+import { mentionsCommand } from "./mentions-command.js"
 import { messagesCommand } from "./messages-command.js"
 import { lockPath } from "./serve-command.js"
 
@@ -58,7 +59,12 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
     chatArgument: "a chat",
   }
   const streams = captureStreams()
-  const commands = () => [storeCommand(messenger), messagesCommand(messenger), configCommand(app, settingsFor(app))]
+  const commands = () => [
+    storeCommand(messenger),
+    messagesCommand(messenger),
+    mentionsCommand(messenger),
+    configCommand(app, settingsFor(app)),
+  ]
   const code = await run(argv, { app, commands }, { streams, tty: false, env })
   const body = JSON.parse(streams.stdout[0] ?? "null")
   return { code, stdout: streams.stdout, stderr: streams.stderr, body, answer: body?.item ?? body }
@@ -531,6 +537,26 @@ describe("the stems", () => {
     })
     const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
     expect(shown).toContainEqual({ setting: "search_stemmers.latin", value: "english", from: "store", scope: "store" })
+  })
+
+  it("**`config set phone_countries` is store-wide** and points at the rebuild that reads numbers again", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+
+    const set = await call(["config", "set", "phone_countries", "ES, ru", "--json"], env)
+    expect(set.answer).toEqual({
+      store: env.MESSAGING_STORE,
+      scope: "store",
+      setting: "phone_countries",
+      value: "es,ru",
+    })
+    expect(set.body.next).toContainEqual(expect.objectContaining({ step: "mentions.rebuild", args: { kind: "phone" } }))
+    const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
+    expect(shown).toContainEqual({ setting: "phone_countries", value: "es,ru", from: "store", scope: "store" })
+
+    const refused = await call(["config", "set", "phone_countries", "es,xx", "--json"], env)
+    expect(refused.code).not.toBe(0)
+    expect(refused.stderr.join("\n")).toContain("not xx")
   })
 
   it("**refuses to change the store-wide setting from a process locked to one profile**", async () => {

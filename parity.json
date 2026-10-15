@@ -2667,6 +2667,13 @@
             "tg": "mentions (docs/dev/mentions-plan.md)"
           }
         },
+        "--new": {
+          "in": [],
+          "planned": {
+            "max": "mentions (docs/dev/mentions-plan.md)",
+            "tg": "mentions (docs/dev/mentions-plan.md)"
+          }
+        },
         "--page": {
           "in": [],
           "planned": {

@@ -13,6 +13,7 @@ import { doctorCommand } from "./messenger/doctor-command.js"
 import { imagesCommand } from "./messenger/images-command.js"
 import { inboxCommand } from "./messenger/inbox.js"
 import { mcpCommand } from "./messenger/mcp-command.js"
+import { mentionsCommand } from "./messenger/mentions-command.js"
 import { messagesCommand } from "./messenger/messages-command.js"
 import { modelsCommand } from "./messenger/models-command.js"
 import { reviewCommand } from "./messenger/review.js"
@@ -39,6 +40,7 @@ const program = createProgram({
     messagesCommand(messenger),
     modelsCommand(messenger),
     imagesCommand(messenger),
+    mentionsCommand(messenger),
     inboxCommand(messenger),
     reviewCommand(messenger),
     storeCommand(messenger),

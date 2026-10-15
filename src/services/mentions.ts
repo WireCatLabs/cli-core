@@ -34,7 +34,9 @@ export interface Mentions extends Page<Mention> {
 
 export interface MentionsService {
   /** `query` empty lists every mention; a bare word is a value. */
-  list(query: string, window: { limit?: number; offset: number }): Promise<Mentions>
+  list(query: string, window: { limit?: number; offset: number; foundAfter?: number }): Promise<Mentions>
+  /** Undecided mentions found after `foundAfter` (ms), or at all: up to `REVIEW_COUNT`, and whether more wait. */
+  newCount(foundAfter: number | undefined): Promise<{ count: number; more: boolean }>
   show(id: number): Promise<MentionDetails>
   rebuild(options?: {
     kinds?: readonly MentionKind[]
@@ -44,6 +46,9 @@ export interface MentionsService {
   confirm(id: number, target: string | undefined, by: string): Promise<MentionDecision>
   reject(id: number, by: string): Promise<MentionDecision>
 }
+
+/** How many a sync counts toward its review note: enough to say "many", cheap on a big store. */
+export const REVIEW_COUNT = 500
 
 export const mentionsService = (deps: ServiceDeps): MentionsService => {
   const located = async () => {
@@ -65,6 +70,12 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
       const page = await store.mentions(ast, window)
       const state = await (await deps.store()).mentionsState()
       return { items: page.items.map(mention), hasMore: page.hasMore, state }
+    },
+    newCount: async (foundAfter) => {
+      const found = parseLucene("status:found", { ...MENTION_QUERY, defaultField: "value" })
+      const window = { offset: 0, limit: REVIEW_COUNT, ...(foundAfter === undefined ? {} : { foundAfter }) }
+      const page = await (await accountStore(deps)).mentions(found, window)
+      return { count: page.items.length, more: page.hasMore }
     },
     show: async (id) => {
       const { store, mention } = await located()

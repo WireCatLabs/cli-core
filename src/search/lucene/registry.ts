@@ -366,7 +366,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
       [
         "phone",
         'phone:"8 900 000-00-01"',
-        "a phone found in the text, written any way: +7…, 8…, with spaces or dashes",
+        "a phone found in the text, written any way; a number without + is read in phone_countries",
       ],
       ["email", 'email:"ana@example.com"', "an address found in the text, lower-cased; quoted, since @ is an operator"],
       ["url", 'url:"https://example.com/a"', "a link found in the text, without utm_*, fbclid and the fragment"],

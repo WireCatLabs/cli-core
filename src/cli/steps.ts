@@ -130,6 +130,18 @@ export const STEPS = defineSteps([
     why: "the stems were built by another stemmer; this builds them again",
   },
   {
+    id: "mentions.rebuild",
+    command: "mentions rebuild",
+    args: [{ name: "kind", required: false }],
+    why: "phone numbers already found were read by the old phone_countries; this reads them again",
+  },
+  {
+    id: "mentions.review",
+    command: "mentions list",
+    args: [{ name: "new", required: true }],
+    why: "{shown} mentions found since the last review wait to be confirmed or rejected",
+  },
+  {
     id: "conversations.build",
     command: "conversations build",
     args: [{ name: "chat", required: false }],

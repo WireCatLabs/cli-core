@@ -1,9 +1,18 @@
 import { existsSync } from "node:fs"
+import { DEFAULT_PHONE_COUNTRIES, parsePhoneCountries } from "../domain/phones.js"
 import { ACCOUNT_GROUPS_SETTING, type AccountGroups, groupMembers, groupName } from "../search/account-list.js"
 import { DEFAULT_STEMMERS, parseStemmers, type Stemmers } from "../search/stem.js"
 import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
-import { accountGroupsOf, openStore, savedStemmers, stemmersOrigin } from "../store/store.js"
+
+import {
+  accountGroupsOf,
+  openStore,
+  savedPhoneCountries,
+  savedStemmers,
+  saveStorePhoneCountries,
+  stemmersOrigin,
+} from "../store/store.js"
 import type { AppIdentity } from "./app.js"
 
 const SCRIPTS: Record<string, keyof Stemmers> = {
@@ -11,12 +20,15 @@ const SCRIPTS: Record<string, keyof Stemmers> = {
   "search_stemmers.latin": "latin",
 }
 
+const PHONE_COUNTRIES = "phone_countries"
+
 /** Settings of the store file, not of a profile: the store is one file for every profile, tg and MAX. */
-export const STORE_SETTINGS = Object.keys(SCRIPTS)
+export const STORE_SETTINGS = [...Object.keys(SCRIPTS), PHONE_COUNTRIES]
 
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
 
-export const isStoreSetting = (setting: string): boolean => setting in SCRIPTS || setting.startsWith(GROUP_PREFIX)
+export const isStoreSetting = (setting: string): boolean =>
+  setting in SCRIPTS || setting === PHONE_COUNTRIES || setting.startsWith(GROUP_PREFIX)
 
 export const changeStoreSetting = async (
   app: AppIdentity,
@@ -25,6 +37,7 @@ export const changeStoreSetting = async (
   value: string | undefined,
 ) => {
   if (setting.startsWith(GROUP_PREFIX)) return changeGroup(app, env, setting, value)
+  if (setting === PHONE_COUNTRIES) return changePhoneCountries(app, env, value)
   const script = SCRIPTS[setting] as keyof Stemmers
   const store = await openStore({ env })
   try {
@@ -38,6 +51,30 @@ export const changeStoreSetting = async (
     }
   } finally {
     await store.close()
+  }
+}
+
+const changePhoneCountries = async (app: AppIdentity, env: NodeJS.ProcessEnv, value: string | undefined) => {
+  const countries = value === undefined ? undefined : parsePhoneCountries(value)
+  // Opened as a store first, so a new or older file gets its tables before the setting is written.
+  await (await openStore({ env })).close()
+  const database = await openCache(storePath(env))
+  try {
+    saveStorePhoneCountries(database, countries, Date.now())
+  } finally {
+    database.close()
+  }
+  return {
+    result: {
+      store: storePath(env),
+      scope: "store",
+      setting: PHONE_COUNTRIES,
+      value: (countries ?? DEFAULT_PHONE_COUNTRIES).join(","),
+    },
+    note:
+      "store-wide — a number written without + is read in these countries, the first that fits; numbers already " +
+      `found keep their old reading until \`${app.command} mentions rebuild phone\``,
+    rebuild: true,
   }
 }
 
@@ -65,6 +102,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   let byDefault = false
   let unreadable = false
   let groups: AccountGroups = {}
+  let phoneCountries: string[] | undefined
   if (existsSync(path)) {
     try {
       const database = await openCache(path)
@@ -73,6 +111,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
         saved = table ? savedStemmers(database) : undefined
         byDefault = table ? stemmersOrigin(database)?.origin === "default" : false
         groups = table ? accountGroupsOf(database) : {}
+        phoneCountries = table ? savedPhoneCountries(database) : undefined
       } finally {
         database.close()
       }
@@ -80,7 +119,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
       unreadable = true
     }
   }
-  const stemmers = STORE_SETTINGS.map((setting) => {
+  const stemmers = Object.keys(SCRIPTS).map((setting) => {
     const script = SCRIPTS[setting] as keyof Stemmers
     if (unreadable) return { setting, value: null, from: "store unreadable", scope: "store" }
     if (saved === null) return { setting, value: null, from: "store, unknown to this build", scope: "store" }
@@ -93,6 +132,14 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   })
   return [
     ...stemmers,
+    unreadable
+      ? { setting: PHONE_COUNTRIES, value: null, from: "store unreadable", scope: "store" }
+      : {
+          setting: PHONE_COUNTRIES,
+          value: (phoneCountries ?? DEFAULT_PHONE_COUNTRIES).join(","),
+          from: phoneCountries ? "store" : "default",
+          scope: "store",
+        },
     ...Object.entries(groups).map(([name, members]) => ({
       setting: `${GROUP_PREFIX}${name}`,
       value: members.join(","),
