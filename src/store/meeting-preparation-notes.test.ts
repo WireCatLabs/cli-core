@@ -121,6 +121,7 @@ describe("bounded notes for meeting preparation", () => {
   it("checks UTF-8 titles and bodies including lookahead before hydration", async () => {
     const f = await fixture()
     for (const column of ["title", "body"]) {
+      f.db.prepare("UPDATE notes SET title=NULL,body='Bring written examples' WHERE id=?").run(Number(f.first.id))
       f.db.prepare(`UPDATE notes SET ${column}=? WHERE id=?`).run("界".repeat(1000), Number(f.first.id))
       const database = { ...f.db, exec: f.db.exec.bind(f.db), prepare: vi.fn(f.db.prepare.bind(f.db)) }
       await expect(
