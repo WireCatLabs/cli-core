@@ -1,11 +1,9 @@
-import { visibleControls } from "@wirecat/cli-base"
-
-export const agentJson = (value: unknown): string =>
-  JSON.stringify(value, (_key, item: unknown) => {
-    if (typeof item === "string") return visibleControls(item)
-    if (item !== null && typeof item === "object" && !Array.isArray(item))
-      return Object.fromEntries(Object.entries(item).map(([key, value]) => [visibleControls(key), value]))
-    return item
-  })
-
-export const agentArguments = (args: Record<string, unknown>): Record<string, unknown> => args
+// The meetings tools escape their answers too, and src/meetings/ may import nothing else in cli-core.
+export {
+  agentArguments,
+  agentBody,
+  agentJson,
+  agentResult,
+  UNTRUSTED,
+  UNTRUSTED_INSTRUCTION,
+} from "../meetings/mcp/index.js"

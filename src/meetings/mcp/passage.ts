@@ -1,11 +1,11 @@
 import { CliError, errorObjectOf, type FailureContext, isCliError, mcpErrorResult } from "@wirecat/cli-base"
 import { type MeetingPassageReader, validateMeetingPassage } from "../passage.js"
+import { agentResult, UNTRUSTED } from "./agent-text.js"
 
 const count = { type: "integer", minimum: 0, maximum: 999 }
 export const meetingPassageTool = {
   name: "meeting_passage",
-  description:
-    "Read a retained cue with bounded surrounding context, citations, revision and explicit coverage; account is fixed by the host",
+  description: `Read a retained cue with bounded surrounding context, citations, revision and explicit coverage; account is fixed by the host. ${UNTRUSTED}`,
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     type: "object" as const,
@@ -48,10 +48,10 @@ export const callMeetingPassageTool = async (
     signal?.throwIfAborted()
     const result = await read(reference, options)
     signal?.throwIfAborted()
-    return { content: [{ type: "text" as const, text: result.content }], structuredContent: result.packet }
+    return agentResult({ content: [{ type: "text" as const, text: result.content }], structuredContent: result.packet })
   } catch (error) {
     const cause =
       !isCliError(error) && signal?.aborted ? new CliError("cancelled", "meeting passage was cancelled") : error
-    return mcpErrorResult(errorObjectOf(cause, { ...failure, effects: { remote: "none", local: "read" } }))
+    return agentResult(mcpErrorResult(errorObjectOf(cause, { ...failure, effects: { remote: "none", local: "read" } })))
   }
 }

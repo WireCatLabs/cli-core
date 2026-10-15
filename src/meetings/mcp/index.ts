@@ -12,6 +12,7 @@ import {
   positiveInteger,
 } from "../reads.js"
 import type { MeetingFilter, MeetingStore } from "../store.js"
+import { agentResult, UNTRUSTED } from "./agent-text.js"
 
 const integer = { type: "integer", minimum: 1 }
 const text = { type: "string", minLength: 1 }
@@ -73,8 +74,9 @@ export const meetingTools = [
     },
     required: ["query"],
   },
-].map(({ properties, required, ...tool }) => ({
+].map(({ properties, required, description, ...tool }) => ({
   ...tool,
+  description: `${description}. ${UNTRUSTED}`,
   inputSchema: { type: "object", properties, required, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }))
@@ -169,15 +171,26 @@ export const callMeetingTool = async (
           cursor: args.cursor as string | undefined,
         })
     }
-    return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
+    return agentResult({
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+      structuredContent: result,
+    })
   } catch (error) {
-    const { content, structuredContent } = mcpErrorResult(
-      errorObjectOf(error, { ...failure, effects: { remote: "none", local: "read" } }),
+    const { content, structuredContent } = agentResult(
+      mcpErrorResult(errorObjectOf(error, { ...failure, effects: { remote: "none", local: "read" } })),
     )
     return { content, structuredContent, isError: true as const }
   }
 }
 
+export {
+  agentArguments,
+  agentBody,
+  agentJson,
+  agentResult,
+  UNTRUSTED,
+  UNTRUSTED_INSTRUCTION,
+} from "./agent-text.js"
 export { callMeetingPassageTool, meetingPassageTool } from "./passage.js"
 export { callMeetingProjectEvidenceTool, meetingProjectEvidenceTool } from "./project-evidence.js"
 export { callMeetingSearchTool, meetingSearchTool } from "./search.js"

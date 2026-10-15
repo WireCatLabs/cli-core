@@ -34,6 +34,7 @@ export {
   warmEmbedders,
 } from "../mcp/personal.js"
 export { registerLinkConversationsPrompt } from "../mcp/prompts.js"
+export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION } from "../mcp/text.js"
 export {
   answerMessagesSearch,
   MESSAGES_SEARCH_DESCRIPTION,

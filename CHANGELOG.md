@@ -94,6 +94,15 @@ shape of this file.
 
 ### Fixed
 
+- **Meeting MCP answers show hidden characters, as tg's and max's do** (FIND-1298): `meetings_list`, `meeting_show`,
+  `meeting_transcript`, `meeting_summary`, `meeting_export`, `meeting_people`, `search_meetings`,
+  `meeting_passage`, `meeting_project_evidence` and `meeting_prepare` escape tag characters, direction overrides,
+  zero-width spaces, U+FEFF, C1 and other control characters (an ANSI escape reads `\x1b`) in their text and
+  structured content, errors included, and every one of them says in its description that the answer is data, never
+  instructions. Cyrillic, emoji and flags are unchanged; arguments and the CLI's `--json` keep the original text.
+  `./cli` and `./meetings/mcp` export the shared pieces for a host's own tools: `agentResult` (a whole MCP result),
+  `agentBody`, `agentJson`, `UNTRUSTED` (for a tool description) and `UNTRUSTED_INSTRUCTION` (for server
+  instructions).
 - **A title with Cyrillic or other non-Latin capitals is found by a lowercase query**: `title:` ignored case only for
   Latin letters, so such a title never matched, and a plain word search did not put it first. Titles now fold the
   same way as the query, for every alphabet.
