@@ -36,6 +36,7 @@ import {
   updateJob,
 } from "./backfill-jobs.js"
 import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
+import { reviewPoint } from "./mention-points.js"
 import { stopOnSignal } from "./patience.js"
 
 /**
@@ -216,18 +217,30 @@ export const syncCommand = (messenger: Messenger): Command => {
         const tasks = await taskRulesAfterSync(context)
         const prepared = "prepared" in result ? result.prepared : undefined
         const unprepared = prepared && !prepared.complete && "chat" in result && result.chat !== null
+        const point = reviewPoint(messenger.app, context.settings.profile, context.env)
+        const review = await context.withServices((services) => services.mentions.newCount(point.after))
+        const toReview = review.count
+        const shown = `${toReview}${review.more ? "+" : ""}`
         renderAnswer(
           this,
           context,
           itemOf(snakeKeys(tasks && tasks.added + tasks.closed > 0 ? { ...result, tasks } : result), {
-            next: unprepared
-              ? [
-                  nextStep("conversations.build", { args: { chat: result.chat } }),
-                  nextStep("conversations.embed", { args: { chat: result.chat } }),
-                ]
-              : [],
+            next: [
+              ...(unprepared
+                ? [
+                    nextStep("conversations.build", { args: { chat: result.chat } }),
+                    nextStep("conversations.embed", { args: { chat: result.chat } }),
+                  ]
+                : []),
+              ...(toReview > 0 ? [nextStep("mentions.review", { args: { new: true }, values: { shown } })] : []),
+            ],
           }),
         )
+        if (toReview > 0)
+          context.renderer.note(
+            `${shown} mention${toReview === 1 ? "" : "s"} found since the last review — ` +
+              `\`${messenger.app.command} mentions list --new\``,
+          )
       } catch (error) {
         if (jobId) {
           const code = isCliFailure(error) ? error.code : "generic_failure"

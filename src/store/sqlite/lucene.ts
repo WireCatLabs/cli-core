@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { storedKinds } from "../../domain/attachments.js"
-import { normalizedValue, siteOf } from "../../domain/mentions.js"
+import { siteOf } from "../../domain/mentions.js"
 import type { Page } from "../../domain/models.js"
 import { tagOf } from "../../domain/tags.js"
 import {
@@ -21,6 +21,7 @@ import { normalize } from "../normalize.js"
 import type { ScoredHit } from "../store.js"
 import { emailHitsByPk } from "./emails.js"
 import type { StoreContext } from "./open.js"
+import { valueMatch } from "./phone-countries.js"
 import { hitsByPk } from "./search.js"
 import { read } from "./transaction.js"
 import type { MatchPlace } from "./words.js"
@@ -392,11 +393,12 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       // Mentions are found in message text only so far: mail has none to match.
       if (corpus.item !== "message") fragment = bound("0")
       else {
+        const match = field === "domain" ? undefined : valueMatch(database, value)
         const where =
-          field === "domain"
+          match === undefined
             ? "mn.domain = ? AND mn.status <> 'dismissed'"
-            : "mn.kind = ? AND mn.value = ? AND mn.status <> 'dismissed'"
-        const params = field === "domain" ? [siteOf(value.toLowerCase())] : [field, normalizedValue(value)]
+            : `mn.kind = ? AND ${match.sql} AND mn.status <> 'dismissed'`
+        const params = match === undefined ? [siteOf(value.toLowerCase())] : [field, ...match.params]
         // A file's or a voice note's mention finds the message it belongs to.
         fragment = bound(
           `m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND ${where} ` +

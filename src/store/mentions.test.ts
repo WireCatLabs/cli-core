@@ -6,6 +6,7 @@ import { parseLucene } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../domain/models.js"
 import { searchStore } from "../services/messages-archive-search.js"
+import { saveStorePhoneCountries } from "./sqlite/phone-countries.js"
 import { type AccountKey, MENTION_QUERY, openStore } from "./store.js"
 
 const OWNER: AccountKey = { provider: "max", account: "1" }
@@ -145,6 +146,38 @@ describe("deciding a mention", () => {
       via: "update",
     })
     expect(await status(store, "89000000001")).toEqual(["linked", "linked", "linked"])
+    await store.close()
+  })
+
+  it("keeps a confirmed owner and when it was found when phone_countries gives a bare number its country", async () => {
+    const { path, store } = await fresh()
+    await store.savePeople(OWNER, [{ id: "7", name: "Ana" }])
+    const ana = await store.personOf({ provider: "max", id: "7" })
+    await store.saveMessages(OWNER, "-1", [message("1", "móvil 612 345 678")], { via: "history" })
+    const [bare] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    expect(bare?.value).toBe("612345678")
+    await store.confirmMention(OWNER, bare?.id ?? 0, `person:${ana?.uid}`, "owner")
+
+    const firstFound = () => {
+      const raw = new DatabaseSync(path)
+      const row = raw.prepare("SELECT created_at FROM mentions").get()
+      raw.close()
+      return row
+    }
+    const before = firstFound()
+    const settings = new DatabaseSync(path)
+    saveStorePhoneCountries(settings, ["es", "ru"], Date.now())
+    settings.close()
+    await store.rebuildMentions({ kinds: ["phone"] })
+
+    const [read] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    expect(read).toMatchObject({ value: "+34612345678", status: "linked" })
+    expect((await store.personOf({ provider: "phone", id: "+34612345678" }))?.uid).toBe(ana?.uid)
+    expect(firstFound()).toEqual(before)
+    const found = async (text: string) =>
+      (await searchStore(store, OWNER, { text, limit: 10 })).items.map(({ id }) => id)
+    expect(await found('phone:"612345678"')).toEqual(["1"])
+    expect(await found('phone:"+34 612 34 56 78"')).toEqual(["1"])
     await store.close()
   })
 

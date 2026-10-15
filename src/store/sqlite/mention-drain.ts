@@ -2,6 +2,7 @@ import { findMentions, MENTION_KINDS, MENTION_VERSIONS, type MentionKind } from 
 import { findNames, type KnownPerson, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
+import { storePhoneCountries } from "./phone-countries.js"
 
 /** Mentions a store write finds before it commits: an older binary may have queued thousands. */
 export const DRAIN_ON_WRITE = 500
@@ -105,9 +106,15 @@ export const writer = (database: CacheDatabase, now: number, kinds: readonly Men
   // Only the kinds this build finds: a later build's kinds stay when this one reads the text again.
   const scope = kinds ?? MENTION_KINDS
   const only = ` AND kind IN (${scope.map(() => "?").join(", ")})`
-  const decided = database.prepare(
-    "SELECT kind, value, status, target_type, target_id, author FROM mentions " +
-      `WHERE source_type = ? AND source_id = ? AND status <> 'found' AND author IS NOT '${METHOD}'${only}`,
+  const existing = database.prepare(
+    "SELECT kind, value, start_offset, status, target_type, target_id, author, created_at FROM mentions " +
+      `WHERE source_type = ? AND source_id = ?${only}`,
+  )
+  // A decision on a number written without `+` was keyed on its old value; once `phone_countries` reads it as
+  // +34…, its identity moves to the new value with it.
+  const rekey = database.prepare(
+    "UPDATE identities SET external_id = ? WHERE id = ? AND provider = 'phone' AND external_id = ? " +
+      "AND NOT EXISTS (SELECT 1 FROM identities WHERE provider = 'phone' AND external_id = ?)",
   )
   const remove = database.prepare(`DELETE FROM mentions WHERE source_type = ? AND source_id = ?${only}`)
   const insert = database.prepare(
@@ -116,10 +123,14 @@ export const writer = (database: CacheDatabase, now: number, kinds: readonly Men
       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
   const original = originalOf(database)
+  const phoneCountries = storePhoneCountries(database)
   const names = !kinds || kinds.includes("person-name") ? nameIndex(knownPeople(database), createStemmer()) : undefined
   const chatPeople = participants(database)
   const found = (source: Source) => [
-    ...findMentions(source.text).map((one) => ({ ...one, decision: undefined as Decision | undefined })),
+    ...findMentions(source.text, { phoneCountries }).map((one) => ({
+      ...one,
+      decision: undefined as Decision | undefined,
+    })),
     ...(names
       ? findNames(source.text, names).map(({ people, ...one }) => {
           // One person can be a row per messenger until merged, so a name often fits several: the one who wrote
@@ -139,13 +150,25 @@ export const writer = (database: CacheDatabase, now: number, kinds: readonly Men
       : []),
   ]
   return (type: SourceType, pk: number, source: Source | null): number => {
-    const kept = new Map(decided.all(type, pk, ...scope).map((row) => [`${row.kind}\u0000${row.value}`, row] as const))
+    const rows = existing.all(type, pk, ...scope)
+    const decided = rows.filter((row) => row.status !== "found" && row.author !== METHOD)
+    const kept = new Map<string, (typeof decided)[number]>(decided.map((row) => [`${row.kind}\u0000${row.value}`, row]))
+    const keptHere = new Map<string, (typeof decided)[number]>(
+      decided.map((row) => [`${row.kind}\u0000${row.start_offset}`, row]),
+    )
+    // A row found again keeps when it was first found, so a rebuild does not make it new for `mentions list --new`.
+    const firstFound = new Map(rows.map((row) => [`${row.kind}\u0000${row.start_offset}`, Number(row.created_at)]))
     remove.run(type, pk, ...scope)
     if (source === null) return 0
     let written = 0
     for (const one of found(source)) {
       if (kinds && !kinds.includes(one.kind)) continue
-      const decision = kept.get(`${one.kind}\u0000${one.value}`) ?? one.decision ?? original(one.kind, one.value)
+      const here = `${one.kind}\u0000${one.start}`
+      const moved = one.kind === "phone" && !kept.has(`${one.kind}\u0000${one.value}`) ? keptHere.get(here) : undefined
+      if (moved?.target_type === "identity")
+        rekey.run(one.value, Number(moved.target_id), String(moved.value), one.value)
+      const decision =
+        kept.get(`${one.kind}\u0000${one.value}`) ?? moved ?? one.decision ?? original(one.kind, one.value)
       written += Number(
         insert.run(
           one.kind,
@@ -163,7 +186,7 @@ export const writer = (database: CacheDatabase, now: number, kinds: readonly Men
           decision?.target_type == null ? null : String(decision.target_type),
           decision?.target_id == null ? null : Number(decision.target_id),
           decision?.author == null ? null : String(decision.author),
-          now,
+          firstFound.get(here) ?? now,
           now,
         ).changes,
       )

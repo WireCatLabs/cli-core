@@ -129,7 +129,11 @@ records, which is what `links` holds.
 ### Phones by rule
 
 The aim is "looks like a phone", not a perfect list: a wrong candidate costs one `dismissed`, a missed one costs
-a search that finds nothing. No library: `libphonenumber-js` installs 10 MB for checks this does not need.
+a search that finds nothing. No runtime library: `libphonenumber-js` installs 10 MB (NEED-1033). Its numbering plans
+are the source of truth all the same: `scripts/phone-plans.ts` writes a 13 KB table of 47 countries (Europe, North
+America, Russia and neighbours) from it, and a test reads every country's sample number the way the library does.
+**Update 2026-10-15 (owner, NEED-1122 A, "most of Europe and the US, local spellings too"):** points 2, 4 and 5 below
+now read the store-wide setting `phone_countries`.
 
 1. **Candidate:** an optional `+`, then 7–15 digits split only by spaces, `-`, `.` or brackets, not glued to a
    letter, a digit, `/` or `@` (so not inside a URL, an e-mail or a longer number).
@@ -139,11 +143,20 @@ a search that finds nothing. No library: `libphonenumber-js` installs 10 MB for 
 3. **Dropped when** it is a date or a time (`12.10.2026`, `2026-10-12`), a sum (a currency sign or word next to
    it), a card number (13–19 digits that pass the Luhn check), an IP address, or an order, invoice or tax number
    (`№`, `заказ`, `счет`, `order`, `ИНН`, `ОГРН`, `БИК`, `р/с` just before it).
-4. **Value:** with `+` → `+` and the digits; 11 digits from `8` or `7` → `+7` and the last 10; 10 digits from `9` →
-   `+7` and the digits; anything else → the digits alone, no `+`, and `confidence` lower. The account has no
-   country, so no other country is guessed.
-5. **Confidence:** written like a phone or after a phone word — 0.9; a bare Russian mobile — 0.7; digits alone —
-   0.5.
+4. **Value:** with `+` or `00` → `+` and the digits, a bracketed `(0)` dropped. Without them the number is read in
+   the countries of `phone_countries` (`config set phone_countries es,ru`, store-wide; unset it is `ru`, as before),
+   the first that fits: with its trunk prefix (`0`, `06`, `8 0`), as written, or after its country code typed
+   without `+`. Grouped digits or digits after a phone word may be any valid number of that country; bare digits
+   only a mobile, since bare landline-shaped digits are mostly order and account numbers. What fits no country stays
+   the digits alone, with `confidence` lower.
+5. **Confidence:** written like a phone or after a phone word — 0.9; a bare mobile — 0.7; digits alone — 0.5.
+6. **Phone words** in Russian, English, Spanish, German, French, Italian and Portuguese (`móvil`, `tfno`, `Handy`,
+   `portable`, `cellulare`, `telemóvel`…); **not-phone words** add `pedido`, `factura`, `nº`, `DNI`, `NIE`, `NIF`,
+   `CIF`, `IBAN`, `Rechnung`, `commande`, `facture`, `fattura`.
+7. **A changed setting** reads already stored numbers again only on `mentions rebuild phone`. A decision moves with
+   its place: a number confirmed as `612345678` stays confirmed as `+34612345678`, and its identity takes the new
+   value. `phone:` and `value:` also find a stored spelling that ends with the typed number's national digits
+   (at least 8), so a number saved before the setting is still found.
 
 Unknown names and places are the weak kinds. They start as `found` with a lower confidence and are never
 shown as facts until linked. A language model may later re-check them — optional, per run, never by default.

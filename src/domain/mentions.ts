@@ -2,6 +2,7 @@
 import { domainToUnicode } from "node:url"
 import psl from "psl"
 import { googleDocumentId, trimUrl } from "./google-documents.js"
+import { DEFAULT_PHONE_COUNTRIES, nationalPhone } from "./phones.js"
 
 export const MENTION_KINDS = ["phone", "email", "url", "document", "person-name"] as const
 export type MentionKind = (typeof MENTION_KINDS)[number]
@@ -100,9 +101,11 @@ const urls = (text: string): FoundMention[] => {
 const PHONE_CANDIDATE =
   /(?<![\p{L}\p{N}/@_+-]|\d[.,])\+?\(?\d[\d \u00a0\u2009\u202f().\-–]{5,24}\d(?![\p{L}\p{N}/@_]|[.,]\d)/gu
 const SEPARATORS = /[ \u00a0\u2009\u202f().\-–]/g
-const PHONE_WORD = /(?:тел|телефон[а-я]*|моб|мобильн[а-я]*|phone|tel|whatsapp|ватсап|вотсап|звони[а-я]*)\.?\s*:?\s*$/iu
+// The words people write before a number, in the languages of the supported countries.
+const PHONE_WORD =
+  /(?:тел|телефон[а-я]*|моб|мобильн[а-я]*|звони[а-я]*|ватсап|вотсап|phone|tel|mobile|cell|call|whatsapp|m[óo]vil|tel[ée]fono|tfno|tlf|ll[áa]ma(?:me)?|handy|telefon|mobil|t[ée]l[ée]phone|portable|cellulare|telem[óo]vel|telefone)\.?\s*:?\s*$/iu
 const NOT_PHONE_WORD =
-  /(?:№|#|заказ[а-я]*|сч[её]т[а-я]*|order|invoice|инн|огрн|бик|кпп|р\/с|к\/с|договор[а-я]*|арт\.|артикул[а-я]*)\s*[:№#]?\s*$/iu
+  /(?:№|#|n[º°o]\.?|заказ[а-я]*|сч[её]т[а-я]*|order|invoice|ref\.?|инн|огрн|бик|кпп|р\/с|к\/с|договор[а-я]*|арт\.|артикул[а-я]*|pedido|factura|fatura|fattura|facture|rechnung|bestell[a-z]*|commande|ordine|encomenda|dni|nie|nif|cif|iban|bic|swift)\s*[:№#]?\s*$/iu
 const CURRENCY_BEFORE = /[$€₽£]\s*$/u
 const CURRENCY_AFTER = /^\s*(?:[$€₽£]|руб|р\.|eur|usd|rub|тыс|млн)/iu
 const DATE = /^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$|^\d{4}[./-]\d{1,2}[./-]\d{1,2}$/
@@ -110,50 +113,87 @@ const IP = /^\d{1,3}(?:\.\d{1,3}){3}$/
 const RUSSIAN_GROUPS = /\d{3}[ \u00a0\-–]\d{2}[ \u00a0\-–]\d{2}$/
 const SPANISH_GROUPS = /^[6-9]\d{2}[ \u00a0\-–]\d{3}[ \u00a0\-–]\d{3}$/
 
-const phoneValue = (written: string, digits: string): { value: string; known: boolean } => {
-  if (written.startsWith("+")) return { value: `+${digits}`, known: true }
-  if (digits.length === 11 && /^[78]/.test(digits)) return { value: `+7${digits.slice(1)}`, known: true }
-  if (digits.length === 10 && digits.startsWith("9")) return { value: `+7${digits}`, known: true }
-  return { value: digits, known: false }
+export interface PhoneOptions {
+  /** Where a number written without `+` is read, first match first: the store's `phone_countries`. */
+  phoneCountries?: readonly string[]
 }
 
-/** Looks like a phone, not a checked one: a wrong guess costs one `dismissed`, a miss a search that finds nothing. */
-const phones = (text: string, urlSpans: FoundMention[]): FoundMention[] => {
+/**
+ * Looks like a phone, not a checked one: a wrong guess costs one `dismissed`, a miss a search that finds nothing.
+ * `+` or `00` makes it international. Without them the number is read in the store's countries: grouped or after
+ * a phone word any valid number, bare digits only a mobile.
+ */
+const phones = (text: string, urlSpans: FoundMention[], countries: readonly string[]): FoundMention[] => {
   const found: FoundMention[] = []
   for (const match of text.matchAll(PHONE_CANDIDATE)) {
     const written = match[0]
     const start = match.index
     const end = start + written.length
     if (urlSpans.some((url) => start < url.end && end > url.start)) continue
-    const digits = written.replace(SEPARATORS, "").replace(/^\+/, "")
+    const international = written.startsWith("+") || /^00[1-9]/.test(written)
+    // `+44 (0)20 …`: the bracketed trunk prefix is not dialled from abroad.
+    const digits = (international ? written.replace(/\(0\)/, "") : written)
+      .replace(SEPARATORS, "")
+      .replace(/^\+|^00/, "")
     if (digits.length < 7 || digits.length > 15 || DATE.test(written) || IP.test(written)) continue
     const before = text.slice(Math.max(0, start - 25), start)
     const after = text.slice(end, end + 6)
     if (NOT_PHONE_WORD.test(before) || CURRENCY_BEFORE.test(before) || CURRENCY_AFTER.test(after)) continue
+    const named = PHONE_WORD.test(before)
+    const grouped = written !== written.replace(SEPARATORS, "")
     const shaped =
-      (written.startsWith("+") && digits.length >= 10) ||
+      (international && digits.length >= 10) ||
       /\(\d{3,5}\)/.test(written) ||
       RUSSIAN_GROUPS.test(written) ||
       SPANISH_GROUPS.test(written)
-    const bareMobile = /^(?:[78]9\d{9}|9\d{9})$/.test(written)
-    const named = PHONE_WORD.test(before)
-    if (!shaped && !bareMobile && !named) continue
-    const { value, known } = phoneValue(written, digits)
-    const confidence = !known ? 0.5 : shaped || named ? 0.9 : 0.7
-    found.push({ kind: "phone", start, end, value, domain: null, confidence })
+    if (international) {
+      if (!shaped && !named) continue
+      found.push({ kind: "phone", start, end, value: `+${digits}`, domain: null, confidence: 0.9 })
+      continue
+    }
+    const national = nationalPhone(digits, countries, { anyType: named || grouped })
+    if (national) {
+      const confidence = named || grouped ? 0.9 : 0.7
+      found.push({ kind: "phone", start, end, value: national.value, domain: null, confidence })
+    } else if (shaped || named) found.push({ kind: "phone", start, end, value: digits, domain: null, confidence: 0.5 })
   }
   return found
 }
 
 /** Every phone, e-mail address, link and Google document in the text, in the order they are written. */
-export const findMentions = (text: string): FoundMention[] => {
+export const findMentions = (text: string, { phoneCountries = DEFAULT_PHONE_COUNTRIES }: PhoneOptions = {}) => {
   const mail = emails(text)
   const links = urls(text).filter((url) => !mail.some((one) => url.start < one.end && url.end > one.start))
-  return [...mail, ...links, ...phones(text, [...links, ...mail])].sort((a, b) => a.start - b.start || a.end - b.end)
+  return [...mail, ...links, ...phones(text, [...links, ...mail], phoneCountries)].sort(
+    (a, b) => a.start - b.start || a.end - b.end,
+  )
 }
 
 /** A value as a person types it, in the form mentions store: `8 900 000-00-01` → `+79000000001`. */
-export const normalizedValue = (typed: string): string => {
-  const [one] = findMentions(typed.trim())
-  return one && one.start === 0 && one.end === typed.trim().length ? one.value : typed.trim().toLowerCase()
+export const normalizedValue = (typed: string, options: PhoneOptions = {}): string =>
+  typedPhone(typed, options)?.value ?? exactlyOne(typed.trim(), options) ?? typed.trim().toLowerCase()
+
+const exactlyOne = (text: string, options: PhoneOptions) => {
+  const [one] = findMentions(text, options)
+  return one && one.start === 0 && one.end === text.length ? one.value : undefined
+}
+
+/**
+ * A number typed into a search, read as if a phone word stood before it, and the national number every stored
+ * spelling of it ends with — at least 8 digits, so a short tail does not match unrelated numbers.
+ */
+export const typedPhone = (
+  typed: string,
+  { phoneCountries = DEFAULT_PHONE_COUNTRIES }: PhoneOptions = {},
+): { value: string; national: string | null } | undefined => {
+  const text = typed.trim()
+  if (!/^\+?[\d\s().\-–]+$/.test(text)) return undefined
+  const digits = text.replace(/\(0\)/, "").replace(/\D/g, "").replace(/^00/, "")
+  if (digits.length < 7 || digits.length > 15) return undefined
+  const national = nationalPhone(digits, phoneCountries, { anyType: true })
+  const tail = national?.national ?? digits.replace(/^0+/, "")
+  return {
+    value: text.startsWith("+") || /^00/.test(text) ? `+${digits}` : (national?.value ?? digits),
+    national: tail.length >= 8 ? tail : null,
+  }
 }

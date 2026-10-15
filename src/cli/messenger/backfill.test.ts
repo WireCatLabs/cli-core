@@ -15,6 +15,7 @@ import { storeCommand } from "./archive-commands.js"
 import { jobsDir, listJobs, readJob, type SpawnJob, saveJob, updateJob } from "./backfill-jobs.js"
 import type { Fetching, Messenger } from "./context.js"
 import { conversationsCommand } from "./conversations-command.js"
+import { mentionsCommand } from "./mentions-command.js"
 import { messagesCommand } from "./messages-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
@@ -79,7 +80,15 @@ const call = async (
   const streams = captureStreams()
   const code = await run(
     argv,
-    { app, commands: () => [storeCommand(messenger), messagesCommand(messenger), conversationsCommand(messenger)] },
+    {
+      app,
+      commands: () => [
+        storeCommand(messenger),
+        messagesCommand(messenger),
+        conversationsCommand(messenger),
+        mentionsCommand(messenger),
+      ],
+    },
     {
       streams,
       tty: false,
@@ -192,6 +201,20 @@ describe("messages sync", () => {
 
     expect(code).toBe(0)
     expect(asked.length).toBeLessThan(6)
+  })
+
+  it("names the mentions found since the last review and the step that lists them", async () => {
+    const withPhone: MessengerAdapter = {
+      ...chatOf({ newest: 0, asked: [] }),
+      history: async () => ({ items: [{ ...message(1), text: "звони +7 900 000-00-01" }], hasMore: false }),
+    } as unknown as MessengerAdapter
+    const env = setup()
+
+    const { code, body, stderr } = await call(["messages", "sync", "7", "--pause", "1ms", "--json"], withPhone, env)
+
+    expect(code).toBe(0)
+    expect(body.next).toContainEqual(expect.objectContaining({ step: "mentions.review", args: { new: true } }))
+    expect(stderr).toContain("1 mention found since the last review")
   })
 
   it("fetches by send time a chat whose ids are words", async () => {
