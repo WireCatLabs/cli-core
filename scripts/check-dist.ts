@@ -5,8 +5,10 @@
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { checkFileLeases } from "./check-file-leases.ts"
 
 const root = join(import.meta.dirname, "../dist")
+await checkFileLeases(root)
 const dist = join(root, "store/sqlite")
 const leaks = readdirSync(root, { recursive: true, encoding: "utf8" })
   .filter((name) => name.endsWith(".js"))

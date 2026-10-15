@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Native archive writer leases in `@wirecat/cli-core/files`.** A narrow ownership port and native
+  PID/nonce adapter expose read-only inspection, explicit dead-local-owner recovery and typed busy/
+  legacy outcomes. The returned lease owns cancellation-independent release. Hosts supply marker
+  layout; existing ordinary-file validation is shared. No provider client, migration or dependency
+  is added.
+
 ### Changed — may break callers
 
 - **The personal MCP catalogue is no longer exported**: `personalMcpTools`, `registerPersonalMcpTools`,
