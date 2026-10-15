@@ -21,7 +21,18 @@ shape of this file.
     `--unanswered` and `--waiting`.
   - A CLI that mounts these commands must drop the lint baseline entries they clear, because a stale entry fails.
     It must also rename the commands and flags in its own docs and examples.
-- **Peer `@wirecat/cli-base` is `>=0.33.0 <0.34.0`.**
+- **`tasks agenda` and `tasks duplicates` filter with query fields, not flags, with no aliases.** The store answers
+  each field in SQL; the agenda no longer narrows its tasks after reading them.
+  - `tasks agenda --tag <name>` is `tag:<name>`; `--category <name>` is `category:<name>`; `--claimed` is
+    `claimed:any`. `claimed:` takes `none`, `mine` (`--holder`), `others` or `any`; the default is
+    `claimed:(none OR mine)`, as before. Task fields and `chat_kind:` join with AND; an OR or NOT that mixes them
+    is refused as `query.unsupported-placement`.
+  - `tasks duplicates --unsure` is `decision:unsure`; the default is `decision:review`. Its fields are
+    `TASK_PAIR_QUERY` (exported beside `TASK_QUERY`).
+  - MCP: `tasks_agenda` drops `claimed`, `category` and `tag`, and `tasks_duplicates` drops `unsure`, for `query`.
+  - Service and store callers: `AgendaOptions` drops `claimed`, `category` and `tag`; `tasks.duplicates()` takes
+    `decision` instead of `unsure`; `store.tasks.find()` takes a compiled `where`.
+  - A CLI that mounts these commands drops the lint baseline entries they clear and renames the flags in its docs.
 
 ### Added
 

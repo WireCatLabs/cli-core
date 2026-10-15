@@ -1,9 +1,24 @@
-import { type QueryAst, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
+import {
+  type QueryAst,
+  type QueryNode,
+  type QueryRegistry,
+  queryError,
+  queryFieldsOf,
+  walkQuery,
+} from "@wirecat/cli-base/query"
 import type * as v from "valibot"
 import { formatLocator, isLocator, parseLocator } from "../domain/locator.js"
 import { formatReference } from "../domain/references.js"
 import { agenda } from "../entities/agenda.js"
-import { AGENDA_COLUMNS, type ChatActivity, inboxKey, queryFilter, type TaskDetails } from "../store/store.js"
+import {
+  AGENDA_COLUMNS,
+  type ChatActivity,
+  type ColumnMap,
+  inboxKey,
+  queryFilter,
+  type TaskDetails,
+  type Where,
+} from "../store/store.js"
 import { CHAT_KINDS } from "./chats.js"
 import type { ServiceDeps } from "./deps.js"
 import { taskAccount } from "./task-rules.js"
@@ -19,17 +34,14 @@ export interface AgendaOptions {
   unanswered?: number
   /** ms: chats silent for longer than this are not looked at: they ended, they did not go quiet. */
   within?: number
-  /** A `tasks agenda` query over `AGENDA_QUERY`; `listQuery` adds the default kinds. */
+  /** A `tasks agenda` query over `AGENDA_QUERY`; `listQuery` adds the default kinds and claims. */
   query?: QueryAst
-  /** Who asks: a task this holder claimed stays listed. */
+  /** Who asks: `claimed:mine` is this holder's claims. */
   holder?: string
-  /** Also list tasks someone else claimed; left out, they are hidden. */
-  claimed?: boolean
-  /** Only tasks of this category. */
-  category?: string
-  /** Only tasks with this tag (`tags add --task`). */
-  tag?: string
 }
+
+const CLAIMS = ["none", "mine", "others", "any"] as const
+const TASK_FIELDS = new Set(["tag", "category", "claimed"])
 
 export const AGENDA_QUERY = {
   entity: "agenda",
@@ -43,9 +55,17 @@ export const AGENDA_QUERY = {
         example: "chat_kind:channel",
         relation: "the kind of the chats in owed, waiting and unsynced",
       },
+      tag: { type: "kw", example: "tag:urgent", relation: "a tag put on a listed task with tags add --task" },
+      category: { type: "kw", example: "category:money", relation: "a listed task's category" },
+      claimed: {
+        type: "enum",
+        values: CLAIMS,
+        example: "claimed:any",
+        relation: "whose claim a listed task is under: none, mine (--holder), others, or any",
+      },
     },
   }),
-  defaults: ["chat_kind:(dialog OR group)"],
+  defaults: ["chat_kind:(dialog OR group)", "claimed:(none OR mine)"],
 } as const satisfies QueryRegistry
 
 /** Why a task is on the agenda; a task planned for later and not due soon is not on it. */
@@ -103,36 +123,23 @@ export interface AgendaService {
 }
 
 export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): AgendaService => ({
-  show: async ({
-    dueWithin = DAY,
-    waiting = 7 * DAY,
-    unanswered = DAY,
-    within = 30 * DAY,
-    query,
-    holder,
-    claimed = false,
-    category,
-    tag,
-  } = {}) => {
+  show: async ({ dueWithin = DAY, waiting = 7 * DAY, unanswered = DAY, within = 30 * DAY, query, holder } = {}) => {
     const [store, account] = [await deps.store(), await deps.account()]
     const at = now()
-    const open = await store.tasks
-      .find({ project: inboxKey(taskAccount(account)), status: "open", limit: 500 })
-      .catch((error: unknown) => {
-        // An account that never had a task has no inbox project yet.
-        if (error instanceof Error && "code" in error && error.code === "not_found") return []
-        throw error
-      })
-    const tagged =
-      tag === undefined
-        ? undefined
-        : new Set(
-            (await store.tags(account, { type: "task", tag: tag.trim().toLowerCase() })).map(({ taskId }) => taskId),
-          )
-    const tasks = open
-      .filter((task) => claimed || task.claimedBy === null || task.claimedBy === holder)
-      .filter((task) => category === undefined || task.category === category.trim().toLowerCase())
-      .filter((task) => tagged === undefined || tagged.has(task.id))
+    const parts = query ? split(query) : { tasks: undefined, chats: undefined }
+    const find = (where?: Where) =>
+      store.tasks
+        .find({ project: inboxKey(taskAccount(account)), status: "open", limit: 500, ...(where ? { where } : {}) })
+        .catch((error: unknown) => {
+          // An account that never had a task has no inbox project yet.
+          if (error instanceof Error && "code" in error && error.code === "not_found") return []
+          throw error
+        })
+    const open = await find()
+    const listed = parts.tasks
+      ? await find(queryFilter(parts.tasks, taskColumns(holder, at), { command: "tasks agenda" }))
+      : open
+    const tasks = listed
       .map((task) => ({ task, reasons: reasonsOf(task, at, dueWithin) }))
       .filter(({ reasons }) => reasons.length > 0)
       .sort((a, b) => urgency(a.task) - urgency(b.task))
@@ -151,7 +158,7 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
         reasons,
       }))
 
-    const where = query ? queryFilter(query, AGENDA_COLUMNS, { command: "tasks agenda" }) : undefined
+    const where = parts.chats ? queryFilter(parts.chats, AGENDA_COLUMNS, { command: "tasks agenda" }) : undefined
     const activity = await store.chatActivity(account, at - within, where)
     const chats = activity.chats.map(({ lastMessageId, ...chat }) => ({
       ...chat,
@@ -177,6 +184,63 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
       waiting: chats.filter((chat) => chat.lastFromOwner === true && silentFor(chat) >= waiting),
       unsynced: chats.filter((chat) => chat.lastMessage === null),
     }
+  },
+})
+
+/** Task terms filter the tasks, the rest the chats; a clause that mixes the two has no one source to ask. */
+const split = (query: QueryAst): { tasks?: QueryAst; chats?: QueryAst } => {
+  const clauses: QueryNode[] = []
+  const flatten = (node: QueryNode) => {
+    if (node.kind === "boolean" && node.clauses.every((clause) => clause.occur === "must"))
+      for (const clause of node.clauses) flatten(clause.node)
+    else clauses.push(node)
+  }
+  flatten(query.root)
+  const side = (node: QueryNode) => {
+    const fields = new Set(walkQuery(node).map((term) => (TASK_FIELDS.has(term.field) ? "tasks" : "chats")))
+    if (fields.size > 1)
+      queryError(
+        "query.unsupported-placement",
+        node.span,
+        "join task fields (tag, category, claimed) and chat_kind with AND, not OR or NOT",
+        { command: "tasks agenda" },
+      )
+    return [...fields][0]
+  }
+  const of = (which: "tasks" | "chats"): QueryAst | undefined => {
+    const own = clauses.filter((node) => side(node) === which)
+    if (own.length === 0) return undefined
+    return {
+      ...query,
+      root: { kind: "boolean", clauses: own.map((node) => ({ occur: "must", node })), span: query.root.span },
+    }
+  }
+  return { tasks: of("tasks"), chats: of("chats") }
+}
+
+const TAGGED =
+  "EXISTS (SELECT 1 FROM taggings g JOIN tags n ON n.id = g.tag_id " +
+  "WHERE g.taggable_type = 'task' AND g.taggable_id = t.id AND n.name = ?)"
+
+/** A claim that lapsed holds nothing, as `tasks claim` reads it. */
+const taskColumns = (holder: string | undefined, at: number): ColumnMap => ({
+  tag: { where: (node) => ({ sql: TAGGED, params: [node.value.trim().toLowerCase()] }) },
+  category: { type: "kw", sql: "t.category" },
+  claimed: {
+    where: (node) => {
+      const claim = node.value.toLowerCase() as (typeof CLAIMS)[number]
+      if (claim === "any") return { sql: "1", params: [] }
+      if (claim === "none") return { sql: "t.claimed_by IS NULL OR t.claimed_until < ?", params: [at] }
+      if (claim === "mine")
+        return {
+          sql: "t.claimed_by IS NOT NULL AND t.claimed_by = ? AND t.claimed_until >= ?",
+          params: [holder ?? null, at],
+        }
+      return {
+        sql: "t.claimed_by IS NOT NULL AND t.claimed_by IS NOT ? AND t.claimed_until >= ?",
+        params: [holder ?? null, at],
+      }
+    },
   },
 })
 

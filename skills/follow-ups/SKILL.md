@@ -99,7 +99,7 @@ A recipe is a set of flags, not a new command:
 |---|---|
 | Morning sweep | `review --new --json`, then `tasks agenda --json` |
 | Weekly quiet-chat pass | `tasks agenda --waiting 3d --within 90d --json` |
-| Groups too, not only people | `tasks agenda --kind dialog,group,channel --json` |
+| Groups too, not only people | `tasks agenda "chat_kind:(dialog OR group OR channel)" --json` |
 | Before a call with someone | `tasks list 'chat:"<chat>" state:open' --json`, then `tasks show` each |
 
 ## Boundaries

@@ -1665,7 +1665,7 @@ describe("the MCP server", () => {
     expect((await call("tasks duplicates defer", { dup: second.key, task: first })).body.item).toMatchObject({
       decision: "unsure",
     })
-    expect((await call("tasks duplicates", { unsure: true })).body.items).toHaveLength(1)
+    expect((await call("tasks duplicates", { query: "decision:unsure" })).body.items).toHaveLength(1)
   })
 
   it("**claims and releases a task through MCP**, and the agenda keeps your own claim and hides another's", async () => {
@@ -1688,6 +1688,8 @@ describe("the MCP server", () => {
       (await call("tasks agenda", { within: "3650d", holder })).body.item.tasks.map((one: { key: string }) => one.key)
     expect(await agenda("chat-7")).toEqual([key])
     expect(await agenda("chat-8")).toEqual([])
+    const anyClaim = await call("tasks agenda", { within: "3650d", holder: "chat-8", query: "claimed:any" })
+    expect(anyClaim.body.item.tasks.map((one: { key: string }) => one.key)).toEqual([key])
     expect((await call("tasks release", { task: key, holder: "chat-8" })).isError).toBe(true)
     expect((await call("tasks release", { task: key, holder: "chat-7" })).body.item.claimed_by).toBeNull()
     expect(await agenda("chat-8")).toEqual([key])

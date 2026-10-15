@@ -282,9 +282,12 @@ describe("tasks", () => {
       json(await call("tasks", "agenda", "--within", "3650d", ...filter, "--json")).item.tasks.map(
         (task: { key: string }) => task.key,
       )
-    expect(await agendaOf("--category", "documents", "--tag", "Urgent")).toEqual(["PR-1"])
-    expect(await agendaOf("--category", "money")).toEqual([])
-    expect(await agendaOf("--tag", "later")).toEqual([])
+    expect(await agendaOf("category:documents", "tag:Urgent")).toEqual(["PR-1"])
+    expect(await agendaOf("category:money")).toEqual([])
+    expect(await agendaOf("tag:later")).toEqual([])
+    expect(await agendaOf("tag:urgent", "chat_kind:channel")).toEqual(["PR-1"])
+    const mixed = await call("tasks", "agenda", "tag:urgent OR chat_kind:channel", "--json")
+    expect([mixed.code, mixed.stderr]).toEqual([2, expect.stringContaining("query.unsupported-placement")])
     expect(json(await call("tags", "list", "--json")).items).toMatchObject([
       { tag: "urgent", type: "task", target: `task:${added.id}` },
     ])
@@ -301,9 +304,14 @@ describe("tasks", () => {
       { key: "PR-1", claimed_by: "chat-7" },
     ])
     expect(json(await call("tasks", "agenda", "--within", "3650d", ...other)).item.tasks).toEqual([])
-    expect(json(await call("tasks", "agenda", "--within", "3650d", "--claimed", ...other)).item.tasks).toMatchObject([
+    expect(json(await call("tasks", "agenda", "--within", "3650d", "claimed:any", ...other)).item.tasks).toMatchObject([
       { key: "PR-1", claimed_by: "chat-7" },
     ])
+    expect(
+      json(await call("tasks", "agenda", "--within", "3650d", "claimed:others", ...other)).item.tasks,
+    ).toHaveLength(1)
+    expect(json(await call("tasks", "agenda", "--within", "3650d", "claimed:others", ...mine)).item.tasks).toEqual([])
+    expect(json(await call("tasks", "agenda", "--within", "3650d", "claimed:none", ...mine)).item.tasks).toEqual([])
     expect((await call.pretty("tasks", "agenda", "--within", "3650d", "--holder", "chat-7")).stdout.join("")).toContain(
       "claimed by chat-7 until",
     )
@@ -460,7 +468,7 @@ describe("tasks that may be one job", () => {
       decision: "unsure",
     })
     expect(json(await call("tasks", "duplicates", "--json")).items).toEqual([])
-    expect(json(await call("tasks", "duplicates", "--unsure", "--json")).items).toHaveLength(1)
+    expect(json(await call("tasks", "duplicates", "decision:unsure", "--json")).items).toHaveLength(1)
 
     const merged = item(await call("tasks", "merge", again, "--into", invoice, "--json"))
     expect(merged).toMatchObject({ pair: { decision: "merged" }, linked: 1, task: { key: invoice } })
@@ -469,7 +477,7 @@ describe("tasks that may be one job", () => {
     const shown = item(await call("tasks", "show", again, "--json"))
     expect(shown).toMatchObject({ status: "dismissed" })
     expect(shown.links).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "duplicate-of" })]))
-    expect(json(await call("tasks", "duplicates", "--unsure", "--json")).items).toEqual([])
+    expect(json(await call("tasks", "duplicates", "decision:unsure", "--json")).items).toEqual([])
 
     const unmerged = item(await call("tasks", "unmerge", again, "--json"))
     expect(unmerged).toMatchObject({ pair: { decision: "unmerged" }, task: { key: again, status: "open" } })

@@ -208,9 +208,6 @@
       "meaning": "maximum source bytes returned from a retained attachment; 1–1048576",
       "default": "524288"
     },
-    "--claimed": {
-      "meaning": "also list tasks someone else holds"
-    },
     "--close-time": {
       "value": "<delay>",
       "meaning": "it closes by itself this long after sending, like 90s or 5m"
@@ -962,10 +959,6 @@
       "value": "<duration>",
       "meaning": "stop fetching after this long (default: 30s)"
     },
-    "--tag": {
-      "value": "<name>",
-      "meaning": "only what carries this tag"
-    },
     "--task": {
       "value": "<id>",
       "meaning": "a task, by its id or key as tasks list shows it"
@@ -1056,9 +1049,6 @@
       "meaning": "only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d",
       "note": "max's own `review` still takes bare hours until T6 moves it (e2)",
       "default": "24h"
-    },
-    "--unsure": {
-      "meaning": "only the pairs the reviewing agent deferred to the owner"
     },
     "--until": {
       "value": "<time>",
@@ -4033,11 +4023,8 @@
     "tasks agenda": {
       "in": "all",
       "options": {
-        "--category": "all",
-        "--claimed": "all",
         "--due-within": "all",
         "--holder": "all",
-        "--tag": "all",
         "--unanswered": "all",
         "--waiting": "all",
         "--within": "all"
@@ -4067,8 +4054,7 @@
     "tasks duplicates": {
       "in": "all",
       "options": {
-        "--limit": "all",
-        "--unsure": "all"
+        "--limit": "all"
       }
     },
     "tasks duplicates defer": {

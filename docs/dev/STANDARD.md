@@ -937,7 +937,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--catch-up-chunks` | `<n>` | at most this many local vector chunks |  | `messages sync`, `store gaps repair` |
 | `--catch-up-messages` | `<n>` | skip a graph rebuild above this message budget |  | `messages sync`, `store gaps repair` |
 | `--catch-up-time` | `<duration>` | time budget for local preparation |  | `messages sync`, `store gaps repair` |
-| `--category` | `<name>` | what a task is about, from the list tasks categories prints |  | `tasks add`, `tasks agenda`, `tasks plan` |
+| `--category` | `<name>` | what a task is about, from the list tasks categories prints |  | `tasks add`, `tasks plan` |
 | `--channel` |  | a private channel instead of a group; people join it by its link |  | `chats create` |
 | `--chart-kind` | `<messages\|active\|membership>` | what to draw: messages, active authors, or joins and leaves | `messages` | `stats charts` |
 | `--chat` | `<chat>` | a chat, by id or name; repeat it for more. **chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4)** |  | `attachments extract`, `chats folders create`, `contacts context`, `conversations batches next`, `conversations batches status`, `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations status`, `images embed`, `metadata get`, `metadata refresh`, `search conversations`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `stats tasks show`, `tags add`, `tags auto`, `tags remove`, `tasks link` |
@@ -945,7 +945,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--check` |  | say whether a newer version exists, and install nothing |  | `bot list`, `upgrade` |
 | `--checkpoints` | `<durations>` | elapsed joining ages to inspect, such as 1d,7d,30d |  | `stats chats retention` |
 | `--chunk-bytes` | `<n>` | maximum source bytes returned from a retained attachment; 1–1048576 | `524288` | `attachments show` |
-| `--claimed` |  | also list tasks someone else holds |  | `tasks agenda` |
 | `--close-time` | `<delay>` | it closes by itself this long after sending, like 90s or 5m |  | `polls create` (tg-only) |
 | `--closed` | `<on\|off>` | on closes a forum topic to new messages, off reopens it |  | `topics edit` (tg-only) |
 | `--comment-to` | `<post>` | comment on this channel post; the comment goes to the post's discussion group |  | `messages send` (tg-only) |
@@ -1140,7 +1139,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--store-token` | `<profile>` | keep a returned authentication token only in this bot profile's OS keyring; never print it |  | `bot api` |
 | `--sync-first` |  | first fetch new messages within the chat, time and message bounds |  | `bot contacts show`, `contacts context`, `search conversations`, `search messages`, `stats contacts top`, `stats messages show`, `stats messages top`, `tags auto` |
 | `--sync-time` | `<duration>` | stop fetching after this long (default: 30s) |  | `search conversations`, `search messages`, `stats contacts top`, `stats messages counters refresh`, `stats messages show`, `stats messages top` |
-| `--tag` | `<name>` | only what carries this tag |  | `tasks agenda` |
 | `--task` | `<id>` | a task, by its id or key as tasks list shows it |  | `tags add`, `tags remove` |
 | `--template` | `<text>` | the reply template |  | `replies edit` |
 | `--text` | `<text>` | the message's new text; - reads stdin |  | `bot callbacks answer` |
@@ -1162,7 +1160,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--type` | `<names>` | only these types. **each command names its own types — tasks add gives the new task question, request, mention or promise — and search notes internal or file — so it differs on purpose (Help text rule 4)** |  | `chats media` (planned), `search notes`, `stats tasks show`, `tasks add` |
 | `--types` | `<value>` | Comma separated list of update types your bot want to receive |  | `bot watch`, `bot webhooks set` |
 | `--unanswered` | `[duration]` | only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d. **max's own `review` still takes bare hours until T6 moves it (e2)** | `24h` | `review`, `tasks agenda` |
-| `--unsure` |  | only the pairs the reviewing agent deferred to the owner |  | `tasks duplicates` |
 | `--until` | `<time>` | only until then: a local time, or a duration from now |  | `chats mute` (planned) |
 | `--until-id` | `<id>` | only up to this message id, inclusive; the newest by default. **tg's `bot store fetch` takes a message link here, the message the fetch starts at, inclusive** |  | `bot store fetch` (tg-only), `chats mark-read` |
 | `--until-time` | `<time>` | through this ISO 8601 time, or 2h / 1d ago |  | `contacts timeline`, `stats chats newcomers`, `stats chats retention` |

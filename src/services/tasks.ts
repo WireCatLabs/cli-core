@@ -56,6 +56,26 @@ export const TASK_QUERY = {
   }),
 } as const satisfies QueryRegistry
 
+/** Which pairs `tasks duplicates` lists: those waiting for the reviewing agent, or those it left to the owner. */
+export const PAIR_DECISIONS = ["review", "unsure"] as const
+export type PairDecision = (typeof PAIR_DECISIONS)[number]
+
+export const TASK_PAIR_QUERY = {
+  entity: "task_pair",
+  backend: "sql",
+  fields: [
+    {
+      name: "decision",
+      type: "enum",
+      values: PAIR_DECISIONS,
+      operators: ["term"],
+      example: "decision:unsure",
+      relation: "review waits for the reviewing agent, unsure for the owner",
+    },
+  ],
+  defaults: ["decision:review"],
+} as const satisfies QueryRegistry
+
 const TIME = (sql: string) => ({ type: "time", sql }) as const
 
 /** `chat:` names the chat as the messenger does; `groups` holds each name already resolved to its stored id. */
@@ -171,7 +191,7 @@ export interface TasksService {
     choice?: DuplicateChoice,
   ): Promise<{ task: TaskView; created: boolean; attached?: boolean; card?: TaskCard }>
   /** Pairs a rule left for review — or, with `unsure`, the ones the reviewing agent passed to the owner — newest first. */
-  duplicates(options: { unsure: boolean; limit: number; offset: number }): Promise<TaskPair[]>
+  duplicates(options: { decision: PairDecision; limit: number; offset: number }): Promise<TaskPair[]>
   /** `rejected`: not the same job, never offered again. `unsure`: the owner decides. */
   decideDuplicate(dup: string, task: string, decision: "rejected" | "unsure", by: TaskOrigin): Promise<TaskPair>
   /** Links every message of `dup` to `into` and closes `dup` as its duplicate; `unmerge` undoes it. */
@@ -391,10 +411,8 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
 
     categories: () => inStore(async (store) => listOf(store)),
 
-    duplicates: ({ unsure, limit, offset }) =>
-      inStore(async (store, account) =>
-        store.tasks.pairs(taskAccount(account), { decision: unsure ? "unsure" : "review", limit, offset }),
-      ),
+    duplicates: ({ decision, limit, offset }) =>
+      inStore(async (store, account) => store.tasks.pairs(taskAccount(account), { decision, limit, offset })),
 
     decideDuplicate: (dup, task, decision, by) =>
       inStore(async (store, account) => {

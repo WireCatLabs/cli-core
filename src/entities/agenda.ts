@@ -33,7 +33,7 @@ export const agenda = v.strictObject({
       source: v.nullable(reference),
       due_at: v.nullable(time),
       next_check_at: v.nullable(time),
-      /** Who works on it now; only the asker's own claims are listed unless --claimed asks for all. */
+      /** Who works on it now; only the asker's own claims are listed unless the query names claimed:. */
       claimed_by: v.nullable(text),
       claimed_until: v.nullable(time),
       created_at: time,
