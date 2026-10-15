@@ -245,7 +245,7 @@ describe("tasks", () => {
     ).toEqual(["https://example.com/invoice", "chat:chat/500/7"])
     expect(item(await call("tasks", "show", planned.key, "--json")).links).toHaveLength(2)
 
-    const agenda = json(await call("tasks", "agenda", "--due", "1d", "--within", "3650d", "--json"))
+    const agenda = json(await call("tasks", "agenda", "--due-within", "1d", "--within", "3650d", "--json"))
     expect(agenda.item.tasks).toMatchObject([{ id: added.id, reasons: ["check"] }])
     expect(json(await call("tasks", "agenda", "--within", "3650d", "chat_kind:channel", "--json")).item.owed).toEqual(
       [],
@@ -292,8 +292,8 @@ describe("tasks", () => {
     expect(json(await call("tasks", "list", "tag:urgent", "--json")).items).toEqual([])
 
     const mine = ["--holder", "chat-7", "--json"]
-    expect(item(await call("tasks", "claim", "PR-1", "--for", "2h", ...mine))).toMatchObject({ claimed_by: "chat-7" })
-    expect(item(await call("tasks", "claim", "PR-1", "--for", "3h", ...mine)).claimed_by).toBe("chat-7")
+    expect(item(await call("tasks", "claim", "PR-1", "--lease", "2h", ...mine))).toMatchObject({ claimed_by: "chat-7" })
+    expect(item(await call("tasks", "claim", "PR-1", "--lease", "3h", ...mine)).claimed_by).toBe("chat-7")
     const other = ["--holder", "claude-code:other", "--json"]
     expect((await call("tasks", "claim", "PR-1", ...other)).stderr).toContain("chat-7 holds task PR-1 until")
     expect((await call("tasks", "release", "PR-1", ...other)).stderr).toContain("only they or the owner release it")
@@ -347,13 +347,13 @@ describe("tasks", () => {
       ),
     ).card.key
 
-    const listed = json(await call("tasks", "similar", invoice, "--json"))
+    const listed = json(await call("tasks", "related", invoice, "--json"))
     expect(listed.items).toMatchObject([
       { key: again, band: expect.stringMatching(/likely|maybe/), found_by: expect.arrayContaining(["text"]) },
     ])
     expect(listed.items[0].reasons).toContain("same amount")
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(2)
-    expect((await call.pretty("tasks", "similar", again)).stdout.join("")).toContain(invoice)
+    expect((await call.pretty("tasks", "related", again)).stdout.join("")).toContain(invoice)
   })
 })
 
@@ -390,7 +390,7 @@ describe("tasks that may be one job", () => {
     "--json",
   ]
 
-  it("**refuses a task that may be the same job and lists the candidates**; --attach links, --new opens", async () => {
+  it("**refuses a task that may be the same job and lists the candidates**; --into links, --new opens", async () => {
     const call = await setup()
     const invoice = item(await call(...request(PROMISE, "Send the invoice for 15 000 rub"))).card.key
 
@@ -405,10 +405,10 @@ describe("tasks that may be one job", () => {
     })
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
 
-    const both = await call(...request("msg:chat/500/7/2", "Invoice", "--attach", invoice, "--new"))
+    const both = await call(...request("msg:chat/500/7/2", "Invoice", "--into", invoice, "--new"))
     expect([both.code, both.stderr]).toEqual([2, expect.stringContaining("choose one")])
 
-    const attached = item(await call(...request("msg:chat/500/7/2", "Invoice 15000 rub to send", "--attach", invoice)))
+    const attached = item(await call(...request("msg:chat/500/7/2", "Invoice 15000 rub to send", "--into", invoice)))
     expect(attached).toMatchObject({ key: invoice, created: false, attached: true })
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
     expect(item(await call("tasks", "show", invoice, "--json")).links).toMatchObject([
@@ -456,7 +456,7 @@ describe("tasks that may be one job", () => {
     ])
     expect((await call.pretty("tasks", "duplicates")).stdout.join("")).toContain(invoice)
 
-    expect(item(await call("tasks", "duplicates", "unsure", again, invoice, "--json"))).toMatchObject({
+    expect(item(await call("tasks", "duplicates", "defer", again, invoice, "--json"))).toMatchObject({
       decision: "unsure",
     })
     expect(json(await call("tasks", "duplicates", "--json")).items).toEqual([])

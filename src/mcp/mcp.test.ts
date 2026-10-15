@@ -860,8 +860,8 @@ describe("the MCP server", () => {
       "tasks categories",
       "tasks duplicates",
       "tasks list",
+      "tasks related",
       "tasks show",
-      "tasks similar",
       "topics list",
     ])
     expect(tools.every((one) => !one.writes)).toBe(true)
@@ -1607,9 +1607,9 @@ describe("the MCP server", () => {
     })
     const linked = await call("tasks link", { task: taskId, targets: ["https://example.com/plan"] })
     expect(linked.body.item.links).toMatchObject([{ target_text: "https://example.com/plan", kind: "related-to" }])
-    expect((await call("tasks agenda", { due: "1d", query: "chat_kind:dialog" })).body.item.tasks).toMatchObject([
-      { id: taskId, title: "Send the plan", reasons: ["due"] },
-    ])
+    expect((await call("tasks agenda", { due_within: "1d", query: "chat_kind:dialog" })).body.item.tasks).toMatchObject(
+      [{ id: taskId, title: "Send the plan", reasons: ["due"] }],
+    )
     const closed = await call("tasks close", { task: taskId, as: "dismissed", reason: "no-reply-needed" })
     expect(closed.body.item).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closed_by: "agent" })
     expect((await call("stats tasks show")).body).toMatchObject({
@@ -1648,7 +1648,7 @@ describe("the MCP server", () => {
       reason: "task.duplicate-candidates",
       details: { candidates: [{ key: first, score: expect.any(Number) }] },
     })
-    expect((await add("msg:chat/500/7/102", { attach: first })).body.item).toMatchObject({
+    expect((await add("msg:chat/500/7/102", { into: first })).body.item).toMatchObject({
       key: first,
       attached: true,
     })
@@ -1662,7 +1662,7 @@ describe("the MCP server", () => {
     expect((await call("tasks duplicates reject", { dup: second.key, task: first })).body.item).toMatchObject({
       decision: "rejected",
     })
-    expect((await call("tasks duplicates unsure", { dup: second.key, task: first })).body.item).toMatchObject({
+    expect((await call("tasks duplicates defer", { dup: second.key, task: first })).body.item).toMatchObject({
       decision: "unsure",
     })
     expect((await call("tasks duplicates", { unsure: true })).body.items).toHaveLength(1)
@@ -1680,7 +1680,7 @@ describe("the MCP server", () => {
     expect((await call("tasks categories", {})).body.item.categories).toContainEqual(
       expect.objectContaining({ name: "money" }),
     )
-    const claimed = await call("tasks claim", { task: key, for: "2h", holder: "chat-7" })
+    const claimed = await call("tasks claim", { task: key, lease: "2h", holder: "chat-7" })
     expect(claimed.body.item).toMatchObject({ key, claimed_by: "chat-7", claimed_until: expect.any(String) })
     const taken = await call("tasks claim", { task: key, holder: "chat-8" })
     expect([taken.isError, taken.body.error.reason]).toEqual([true, "task.claimed"])

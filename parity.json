@@ -106,10 +106,6 @@
       "meaning": "let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m",
       "note": "schedule agent and schedule command take it for their one run: a duration from now or an ISO 8601 time"
     },
-    "--attach": {
-      "value": "<task>",
-      "meaning": "link the message to this task, one that may be the same job, instead of opening a new one"
-    },
     "--attachment": {
       "value": "<n>",
       "meaning": "which file of the message, from 1; needed when it has more than one"
@@ -309,9 +305,13 @@
       "note": "A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview."
     },
     "--due": {
-      "value": "<when>",
-      "meaning": "when a task must be done: an ISO 8601 time or a duration from now; none clears it",
-      "note": "tasks agenda instead takes a duration such as 1d to select tasks due within that interval"
+      "value": "<time>",
+      "meaning": "when a task must be done: an ISO 8601 time or a duration from now; none clears it"
+    },
+    "--due-within": {
+      "value": "<duration>",
+      "meaning": "list tasks due within this: 30m, 2h, 1d",
+      "default": "1d"
     },
     "--emoji": {
       "value": "<emoji>",
@@ -381,8 +381,7 @@
     "--for": {
       "value": "<agents>",
       "meaning": "which agents a skill is installed for: claude, agents or all",
-      "default": "all",
-      "note": "tasks claim instead takes how long the claim lasts, such as 30m or 2h"
+      "default": "all"
     },
     "--for-everyone": {
       "meaning": "delete for everyone in the chat, not only for you — they cannot get it back"
@@ -440,8 +439,8 @@
       "note": "a folder (`chats folders`) or an export folder (`store export`) takes these chats"
     },
     "--into": {
-      "value": "<task>",
-      "meaning": "the task that stays when another is merged into it"
+      "value": "<id>",
+      "meaning": "the task that stays: a duplicate is merged into it, or a message is linked to it instead of opening a task"
     },
     "--join-approval": {
       "value": "<on|off>",
@@ -470,6 +469,11 @@
       "value": "<name>",
       "meaning": "your last name"
     },
+    "--lease": {
+      "value": "<duration>",
+      "meaning": "how long a task claim lasts, such as 30m or 2h; claiming again extends it",
+      "default": "30m"
+    },
     "--left": {
       "meaning": "only the chats this account has left"
     },
@@ -477,11 +481,6 @@
       "value": "<n>",
       "meaning": "how many: rows to show, or messages one run fetches",
       "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13)"
-    },
-    "--lines": {
-      "value": "<n>",
-      "meaning": "how many lines",
-      "default": "50"
     },
     "--link": {
       "value": "<link>",
@@ -532,8 +531,8 @@
       "default": "16777216"
     },
     "--max-meetings": {
-      "value": "<n|all>",
-      "meaning": "how many of the meeting account's meetings to look through, newest first; all looks through every one (default 100)"
+      "value": "<n>",
+      "meaning": "how many of the meeting account's meetings to look through, newest first, or all for every one (default 100)"
     },
     "--max-messages": {
       "value": "<n>",
@@ -756,10 +755,6 @@
       "default": "5s",
       "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13)"
     },
-    "--payload": {
-      "value": "<text>",
-      "meaning": "the start parameter the bot reads; a link's own ?start= when not given"
-    },
     "--per-chat": {
       "meaning": "at most this many per chat, such as 1/12h",
       "value": "<limit>"
@@ -859,7 +854,7 @@
       "meaning": "take your vote back, where the poll allows it"
     },
     "--revision": {
-      "value": "<number>",
+      "value": "<n>",
       "meaning": "the revision you read before editing"
     },
     "--revoke": {
@@ -877,8 +872,8 @@
       "meaning": "run a saved search, or an earlier run by its id; options typed with it replace its own, more words are AND-ed"
     },
     "--scope": {
-      "value": "<personal|work>",
-      "meaning": "only what belongs to personal or to work accounts"
+      "value": "<scope>",
+      "meaning": "only what belongs to personal or to work accounts: personal or work"
     },
     "--score": {
       "value": "<helpful|active|engaging>",
@@ -946,7 +941,7 @@
     },
     "--start": {
       "value": "<param>",
-      "meaning": "the start parameter the app reads"
+      "meaning": "the start parameter the bot or app reads; for chats start, a link's own ?start= when not given"
     },
     "--status": {
       "value": "<status>",
@@ -972,7 +967,7 @@
       "meaning": "only what carries this tag"
     },
     "--task": {
-      "value": "<task>",
+      "value": "<id>",
       "meaning": "a task, by its id or key as tasks list shows it"
     },
     "--template": {
@@ -1063,7 +1058,7 @@
       "default": "24h"
     },
     "--unsure": {
-      "meaning": "only the pairs the reviewing agent left to the owner"
+      "meaning": "only the pairs the reviewing agent deferred to the owner"
     },
     "--until": {
       "value": "<time>",
@@ -1093,7 +1088,7 @@
       "meaning": "send an Ogg Opus file as a voice message, alone, with no text"
     },
     "--waiting": {
-      "value": "<span>",
+      "value": "<duration>",
       "meaning": "only chats where the owner wrote last at least this long ago",
       "default": "7d"
     },
@@ -2057,7 +2052,7 @@
         "tg": "tg-cli backlog: start a bot, open its mini app"
       },
       "options": {
-        "--payload": {
+        "--start": {
           "in": ["max"],
           "planned": {
             "tg": "tg-cli backlog: start a bot, open its mini app"
@@ -3496,7 +3491,7 @@
     "server logs": {
       "in": "all",
       "options": {
-        "--lines": "all"
+        "--limit": "all"
       }
     },
     "server restart": {
@@ -4023,10 +4018,10 @@
     "tasks add": {
       "in": "all",
       "options": {
-        "--attach": "all",
         "--category": "all",
         "--description": "all",
         "--due": "all",
+        "--into": "all",
         "--new": "all",
         "--remind-time": "all",
         "--title": "all",
@@ -4040,7 +4035,7 @@
       "options": {
         "--category": "all",
         "--claimed": "all",
-        "--due": "all",
+        "--due-within": "all",
         "--holder": "all",
         "--tag": "all",
         "--unanswered": "all",
@@ -4054,8 +4049,8 @@
     "tasks claim": {
       "in": "all",
       "options": {
-        "--for": "all",
-        "--holder": "all"
+        "--holder": "all",
+        "--lease": "all"
       }
     },
     "tasks close": {
@@ -4076,10 +4071,10 @@
         "--unsure": "all"
       }
     },
-    "tasks duplicates reject": {
+    "tasks duplicates defer": {
       "in": "all"
     },
-    "tasks duplicates unsure": {
+    "tasks duplicates reject": {
       "in": "all"
     },
     "tasks link": {
@@ -4113,6 +4108,12 @@
         "--title": "all"
       }
     },
+    "tasks related": {
+      "in": "all",
+      "options": {
+        "--limit": "all"
+      }
+    },
     "tasks release": {
       "in": "all",
       "options": {
@@ -4121,12 +4122,6 @@
     },
     "tasks show": {
       "in": "all"
-    },
-    "tasks similar": {
-      "in": "all",
-      "options": {
-        "--limit": "all"
-      }
     },
     "tasks unmerge": {
       "in": "all"

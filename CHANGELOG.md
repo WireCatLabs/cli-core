@@ -5,6 +5,30 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **Shared task, bot and option names follow cli-base 0.33.0's vocabulary, with no aliases.**
+  - Commands: `tasks similar` is `tasks related`; `tasks duplicates unsure` is `tasks duplicates defer`. Its
+    permission key is `tasks.duplicates.defer`. The MCP tools are `tasks_related` and `tasks_duplicates_defer`.
+    The stored decision is still `unsure`.
+  - Options: `tasks add --attach <task>` is `--into <id>` (MCP `into`). `tasks claim --for <span>` is
+    `--lease <duration>` (MCP `lease`). `tasks agenda --due <span>` is `--due-within <duration>` (MCP `due_within`).
+    `server logs --lines` is `--limit` (`-n` stays). `chats start --payload` is `--start`, as `chats app` has it.
+  - Value names now match the vocabulary: `--title <title>`, `--due <time>`, `--type <type>`, `--task <id>`,
+    `--revision <n>`, `--scope <scope>`, `--max-meetings <n>` (it still takes `all`), and `<duration>` for
+    `--unanswered` and `--waiting`.
+  - A CLI that mounts these commands must drop the lint baseline entries they clear, because a stale entry fails.
+    It must also rename the commands and flags in its own docs and examples.
+- **Peer `@wirecat/cli-base` is `>=0.33.0 <0.34.0`.**
+
+### Fixed
+
+- **The new shared commands pass the help lint.** `images embed`, `mentions list|domains`, `tasks agenda`, `plan`,
+  `related`, `duplicates`, `duplicates reject|defer`, `merge`, `unmerge` and `categories` have a summary of 80
+  characters or less. The new leaves also have one or two examples.
+
 ## 0.287.0 — 15.10.2026
 
 ### Changed — may break callers

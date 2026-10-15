@@ -354,9 +354,9 @@ export const serverCommand = (messenger: Messenger, options: ServerOptions = {})
 
   annotate(command.command("logs"), { effects: LOCAL_READ })
     .description("serve's latest log lines — from the journal under systemd, else its log file")
-    .option("-n, --lines <n>", "how many lines", (value) => wholeNumber(value), 50)
+    .option("-n, --limit <n>", "how many lines", (value) => wholeNumber(value), 50)
     .action(async function (this: Command) {
-      const { lines } = this.opts<{ lines: number }>()
+      const { limit: lines } = this.opts<{ limit: number }>()
       const { context, platform, unit } = prepare(this)
       const text = existsSync(unit.path) ? await platform.logs(unit, lines) : tail(unit.logPath, lines)
       if (!text) context.renderer.note(`no log yet for profile ${unit.profile}`)

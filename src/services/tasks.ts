@@ -313,7 +313,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         )
         if (held) return { task: await taskView(store, account, held), created: false }
         if (choice.attach !== undefined && choice.new)
-          throw new CliError("validation_error", "choose one: --attach <task> or --new")
+          throw new CliError("validation_error", "choose one: --into <id> or --new")
         const draft = {
           title: plan.title ?? "",
           ...(plan.description === undefined ? {} : { description: plan.description }),
@@ -358,7 +358,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
             "validation_error",
             `${candidates.length === 1 ? "a task" : `${candidates.length} tasks`} may be the same job: ` +
               `${shown.map((one) => `${one.key} (${one.band}, ${one.score}: ${one.reasons.join(", ")})`).join("; ")}` +
-              " — attach the message to one with --attach <task>, or open it anyway with --new",
+              " — link the message to one with --into <id>, or open it anyway with --new",
             { reason: "task.duplicate-candidates", candidates: shown },
           )
         }

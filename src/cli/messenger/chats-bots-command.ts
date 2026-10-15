@@ -10,10 +10,10 @@ export const botChatCommands = (messenger: Messenger): Command[] => [
   annotate(new Command("start"), { effects: REMOTE_WRITE })
     .description("start a bot, as its Start button does; the bot sees that you started it")
     .argument("<bot>", "the chat with the bot — its id or its name — or the bot's link, even one never opened")
-    .option("--payload <text>", "the start parameter the bot reads; a link's own ?start= when not given")
+    .option("--start <param>", "the start parameter the bot reads; a link's own ?start= when not given")
     .action(async function (this: Command, bot: string) {
       const context = messengerContext(this, messenger)
-      const { payload } = this.opts<{ payload?: string }>()
+      const { start: payload } = this.opts<{ start?: string }>()
       renderAnswer(
         this,
         context,

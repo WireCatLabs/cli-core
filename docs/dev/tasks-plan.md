@@ -40,7 +40,7 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
    be related: `blocked-by`, `follow-up-of`, `related-to` (`src/store/sqlite/task-relations.ts:10`); a `task:`
    target records a relation (0.274.0).
 4. **Duplicates: the chain runs on creation (step 5, store version 15).** `tasks add` refuses a likely or maybe
-   candidate and takes `--attach` or `--new`; a rule-made task opens and its candidates go to `task_pairs` as
+   candidate and takes `--into` or `--new`; a rule-made task opens and its candidates go to `task_pairs` as
    `review` (`src/store/sqlite/task-pairs.ts`); `tasks duplicates`, `merge`, `unmerge`, `duplicates reject` /
    `unsure` decide. A message attached or merged into a task is linked as `evidence`, and a rule opens no second
    task for it (`findBySource(…, { linked: true })`). Not yet: the chain on a new message linked to an existing
@@ -202,7 +202,7 @@ module with the reason for each number; nothing else hard-codes them.
 |---|---|---|
 | Certain (§ 2) | — | nothing new |
 | Likely | listed first; the agent must choose (below) | to the review list; the reviewing agent decides |
-| Maybe | `tasks add` refuses and lists up to 5 candidates with score and reasons ("same person, same amount, 2 of 5 stems shared"); the agent repeats with `--attach <task>` or `--new` | to the review list; the reviewing agent decides |
+| Maybe | `tasks add` refuses and lists up to 5 candidates with score and reasons ("same person, same amount, 2 of 5 stems shared"); the agent repeats with `--into <task>` or `--new` | to the review list; the reviewing agent decides |
 | Different | created | created |
 
 - Refusing, not warning: an agent skips a warning; it cannot skip an exit code. Asking the creating agent costs
@@ -220,7 +220,7 @@ module with the reason for each number; nothing else hard-codes them.
 
 ### 7. Learn from answers
 
-Every merge, rejection, `--attach` and `--new` after a candidate list is a labelled pair. With enough of them,
+Every merge, rejection, `--into` and `--new` after a candidate list is a labelled pair. With enough of them,
 `m` and `u` per level are recounted from the pairs — the Splink estimate by counting, no training step — and
 the bands move. A score never merges on its own: the test set shows the fields cannot tell some look-alikes
 apart. If real answers show "likely" pairs are almost always accepted, merging them is the owner's call.
@@ -258,7 +258,7 @@ found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`)
    `agenda --claimed`, relation kinds `duplicate-of` and `discovered-from` — store version 13.
 3. **`task_words` / `task_stems`**, the normalizer + signature extraction, digit groups joined, a stop-word list.
 4. **Scoring module** (candidates, comparison, weights, bands), tuned on the test set.
-5. **`tasks add` check** (`--attach`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`;
+5. **`tasks add` check** (`--into`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`;
    relations between message tasks — built (store version 15, `task_pairs`).
 6. **`agenda --category --tag`**, the MCP tools `tasks_claim` / `tasks_release`, and the category list in the
    store (`config set task_categories.*`) — built.

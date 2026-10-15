@@ -1313,13 +1313,7 @@ describe("the shared read commands", () => {
     }
     const bots = { personalBots: true }
 
-    const started = await call(
-      ["chats", "start", "Book", "--payload", "ref1", "--json"],
-      async () => bot,
-      env,
-      {},
-      bots,
-    )
+    const started = await call(["chats", "start", "Book", "--start", "ref1", "--json"], async () => bot, env, {}, bots)
     const opened = await call(["chats", "app", "Book", "--start", "p", "--json"], async () => bot, env, {}, bots)
     const hidden = await call(["chats", "start", "Book"], async () => bot, env)
 
@@ -1335,7 +1329,7 @@ describe("the shared read commands", () => {
     expect(JSON.stringify(journal)).not.toContain("signed")
   })
 
-  it("**starts a bot by its link**, taking the link's start parameter unless --payload is given", async () => {
+  it("**starts a bot by its link**, taking the link's start parameter unless --start is given", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const starts: unknown[] = []
@@ -1350,7 +1344,7 @@ describe("the shared read commands", () => {
     const bots = { personalBots: true }
 
     await call(["chats", "start", "https://bot.example/b?start=from-link"], async () => bot, env, {}, bots)
-    await call(["chats", "start", "https://bot.example/b", "--payload", "typed"], async () => bot, env, {}, bots)
+    await call(["chats", "start", "https://bot.example/b", "--start", "typed"], async () => bot, env, {}, bots)
     await call(["chats", "start", "Book"], async () => bot, env, {}, bots)
 
     expect(starts).toEqual([
