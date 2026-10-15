@@ -151,6 +151,7 @@ log, an error message or a run record. Nothing is fetched from an outside servic
 ## Not yet
 
 - Mentions in notes, Drive documents and mail are found, and `phone:` and the other fields find an email in memo's
-  mail search, but they are not listed by `mentions list` yet.
+  mail search, but they are not listed by `mentions list`: that is memo's to list, and it has no command yet. In
+  mail, a tracking link (a query string or a long code in its path) is kept once per letter as its site.
 - Links to anything but a Telegram chat or account resolved to what they name.
 - Names of people the store does not know, and addresses.

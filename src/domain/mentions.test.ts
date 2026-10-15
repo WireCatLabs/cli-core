@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { findMentions, type MentionKind, telegramTarget } from "./mentions.js"
+import { findMentions, type MentionKind, oneTrackedLinkPerSite, telegramTarget } from "./mentions.js"
 
 const values = (text: string, kind: MentionKind) =>
   findMentions(text)
@@ -162,5 +162,18 @@ describe("what a Telegram link names", () => {
     ["https://example.com/book_club", undefined],
   ])("%s", (url, target) => {
     expect(telegramTarget(url)).toEqual(target)
+  })
+})
+
+describe("tracking links in mail", () => {
+  it("keeps one per site, as the site, and every plain link as it is", () => {
+    const text =
+      "https://news.example.com/click?id=1 https://news.example.com/c/AbCdEfGhIjKlMnOpQrStUvWxYz012 " +
+      "https://example.org/price https://shop.example.net/track/AbCdEfGhIjKlMnOpQrStUvWxYz"
+    expect(oneTrackedLinkPerSite(findMentions(text)).map(({ value, start }) => `${start} ${value}`)).toEqual([
+      "0 https://news.example.com",
+      "93 https://example.org/price",
+      "119 https://shop.example.net",
+    ])
   })
 })

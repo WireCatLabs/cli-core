@@ -3,6 +3,7 @@ import {
   MENTION_KINDS,
   MENTION_VERSIONS,
   type MentionKind,
+  oneTrackedLinkPerSite,
   telegramTarget,
 } from "../../domain/mentions.js"
 import { findNames, type KnownPerson, nameIndex } from "../../domain/person-names.js"
@@ -211,7 +212,8 @@ export const writer = (database: CacheDatabase, now: number, kinds: readonly Men
     remove.run(type, pk, ...scope)
     if (source === null) return 0
     let written = 0
-    for (const one of found(source)) {
+    const all = found(source)
+    for (const one of type === "email" ? oneTrackedLinkPerSite(all) : all) {
       if (kinds && !kinds.includes(one.kind)) continue
       const here = `${one.kind}\u0000${one.start}`
       const moved = one.kind === "phone" && !kept.has(`${one.kind}\u0000${one.value}`) ? keptHere.get(here) : undefined

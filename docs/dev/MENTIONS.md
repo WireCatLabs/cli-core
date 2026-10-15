@@ -69,6 +69,11 @@ link names a stored one (`telegramTarget`, `telegramLink`: `t.me/<username>` by 
 `identities.username`, `t.me/c/<id>` by the chat id `-100<id>`; invites and sticker links name nothing). All have
 the author `rules`. Few chats hold a username yet: it is saved when a chat's details are read.
 
+**Links in mail.** A link in an email with a query string or a long opaque token (24+ of `[A-Za-z0-9_-]`) is a
+tracking redirect nearly always: one letter each, hundreds of thousands per mailbox. The writer keeps one row per
+letter and origin, with the origin as its value (`oneTrackedLinkPerSite`); offsets point at the first such link, so
+`written` shows it as sent. Other texts keep every link.
+
 **Decisions.** `confirm` and `reject` of a `phone`, `email`, `url` or `document` update every row with that kind
 and value. A `person-name` is decided on its own row, and with `--all-in-chat` (`Decider.inChat`) also on every row of the same value in the same chat that is still `found` or decided only by the rules. Rules-authored decisions are not kept across a
 rebuild; they are derived again, so a better rule can change them.
