@@ -59,7 +59,7 @@ export const pollReadTools = (messenger: Messenger): Record<string, AnyTool> => 
   }),
 })
 
-/** Offered with `--allow-send`, each under the permission its guard kind names. */
+/** Offered by the profile's permissions, each under the permission its guard kind names. */
 export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
   return {

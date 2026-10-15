@@ -9,7 +9,7 @@ import { onlineDeps, servicesFor } from "../../services/index.js"
 import { type AnyTool, chatOf, message, tool, WRITE } from "../tool.js"
 import { HTML_TOOL_HELP } from "./messages-send.js"
 
-/** What changes a message others already have, offered with `--allow-send`, each behind its own `allow` permission. */
+/** What changes a message others already have, offered by the profile's permissions, each behind its own `allow` permission. */
 export const messageActionTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
   const messages = (adapter: MessengerAdapter, guard: SendGuard) =>

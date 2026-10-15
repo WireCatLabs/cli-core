@@ -19,13 +19,7 @@ export interface McpEnvironment extends BaseEnvironment {
 }
 
 export interface McpFlags {
-  confirmSend?: boolean
-  allowDangerous?: boolean
-  allowSend?: boolean
-  allowMarkRead?: boolean
-  allowDelete?: boolean
   permission?: string[]
-  httpConfirmation?: string
   http?: boolean
   port?: string
   publicUrl?: string
@@ -66,38 +60,12 @@ const portOf = (given: string | undefined): number => {
   return port
 }
 
-/** They decided which tools were offered or which writes showed a form; the profile's permissions do now. Kept so a configured agent still starts. */
-const RETIRED = [
-  "allowSend",
-  "allowMarkRead",
-  "allowDelete",
-  "confirmSend",
-  "allowDangerous",
-  "httpConfirmation",
-] as const
-
 const withFlags = (command: Command): Command =>
-  command
-    .option(
-      "--permission <key=level>",
-      "override a permission for this server only; repeat for more keys",
-      (value: string, previous: string[] = []) => [...previous, value],
-    )
-    .option("--confirm-send", "no longer used — writes show no form; the profile's permissions decide")
-    .option("--allow-dangerous", "no longer used — writes show no form; the profile's permissions decide")
-    .option("--allow-send", "no longer used — the profile's permissions decide; kept so an old setup still starts")
-    .option("--allow-mark-read", "no longer used — the profile's permissions decide")
-    .option("--allow-delete", "no longer used — the profile's permissions decide")
-
-const retiredNote = (app: AppIdentity, flags: McpFlags): string | undefined => {
-  const given = RETIRED.filter((flag) => flags[flag] !== undefined && flags[flag] !== false)
-  if (given.length === 0) return undefined
-  const names = given.map((flag) => `--${flag.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`)
-  return (
-    `${names.join(", ")} no longer decide${given.length === 1 ? "s" : ""} anything: the profile's permissions do — ` +
-    `\`${app.command} config show permissions\``
+  command.option(
+    "--permission <key=level>",
+    "override a permission for this server only; repeat for more keys",
+    (value: string, previous: string[] = []) => [...previous, value],
   )
-}
 
 export const mcpCommand = (messenger: Messenger): Command => {
   const { app } = messenger
@@ -110,15 +78,12 @@ export const mcpCommand = (messenger: Messenger): Command => {
       "--http",
       "serve over HTTP on 127.0.0.1 for ChatGPT and Claude in the browser, behind your tunnel; the profile's permissions decide",
     )
-    .option("--http-confirmation <mode>", "no longer used — writes show no form; the profile's permissions decide")
     .option("--port <port>", `the local port for --http (default ${DEFAULT_PORT})`)
     .option("--public-url <url>", "the tunnel's https address the browser apps use, e.g. https://<name>.ts.net")
     .option("--revoke", "forget every login given to a browser app; each must log in again")
   command.action(async function (this: Command) {
     const flags = this.optsWithGlobals<McpFlags>()
     const context = messengerContext(this, messenger)
-    const note = retiredNote(app, flags)
-    if (note) context.renderer.warn(note)
     if (flags.revoke) {
       const { revokeAll } = await import("../../mcp/http/oauth.js")
       revokeAll(httpTokenFile(app, context.settings.profile, context.env))
@@ -154,7 +119,7 @@ export const mcpCommand = (messenger: Messenger): Command => {
     ).action(async function (this: Command) {
       const flags = this.optsWithGlobals<McpFlags>()
       const context = messengerContext(this, messenger)
-      const { renderer, settings, env } = context
+      const { settings, env } = context
       const given = environmentOf<McpEnvironment>(this).mcp ?? {}
       const entry = serverEntry(app, {
         profile: settings.profile,
@@ -170,8 +135,6 @@ export const mcpCommand = (messenger: Messenger): Command => {
         itemOf({ config: entry.config }, { next: entry.nodeBound ? [nextStep("mcp.config", { args: {} })] : [] }),
         () => JSON.stringify(entry.config, null, 2),
       )
-      const note = retiredNote(app, flags)
-      if (note) renderer.warn(note)
     }),
   )
   command.addCommand(

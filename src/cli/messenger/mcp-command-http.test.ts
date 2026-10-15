@@ -35,14 +35,12 @@ const cli = async (argv: string[]) => {
 }
 
 describe("HTTP MCP startup", () => {
-  it("passes the effective overrides without saving the profile, and starts with a retired confirmation mode", async () => {
+  it("passes the effective overrides without saving the profile", async () => {
     const { code, streams } = await cli([
       "mcp",
       "--http",
       "--public-url",
       "https://device.example",
-      "--http-confirmation",
-      "permissions",
       "--permission",
       "messages.send=allow",
       "--permission",
