@@ -26,7 +26,7 @@ import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import type { MessengerAdapter, SendOptions } from "../ports/messenger.js"
-import type { SendGuard } from "../sends/guard.js"
+import type { Asker, GuardRequest, SendGuard } from "../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../sends/journal.js"
 import { RESOURCES } from "../sends/permissions.js"
 import { conversationsService } from "../services/conversations.js"
@@ -347,6 +347,7 @@ interface Harness {
   forwardTopic?: boolean
   pollCloseSeconds?: readonly [number, number]
   counterFields?: Messenger["counterFields"]
+  guard?: Messenger["guard"]
   serverSearch?: boolean
   /** Another server's files, to read what it stored. */
   root?: string
@@ -380,6 +381,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     forwardTopic,
     pollCloseSeconds,
     counterFields,
+    guard,
     root: _root,
     http,
     permission = [],
@@ -406,6 +408,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     ...(forwardTopic ? { forwardTopic } : {}),
     ...(pollCloseSeconds ? { pollCloseSeconds } : {}),
     ...(counterFields ? { counterFields } : {}),
+    ...(guard ? { guard } : {}),
   }
   const streams = captureStreams()
   let made: ReturnType<typeof createServer> | undefined
@@ -2234,6 +2237,21 @@ describe("the MCP server", () => {
       skill: skillResource(app, new URL("file:///SKILL.md")).instruction,
     })
     expect(text.length).toBeLessThanOrEqual(2048)
+  })
+})
+
+describe("a messenger's own send guard over MCP", () => {
+  it("is handed an asker that lets a write at level ask go ahead: no terminal answers it", async () => {
+    const asked: (Asker | undefined)[] = []
+    await connect(scripted(), {
+      guard: (_command, _settings, _warn, ask) => {
+        asked.push(ask)
+        return { check: () => {}, record: () => {} }
+      },
+    })
+    const given = asked.find((ask) => ask !== undefined)
+    expect(given).toBeTypeOf("function")
+    await expect(given?.("messages.delete", { chatId: "7" } as GuardRequest)).resolves.toBeUndefined()
   })
 })
 

@@ -60,9 +60,10 @@ export const createServer = (
   )
   const writes = Object.fromEntries(Object.entries(offered).filter(([, one]) => one.annotations.readOnlyHint !== true))
   // No one is at a terminal to answer the guard's question: over MCP a write at level `ask` goes ahead.
-  const guard = messenger.guard
-    ? context.guard
-    : guardFor(app, settings, context.renderer.warn, context.env, async () => {})
+  const goAhead = async () => {}
+  const guard =
+    messenger.guard?.(command, settings, context.renderer.warn, goAhead) ??
+    guardFor(app, settings, context.renderer.warn, context.env, goAhead)
   const session = new MessengerSession(
     async (events) => connected(await messenger.connect(command, context, { events }), messenger, context, events),
     (run, body) => context.run(body, { name: run }),
