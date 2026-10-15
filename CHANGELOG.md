@@ -21,6 +21,15 @@ shape of this file.
   whose received mail holds the value, most letters first (a signature, mostly), for a message's mention and a mail
   one alike. Offered only; nothing is linked by this rule.
 
+### Changed — may break callers
+
+- **Mail keeps a tracking link once per letter and site, as the site** (`url` rule version 2): a link in an email
+  with a query string or a run of 24 or more letters, digits, `-` or `_` is stored as its origin
+  (`https://news.example.com`), once per letter and origin; `written` still reads the link as sent, and `domain:` and
+  `url:"https://news.example.com"` find the letter. Messages, files and notes keep every link whole. On a copy of a
+  real mailbox: mail link rows −39%, distinct values −76%, the `mentions` table and its indexes −60%, every letter
+  and site still found. `mentions rebuild url` applies it to stored mail.
+
 ### Fixed
 
 - **`mentions list`, `show`, `--new`, `domains` and `--all-in-chat` no longer pick up mentions of documents, notes and

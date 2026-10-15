@@ -17,7 +17,7 @@ export interface Decider {
 export const MENTION_VERSIONS: Record<MentionKind, number> = {
   phone: 1,
   email: 1,
-  url: 1,
+  url: 2,
   document: 1,
   "person-name": 1,
 }
@@ -198,6 +198,31 @@ export const findMentions = (text: string, { phoneCountries = DEFAULT_PHONE_COUN
   return [...mail, ...links, ...phones(text, [...links, ...mail], phoneCountries)].sort(
     (a, b) => a.start - b.start || a.end - b.end,
   )
+}
+
+// A mail link with a query or a long opaque token is mostly a one-off tracking redirect: hundreds of thousands per
+// mailbox, each in one letter.
+const OPAQUE = /[A-Za-z0-9_-]{24,}/
+
+/**
+ * Mail keeps such links once per letter and site, as the site's origin, so `domain:` and `mentions domains` still
+ * find the letter; `written` still reads the link as it was sent.
+ */
+export const oneTrackedLinkPerSite = <T extends { kind: MentionKind; value: string }>(found: T[]): T[] => {
+  const sites = new Set<string>()
+  return found.flatMap((one) => {
+    if (one.kind !== "url") return [one]
+    let url: URL
+    try {
+      url = new URL(one.value)
+    } catch {
+      return [one]
+    }
+    if (!url.search && !OPAQUE.test(url.pathname)) return [one]
+    if (sites.has(url.origin)) return []
+    sites.add(url.origin)
+    return [{ ...one, value: url.origin }]
+  })
 }
 
 /** A value as a person types it, in the form mentions store: `8 900 000-00-01` → `+79000000001`. */
