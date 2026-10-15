@@ -24,7 +24,10 @@ export const reviewPoint = (app: AppIdentity, profile: string, env: NodeJS.Proce
   return {
     after,
     save: (foundAt) => {
-      const newest = Math.max(...foundAt.map((at) => Date.parse(at)).filter(Number.isFinite))
+      const newest = foundAt.reduce(
+        (most, at) => Math.max(most, Date.parse(at) || Number.NEGATIVE_INFINITY),
+        Number.NEGATIVE_INFINITY,
+      )
       if (!Number.isFinite(newest) || (after !== undefined && newest <= after)) return
       writeSecurely(file, `${JSON.stringify({ reviewedThrough: new Date(newest).toISOString() })}\n`, 0o600)
     },
