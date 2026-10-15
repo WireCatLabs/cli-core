@@ -114,7 +114,7 @@ them.
 `domain` through `siteOf`. They skip dismissed rows. `mentions:"person:<id>"` matches linked rows only: a name
 linked to that person, or a phone or an address whose identity is theirs; `organization:<id>` goes through
 `organization_identities`; `document:<id>` through the target. Another type is `query.invalid-reference`. A
-mention in an attachment finds its message. Mail has no mentions yet, so these fields match nothing there.
+mention in an attachment finds its message. Mail search takes the same fields (store version 16).
 
 ## Review after a sync
 
