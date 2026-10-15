@@ -428,5 +428,24 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `tasks` ADD `claimed_by` text;",
       "ALTER TABLE `tasks` ADD `claimed_until` integer;"
     ]
+  },
+  {
+    "name": "20261014222837_version-14-task-words",
+    "statements": [
+      "CREATE TABLE `task_index_pending` (\n\t`id` integer NOT NULL,\n\t`indexable_type` text NOT NULL,\n\tCONSTRAINT `task_index_pending_pk` PRIMARY KEY(`indexable_type`, `id`)\n);"
+    ]
+  },
+  {
+    "name": "20261014222841_version-14-task-words-triggers",
+    "statements": [
+      "-- Words and stems of a task's title and description, rowid = task id, for the duplicate check's candidate lookup.\n-- Stemming needs JS, so the triggers only queue the task and the next lookup indexes it, as notes do.\nCREATE VIRTUAL TABLE task_words USING fts5(\n  normalized_text, scope,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2', prefix = '3');",
+      "CREATE VIRTUAL TABLE task_words_vocab USING fts5vocab(task_words, 'col');",
+      "CREATE VIRTUAL TABLE task_stems USING fts5(\n  stems, scope,\n  content = '', contentless_delete = 1,\n  tokenize = 'unicode61 remove_diacritics 2');",
+      "CREATE TRIGGER task_index_ai AFTER INSERT ON tasks BEGIN\n  INSERT OR IGNORE INTO task_index_pending (indexable_type, id) VALUES ('task', new.id);\nEND;",
+      "CREATE TRIGGER task_index_au AFTER UPDATE OF title, description, deleted_at ON tasks\n  WHEN old.title IS NOT new.title OR old.description IS NOT new.description OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO task_index_pending (indexable_type, id) VALUES ('task', new.id);\nEND;",
+      "CREATE TRIGGER task_index_ad AFTER DELETE ON tasks BEGIN\n  DELETE FROM task_words WHERE rowid = old.id;\n  DELETE FROM task_stems WHERE rowid = old.id;\n  DELETE FROM task_index_pending WHERE indexable_type = 'task' AND id = old.id;\nEND;",
+      "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version, built_at, analyzer)\n  VALUES ('task_index', 0, 0, 0, 1, NULL, NULL);",
+      "INSERT OR IGNORE INTO task_index_pending (indexable_type, id) SELECT 'task', id FROM tasks;"
+    ]
   }
 ]

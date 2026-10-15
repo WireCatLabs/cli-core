@@ -386,7 +386,7 @@ describe("what the initial migration seeds and enforces", () => {
         .prepare("SELECT name FROM search_index_state ORDER BY name")
         .all()
         .map((row) => row.name),
-    ).toEqual(["document_index", "memory_index", "message_stems", "message_words", "note_index"])
+    ).toEqual(["document_index", "memory_index", "message_stems", "message_words", "note_index", "task_index"])
   })
 
   it("refuses a second displayed alias, a second summary from one source and a repeated meeting chat line", async () => {

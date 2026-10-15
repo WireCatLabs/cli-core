@@ -60,9 +60,13 @@ const STOP_WORDS = new Set(
 /** `15 000` (any space) and `1,500` become one token; only before exactly three digits, so `20.10` stays a date. */
 const joinDigitGroups = (text: string): string => text.replace(/(\d)[ \u00a0\u202f,](?=\d{3}(?!\d))/gu, "$1")
 
+/** What `task_words` holds: the search normalizer, digit groups joined. Message and note words keep `normalize` alone. */
+export const taskWordsOf = (text: string): string => normalize(joinDigitGroups(text))
+
 const defaultStemmer = createStemmer(DEFAULT_STEMMERS)
 
-const stemsOf = (text: string, stemmer: Stemmer): Set<string> =>
+/** What `task_stems` holds and the candidate lookup matches: one cleaning for both sides, or bm25 compares unlike. */
+export const taskStemsOf = (text: string, stemmer: Stemmer): Set<string> =>
   new Set(
     stemmer
       .explain(joinDigitGroups(text))
@@ -82,7 +86,7 @@ export const prepareTask = (task: TaskSide, stemmer: Stemmer = defaultStemmer): 
   const createdMs = task.createdAt.getTime()
   const signatureText = normalize(joinDigitGroups(`${description}\n${task.title}`))
   return {
-    stems: stemsOf(`${task.title}\n${description}`, stemmer),
+    stems: taskStemsOf(`${task.title}\n${description}`, stemmer),
     trigrams: trigramsOf(normalize(joinDigitGroups(task.title))),
     ...(task.person === undefined ? {} : { person: task.person }),
     ...(task.category === undefined ? {} : { category: task.category }),

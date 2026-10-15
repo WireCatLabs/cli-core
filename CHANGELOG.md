@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`tasks similar <task>`** (MCP `tasks_similar`, read-only, permission key `tasks.similar`): the tasks of the
+  same account that may be the same job — open, or closed in the last 14 days — scored field by field, best first,
+  each with `band` (likely, maybe, different), `reasons`, `levels` and `found_by`. Candidates come from shared stems
+  (`bm25`, 20), the same person and the same category (10 each, newest) and one reply chain, at most 40; the same chat
+  alone never makes one. Nothing is merged or refused yet. `store.tasks.similar` takes a task or a draft.
+- **Task word index (store version 14)**: `task_words` and `task_stems` hold each task's title and description, digit
+  groups joined (`15 000` → `15000`) and stop words left out; a rule's `<kind> — <source>` title is not indexed.
+  Task writes queue the task and the next lookup indexes it, as for notes; the upgrade queues every stored task, and
+  `store reindex` queues them again. Message and note indexing are unchanged.
+
 ## 0.284.0 — 15.10.2026
 
 ### Added

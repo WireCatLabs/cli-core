@@ -4,7 +4,13 @@ import type * as v from "valibot"
 import { isLocator, parseLocator } from "../domain/locator.js"
 import { formatReference } from "../domain/references.js"
 import { task as taskEntity } from "../entities/task.js"
-import { TASK_RELATION_KINDS, type TaskRelation, type TaskRelationKind } from "../store/index.js"
+import {
+  type SimilarTask,
+  TASK_RELATION_KINDS,
+  type TaskDraft,
+  type TaskRelation,
+  type TaskRelationKind,
+} from "../store/index.js"
 import type { AccountKey, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
 import { type ColumnMap, queryFilter } from "../store/store.js"
 import {
@@ -133,6 +139,11 @@ export interface TaskCard extends TaskDetails {
 /** What waits on the owner, kept in the local store by `src/tasks/`; nothing here reaches the messenger. */
 export interface TasksService {
   list(request: TaskListRequest): Promise<TaskList>
+  /**
+   * Tasks of this account that may be the same job as a task, or as a draft not added yet: scored, best first,
+   * each with its band and reasons. Reads only; nothing is merged or refused here.
+   */
+  similar(subject: string | TaskDraft, options?: { limit?: number }): Promise<SimilarTask[]>
   add(
     message: string,
     type: TaskKind,
@@ -402,6 +413,15 @@ export const tasksService = (
       inStore(async (store, account) => {
         await owned(store, account, id)
         return cardOf(store, id)
+      }),
+
+    similar: (subject, { limit } = {}) =>
+      inStore(async (store, account) => {
+        const options = limit === undefined ? {} : { limit }
+        if (typeof subject !== "string")
+          return store.tasks.similar({ account: taskAccount(account), draft: subject }, options)
+        await owned(store, account, subject)
+        return store.tasks.similar({ task: subject }, options)
       }),
 
     stats: (filter = {}) =>

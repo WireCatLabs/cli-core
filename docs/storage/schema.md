@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-84 tables, 17 full-text indexes.
+85 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -1326,6 +1326,34 @@ The history of a task: created, status changed, assigned, due date moved.
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `INDEX (task_id)`, `INDEX (actor_type, actor_id)`
+
+### `task_words`
+
+Word index over task titles and descriptions, digit groups joined.
+
+```sql
+CREATE VIRTUAL TABLE task_words USING fts5(normalized_text, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2', prefix = '3');
+CREATE VIRTUAL TABLE task_words_vocab USING fts5vocab(task_words, 'col')
+```
+
+### `task_stems`
+
+Stem index, the pair of task_words, without stop words.
+
+```sql
+CREATE VIRTUAL TABLE task_stems USING fts5(stems, scope, content = '', contentless_delete = 1, tokenize = 'unicode61 remove_diacritics 2')
+```
+
+### `task_index_pending`
+
+Rows of tasks waiting to be indexed: triggers enqueue, JS normalizes, stems and writes the index.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | not null |  |  |
+| `indexable_type` | text | not null |  | which table the waiting row belongs to |
+
+*Keys and indexes:* `PRIMARY KEY (indexable_type, id)`
 
 ### `decisions`
 

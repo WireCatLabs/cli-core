@@ -1302,6 +1302,15 @@ export const taskEvents = sqliteTable(
   ],
 )
 
+export const taskIndexPending = sqliteTable(
+  "task_index_pending",
+  {
+    id: integer("id").notNull(),
+    indexableType: text("indexable_type").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.indexableType, table.id] })],
+)
+
 export const decisions = sqliteTable(
   "decisions",
   {

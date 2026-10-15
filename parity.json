@@ -4075,6 +4075,12 @@
     "tasks show": {
       "in": "all"
     },
+    "tasks similar": {
+      "in": "all",
+      "options": {
+        "--limit": "all"
+      }
+    },
     "topics": {
       "in": ["tg"],
       "reason": "MAX has no forum topics"
