@@ -43,6 +43,7 @@ import { officialStats } from "./official-stats.js"
 import { person } from "./person.js"
 import { pollVote } from "./poll-vote.js"
 import { ranking } from "./ranking.js"
+import { relationship } from "./relationship.js"
 import { retention } from "./retention.js"
 import { savedSearch } from "./saved-search.js"
 import { tagging } from "./tagging.js"
@@ -92,6 +93,7 @@ export {
   pollVote,
   ranking,
   reference,
+  relationship,
   retention,
   savedSearch,
   tagging,
@@ -160,6 +162,7 @@ export const ENTITIES = {
   meeting_transcript: meetingTranscript,
   meeting_summary: meetingSummary,
   reference,
+  relationship,
   tagging,
   conversation,
   saved_search: savedSearch,

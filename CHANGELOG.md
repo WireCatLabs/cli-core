@@ -42,9 +42,17 @@ shape of this file.
   `--new` is kept as a labelled pair, for recounting the weights later.
 - `tasks link <task> task:<other> --kind duplicate-of` joins two tasks found in messages of one account; the other
   relation kinds still join owner-project tasks only. `tasks show` lists `duplicate-of` relations.
+- **List-query helpers in `@wirecat/cli-core/cli`**: `withQuery`, `listQuery`, `typedQuery`, `nativeTerms`,
+  `queryArgument`, `queryHelp`, `nativeField`, `unfilteredQuery`, `timeBounds`, `searchText`, `pageOf`,
+  `commandPath`, `LIST_QUERY_GUIDE` and `TASK_QUERY`, so a tool built on cli-core keeps no copy. New: `termField` (a
+  field its store compares whole) and `queryTerms` (a list's terms as `field → value`, enum values lowercased).
+- **`relationship` entity**: a link between two people, organizations, projects or tasks, as the store's
+  `knowledge.relations` holds it. **`fact.confirmed_by`** (optional): `{type, id}` of who accepted the fact.
 
 ### Changed — may break callers
 
+- **`nativeTerms` reads typed AND terms beside a list's defaults**; it refused them as a nested group. An MCP list
+  whose provider filters by itself describes its `query` as terms joined by AND, no longer offering OR and ranges.
 - **`phone:` and `value:` also match a stored number ending with the typed number's national digits** (8 or more), so
   a number saved before `phone_countries` is found either way. A Russian landline in groups, `(812) 000-00-01`, is now
   `+78120000001`, not the bare digits.

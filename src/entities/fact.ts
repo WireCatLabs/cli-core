@@ -15,6 +15,8 @@ export const fact = v.strictObject({
   supersedes: v.nullable(reference),
   author,
   model: v.nullable(text),
+  /** Who accepted it; `null` while it is proposed. */
+  confirmed_by: v.optional(v.nullable(v.strictObject({ type: v.picklist(["person", "bot"]), id }))),
   scope: v.nullable(v.picklist(MEMORY_SCOPES)),
   /** Who recorded it: the owner, or an agent whose fact waits as proposed. */
   origin: v.picklist(["owner", "agent"]),

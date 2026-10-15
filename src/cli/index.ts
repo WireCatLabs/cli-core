@@ -95,6 +95,7 @@ export { momentOf } from "../services/moment.js"
 export { maskedAccount } from "../services/people.js"
 export { unanswered } from "../services/questions.js"
 export { openRequestTask } from "../services/task-rules.js"
+export { TASK_QUERY } from "../services/tasks.js"
 export {
   type AgentPolicy,
   type AgentTask,
@@ -206,7 +207,25 @@ export {
   provideInputPolicy,
 } from "./input-policy.js"
 export { answerFields, checkJson, type JsonFieldsResolver, type JsonRequest, liftJson } from "./json-fields.js"
-export { pagedList } from "./list-query.js"
+export {
+  commandPath,
+  LIST_QUERY_GUIDE,
+  listQuery,
+  nativeField,
+  nativeTerms,
+  pagedList,
+  pageOf,
+  type QueryWords,
+  queryArgument,
+  queryHelp,
+  queryTerms,
+  searchText,
+  termField,
+  timeBounds,
+  typedQuery,
+  unfilteredQuery,
+  withQuery,
+} from "./list-query.js"
 export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 export { addMeetingPreparationCommand } from "./meeting-preparation-command.js"
 export {
