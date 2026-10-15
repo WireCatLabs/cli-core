@@ -5,7 +5,7 @@ import type { AdminRight, GroupSettings } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { EventSink } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
-import { guardFor, type SendGuard } from "../../sends/guard.js"
+import { type Asker, guardFor, type SendGuard } from "../../sends/guard.js"
 import { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "../../sends/pace.js"
 import {
   assertStatsPermissionsCurrent,
@@ -107,8 +107,10 @@ export interface Messenger extends ServiceMessenger {
   /**
    * The send guard for a command, when the messenger's is not the profile's plain one — max-cli's
    * background server journals what it forwards, so a command over it records only its refusals.
+   * `ask`, when given, answers a write at level `ask` instead of the messenger's own prompt: the MCP
+   * server has no terminal to ask at.
    */
-  guard?: (command: Command, settings: Settings, warn: (message: string) => void) => SendGuard
+  guard?: (command: Command, settings: Settings, warn: (message: string) => void, ask?: Asker) => SendGuard
   /** The permission key of one of this CLI's own commands, when `keyForCommand` does not know it. */
   permissionKey?: PermissionKeyOf
   /** The CLI's SKILL.md, which the MCP server also serves as `<command>://skill`. */
