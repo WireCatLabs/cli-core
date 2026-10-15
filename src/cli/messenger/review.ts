@@ -139,7 +139,10 @@ const notes = (
     if (chat.answeredBy === "owner")
       renderer.note(`${chat.title ?? chat.id}: its admins are not known, so only your answers count`)
   if (found.tasks && found.tasks.added + found.tasks.closed > 0)
-    renderer.note(`tasks: ${found.tasks.added} opened, ${found.tasks.closed} closed by the rules`)
+    renderer.note(
+      `tasks: ${found.tasks.added} opened, ${found.tasks.closed} closed by the rules` +
+        (found.tasks.review > 0 ? `, ${found.tasks.review} pair(s) to review — tasks duplicates` : ""),
+    )
   if (found.partial && pretty) renderer.warn(PARTIAL_NOTE)
   if (found.unanswered)
     renderer.note(

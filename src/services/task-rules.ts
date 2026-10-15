@@ -8,6 +8,8 @@ import { categorize } from "./task-categories.js"
 export interface RuleResult {
   added: number
   closed: number
+  /** Opened tasks that may be the same job as another: on the review list (`tasks duplicates`). */
+  review: number
 }
 
 export const taskAccount = ({ provider, account }: AccountKey): string => `${provider}:${account}`
@@ -25,12 +27,12 @@ export const applyTaskRules = async (
 ): Promise<RuleResult> => {
   const tasks = createTaskService({ store, ...(now ? { now } : {}) })
   const owner = taskAccount(account)
-  const result: RuleResult = { added: 0, closed: 0 }
+  const result: RuleResult = { added: 0, closed: 0, review: 0 }
   const sourceOf = (message: Message) =>
     formatLocator({ provider: account.provider, account: account.account, chat: message.chatId, message: message.id })
 
   const open = async (message: Message, group: Id, kind: TaskKind) => {
-    const { created } = await tasks.add({
+    const { created, review = 0 } = await tasks.add({
       source: sourceOf(message),
       sourceKind: "message",
       account: owner,
@@ -40,6 +42,7 @@ export const applyTaskRules = async (
       category: categorize(message.text),
     })
     if (created) result.added += 1
+    result.review += review
   }
   const close = async (message: Message, kind: TaskKind, answer?: Message) => {
     for (const task of await store.findBySource(owner, sourceOf(message))) {
@@ -95,7 +98,7 @@ export const applyTaskRulesToStored = async (
   since?: string,
   newerThan?: string,
 ): Promise<RuleResult & { until: string | null }> => {
-  const result: RuleResult & { until: string | null } = { added: 0, closed: 0, until: since ?? null }
+  const result: RuleResult & { until: string | null } = { added: 0, closed: 0, review: 0, until: since ?? null }
   for (const chat of await store.chatStats(account)) {
     if (chat.lastStoredAt === null || (since !== undefined && chat.lastStoredAt <= since)) continue
     // A skipped chat still moves the stop point, or the next pass would read all of it as new.
@@ -116,6 +119,7 @@ export const applyTaskRulesToStored = async (
     )
     result.added += pass.added
     result.closed += pass.closed
+    result.review += pass.review
     if (result.until === null || chat.lastStoredAt > result.until) result.until = chat.lastStoredAt
   }
   return result
@@ -136,9 +140,9 @@ export const applyTaskRulesSinceLastPass = async (
 ): Promise<RuleResult> => {
   const since = await store.taskRulesStop(account)
   const newerThan = since === null ? new Date(now.getTime() - FIRST_PASS_DAYS * 86_400_000).toISOString() : undefined
-  const { added, closed, until } = await applyTaskRulesToStored(store, account, since ?? undefined, newerThan)
+  const { added, closed, review, until } = await applyTaskRulesToStored(store, account, since ?? undefined, newerThan)
   if (until !== null && until !== since) await store.setTaskRulesStop(account, until)
-  return { added, closed }
+  return { added, closed, review }
 }
 
 /**

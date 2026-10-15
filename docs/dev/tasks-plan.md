@@ -39,9 +39,12 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
 3. **More messages can be linked to a task** — `tasks link <task> msg:…` writes `links` rows — and two tasks can
    be related: `blocked-by`, `follow-up-of`, `related-to` (`src/store/sqlite/task-relations.ts:10`); a `task:`
    target records a relation (0.274.0).
-4. **Duplicates are stopped per message only.** `add` returns the task a source message already has
-   (`service.ts:50`, `findBySource`). Three unanswered questions in one chat are three tasks; an agent's task on
-   the next message of a chat is another.
+4. **Duplicates: the chain runs on creation (step 5, store version 15).** `tasks add` refuses a likely or maybe
+   candidate and takes `--attach` or `--new`; a rule-made task opens and its candidates go to `task_pairs` as
+   `review` (`src/store/sqlite/task-pairs.ts`); `tasks duplicates`, `merge`, `unmerge`, `duplicates reject` /
+   `unsure` decide. A message attached or merged into a task is linked as `evidence`, and a rule opens no second
+   task for it (`findBySource(…, { linked: true })`). Not yet: the chain on a new message linked to an existing
+   task.
 5. **Rules run in `review` and `serve`, not in `sync`** (`src/services/inbox.ts:359`,
    `src/cli/messenger/serve-command.ts:232`). `applyTaskRulesToStored(store, account, since)` (0.274.0) runs
    them over what is stored, from a stop point.
@@ -49,8 +52,8 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
    `src/services/task-categories.ts`; no `tasks.categories` config yet — the config schema is strict and the rule
    passes read no settings), tags on tasks, keys per type, the claim lease (`tasks claim`, `release`,
    `agenda --claimed`) and the relation kinds `duplicate-of` and `discovered-from`. A relation joins only
-   owner-project tasks (`liveTask`, `src/store/sqlite/task-relations.ts`), so `duplicate-of` between two message
-   tasks is refused until step 5 opens it. MCP has no claim tools yet.
+   owner-project tasks (`liveTask`, `src/store/sqlite/task-relations.ts`), except `duplicate-of`, which joins two
+   live tasks of one project or account. MCP has no claim tools yet.
 7. **What the comparison can reuse:** the text normalizer and the Snowball stemmers (Russian, English, Spanish;
    `src/search/stem.ts`) behind message and note search; FTS5 tables per domain (`message_words` /
    `message_stems`, `note_words` / `note_stems`); `identities` for "the same person"; one write lock per
@@ -225,8 +228,9 @@ attached and sent to review.
 
 Built 2026-10-15 (`applyTaskRulesSinceLastPass`): the stop point is a `store_settings` row per account, the first
 pass reads only chats with a message in the last 14 days (a store holding years of chats opens no task for an old
-question), and the answer carries `tasks: {added, closed}`. Until step 5, rule-made tasks open as before — one per
-source message; the chain joins when it is built.
+question), and the answer carries `tasks: {added, closed, review}` — `review` counts the opened tasks whose
+candidates went to the review list (step 5). Nothing is attached automatically beyond the same rule on the same
+message.
 
 ## Test set
 
@@ -250,7 +254,7 @@ found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`)
 3. **`task_words` / `task_stems`**, the normalizer + signature extraction, digit groups joined, a stop-word list.
 4. **Scoring module** (candidates, comparison, weights, bands), tuned on the test set.
 5. **`tasks add` check** (`--attach`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`;
-   relations between message tasks (`liveTask` allows owner-project tasks only).
+   relations between message tasks — built (store version 15, `task_pairs`).
 6. **`agenda --category --label`**, the MCP tools `tasks_claim` / `tasks_release`, and the `tasks.categories`
    config.
 7. **Rules on `sync`.**

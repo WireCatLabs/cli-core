@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-85 tables, 19 full-text indexes.
+86 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -1326,6 +1326,29 @@ The history of a task: created, status changed, assigned, due date moved.
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `INDEX (task_id)`, `INDEX (actor_type, actor_id)`
+
+### `task_pairs`
+
+Two tasks that may be one job, and what was decided about them: the review list the duplicate check leaves, and every merge, rejection, `--attach` and `--new` as a labelled pair. A merge never deletes; `tasks unmerge` undoes one.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `task_id` | integer |  | → `tasks.id` | the newer task, the one that would be the duplicate; null for an `--attach`, which made none |
+| `source_locator` | text |  |  | the message an `--attach` linked to `other_id` instead of opening a task |
+| `other_id` | integer | not null | → `tasks.id` | the task it may duplicate |
+| `score` | integer | not null |  | the comparison's sum of weights when the pair was recorded |
+| `band` | text | not null |  | likely, maybe or different |
+| `levels` | text | not null |  | JSON: the level of each field, which the weights are recounted from |
+| `reasons` | text | not null |  | JSON: the reasons shown with the score |
+| `decision` | text | not null |  | review, unsure, merged, rejected, unmerged, attached, new |
+| `decided_by_type` | text |  |  | `person` or `bot` |
+| `decided_by_id` | integer |  |  | the row in the `decided_by_type` table |
+| `decided_at` | integer |  |  |  |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (task_id, other_id)`, `INDEX (decision, created_at)`, `INDEX (other_id)`, `INDEX (decided_by_type, decided_by_id)`
 
 ### `task_words`
 

@@ -28,12 +28,32 @@ shape of this file.
 - **`mentions list --new`**: undecided mentions found since the last run that showed them all,
   per profile. `messages sync` names how many there are, with the `mentions.review` step. Mentions carry `found_at`,
   which a rebuild keeps.
+- **Duplicate review (store version 15)**: `task_pairs` keeps each pair of tasks that may be one job and what was
+  decided. A task a rule opens (review, serve, `messages sync`) still opens, and its likely and maybe candidates go to
+  a review list; the rule-pass answers count them as `review`. `tasks duplicates [--unsure]` lists the pairs newest
+  first with score, band, levels and reasons; `tasks merge <dup> --into <task>` links every message of the duplicate to
+  the task, closes it `dismissed` with a `duplicate-of` relation and deletes nothing; `tasks unmerge <dup>` reopens it
+  and removes the relation (links stay); `tasks duplicates reject <dup> <task>` keeps a pair off the list for good, and
+  `tasks duplicates unsure <dup> <task>` leaves it to the owner. MCP: `tasks_duplicates`, `tasks_merge`,
+  `tasks_unmerge`, `tasks_duplicates_reject`, `tasks_duplicates_unsure`; permission keys `tasks.merge`,
+  `tasks.unmerge`, `tasks.duplicates.reject`, `tasks.duplicates.unsure`. Every merge, rejection, `--attach` and
+  `--new` is kept as a labelled pair, for recounting the weights later.
+- `tasks link <task> task:<other> --kind duplicate-of` joins two tasks found in messages of one account; the other
+  relation kinds still join owner-project tasks only. `tasks show` lists `duplicate-of` relations.
 
 ### Changed — may break callers
 
 - **`phone:` and `value:` also match a stored number ending with the typed number's national digits** (8 or more), so
   a number saved before `phone_countries` is found either way. A Russian landline in groups, `(812) 000-00-01`, is now
   `+78120000001`, not the bare digits.
+- **`tasks add` refuses a task that may be the same job** as an open task, or one closed in the last 14 days: exit 2,
+  reason `task.duplicate-candidates`, with up to 5 candidates (key, title, score, band, reasons) in the error's
+  `details.candidates`. Repeat with `--attach <task>` to link the message to that task instead (no task opens; the
+  answer says `attached: true`), or with `--new` to open it anyway. MCP `tasks_add` takes `attach` and `new`. A
+  source that already has a task of that type still answers `created: false` first.
+- A rule no longer opens a task for a message that is linked to a task as `evidence` — what `--attach` and
+  `tasks merge` write. `TaskStore.findBySource` takes `{ linked: true }` for that, and an optional
+  `reviewDuplicates`; `RuleResult` and the sync answer's `tasks` gain `review`.
 
 ## 0.284.0 — 15.10.2026
 

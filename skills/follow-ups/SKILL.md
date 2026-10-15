@@ -54,6 +54,8 @@ For a chat in `owed` or `waiting`: read around its `lastMessage` the same way.
 |---|---|
 | A promise, a request, a question someone waits on | `tasks add <msg> --type promise\|request\|question --category <name>` with a plan; `tasks categories` lists the names |
 | `tasks add` answers `created: false` | the message already has that task (a rule made it): `tasks plan` that one |
+| `tasks add` refuses with `task.duplicate-candidates` | read the listed tasks: the same job → repeat with `--attach <key>`; a different one → repeat with `--new` |
+| `tasks duplicates` lists pairs a rule opened | one job → `tasks merge <task> --into <other>`; two jobs → `tasks duplicates reject <task> <other>`; the meaning cannot tell (mum's gift or dad's) → `tasks duplicates unsure <task> <other>` for the owner. A wrong merge: `tasks unmerge <task>` |
 | A task that is done (the reply came, the file was sent) | `tasks close <key> --as done --reason "<one line>"` |
 | A task still open, nothing new | `tasks plan <key> --check <when>` — 1d if hot, 3d–7d if not |
 | A task with the wrong category | `tasks plan <key> --category <name>` |

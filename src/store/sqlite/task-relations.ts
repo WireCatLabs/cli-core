@@ -51,13 +51,27 @@ const liveTask = (database: CacheDatabase, rowId: number) => {
   if (!row) throw new CliError("not_found", "the owner project task is unavailable")
   return row
 }
+/** A message task's inbox has an account, so the owner-project check refuses it; one job seen twice is either kind. */
+const anyLiveTask = (database: CacheDatabase, rowId: number) => {
+  const row = database
+    .prepare(
+      "SELECT t.id,t.status,t.project_id FROM tasks t JOIN projects p ON p.id=t.project_id WHERE t.id=? AND t.deleted_at IS NULL AND p.deleted_at IS NULL",
+    )
+    .get(rowId)
+  if (!row) throw new CliError("not_found", "the task is unavailable")
+  return row
+}
+const liveFor = (database: CacheDatabase, rowId: number, kind?: TaskRelationKind) =>
+  kind === "duplicate-of" || kind === undefined ? anyLiveTask(database, rowId) : liveTask(database, rowId)
 
 /** Validation and the edge insert must see the same write-locked snapshot. */
 export const validateTaskRelation = (database: CacheDatabase, from: number, to: number, kind: TaskRelationKind) => {
   kindOf(kind)
-  liveTask(database, from)
-  liveTask(database, to)
+  const a = liveFor(database, from, kind)
+  const b = liveFor(database, to, kind)
   if (from === to) throw new CliError("validation_error", "a task cannot link to itself")
+  if (kind === "duplicate-of" && a.project_id !== b.project_id)
+    throw new CliError("validation_error", "a duplicate is in the same project or account as the task it duplicates")
   if (kind === "related-to") return
   const reached = database
     .prepare(
@@ -82,12 +96,12 @@ export const taskRelationsStoreOver = (
   ) => void,
 ): TaskRelationsStore => {
   const { database, now } = context
-  const required = (reference: string) => {
+  const required = (reference: string, kind?: TaskRelationKind) => {
     if (typeof reference !== "string" || !reference.trim())
       throw new CliError("validation_error", "a task reference is required")
     const rowId = taskRowOf(database, reference.startsWith("task:") ? reference.slice(5) : reference)
     if (rowId === undefined) throw new CliError("not_found", "the task is unavailable")
-    liveTask(database, rowId)
+    liveFor(database, rowId, kind)
     return rowId
   }
   const ref = (rowId: number) => {
@@ -97,8 +111,8 @@ export const taskRelationsStoreOver = (
   }
   const pair = (from: string, to: string, kind: TaskRelationKind) => {
     kindOf(kind)
-    const a = required(from)
-    const b = required(to)
+    const a = required(from, kind)
+    const b = required(to, kind)
     return kind === "related-to" && a > b ? ([b, a] as const) : ([a, b] as const)
   }
   const relationOf = (row: Record<string, unknown>): TaskRelation => ({
@@ -151,7 +165,7 @@ export const taskRelationsStoreOver = (
         const rowId = required(task)
         const rows = database
           .prepare(
-            "SELECT id,from_id,to_id,kind FROM links WHERE from_type='task' AND to_type='task' AND (from_id=? OR to_id=?) AND kind IN ('blocked-by','follow-up-of','related-to') AND anchor IS NULL ORDER BY id LIMIT 501",
+            "SELECT id,from_id,to_id,kind FROM links WHERE from_type='task' AND to_type='task' AND (from_id=? OR to_id=?) AND kind IN ('blocked-by','follow-up-of','related-to','duplicate-of') AND anchor IS NULL ORDER BY id LIMIT 501",
           )
           .all(rowId, rowId)
         if (rows.length > 500)
@@ -160,7 +174,7 @@ export const taskRelationsStoreOver = (
       }),
     taskReadiness: async (task) =>
       read(database, () => {
-        const rowId = required(task)
+        const rowId = required(task, "blocked-by")
         const rows = database
           .prepare(
             "SELECT l.to_id,t.status,t.deleted_at,p.deleted_at AS project_deleted FROM links l LEFT JOIN tasks t ON t.id=l.to_id LEFT JOIN projects p ON p.id=t.project_id WHERE l.from_type='task' AND l.to_type='task' AND l.kind='blocked-by' AND l.from_id=? AND l.confirmed=1 AND l.anchor IS NULL AND (t.id IS NULL OR t.deleted_at IS NOT NULL OR p.deleted_at IS NOT NULL OR t.status!='done') ORDER BY l.id LIMIT 101",

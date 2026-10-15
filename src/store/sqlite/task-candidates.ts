@@ -3,6 +3,7 @@ import { isLocator } from "../../domain/locator.js"
 import { DEFAULT_STEMMERS, type Stemmer } from "../../search/stem.js"
 import type { TaskAmount } from "../../search/task-signature.js"
 import {
+  compareTasks,
   type PreparedTask,
   prepareTask,
   rankCandidates,
@@ -48,6 +49,8 @@ export interface TaskSimilarity {
    * the last 14 days. Never refuses or merges; `tasks add` and the review list decide on the bands.
    */
   similar(subject: SimilarSubject, options?: { limit?: number }): Promise<SimilarTask[]>
+  /** One pair scored as `similar` scores a candidate, whichever lookup would or would not have found it. */
+  compare(subject: SimilarSubject, other: string): Promise<Similarity>
 }
 
 const DAY = 86_400_000
@@ -190,6 +193,18 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
   }
 
   return {
+    compare: async (subject, other) => {
+      const side = subjectOf(subject)
+      const id = taskRowOf(database, other.startsWith("task:") ? other.slice("task:".length) : other)
+      const row = id === undefined ? undefined : rowOf(id)
+      if (!side || !row) throw new CliError("not_found", `no task ${other}`)
+      const stemmer = stemmerFor(storeStemmers(database) ?? DEFAULT_STEMMERS)
+      const otherSide = sideOf(row)
+      const chain = side.source ? replyChain(side.source.message) : new Set<number>()
+      return compareTasks(prepared(side, stemmer), prepared(otherSide, stemmer), {
+        replyChain: otherSide.source !== undefined && chain.has(otherSide.source.message),
+      })
+    },
     similar: async (subject, { limit = 10 } = {}) => {
       const side = subjectOf(subject)
       if (!side) return []

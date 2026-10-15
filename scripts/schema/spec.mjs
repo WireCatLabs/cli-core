@@ -1153,6 +1153,32 @@ const NEW = {
         c("created_at", "integer", { notnull: true }),
       ],
     },
+    {
+      name: "task_pairs",
+      doc: "Two tasks that may be one job, and what was decided about them: the review list the duplicate check leaves, and every merge, rejection, `--attach` and `--new` as a labelled pair. A merge never deletes; `tasks unmerge` undoes one.",
+      cols: [
+        id(),
+        fk("task_id", "tasks", {
+          note: "the newer task, the one that would be the duplicate; null for an `--attach`, which made none",
+        }),
+        c("source_locator", "text", {
+          note: "the message an `--attach` linked to `other_id` instead of opening a task",
+        }),
+        fk("other_id", "tasks", { notnull: true, note: "the task it may duplicate" }),
+        c("score", "integer", { notnull: true, note: "the comparison's sum of weights when the pair was recorded" }),
+        c("band", "text", { notnull: true, note: "likely, maybe or different" }),
+        c("levels", "text", {
+          notnull: true,
+          note: "JSON: the level of each field, which the weights are recounted from",
+        }),
+        c("reasons", "text", { notnull: true, note: "JSON: the reasons shown with the score" }),
+        c("decision", "text", { notnull: true, note: "review, unsure, merged, rejected, unmerged, attached, new" }),
+        ...actor("decided_by"),
+        c("decided_at", "integer"),
+        ...ts(),
+      ],
+      keys: ["UNIQUE (task_id, other_id)", "INDEX (decision, created_at)"],
+    },
     fts("task_words", "Word index over task titles and descriptions, digit groups joined.", "normalized_text, scope"),
     fts("task_stems", "Stem index, the pair of task_words, without stop words.", "stems, scope"),
     queue("task_index_pending", "tasks"),

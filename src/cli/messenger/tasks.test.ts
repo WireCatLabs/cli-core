@@ -7,6 +7,7 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { task } from "../../entities/index.js"
+import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -320,7 +321,21 @@ describe("tasks", () => {
       item(await call("tasks", "add", message, "--type", "request", "--category", "money", "--title", title, "--json"))
         .card.key
     const invoice = await add(PROMISE, "Send the invoice for 15 000 rub")
-    const again = await add("msg:chat/500/7/2", "Invoice 15000 rub to send")
+    const again = item(
+      await call(
+        "tasks",
+        "add",
+        "msg:chat/500/7/2",
+        "--type",
+        "request",
+        "--category",
+        "money",
+        "--title",
+        "Invoice 15000 rub to send",
+        "--new",
+        "--json",
+      ),
+    ).card.key
 
     const listed = json(await call("tasks", "similar", invoice, "--json"))
     expect(listed.items).toMatchObject([
@@ -329,6 +344,114 @@ describe("tasks", () => {
     expect(listed.items[0].reasons).toContain("same amount")
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(2)
     expect((await call.pretty("tasks", "similar", again)).stdout.join("")).toContain(invoice)
+  })
+})
+
+describe("tasks that may be one job", () => {
+  const request = (message: string, title: string, ...more: string[]) => [
+    "tasks",
+    "add",
+    message,
+    "--type",
+    "request",
+    "--category",
+    "money",
+    "--title",
+    title,
+    ...more,
+    "--json",
+  ]
+
+  it("**refuses a task that may be the same job and lists the candidates**; --attach links, --new opens", async () => {
+    const call = await setup()
+    const invoice = item(await call(...request(PROMISE, "Send the invoice for 15 000 rub"))).card.key
+
+    const refused = await call(...request("msg:chat/500/7/2", "Invoice 15000 rub to send"))
+    expect(refused.code).toBe(2)
+    expect(JSON.parse(refused.stderr).error).toMatchObject({
+      code: "validation_error",
+      reason: "task.duplicate-candidates",
+      details: {
+        candidates: [{ key: invoice, band: expect.stringMatching(/likely|maybe/), reasons: expect.any(Array) }],
+      },
+    })
+    expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
+
+    const both = await call(...request("msg:chat/500/7/2", "Invoice", "--attach", invoice, "--new"))
+    expect([both.code, both.stderr]).toEqual([2, expect.stringContaining("choose one")])
+
+    const attached = item(await call(...request("msg:chat/500/7/2", "Invoice 15000 rub to send", "--attach", invoice)))
+    expect(attached).toMatchObject({ key: invoice, created: false, attached: true })
+    expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
+    expect(item(await call("tasks", "show", invoice, "--json")).links).toMatchObject([
+      { kind: "evidence", to: expect.stringContaining("msg:chat/500/7/2") },
+    ])
+  })
+
+  it("**--new opens the task anyway** and keeps the answer as a pair that is not one job", async () => {
+    const call = await setup()
+    const invoice = item(await call(...request(PROMISE, "Send the invoice for 15 000 rub"))).card.key
+    const opened = item(await call(...request("msg:chat/500/7/2", "Invoice 15000 rub to send", "--new")))
+    expect(opened).toMatchObject({ created: true })
+    expect(json(await call("tasks", "duplicates", "--json")).items).toEqual([])
+
+    const database = await openCache(join(call.root, "m.db"))
+    expect(
+      database
+        .prepare("SELECT decision FROM task_pairs WHERE other_id = (SELECT id FROM tasks WHERE key = ?)")
+        .all(invoice),
+    ).toEqual([{ decision: "new" }])
+    database.close()
+  })
+
+  it("**lists pairs for review, marks one unsure for the owner, merges and unmerges, rejects**", async () => {
+    const call = await setup()
+    const invoice = item(await call(...request(PROMISE, "Send the invoice for 15 000 rub"))).card.key
+    const again = item(await call(...request("msg:chat/500/7/2", "Invoice 15000 rub to send", "--new"))).card.key
+    const database = await openCache(join(call.root, "m.db"))
+    database
+      .prepare(
+        "UPDATE task_pairs SET decision = 'review', decided_by_type = NULL, decided_by_id = NULL, decided_at = NULL",
+      )
+      .run()
+    database.close()
+
+    const listed = json(await call("tasks", "duplicates", "--json"))
+    expect(listed.items).toMatchObject([
+      {
+        task: { key: again },
+        other: { key: invoice },
+        decision: "review",
+        decided_at: null,
+        levels: expect.any(Object),
+      },
+    ])
+    expect((await call.pretty("tasks", "duplicates")).stdout.join("")).toContain(invoice)
+
+    expect(item(await call("tasks", "duplicates", "unsure", again, invoice, "--json"))).toMatchObject({
+      decision: "unsure",
+    })
+    expect(json(await call("tasks", "duplicates", "--json")).items).toEqual([])
+    expect(json(await call("tasks", "duplicates", "--unsure", "--json")).items).toHaveLength(1)
+
+    const merged = item(await call("tasks", "merge", again, "--into", invoice, "--json"))
+    expect(merged).toMatchObject({ pair: { decision: "merged" }, linked: 1, task: { key: invoice } })
+    expect(item(await call("tasks", "show", again, "--json"))).toMatchObject({ status: "dismissed" })
+    expect(json(await call("tasks", "duplicates", "--unsure", "--json")).items).toEqual([])
+
+    const unmerged = item(await call("tasks", "unmerge", again, "--json"))
+    expect(unmerged).toMatchObject({ pair: { decision: "unmerged" }, task: { key: again, status: "open" } })
+
+    expect(item(await call("tasks", "duplicates", "reject", again, invoice, "--json"))).toMatchObject({
+      decision: "rejected",
+    })
+    const missing = await call("tasks", "merge", again, "--json")
+    expect(missing.code).toBe(2)
+  })
+
+  it("asks for the write permission of each decision", async () => {
+    const call = await setup({ profiles: { default: { permissions: { "tasks.merge": "deny" } } } })
+    expect((await call("tasks", "merge", "Q-1", "--into", "Q-2", "--json")).code).toBe(5)
   })
 })
 
