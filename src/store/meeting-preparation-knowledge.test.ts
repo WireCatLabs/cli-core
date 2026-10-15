@@ -64,8 +64,14 @@ describe("accepted knowledge for meeting preparation", () => {
     const deleted = await f.add("Deleted")
     f.db.prepare("UPDATE facts SET deleted_at=5000 WHERE id=?").run(Number(deleted.id))
     const future = await f.add("Not recorded yet")
-    f.db.prepare("UPDATE facts SET updated_at=10000 WHERE id=?").run(Number(future.id))
+    f.db.prepare("UPDATE facts SET updated_at=10001 WHERE id=?").run(Number(future.id))
     expect((await f.store.meetings.preparationKnowledge(f.request)).items).toHaveLength(3)
+  })
+
+  it("includes accepted facts recorded exactly at the preparation start", async () => {
+    const f = await fixture()
+    f.db.prepare("UPDATE facts SET updated_at=10000 WHERE id=?").run(Number(f.projectFact.id))
+    expect((await f.store.meetings.preparationKnowledge(f.request)).items[0]?.ref).toBe(f.projectFact.ref)
   })
 
   it("rechecks person/project links and excludes proposals and deleted/scoped projects", async () => {

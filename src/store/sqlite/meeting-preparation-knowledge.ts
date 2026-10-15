@@ -28,7 +28,7 @@ export const meetingPreparationKnowledgeOver = ({
         (f.subject_type='person' AND f.subject_id IN (SELECT id FROM people)) AS shared_person,
         ((f.subject_type='project' AND f.subject_id IN (SELECT id FROM projects))
           OR f.project_id IN (SELECT id FROM projects)) AS shared_project
-        FROM facts f WHERE f.status='accepted' AND f.deleted_at IS NULL AND f.updated_at<?
+        FROM facts f WHERE f.status='accepted' AND f.deleted_at IS NULL AND f.updated_at<=?
         AND (f.subject_type IS NULL OR f.subject_type='person' OR
           (f.subject_type='project' AND EXISTS(SELECT 1 FROM main.projects p
             WHERE p.id=f.subject_id AND p.account_id IS NULL AND p.deleted_at IS NULL)))

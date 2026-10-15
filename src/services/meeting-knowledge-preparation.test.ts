@@ -146,7 +146,7 @@ describe("meeting knowledge preparation", () => {
     { statement: "" },
     { subject: "meeting:1/1" },
     { project: "person:1" },
-    { updatedAt: 10000 },
+    { updatedAt: 10001 },
     { sharedPerson: true, subject: "project:1" },
     { sharedProject: false },
   ])("refuses invalid host facts %j", async (patch) => {

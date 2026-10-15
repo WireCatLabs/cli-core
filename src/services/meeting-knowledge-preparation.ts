@@ -19,7 +19,7 @@ const factOf = (fact: MeetingPreparationFact, before: number): MeetingPreparatio
     (fact.project !== null && (typeof fact.project !== "string" || !/^project:[1-9]\d*$/.test(fact.project))) ||
     !Number.isSafeInteger(fact.updatedAt) ||
     Math.abs(fact.updatedAt) > 8640000000000000 ||
-    fact.updatedAt >= before ||
+    fact.updatedAt > before ||
     typeof fact.sharedPerson !== "boolean" ||
     typeof fact.sharedProject !== "boolean" ||
     !(fact.sharedPerson || fact.sharedProject) ||

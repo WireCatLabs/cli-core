@@ -73,7 +73,7 @@ person links and confirmed global project memberships in one read snapshot. It s
 undeleted facts whose subject is an explicitly linked person, whose subject is a confirmed project,
 or whose project is a confirmed project. Account-scoped subjects and projects are excluded even
 when another association qualifies. A fact attached to a meeting is handled by meeting context,
-not repeated here. Facts updated at or after the preparation start are excluded; older accepted
+not repeated here. Facts updated after the preparation start are excluded; older accepted
 facts may predate the meeting history window. This is current accepted knowledge, not an historical
 snapshot or proof of when the asserted event occurred.
 
