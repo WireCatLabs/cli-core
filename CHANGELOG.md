@@ -7,6 +7,12 @@ shape of this file.
 
 ## 0.294.0 — 15.10.2026
 
+### Added
+
+- **A message draws the poll it carries**: `Attachment.poll` holds it, and `renderMessages` shows the question, each
+  answer with the id a vote takes, its voters and ✓ on the owner's own, then the totals (`pollLines`, exported). The
+  JSON answer is unchanged; `polls show` stays the way to read a poll as data.
+
 ### Fixed
 
 - Model requests needing verbatim source evidence can set `allowSourceQuotes: true`. The gateway

@@ -8,6 +8,7 @@ import type {
   MailPerson,
   Message,
   MessageHit,
+  Poll,
   QuotedMessage,
   Reactions,
   WindowedMessage,
@@ -177,9 +178,10 @@ const attachmentLines = (
       paint("dim", row.map((button) => link(`[${++number} ${singleLine(button.text)}]`, button.url)).join(" ")),
     )
 
+  const polls = attachments.flatMap((attachment) => (attachment.poll ? pollLines(attachment.poll) : []))
   const groups = new Map<string, Attachment[]>()
   for (const attachment of attachments) {
-    if (attachment.buttons) continue
+    if (attachment.buttons || attachment.poll) continue
     const key = singleLine(attachment.name ?? attachment.title ?? attachment.kind)
     groups.set(key, [...(groups.get(key) ?? []), attachment])
   }
@@ -191,7 +193,26 @@ const attachmentLines = (
     const each = same.map((attachment, index) => link(String(index + 1), attachment.url)).join(" ")
     return paint("dim", `📎 ${label} ×${same.length} ${each}`)
   })
-  return [...files, ...keyboard]
+  return [...polls, ...files, ...keyboard]
+}
+
+/** `📊 question`, then each answer with the id a vote takes, its voters and ✓ on the owner's own, then the totals. */
+export const pollLines = (poll: Poll): string[] => {
+  const kind = [
+    poll.closed ? "closed" : "",
+    poll.multiple ? "several answers" : "",
+    poll.anonymous ? "anonymous" : "",
+    poll.quiz ? "quiz" : "",
+  ].filter(Boolean)
+  const count = (voters: number | null) => (voters === null ? "?" : String(voters))
+  return [
+    `📊 ${visibleControls(poll.question)}`,
+    ...poll.answers.map(
+      (answer) =>
+        `  [${answer.id}] ${visibleControls(answer.text)} — ${count(answer.voters)}${answer.chosen ? " ✓" : ""}`,
+    ),
+    `  ${[`${count(poll.voters)} voted`, ...kind].join(" · ")}`,
+  ]
 }
 
 const megabytes = (bytes: number): string =>
