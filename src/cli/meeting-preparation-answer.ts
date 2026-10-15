@@ -97,7 +97,7 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   const size = () => Buffer.byteLength(JSON.stringify(item), "utf8")
   while (size() > item.limits.bytes && item.knowledge?.items.length) {
     item.knowledge.items.pop()
-    item.knowledge.output_limited = item.coverage.output_limited = true
+    item.knowledge.coverage.output_limited = item.coverage.output_limited = true
   }
   if (size() > item.limits.bytes && item.knowledge) {
     delete item.knowledge

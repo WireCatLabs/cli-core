@@ -67,11 +67,13 @@ export const appendKnowledgePreparation = async (
   const knowledge: NonNullable<MeetingPreparation["knowledge"]> = {
     anchors: result.items.map((item) => item.reference),
     items: [],
-    hasMore: page.hasMore,
-    outputLimited: false,
     selection: "accepted-global-person/project-facts",
-    factEvidence: "not-revalidated",
-    otherSources: "not-queried",
+    coverage: {
+      hasMore: page.hasMore,
+      outputLimited: false,
+      factEvidence: "not-revalidated",
+      otherSources: "not-queried",
+    },
   }
   result.knowledge = knowledge
   const size = () => Buffer.byteLength(JSON.stringify(result), "utf8")
@@ -84,7 +86,7 @@ export const appendKnowledgePreparation = async (
     knowledge.items.push(fact)
     if (size() > input.bytes) {
       knowledge.items.pop()
-      knowledge.outputLimited = result.coverage.outputLimited = true
+      knowledge.coverage.outputLimited = result.coverage.outputLimited = true
       break
     }
   }

@@ -84,8 +84,9 @@ before hydration. Database scan/sort work remains unbounded by row limits. Each 
 reference lets an agent retrieve the full record and evidence separately. No full evidence graph,
 annotation body, model output or source message is read by this capability.
 
-`knowledge` records included anchor references, `hasMore`, `outputLimited`, the selection
-`accepted-global-person/project-facts`, `factEvidence: not-revalidated` and `otherSources: not-queried`.
+`knowledge` records included anchor references and the selection `accepted-global-person/project-facts`.
+Its `coverage` holds `hasMore`, `outputLimited`, `factEvidence: not-revalidated` and `otherSources: not-queried`.
+The shared field projector retains that object even when selecting only `knowledge.items.ref`.
 Existing nonmeeting coverage gaps remain because notes and communications were not searched.
 Its optional data is trimmed before related or exact-series evidence when the public mapper's
 normalized output exceeds `bytes`. Public fields use snake_case and ISO update timestamps.
