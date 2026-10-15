@@ -5,6 +5,7 @@ import type { ServerContext } from "@modelcontextprotocol/server"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
+import { itemOf } from "../cli/envelope.js"
 import { openCache } from "../store/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { agentLog } from "./agent-log.js"
@@ -20,7 +21,7 @@ const echo = tool({
   description: "says it back",
   input: v.strictObject({ text: v.string() }),
   annotations: WRITE,
-  local: async ({ text }) => ({ said: text }),
+  local: async ({ text }) => itemOf({ said: text }),
 })
 const refusing = tool({
   title: "Refuse",
@@ -50,7 +51,7 @@ describe("the MCP agent log", () => {
     const run = runner(store)
 
     const answer = await run("messages_send", echo as AnyTool, { text: "secret words" }, ctx)
-    expect(answer.structuredContent).toEqual({ said: "secret words" })
+    expect(answer.structuredContent).toMatchObject({ item: { said: "secret words" } })
     await run("chats_show", refusing as AnyTool, { text: "more secret words" }, ctx)
 
     const rows = await store.agentActions.list()

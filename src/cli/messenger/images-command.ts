@@ -1,6 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { LOCAL_WRITE } from "../effects.js"
+import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { imageModelsCommand } from "./models-command.js"
@@ -41,7 +42,7 @@ export const imagesCommand = (messenger: Messenger): Command => {
             `${done.skipped ? `, ${done.skipped} not readable` : ""}${done.failed ? `, ${done.failed} failed` : ""}\n`,
         )
         if (done.more) context.renderer.note("more pictures are left — run it again")
-      } else context.renderer.result(done)
+      } else renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
 
   images.addCommand(imageModelsCommand(messenger))

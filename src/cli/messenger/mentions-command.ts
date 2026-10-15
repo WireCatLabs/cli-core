@@ -149,9 +149,8 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       refuseLocalWrite(context, tool, "mentions.confirm")
       const by = authorOf(environmentOf(this).env ?? process.env, this.opts<{ asOwner?: boolean }>().asOwner)
       const inChat = this.opts<{ allInChat?: boolean }>().allInChat === true
-      context.renderer.result(
-        await context.withServices((services) => services.mentions.confirm(id, person, by, inChat)),
-      )
+      const decided = await context.withServices((services) => services.mentions.confirm(id, person, by, inChat))
+      renderAnswer(this, context, itemOf(snakeKeys(decided)))
     })
 
   annotate(mentions.command("reject"), {
@@ -168,7 +167,8 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       refuseLocalWrite(context, tool, "mentions.reject")
       const by = authorOf(environmentOf(this).env ?? process.env, this.opts<{ asOwner?: boolean }>().asOwner)
       const inChat = this.opts<{ allInChat?: boolean }>().allInChat === true
-      context.renderer.result(await context.withServices((services) => services.mentions.reject(id, by, inChat)))
+      const decided = await context.withServices((services) => services.mentions.reject(id, by, inChat))
+      renderAnswer(this, context, itemOf(snakeKeys(decided)))
     })
 
   annotate(mentions.command("rebuild"), {

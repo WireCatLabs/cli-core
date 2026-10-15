@@ -180,7 +180,7 @@ export const crashOf = (error: unknown): { event: "command.crashed"; errorClass:
 
 export const partialOutcome = (answer: unknown): import("./run.js").RunMetadata["partial"] => {
   if (!answer || typeof answer !== "object") return undefined
-  const body = answer as {
+  const body = ("item" in answer ? answer.item : answer) as {
     batch?: {
       failed?: number
       stopReason?: string

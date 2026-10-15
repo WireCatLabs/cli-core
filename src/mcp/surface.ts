@@ -2,7 +2,7 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { answerSchema } from "../cli/envelope.js"
+import { answerSchema, listOf } from "../cli/envelope.js"
 import { movedPath, movedPointer } from "../cli/moved.js"
 import type { AppErrors } from "../errors/reasons.js"
 import { agentArguments } from "./text.js"
@@ -122,21 +122,23 @@ export const registerCommands = (
     },
     async ({ query }: { query?: string }) => {
       const found = search(commands, query ?? "")
-      return answered(
-        query?.trim()
-          ? {
-              items: found.slice(0, MATCHES).map(([command, one]) => ({
-                command,
-                title: one.title,
-                description: one.description,
-                writes: one.writes,
-                arguments: toJsonSchema(one.input),
-                output: toJsonSchema(one.output ?? ANSWER),
-              })),
-              more: found.length > MATCHES,
-            }
-          : { items: found.map(([command, one]) => ({ command, title: one.title, writes: one.writes })) },
-      )
+      const items = query?.trim()
+        ? found.slice(0, MATCHES).map(([command, one]) => ({
+            command,
+            title: one.title,
+            description: one.description,
+            writes: one.writes,
+            arguments: toJsonSchema(one.input),
+            output: toJsonSchema(one.output ?? ANSWER),
+          }))
+        : found.map(([command, one]) => ({ command, title: one.title, writes: one.writes }))
+      // The tool takes no page: more matches mean narrower words, so the list carries no page.next to rerun.
+      const { next: _paging, ...list } = listOf(`${prefix}_tools_search`, {
+        items,
+        limit: Math.max(items.length, query?.trim() ? MATCHES : 1),
+        has_more: found.length > items.length,
+      })
+      return answered(list)
     },
   )
 

@@ -57,7 +57,7 @@ describe("images embed CLI", () => {
     const { call, embed } = fixture()
     const answer = await call(["images", "embed", "--chat", "7", "--limit", "3", "--json"])
     expect(answer.code).toBe(0)
-    expect(JSON.parse(answer.stdout)).toMatchObject({ embedded: 2, skipped: 1, failed: 1, more: true })
+    expect(JSON.parse(answer.stdout)).toMatchObject({ item: { embedded: 2, skipped: 1, failed: 1, more: true } })
     expect(embed).toHaveBeenCalledOnce()
     expect(embed.mock.calls[0]?.[0]).toMatchObject({ chat: "7", limit: 3 })
     expect(embed.mock.calls[0]?.[0].signal?.aborted).toBe(true)

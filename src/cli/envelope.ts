@@ -21,9 +21,6 @@ export type ListBody<T> = Omit<ListEnvelope<T>, "meta"> & { meta?: Partial<Meta>
 export type ItemBody<T> = Omit<ItemEnvelope<T>, "meta"> & { meta?: Partial<Meta> }
 export type Body<T = unknown> = ListBody<T> | ItemBody<T>
 
-/** Only bodies built here get `meta`: an answer still in its old shape passes through untouched. */
-const built = new WeakSet<object>()
-
 export interface ListInput<T> {
   items: T[]
   limit: number
@@ -72,7 +69,6 @@ export const listOf = <T>(command: string, input: ListInput<T>): ListBody<T> => 
     ...(missing && missing.length > 0 ? { missing } : {}),
     ...(meta ? { meta } : {}),
   }
-  built.add(body)
   return body
 }
 
@@ -86,7 +82,6 @@ export const itemOf = <T>(
     ...(missing && missing.length > 0 ? { missing } : {}),
     ...(meta ? { meta } : {}),
   }
-  built.add(body)
   return body
 }
 
@@ -118,14 +113,33 @@ export const snakeKeysKeeping = (verbatim: Iterable<string>): ((value: unknown) 
  */
 export const snakeKeys = snakeKeysKeeping([])
 
-export const isBody = (value: unknown): value is Body => typeof value === "object" && value !== null && built.has(value)
+/**
+ * The envelope's shape, not where it was built: an answer an app reshaped (snake_case, `--json=a,b`) or parsed from
+ * another command's output is still one.
+ */
+export const isBody = (value: unknown): value is Body => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
+  if ("item" in value) return true
+  return (
+    "items" in value &&
+    Array.isArray(value.items) &&
+    "page" in value &&
+    typeof value.page === "object" &&
+    value.page !== null
+  )
+}
+
+/** A programming error: every answer goes out as `item` or `items` + `page`, built by `itemOf` or `listOf`. */
+const refuse = (value: unknown): never => {
+  const keys = typeof value === "object" && value !== null ? Object.keys(value).join(", ") : typeof value
+  throw new Error(`not an answer envelope (keys: ${keys}) — build it with itemOf or listOf`)
+}
 
 /** The answer with each next step judged by `targets` — for MCP, which prints no command line to check them by. */
 export const judgedAnswer = <T>(value: T, targets: NonNullable<StepInput["targets"]>): T => {
-  if (!isBody(value) || !value.next) return value
-  const judged = { ...value, next: withSafety(value.next, targets) }
-  built.add(judged)
-  return judged as T
+  if (!isBody(value)) return refuse(value)
+  if (!value.next) return value
+  return { ...value, next: withSafety(value.next, targets) } as T
 }
 
 /** `meta` from the run the answer belongs to, so `runs show <run_id>` finds it. Complete unless it names an issue. */
@@ -139,9 +153,9 @@ export const metaNow = (extra: Partial<Meta> = {}): Meta => {
   }
 }
 
-/** The one place an answer gets its `meta`, for the CLI and MCP alike. Anything else is returned as it was. */
+/** The one place an answer gets its `meta`, for the CLI and MCP alike. */
 export const sealed = <T>(value: T): T => {
-  if (!isBody(value)) return value
+  if (!isBody(value)) return refuse(value)
   const { meta, ...rest } = value
   return { ...rest, meta: metaNow(meta) } as T
 }
@@ -175,11 +189,11 @@ export const renderAnswer = <T>(
   body: Body<T>,
   view?: (body: Body<T>) => string,
 ): void => {
+  if (!isBody(body)) refuse(body)
   const root = rootOf(command)
   const next = runnable(root, body.next)
   const kept = { ...body, ...(next.length > 0 ? { next } : {}) } as Body<T>
   if (next.length === 0) delete (kept as { next?: unknown }).next
-  built.add(kept)
   const whole = sealed(kept) as ListEnvelope<T> | ItemEnvelope<T>
   if (format === "json") renderer.result(whole)
   else if (format === "jsonl") for (const line of linesOf(whole).split("\n")) streams.data(line)
@@ -191,3 +205,10 @@ export const renderAnswer = <T>(
   for (const step of next)
     renderer.note(step.kind === "command" ? `→ ${step.why}: ${stepLine(root, step)}` : `→ ${step.why}`)
 }
+
+/**
+ * A document that is not an answer about the owner's data — the command registry, a `--dry-run` preview of what a
+ * command would do — printed whole, with no envelope.
+ */
+export const renderDocument = ({ renderer }: Pick<AnswerOutput, "renderer">, document: object): void =>
+  renderer.result(document)
