@@ -8,6 +8,7 @@ import {
   readMeetingPreparation,
 } from "../cli/meeting-preparation-read.js"
 import { meetingPreparation } from "../entities/index.js"
+import { agentResult, UNTRUSTED } from "./text.js"
 
 const inputSchema: Record<string, unknown> = { ...jsonSchemaOf(meetingPreparationInput) }
 const outputSchema: Record<string, unknown> = {
@@ -15,8 +16,7 @@ const outputSchema: Record<string, unknown> = {
 }
 export const meetingPreparationTool = {
   name: "meeting_prepare",
-  description:
-    "Prepare cited context for one exact provider series in the server's selected account. Reads remote upcoming proof and bounded stored history, related meeting transcripts through explicit people/confirmed project links, accepted meeting facts and directly sourced tasks; performs no writes. Optional ISO windows default to now, seven days ahead and thirty days of history. Coverage identifies incomplete and unqueried context.",
+  description: `Prepare cited context for one exact provider series in the server's selected account. Reads remote upcoming proof and bounded stored history, related meeting transcripts through explicit people/confirmed project links, accepted meeting facts and directly sourced tasks; performs no writes. Optional ISO windows default to now, seven days ahead and thirty days of history. Coverage identifies incomplete and unqueried context. ${UNTRUSTED}`,
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   inputSchema: { ...inputSchema, type: "object" as const },
   outputSchema: { ...outputSchema, type: "object" as const },
@@ -30,8 +30,11 @@ export const callMeetingPreparationTool = async (
 ) => {
   try {
     const result = await readMeetingPreparation(read, input, signal, now)
-    return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result }
+    return agentResult({
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+      structuredContent: result,
+    })
   } catch (error) {
-    return mcpErrorResult(errorObjectOf(error, { ...failure, effects: REMOTE_READ }))
+    return agentResult(mcpErrorResult(errorObjectOf(error, { ...failure, effects: REMOTE_READ })))
   }
 }
