@@ -12,6 +12,7 @@ export {
   meetingSummary,
   meetingTranscript,
 } from "./answers.js"
+export type { MeetingBatchReader } from "./batch.js"
 export type {
   MeetingContextStore,
   MeetingEventLinkInput,

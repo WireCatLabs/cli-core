@@ -14,15 +14,35 @@ const count = (value: string) => {
     throw new CliError("validation_error", "expected a nonnegative safe integer")
   return Number(value)
 }
-/** The host fixes account scope, connection lifetime and final rendering/output limits. */
-export const addMeetingPassageCommand = (
-  program: Command,
-  deps: {
-    read: MeetingPassageReader
-    signal: () => AbortSignal | undefined
-    output: (result: MeetingPassageResult, format: MeetingPassageOutputFormat) => void
-  },
-) => {
+export interface MeetingPassageFlags {
+  beforeN?: number
+  afterN?: number
+  bytes?: number
+  maxReadBytes?: number
+  expectedFingerprint?: string
+  format?: MeetingPassageOutputFormat
+}
+
+export const meetingPassageRequest = (
+  reference: string,
+  options: MeetingPassageFlags,
+  signal?: AbortSignal,
+): MeetingPassageRequest => {
+  const input: MeetingPassageRequest = {
+    before: options.beforeN,
+    after: options.afterN,
+    bytes: options.bytes,
+    max_read_bytes: options.maxReadBytes,
+    expected_fingerprint: options.expectedFingerprint,
+    format: options.format ?? "text",
+    signal,
+  }
+  validateMeetingPassage(reference, input)
+  signal?.throwIfAborted()
+  return input
+}
+
+export const createMeetingPassageCommand = (program: Command): Command => {
   const meetings = program.commands.find((command) => command.name() === "meetings")
   if (!meetings) throw new CliError("configuration_error", "meeting command group is unavailable")
   return annotate(
@@ -43,35 +63,6 @@ export const addMeetingPassageCommand = (
         new Option("--format <format>", "compact text, Markdown or structured JSON")
           .choices(["text", "markdown", "json"])
           .default("text"),
-      )
-      .action(
-        async (
-          reference: string,
-          options: Omit<MeetingPassageRequest, "before" | "after" | "max_read_bytes" | "expected_fingerprint"> & {
-            beforeN?: number
-            afterN?: number
-            maxReadBytes?: number
-            expectedFingerprint?: string
-          },
-          command: Command,
-        ) => {
-          const globals = command.optsWithGlobals()
-          const format = globals.json || globals.jsonl ? "json" : (options.format ?? "text")
-          const input = {
-            before: options.beforeN,
-            after: options.afterN,
-            bytes: options.bytes,
-            max_read_bytes: options.maxReadBytes,
-            expected_fingerprint: options.expectedFingerprint,
-            format,
-            signal: deps.signal(),
-          }
-          validateMeetingPassage(reference, input)
-          input.signal?.throwIfAborted()
-          const result = await deps.read(reference, input)
-          input.signal?.throwIfAborted()
-          deps.output(result, format)
-        },
       ),
     {
       origin: "handwritten",
@@ -80,3 +71,23 @@ export const addMeetingPassageCommand = (
     },
   )
 }
+
+/** The host fixes account scope, connection lifetime and final rendering/output limits. */
+export const addMeetingPassageCommand = (
+  program: Command,
+  deps: {
+    read: MeetingPassageReader
+    signal: () => AbortSignal | undefined
+    output: (result: MeetingPassageResult, format: MeetingPassageOutputFormat) => void
+  },
+) =>
+  createMeetingPassageCommand(program).action(
+    async (reference: string, options: MeetingPassageFlags, command: Command) => {
+      const globals = command.optsWithGlobals()
+      const format = globals.json || globals.jsonl ? "json" : (options.format ?? "text")
+      const input = meetingPassageRequest(reference, { ...options, format }, deps.signal())
+      const result = await deps.read(reference, input)
+      input.signal?.throwIfAborted()
+      deps.output(result, format)
+    },
+  )

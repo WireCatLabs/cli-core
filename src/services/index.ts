@@ -193,6 +193,7 @@ export {
   savePicture,
 } from "./document-pictures.js"
 export type { ModelChoice } from "./embeddings.js"
+export { createMeetingBatchReader } from "./meeting-batch.js"
 export {
   createMeetingContextService,
   type MeetingContextService,

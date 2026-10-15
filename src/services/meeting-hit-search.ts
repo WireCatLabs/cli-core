@@ -30,6 +30,7 @@ export const searchMeetingHits = async (
   store: Pick<MessageStore, "meetings"> & { knowledge?: MessageStore["knowledge"] },
   query: string,
   request: MeetingHitSearchRequest,
+  options: { refreshIndex?: boolean } = {},
 ) => {
   const { project, tag, topic, ...input } = request
   input.signal?.throwIfAborted()
@@ -67,7 +68,7 @@ export const searchMeetingHits = async (
     else input.tagId = id
     selection.push({ kind, id, name: entry.name, by: "explicit-link" })
   }
-  await refreshMeetingIndex(store.meetings, input.accountId, input.signal)
+  if (options.refreshIndex !== false) await refreshMeetingIndex(store.meetings, input.accountId, input.signal)
   const result = await store.meetings.searchHits(query, input)
   input.signal?.throwIfAborted()
   return { ...result, selection }

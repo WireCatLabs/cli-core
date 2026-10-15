@@ -30,6 +30,9 @@ const timestamp = (ms: number) => {
       "0",
     )}:${Math.floor(seconds / 60) % 60 < 10 ? "0" : ""}${Math.floor(seconds / 60) % 60}:${(seconds % 60).toString().padStart(2, "0")}`
 }
+export const formatMeetingEvidenceText = (text: string, format: MeetingPassageFormat): string =>
+  format === "markdown" ? markdown(text) : visible(text)
+
 /** Presentation only: retained references, revision flags and incomplete coverage survive compact output. */
 export const formatMeetingPassage = (
   packet: MeetingEvidencePacket | MeetingHitContextPacket,
