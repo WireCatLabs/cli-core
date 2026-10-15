@@ -71,7 +71,6 @@ number is needed in [COORDINATION.md](COORDINATION.md).
    `memo folders attach` refuses them (point 5). Merged in cli-memo#116.
 3. **drive-cli, after drive#19 merges:**
    1. `openIndex` opens `storePath(env)`: `openStore({ path: storePath(env), env, command: "drive" })`.
-      An explicit path, so drive never runs the old-store cleanup (`src/store/store.ts:790-791`).
    2. `DRIVE_STORE` goes (Q3); tests, smoke and the contract seed set `MESSAGING_STORE`
       (`drive-cli/src/testing.ts:30`, `scripts/smoke.ts:49`, `contracts/previous/seed.mjs:14`).
       Docs that describe `drive.db` and "share a store deliberately" are rewritten
