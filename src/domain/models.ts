@@ -172,6 +172,8 @@ export interface Attachment {
   providerRef?: ProviderMetadata
   /** A bot's keyboard under the message, row by row. */
   buttons?: Button[][]
+  /** The poll the message carries, as it stood when read; drawn for a person, not part of the JSON answer. */
+  poll?: Poll
 }
 
 /**

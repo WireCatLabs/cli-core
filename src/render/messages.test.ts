@@ -34,6 +34,28 @@ const plain: RenderOptions = { timeZone: "Europe/Madrid", width: 60 }
 const ESC = "\u001b"
 
 describe("a message, as a person reads it", () => {
+  it("draws a poll it carries: each answer with its id, voters and the owner's ✓, then the totals", () => {
+    const poll = {
+      chatId: "7",
+      messageId: "1",
+      question: "Когда созвон?",
+      answers: [
+        { id: "a", text: "четверг", voters: 3, chosen: true },
+        { id: "b", text: "пятница", voters: null, chosen: false },
+      ],
+      closed: false,
+      multiple: true,
+      anonymous: false,
+      voters: 3,
+    }
+    const out = renderMessage(message({ text: "", attachments: [{ kind: "poll", poll }] }), plain)
+    expect(out).toContain("📊 Когда созвон?")
+    expect(out).toContain("[a] четверг — 3 ✓")
+    expect(out).toContain("[b] пятница — ?")
+    expect(out).toContain("3 voted · several answers")
+    expect(out).not.toContain("📎")
+  })
+
   it("puts time and sender on one line and the text under them", () => {
     expect(renderMessage(message(), plain)).toBe("10:05:12  Анна\n          созвонимся в четверг?")
   })

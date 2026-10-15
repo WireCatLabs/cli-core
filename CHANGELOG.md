@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A message draws the poll it carries**: `Attachment.poll` holds it, and `renderMessages` shows the question, each
+  answer with the id a vote takes, its voters and ✓ on the owner's own, then the totals (`pollLines`, exported). The
+  JSON answer is unchanged; `polls show` stays the way to read a poll as data.
+
 ### Fixed
 
 - The source-evidence opt-in explicitly permits supporting quotes rather than requesting a
