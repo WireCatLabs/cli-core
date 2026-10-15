@@ -2,6 +2,7 @@ import { capped, extensionOf, startsWith, withEngine } from "../engine.js"
 import type { Reader } from "../types.js"
 
 /** OLE2 compound file: every legacy Office binary — .doc, .xls, .ppt — starts with it. */
+// biome-ignore lint/security/noSecrets: OLE2 file signature bytes, not a key
 const OLE = "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
 
 interface WordExtractor {

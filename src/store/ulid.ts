@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto"
 
+// biome-ignore lint/security/noSecrets: Crockford base32 alphabet, not a key
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 /** 26 characters, sortable by creation time: 48 bits of milliseconds, then 80 random bits. */
