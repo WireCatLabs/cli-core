@@ -5,17 +5,12 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.293.0 — 15.10.2026
 
 ### Added
 
 - **`store.mail.emails` and `emailRefs` take `attachmentErrors`**: only emails with an attachment whose text
   extraction failed with one of those errors, so a retry reads those emails again instead of a whole mailbox.
-
-## 0.293.0 — 15.10.2026
-
-### Added
-
 - **Meeting reads can run as an explicit bounded batch.** The shared CLI builder registers word search and
   passage handlers, keeps independent answers/cursors/errors, reserves stored-text read ceilings and performs
   one bounded index pass. The host selects one account and owns input, cancellation and final output; no model
