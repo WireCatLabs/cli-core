@@ -6,7 +6,6 @@ import { parseLucene } from "@wirecat/cli-base/query"
 import { describe, expect, it } from "vitest"
 import type { Message } from "../domain/models.js"
 import { searchStore } from "../services/messages-archive-search.js"
-import { saveStorePhoneCountries } from "./sqlite/phone-countries.js"
 import { type AccountKey, MENTION_QUERY, openStore } from "./store.js"
 
 const OWNER: AccountKey = { provider: "max", account: "1" }
@@ -166,7 +165,9 @@ describe("deciding a mention", () => {
     }
     const before = firstFound()
     const settings = new DatabaseSync(path)
-    saveStorePhoneCountries(settings, ["es", "ru"], Date.now())
+    settings
+      .prepare("INSERT INTO store_settings (key, value, at) VALUES ('phoneCountries', ?, ?)")
+      .run(JSON.stringify(["es", "ru"]), Date.now())
     settings.close()
     await store.rebuildMentions({ kinds: ["phone"] })
 

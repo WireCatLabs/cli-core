@@ -1,6 +1,6 @@
 // Writes src/domain/phone-plans.generated.ts from libphonenumber's metadata, the numbering plans Google keeps.
 // The library itself is a dev dependency: the CLI ships these few rows, not its 10 MB (NEED-1033).
-// Run: node --experimental-strip-types scripts/phone-plans.ts
+// Run: node --experimental-strip-types scripts/phone-plans.ts && pnpm exec biome check --write src/domain/phone-plans.generated.ts
 import { writeFileSync } from "node:fs"
 import { Metadata } from "libphonenumber-js/max"
 
@@ -79,7 +79,19 @@ const alternatives = (pattern: string): string[] => {
   return parts
 }
 
-const metadata = new Metadata()
+// The package's types describe its parsing functions, not the metadata reader these rows come from.
+interface Plan {
+  nationalPrefix(): unknown
+  nationalPrefixForParsing(): string | undefined
+  possibleLengths(): number[]
+  nationalNumberPattern(): string
+  type(name: "MOBILE" | "FIXED_LINE"): { pattern(): string } | undefined
+}
+const metadata = new Metadata() as unknown as {
+  selectNumberingPlan(country: string): void
+  numberingPlan: Plan
+  countryCallingCode(): string
+}
 const rows = COUNTRIES.map((country) => {
   metadata.selectNumberingPlan(country)
   const plan = metadata.numberingPlan
