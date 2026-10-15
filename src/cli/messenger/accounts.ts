@@ -2,8 +2,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { Provider } from "../../domain/models.js"
+import type { AppIdentity } from "../../ports/app.js"
 import type { AccountKey } from "../../store/store.js"
-import type { AppIdentity } from "../app.js"
 
 /** Which account a profile is, remembered so `--offline` can find its rows without connecting. */
 export const accountFileFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv): string =>

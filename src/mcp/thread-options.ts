@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { parseDuration } from "../cli/settings.js"
+import { parseDuration } from "../domain/duration.js"
 import type { ThreadOptions } from "../services/thread-context.js"
 
 export const threadInputs = {

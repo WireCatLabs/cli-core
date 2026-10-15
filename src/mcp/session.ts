@@ -1,6 +1,6 @@
-import { isCliFailure } from "../cli/failures.js"
-import type { EventSink } from "../cli/runs/events.js"
+import { isCliFailure } from "../errors/failures.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
+import type { EventSink } from "../runs/events.js"
 
 export interface SessionOptions {
   /** Close the connection after this long without a call. */

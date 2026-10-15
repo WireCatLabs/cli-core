@@ -75,7 +75,7 @@ A generated tag is a `taggings` row, not a row in another table. New columns:
 3. **A model, on request:** `tags suggest <ref|query> --model <provider:model>` sends the text to a model with the
    vocabulary and records claims (`algorithm = model:<provider>:<model>`). A local model runs on this machine;
    OpenAI or Anthropic receive the owner's text, so a remote model is named on every run — never a default, never
-   chosen by the tool — and uses the embedding keys already kept per provider (`src/cli/embedding-keys.ts`).
+   chosen by the tool — and uses the embedding keys already kept per provider (`src/embeddings/keys.ts`).
 4. **An agent:** reads the thing itself and calls `tags add`; an agent's `tags add` writes a claim, the owner's a
    confirmed row. No new dependency.
 

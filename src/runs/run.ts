@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createRecordLog, type Logger, resolvePaths, writeSecurely } from "@wirecat/cli-base"
-import type { AppIdentity } from "../app.js"
+import type { AppIdentity } from "../ports/app.js"
 import { LOG_ATTRIBUTES } from "./log-attributes.js"
 import { fromLogAttributes, logAttributes, snakeLogger } from "./log-keys.js"
 

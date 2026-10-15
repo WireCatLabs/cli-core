@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { threadIdOf } from "../../domain/thread.js"
 import { capability } from "../../ports/messenger.js"
 import {
   closeAfterOf,
@@ -21,7 +22,6 @@ import { type Messenger, messengerContext } from "./context.js"
 import { selfOf } from "./message-items.js"
 import { afterWrite, writtenAnswer } from "./message-writes.js"
 import { VOTERS_QUERY } from "./people-queries.js"
-import { threadIdOf } from "./thread.js"
 
 /**
  * `polls show|vote|close|create`. An answer is named by its id, as `polls show` prints it — never by

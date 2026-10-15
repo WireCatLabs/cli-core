@@ -13,14 +13,15 @@ import { type Saved, saveFiles } from "../../services/file-download.js"
 
 export { downloadMessage, type Saved, safeName, save } from "../../services/file-download.js"
 
+import { parseDuration } from "../../domain/duration.js"
+import type { Fetching } from "../../ports/traits.js"
 import { OFFLINE } from "../../services/deps.js"
 import type { MessagesService } from "../../services/messages.js"
 import { patiently } from "../../services/patience.js"
 import { FETCH } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { parseDuration } from "../settings.js"
 import { nextStep } from "../steps.js"
-import { type Fetching, type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
+import { type Messenger, type MessengerContext, messengerContext, refuseLocalWrite } from "./context.js"
 import { stopOnSignal } from "./patience.js"
 
 /** `messages download`: every file of one message, or with `--all` of a whole chat, never over a file already there. */

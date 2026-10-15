@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
-import { findRun, listRuns, readEvents, startRun } from "./run.js"
+import { findRun, listRuns, readEvents, startRun } from "../../runs/run.js"
 import { searchRuns } from "./search.js"
 
 it("searches error codes, partial IDs and safe events with profile isolation and pagination", async () => {

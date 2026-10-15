@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { memoryKeyring } from "@wirecat/cli-base"
 import { beforeEach, describe, expect, it } from "vitest"
-import type { AppIdentity } from "../app.js"
+import type { AppIdentity } from "../../ports/app.js"
 import { botFiles, ChatRegistry, registryProfiles } from "./registry.js"
 import { BotTokenStore } from "./token.js"
 

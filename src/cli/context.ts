@@ -1,13 +1,13 @@
 import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { resolveOutput } from "../output.js"
+import type { AppIdentity } from "../ports/app.js"
+import type { EventSink } from "../runs/events.js"
+import { recorded } from "../runs/recording.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
-import type { AppIdentity } from "./app.js"
 import { type Closeable, withDeadline } from "./deadline.js"
 import { withAbort } from "./execution.js"
 import { rootOf } from "./profile.js"
-import type { EventSink } from "./runs/events.js"
-import { recorded } from "./runs/recording.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
 
 /** What every CLI's commands write to, when it is not the real terminal. A CLI adds its own fields. */

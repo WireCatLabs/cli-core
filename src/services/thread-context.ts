@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
-import { isCliFailure } from "../cli/failures.js"
 import { RULES_VERSION } from "../conversations/link.js"
 import { formatLocator } from "../domain/locator.js"
 import type { Id, WindowedMessage } from "../domain/models.js"
+import { isCliFailure } from "../errors/failures.js"
 import type { AccountKey, MessageStore, StoredLink } from "../store/store.js"
 
 export const THREAD_BOUNDS = { maxHops: 8, maxMessages: 50, maxBytes: 65_536, withinMs: 86_400_000 }

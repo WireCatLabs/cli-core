@@ -17,13 +17,13 @@ import {
 } from "../../background/schedules.js"
 import { type ServerSystem, thisMachine } from "../../background/system.js"
 import { locationVariables } from "../../background/units.js"
+import { parseDuration } from "../../domain/duration.js"
+import { readOnlyLockOf } from "../../ports/app.js"
 import { aheadOf } from "../../services/moment.js"
 import { storePath } from "../../store/path.js"
-import { readOnlyLockOf } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { parseDuration } from "../settings.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /** Each run of an agent is a paid model call that reads chats; keeping the store current is `serve`'s job. */

@@ -415,7 +415,7 @@ change of status, due date, priority or assignee is a `task_events` row.
 
 `run()` (`src/cli/program.ts`) never throws; it returns an exit code. It lifts a profile given as
 the first word, resolves settings (flag → environment → file → default, `src/cli/settings.ts`),
-records runs (`src/cli/runs/`) and closes what a command holds when `--timeout` ends it
+records runs (`src/runs/`; the `runs` command is `src/cli/runs/`) and closes what a command holds when `--timeout` ends it
 (`src/cli/deadline.ts`).
 
 Optional `ProgramDefinition.configure`, `prepare` and `onFailure` let a consumer add root options,
@@ -446,8 +446,12 @@ profile's permissions exactly as over stdio; no form is forced (NEED-774, which 
 Five layers, each calling only the ones below it: the **domain** (`src/domain/`), the **adapters**
 (each CLI's own, behind `MessengerAdapter`), the **ports** (`port.ts`, the store), the **services**
 (`src/services/`) and the **interface** (the commands and the MCP tools). `biome.json` refuses an import of `commander` or
-of a command file from `src/services/`, `src/sends/` and `src/mcp/`: what a service or an MCP tool
-shares with a command lives in the service, and the command imports it. It also refuses a table module under
+of anything under `src/cli/` from `src/services/`, `src/sends/`, `src/replies/`, `src/attachments/`,
+`src/moderation/`, `src/models/`, `src/analysis/`, `src/domain/` and `src/ports/`, and of a command file from
+`src/mcp/`: what they share with a command lives below it, and the command imports it. A service sees the
+messenger as `MessengerTraits` (`src/ports/traits.ts`), the fields it reads; the CLI's `Messenger` adds how
+commands connect and resolve settings. The app's identity is `src/ports/app.ts`, error shapes and reasons
+`src/errors/`, run records and log keys `src/runs/`. It also refuses a table module under
 `src/store/sqlite/` from `src/services/`, `src/sends/`, `src/mcp/` and `src/cli/`: they reach the store
 through `src/store/store.ts`, which re-exports what they need.
 

@@ -1,4 +1,7 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
+export { parseDuration } from "../domain/duration.js"
+export { isCliFailure, isCommanderFailure } from "../errors/failures.js"
+export { type AppErrors, failureContext } from "../errors/reasons.js"
 export { botInstructions } from "../mcp/bot/instructions.js"
 export { type BotServerOptions, botToolName, createBotServer, type RunBotCommand } from "../mcp/bot/server.js"
 export {
@@ -41,6 +44,7 @@ export {
   type MessagesSearchArgs,
   messagesSearchInput,
 } from "../mcp/tools/search.js"
+export { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 export type {
   AccountHealth,
   AccountStanding,
@@ -83,11 +87,42 @@ export type {
   TopicEditing,
   Transcript,
 } from "../ports/messenger.js"
+export type { Fetching, MediaOption, MessengerTraits } from "../ports/traits.js"
 export { senderFacts } from "../replies/dry-run.js"
 export { type ReplyRender, replyRenderer } from "../replies/rendering.js"
 export { repliesPathFor } from "../replies/rules.js"
 export { NO_RULES, NO_TASKS, NOT_ALLOWED, ONLY_TASK, type Replied, type Replier, replyTo } from "../replies/serve.js"
 export { repliesStatePathFor } from "../replies/state.js"
+export {
+  type CacheEvent,
+  type DiagnosticEvent,
+  type EventSink,
+  providerErrorKey,
+  type RequestEvent,
+  renderEvent,
+  type WarningEvent,
+} from "../runs/events.js"
+export { CORE_LOG_EVENTS } from "../runs/log-events.js"
+export {
+  crashOf,
+  type Recording,
+  type RecordingOptions,
+  recorded,
+  startRecording,
+  wasSettled,
+} from "../runs/recording.js"
+export {
+  findRun,
+  KEEP_RUNS_FOR_DAYS,
+  listRuns,
+  pruneRuns,
+  type RunMetadata,
+  readEvents,
+  runsDirFor,
+  runtime,
+  startRun,
+} from "../runs/run.js"
+export { currentRun, inRun, type RunScope, useAsProcessRun } from "../runs/scope.js"
 export { guardedApp, guardedPress, guardedStart, type Pressed } from "../sends/buttons.js"
 export { guardedClose, guardedCreatePoll, guardedVote } from "../sends/polls.js"
 export type { InboxReader } from "../services/inbox.js"
@@ -104,7 +139,6 @@ export {
   evaluateAgent,
   type Observation,
 } from "./agent-evaluation.js"
-export { type AppIdentity, envName, readOnlyLockOf } from "./app.js"
 export { botAdminsCommand, botMembersCommand } from "./bot/admins.js"
 export { type ApiCommandInput, type ApiCommands, generatedApiCommand } from "./bot/api.js"
 export {
@@ -198,7 +232,6 @@ export {
   snakeKeysKeeping,
 } from "./envelope.js"
 export { withAbort } from "./execution.js"
-export { isCliFailure, isCommanderFailure } from "./failures.js"
 export {
   bufferedInput,
   type InputPolicy,
@@ -244,8 +277,6 @@ export { type CompletionOptions, completeCommand } from "./messenger/complete-co
 export { contactsCommand } from "./messenger/contacts-command.js"
 export {
   type ConnectOptions,
-  type Fetching,
-  type MediaOption,
   type Messenger,
   type MessengerContext,
   messengerContext,
@@ -318,39 +349,8 @@ export {
   usableProfileName,
 } from "./profile.js"
 export { createProgram, type ProgramDefinition, type ProgramOptions, type RunOptions, run } from "./program.js"
-export { type AppErrors, failureContext } from "./reasons.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export { runsCommand } from "./runs/command.js"
-export {
-  type CacheEvent,
-  type DiagnosticEvent,
-  type EventSink,
-  providerErrorKey,
-  type RequestEvent,
-  renderEvent,
-  type WarningEvent,
-} from "./runs/events.js"
-export { CORE_LOG_EVENTS } from "./runs/log-events.js"
-export {
-  crashOf,
-  type Recording,
-  type RecordingOptions,
-  recorded,
-  startRecording,
-  wasSettled,
-} from "./runs/recording.js"
-export {
-  findRun,
-  KEEP_RUNS_FOR_DAYS,
-  listRuns,
-  pruneRuns,
-  type RunMetadata,
-  readEvents,
-  runsDirFor,
-  runtime,
-  startRun,
-} from "./runs/run.js"
-export { currentRun, inRun, type RunScope, useAsProcessRun } from "./runs/scope.js"
 export {
   type Config,
   type Configuration,
@@ -361,7 +361,6 @@ export {
   type GlobalFlags,
   NONE_NAMED,
   type ProfileKind,
-  parseDuration,
   plain,
   type ResolveOptions,
   type Settings,

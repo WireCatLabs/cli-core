@@ -1,12 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
-import type { AppIdentity } from "../app.js"
+import type { AppIdentity } from "../../ports/app.js"
+import { findRun, listRuns, readEvents, runsDirFor } from "../../runs/run.js"
 import { environmentOf, outputFor } from "../context.js"
 import { LOCAL_READ, NO_EFFECTS } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
-import { findRun, listRuns, readEvents, runsDirFor } from "./run.js"
 import { type RunSearch, runsFound, searchRuns } from "./search.js"
 
 /** Reading the log is not itself worth recording, so **nothing here starts a run**. */

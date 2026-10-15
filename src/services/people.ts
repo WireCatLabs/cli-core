@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { type Predicate, queryError } from "@wirecat/cli-base/query"
-import { isCliFailure } from "../cli/failures.js"
 import type { Chat, Contact, Id, Member, Page, PersonCard, PersonProfile, PhoneBookEntry } from "../domain/models.js"
+import { isCliFailure } from "../errors/failures.js"
 import { capability } from "../ports/messenger.js"
 import { pickPerson } from "../resolve.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"

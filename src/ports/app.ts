@@ -1,4 +1,4 @@
-import type { AppErrors } from "./reasons.js"
+import type { AppErrors } from "../errors/reasons.js"
 
 /** Who a messenger CLI is: the word people type, where its files live, what its variables start with. */
 export interface AppIdentity {

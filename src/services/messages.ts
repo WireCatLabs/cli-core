@@ -1,18 +1,18 @@
 import { CliError } from "@wirecat/cli-base"
-import type { MediaOption, Messenger } from "../cli/messenger/context.js"
-import { threadIdOf } from "../cli/messenger/thread.js"
-import type { DownloadedFile } from "../domain/attachments.js"
+import type { DownloadedFile, Upload } from "../domain/attachments.js"
 import { type FormattedText, validateFormattedText, visibleFormattedText } from "../domain/formatting.js"
 import { formatLocator } from "../domain/locator.js"
 import { type MessageLink, messageLinkTarget, validatePermalink } from "../domain/message-link.js"
 import type { Deletion, Discussion, Id, Message, Page, Provider, WindowedMessage } from "../domain/models.js"
+import { threadIdOf } from "../domain/thread.js"
 import { type After, capability, type Download, type MessengerAdapter, type Sent } from "../ports/messenger.js"
+import type { MediaOption, MessengerTraits } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import type { PermissionKey } from "../sends/permissions.js"
 import { sendAsCheck } from "../sends/send-as.js"
 import { newOperationId, newSendId } from "../sends/send-id.js"
-import { type Upload, uploadSize } from "../sends/upload.js"
+import { uploadSize } from "../sends/upload.js"
 import type {
   AccountKey,
   ChatCompleteness,
@@ -744,7 +744,7 @@ const MEDIA_FLAGS: Record<MediaOption, string> = {
   fileName: "--filename",
 }
 
-const checkMediaOptions = (messenger: Messenger, asked: MediaOption[], attachments: number): void => {
+const checkMediaOptions = (messenger: MessengerTraits, asked: MediaOption[], attachments: number): void => {
   const [first] = asked
   if (first === undefined) return
   const missing = asked.find((one) => !messenger.mediaOptions?.includes(one))

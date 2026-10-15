@@ -4,7 +4,7 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { answerSchema } from "../cli/envelope.js"
 import { movedPath, movedPointer } from "../cli/moved.js"
-import type { AppErrors } from "../cli/reasons.js"
+import type { AppErrors } from "../errors/reasons.js"
 import { agentArguments } from "./text.js"
 import {
   type AnyTool,

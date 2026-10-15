@@ -1,6 +1,6 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
-import type { Messenger } from "../cli/messenger/context.js"
 import type { Chat, Id, Page, Provider } from "../domain/models.js"
+import type { MessengerTraits } from "../ports/traits.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountStore } from "../store/account-store.js"
@@ -8,7 +8,7 @@ import type { AccountKey, MessageStore } from "../store/store.js"
 import { nothingStored, type ServiceDeps } from "./deps.js"
 
 /** What a store search reads of the messenger: its saved-messages chat, and its command for a hint. */
-export type Saved = Partial<Pick<Messenger, "savedChatId" | "app">>
+export type Saved = Partial<Pick<MessengerTraits, "savedChatId" | "app">>
 
 /**
  * The chat a store read is about. Offline, a chat with nothing kept answers empty, as it always has;

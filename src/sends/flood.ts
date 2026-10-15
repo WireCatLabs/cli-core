@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { resolvePaths } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
+import type { AppIdentity } from "../ports/app.js"
 
 /** "The messenger said: do not ask for this again before `until`." */
 export interface FloodDeadline {

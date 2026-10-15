@@ -1,5 +1,5 @@
 import { Credentials, pathsAreOverridden, resolvePaths } from "@wirecat/cli-base"
-import { type AppIdentity, envName } from "./app.js"
+import { type AppIdentity, envName } from "../ports/app.js"
 
 /**
  * Combot's key for CAS, where the owner keeps one: the keyring account `registries:cas` under the

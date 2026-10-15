@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { Id } from "../../domain/models.js"
-import type { AppIdentity } from "../app.js"
+import type { AppIdentity } from "../../ports/app.js"
 
 interface Saved {
   /** Where a chat with no point of its own starts: the first check, or the one point older versions kept. */

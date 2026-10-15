@@ -1,9 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
-import { formatMeetingReference, parseMeetingReference } from "../domain/meeting-reference.js"
 import {
   createMeetingContext,
+  formatMeetingReference,
   type MeetingContextChange,
   type MeetingMutationOptions,
+  parseMeetingReference,
   snapshotMeetingScope,
   validateMeetingContextChange,
 } from "../meetings/index.js"

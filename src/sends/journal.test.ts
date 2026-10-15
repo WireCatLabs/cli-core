@@ -5,8 +5,8 @@ import { logRecordSchema } from "@wirecat/cli-base/standards"
 import { expectRegisteredEvents } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { expect, it } from "vitest"
-import { CORE_LOG_EVENTS } from "../cli/runs/log-events.js"
-import { inRun } from "../cli/runs/scope.js"
+import { CORE_LOG_EVENTS } from "../runs/log-events.js"
+import { inRun } from "../runs/scope.js"
 import { SendJournal } from "./journal.js"
 
 const journalFile = () => join(mkdtempSync(join(tmpdir(), "send-journal-")), "default.jsonl")

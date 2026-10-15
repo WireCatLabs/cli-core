@@ -1,5 +1,5 @@
 import { logAttributesJsonSchema } from "@wirecat/cli-base/standards"
-import type { SendEntry } from "../../sends/journal.js"
+import type { SendEntry } from "../sends/journal.js"
 import type { DiagnosticEvent } from "./events.js"
 import { logAttributes } from "./log-keys.js"
 

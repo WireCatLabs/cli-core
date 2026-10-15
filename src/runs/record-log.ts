@@ -1,5 +1,5 @@
 import { createRecordLog, type Logger } from "@wirecat/cli-base"
-import type { AppIdentity } from "../app.js"
+import type { AppIdentity } from "../ports/app.js"
 import { LOG_ATTRIBUTES } from "./log-attributes.js"
 import { snakeLogger } from "./log-keys.js"
 import { currentRun } from "./scope.js"

@@ -1,8 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
-import type { Messenger } from "../cli/messenger/context.js"
-import { formatMeetingReference } from "../domain/meeting-reference.js"
 import type { SearchHit } from "../meetings/index.js"
+import { formatMeetingReference } from "../meetings/index.js"
+import type { MessengerTraits } from "../ports/traits.js"
 import { entriesOfList, fitting } from "../search/account-list.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { codeOf } from "../sends/guarded.js"
@@ -197,7 +197,7 @@ export const searchAllIncludingMeetings = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchAllIncludingMeetingsRequest,
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">> = {},
   searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
 ): Promise<SearchAllIncludingMeetingsFound> => {
   whole(request.limit, 1, 1000, "limit")
@@ -290,7 +290,7 @@ export const searchAllWithMeetings = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchAllWithMeetingsRequest,
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">> = {},
   searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
 ): Promise<SearchAllIncludingMeetingsFound> => {
   if (request.source !== undefined)
@@ -330,7 +330,7 @@ const searchAllOfSource = async (
   account: AccountKey,
   source: string,
   request: SearchAllWithMeetingsRequest,
-  messenger: Partial<Pick<Messenger, "savedChatId" | "app">>,
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">>,
   searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
 ): Promise<SearchAllIncludingMeetingsFound> => {
   const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS

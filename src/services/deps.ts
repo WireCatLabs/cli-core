@@ -1,12 +1,18 @@
 import { CliError } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
-import { isCliFailure } from "../cli/failures.js"
-import type { Messenger } from "../cli/messenger/context.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
+import { isCliFailure } from "../errors/failures.js"
+import type { AppIdentity } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
+import type { MessengerTraits } from "../ports/traits.js"
 import type { SendGuard } from "../sends/guard.js"
 import type { AccountStore } from "../store/account-store.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import type { Override } from "./index.js"
+
+export interface ServiceMessenger extends MessengerTraits {
+  /** Replaces shared use cases for this messenger; its commands and MCP tools both get the replacement. */
+  services?: Override
+}
 
 /**
  * What a service works with. Each part is opened on first use, so a read from the store never
@@ -14,9 +20,9 @@ import type { AccountKey, MessageStore } from "../store/store.js"
  * what they opened.
  */
 export interface ServiceDeps {
-  messenger: Messenger
+  messenger: ServiceMessenger
   offline: boolean
-  /** `store`: the messenger's history is read from the local store (`Messenger.history`); `server` when unset. */
+  /** `store`: the messenger's history is read from the local store (`MessengerTraits.history`); `server` when unset. */
   reads?: "server" | "store"
   account: () => Promise<AccountKey>
   /** Already saving what its reads answer, and recording each call as a run event. */
@@ -105,7 +111,7 @@ export const fromStore = (deps: Pick<ServiceDeps, "offline" | "reads">): boolean
   deps.offline || deps.reads === "store"
 
 /** What a store-mode read answers for a chat the store holds nothing of. */
-export const nothingStored = (messenger: Messenger): string =>
+export const nothingStored = (messenger: MessengerTraits): string =>
   `nothing stored for this chat yet — keep \`${messenger.app.command} serve\` running`
 
 /** Where a store-mode messenger's history comes from, for what it cannot do. */
@@ -116,7 +122,7 @@ export const OFFLINE =
 
 /** Over a connection that is already open — an MCP session holds one for minutes. */
 export const onlineDeps = (
-  messenger: Messenger,
+  messenger: ServiceMessenger,
   adapter: MessengerAdapter,
   guard: SendGuard,
   where: { profile?: string; env?: NodeJS.ProcessEnv; pictures?: boolean } = {},
@@ -138,7 +144,7 @@ export const onlineDeps = (
 
 /** Over the local store alone, for `--offline` and the tools that never ask the messenger. */
 export const storedDeps = (
-  messenger: Messenger,
+  messenger: ServiceMessenger,
   store: MessageStore,
   account: AccountKey,
   guard: SendGuard,
@@ -159,7 +165,7 @@ export const storedDeps = (
  * `--offline`, so `inbox` and `review` answer too. Nothing here connects.
  */
 export const storeModeDeps = (
-  messenger: Messenger,
+  messenger: ServiceMessenger,
   store: MessageStore,
   account: AccountKey,
   guard: SendGuard,
@@ -180,12 +186,9 @@ export const storeOnlyDeps = (
   const refuse = (): never => {
     throw new CliError("validation_error", NOT_A_MESSENGER)
   }
-  const messenger: Messenger = {
+  const messenger: MessengerTraits = {
     app,
     provider: account.provider,
-    chatArgument: "a stored chat, by its id or title",
-    resolveSettings: refuse,
-    connect: async () => refuse(),
   }
   const guard: SendGuard = { check: refuse, record: () => {} }
   return { ...storedDeps(messenger, store, account, guard), ...(env === undefined ? {} : { env }) }

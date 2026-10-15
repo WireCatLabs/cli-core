@@ -3,12 +3,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import {
-  canonicalMeetingReference,
-  formatMeetingReference,
-  parseMeetingReference,
-} from "../domain/meeting-reference.js"
 import type { MeetingSave } from "../meetings/index.js"
+import { canonicalMeetingReference, formatMeetingReference, parseMeetingReference } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { readMeetingEvidence } from "./meeting-evidence.js"

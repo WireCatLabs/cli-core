@@ -2,7 +2,6 @@ import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, queryError, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
 import type { RegistryOptions } from "../botcheck/registries.js"
 import { botCheckService } from "../botcheck/service.js"
-import { threadIdOf } from "../cli/messenger/thread.js"
 import type {
   Chat,
   ChatCard,
@@ -16,6 +15,7 @@ import type {
   Page,
   SenderIdentity,
 } from "../domain/models.js"
+import { threadIdOf } from "../domain/thread.js"
 import { capability, type MessengerAdapter } from "../ports/messenger.js"
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"

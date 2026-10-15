@@ -1,6 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
 import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
-import type { AppIdentity } from "../cli/app.js"
 import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
 import {
@@ -13,6 +12,7 @@ import {
 import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel, vectorModelKey } from "../embeddings/models.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
+import type { AppIdentity } from "../ports/app.js"
 import { entriesOfList, fitting, type SkippedSource } from "../search/account-list.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"

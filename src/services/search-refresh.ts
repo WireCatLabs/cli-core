@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { parseDuration } from "../cli/settings.js"
+import { parseDuration } from "../domain/duration.js"
 import type { QueryExecution, ResolvedNode } from "../search/lucene/resolved.js"
 import type { AccountKey } from "../store/store.js"
 import { archiveService } from "./archive.js"

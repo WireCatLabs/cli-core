@@ -1,7 +1,7 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { resolvePaths } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
+import type { AppIdentity } from "../ports/app.js"
 import { withFileLock } from "./file-lock.js"
 
 /** How fast one profile may ask its messenger, counted across every process using it. */

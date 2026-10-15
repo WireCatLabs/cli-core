@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { servingProfiles } from "../../background/lock.js"
-import type { AdminRight, Chat, GroupSettings, Id, Provider } from "../../domain/models.js"
+import type { AdminRight, GroupSettings } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import type { EventSink } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { guardFor, type SendGuard } from "../../sends/guard.js"
 import { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "../../sends/pace.js"
@@ -12,13 +13,11 @@ import {
   type PermissionKey,
   readKeysForCommand,
 } from "../../sends/permissions.js"
-import { OFFLINE, type Override, type ServiceDeps, type Services, servicesFor } from "../../services/index.js"
+import { OFFLINE, type ServiceDeps, type ServiceMessenger, type Services, servicesFor } from "../../services/index.js"
 import type { OpenRecognizer } from "../../speech/transcribe.js"
 import { type AccountKey, type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
-import type { AppIdentity } from "../app.js"
 import { type BaseContext, baseContext, environmentOf } from "../context.js"
 import { knownPermissionKeys, type PermissionKeyOf, unknownPermissionKeys } from "../permission-keys.js"
-import type { EventSink } from "../runs/events.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../settings.js"
 import { recalledAccount, rememberAccount } from "./accounts.js"
 import { terminalAsker } from "./ask.js"
@@ -35,35 +34,8 @@ export interface ConnectOptions {
   events?: EventSink
 }
 
-export interface Fetching {
-  beforeInclusive?: boolean
-  /** Messages per history request. */
-  page: number
-  /** The most one history request returns, where the messenger is known to cap it; a larger `--page-size` is refused. */
-  maxPageSize?: number
-  /** The least wait between requests, as `--pause` takes it. */
-  pause: string
-  /** Each wait drawn between `pause` and twice that, as a person scrolls rather than a clock. */
-  jitter?: boolean
-  /** `messages sync` takes this many pages' worth of messages when `--limit` is not given. */
-  maxPages: number
-  /**
-   * What a held stretch is keyed by: the message id, or its send time where ids pass 2^53 and do
-   * not count messages (MAX). By time, `before` reaches the adapter as an ISO time.
-   */
-  orderBy?: "id" | "time"
-}
-
 /** What one messenger CLI hands the shared commands. Everything else about it stays in its own code. */
-/** `messages send --spoiler` and `--caption-above`. */
-export type MediaOption = "spoiler" | "captionAbove" | "fileName"
-
-export interface Messenger {
-  counterFields?: readonly import("../../domain/counters.js").CounterField[]
-  app: AppIdentity
-  provider: Provider
-  /** The messenger's own name, as its users write it — `Telegram`, `MAX`. Defaults to the command. */
-  name?: string
+export interface Messenger extends ServiceMessenger {
   /** How fast one profile may ask the messenger, across processes, unless `requests_per_minute` says otherwise. */
   pace?: PaceRate
   resolveSettings: (flags: GlobalFlags, options?: ResolveOptions) => Settings
@@ -76,11 +48,6 @@ export interface Messenger {
   chatArgument: string
   /** The group settings this messenger has, as `chats update` offers them; every one when unset. */
   groupSettings?: readonly (keyof GroupSettings)[]
-  /**
-   * The send options for attachments this messenger honours; none when unset, so an adapter that does not
-   * know a newer option is never handed one to drop.
-   */
-  mediaOptions?: readonly MediaOption[]
   /** Whether `polls create` makes quizzes (`--quiz --correct --solution`); no when unset. */
   pollQuiz?: boolean
   /** How many seconds after sending a poll may close by itself — `polls create --close-time`; none when unset. */
@@ -89,10 +56,6 @@ export interface Messenger {
   pollVoters?: boolean
   /** Whether `topics show` reads one forum topic; no when unset. */
   topicShow?: boolean
-  /** Whether `messages forward --topic` forwards into a forum topic; no when unset. */
-  forwardTopic?: boolean
-  /** Whether folders take kinds of chat, skip muted, read or archived ones, exclude and pin chats; no when unset. */
-  folderRules?: boolean
   /** Whether the messenger reads HTML in `--html`; no when unset. */
   html?: boolean
   /** Whether folder ordering is available; yes when unset. */
@@ -119,52 +82,26 @@ export interface Messenger {
   inviteLinkRevoke?: boolean
   /** Whether one invite link can be changed — `chats link update`; no when unset. */
   inviteLinkUpdate?: boolean
-  /** Whether the messenger says when an account was made — the moderation rule `newAccount`; yes when unset. */
-  knowsAccountAge?: boolean
-  /**
-   * This messenger's invite links, which `chats moderate` judges under `invites`. Telegram's and MAX's
-   * are built in for now.
-   */
-  inviteLinks?: RegExp
   /** Whether people added can be shown the messages from before they came — `members add --history`; yes when unset. */
   addsWithHistory?: boolean
   /** The admin rights this messenger has, as `admins add --can` offers them; every one when unset. */
   adminRights?: readonly AdminRight[]
-  /** The chat `me` names, when the messenger has a notes-to-self chat. */
-  savedChatId?: (account: AccountKey) => Id
   /**
    * The account a command names itself, in place of the one its profile remembers: memo has no messenger
    * profile and mounts the local task builders with `--provider --account`.
    */
   accountOf?: (command: Command) => AccountKey | undefined
-  /** The other person in a one-to-one chat, when the chat says who — a recipient list matches on it. */
-  partnerOf?: (chat: Chat) => Id | undefined
   /**
    * Whether a stored chat may hold a message the messenger deleted without naming its chat. When
    * unset, the store applies Telegram's rule.
    */
   deletedWithoutChat?: DeletionScope
-  /** How `messages sync` reads this messenger's history, where Telegram's defaults do not fit it. */
-  fetching?: Fetching
-  /**
-   * Where `chats`, `messages list|context` and `contacts` read from. `store` is for a messenger that
-   * pushes its history instead of answering for it: those reads answer from the local store, which
-   * `serve` keeps filled, and never connect; writes still do. `server` when unset.
-   */
-  history?: "server" | "store"
   /** Whether the messenger computes a chat's statistics for its admins — `stats chats official`; no when unset. */
   officialStats?: boolean
-  /**
-   * Whether `search messages --backend` is offered: the adapter has `searchMessages`. `chat` when its server
-   * searches one chat at a time, so only a query that names one chat asks it. No when unset.
-   */
-  serverSearch?: boolean | "chat"
   /** Whether this CLI's background service fetches tracked rosters daily; true when unset. */
   tracksMembers?: boolean
   /** Speech model ids, most suitable first, for `messages transcribe --local`; the first is the default. */
   speechModels?: readonly string[]
-  /** Replaces shared use cases for this messenger; its commands and MCP tools both get the replacement. */
-  services?: Override
   /**
    * The send guard for a command, when the messenger's is not the profile's plain one — max-cli's
    * background server journals what it forwards, so a command over it records only its refusals.

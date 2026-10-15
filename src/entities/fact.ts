@@ -1,6 +1,5 @@
 import * as v from "valibot"
-import { FACT_STATUSES, FACT_TYPES } from "../store/sqlite/facts.js"
-import { MEMORY_SCOPES } from "../store/sqlite/memories.js"
+import { FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../domain/knowledge.js"
 import { author, id, reference, text, time } from "./fields.js"
 
 export const fact = v.strictObject({

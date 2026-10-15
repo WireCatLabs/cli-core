@@ -1,4 +1,4 @@
-import type { Upload } from "../sends/upload.js"
+import type { Upload } from "./attachments.js"
 import type { CounterObservation, CounterObservations } from "./counters.js"
 
 /**

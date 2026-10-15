@@ -2,9 +2,9 @@ import { spawn } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, writeSecurely } from "@wirecat/cli-base"
-import { type AppIdentity, readOnlyLockOf } from "../cli/app.js"
-import { recordLogFor } from "../cli/runs/record-log.js"
-import { childTrace } from "../cli/runs/scope.js"
+import { type AppIdentity, readOnlyLockOf } from "../ports/app.js"
+import { recordLogFor } from "../runs/record-log.js"
+import { childTrace } from "../runs/scope.js"
 import type { ServerSystem } from "./system.js"
 
 /** Minutes between runs, a daily local time, or one local moment. */

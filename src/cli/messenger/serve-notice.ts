@@ -1,7 +1,7 @@
 import type { Renderer } from "@wirecat/cli-base"
-import type { AppIdentity } from "../app.js"
-import { recordLogFor } from "../runs/record-log.js"
-import { currentRun } from "../runs/scope.js"
+import type { AppIdentity } from "../../ports/app.js"
+import { recordLogFor } from "../../runs/record-log.js"
+import { currentRun } from "../../runs/scope.js"
 import type { MessengerContext } from "./context.js"
 
 /** Something `serve` reports: a code and ids for its log, and the sentence a person at a terminal reads. */

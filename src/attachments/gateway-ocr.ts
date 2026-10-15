@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
-import { embeddingKeys, endpointKeyName } from "../cli/embedding-keys.js"
+import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { type ModelSettings, modelGateway, modelTarget } from "../models/index.js"
+import type { AppIdentity } from "../ports/app.js"
 import type { OcrPipeline } from "./ocr.js"
 
 export const gatewayOcr = ({

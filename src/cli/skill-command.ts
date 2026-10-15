@@ -1,6 +1,6 @@
 import { skillCommand as sharedSkillCommand } from "@wirecat/cli-base/skill"
 import type { Command } from "commander"
-import type { AppIdentity } from "./app.js"
+import type { AppIdentity } from "../ports/app.js"
 import { environmentOf, outputFor } from "./context.js"
 import { grantsAuthority } from "./effects.js"
 

@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { MEMORY_KINDS, MEMORY_SCOPES, type MEMORY_STATUSES } from "../../domain/knowledge.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import { normalize } from "../normalize.js"
 import { type Actor, botNamed, ownerPerson } from "./actors.js"
@@ -9,10 +10,6 @@ import type { StoreContext } from "./open.js"
 import { stemmerCache } from "./stems.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { write } from "./transaction.js"
-
-export const MEMORY_KINDS = ["summary", "digest", "preference"] as const
-export const MEMORY_STATUSES = ["proposed", "confirmed", "stale", "superseded"] as const
-export const MEMORY_SCOPES = ["personal", "work"] as const
 
 /** Who wrote it: the owner, or an agent by its bot handle and the model it ran on. */
 export type Author = "owner" | { bot: string; model?: string }

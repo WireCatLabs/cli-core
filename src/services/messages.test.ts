@@ -483,7 +483,7 @@ describe("the messages service's writes", () => {
     await expect(service.send({ chat: "Book", text: "hi", threadId: "12" })).rejects.toThrow(
       "cannot send to a forum topic",
     )
-    await expect(service.send({ chat: "Book", text: "hi", threadId: " " })).rejects.toThrow("--topic needs")
+    await expect(service.send({ chat: "Book", text: "hi", threadId: " " })).rejects.toThrow("the topic id is empty")
     expect(writes).toEqual([])
   })
 

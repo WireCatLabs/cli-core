@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import { formatMeetingReference, parseMeetingReference } from "../domain/meeting-reference.js"
 import {
+  formatMeetingReference,
   type MeetingContextCue,
   type MeetingHitContextOptions,
   type MeetingHitContextPacket,
   meetingHitContextLimits,
+  parseMeetingReference,
 } from "../meetings/index.js"
 import type { MeetingContextReadCapabilities } from "../store/store.js"
 import { checkMeetingCancelled, cueEvidence, type MeetingEvidenceCue } from "./meeting-evidence.js"

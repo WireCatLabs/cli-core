@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { canonicalMeetingReference, formatMeetingReference, parseMeetingReference } from "./meeting-reference.js"
+import { canonicalMeetingReference, formatMeetingReference, parseMeetingReference } from "./reference.js"
 
 describe("durable local meeting references", () => {
   it("canonicalizes safe IDs without losing the first cue position", () => {

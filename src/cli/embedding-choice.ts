@@ -1,10 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import { type AISettings, endpoint } from "../analysis/settings.js"
+import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import { remoteModel } from "../embeddings/remote.js"
+import type { AppIdentity } from "../ports/app.js"
 import type { ModelChoice } from "../services/embeddings.js"
-import type { AppIdentity } from "./app.js"
-import { embeddingKeys, endpointKeyName } from "./embedding-keys.js"
 
 export interface ModelOptions {
   model?: string

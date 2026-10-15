@@ -1,7 +1,7 @@
 import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { resolvePaths, writeSecurely } from "@wirecat/cli-base"
-import type { AppIdentity } from "../cli/app.js"
+import type { AppIdentity } from "../ports/app.js"
 import { alive } from "./processes.js"
 
 export interface Lock {
