@@ -37,6 +37,22 @@ const cli = (read: MeetingPreparationReader) => {
 const args = { series_id: "example-series" }
 
 describe("meeting preparation adapters", () => {
+  it("returns owner notes in the same strict CLI and MCP envelope", async () => {
+    const f = await fixture()
+    const note = await f.store.notes.addNote({ text: "Bring the project checklist", about: [f.project.ref] })
+    const { program, output } = cli(f.read)
+    await program.parseAsync(["meetings", "prepare", "example-series"], { from: "user" })
+    const mcp = await callMeetingPreparationTool(f.read, args, undefined, {}, now)
+    expect(mcp.structuredContent).toMatchObject({ item: output.mock.calls[0]?.[0].item })
+    expect(mcp.structuredContent).toMatchObject({
+      item: {
+        notes: {
+          items: [{ ref: note.ref, revision: 1, text: note.text }],
+          coverage: { source_evidence: "not-revalidated", other_sources: "not-queried" },
+        },
+      },
+    })
+  })
   it("uses canonical inclusive-start and exclusive-end time flags with the same MCP windows", async () => {
     const f = await fixture()
     const { program, output } = cli(f.read)
@@ -224,6 +240,7 @@ describe("meeting preparation adapters", () => {
   it("keeps the normalized public item within its own byte bound", async () => {
     const f = await fixture()
     const packet = await f.read(args.series_id, { ...f.request, bytes: 65536 })
+    delete packet.notes
     const full = meetingPreparationAnswer(packet)
     packet.limits.bytes = Buffer.byteLength(JSON.stringify(full.item)) - 100
     const answer = meetingPreparationAnswer(packet)
