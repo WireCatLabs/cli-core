@@ -26,7 +26,7 @@ import {
 } from "../tasks/index.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
-import { categorize, DEFAULT_TASK_CATEGORIES, type TaskCategory, taskCategoryOf } from "./task-categories.js"
+import { categorize, type TaskCategory, taskCategoryOf } from "./task-categories.js"
 import { taskAccount } from "./task-rules.js"
 
 export { TASK_KINDS, TASK_STATES }
@@ -192,7 +192,7 @@ export interface TasksService {
   ): Promise<TaskCard | { relations: TaskRelation[] }>
   show(id: string): Promise<TaskCard>
   /** The list a task's category comes from, with what each one means. */
-  categories(): readonly TaskCategory[]
+  categories(): Promise<readonly TaskCategory[]>
   /** Takes an open task for `holder` for `forMs`; refused, naming the holder, while someone else holds it. */
   claim(id: string, holder: string, forMs: number): Promise<TaskCard>
   /** Gives a task back; only its holder or the owner may. */
@@ -228,11 +228,10 @@ export const taskTypesOf = (typed: string): TaskKind[] => [
   ),
 ]
 
-export const tasksService = (
-  deps: ServiceDeps,
-  categories: readonly TaskCategory[] = DEFAULT_TASK_CATEGORIES,
-): TasksService => {
-  const categoryOf = taskCategoryOf(categories)
+/** `categories` fixes the list; left out, each call reads the store's (`config set task_categories.*`). */
+export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCategory[]): TasksService => {
+  const listOf = async (store: MessageStore) => categories ?? (await store.tasks.categories())
+  const categoryOf = async (store: MessageStore, name: string) => taskCategoryOf(await listOf(store))(name)
   const inStore = async <T>(work: (store: MessageStore, account: AccountKey) => Promise<T>): Promise<T> =>
     work(await deps.store(), await deps.account())
   const service = (store: MessageStore) => createTaskService({ store: store.tasks })
@@ -257,7 +256,7 @@ export const tasksService = (
     return { ...details, links: await store.notes.links({ from: details.ref }) }
   }
   const planOf = async (store: MessageStore, id: string, plan: TaskPlan, by: TaskOrigin) => {
-    if (plan.category !== undefined) plan = { ...plan, category: categoryOf(plan.category) }
+    if (plan.category !== undefined) plan = { ...plan, category: await categoryOf(store, plan.category) }
     const open = (await store.tasks.get(id))?.state === "open"
     if (!open && (plan.dueAt != null || plan.nextCheckAt != null))
       throw new CliError("validation_error", "a closed task takes no due date or next check; it stays closed")
@@ -284,7 +283,7 @@ export const tasksService = (
 
     add: (message, type, origin, { category: named, ...plan } = {}, choice = {}) =>
       inStore(async (store, account) => {
-        const chosen = named === undefined ? undefined : categoryOf(named)
+        const chosen = named === undefined ? undefined : await categoryOf(store, named)
         const source = message.trim()
         const native = isNoteReference(source)
         if (!native && !isLocator(source)) {
@@ -378,7 +377,7 @@ export const tasksService = (
           kind: type,
           origin,
           ...(plan.dueAt ? { dueAt: plan.dueAt } : {}),
-          category: chosen ?? categorize(await sourceText(), categories),
+          category: chosen ?? categorize(await sourceText(), await listOf(store)),
         })
         const task = (await store.tasks.get(added.id)) ?? added
         if (created)
@@ -390,7 +389,7 @@ export const tasksService = (
         return { task: await taskView(store, account, task), created, card }
       }),
 
-    categories: () => categories,
+    categories: () => inStore(async (store) => listOf(store)),
 
     duplicates: ({ unsure, limit, offset }) =>
       inStore(async (store, account) =>

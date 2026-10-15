@@ -25,6 +25,10 @@ export interface AgendaOptions {
   holder?: string
   /** Also list tasks someone else claimed; left out, they are hidden. */
   claimed?: boolean
+  /** Only tasks of this category. */
+  category?: string
+  /** Only tasks with this tag (`tags add --task`). */
+  tag?: string
 }
 
 export const AGENDA_QUERY = {
@@ -107,6 +111,8 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
     query,
     holder,
     claimed = false,
+    category,
+    tag,
   } = {}) => {
     const [store, account] = [await deps.store(), await deps.account()]
     const at = now()
@@ -117,8 +123,16 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
         if (error instanceof Error && "code" in error && error.code === "not_found") return []
         throw error
       })
+    const tagged =
+      tag === undefined
+        ? undefined
+        : new Set(
+            (await store.tags(account, { type: "task", tag: tag.trim().toLowerCase() })).map(({ taskId }) => taskId),
+          )
     const tasks = open
       .filter((task) => claimed || task.claimedBy === null || task.claimedBy === holder)
+      .filter((task) => category === undefined || task.category === category.trim().toLowerCase())
+      .filter((task) => tagged === undefined || tagged.has(task.id))
       .map((task) => ({ task, reasons: reasonsOf(task, at, dueWithin) }))
       .filter(({ reasons }) => reasons.length > 0)
       .sort((a, b) => urgency(a.task) - urgency(b.task))

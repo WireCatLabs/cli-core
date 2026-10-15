@@ -8,6 +8,7 @@ import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
+import { openStore } from "../../store/store.js"
 import { configCommand } from "../config-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -557,6 +558,42 @@ describe("the stems", () => {
     const refused = await call(["config", "set", "phone_countries", "es,xx", "--json"], env)
     expect(refused.code).not.toBe(0)
     expect(refused.stderr.join("\n")).toContain("not xx")
+  })
+
+  it("**`config set task_categories.<name>` edits the one task category list** of the store, and unset resets it", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    const listed = async () => {
+      const store = await openStore({ env })
+      try {
+        return (await store.tasks.categories()).map(({ name }) => name)
+      } finally {
+        await store.close()
+      }
+    }
+
+    const set = await call(
+      ["config", "set", "task_categories.travel", "trips and tickets | flight, hotel, билет, es:vuelo", "--json"],
+      env,
+    )
+    expect(set.answer).toEqual({
+      store: env.MESSAGING_STORE,
+      scope: "store",
+      setting: "task_categories.travel",
+      value: "trips and tickets | en:flight, en:hotel, ru:билет, es:vuelo",
+    })
+    expect((await listed()).slice(-2)).toEqual(["travel", "other"])
+    const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
+    expect(shown).toContainEqual(expect.objectContaining({ setting: "task_categories.travel", from: "store" }))
+
+    await call(["config", "unset", "task_categories.personal", "--json"], env)
+    expect(await listed()).not.toContain("personal")
+    const fallback = await call(["config", "unset", "task_categories.other", "--json"], env)
+    expect([fallback.code, fallback.stderr.join("\n")]).toEqual([2, expect.stringContaining("other stays")])
+    expect((await call(["config", "set", "task_categories.Bad Name", "x", "--json"], env)).code).toBe(2)
+
+    await call(["config", "unset", "task_categories", "--json"], env)
+    expect(await listed()).toEqual(["money", "documents", "meeting", "delivery", "access", "personal", "other"])
   })
 
   it("**refuses to change the store-wide setting from a process locked to one profile**", async () => {

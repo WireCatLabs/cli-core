@@ -993,6 +993,10 @@
       "value": "<duration>",
       "meaning": "stop fetching after this long (default: 30s)"
     },
+    "--tag": {
+      "value": "<name>",
+      "meaning": "only what carries this tag"
+    },
     "--task": {
       "value": "<task>",
       "meaning": "a task, by its id or key as tasks list shows it"
@@ -4055,9 +4059,11 @@
     "tasks agenda": {
       "in": "all",
       "options": {
+        "--category": "all",
         "--claimed": "all",
         "--due": "all",
         "--holder": "all",
+        "--tag": "all",
         "--unanswered": "all",
         "--waiting": "all",
         "--within": "all"

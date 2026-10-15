@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { TaskCategory } from "../../domain/task-categories.js"
 import {
   matches,
   TASK_KINDS,
@@ -16,6 +17,7 @@ import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { type TaskSimilarity, taskSimilarityOver } from "./task-candidates.js"
+import { saveTaskCategories, storeTaskCategories } from "./task-category-settings.js"
 import { inboxKey, typedKey } from "./task-keys.js"
 import { type TaskPairs, taskPairsOver } from "./task-pairs.js"
 import { taskRowOf, thingOf } from "./things.js"
@@ -27,6 +29,10 @@ export { taskIdOf, taskRowOf } from "./things.js"
 
 /** `TaskStore` for `src/tasks/`, plus a way from its task ids to the store's rows. */
 export interface StoreTaskStore extends Required<TaskStore>, WorkTasks, TaskSimilarity, TaskPairs {
+  /** The task categories `config set task_categories.*` saved, or the default list: one per store. */
+  categories(): Promise<readonly TaskCategory[]>
+  /** `undefined` goes back to the default list. */
+  saveCategories(categories: readonly TaskCategory[] | undefined): Promise<void>
   /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
   rowOf(id: string): number | undefined
   /** One account's tasks a list query keeps, oldest first, each with its title and last change. */
@@ -110,6 +116,8 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     ...similarity,
     ...taskPairsOver(context, similarity),
     rowOf: (id) => taskRowOf(database, id),
+    categories: async () => storeTaskCategories(database),
+    saveCategories: async (categories) => write(database, () => saveTaskCategories(database, categories, now())),
     query: async (account, where, { limit, offset }) => {
       const project = inbox(account, false)
       if (project === undefined) return []

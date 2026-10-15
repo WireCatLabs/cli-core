@@ -44,16 +44,17 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
    `review` (`src/store/sqlite/task-pairs.ts`); `tasks duplicates`, `merge`, `unmerge`, `duplicates reject` /
    `unsure` decide. A message attached or merged into a task is linked as `evidence`, and a rule opens no second
    task for it (`findBySource(…, { linked: true })`). Not yet: the chain on a new message linked to an existing
-   task.
+   task — the comparison reads only a task's title, description and source message, so a linked message changes
+   no score until the comparison reads linked messages too.
 5. **Rules run in `review` and `serve`, not in `sync`** (`src/services/inbox.ts:359`,
    `src/cli/messenger/serve-command.ts:232`). `applyTaskRulesToStored(store, account, since)` (0.274.0) runs
    them over what is stored, from a stop point.
-6. **Store version 13 (step 2) added** a category from a list in code (`DEFAULT_TASK_CATEGORIES`,
-   `src/services/task-categories.ts`; no `tasks.categories` config yet — the config schema is strict and the rule
-   passes read no settings), tags on tasks, keys per type, the claim lease (`tasks claim`, `release`,
+6. **Store version 13 (step 2) added** a category (default list `DEFAULT_TASK_CATEGORIES`,
+   `src/domain/task-categories.ts`), tags on tasks, keys per type, the claim lease (`tasks claim`, `release`,
    `agenda --claimed`) and the relation kinds `duplicate-of` and `discovered-from`. A relation joins only
    owner-project tasks (`liveTask`, `src/store/sqlite/task-relations.ts`), except `duplicate-of`, which joins two
-   live tasks of one project or account. MCP has no claim tools yet.
+   live tasks of one project or account. Step 6 added the owner's category list in the store, MCP `tasks_claim` /
+   `tasks_release` / `tasks_categories`, and `agenda --category --tag`.
 7. **What the comparison can reuse:** the text normalizer and the Snowball stemmers (Russian, English, Spanish;
    `src/search/stem.ts`) behind message and note search; FTS5 tables per domain (`message_words` /
    `message_stems`, `note_words` / `note_stems`); `identities` for "the same person"; one write lock per
@@ -88,8 +89,12 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
 
 ## Categories and labels
 
-- **A fixed list in the config**, `tasks.categories`: each has a name, one line of meaning, and trigger words
-  in each language. Default list: `money`, `documents`, `meeting`, `delivery`, `access`, `personal`, `other`.
+- **One list per store**, edited with `config set task_categories.<name> "<meaning> | <words>"` (a word may say its
+  language, `es:vuelo`; otherwise its script picks Russian or English), removed with `config unset
+  task_categories.<name>`, back to the default with `config unset task_categories`. It is a `store_settings` row,
+  not a profile setting: the rules run in tg, max, memo and `sync` and must agree, and a profile's config schema
+  refuses unknown sections. `other` cannot be removed. Default list: `money`, `documents`, `meeting`, `delivery`,
+  `access`, `personal`, `other`.
 - **An agent must name a category** (`tasks add --category money`); an unknown one is refused with the list, so
   "finance", "payments" and "деньги" never coexist. `tasks categories` prints the list with meanings.
 - **A rule picks the category** by matching the source message's stems against each category's trigger stems;
@@ -255,8 +260,8 @@ found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`)
 4. **Scoring module** (candidates, comparison, weights, bands), tuned on the test set.
 5. **`tasks add` check** (`--attach`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`;
    relations between message tasks — built (store version 15, `task_pairs`).
-6. **`agenda --category --label`**, the MCP tools `tasks_claim` / `tasks_release`, and the `tasks.categories`
-   config.
+6. **`agenda --category --tag`**, the MCP tools `tasks_claim` / `tasks_release`, and the category list in the
+   store (`config set task_categories.*`) — built.
 7. **Rules on `sync`.**
 8. Then tg and max move their cli-core pin together with cli-core#1121 (`search mail` leaves them).
 

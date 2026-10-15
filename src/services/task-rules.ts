@@ -3,7 +3,7 @@ import type { Id, Message, ReviewChat } from "../domain/models.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { createTaskService, type TaskKind, type TaskStore } from "../tasks/index.js"
 import { questions } from "./questions.js"
-import { categorize } from "./task-categories.js"
+import { categorize, type TaskCategory } from "./task-categories.js"
 
 export interface RuleResult {
   added: number
@@ -23,7 +23,12 @@ export const taskAccount = ({ provider, account }: AccountKey): string => `${pro
  */
 export const applyTaskRules = async (
   review: { chats: Pick<ReviewChat, "id" | "messages">[] },
-  { store, account, now }: { store: TaskStore; account: AccountKey; now?: () => Date },
+  {
+    store,
+    account,
+    now,
+    categories,
+  }: { store: TaskStore; account: AccountKey; now?: () => Date; categories?: readonly TaskCategory[] },
 ): Promise<RuleResult> => {
   const tasks = createTaskService({ store, ...(now ? { now } : {}) })
   const owner = taskAccount(account)
@@ -39,7 +44,7 @@ export const applyTaskRules = async (
       group,
       kind,
       origin: "rule",
-      category: categorize(message.text),
+      category: categorize(message.text, categories),
     })
     if (created) result.added += 1
     result.review += review
@@ -80,7 +85,10 @@ export const applyTaskRulesOnArrival = async (
   const messages = [...page.items.filter((one) => one.id !== message.id), message].sort(
     (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp),
   )
-  return applyTaskRules({ chats: [{ id: message.chatId, messages }] }, { store: store.tasks, account })
+  return applyTaskRules(
+    { chats: [{ id: message.chatId, messages }] },
+    { store: store.tasks, account, categories: await store.tasks.categories() },
+  )
 }
 
 /** The most messages one chat gives a stored pass, however many arrived since the last. */
@@ -99,6 +107,7 @@ export const applyTaskRulesToStored = async (
   newerThan?: string,
 ): Promise<RuleResult & { until: string | null }> => {
   const result: RuleResult & { until: string | null } = { added: 0, closed: 0, review: 0, until: since ?? null }
+  const categories = await store.tasks.categories()
   for (const chat of await store.chatStats(account)) {
     if (chat.lastStoredAt === null || (since !== undefined && chat.lastStoredAt <= since)) continue
     // A skipped chat still moves the stop point, or the next pass would read all of it as new.
@@ -112,10 +121,7 @@ export const applyTaskRulesToStored = async (
     })
     const pass = await applyTaskRules(
       { chats: [{ id: chat.chatId, messages: page.items }] },
-      {
-        store: store.tasks,
-        account,
-      },
+      { store: store.tasks, account, categories },
     )
     result.added += pass.added
     result.closed += pass.closed
@@ -162,7 +168,7 @@ export const openRequestTask = async (store: MessageStore, account: AccountKey, 
     group: message.chatId,
     kind: "request",
     origin: "rule",
-    category: categorize(message.text),
+    category: categorize(message.text, await store.tasks.categories()),
   })
   return created
 }
