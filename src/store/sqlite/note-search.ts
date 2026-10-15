@@ -185,6 +185,13 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
   const tests = new Map<ResolvedPredicate, (text: string) => boolean>()
   const fragments = new Map<ResolvedPredicate, Fragment>()
   const automaton = (pattern: string, node: ResolvedPredicate): Automaton => compileAutomaton(pattern, node.span)
+  // SQLite's lower() folds ASCII only, and Bun cannot register a function that folds the rest, so titles fold here.
+  let titles: { id: number; title: string }[] | undefined
+  const foldedTitles = () =>
+    (titles ??= database
+      .prepare(`SELECT id, title FROM ${corpus.view} n WHERE n.title IS NOT NULL AND n.deleted_at IS NULL`)
+      .all()
+      .map((row) => ({ id: Number(row.id), title: normalize(String(row.title)) })))
 
   const leaf = (node: ResolvedPredicate): Fragment => {
     const { field, operator, value } = node
@@ -256,12 +263,15 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
         return bound("EXISTS (SELECT 1 FROM json_each(n.metadata, '$.folded.keywords') WHERE value = ?)", wanted)
       if (field === "lang")
         return bound(`(${folded("language")} = ? OR ${folded("language")} LIKE ? || '-%')`, wanted, wanted)
-      if (field === "title")
+      if (field === "title") {
+        check()
+        const ids = foldedTitles().flatMap(({ id, title }) => (title.includes(wanted) ? [id] : []))
         return bound(
-          `(instr(${folded("title")}, ?) > 0 OR instr(lower(coalesce(n.title, '')), lower(?)) > 0)`,
+          `(instr(${folded("title")}, ?) > 0 OR n.id IN (SELECT value FROM json_each(?)))`,
           wanted,
-          value,
+          JSON.stringify(ids),
         )
+      }
       return bound(`instr(${folded(field)}, ?) > 0`, wanted)
     }
     if (field === "date") {
