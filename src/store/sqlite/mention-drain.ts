@@ -104,7 +104,7 @@ export const participants = (database: CacheDatabase) => {
   }
 }
 
-/** Where mentions are read from: a message's own text, and the text of its files and voice notes. */
+/** Where mentions are read from: a message's own text, its files and voice notes, documents, notes and mail. */
 export const SOURCES = {
   message: {
     count: "SELECT count(*) AS n FROM messages WHERE deleted_at IS NULL",
@@ -123,6 +123,28 @@ export const SOURCES = {
       "SELECT a.text, CASE WHEN coalesce(a.extractor, '') LIKE 'speech:%' THEN 'transcript' ELSE 'file_text' END AS field, " +
       "m.chat_id FROM attachments a JOIN messages m ON m.id = a.attachable_id WHERE a.id = ? AND a.attachable_type = 'message' " +
       "AND a.text IS NOT NULL AND m.deleted_at IS NULL",
+  },
+  // Texts outside a chat: no one wrote them in a chat, so a name in them is never linked by rule.
+  document: {
+    count: "SELECT count(*) AS n FROM documents WHERE deleted_at IS NULL AND coalesce(body, '') <> ''",
+    page:
+      "SELECT id, body AS text, 'text' AS field, NULL AS chat_id FROM documents WHERE id > ? AND deleted_at IS NULL " +
+      "AND coalesce(body, '') <> '' ORDER BY id LIMIT ?",
+    one: "SELECT body AS text, 'text' AS field, NULL AS chat_id FROM documents WHERE id = ? AND deleted_at IS NULL",
+  },
+  note: {
+    count: "SELECT count(*) AS n FROM notes WHERE deleted_at IS NULL AND coalesce(body, '') <> ''",
+    page:
+      "SELECT id, body AS text, 'text' AS field, NULL AS chat_id FROM notes WHERE id > ? AND deleted_at IS NULL " +
+      "AND coalesce(body, '') <> '' ORDER BY id LIMIT ?",
+    one: "SELECT body AS text, 'text' AS field, NULL AS chat_id FROM notes WHERE id = ? AND deleted_at IS NULL",
+  },
+  email: {
+    count: "SELECT count(*) AS n FROM emails WHERE deleted_at IS NULL AND coalesce(body_text, '') <> ''",
+    page:
+      "SELECT id, body_text AS text, 'text' AS field, NULL AS chat_id FROM emails WHERE id > ? AND deleted_at IS NULL " +
+      "AND coalesce(body_text, '') <> '' ORDER BY id LIMIT ?",
+    one: "SELECT body_text AS text, 'text' AS field, NULL AS chat_id FROM emails WHERE id = ? AND deleted_at IS NULL",
   },
 } as const
 export type SourceType = keyof typeof SOURCES

@@ -150,6 +150,7 @@ log, an error message or a run record. Nothing is fetched from an outside servic
 
 ## Not yet
 
-- Mentions in notes, Drive documents and mail.
+- Mentions in notes, Drive documents and mail are found, and `phone:` and the other fields find an email in memo's
+  mail search, but they are not listed by `mentions list` yet.
 - Links to anything but a Telegram chat or account resolved to what they name.
 - Names of people the store does not know, and addresses.

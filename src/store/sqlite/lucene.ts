@@ -202,6 +202,17 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     let fragment: Fragment
     let test: Leaf["test"]
     const bound = (sql: string, ...params: SqlValue[]): Fragment => ({ sql, params, exact: true })
+    // The items whose mentions match: an email by its text; a message by its text, files and voice notes.
+    const mentioned = (where: string, params: SqlValue[]) =>
+      mail
+        ? bound(`m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='email' AND ${where})`, ...params)
+        : bound(
+            `m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND ${where} ` +
+              "UNION SELECT a.attachable_id FROM mentions mn JOIN attachments a ON a.id=mn.source_id " +
+              `AND a.attachable_type='message' WHERE mn.source_type='attachment' AND ${where})`,
+            ...params,
+            ...params,
+          )
     const stemsOf = (text: string) => execution.stemmer?.phrases(text)
     if ((field === "text" || field === "exact") && value === "") fragment = bound("0")
     else if (field === "body" && value === "") fragment = bound("m.text = ?", "")
@@ -378,36 +389,13 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       }
       const target = linked[type ?? ""]
       if (target === undefined) searchError("query.invalid-reference", node.span)
-      else if (corpus.item !== "message") fragment = bound("0")
-      else {
-        const [where, params] = target
-        fragment = bound(
-          `m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND mn.status = 'linked' AND (${where}) ` +
-            "UNION SELECT a.attachable_id FROM mentions mn JOIN attachments a ON a.id=mn.source_id " +
-            `AND a.attachable_type='message' WHERE mn.source_type='attachment' AND mn.status = 'linked' AND (${where}))`,
-          ...params,
-          ...params,
-        )
-      }
+      else fragment = mentioned(`mn.status = 'linked' AND (${target[0]})`, target[1])
     } else if (field === "phone" || field === "email" || field === "url" || field === "domain") {
-      // Mentions are found in message text only so far: mail has none to match.
-      if (corpus.item !== "message") fragment = bound("0")
-      else {
-        const match = field === "domain" ? undefined : valueMatch(database, value)
-        const where =
-          match === undefined
-            ? "mn.domain = ? AND mn.status <> 'dismissed'"
-            : `mn.kind = ? AND ${match.sql} AND mn.status <> 'dismissed'`
-        const params = match === undefined ? [siteOf(value.toLowerCase())] : [field, ...match.params]
-        // A file's or a voice note's mention finds the message it belongs to.
-        fragment = bound(
-          `m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND ${where} ` +
-            "UNION SELECT a.attachable_id FROM mentions mn JOIN attachments a ON a.id=mn.source_id " +
-            `AND a.attachable_type='message' WHERE mn.source_type='attachment' AND ${where})`,
-          ...params,
-          ...params,
-        )
-      }
+      const match = field === "domain" ? undefined : valueMatch(database, value)
+      fragment =
+        match === undefined
+          ? mentioned("mn.domain = ? AND mn.status <> 'dismissed'", [siteOf(value.toLowerCase())])
+          : mentioned(`mn.kind = ? AND ${match.sql} AND mn.status <> 'dismissed'`, [field, ...match.params])
     } else if (field === "tag") {
       const tag = tagOf(value)
       if (tag === undefined) searchError("query.invalid-tag", node.span)

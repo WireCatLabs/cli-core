@@ -235,7 +235,7 @@ an index lookup.
    Telegram account it names — built. `mentions domains` (sites by number of links, in how many chats, first and last time; named under `mentions`,
    since `links` is the table of relations between records) — built.
    **1e** — the other texts: file texts and voice transcripts built (store version 10); notes, documents and mail
-   to come.
+   built (store version 16: read, searchable in mail; a `mentions` command in memo to list and decide them is next).
 2. `person-name` for known people (stems against names and aliases); `mentions:<reference>` — built: people met
    in a messenger, a meeting or a confirmed phone, not the e-mail-only ones; a Latin name transliterated; a stem or
    the written name plus up to three letters of ending; a rule link only to the one fitting person who wrote in the

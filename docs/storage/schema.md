@@ -1741,7 +1741,7 @@ A phone, e-mail address, link, Google document or known person's name found in o
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
 | `kind` | text | not null |  | `phone`, `email`, `url`, `document` |
-| `source_type` | text | not null |  | the text's row: `message`, or `attachment` for a message's file or voice note |
+| `source_type` | text | not null |  | the text's row: `message`, `attachment` (its file), `document`, `note` or `email` |
 | `source_id` | integer | not null |  | the row in the `source_type` table |
 | `source_field` | text | not null |  | which text of that row: a message's `text`, an attachment's `file_text` or `transcript` |
 | `start_offset` | integer | not null |  | where it is written in that text, in UTF-16 units |
@@ -1766,7 +1766,7 @@ Texts written or edited since their mentions were found: triggers enqueue, the s
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
-| `source_type` | text | not null |  | the text's row: `message` or `attachment` |
+| `source_type` | text | not null |  | `message`, `attachment`, `document`, `note` or `email` |
 | `source_id` | integer | not null |  | the row in the `source_type` table |
 
 *Keys and indexes:* `PRIMARY KEY (source_type, source_id)`
