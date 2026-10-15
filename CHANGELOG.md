@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- Model requests that need verbatim source evidence can set `allowSourceQuotes: true`. The gateway
+  then permits exact supporting quotes without treating source data as instructions; ordinary
+  requests retain the existing no-copy policy. This removes conflicting instructions for
+  document-memory extraction callers that explicitly opt in.
+
 ## 0.293.0 — 15.10.2026
 
 ### Added
