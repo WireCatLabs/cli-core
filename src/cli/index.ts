@@ -240,7 +240,15 @@ export {
   MAX_SECRET_INPUT,
   provideInputPolicy,
 } from "./input-policy.js"
-export { answerFields, checkJson, type JsonFieldsResolver, type JsonRequest, liftJson } from "./json-fields.js"
+export {
+  answerFields,
+  checkJson,
+  type EntityFields,
+  entityFields,
+  type JsonFieldsResolver,
+  type JsonRequest,
+  liftJson,
+} from "./json-fields.js"
 export {
   commandPath,
   LIST_QUERY_GUIDE,

@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { outputFor } from "./context.js"
 import { itemOf, renderAnswer } from "./envelope.js"
-import { answerFields, checkJson, liftJson } from "./json-fields.js"
+import { answerFields, checkJson, entityFields, liftJson } from "./json-fields.js"
 import { run } from "./program.js"
 import { commandAt } from "./steps.js"
 
@@ -90,6 +90,44 @@ describe("--json [fields]", () => {
     expect(() => checkJson(list, { json: true }, true)).toThrow(expect.objectContaining({ code: "validation_error" }))
     expect(() => checkJson(list, { json: true }, false)).not.toThrow()
     expect(() => checkJson(commandAt(root, "messages list") as Command, { json: true }, true)).not.toThrow()
+  })
+})
+
+describe("an app's own entities", () => {
+  const app = new Command("memo")
+  const tags = annotate(app.command("tags").command("list"), { output: { entity: "source_tag" } })
+  const folders = annotate(app.command("folders").command("list"), { output: { entity: "notes_folder", view: "row" } })
+  const shared = annotate(app.command("chats").command("list"), { output: { entity: "chat" } })
+  const resolve = entityFields({ source_tag: ["tag", "type", "count"], "notes_folder.row": { entries: { path: 1 } } })
+  const at = (words: string[]) => commandAt(app, words.filter((word) => !word.startsWith("-")).join(" "))
+
+  it("refuses a field the app's entity lacks with the error a shared entity gives", () => {
+    expect(() => checkJson(tags, { json: true, fields: "tag,title" }, false, resolve)).toThrow(
+      expect.objectContaining({
+        code: "validation_error",
+        message: "--json: no field title here; the fields are tag, type, count",
+        details: { reason: "output.unknown-field", param: "--json", allowed: ["tag", "type", "count"] },
+      }),
+    )
+  })
+
+  it("keeps the fields the app's entity has, written either way", () => {
+    expect(() => checkJson(tags, { json: true, fields: "tag,items.count" }, false, resolve)).not.toThrow()
+    expect(liftJson(["tags", "list", "--json", "tag,count"], at, resolve)).toEqual({
+      argv: ["tags", "list", "--json"],
+      json: true,
+      fields: "tag,count",
+    })
+    expect(answerFields(folders, resolve)).toEqual(["path"])
+  })
+
+  it("leaves cli-core's entities and undeclared commands as they were", () => {
+    expect(answerFields(shared, resolve)).toEqual(answerFields(list))
+    expect(answerFields(app.command("plain"), resolve)).toBeUndefined()
+  })
+
+  it("refuses an app entity that takes a shared entity's name", () => {
+    expect(() => entityFields({ chat: ["title"] })).toThrow("chat is cli-core's entity")
   })
 })
 

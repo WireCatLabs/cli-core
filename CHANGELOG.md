@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`entityFields({ name: fields })` lets an app check `--json=a,b` against its own entities.** It builds the
+  `JsonFieldsResolver` that `liftJson` and `checkJson` already take, keyed by the `output` entity (or `entity.view`)
+  a command declares. A field the entity lacks is refused with the same `validation_error` as a cli-core entity.
+  Fields are a list of names or an object schema's `entries`; a name cli-core already uses is refused.
+
 ## 0.290.0 — 15.10.2026
 
 ### Fixed
