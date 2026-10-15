@@ -1,0 +1,35 @@
+import { CliError } from "@wirecat/cli-base"
+import type { MeetingPreparationItem } from "../entities/meeting-preparation.js"
+
+/** Bound the final representation, including any transport escaping, with one shared priority. */
+export const boundMeetingPreparationItem = (item: MeetingPreparationItem): void => {
+  for (const entry of [...item.meetings, ...item.related.items])
+    entry.evidence.content_bytes = Buffer.byteLength(JSON.stringify(entry.evidence.items), "utf8")
+  const size = () => Buffer.byteLength(JSON.stringify(item), "utf8")
+  while (size() > item.limits.bytes && item.notes?.items.length) {
+    item.notes.items.pop()
+    item.notes.coverage.output_limited = item.coverage.output_limited = true
+  }
+  if (size() > item.limits.bytes && item.notes) {
+    delete item.notes
+    item.coverage.output_limited = true
+  }
+  while (size() > item.limits.bytes && item.knowledge?.items.length) {
+    item.knowledge.items.pop()
+    item.knowledge.coverage.output_limited = item.coverage.output_limited = true
+  }
+  if (size() > item.limits.bytes && item.knowledge) {
+    delete item.knowledge
+    item.coverage.output_limited = true
+  }
+  while (size() > item.limits.bytes && item.related.items.length) {
+    item.related.items.pop()
+    item.related.output_limited = item.coverage.output_limited = true
+  }
+  while (size() > item.limits.bytes && item.meetings.length) {
+    item.meetings.pop()
+    item.coverage.output_limited = true
+  }
+  if (size() > item.limits.bytes)
+    throw new CliError("validation_error", "Preparation metadata exceeds bytes; increase the output budget")
+}

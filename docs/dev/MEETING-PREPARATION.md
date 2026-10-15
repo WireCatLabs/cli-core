@@ -182,6 +182,9 @@ cue array. The item's `limits.bytes` bounds its JSON representation, excluding t
 normalization removes trailing related entries before exact-series entries to keep that bound,
 reporting `output_limited`. Related public fields are `anchors`, `items`, `has_more`, `output_limited`
 and `selection`; each item contains `ref`, `meeting`, `evidence`, `shared_person` and `shared_project`.
+MCP reapplies the same item budget after making hidden/control characters visible. It recalculates
+cue `content_bytes` for that escaped representation, trims notes before accepted knowledge and
+meeting evidence, and sets `meta.truncated` when it omits data. CLI JSON retains its original text.
 Unfit metadata is refused. Skipped unavailable meetings set `meta.complete=false` with source issues;
 output byte truncation sets `meta.truncated`. Unknown archive coverage remains a domain coverage
 fact rather than a claim that failed sources succeeded.

@@ -2,13 +2,14 @@ import { errorObjectOf, type FailureContext, mcpErrorResult } from "@wirecat/cli
 import { errorObjectSchema, itemEnvelopeSchema, jsonSchemaOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { REMOTE_READ } from "../cli/effects.js"
+import { boundMeetingPreparationItem } from "../cli/meeting-preparation-budget.js"
 import {
   type MeetingPreparationReader,
   meetingPreparationInput,
   readMeetingPreparation,
 } from "../cli/meeting-preparation-read.js"
 import { meetingPreparation } from "../entities/index.js"
-import { agentResult, UNTRUSTED } from "./text.js"
+import { agentBody, agentResult, UNTRUSTED } from "./text.js"
 
 const inputSchema: Record<string, unknown> = { ...jsonSchemaOf(meetingPreparationInput) }
 const outputSchema: Record<string, unknown> = {
@@ -29,7 +30,9 @@ export const callMeetingPreparationTool = async (
   now?: number,
 ) => {
   try {
-    const result = await readMeetingPreparation(read, input, signal, now)
+    const result = agentBody(await readMeetingPreparation(read, input, signal, now))
+    boundMeetingPreparationItem(result.item)
+    if (result.item.coverage.output_limited) result.meta = { ...result.meta, truncated: true }
     return agentResult({
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
       structuredContent: result,
