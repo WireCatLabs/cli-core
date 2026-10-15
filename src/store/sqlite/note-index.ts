@@ -1,5 +1,6 @@
 import { CHUNK_CHARS, chunkHash, splitSections, splitText } from "../../conversations/chunks.js"
 import { analyzerIdentity, DEFAULT_STEMMERS, type Stemmer, type Stemmers } from "../../search/stem.js"
+import { taskStemsOf, taskWordsOf } from "../../search/task-similarity.js"
 import type { CacheDatabase } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { dropDocumentPicture } from "./document-pictures.js"
@@ -24,7 +25,7 @@ export interface NoteIndexState {
  */
 export interface Corpus {
   /** The singular table name: `indexable_type` in the queue, `chunkable_type` in chunks. */
-  type: "document" | "note" | "memory" | "email"
+  type: "document" | "note" | "memory" | "email" | "task"
   /** Its row in `search_index_state`. */
   index: string
   table: string
@@ -32,6 +33,8 @@ export interface Corpus {
   read: string
   /** False when the corpus cuts its own pieces for search by meaning, as mail does by thread. */
   pieces?: false
+  /** The words and stems rows, when the corpus cleans its text its own way; `normalize` and `indexText` otherwise. */
+  terms?: (text: string, stemmer: Stemmer) => { words: string; stems: string }
 }
 
 export const CORPORA = {
@@ -63,6 +66,17 @@ export const CORPORA = {
       "SELECT e.subject AS title, coalesce(e.body_text, '') AS body, e.deleted_at IS NULL AS live, a.scope, e.account_id FROM emails e " +
       "JOIN accounts a ON a.id = e.account_id WHERE e.id = ?",
     pieces: false,
+  },
+  task: {
+    type: "task",
+    index: "task_index",
+    table: "tasks",
+    // A rule names its task `<kind> — <source>`: words every rule task shares, so they say nothing about this one.
+    read:
+      "SELECT CASE WHEN title = type || ' — ' || coalesce(source_locator, '') THEN NULL ELSE title END AS title, " +
+      "coalesce(description, '') AS body, deleted_at IS NULL AS live, 'personal' AS scope FROM tasks WHERE id = ?",
+    pieces: false,
+    terms: (text, stemmer) => ({ words: taskWordsOf(text), stems: [...taskStemsOf(text, stemmer)].join(" ") }),
   },
 } as const satisfies Record<string, Corpus>
 
@@ -132,9 +146,10 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
     const live = row !== undefined && Number(row.live) === 1
     const text = live ? noteIndexText(row.title == null ? null : String(row.title), String(row.body)) : ""
     const scope = live ? String(row.scope ?? "personal") : ""
-    const words = normalize(text)
+    const terms = corpus.terms && text ? corpus.terms(text, stemmer) : undefined
+    const words = terms ? terms.words : normalize(text)
     if (words !== "") statements.words.run(id, words, scope)
-    const stems = text ? stemmer.indexText(text) : ""
+    const stems = terms ? terms.stems : text ? stemmer.indexText(text) : ""
     if (stems !== "") statements.stems.run(id, stems, scope)
     const after = new Set<string>()
     if (text.trim() && corpus.pieces !== false) {

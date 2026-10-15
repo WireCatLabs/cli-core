@@ -15,6 +15,7 @@ import { folded } from "./folded.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
+import { type TaskSimilarity, taskSimilarityOver } from "./task-candidates.js"
 import { inboxKey, typedKey } from "./task-keys.js"
 import { taskRowOf, thingOf } from "./things.js"
 import { write } from "./transaction.js"
@@ -24,7 +25,7 @@ export { inboxKey, linkInbox, taskAccountOf } from "./task-keys.js"
 export { taskIdOf, taskRowOf } from "./things.js"
 
 /** `TaskStore` for `src/tasks/`, plus a way from its task ids to the store's rows. */
-export interface StoreTaskStore extends TaskStore, WorkTasks {
+export interface StoreTaskStore extends TaskStore, WorkTasks, TaskSimilarity {
   /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
   rowOf(id: string): number | undefined
   /** One account's tasks a list query keeps, oldest first, each with its title and last change. */
@@ -104,6 +105,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
 
   return {
     ...workTasksOver(context),
+    ...taskSimilarityOver(context),
     rowOf: (id) => taskRowOf(database, id),
     query: async (account, where, { limit, offset }) => {
       const project = inbox(account, false)

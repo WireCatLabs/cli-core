@@ -18,7 +18,7 @@ import {
 import { holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
-import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
+import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
@@ -244,6 +244,39 @@ export const tasksCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       const shown = await context.withServices((services) => services.tasks.show(id))
       renderAnswer(this, context, itemOf(snakeKeys(shown)), () => `${card(shown)}\n`)
+    })
+
+  annotate(tasks.command("similar"), { effects: LOCAL_READ })
+    .description(
+      "tasks that may be the same job as this one, best first, each with a band — likely, maybe, different — and the " +
+        "reasons; merges nothing",
+    )
+    .argument("<task>", "the task's id or key, as tasks list shows it")
+    .option("--limit <n>", "how many, at most 40 (default 10)", positiveCount("--limit"))
+    .action(async function (this: Command, id: string) {
+      const context = messengerContext(this, messenger)
+      const { limit = 10 } = this.opts<{ limit?: number }>()
+      const found = await context.withServices((services) => services.tasks.similar(id, { limit }))
+      renderAnswer(
+        this,
+        context,
+        listOf("tasks similar", { items: found.map(snakeKeys), limit, has_more: false }),
+        () =>
+          found.length === 0
+            ? ""
+            : `${found
+                .map((one) =>
+                  [
+                    one.key,
+                    String(one.score).padStart(3),
+                    one.band.padEnd(9),
+                    one.title,
+                    `(${one.reasons.join(", ")})`,
+                  ].join("  "),
+                )
+                .join("\n")}\n`,
+      )
+      if (found.length === 0 && context.format === "pretty") context.renderer.note("no open or recent task looks alike")
     })
 
   withQuery(

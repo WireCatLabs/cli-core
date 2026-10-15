@@ -185,6 +185,25 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         itemOf(snakeKeys(await tasks(store, account, defaults.guard).show(args.task))),
     }),
 
+    tasks_similar: tool({
+      title: "Tasks like this one",
+      description:
+        "Open tasks, and tasks closed in the last 14 days, that may be the same job as this one: found by shared " +
+        "words, the same person, the same category or one reply chain — never by the same chat alone — and scored " +
+        "field by field, best first. `band` is likely, maybe or different; nothing merges on it. Returns " +
+        "{ items: [{ ref, key, title, status, created_at, found_by, score, band, levels, reasons, text }] }.",
+      input: v.object({
+        task: text(200, "the task's id or key"),
+        limit: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(40), v.description("how many"))),
+      }),
+      annotations: { ...READ, openWorldHint: false },
+      stored: async (store, account, args, defaults) => {
+        const size = args.limit ?? 10
+        const found = await tasks(store, account, defaults.guard).similar(args.task, { limit: size })
+        return listOf("tasks similar", { items: found.map(snakeKeys), limit: size, has_more: false })
+      },
+    }),
+
     tasks_agenda: tool({
       title: "Today's agenda",
       description:

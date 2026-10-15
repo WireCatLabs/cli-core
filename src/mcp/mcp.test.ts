@@ -860,6 +860,7 @@ describe("the MCP server", () => {
       "tasks agenda",
       "tasks list",
       "tasks show",
+      "tasks similar",
       "topics list",
     ])
     expect(tools.every((one) => !one.writes)).toBe(true)

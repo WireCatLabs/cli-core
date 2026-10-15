@@ -1153,6 +1153,9 @@ const NEW = {
         c("created_at", "integer", { notnull: true }),
       ],
     },
+    fts("task_words", "Word index over task titles and descriptions, digit groups joined.", "normalized_text, scope"),
+    fts("task_stems", "Stem index, the pair of task_words, without stop words.", "stems, scope"),
+    queue("task_index_pending", "tasks"),
     {
       name: "decisions",
       doc: "Replaced by `facts` (a decision is a fact of type `decision`) in store version 2. Nothing writes it; it stays, empty, until a version that may drop tables.",

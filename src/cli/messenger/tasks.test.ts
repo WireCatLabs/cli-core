@@ -313,6 +313,23 @@ describe("tasks", () => {
     expect(shown.stdout.join("")).toContain("Ana: I'll send the invoice tomorrow")
     expect((await call("stats", "tasks", "show")).stdout.join("")).toContain("1 open")
   })
+
+  it("**lists the tasks that may be the same job**, scored, in snake_case, and changes nothing", async () => {
+    const call = await setup()
+    const add = async (message: string, title: string) =>
+      item(await call("tasks", "add", message, "--type", "request", "--category", "money", "--title", title, "--json"))
+        .card.key
+    const invoice = await add(PROMISE, "Send the invoice for 15 000 rub")
+    const again = await add("msg:chat/500/7/2", "Invoice 15000 rub to send")
+
+    const listed = json(await call("tasks", "similar", invoice, "--json"))
+    expect(listed.items).toMatchObject([
+      { key: again, band: expect.stringMatching(/likely|maybe/), found_by: expect.arrayContaining(["text"]) },
+    ])
+    expect(listed.items[0].reasons).toContain("same amount")
+    expect(json(await call("tasks", "list", "--json")).items).toHaveLength(2)
+    expect((await call.pretty("tasks", "similar", again)).stdout.join("")).toContain(invoice)
+  })
 })
 
 it("removes resource-local statistics without aliases and retains independent data denials", async () => {
