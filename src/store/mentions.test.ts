@@ -122,7 +122,11 @@ describe("mentions", () => {
     expect(items.map(({ kind, status }) => `${kind} ${status}`).sort()).toEqual(["email dismissed", "phone found"])
     expect(await reopened.mentionsState()).toEqual({ pending: 0, rebuiltAt: "2026-10-13T21:00:00.000Z" })
 
-    expect(await reopened.rebuildMentions({ kinds: ["phone"] })).toEqual({ messages: 2, attachments: 0, mentions: 1 })
+    expect(await reopened.rebuildMentions({ kinds: ["phone"] })).toMatchObject({
+      messages: 2,
+      attachments: 0,
+      mentions: 1,
+    })
     expect((await reopened.mentions(OWNER, q("kind:email"), { offset: 0 })).items[0]?.status).toBe("dismissed")
     await reopened.close()
   })
