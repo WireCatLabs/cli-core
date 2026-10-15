@@ -98,7 +98,14 @@ describe("mentions", () => {
 
     const rebuilt = await chat("mentions", "rebuild", "--json")
     expect(rebuilt.code).toBe(0)
-    expect(JSON.parse(rebuilt.stdout).item).toEqual({ messages: 2, attachments: 0, mentions: 3 })
+    expect(JSON.parse(rebuilt.stdout).item).toEqual({
+      messages: 2,
+      attachments: 0,
+      documents: 0,
+      notes: 0,
+      emails: 0,
+      mentions: 3,
+    })
     expect((await chat("mentions", "list", "--json")).stderr).not.toContain("mentions rebuild")
     const names = await chat("mentions", "rebuild", "person-name", "--json")
     expect(names.code, names.stderr).toBe(0)
