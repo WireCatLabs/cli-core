@@ -393,8 +393,8 @@
       "note": "the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)"
     },
     "--from": {
-      "value": "<who|link>",
-      "meaning": "sender to match in `bot search messages`; starting message link in tg bot store fetch"
+      "value": "<who>",
+      "meaning": "sender to match in `bot search messages`"
     },
     "--from-dir": {
       "value": "<dir>",
@@ -436,7 +436,8 @@
     },
     "--include": {
       "value": "<kinds>",
-      "meaning": "a folder takes every chat of these kinds: contacts, non-contacts, groups, channels, bots"
+      "meaning": "every chat of these kinds, comma-separated",
+      "note": "a folder (`chats folders`) or an export folder (`store export`) takes these chats"
     },
     "--into": {
       "value": "<task>",
@@ -1070,7 +1071,8 @@
     },
     "--until-id": {
       "value": "<id>",
-      "meaning": "only up to this message id, inclusive; the newest by default"
+      "meaning": "only up to this message id, inclusive; the newest by default",
+      "note": "tg's `bot store fetch` takes a message link here, the message the fetch starts at, inclusive"
     },
     "--until-time": {
       "value": "<time>",
@@ -1599,15 +1601,15 @@
     "bot store fetch": {
       "in": "all",
       "options": {
-        "--from": {
-          "in": ["tg"],
-          "reason": "Telegram bots read message numbers and need a starting link when none is known; MAX pages chat history directly"
-        },
         "--last": "all",
         "--limit": "all",
         "--page-size": "all",
         "--pause": "all",
-        "--since-time": "all"
+        "--since-time": "all",
+        "--until-id": {
+          "in": ["tg"],
+          "reason": "Telegram bots read message numbers and need a starting link when none is known; MAX pages chat history directly"
+        }
       }
     },
     "bot uploads": {
@@ -3881,10 +3883,10 @@
         "--all": "all",
         "--encrypt": "all",
         "--format": "all",
-        "--kind": "all",
+        "--include": "all",
         "--output": "all",
-        "--since-time": "all",
-        "--to": "all"
+        "--output-dir": "all",
+        "--since-time": "all"
       }
     },
     "store gaps": {

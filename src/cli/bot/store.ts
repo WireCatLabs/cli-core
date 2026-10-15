@@ -36,7 +36,7 @@ export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMess
     .option("--pause <duration>", "pause between pages, to stay under the messenger's limits", fetching.pause)
     .option("--since-time <time>", "stop once it reaches messages older than this: ISO 8601, or 2h / 1d ago")
     .option("--last <n>", "stop once the newest n messages are held", wholeNumber)
-  if (fetching.from) fetch.option("--from <link>", fetching.from)
+  if (fetching.from) fetch.option("--until-id <id>", fetching.from)
   fetch.action(async function (this: Command, chat: string) {
     const options = this.opts<{
       limit?: number
@@ -44,7 +44,7 @@ export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMess
       pause: string
       sinceTime?: string
       last?: number
-      from?: string
+      untilId?: string
     }>()
     if (options.sinceTime !== undefined && options.last !== undefined) {
       throw new CliError("validation_error", "give --since-time or --last, not both: how far back the fetch goes")
@@ -59,7 +59,7 @@ export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMess
         const adapter = await context.authenticated({
           events,
           stop: stop.signal,
-          history: { pauseMs, ...(options.from === undefined ? {} : { from: options.from }) },
+          history: { pauseMs, ...(options.untilId === undefined ? {} : { from: options.untilId }) },
         })
         try {
           const page = botCan(adapter, "historyBefore", bot, "read a chat back")

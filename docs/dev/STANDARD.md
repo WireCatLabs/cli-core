@@ -397,6 +397,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--context` | `<n>` | count | how many messages before and after each hit | messages |
 | `--events` |  | switch | also print edits, deletions and other changes; every line names its event |  |
 | `--qr-file` | `<png>` | path | write the login QR code to this PNG instead of drawing it |  |
+| `--all-versions` |  | switch | also the earlier versions a newer one replaced |  |
 | `--measure` | `<name>` | choice | the metric a ranking is ordered by |  |
 | `--newest` |  | switch | newest first instead of best first |  |
 | `--order` | `<recent\|name>` | choice | the order of a list: most recent first, or by name |  |
@@ -469,6 +470,8 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--size` | `<n>` | count | how many messages in one batch | messages |
 | `--unified-search` |  | switch | expose search across resources for the selected profile |  |
 | `--within` | `<duration>` | duration | the window after an event that counts |  |
+| `--grant` | `<scopes>` | list | also ask for these permissions at sign-in, comma-separated; the command lists them |  |
+| `--min-similarity` | `<n>` | number | how alike two names must be to count as a match, from 0 to 1 |  |
 | `--analyze` |  | switch | also analyze with the configured provider |  |
 | `--catch-up` |  | switch | prepare local search: after this run, or before a search reads it |  |
 | `--extract` |  | switch | also read the text inside the files written |  |
@@ -489,6 +492,8 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--ocr` |  | switch | also read the text in images and scanned PDFs with the configured OCR model |  |
 | `--online` |  | switch | also connect once and read the account; sends nothing |  |
 | `--sync-first` |  | switch | first bring what it reads up to date from the source |  |
+| `--domain-age` |  | switch | also ask each domain's registry when it was registered; the registry learns the domain |  |
+| `--retry-attachments` |  | switch | also reread the stored attachments whose text was not read before |  |
 | `--meetings` | `<n>` | count | at most this many stored meeting occurrences in context | meetings |
 | `--cues` | `<n>` | count | at most this many transcript cues per selected occurrence | cues |
 | `--context-limit` | `<n>` | count | at most this many entries per context category | items |
@@ -590,6 +595,8 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--transcript-id` | `<id>` | id | one transcript version, by id |  |
 | `--until-id` | `<id>` | id | up to and including this message id |  |
 | `--uuid` | `<uuid>` | string | one meeting occurrence, by its UUID |  |
+| `--ignore` | `<path>` | path | also skip this file or folder, a path or a glob; repeat it for more |  |
+| `--subfolder` | `<path>` | path | a subfolder inside --folder |  |
 | `--at-time` | `<time>` | time | do it at this time |  |
 | `--add` | `<chat>` | id | put this chat into the set being changed; repeat it for more |  |
 | `--all-can-pin` | `<on\|off>` | choice | every member may pin messages |  |
@@ -667,6 +674,12 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--title` | `<title>` | string | the title or name to give it |  |
 | `--type` | `<type>` | choice | what type of thing it is; the command lists the types |  |
 | `--types` | `<types>` | list | the update types, comma-separated, in the messenger's words |  |
+| `--occurred-time` | `<time>` | time | when it happened |  |
+| `--clear` |  | switch | unset it, instead of setting a new value |  |
+| `--do` | `<actions>` | list | what a rule does when it matches, comma-separated; the command lists the actions |  |
+| `--sender` | `<address>` | string | a sender, by email address |  |
+| `--domain` | `<domain>` | string | an internet domain, such as example.com |  |
+| `--list-id` | `<id>` | id | a mailing list, by its List-Id header |  |
 | `--filter` | `<query>` | string | a query every result must also match, beside the search's own words |  |
 
 <!-- flags: end -->
@@ -960,7 +973,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all. **tasks claim instead takes how long the claim lasts, such as 30m or 2h** | `all` | `skill install`, `tasks claim` |
 | `--for-everyone` |  | delete for everyone in the chat, not only for you — they cannot get it back |  | `messages delete` |
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
-| `--from` | `<who\|link>` | sender to match in `bot search messages`; starting message link in tg bot store fetch |  | `bot search messages`, `bot store fetch` (tg-only) |
+| `--from` | `<who>` | sender to match in `bot search messages` |  | `bot search messages` |
 | `--from-dir` | `<dir>` | read nonrecursive files from this directory for one explicit chat |  | `attachments extract` |
 | `--full` |  | found messages and mail with their whole text and every provider field |  | every command (planned) |
 | `--hidden` | `<on\|off>` | on hides a forum's General topic from the topic list, off shows it |  | `topics edit` (tg-only) |
@@ -971,12 +984,12 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--http` |  | serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login. **MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption** |  | `mcp` |
 | `--http-confirmation` | `<mode>` | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `mcp` (tg-only) |
 | `--idle` | `<duration>` | stop after this long with nobody using it — 15m, 1h |  | `serve` (max-only), `server restart` (max-only), `server start` (max-only) |
-| `--include` | `<kinds>` | a folder takes every chat of these kinds: contacts, non-contacts, groups, channels, bots |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
+| `--include` | `<kinds>` | every chat of these kinds, comma-separated. **a folder (`chats folders`) or an export folder (`store export`) takes these chats** |  | `chats folders create` (tg-only), `chats folders update` (tg-only), `store export` |
 | `--into` | `<task>` | the task that stays when another is merged into it |  | `tasks merge` |
 | `--join-approval` | `<on\|off>` | people ask to join, and an admin lets them in |  | `chats update` (tg-only) |
 | `--json` |  | machine-readable output: one JSON value on stdout, nothing else |  | every command |
 | `--jsonl` |  | machine-readable output: one JSON object per line, for streaming and jq |  | every command |
-| `--kind` | `<kind>` | only chats of this kind: dialog, group, channel or saved |  | `inbox`, `review`, `store export`, `tasks link` |
+| `--kind` | `<kind>` | only chats of this kind: dialog, group, channel or saved |  | `inbox`, `review`, `tasks link` |
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot store fetch`, `messages sync` |
 | `--last-name` | `<name>` | your last name |  | `account update` |
@@ -1048,7 +1061,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--order` | `<recent\|name>` | newest conversation first, or alphabetical |  | `contacts list` |
 | `--others` |  | every session but this one. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `account sessions end` |
 | `--output` |  | where to write: a directory for `messages download`, a file for `store export`. **`store export` and other commands use --output for a file; `messages download` takes --output-dir — e10** | `.` | `doctor report create`, `stats charts`, `store decrypt`, `store export` |
-| `--output-dir` | `<dir>` | the folder to write into, created if missing. **`attachments extract` takes it only with --download, and has no default there, so extraction never fills the working folder unasked** | `.` | `attachments extract`, `messages download` |
+| `--output-dir` | `<dir>` | the folder to write into, created if missing. **`attachments extract` takes it only with --download, and has no default there, so extraction never fills the working folder unasked** | `.` | `attachments extract`, `messages download`, `store export` |
 | `--outside` | `<hours>` | answer outside this 24-hour window, such as 09:00-19:00 |  | `replies edit` |
 | `--page` | `<n>` | which page, starting at 1 |  | `attachments list`, `attachments show`, `bot search messages`, `chats documents list` (planned), `chats list`, `chats members list`, `chats requests list`, `contacts list`, `mentions domains` (planned), `mentions list` (planned), `runs list`, `runs search`, `search all`, `search messages`, `search notes`, `searches history`, `sends list`, `store jobs list` |
 | `--page-size` | `<n>` | how many items one request to the messenger asks for; the messenger's own if not given. **the default is each messenger's own page: 30 on MAX, 100 on Telegram** |  | `bot store fetch`, `messages sync`, `store gaps repair` |
@@ -1123,7 +1136,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--timeout` | `<duration>` | give up on the whole command after this — 30s, 2m, 500ms |  | every command |
 | `--timezone` | `<zone>` | the IANA timezone for calendar date boundaries. **replies edit uses this option for the IANA timezone for the working window** | `system IANA timezone` | `replies edit`, `search all`, `search conversations`, `search messages`, `search notes`, `searches create`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered` |
 | `--title` | `<title>` | the new name — of a chat, a folder or a forum topic. **tasks add and tasks plan use this for the action and its object, in one line** |  | `bot chats admins add`, `chats folders update`, `chats update`, `tasks add`, `tasks plan`, `topics edit` (tg-only) |
-| `--to` | `<chat>` | the chat to forward it to: an id, or part of a chat name. **the sentence says how to name a chat the messenger's way, so it differs on purpose (Help text rule 4)** |  | `messages forward`, `store export` |
+| `--to` | `<chat>` | the chat to forward it to: an id, or part of a chat name. **the sentence says how to name a chat the messenger's way, so it differs on purpose (Help text rule 4)** |  | `messages forward` |
 | `--topic` | `<id>` | address this forum topic: send or forward to it, read only it, or mark only it read. **Telegram group forums only; MAX explicitly refuses this option before sending** |  | `chats mark-read`, `messages forward` (tg-only), `messages send`, `polls create` |
 | `--trace` |  | one line per request on stderr: ids and timings, never message content. **max logs one line per request, tg the connection's own lines: the same option, a different mechanism (Help text rule 4)** |  | every command |
 | `--track` |  | also do it daily while serve runs |  | `chats members fetch` |
@@ -1133,7 +1146,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--unanswered` | `[duration]` | only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d. **max's own `review` still takes bare hours until T6 moves it (e2)** | `24h` | `review`, `tasks agenda` |
 | `--unsure` |  | only the pairs the reviewing agent left to the owner |  | `tasks duplicates` |
 | `--until` | `<time>` | only until then: a local time, or a duration from now |  | `chats mute` (planned) |
-| `--until-id` | `<id>` | only up to this message id, inclusive; the newest by default |  | `chats mark-read` |
+| `--until-id` | `<id>` | only up to this message id, inclusive; the newest by default. **tg's `bot store fetch` takes a message link here, the message the fetch starts at, inclusive** |  | `bot store fetch` (tg-only), `chats mark-read` |
 | `--until-time` | `<time>` | through this ISO 8601 time, or 2h / 1d ago |  | `contacts timeline`, `stats chats newcomers`, `stats chats retention` |
 | `--upgrade` |  | explicitly upgrade a basic group to a supergroup before enabling topics; its chat id changes |  | `topics enable` (tg-only) |
 | `--verbose` |  | more detail in what is shown: -v ids, -vv everything known | `0` | every command |

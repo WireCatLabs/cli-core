@@ -29,6 +29,10 @@ shape of this file.
   `schedule agent|command --once` → `--at-time <time>`; `bot chats moderate --no-ban` → `--no-block`;
   `chats mark-read --until` → `--until-id <id>`; `tasks add|plan --check` → `--remind-time <time>`.
   `tasks agenda --within` keeps its name and now says `<duration>`, the value the vocabulary registers.
+- **`store export --to <dir>` → `--output-dir <dir>`, `--kind <kinds>` → `--include <kinds>`**, and
+  `bot store fetch --from` → `--until-id` (mounted when the messenger sets `fetching.from`, which stays its help).
+- **cli-base 0.32.0**: the dependency and the peer range move to `>=0.32.0 <0.33.0`; an app on 0.31 installs two
+  copies of cli-base until it bumps.
 - **MCP inputs follow**: `chats_members_audit` `budget` → `max_pages`, `chats_mark_read` `until` → `until_id`,
   `attachments_show` `if_sha256` → `expected_fingerprint`, `tags_auto` `refresh_metadata` → `sync_first`,
   `tasks_add`/`tasks_plan` `next_check` → `remind_time` (the answer keeps `next_check_at`).

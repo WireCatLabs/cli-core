@@ -91,7 +91,7 @@ const clearCommand = (messenger: Messenger): Command =>
 
 /**
  * One chat's stored messages, oldest first — `--jsonl` for a file or a pipe, one message per line,
- * `--format markdown` for a transcript a person reads. With `--to`, any number of chats into a
+ * `--format markdown` for a transcript a person reads. With `--output-dir`, any number of chats into a
  * folder, and each later run into the same folder adds only what changed.
  */
 const exportCommand = (messenger: Messenger): Command =>
@@ -99,7 +99,7 @@ const exportCommand = (messenger: Messenger): Command =>
     .description(
       "a chat's stored messages, oldest first: --jsonl one message per line, --json the list envelope of messages; never asks the messenger",
     )
-    .argument("[chats...]", `${messenger.chatArgument}; several with --to`)
+    .argument("[chats...]", `${messenger.chatArgument}; several with --output-dir`)
     .option(
       "--format <format>",
       "jsonl: one message per line, the default with --output; markdown: a transcript with a heading per day, replies and forwards quoted",
@@ -107,27 +107,30 @@ const exportCommand = (messenger: Messenger): Command =>
     .option("--since-time <time>", "only from this ISO 8601 time, or 30m / 2h / 1d ago, on")
     .option("--output <file>", "write JSON lines, or the transcript, to this new file, readable only by you")
     .option(
-      "--to <dir>",
+      "--output-dir <dir>",
       "write into this folder, a file per chat and a manifest; run again on it for only what changed since",
     )
-    .option("--kind <kinds>", `with --to: every stored chat of these kinds, comma-separated: ${CHAT_KINDS.join(", ")}`)
-    .option("--all", "with --to: every stored chat of this account")
+    .option(
+      "--include <kinds>",
+      `with --output-dir: every stored chat of these kinds, comma-separated: ${CHAT_KINDS.join(", ")}`,
+    )
+    .option("--all", "with --output-dir: every stored chat of this account")
     .option(...ENCRYPT_OPTION)
     .action(async function (this: Command, chats: string[]) {
       const {
         format,
         sinceTime: since,
         output,
-        to,
-        kind,
+        outputDir: to,
+        include: kind,
         all,
         encrypt,
       } = this.opts<{
         format?: string
         sinceTime?: string
         output?: string
-        to?: string
-        kind?: string
+        outputDir?: string
+        include?: string
         all?: boolean
         encrypt?: boolean
       }>()
@@ -139,13 +142,13 @@ const exportCommand = (messenger: Messenger): Command =>
         if (format === "markdown" || since !== undefined || output !== undefined) {
           throw new CliError(
             "validation_error",
-            "--to writes JSON lines and keeps its own point — not with --format markdown, --since-time or --output",
+            "--output-dir writes JSON lines and keeps its own point — not with --format markdown, --since-time or --output",
           )
         }
         if (chats.length === 0 && kind === undefined && all !== true) {
-          throw new CliError("validation_error", "--to needs chats, --kind or --all")
+          throw new CliError("validation_error", "--output-dir needs chats, --include or --all")
         }
-        const kinds = kind === undefined ? undefined : kindsOf(kind)
+        const kinds = kind === undefined ? undefined : kindsOf(kind, "--include")
         const dir = resolve(to)
         const password = encrypt ? await passwordOf(this, { twice: true }) : undefined
         const exported = await context.withServices(async (services) => {
@@ -189,10 +192,13 @@ const exportCommand = (messenger: Messenger): Command =>
         return
       }
       if (chats.length !== 1 || kind !== undefined || all === true) {
-        throw new CliError("validation_error", "one chat at a time without --to; --kind and --all need --to")
+        throw new CliError(
+          "validation_error",
+          "one chat at a time without --output-dir; --include and --all need --output-dir",
+        )
       }
       if (encrypt && output === undefined) {
-        throw new CliError("validation_error", "--encrypt writes a file — with --output or --to")
+        throw new CliError("validation_error", "--encrypt writes a file — with --output or --output-dir")
       }
       const password = encrypt ? await passwordOf(this, { twice: true }) : undefined
       const chat = chats[0] as string
