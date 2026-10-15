@@ -5,6 +5,8 @@ import type {
   MeetingPreparationContextStore,
   MeetingPreparationFact,
   MeetingPreparationKnowledgeStore,
+  MeetingPreparationNote,
+  MeetingPreparationNotesStore,
   MeetingReadCapabilities,
   MeetingRelatedHistoryEntry,
   MeetingRelatedHistoryStore,
@@ -32,7 +34,7 @@ export interface MeetingPreparationPorts {
     MeetingSeriesHistoryStore &
     MeetingPreparationContextStore &
     MeetingRelatedHistoryStore &
-    Partial<MeetingPreparationKnowledgeStore>
+    Partial<MeetingPreparationKnowledgeStore & MeetingPreparationNotesStore>
   upcoming: ReturnType<typeof createUpcomingMeetingReader>
 }
 export interface MeetingPreparationEntry {
@@ -63,6 +65,17 @@ export interface MeetingPreparation {
       hasMore: boolean
       outputLimited: boolean
       factEvidence: "not-revalidated"
+      otherSources: "not-queried"
+    }
+  }
+  notes?: {
+    anchors: string[]
+    items: MeetingPreparationNote[]
+    selection: "owner-written-global-person/project-notes"
+    coverage: {
+      hasMore: boolean
+      outputLimited: boolean
+      sourceEvidence: "not-revalidated"
       otherSources: "not-queried"
     }
   }

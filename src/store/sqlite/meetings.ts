@@ -8,6 +8,7 @@ import type {
   MeetingParticipantSearchStore,
   MeetingPreparationContextStore,
   MeetingPreparationKnowledgeStore,
+  MeetingPreparationNotesStore,
   MeetingRelatedHistoryStore,
   MeetingSave,
   MeetingSearchIndexStore,
@@ -37,6 +38,7 @@ import { INDEX_CODES, type Indexable, indexedText, meetingRowid, summaryOf } fro
 import { meetingParticipantSearchOver } from "./meeting-participant-search.js"
 import { meetingPreparationContextOver } from "./meeting-preparation-context.js"
 import { meetingPreparationKnowledgeOver } from "./meeting-preparation-knowledge.js"
+import { meetingPreparationNotesOver } from "./meeting-preparation-notes.js"
 import { type MeetingContextReadCapabilities, type MeetingReadCapabilities, meetingReadsOver } from "./meeting-reads.js"
 import { meetingRelatedHistoryOver } from "./meeting-related-history.js"
 import { meetingSeriesHistoryOver } from "./meeting-series-history.js"
@@ -662,6 +664,7 @@ const participants = (database: CacheDatabase, query: string, accountId?: number
 export type StoredMeetings = MeetingStore &
   MeetingPreparationContextStore &
   MeetingPreparationKnowledgeStore &
+  MeetingPreparationNotesStore &
   MeetingRelatedHistoryStore &
   MeetingSeriesHistoryStore &
   MeetingTranscriptStore &
@@ -681,6 +684,7 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     ...meetingSeriesHistoryOver(context),
     ...meetingPreparationContextOver(context),
     ...meetingPreparationKnowledgeOver(context),
+    ...meetingPreparationNotesOver(context),
     ...meetingRelatedHistoryOver(context),
     ...meetingHitSearchOver(context),
     ...meetingParticipantSearchOver(context),

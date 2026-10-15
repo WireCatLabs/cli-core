@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference, type MeetingProviderScope, snapshotMeetingScope } from "../meetings/index.js"
 import { readMeetingEvidence } from "./meeting-evidence.js"
 import { appendKnowledgePreparation } from "./meeting-knowledge-preparation.js"
+import { appendNotesPreparation } from "./meeting-notes-preparation.js"
 import type {
   MeetingPreparation,
   MeetingPreparationPorts,
@@ -34,7 +35,8 @@ export const createMeetingPreparationService = (
       "transcriptRows",
     ].some((key) => typeof store[key as keyof typeof store] !== "function") ||
     typeof ports?.upcoming?.next !== "function" ||
-    (store.preparationKnowledge !== undefined && typeof store.preparationKnowledge !== "function")
+    (store.preparationKnowledge !== undefined && typeof store.preparationKnowledge !== "function") ||
+    (store.preparationNotes !== undefined && typeof store.preparationNotes !== "function")
   )
     throw new CliError(
       "configuration_error",
@@ -145,6 +147,7 @@ export const createMeetingPreparationService = (
       }
       await appendRelatedPreparation(store, result, input)
       await appendKnowledgePreparation(store, result, input)
+      await appendNotesPreparation(store, result, input)
       preparationCancelled(signal)
       if (size(result) > bytes)
         throw new CliError("validation_error", "Preparation coverage exceeds bytes; increase the output budget")

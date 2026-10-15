@@ -47,6 +47,7 @@ Automatic findings intake remains separate.
 | Facts | Accepted facts whose subject is this meeting, including decisions and promises | Proposed/reversed facts and facts about other subjects are excluded; evidence is not revalidated |
 | Tasks | Existing tasks with this exact meeting source group and a source beneath its reference | Includes current task status; excludes other-account projects and unrelated project tasks |
 | Related meetings | Other series joined through existing person links or confirmed global project memberships shared with included history | Same account and history window; dated live meetings only; no name, email or alias matching |
+| Owner notes | Owner-written notes and annotations about explicitly linked people or confirmed global projects | Optional port; current revisions only, no imported files, messages or mail; note text is distinct from accepted facts |
 | Accepted knowledge | Global person/project facts through those explicit associations, with fact references and association flags | Optional port, accepted status only; no mail, messages or notes; source evidence is not revalidated |
 
 Related history records its anchor meeting references and separate `sharedPerson`/`sharedProject`
@@ -57,7 +58,7 @@ The service reads cited cues without refreshing the derived search index. If the
 exact-series anchors, related history remains unqueried. When it is queried, person-history and
 project-wide coverage are replaced in `unqueried` by the narrower `person-nonmeeting-context` and `project-nonmeeting-context` gaps;
 project-alias candidates always remain unqueried. This covers related meeting transcripts, not
-mail, messages, project notes or every source about a person. The result is a factual context bundle for an agent, not an AI-generated summary.
+mail, messages or every source about a person. The optional notes section below adds a bounded subset of owner notes. The result is a factual context bundle for an agent, not an AI-generated summary.
 Stored facts and task provenance do not establish that their underlying evidence still holds.
 
 ### Accepted person and project facts
@@ -87,9 +88,44 @@ annotation body, model output or source message is read by this capability.
 `knowledge` records included anchor references and the selection `accepted-global-person/project-facts`.
 Its `coverage` holds `hasMore`, `outputLimited`, `factEvidence: not-revalidated` and `otherSources: not-queried`.
 The shared field projector retains that object even when selecting only `knowledge.items.ref`.
-Existing nonmeeting coverage gaps remain because notes and communications were not searched.
+Existing nonmeeting coverage gaps remain because this is not a complete search of notes and communications.
 Its optional data is trimmed before related or exact-series evidence when the public mapper's
 normalized output exceeds `bytes`. Public fields use snake_case and ISO update timestamps.
+
+### Owner notes about people and projects
+
+The optional `store.meetings.preparationNotes` port adds `notes` after meeting evidence and accepted
+knowledge. It uses the same validated account, series, included anchor IDs and bounds as
+`preparationKnowledge`. Hosts without the method remain compatible; an absent section does not mean
+there are no matching notes. No store migration is required.
+
+The native adapter reads owner-authored rows from the shared notes table, including annotations.
+A live note qualifies through its primary person/project subject or a confirmed additional `about`
+link to a currently linked person or confirmed global project from the included history. Its primary
+subject must itself be a live global person/project: account-scoped meeting/chat subjects are excluded
+even when an additional project link matches. Proposed links, bot-authored notes, deleted notes and
+account-scoped or deleted projects are excluded. No name, email, title or alias matching takes place.
+Current revisions updated at or before the preparation start qualify, including notes older than the
+history window. This is a live read, not an historical snapshot.
+
+Items carry `ref` (`note:<id>`), nullable `title`, `text`, `revision`, `updatedAt` and nullable `person`
+and `project` references. Each association reference is the smallest matching stored ID of that type;
+it proves one qualifying association, rather than listing all subjects or attendees. A note matching
+both paths is returned once. Retrieve the referenced note separately for all its associations.
+
+Up to `min(contextLimit, 20)` notes are returned, newest update then ID descending. A separate
+lookahead determines `notes.coverage.hasMore`. UTF-8 title and body bytes, including lookahead,
+are checked in one read snapshot before body hydration; row limits do not bound SQL scan/sort work.
+`notes.anchors` records included history references, and `selection` is
+`owner-written-global-person/project-notes`. Coverage contains `hasMore`, `outputLimited`,
+`sourceEvidence: not-revalidated` and `otherSources: not-queried`. Public answers use snake_case
+and ISO timestamps; selecting `notes.items.ref` retains the nested coverage object.
+
+Notes are owner text, separate from accepted facts. Imported/file documents, messages, mail and
+unlinked notes remain unqueried; the broad nonmeeting coverage gaps remain. The assembler validates
+custom host pages, refuses duplicates and byte overflows, and propagates read/cancellation failures.
+Notes use the remaining output budget after accepted facts and meeting evidence. Public normalization
+trims notes first, then accepted knowledge, related meetings and exact history; truncation stays visible.
 
 Defaults: five exact-series history meetings and up to five related meetings, ten cues per occurrence, twenty entries per context category,
 256 KiB stored text per read and 64 KiB for the serialized result. Hard limits are twenty meetings,

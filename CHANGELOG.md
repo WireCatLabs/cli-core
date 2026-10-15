@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- Meeting preparation can include bounded owner-written notes and annotations about explicitly linked
+  people and confirmed global projects. Notes retain their references, revisions and separate coverage;
+  accepted facts and meeting evidence keep priority. Custom SDK hosts may omit the new read port.
+
 ## 0.288.0 — 15.10.2026
 
 ### Changed — may break callers

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { type MeetingPreparationKnowledgeStore, validateMeetingRelatedHistory } from "../../meetings/index.js"
-import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
+import { preparationSubjects } from "./preparation-subjects.js"
 import { read } from "./transaction.js"
 
 export const meetingPreparationKnowledgeOver = ({
@@ -12,18 +12,7 @@ export const meetingPreparationKnowledgeOver = ({
       validateMeetingRelatedHistory(original)
     if (!anchorIds.length) return { items: [], hasMore: false }
     return read(database, () => {
-      const selection = `WITH anchors AS (
-        SELECT m.id FROM meetings m JOIN meeting_series s ON s.id=m.meeting_series_id
-        WHERE m.id IN (${anchorIds.map(() => "?").join(",")}) AND m.account_id=? AND s.account_id=?
-        AND s.id=? AND m.started_at>=? AND m.started_at<? AND m.deleted_at IS NULL AND s.deleted_at IS NULL
-      ), people AS (
-        SELECT DISTINCT l.person_id AS id FROM anchors a JOIN meeting_participants p ON p.meeting_id=a.id
-        JOIN identity_links l ON l.identity_id=p.identity_id JOIN persons person ON person.id=l.person_id
-      ), projects AS (
-        SELECT DISTINCT p.id FROM anchors a JOIN links l ON l.from_type='meeting' AND l.from_id=a.id
-        AND l.to_type='project' AND l.kind=${linkKind("member-of")} AND l.confirmed=1
-        JOIN main.projects p ON p.id=l.to_id WHERE p.account_id IS NULL AND p.deleted_at IS NULL
-      ), candidates AS (
+      const selection = `${preparationSubjects(anchorIds.length)}, candidates AS (
         SELECT f.id,f.type,f.statement,f.subject_type,f.subject_id,f.project_id,f.updated_at,
         (f.subject_type='person' AND f.subject_id IN (SELECT id FROM people)) AS shared_person,
         ((f.subject_type='project' AND f.subject_id IN (SELECT id FROM projects))

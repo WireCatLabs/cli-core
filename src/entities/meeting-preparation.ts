@@ -71,6 +71,29 @@ export const meetingPreparation = v.strictObject({
       }),
     }),
   ),
+  notes: v.optional(
+    v.strictObject({
+      anchors: v.array(reference),
+      items: v.array(
+        v.strictObject({
+          ref: reference,
+          title: v.nullable(v.string()),
+          text: v.string(),
+          revision: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
+          updated_at: isoTime,
+          person: v.nullable(reference),
+          project: v.nullable(reference),
+        }),
+      ),
+      selection: v.literal("owner-written-global-person/project-notes"),
+      coverage: v.strictObject({
+        has_more: v.boolean(),
+        output_limited: v.boolean(),
+        source_evidence: v.literal("not-revalidated"),
+        other_sources: v.literal("not-queried"),
+      }),
+    }),
+  ),
   limits: v.strictObject({ meetings: count, cues: count, context_limit: count, max_read_bytes: count, bytes: count }),
   coverage: v.strictObject({
     archive_completeness: v.literal("unknown"),
