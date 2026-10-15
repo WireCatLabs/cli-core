@@ -4178,14 +4178,9 @@ describe("the guard, account and mcp config commands", () => {
   it("**print the mcp entry by full path**, and warn when node belongs to a version manager", async () => {
     const env = sandbox()
     const mcp = { execPath: "/home/o/.nvm/versions/node/v24/bin/node", scriptPath: "/usr/lib/chat/bin/chat.js" }
-    const { code, stdout, stderr } = await call(
-      ["work", "mcp", "config", "--confirm-send", "--allow-dangerous", "--allow-send", "--json"],
-      async () => fake,
-      env,
-      {
-        mcp,
-      },
-    )
+    const { code, stdout } = await call(["work", "mcp", "config", "--json"], async () => fake, env, {
+      mcp,
+    })
 
     expect(code).toBe(0)
     expect(json(stdout).item.config.mcpServers["chat-work"]).toMatchObject({
@@ -4194,9 +4189,6 @@ describe("the guard, account and mcp config commands", () => {
       env: { MESSAGING_STORE: env.MESSAGING_STORE },
     })
     expect(json(stdout).next).toEqual([expect.objectContaining({ step: "mcp.config", command: "mcp config" })])
-    expect(stderr.join("\n")).toContain(
-      "--allow-send, --confirm-send, --allow-dangerous no longer decide anything: the profile's permissions do",
-    )
 
     const pretty = await call(["mcp", "config"], async () => fake, env, { mcp, tty: true })
     expect(JSON.parse(pretty.stdout.join("\n")).mcpServers.chat.args).toEqual([mcp.scriptPath, "default", "mcp"])

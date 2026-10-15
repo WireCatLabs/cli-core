@@ -6,7 +6,7 @@ import type { SendGuard } from "../../sends/guard.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
 import { type AnyTool, chatOf, message, tool, WRITE } from "../tool.js"
 
-/** Offered with `--allow-send`, under the `reaction` permission. */
+/** Offered by the profile's permissions, under the `reaction` permission. */
 export const reactionTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
   const messages = (adapter: MessengerAdapter, guard: SendGuard) =>

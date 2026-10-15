@@ -901,12 +901,8 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--all-in-chat` |  | decide a name in every undecided place of it in the same chat too |  | `mentions confirm` (planned), `mentions reject` (planned) |
 | `--allow-any-file` |  | send a --file even from credential folders or the tool's own folders |  | `bot api` (planned), `bot messages send`, `messages send` |
 | `--allow-chats` | `<ids>` | replace allowed chat ids, comma-separated; empty clears |  | `replies audience`, `replies edit` |
-| `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate`, `bot mcp`, `bot mcp config`, `bot messages delete`, `chats clear` (planned), `chats delete` (planned), `chats moderate`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only), `messages delete`, `store clear` |
-| `--allow-delete` |  | offer the tool that deletes messages for you only; it cannot be undone. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
-| `--allow-mark-read` |  | offer the tool that marks a chat read; the other person sees it. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
-| `--allow-moderate` |  | offer the tool that applies a group's rules — delete others' messages, remove people. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config` |
+| `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate`, `bot messages delete`, `chats clear` (planned), `chats delete` (planned), `chats moderate`, `messages delete`, `store clear` |
 | `--allow-people` | `<ids>` | replace allowed sender ids, comma-separated; empty clears |  | `replies audience`, `replies edit` |
-| `--allow-send` |  | offer the send tool; without it the server can only read. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
 | `--allow-writes` |  | acknowledge that the profile offers writing tools when installing local MCP |  | `mcp setup` |
 | `--analyze` |  | link conversation batches using the configured analysis provider, with remembered chat/provider consent |  | `conversations build` |
 | `--anonymous` |  | nobody sees who voted for what |  | `polls create` |
@@ -950,7 +946,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--comment-to` | `<post>` | comment on this channel post; the comment goes to the post's discussion group |  | `messages send` (tg-only) |
 | `--component` | `<name>` | the ranking component whose contributing messages or answer pairs to read |  | `stats contacts evidence`, `stats messages evidence` |
 | `--concurrency` | `<n>` | remote: requests at once (default: 4) |  | `attachments extract`, `conversations embed` |
-| `--confirm-send` |  | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `bot mcp`, `bot mcp config`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
 | `--contact` | `<person>` | the person to tag or untag: their id, @username or name, as the local store knows them |  | `tags add`, `tags remove` |
 | `--contacts-only` |  | match only contacts |  | `replies edit` |
 | `--context` | `<n>` | messages before and after each hit |  | `search messages`, `searches create` |
@@ -1000,7 +995,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--holder` | `<name>` | who you are for task claims: a session or chat id |  | `tasks agenda`, `tasks claim`, `tasks release` |
 | `--html` |  | the text is HTML: <b>, <i>, <a href>, <code> |  | `bot messages edit`, `bot messages send`, `messages edit` (tg-only), `messages send` (tg-only) |
 | `--http` |  | serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login. **MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption** |  | `mcp` |
-| `--http-confirmation` | `<mode>` | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `mcp` (tg-only) |
 | `--idle` | `<duration>` | stop after this long with nobody using it — 15m, 1h |  | `serve` (max-only), `server restart` (max-only), `server start` (max-only) |
 | `--include` | `<kinds>` | every chat of these kinds, comma-separated. **a folder (`chats folders`) or an export folder (`store export`) takes these chats** |  | `chats folders create` (tg-only), `chats folders update` (tg-only), `store export` |
 | `--into` | `<id>` | the task that stays: a duplicate is merged into it, or a message is linked to it instead of opening a task |  | `tasks add`, `tasks merge` |
@@ -1423,9 +1417,7 @@ it writes no file and uses the same `messages` read permission.
 3. **Every command says whether it writes**; `read` refuses a writing one and `write` a reading one.
 4. **A command is found and run by its [permission](#permissions)**, never by a flag of its own:
    `deny` hides it, `readonly` hides the writing ones, `ask` and `allow` act — no form, since nobody
-   is at a terminal to answer (NEED-772, NEED-773). `--confirm-send`, `--allow-dangerous`,
-   `--http-confirmation`, `--allow-send`, `--allow-mark-read` and `--allow-delete` decide nothing any
-   more: they are accepted with a warning, so an agent set up with them still starts.
+   is at a terminal to answer (NEED-772, NEED-773). `mcp` takes no flag that grants or confirms access.
 5. **Unknown arguments are refused before execution.** A retired schedule field must never turn
    a scheduled write into an immediate one. Consumers retaining their own session use the public
    personal MCP catalogue and registration seam, filtering only unsupported capabilities.

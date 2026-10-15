@@ -43,25 +43,9 @@
     "--allow-dangerous": {
       "meaning": "go ahead without the question an ask level puts before a deletion"
     },
-    "--allow-delete": {
-      "meaning": "offer the tool that deletes messages for you only; it cannot be undone",
-      "note": "retired access flag: accepted with a warning, grants no permissions in either CLI"
-    },
-    "--allow-mark-read": {
-      "meaning": "offer the tool that marks a chat read; the other person sees it",
-      "note": "retired access flag: accepted with a warning, grants no permissions in either CLI"
-    },
-    "--allow-moderate": {
-      "meaning": "offer the tool that applies a group's rules — delete others' messages, remove people",
-      "note": "retired access flag: accepted with a warning, grants no permissions in either CLI"
-    },
     "--allow-people": {
       "meaning": "replace allowed sender ids, comma-separated; empty clears",
       "value": "<ids>"
-    },
-    "--allow-send": {
-      "meaning": "offer the send tool; without it the server can only read",
-      "note": "retired access flag: accepted with a warning, grants no permissions in either CLI"
     },
     "--allow-writes": {
       "meaning": "acknowledge that the profile offers writing tools when installing local MCP"
@@ -227,10 +211,6 @@
     "--concurrency": {
       "value": "<n>",
       "meaning": "remote: requests at once (default: 4)"
-    },
-    "--confirm-send": {
-      "meaning": "no longer used: MCP writes show no form; the profile's permissions decide",
-      "note": "retired: accepted with a warning so an old setup still starts"
     },
     "--contact": {
       "value": "<person>",
@@ -420,11 +400,6 @@
     "--http": {
       "meaning": "serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login",
       "note": "MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption"
-    },
-    "--http-confirmation": {
-      "value": "<mode>",
-      "meaning": "no longer used: MCP writes show no form; the profile's permissions decide",
-      "note": "retired: accepted with a warning so an old setup still starts"
     },
     "--idle": {
       "value": "<duration>",
@@ -1468,23 +1443,11 @@
     },
     "bot mcp": {
       "in": "all",
-      "options": {
-        "--allow-dangerous": "all",
-        "--allow-delete": "all",
-        "--allow-moderate": "all",
-        "--allow-send": "all",
-        "--confirm-send": "all"
-      }
+      "options": {}
     },
     "bot mcp config": {
       "in": "all",
-      "options": {
-        "--allow-dangerous": "all",
-        "--allow-delete": "all",
-        "--allow-moderate": "all",
-        "--allow-send": "all",
-        "--confirm-send": "all"
-      }
+      "options": {}
     },
     "bot me": {
       "in": "all"
@@ -2489,31 +2452,7 @@
     "mcp": {
       "in": "all",
       "options": {
-        "--allow-dangerous": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-delete": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-mark-read": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-send": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--confirm-send": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
         "--http": "all",
-        "--http-confirmation": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
         "--permission": "all",
         "--port": "all",
         "--public-url": "all",
@@ -2530,26 +2469,6 @@
     "mcp config": {
       "in": "all",
       "options": {
-        "--allow-dangerous": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-delete": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-mark-read": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-send": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--confirm-send": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
         "--permission": "all",
         "--yes": {
           "in": [],
@@ -2563,53 +2482,13 @@
     "mcp doctor": {
       "in": "all",
       "options": {
-        "--allow-dangerous": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-delete": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-mark-read": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-send": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--confirm-send": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
         "--permission": "all"
       }
     },
     "mcp setup": {
       "in": "all",
       "options": {
-        "--allow-dangerous": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-delete": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-mark-read": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
-        "--allow-send": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
         "--allow-writes": "all",
-        "--confirm-send": {
-          "in": ["tg"],
-          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
-        },
         "--permission": "all"
       }
     },

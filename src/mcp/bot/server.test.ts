@@ -332,9 +332,9 @@ describe("chat_bot_chats_moderate", () => {
 })
 
 describe("bot mcp config", () => {
-  it("**prints the entry for `bot mcp`**, and says the old flags decide nothing", async () => {
+  it("**prints the entry for `bot mcp`**", async () => {
     const streams = captureStreams()
-    const code = await run(["sales", "bot", "mcp", "config", "--allow-send", "--confirm-send", "--json"], definition, {
+    const code = await run(["sales", "bot", "mcp", "config", "--json"], definition, {
       streams,
       tty: false,
       env,
@@ -352,9 +352,6 @@ describe("bot mcp config", () => {
         },
       },
     })
-    expect(streams.stderr.join("\n")).toContain(
-      "--allow-send, --confirm-send no longer decide anything: the bot profile's permissions do",
-    )
   })
 
   it("is not mounted for a messenger that hands in no run", () => {

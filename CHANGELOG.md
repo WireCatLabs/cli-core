@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`mcp` and `bot mcp` no longer take the retired access flags** `--allow-send`, `--allow-mark-read`,
+  `--allow-delete`, `--allow-moderate`, `--confirm-send`, `--allow-dangerous` and `--http-confirmation`: an agent set
+  up with one now fails to start with "unknown option" instead of a warning. The profile's permissions decide, as
+  they already did.
+
 ## 0.292.0 — 15.10.2026
 
 ### Added
