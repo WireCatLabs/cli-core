@@ -9,6 +9,8 @@ shape of this file.
 
 ### Added
 
+- **`mentions confirm|reject <id> --all-in-chat`**: a name is decided in every undecided place of it in the same
+  chat too, «Ольга» once for the whole chat; places someone already decided keep their decision.
 - **`tasks similar <task>`** (MCP `tasks_similar`, read-only, permission key `tasks.similar`): the tasks of the
   same account that may be the same job — open, or closed in the last 14 days — scored field by field, best first,
   each with `band` (likely, maybe, different), `reasons`, `levels` and `found_by`. Candidates come from shared stems

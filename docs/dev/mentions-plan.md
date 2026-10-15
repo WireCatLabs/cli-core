@@ -91,8 +91,9 @@ an edit or a deletion removes it and breaks the chain, and choosing the primary 
 
 **Names and places are linked one occurrence at a time.** The text «Ольга» does not say which Ольга; two messages
 in two chats can mean two people. Each name mention gets its own target (`person` or `place`). `mentions show`
-offers the people with that name met in the same chat first, and `mentions confirm --chat` links every «Ольга» of
-one chat to one person in one step — still one target per row, so one wrong chat is fixed alone.
+offers the people with that name met in the same chat first, and `mentions confirm --all-in-chat` (built; `--chat`
+names a chat everywhere else) links every undecided «Ольга» of one chat to one person in one step — still one
+target per row, so one wrong chat is fixed alone; `reject --all-in-chat` dismisses them the same way.
 
 **An organization owns an identity** in a table of its own, `organization_identities` (owner, NEED-1065): a
 shop's number, `info@`. It is apart from `identity_links`, which says which person an identity is, so one number

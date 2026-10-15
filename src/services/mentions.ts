@@ -43,8 +43,9 @@ export interface MentionsService {
     onBatch?: (done: number, total: number) => void
   }): Promise<MentionsRebuild>
   /** `target` is `person:<uid>` or `organization:<id>` for a phone or an address; a document needs none. */
-  confirm(id: number, target: string | undefined, by: string): Promise<MentionDecision>
-  reject(id: number, by: string): Promise<MentionDecision>
+  confirm(id: number, target: string | undefined, by: string, inChat?: boolean): Promise<MentionDecision>
+  /** `inChat`: a name is decided in every undecided place of its chat too. */
+  reject(id: number, by: string, inChat?: boolean): Promise<MentionDecision>
 }
 
 /** How many a sync counts toward its review note: enough to say "many", cheap on a big store. */
@@ -84,7 +85,7 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
       const { before, after, sameValue, candidates, ...rest } = found
       return { ...mention(rest), before, after, sameValue, candidates }
     },
-    confirm: async (id, target, by) => {
+    confirm: async (id, target, by, inChat = false) => {
       let owner: string | undefined
       if (target !== undefined) {
         const reference = parseReference(target)
@@ -95,9 +96,9 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
           )
         owner = `${reference.type}:${reference.id}`
       }
-      return (await accountStore(deps)).confirmMention(id, owner, by)
+      return (await accountStore(deps)).confirmMention(id, owner, { by, inChat })
     },
-    reject: async (id, by) => (await accountStore(deps)).rejectMention(id, by),
+    reject: async (id, by, inChat = false) => (await accountStore(deps)).rejectMention(id, { by, inChat }),
     rebuild: async (options = {}) =>
       (await crossAccount(deps, "mentions are derived from every account's stored text")).rebuildMentions(options),
   }

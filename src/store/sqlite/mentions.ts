@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { defineQuery, type QueryAst } from "@wirecat/cli-base/query"
-import { MENTION_KINDS, type MentionKind, siteOf } from "../../domain/mentions.js"
+import { type Decider, MENTION_KINDS, type MentionKind, siteOf } from "../../domain/mentions.js"
 import { findNames, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
@@ -244,7 +244,7 @@ export interface MentionDecision {
 const mentionOfAccount = (database: CacheDatabase, accountPk: number, id: number) => {
   const row = database.prepare(`${SELECT}WHERE mn.id = ? AND m.account_id = ?`).get(id, accountPk)
   if (!row) throw new CliError("not_found", `no mention ${id} in this account`)
-  return { id, kind: String(row.kind) as MentionKind, value: String(row.value) }
+  return { id, kind: String(row.kind) as MentionKind, value: String(row.value), chat: Number(row.chat_pk) }
 }
 
 /**
@@ -253,18 +253,26 @@ const mentionOfAccount = (database: CacheDatabase, accountPk: number, id: number
  */
 const decide = (
   database: CacheDatabase,
-  { id, kind, value }: { id: number; kind: MentionKind; value: string },
+  { id, kind, value, chat }: { id: number; kind: MentionKind; value: string; chat: number },
   status: MentionStatus,
   target: { type: string; id: number } | null,
-  by: string,
+  { by, inChat }: Decider,
   now: number,
 ): MentionDecision => {
   const set = "UPDATE mentions SET status = ?, target_type = ?, target_id = ?, author = ?, updated_at = ? "
   const decision = [status, target?.type ?? null, target?.id ?? null, by, now] as const
+  // The same name in one chat, still undecided or decided only by the rules: what someone decided stays.
+  const sameChat =
+    "WHERE id = ? OR id IN (SELECT mn.id FROM mentions mn LEFT JOIN attachments att ON mn.source_type = 'attachment' " +
+    "AND att.id = mn.source_id AND att.attachable_type = 'message' JOIN messages m ON m.id = CASE WHEN " +
+    "mn.source_type = 'attachment' THEN att.attachable_id ELSE mn.source_id END WHERE m.chat_id = ? " +
+    "AND mn.kind = 'person-name' AND mn.value = ? AND (mn.status = 'found' OR mn.author = 'rules'))"
   const changed = (
-    kind === "person-name"
-      ? database.prepare(`${set}WHERE id = ?`).run(...decision, id)
-      : database.prepare(`${set}WHERE kind = ? AND value = ?`).run(...decision, kind, value)
+    kind !== "person-name"
+      ? database.prepare(`${set}WHERE kind = ? AND value = ?`).run(...decision, kind, value)
+      : inChat
+        ? database.prepare(`${set}${sameChat}`).run(...decision, id, chat, value)
+        : database.prepare(`${set}WHERE id = ?`).run(...decision, id)
   ).changes
   return { kind, value, status, target: target ? `${target.type}:${target.id}` : null, mentions: Number(changed) }
 }
@@ -280,7 +288,7 @@ export const confirmMention = (
   accountPk: number,
   id: number,
   owner: { person: number } | { organization: number } | undefined,
-  by: string,
+  by: Decider,
 ): MentionDecision => {
   const { database } = context
   const mention = mentionOfAccount(database, accountPk, id)
@@ -302,14 +310,14 @@ export const confirmMention = (
         .prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
         .get(mention.kind, mention.value)?.id,
     )
-    if ("person" in owner) linkIdentityToPerson(context, identity, owner.person, { method: "mention", by })
+    if ("person" in owner) linkIdentityToPerson(context, identity, owner.person, { method: "mention", by: by.by })
     else
       database
         .prepare(
           "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
             "VALUES (?, ?, 'mention', ?, ?, ?) ON CONFLICT (identity_id, organization_id) DO NOTHING",
         )
-        .run(identity, owner.organization, by, now, now)
+        .run(identity, owner.organization, by.by, now, now)
     return decide(database, mention, "linked", { type: "identity", id: identity }, by, now)
   }
   if (mention.kind === "document") {
@@ -332,5 +340,5 @@ export const confirmMention = (
 }
 
 /** Not a real mention, or not worth keeping: every place the value is written, now and on later syncs. */
-export const rejectMention = (context: StoreContext, accountPk: number, id: number, by: string): MentionDecision =>
+export const rejectMention = (context: StoreContext, accountPk: number, id: number, by: Decider): MentionDecision =>
   decide(context.database, mentionOfAccount(context.database, accountPk, id), "dismissed", null, by, context.now())

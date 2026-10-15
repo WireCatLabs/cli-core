@@ -7,7 +7,7 @@ import type { Link, LinkInput } from "../conversations/link.js"
 import type { DownloadedFile } from "../domain/attachments.js"
 import type { ChannelTagMatch } from "../domain/channel-tags.js"
 import type { CounterObservations, CounterState } from "../domain/counters.js"
-import type { MentionKind } from "../domain/mentions.js"
+import type { Decider, MentionKind } from "../domain/mentions.js"
 import type {
   Chat,
   ChatKind,
@@ -450,9 +450,9 @@ export interface MessageStore {
    * Says what a mention's value is, everywhere it is written: a phone or an address belongs to its owner
    * (`person:<uid>` or `organization:<id>`), a document id names the stored document.
    */
-  confirmMention(key: AccountKey, id: number, owner: string | undefined, by: string): Promise<MentionDecision>
+  confirmMention(key: AccountKey, id: number, owner: string | undefined, by: Decider): Promise<MentionDecision>
   /** Dismisses a mention's value everywhere it is written, and on later syncs. */
-  rejectMention(key: AccountKey, id: number, by: string): Promise<MentionDecision>
+  rejectMention(key: AccountKey, id: number, by: Decider): Promise<MentionDecision>
   /** Finds the mentions of every stored message again, every account's; decisions stay. */
   rebuildMentions(options?: {
     kinds?: readonly MentionKind[]

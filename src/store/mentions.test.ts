@@ -134,7 +134,7 @@ describe("deciding a mention", () => {
     })
     const [one] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
 
-    const decided = await store.confirmMention(OWNER, one?.id ?? 0, `person:${ana?.uid}`, "owner")
+    const decided = await store.confirmMention(OWNER, one?.id ?? 0, `person:${ana?.uid}`, { by: "owner" })
 
     expect(decided).toMatchObject({ kind: "phone", value: "+79000000001", status: "linked", mentions: 2 })
     expect(await status(store, "89000000001")).toEqual(["linked", "linked"])
@@ -155,7 +155,7 @@ describe("deciding a mention", () => {
     await store.saveMessages(OWNER, "-1", [message("1", "móvil 612 345 678")], { via: "history" })
     const [bare] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
     expect(bare?.value).toBe("612345678")
-    await store.confirmMention(OWNER, bare?.id ?? 0, `person:${ana?.uid}`, "owner")
+    await store.confirmMention(OWNER, bare?.id ?? 0, `person:${ana?.uid}`, { by: "owner" })
 
     const firstFound = () => {
       const raw = new DatabaseSync(path)
@@ -217,7 +217,7 @@ describe("deciding a mention", () => {
     )
     const [one] = (await store.mentions(OWNER, q("kind:url"), { offset: 0 })).items
 
-    expect(await store.rejectMention(OWNER, one?.id ?? 0, "claude-code")).toMatchObject({
+    expect(await store.rejectMention(OWNER, one?.id ?? 0, { by: "claude-code" })).toMatchObject({
       status: "dismissed",
       mentions: 2,
     })
@@ -234,9 +234,11 @@ describe("deciding a mention", () => {
     const [phone, link] = (await store.mentions(OWNER, undefined, { offset: 0 })).items.sort((a, b) =>
       a.kind.localeCompare(b.kind),
     )
-    await expect(store.confirmMention(OWNER, phone?.id ?? 0, undefined, "owner")).rejects.toThrow(/person:<uid>/)
-    await expect(store.confirmMention(OWNER, link?.id ?? 0, undefined, "owner")).rejects.toThrow(/reject it/)
-    await expect(store.rejectMention(OTHER, phone?.id ?? 0, "owner")).rejects.toThrow(/no mention/)
+    await expect(store.confirmMention(OWNER, phone?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
+      /person:<uid>/,
+    )
+    await expect(store.confirmMention(OWNER, link?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(/reject it/)
+    await expect(store.rejectMention(OTHER, phone?.id ?? 0, { by: "owner" })).rejects.toThrow(/no mention/)
     await store.close()
   })
 })
@@ -266,7 +268,7 @@ describe("mention fields in a message search", () => {
     expect(await found(store, 'phone:89000000001 -email:"ana@example.com"')).toEqual(["1"])
 
     const [link] = (await store.mentions(OWNER, q("kind:url domain:example.com"), { offset: 0 })).items
-    await store.rejectMention(OWNER, link?.id ?? 0, "owner")
+    await store.rejectMention(OWNER, link?.id ?? 0, { by: "owner" })
     expect(await found(store, "domain:example.com")).toEqual(["2"])
     expect(await found(store, 'url:"https://example.com/a"')).toEqual([])
     await store.close()
@@ -325,10 +327,12 @@ describe("an organization's number", () => {
     await store.saveMessages(OWNER, "-1", [message("1", "магазин: +7 900 000-00-02")], { via: "history" })
     const [phone] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
 
-    expect(await store.confirmMention(OWNER, phone?.id ?? 0, `organization:${shop.id}`, "owner")).toMatchObject({
-      status: "linked",
-      target: expect.stringMatching(/^identity:/),
-    })
+    expect(await store.confirmMention(OWNER, phone?.id ?? 0, `organization:${shop.id}`, { by: "owner" })).toMatchObject(
+      {
+        status: "linked",
+        target: expect.stringMatching(/^identity:/),
+      },
+    )
     expect(await store.personOf({ provider: "phone", id: "+79000000002" })).toBeUndefined()
     await store.saveMessages(OWNER, "-1", [message("2", "тот же 89000000002", "2026-10-02T10:00:00.000Z")], {
       via: "update",
@@ -337,7 +341,7 @@ describe("an organization's number", () => {
       "linked",
       "linked",
     ])
-    await expect(store.confirmMention(OWNER, phone?.id ?? 0, "organization:999", "owner")).rejects.toThrow(
+    await expect(store.confirmMention(OWNER, phone?.id ?? 0, "organization:999", { by: "owner" })).rejects.toThrow(
       /no organization/,
     )
     await store.close()
@@ -396,15 +400,17 @@ describe("known people's names", () => {
       a.messageId.localeCompare(b.messageId),
     )
 
-    expect(await store.confirmMention(OWNER, call?.id ?? 0, smirnov, "owner")).toMatchObject({ mentions: 1 })
-    expect(await store.rejectMention(OWNER, firm?.id ?? 0, "owner")).toMatchObject({ mentions: 1 })
+    expect(await store.confirmMention(OWNER, call?.id ?? 0, smirnov, { by: "owner" })).toMatchObject({ mentions: 1 })
+    expect(await store.rejectMention(OWNER, firm?.id ?? 0, { by: "owner" })).toMatchObject({ mentions: 1 })
     await store.rebuildMentions({ kinds: ["person-name"] })
     expect(await names(store)).toEqual([`1 Смирнов linked ${smirnov}`, "2 Смирнов dismissed null"])
 
     const found = await searchStore(store, OWNER, { text: `mentions:"${smirnov}"`, limit: 10 })
     expect(found.items.map(({ id }) => id)).toEqual(["1"])
     const [dismissed] = (await store.mentions(OWNER, q("kind:person-name status:dismissed"), { offset: 0 })).items
-    await expect(store.confirmMention(OWNER, dismissed?.id ?? 0, undefined, "owner")).rejects.toThrow(/person:<uid>/)
+    await expect(store.confirmMention(OWNER, dismissed?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
+      /person:<uid>/,
+    )
     await store.close()
   })
 
@@ -414,6 +420,41 @@ describe("known people's names", () => {
     await store.saveMessages(OWNER, "-1", [from("1", "7", "Кузнечику привет")], { via: "history" })
 
     expect(await names(store)).toEqual([`1 Кузнечику linked ${belkin}`])
+    await store.close()
+  })
+
+  it("decides a name in every undecided place of its chat with --all-in-chat, and nowhere else", async () => {
+    const { store, smirnov } = await named()
+    await store.saveMessages(
+      OWNER,
+      "-2",
+      [
+        from("1", "9", "Смирнов звонил", "-2"),
+        from("2", "9", "Смирнов это фирма", "-2"),
+        from("3", "9", "Смирнов придёт", "-2"),
+      ],
+      { via: "history" },
+    )
+    await store.saveMessages(OWNER, "-3", [from("4", "9", "Смирнов тут", "-3")], { via: "history" })
+    const byMessage = async () =>
+      Object.fromEntries(
+        (await store.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items.map((one) => [one.messageId, one]),
+      )
+    const before = await byMessage()
+    await store.rejectMention(OWNER, before["2"]?.id ?? 0, { by: "owner" })
+
+    expect(
+      await store.confirmMention(OWNER, before["1"]?.id ?? 0, smirnov, { by: "owner", inChat: true }),
+    ).toMatchObject({
+      mentions: 2,
+    })
+    const after = await byMessage()
+    expect([after["1"]?.status, after["2"]?.status, after["3"]?.status, after["4"]?.status]).toEqual([
+      "linked",
+      "dismissed",
+      "linked",
+      "found",
+    ])
     await store.close()
   })
 
