@@ -702,9 +702,10 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 
 **Every command whose primary result is a search lives under `search`, then its resource**
 (owner, 2026-10-08), as statistics live under `stats`: `search all`, `search messages`,
-`search mail`, `search notes`, `search conversations`, `search topics`; for the bot account
-`bot search messages`. `search all` covers every resource the store holds and is the one an agent
-should reach for first. A resource's own `search` leaf (`messages search`) does not exist beside it.
+`search notes`, `search conversations`, `search topics`; for the bot account `bot search messages`.
+`search all` covers messages and notes, and a meeting account `--source` names, and is the one an agent
+should reach for first. Mail is the knowledge tool's: a source tool has no `search mail`, and `search all`
+there never reads mail (owner, 2026-10-14; [TOOL-BOUNDARIES.md](TOOL-BOUNDARIES.md)). A resource's own `search` leaf (`messages search`) does not exist beside it.
 `searches` stays: it is the owner's saved searches, a resource, not a search.
 
 ### Where a search word is looked for
@@ -1262,7 +1263,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 8. **A search says which accounts it read** ([source-everywhere-plan.md](source-everywhere-plan.md)).
    Every stored thing has a kind (`messages`, `mail`, `notes`, `documents`, `meetings`), a provider
    and an account; `--source` takes `provider:account`, a bare provider, a bare kind or
-   `group:<name>`, and a positive `in:` a bare provider or kind. `search all`, `search mail` and `search notes` answer
+   `group:<name>`, and a positive `in:` a bare provider or kind. `search all`, memo's `search mail` and `search notes` answer
    `accounts: [{ resource, provider, account }]` beside `searched` and `skipped`; `search messages`
    answers the same list as `coverage.accounts`. A `--source` entry a search cannot use is named in
    `meta.issues` as `{ code, source }`, its reason on stderr. A hit's `provider:account` is a valid
