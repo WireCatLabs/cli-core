@@ -123,6 +123,7 @@ const samples: Record<EntityName, unknown> = {
     supersedes: null,
     author,
     model: null,
+    confirmed_by: { type: "person", id: "1" },
     scope: null,
     origin: "owner",
     evidence: [],
@@ -372,6 +373,18 @@ const samples: Record<EntityName, unknown> = {
     built_at: at,
     rules_version: 1,
   },
+  relationship: {
+    id: "4",
+    from: "person:1",
+    to: "project:2",
+    kind: "member-of",
+    role: "lead",
+    evidence: null,
+    confirmed: false,
+    provenance: "agent",
+    confidence_category: "weak",
+    created_at: at,
+  },
   tagging: {
     tag: "work",
     type: "chat",
@@ -589,6 +602,7 @@ const renamed: Partial<Record<EntityName, [from: string, to: string]>> = {
   poll_vote: ["voted_at", "votedAt"],
   topic: ["unread_count", "unreadCount"],
   folder: ["chat_ids", "chatIds"],
+  relationship: ["confidence_category", "confidenceCategory"],
 }
 
 const rename = (sample: unknown, [from, to]: [string, string]) => {

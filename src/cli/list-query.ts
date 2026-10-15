@@ -3,12 +3,15 @@ import {
   dateRange,
   defineQuery,
   type FieldSpec,
+  type FieldType,
   fieldsHelp,
   fieldsNamed,
+  OPERATORS_BY_TYPE,
   type Predicate,
   parseLucene,
   QUERY_LIMITS,
   type QueryAst,
+  type QueryNode,
   type QueryRegistry,
   queryError,
   queryFieldsOf,
@@ -125,9 +128,11 @@ export const queryArgument = (registry: QueryRegistry) => {
       v.description(
         fields.length === 0
           ? "field:value terms; this list filters by none yet, so any term is refused"
-          : `field:value terms that narrow the list (Lucene: AND OR NOT, [a TO b], > <); fields: ${fields
-              .map((field) => field.name)
-              .join(", ")}; e.g. ${fields[0]?.example ?? ""}`,
+          : `${
+              registry.backend === "native"
+                ? "field:value terms joined by AND that narrow the list"
+                : "field:value terms that narrow the list (Lucene: AND OR NOT, [a TO b], > <)"
+            }; fields: ${fields.map((field) => field.name).join(", ")}; e.g. ${fields[0]?.example ?? ""}`,
       ),
     ),
   )
@@ -141,24 +146,44 @@ export const nativeTerms = (ast: QueryAst | undefined, command: string): Map<str
   const terms = new Map<string, Predicate>()
   if (!ast) return terms
   const context = { command, guide: LIST_QUERY_GUIDE }
-  const add = (node: Predicate) => {
+  // listQuery wraps a typed `a:x b:y` as one clause beside the defaults, so an all-AND group nests.
+  const add = (node: QueryNode) => {
+    if (node.kind === "boolean") {
+      for (const clause of node.clauses) {
+        if (clause.occur !== "must")
+          queryError(
+            "query.unsupported-placement",
+            clause.node.span,
+            "this list takes only field:value terms joined by AND",
+            context,
+          )
+        add(clause.node)
+      }
+      return
+    }
     if (terms.has(node.field))
       queryError("query.unsupported-placement", node.span, `${node.field} only once here`, context)
     terms.set(node.field, node)
   }
-  const { root } = ast
-  if (root.kind === "predicate") add(root)
-  else
-    for (const clause of root.clauses) {
-      if (clause.occur !== "must" || clause.node.kind !== "predicate")
-        queryError(
-          "query.unsupported-placement",
-          clause.node.span,
-          "this list takes only field:value terms joined by AND",
-          context,
-        )
-      add(clause.node)
-    }
+  add(ast.root)
+  return terms
+}
+
+/**
+ * A store that compares whole values: each field's `field:value` or `field:"two words"`, enum values lowercased
+ * as validation already accepts them. A range or wildcard is refused rather than read as a value.
+ */
+export const queryTerms = (words: QueryWords, registry: QueryRegistry, command: string): Map<string, string> => {
+  const terms = new Map<string, string>()
+  for (const [field, node] of nativeTerms(listQuery(typedQuery(words), registry, command), command)) {
+    if (node.operator !== "term" && node.operator !== "phrase")
+      queryError("query.unsupported-placement", node.span, `${field} takes one whole value here`, {
+        command,
+        guide: LIST_QUERY_GUIDE,
+      })
+    const enumerated = registry.fields.find(({ name }) => name === field)?.type === "enum"
+    terms.set(field, enumerated ? node.value.toLowerCase() : node.value)
+  }
   return terms
 }
 
@@ -186,6 +211,21 @@ export const searchText = (term: Predicate | undefined): string | undefined =>
 
 /** A field the provider filters itself; names follow the search language, as in `search messages`. */
 export const nativeField = (field: Omit<FieldSpec, "native">): FieldSpec => ({ ...field, native: true })
+
+/** A field the store filters by whole values only, as `queryTerms` reads them. */
+export const termField = (
+  name: string,
+  type: FieldType,
+  example: string,
+  more: Pick<FieldSpec, "values" | "relation"> = {},
+): FieldSpec =>
+  nativeField({
+    name,
+    type,
+    operators: OPERATORS_BY_TYPE[type].filter((operator) => operator === "term" || operator === "phrase"),
+    example,
+    ...more,
+  })
 
 /** The Fields section of a list's help, for a list that places its own `[query...]`. */
 export const queryHelp = (registry: QueryRegistry): string => `\n${fieldsHelp(registry, LIST_QUERY_GUIDE)}`
