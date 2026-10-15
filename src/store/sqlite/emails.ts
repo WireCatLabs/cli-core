@@ -222,6 +222,8 @@ export interface EmailFilter extends MailFilter {
   since?: number
   /** Exclusive. */
   until?: number
+  /** Only emails with an attachment whose text extraction failed with one of these errors. */
+  attachmentErrors?: string[]
 }
 
 export interface EmailRef {
@@ -601,6 +603,12 @@ const emailWhere = (filter: EmailFilter): [string, SqlValue[]] => {
     )
   if (filter.since !== undefined) add("coalesce(e.received_at, e.sent_at) >= ?", filter.since)
   if (filter.until !== undefined) add("coalesce(e.received_at, e.sent_at) < ?", filter.until)
+  if (filter.attachmentErrors !== undefined)
+    add(
+      `e.id IN (SELECT attachable_id FROM attachments WHERE attachable_type = 'email'
+         AND extraction_error IN (${filter.attachmentErrors.map(() => "?").join(",") || "NULL"}))`,
+      ...filter.attachmentErrors,
+    )
   return [where.join(" AND "), params]
 }
 
