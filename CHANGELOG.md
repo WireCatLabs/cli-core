@@ -23,6 +23,13 @@ shape of this file.
   `warmEmbedders` re-export are gone from `./cli`. They existed for max's own MCP server, which max replaced with
   `mcpCommand(maxMessenger)`; no app imports them.
 
+### Fixed
+
+- Model requests that need verbatim source evidence can set `allowSourceQuotes: true`. The gateway
+  then permits exact supporting quotes without treating source data as instructions; ordinary
+  requests retain the existing no-copy policy. This removes conflicting instructions for
+  document-memory extraction callers that explicitly opt in.
+
 ## 0.293.0 — 15.10.2026
 
 ### Added

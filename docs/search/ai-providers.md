@@ -18,9 +18,12 @@ values and the source of each field. Environment overrides use names such as
 `MAX_MODELS_ANALYSIS_PROVIDER`, `MAX_MODELS_REPLIES_MODEL`, and `MAX_MODELS_DEFAULT_BASE_URL`.
 
 The gateway takes `purpose`, optional `system`, `prompt`, optional untrusted `data`, `maxTokens`
-and optional provider-specific `options`. The data is sent separately and never followed as
-instructions. Reply blocks may use template metadata at the owner’s insertion points; they must
-not copy the incoming message into the reply. Other non-OCR callers keep the no-copy policy.
+and optional provider-specific `options`. The gateway sends data separately and instructs the
+model to treat it as content rather than instructions. Reply blocks may use template metadata at the owner’s insertion points; they must
+not copy the incoming message into the reply. SDK callers that require exact supporting evidence
+set `allowSourceQuotes: true` on the request. This permits supporting quotes while keeping the
+source in a separate untrusted-data message; it does not authorize following its instructions.
+Other non-OCR requests keep the no-copy policy, including ordinary replies.
 Options are validated by the selected adapter: unknown keys and wrong types
 are refused before any request. OpenAI supports temperature, top_p, presence_penalty,
 frequency_penalty, seed, stop, and response_format (text or json_object); Anthropic supports
