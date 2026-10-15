@@ -16,6 +16,11 @@ shape of this file.
   one bounded index pass. The host selects one account and owns input, cancellation and final output; no model
   or remote write is dispatched. The existing single-input commands keep their grammar and behavior.
 
+### Changed — may break callers
+
+- **Requires `@wirecat/cli-base >=0.35.0 <0.36.0`.** Update the consumer's direct Base pin to `0.35.0`
+  alongside Core; the shared batch APIs use exports introduced in that Base release.
+
 ## 0.292.0 — 15.10.2026
 
 ### Changed — may break callers
