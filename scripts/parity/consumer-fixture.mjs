@@ -12,7 +12,7 @@ const cli = process.argv[2],
   repo = process.argv[3],
   require = createRequire(`${repo}/package.json`)
 const { captureStreams, memoryKeyring } = await import(require.resolve("@wirecat/cli-base"))
-const { seedSearchRecipes, mcpCommandsClient } = await import(require.resolve("@wirecat/cli-core/testing"))
+const { seedSearchRecipes } = await import(require.resolve("@wirecat/cli-core/testing"))
 const { servicesFor, storedDeps } = await import(require.resolve("@wirecat/cli-core/services"))
 const { openStore } = await import(require.resolve("@wirecat/cli-core/store"))
 const { rememberAccount } = await import(require.resolve("@wirecat/cli-core/cli"))
@@ -49,6 +49,23 @@ const descriptor =
     ? (await import(`${repo}/dist/messenger.js`)).maxMessenger
     : (await import(`${repo}/dist/commands/context.js`)).TELEGRAM
 const service = servicesFor({ ...storedDeps(descriptor, db, account, {}), env: process.env, history: false })
+const surfaceOf = (client, app) => {
+  const listed = async (query) => {
+    const result = await client.callTool({ name: `${app}_tools_search`, arguments: query ? { query } : {} })
+    return JSON.parse(result.content.find((part) => part.type === "text")?.text ?? "null").items
+  }
+  return {
+    commands: async () => (await listed()).map(({ command }) => command),
+    run: async (command, args, options) => {
+      const found = (await listed(command)).find((one) => one.command === command)
+      return client.callTool(
+        { name: `${app}_${found?.writes ? "write" : "read"}`, arguments: { command, arguments: args } },
+        undefined,
+        options,
+      )
+    },
+  }
+}
 const runtimeArgs = process.versions.bun ? ["--preload"] : ["--import"]
 const transport = new StdioClientTransport({
   command: process.execPath,
@@ -71,9 +88,9 @@ transport.stderr?.on("data", (chunk) => {
 })
 try {
   await client.connect(transport)
-  const commands = mcpCommandsClient(client, cli)
-  const callTool = async (name, args) => {
-    const result = await commands.callTool({ name: `${cli}_${name}`, arguments: args }, undefined, { timeout: 10000 })
+  const commands = surfaceOf(client, cli)
+  const callTool = async (command, args) => {
+    const result = await commands.run(command, args, { timeout: 10000 })
     const first = result.content.find((part) => part.type === "text")
     return { isError: result.isError === true, body: result.structuredContent ?? JSON.parse(first?.text ?? "null") }
   }
@@ -122,7 +139,7 @@ try {
         timezone: "UTC",
         limit: 20,
       })
-      const mcp = await callTool("messages_search", {
+      const mcp = await callTool("messages search", {
         text: recipe.query,
         ...(recipe.explicit ? { language: "lucene" } : {}),
         timezone: "UTC",
@@ -164,7 +181,7 @@ try {
         }),
         (error) => error.code === recipe.code && error.details.reason === recipe.reason,
       )
-      const mcp = await callTool("messages_search", {
+      const mcp = await callTool("messages search", {
         text: recipe.query,
         ...(recipe.explicit ? { language: "lucene" } : {}),
         timezone: "UTC",
@@ -226,7 +243,7 @@ try {
     assert.equal(result.code, 0)
     const cliIds = JSON.parse(result.stdout).items.map((hit) => hit.locator)
     const direct = await service.messages.search({ text: "кафе OR библиотека", language: "lucene", limit })
-    const mcp = await callTool("messages_search", { text: "кафе OR библиотека", limit })
+    const mcp = await callTool("messages search", { text: "кафе OR библиотека", limit })
     assert.deepEqual(
       direct.items.map((hit) => hit.locator),
       cliIds,
@@ -249,14 +266,14 @@ try {
     assert.equal(result.stdout, "")
     const reason = JSON.parse(result.stderr).error.reason
     await assert.rejects(service.messages.search({ text, limit: 20 }), (error) => error.details.reason === reason)
-    const mcp = await callTool("messages_search", { text })
+    const mcp = await callTool("messages search", { text })
     assert.equal(mcp.body.error.reason, reason)
     checks.push({ name: text.length > 8192 ? "oversized query" : "empty/whitespace query", pass: true })
   }
   for (const text of ["", "  ", "x".repeat(8193)]) {
     const result = await invoke(["conversations", "search", text])
     assert.equal(result.code, 2)
-    const mcp = await callTool("conversations_search", { query: text })
+    const mcp = await callTool("conversations search", { query: text })
     assert.equal(mcp.isError, true)
     await assert.rejects(service.embeddings.search(text, { limit: 20 }), (error) => error.code === "validation_error")
     checks.push({ name: "topic query size/empty bounds", pass: true })
@@ -275,7 +292,7 @@ try {
     assert.ok(refused.stderr.includes("another account"))
     const accepted = await invoke(["messages", mode, locator])
     assert.equal(accepted.code, 0)
-    const mcp = await callTool("messages_context", { chat: foreign, offline: true })
+    const mcp = await callTool("messages context", { chat: foreign, offline: true })
     assert.equal(mcp.body.error.code, "validation_error")
     checks.push({ name: `${mode} locator account isolation`, pass: true })
   }
@@ -340,7 +357,7 @@ try {
       expected,
     )
     assert.deepEqual(
-      (await callTool("messages_search", { text: "scopeprobetoken", ...(source ? { source } : {}) })).body.items.map(
+      (await callTool("messages search", { text: "scopeprobetoken", ...(source ? { source } : {}) })).body.items.map(
         (hit) => hit.locator,
       ),
       expected,
@@ -362,7 +379,7 @@ try {
     "from:901",
   ])
   assert.equal(filtered.code, 0)
-  const eligible = await callTool("conversations_search", {
+  const eligible = await callTool("conversations search", {
     query: "scopeprobetoken",
     source: "all",
     filter: "from:901",
@@ -386,7 +403,7 @@ try {
   const topic = await invoke(["conversations", "search", "кафе", "--chat", "7"])
   assert.equal(topic.code, 0)
   const topicBody = JSON.parse(topic.stdout)
-  const topicMcp = await callTool("conversations_search", { query: "кафе", chat: "7" })
+  const topicMcp = await callTool("conversations search", { query: "кафе", chat: "7" })
   const topicService = await service.embeddings.search("кафе", { chat: "7", limit: 20 })
   const firstIds = (hits) => hits.map((hit) => hit.summary.firstMessageId)
   assert.deepEqual(firstIds(topicMcp.body.items), firstIds(topicBody.items ?? topicBody.hits))
@@ -398,14 +415,14 @@ try {
   checks.push({ name: "words-only topic fallback and linking prompt", pass: true })
   const statsQuery = 'from:("Alice Synthetic" OR "Bob Synthetic")'
   const statsCli = await invoke(["stats", "messages", "show", statsQuery, "--by", "chat"])
-  const statsMcp = await callTool("stats_messages_show", { text: statsQuery, by: "chat" })
+  const statsMcp = await callTool("stats messages show", { text: statsQuery, by: "chat" })
   assert.equal(statsCli.code, 0)
   assert.equal(statsMcp.isError, false)
   assert.equal(typeof statsMcp.body.total, "number")
   assert.equal(statsMcp.body.total, JSON.parse(statsCli.stdout).total)
   assert.equal((await service.messages.stats({ text: statsQuery, by: "chat", limit: 20 })).total, statsMcp.body.total)
   const packetCli = await invoke(["messages", "context", locator, "--thread"])
-  const packetMcp = await callTool("messages_context", { chat: locator, thread: true, before_n: 5, after_n: 5 })
+  const packetMcp = await callTool("messages context", { chat: locator, thread: true, before_n: 5, after_n: 5 })
   assert.equal(packetCli.code, 0)
   assert.deepEqual(
     packetMcp.body.items.map((hit) => hit.id),
@@ -437,7 +454,7 @@ try {
   const extraction = await invoke(["attachments", "extract", "--chat", "20", "--limit", "1"])
   assert.equal(extraction.code, 0, extraction.stderr)
   assert.equal(JSON.parse(extraction.stdout).extracted, 1)
-  const written = await callTool("attachments_text_set", {
+  const written = await callTool("attachments text set", {
     chat: "20",
     message: "9900",
     text: "agentfiletoken replacement",
@@ -454,7 +471,7 @@ try {
     ["9900"],
   )
   assert.deepEqual(
-    (await callTool("messages_search", { text: "content:agentfiletoken" })).body.items.map((hit) => hit.id),
+    (await callTool("messages search", { text: "content:agentfiletoken" })).body.items.map((hit) => hit.id),
     ["9900"],
   )
   writeFileSync(plain, "clifiletoken writeback")
@@ -463,12 +480,12 @@ try {
     0,
   )
   assert.deepEqual(
-    (await callTool("messages_search", { text: "content:clifiletoken" })).body.items.map((hit) => hit.id),
+    (await callTool("messages search", { text: "content:clifiletoken" })).body.items.map((hit) => hit.id),
     ["9900"],
   )
   assert.equal((await invoke(["attachments", "extract", "--chat", "20", "--limit", "1"])).code, 0)
   assert.deepEqual(
-    (await callTool("messages_search", { text: "content:clifiletoken" })).body.items.map((hit) => hit.id),
+    (await callTool("messages search", { text: "content:clifiletoken" })).body.items.map((hit) => hit.id),
     ["9900"],
   )
   checks.push({ name: "plain extraction and CLI/MCP agent write-back preserve origin", pass: true })
@@ -479,7 +496,7 @@ try {
   assert.ok(taggedItems.every((hit) => hit.locator.startsWith(`msg:${provider}/500/`)))
   assert.equal((await invoke(["searches", "create", "audit-recipe", "кафе"])).code, 0)
   const saved = await invoke(["messages", "search", "--saved", "audit-recipe"])
-  const savedMcp = await callTool("messages_search", { saved: "audit-recipe" })
+  const savedMcp = await callTool("messages search", { saved: "audit-recipe" })
   assert.deepEqual(
     savedMcp.body.items.map((hit) => hit.locator),
     JSON.parse(saved.stdout).items.map((hit) => hit.locator),
@@ -492,7 +509,15 @@ try {
     configPath,
     JSON.stringify({
       profiles: {
-        auditreadonly: { readOnly: true },
+        auditreadonly: {
+          permissions: {
+            messages: "readonly",
+            conversations: "readonly",
+            attachments: "readonly",
+            tags: "readonly",
+            searches: "readonly",
+          },
+        },
         auditdenied: { permissions: { messages: "deny" } },
         auditasked: { permissions: { "conversations.links": "ask" } },
       },
@@ -526,33 +551,30 @@ try {
     })
     try {
       await restricted.connect(restrictedTransport)
-      const restrictedCommands = mcpCommandsClient(restricted, cli)
-      const names = (await restrictedCommands.listTools()).tools.map((tool) => tool.name)
+      const restrictedCommands = surfaceOf(restricted, cli)
+      const names = await restrictedCommands.commands()
       if (profile === "auditreadonly") {
-        assert.ok(names.includes(`${cli}_messages_search`))
-        for (const suffix of [
-          "conversations_build",
-          "conversations_links_add",
-          "attachments_text_set",
-          "tags_add",
-          "searches_create",
+        assert.ok(names.includes("messages search"))
+        for (const command of [
+          "conversations build",
+          "conversations links add",
+          "attachments text set",
+          "tags add",
+          "searches create",
         ])
-          assert.ok(!names.includes(`${cli}_${suffix}`))
+          assert.ok(!names.includes(command))
       } else if (profile === "auditdenied") {
-        for (const suffix of [
-          "messages_search",
-          "messages_context",
-          "conversations_search",
-          "conversations_batches_next",
-          "attachments_list",
+        for (const command of [
+          "messages search",
+          "messages context",
+          "conversations search",
+          "conversations batches next",
+          "attachments list",
         ])
-          assert.ok(!names.includes(`${cli}_${suffix}`))
+          assert.ok(!names.includes(command))
       } else {
-        assert.ok(names.includes(`${cli}_conversations_build`))
-        const result = await restrictedCommands.callTool({
-          name: `${cli}_conversations_build`,
-          arguments: { chat: "7" },
-        })
+        assert.ok(names.includes("conversations build"))
+        const result = await restrictedCommands.run("conversations build", { chat: "7" })
         assert.notEqual(result.isError, true)
         assert.equal(result.structuredContent.chat, "7")
       }

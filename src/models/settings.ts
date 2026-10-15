@@ -1,6 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { settingAt } from "../cli/config-keys.js"
 import { endpoint } from "./endpoint.js"
 import type { ModelTarget } from "./types.js"
 
@@ -49,7 +48,7 @@ export const resolveModelSettings = (
         [variable, env[variable]?.trim() || undefined],
         ...configured.map(([from, model]): [string, unknown] => [
           `${from}: models.${purpose}.${field}`,
-          settingAt(model[purpose], field),
+          model[purpose]?.[field],
         ]),
         ...(purpose === "analysis" && legacy.sources[legacyKey] !== "default"
           ? [
@@ -68,7 +67,7 @@ export const resolveModelSettings = (
               ] as [string, unknown],
               ...configured.map(([from, model]): [string, unknown] => [
                 `${from}: models.default.${field}`,
-                settingAt(model.default, field),
+                model.default?.[field],
               ]),
             ]),
       ]

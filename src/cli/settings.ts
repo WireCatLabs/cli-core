@@ -3,18 +3,15 @@ import { CliError, configFilePath, resolvePaths, saveConfigFile } from "@wirecat
 import * as v from "valibot"
 import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
 import {
-  fromOldSettings,
   LEVELS,
   type Level,
   layerPermissions,
-  PERMISSIONS,
-  type Permission,
   type PermissionKey,
   permissionOverrides,
   RESOURCES,
 } from "../sends/permissions.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "./app.js"
-import { declaredSettingName, loadSnakeCaseConfig, settingAt, snakeCaseConfig } from "./config-keys.js"
+import { loadSnakeCaseConfig } from "./config-keys.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
 import { DEFAULT_PROFILE, usableProfileName } from "./profile.js"
@@ -40,11 +37,6 @@ const wholeOrZero = (text: string, name: string): number => {
     throw new CliError("validation_error", `${name} has to be a whole number, 0 or more`)
   return value
 }
-const permissionList = v.array(
-  v.picklist(PERMISSIONS, (issue) => `has to be one of ${PERMISSIONS.join(", ")}, not ${issue.received}`),
-  plain("has to be a list of actions, like send,reaction"),
-)
-
 const permissionLevels = v.record(
   v.pipe(
     v.string(),
@@ -80,8 +72,6 @@ const SHARED_PROFILE_ENTRIES = {
   sender_colors: v.optional(flag),
   record: v.optional(flag),
   keep_runs_for_days: v.optional(count),
-  read_only: v.optional(flag),
-  allow: v.optional(permissionList),
   permissions: v.optional(permissionLevels),
   sends_per_hour: v.optional(count),
   requests_per_minute: v.optional(countOrZero),
@@ -208,14 +198,11 @@ export interface Settings extends AISettings {
   /** A failed run is kept even unrecorded, unless recording was turned off by name. */
   keepFailedRuns: boolean
   keepRunsForDays: number
-  readOnly: boolean
   /** The variable that made this process read-only, above every level and flag (`<PREFIX>_READ_ONLY`). */
   readOnlyLock?: string
-  /** `undefined` is every action; a list is only those. */
-  allow: readonly Permission[] | undefined
   /**
-   * The levels the owner set — `readOnly` and `allow` folded in under what the file's `permissions`
-   * says. The built-in defaults are not here: `levelFor` adds them, and they only ever tighten.
+   * The levels the owner set in the file's `permissions`. The built-in defaults are not here: `levelFor`
+   * adds them, and they only ever tighten.
    */
   permissions: Readonly<Record<PermissionKey, Level>>
   /** Where each key of `permissions` came from. */
@@ -253,7 +240,7 @@ export interface ResolveOptions {
    * when no profile is named. Its `profile` is then `default`, from `none named`.
    */
   needsProfile?: boolean
-  /** Read the config file without writing it: no default file, no setting names moved. For a dry run. */
+  /** Read the config file without writing it: no default file. For a dry run. */
   readOnly?: boolean
 }
 
@@ -324,11 +311,9 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const configPathFor = ({ env = process.env, configDir }: ResolveOptions) =>
     configFilePath(configDir ?? resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).config)
 
-  const readConfig = (path: string, readOnly = false): Config => {
+  const readConfig = (path: string): Config => {
     try {
-      return loadSnakeCaseConfig(path, extension.schema ?? schema, () => ({ profiles: {} }), {
-        rewrite: !readOnly,
-      }) as Config
+      return loadSnakeCaseConfig(path, extension.schema ?? schema, () => ({ profiles: {} })) as Config
     } catch (error) {
       throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
     }
@@ -376,22 +361,18 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const env = options.env ?? process.env
     const configPath = configPathFor(options)
     try {
-      if (!options.readOnly)
-        ensureDefaultConfig(configPath, snakeCaseConfig(extension.schema ?? schema, DEFAULT_CONFIG).config)
+      if (!options.readOnly) ensureDefaultConfig(configPath)
     } catch (error) {
       throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
     }
-    const config = readConfig(configPath, options.readOnly)
+    const config = readConfig(configPath)
 
     const lock = given(env[PROFILE_LOCK])
     const named = first<string | undefined>(
       [
         ["first word", flags.profile],
         [PROFILE, given(env[PROFILE])],
-        [
-          extension.sourcePaths ? "config file: default_profile" : "config file",
-          settingAt(config as unknown as Record<string, unknown>, "default_profile") as string | undefined,
-        ],
+        [extension.sourcePaths ? "config file: default_profile" : "config file", config.default_profile],
         [PROFILE_LOCK, lock],
       ],
       undefined,
@@ -417,7 +398,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     ]
     const fromLayers = <T>(key: string, fallback: T, only = layers) =>
       first<T>(
-        only.map(([from, scope]): [Source, T | undefined] => [from, settingAt(scope, key) as T | undefined]),
+        only.map(([from, scope]): [Source, T | undefined] => [from, scope?.[key] as T | undefined]),
         fallback,
       )
     const kindLayers = layers.filter(([from]) => from.startsWith(`config file: ${kind}.`))
@@ -433,9 +414,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
     const readOnlyLock = readOnlyLockOf(app, env)
-    const configuredReadOnly = fromLayers("read_only", false)
-    const readOnly = readOnlyLock ? { value: true, from: readOnlyLock } : configuredReadOnly
-    const allow = fromLayers<readonly Permission[] | undefined>("allow", undefined)
     // A bot has no hourly limit unless the bot section gives it one: a bot that answers people is
     // expected to send a lot, and a limit there is the owner's choice, not the tool's.
     const sendsPerHour =
@@ -451,36 +429,24 @@ export const settingsFor = <T extends object = Record<never, never>>(
       kind === "bot"
         ? fromLayers<boolean | readonly string[]>("read_other_bots", false, kindLayers)
         : { value: false, from: "default" }
-    // The old settings sit in the layer they were written in, under that layer's own `permissions`.
-    const old = configuredReadOnly.value
-      ? { label: "read_only", from: configuredReadOnly.from }
-      : { label: "allow", from: allow.from }
-    const oldLevels = fromOldSettings(configuredReadOnly.value, allow.value, { bot: kind === "bot" })
     const permissions = layerPermissions([
       ["flag", permissionOverrides(flags.permission)],
-      ...layers.flatMap(([from, scope]): [Source, Record<PermissionKey, Level> | undefined][] => [
-        [from, scope?.permissions as Record<PermissionKey, Level> | undefined],
-        ...(from === old.from
-          ? [[extension.sourcePaths ? old.from : old.label, oldLevels] as [Source, Record<PermissionKey, Level>]]
-          : []),
+      ...layers.map(([from, scope]): [Source, Record<PermissionKey, Level> | undefined] => [
+        from,
+        scope?.permissions as Record<PermissionKey, Level> | undefined,
       ]),
     ])
     const updateCheck = first(
       [
         [
           extension.sourcePaths ? "config file: defaults" : "config defaults",
-          settingAt(shared, "update_check") as boolean | undefined,
+          shared.update_check as boolean | undefined,
         ],
       ],
       true,
     )
     const skillHint = first(
-      [
-        [
-          extension.sourcePaths ? "config file: defaults" : "config defaults",
-          settingAt(shared, "skill_hint") as boolean | undefined,
-        ],
-      ],
+      [[extension.sourcePaths ? "config file: defaults" : "config defaults", shared.skill_hint as boolean | undefined]],
       true,
     )
     const timeout = first<string | undefined>(
@@ -517,9 +483,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       record: record.value,
       keepFailedRuns: record.value || record.from === "default",
       keepRunsForDays: keepRunsForDays.value,
-      readOnly: readOnly.value,
       ...(readOnlyLock ? { readOnlyLock } : {}),
-      allow: allow.value,
       permissions: permissions.levels,
       permissionSources: permissions.sources,
       sendsPerHour: sendsPerHour.value,
@@ -545,8 +509,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
         pictureSearch: pictureSearch.from,
         record: record.from,
         keepRunsForDays: keepRunsForDays.from,
-        readOnly: readOnly.from,
-        allow: allow.from,
         sendsPerHour: sendsPerHour.from,
         requestsPerMinute: requestsPerMinute.from,
         readOtherBots: readOtherBots.from,
@@ -581,13 +543,11 @@ export const settingsFor = <T extends object = Record<never, never>>(
     path: string,
     {
       profile,
-      setting: typed,
+      setting,
       value,
       kind,
     }: { profile: string | undefined; setting: string; value: string | undefined; kind?: ProfileKind | undefined },
   ): unknown => {
-    const typedHead = typed.split(".")[0] ?? typed
-    const setting = allSettings.includes(typedHead) && typedHead !== "models" ? typed : declaredSettingName(typed)
     const [name = setting, ...rest] = setting.split(".")
     const level = name === "permissions" && rest.length > 0 ? rest.join(".") : undefined
     const modelField = /^models\.([a-z][a-z0-9-]*)\.(provider|model|base_url)$/.exec(setting)

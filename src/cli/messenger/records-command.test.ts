@@ -198,7 +198,7 @@ describe("reads only the server answers", () => {
       adapter,
       { privacy: true },
       {
-        defaults: { readOnly: true },
+        defaults: { permissions: { account: "readonly" } },
         profiles: {},
       },
     )
@@ -258,7 +258,7 @@ describe("reads only the server answers", () => {
     const deleted = await invoke(["chats", "delete", "Book club", "--allow-dangerous", "--json"], adapter, own)
     const cleared = await invoke(["chats", "clear", "Book club", "--allow-dangerous", "--json"], adapter, own)
     const readOnly = await invoke(["chats", "clear", "Book club", "--allow-dangerous"], adapter, own, {
-      defaults: { readOnly: true },
+      defaults: { permissions: { chats: "readonly" } },
       profiles: {},
     })
     const elsewhere = await invoke(["chats", "delete", "Book club", "--allow-dangerous"], adapter)

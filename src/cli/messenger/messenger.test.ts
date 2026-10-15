@@ -851,7 +851,7 @@ describe("the shared read commands", () => {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
-      JSON.stringify({ profiles: { default: { sendsPerHour: 1 } } }),
+      JSON.stringify({ profiles: { default: { sends_per_hour: 1 } } }),
     )
     const pins: unknown[] = []
     const pinning: MessengerAdapter = {
@@ -895,7 +895,7 @@ describe("the shared read commands", () => {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
-      JSON.stringify({ profiles: { default: { sendsPerHour: 1 } } }),
+      JSON.stringify({ profiles: { default: { sends_per_hour: 1 } } }),
     )
     const reactions: unknown[] = []
     const reacting: MessengerAdapter = {
@@ -1038,7 +1038,7 @@ describe("the shared read commands", () => {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
-      JSON.stringify({ profiles: { default: { sendsPerHour: 3 } } }),
+      JSON.stringify({ profiles: { default: { sends_per_hour: 3 } } }),
     )
     const deletions: unknown[] = []
     const deleting: MessengerAdapter = {

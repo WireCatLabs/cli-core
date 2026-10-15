@@ -16,7 +16,7 @@ import { createProgram, run } from "../../cli/program.js"
 import { settingsFor } from "../../cli/settings.js"
 import type { Message } from "../../domain/models.js"
 import { ModerationRules, moderationPathFor } from "../../moderation/rules.js"
-import { commandsClient } from "../../testing/mcp-commands-client.js"
+import { surfaceOf } from "../../testing/mcp-surface.js"
 import { type BotServerOptions, createBotServer, type RunBotCommand } from "./server.js"
 import type { BotTool } from "./tools.js"
 
@@ -152,11 +152,11 @@ const connect = async (
     await client.close()
     await server.close()
   })
-  return { client: commandsClient(client, "chat_bot"), raw: client, offered, forms }
+  return { client: surfaceOf(client, "chat_bot"), raw: client, offered, forms }
 }
 
-const call = async (client: Pick<Client, "callTool">, name: string, args: Record<string, unknown> = {}) => {
-  const result = await client.callTool({ name, arguments: args })
+const call = async (client: ReturnType<typeof surfaceOf>, command: string, args: Record<string, unknown> = {}) => {
+  const result = await client.run({ command, arguments: args })
   const body = result.structuredContent as Record<string, unknown>
   return { isError: result.isError === true, body, error: body?.error as { code?: string } | undefined }
 }
@@ -234,10 +234,8 @@ describe("bot mcp tools by permission level", () => {
 
   it("**the CLI's own tool replaces the shared one with the same words**", async () => {
     const { client } = await connect()
-    const { tools } = await client.listTools()
-
-    expect(tools.find((one) => one.name === "chat_bot_sends_list")?.title).toBe("The CLI's own")
-    expect(tools.map((one) => one.name)).toContain("chat_bot_status")
+    expect((await client.describe("sends list"))?.title).toBe("The CLI's own")
+    expect(await client.commands()).toContain("status")
   })
 })
 
@@ -245,7 +243,7 @@ describe("bot mcp writes", () => {
   it("**sends through the command**, by the chat's title, with no form at level allow", async () => {
     const { client } = await connect()
 
-    const sent = await call(client, "chat_bot_messages_send", { chat: "Team", text: "Hello" })
+    const sent = await call(client, "messages send", { chat: "Team", text: "Hello" })
 
     expect(sent.isError).toBe(false)
     expect(sent.body).toMatchObject({ item: { message: { id: "100", chat_id: "-100" } } })
@@ -255,14 +253,14 @@ describe("bot mcp writes", () => {
   it("**deletes with no form**, where the level asks", async () => {
     const { client } = await connect()
 
-    expect((await call(client, "chat_bot_messages_delete", { chat: "-100", message: "7" })).isError).toBe(false)
+    expect((await call(client, "messages delete", { chat: "-100", message: "7" })).isError).toBe(false)
     expect(calls).toEqual(["delete -100 7"])
   })
 
   it("refuses a message id that would read as a flag, before running anything", async () => {
     const { client } = await connect()
 
-    const refused = await call(client, "chat_bot_messages_send", { chat: "-100", text: "x", reply_to: "--silent" })
+    const refused = await call(client, "messages send", { chat: "-100", text: "x", reply_to: "--silent" })
 
     expect(refused.isError).toBe(true)
     expect(calls).toEqual([])
@@ -272,7 +270,7 @@ describe("bot mcp writes", () => {
     configure({ bot: { profiles: { sales: { permissions: { "bot.messages.send": "ask" } } } } })
     const { client } = await connect()
 
-    const sent = await call(client, "chat_bot_messages_send", { chat: "-100", text: "Hi" })
+    const sent = await call(client, "messages send", { chat: "-100", text: "Hi" })
 
     expect(sent.isError).toBe(false)
     expect(calls).toEqual(["send -100 Hi"])
@@ -283,15 +281,15 @@ describe("a tool of the CLI's own that is more than one command", () => {
   it("**answers with what it did**", async () => {
     const { client } = await connect()
 
-    const done = await call(client, "chat_bot_chats_leave", { chat: "Team" })
+    const done = await call(client, "chats leave", { chat: "Team" })
 
     expect(done.body).toMatchObject({ item: { left: "Team", seen: { items: [{ id: "-100", title: "Team" }] } } })
   })
 
   it("**is handed the flag that answers its command's question at level ask**, and none otherwise", async () => {
     const flags = async () =>
-      ((await call((await connect()).client, "chat_bot_chats_admins_add")).body as { item: { answerFlags: string[] } })
-        .item.answerFlags
+      ((await call((await connect()).client, "chats admins add")).body as { item: { answerFlags: string[] } }).item
+        .answerFlags
 
     expect(await flags()).toEqual([])
     configure({ bot: { profiles: { sales: { permissions: { "bot.chats.admins": "ask" } } } } })
@@ -310,7 +308,7 @@ describe("chat_bot_chats_moderate", () => {
     deleting("ask")
     const { client } = await connect()
 
-    expect((await call(client, "chat_bot_chats_moderate", { chat: "Team" })).isError).toBe(false)
+    expect((await call(client, "chats moderate", { chat: "Team" })).isError).toBe(false)
     expect(calls).toEqual([])
   })
 
@@ -319,7 +317,7 @@ describe("chat_bot_chats_moderate", () => {
     configure({ bot: { profiles: { sales: { permissions: { "bot.chats.moderate": "ask" } } } } })
     const { client } = await connect()
 
-    const done = await call(client, "chat_bot_chats_moderate", { chat: "-100" })
+    const done = await call(client, "chats moderate", { chat: "-100" })
 
     expect(done.body).toMatchObject({ item: { rows: [{ action: "delete", outcome: "done" }] } })
     expect(calls).toEqual(["delete -100 2"])
@@ -327,7 +325,7 @@ describe("chat_bot_chats_moderate", () => {
 
   it("acts at level allow", async () => {
     deleting("allow")
-    expect((await call((await connect()).client, "chat_bot_chats_moderate", { chat: "-100" })).body).toMatchObject({
+    expect((await call((await connect()).client, "chats moderate", { chat: "-100" })).body).toMatchObject({
       item: { rows: [{ outcome: "done" }] },
     })
   })
@@ -368,7 +366,7 @@ describe("bot mcp config", () => {
 it("reads bot identity through MCP under read-only permissions without a write", async () => {
   configure({ bot: { profiles: { sales: { permissions: { bot: "readonly" } } } } })
   const { client } = await connect()
-  const result = await call(client, "chat_bot_me")
+  const result = await call(client, "me")
   expect(result.isError).toBe(false)
   expect(result.body.item).toEqual({ id: "42", name: "Sales", username: "sales_bot" })
   expect(calls).toEqual([])

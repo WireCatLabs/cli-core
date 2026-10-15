@@ -79,7 +79,7 @@ const setup = async () => {
       join(env.CHAT_CONFIG_DIR, "config.json"),
       JSON.stringify({
         profiles: {
-          default: { analysisProvider: "openai", analysisModel: "test-model", analysisBaseUrl: baseUrl, ...extra },
+          default: { analysis_provider: "openai", analysis_model: "test-model", analysis_base_url: baseUrl, ...extra },
         },
       }),
     )
@@ -175,7 +175,7 @@ describe("analysis CLI consent and configuration", () => {
     const { call, configure, calls } = await setup()
     expect((await call("conversations", "build", "--analyze", "--yes", "--json")).code).not.toBe(0)
     expect((await call("conversations", "build", "--chat", "9", "--model", "test-model", "--json")).code).not.toBe(0)
-    configure({ analysisProvider: "agent" })
+    configure({ analysis_provider: "agent" })
     expect((await call("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")).code).not.toBe(0)
     configure({ permissions: { "conversations.links": "readonly" } })
     expect((await call("conversations", "build", "--analyze", "--chat", "9", "--yes", "--json")).code).not.toBe(0)

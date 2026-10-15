@@ -46,6 +46,22 @@ shape of this file.
   `removeTags` also take the new `TaskTagTarget`, while `TagTarget` itself is unchanged. `TaskDetails` gains
   `category`, `claimedBy` and `claimedUntil`, and `WorkTasks` / `TasksService` gain `claim` and `release`
   (`TasksService` also `categories`): a fake that implements these interfaces adds the members.
+- **`permissions` is the only access setting.** `read_only` and `allow` are gone from the config schema, so a file
+  that still holds them is refused as an unknown setting. `Settings.readOnly`, `Settings.allow` and their sources
+  are gone; `readOnlyLock` (`<PREFIX>_READ_ONLY`) stays. `sendGuard` no longer takes `readOnly`, `readOnlyFrom`,
+  `allow`, `allowFrom` or `allowFix`; without `permissions` it refuses nothing by level. `fromOldSettings`
+  (`./sends`), `migratePermissionConfig` (`./cli`) and `config migrate` are removed.
+- **Settings are read only under their snake_case names.** A camelCase key in the file is no longer renamed or read,
+  so it is refused as unknown; `config set` takes the setting's own name only. `loadSnakeCaseConfig` reads and
+  checks the file without rewriting it and takes no `rewrite` option; `snakeCaseConfig` and `ConfigRename` are
+  removed.
+- **No folder moves at start.** `migrateFolders` (`./background`) is removed with the moves out of `~/Library` and
+  into the WireCat folder. Callers delete the call.
+- **A job or schedule saved as `store fetch` is no longer rewritten to `messages sync`.**
+- **`declaredSettingName` is removed from `./cli`**, with the camelCase names `config set` and `config unset` took
+  since 0.279.0: a setting is named in snake_case only, and anything else is an unknown setting.
+- **`mcpCommandsClient` is removed from `./testing`.** Tests call `<app>_tools_search`, `<app>_read` and
+  `<app>_write` with a command path.
 
 ## 0.281.0 — 15.10.2026
 

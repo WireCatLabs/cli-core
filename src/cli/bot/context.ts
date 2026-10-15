@@ -52,8 +52,6 @@ export const botContext = (command: Command, bot: BotMessenger) => {
       sendGuard({
         profile: `${asFirstWord(profile)}bot`,
         command: bot.app.command,
-        readOnly: settings.readOnly,
-        readOnlyFrom: settings.sources.readOnly ?? "default",
         ...(settings.readOnlyLock ? { readOnlyLock: settings.readOnlyLock } : {}),
         permissions: settings.permissions,
         permissionSources: settings.permissionSources,

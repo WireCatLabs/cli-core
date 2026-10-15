@@ -700,12 +700,12 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--all-can-pin` | `<on\|off>` | every member may pin messages |  | `chats update` |
 | `--allow-any-file` |  | send a --file even from credential folders or the tool's own folders |  | `bot api` (planned), `bot messages send`, `messages send` |
 | `--allow-chats` | `<ids>` | replace allowed chat ids, comma-separated; empty clears |  | `replies audience` |
-| `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate`, `bot mcp`, `bot mcp config`, `bot messages delete`, `chats clear` (planned), `chats delete` (planned), `chats moderate`, `mcp`, `mcp config`, `mcp doctor`, `mcp setup`, `messages delete`, `store clear` |
-| `--allow-delete` |  | offer the tool that deletes messages for you only; it cannot be undone. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config`, `mcp`, `mcp config`, `mcp doctor`, `mcp setup` |
-| `--allow-mark-read` |  | offer the tool that marks a chat read; the other person sees it. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `mcp`, `mcp config`, `mcp doctor`, `mcp setup` |
-| `--allow-moderate` |  | offer the tool that applies a group's rules — delete others' messages, remove people. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config`, `mcp` (planned), `mcp config` (planned), `mcp doctor` (max-only), `mcp setup` (max-only) |
+| `--allow-dangerous` |  | go ahead without the question an ask level puts before a deletion |  | `bot chats moderate`, `bot mcp`, `bot mcp config`, `bot messages delete`, `chats clear` (planned), `chats delete` (planned), `chats moderate`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only), `messages delete`, `store clear` |
+| `--allow-delete` |  | offer the tool that deletes messages for you only; it cannot be undone. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
+| `--allow-mark-read` |  | offer the tool that marks a chat read; the other person sees it. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
+| `--allow-moderate` |  | offer the tool that applies a group's rules — delete others' messages, remove people. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config` |
 | `--allow-people` | `<ids>` | replace allowed sender ids, comma-separated; empty clears |  | `replies audience` |
-| `--allow-send` |  | offer the send tool; without it the server can only read. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config`, `mcp`, `mcp config`, `mcp doctor`, `mcp setup` |
+| `--allow-send` |  | offer the send tool; without it the server can only read. **retired access flag: accepted with a warning, grants no permissions in either CLI** |  | `bot mcp`, `bot mcp config`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
 | `--allow-writes` |  | acknowledge that the profile offers writing tools when installing local MCP |  | `mcp setup` |
 | `--analyze` |  | link conversation batches using the configured analysis provider, with remembered chat/provider consent |  | `conversations build` |
 | `--anonymous` |  | nobody sees who voted for what |  | `polls create` |
@@ -752,7 +752,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--comment-to` | `<post>` | comment on this channel post; the comment goes to the post's discussion group |  | `messages send` (tg-only) |
 | `--component` | `<name>` | the ranking component whose contributing messages or answer pairs to read |  | `stats contacts evidence`, `stats messages evidence` |
 | `--concurrency` | `<n>` | remote: requests at once (default: 4) |  | `attachments extract`, `conversations embed` |
-| `--confirm-send` |  | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `bot mcp`, `bot mcp config`, `mcp`, `mcp config`, `mcp doctor`, `mcp setup` |
+| `--confirm-send` |  | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `bot mcp`, `bot mcp config`, `mcp` (tg-only), `mcp config` (tg-only), `mcp doctor` (tg-only), `mcp setup` (tg-only) |
 | `--contact` | `<person>` | the person to tag or untag: their id, @username or name, as the local store knows them |  | `tags add`, `tags remove` |
 | `--contacts-only` |  | match only contacts |  | `replies edit` |
 | `--context` | `<n>` | messages before and after each hit |  | `search mail`, `search messages`, `searches create` |
@@ -770,7 +770,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--discover` |  | find partial lexical matches and eligible replies in the local archive; results are evidence, not confirmed answers |  | `search messages` |
 | `--do` | `<actions>` | actions: reply, task, or both, comma-separated |  | `replies edit` |
 | `--download` |  | first save, from the messenger, the files no download saved yet |  | `attachments extract` |
-| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `bot chats moderate`, `chats moderate`, `config migrate`, `stats messages counters refresh`, `store repair`, `tags auto` |
+| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `bot chats moderate`, `chats moderate`, `stats messages counters refresh`, `store repair`, `tags auto` |
 | `--due` | `<when>` | when a task must be done: an ISO 8601 time or a duration from now; none clears it. **tasks agenda instead takes a duration such as 1d to select tasks due within that interval** |  | `tasks add`, `tasks agenda`, `tasks plan` |
 | `--emoji` | `<emoji>` | the folder's icon |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
 | `--encrypt` |  | compress and encrypt with a password, typed at a hidden prompt or piped on stdin; never kept |  | `store backup`, `store export` |
@@ -801,7 +801,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--holder` | `<name>` | who you are for task claims: a session or chat id |  | `tasks agenda`, `tasks claim`, `tasks release` |
 | `--html` |  | the text is HTML: <b>, <i>, <a href>, <code> |  | `bot messages edit`, `bot messages send`, `messages edit` (tg-only), `messages send` (tg-only) |
 | `--http` |  | serve MCP over HTTP on 127.0.0.1 behind the owner's tunnel, with a one-owner login. **MAX spells out that profile permissions decide; Telegram wording catches up at its next shared SDK adoption** |  | `mcp` |
-| `--http-confirmation` | `<mode>` | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `mcp` |
+| `--http-confirmation` | `<mode>` | no longer used: MCP writes show no form; the profile's permissions decide. **retired: accepted with a warning so an old setup still starts** |  | `mcp` (tg-only) |
 | `--idle` | `<duration>` | stop after this long with nobody using it — 15m, 1h |  | `serve` (max-only), `server restart` (max-only), `server start` (max-only) |
 | `--if-sha256` | `<hash>` | require the whole retained file to match this previous SHA256 |  | `attachments show` |
 | `--include` | `<kinds>` | a folder takes every chat of these kinds: contacts, non-contacts, groups, channels, bots |  | `chats folders create` (tg-only), `chats folders update` (tg-only) |
@@ -881,7 +881,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--operation-id` | `<id>` | identify a send or creation attempt; message/poll retries reuse it, while an unknown topic creation must never be repeated |  | `messages forward`, `messages send`, `polls create`, `topics create` (tg-only) |
 | `--order` | `<recent\|name>` | newest conversation first, or alphabetical |  | `contacts list` |
 | `--others` |  | every session but this one. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `account sessions end` |
-| `--output` |  | where to write: a directory for `messages download`, a file for `store export`. **MAX `messages download --output <dir>` remains a compatibility alias for `--output-dir`; other commands use --output for a file — e10** | `.` | `doctor report create`, `messages download` (max-only), `stats charts`, `store decrypt`, `store export` |
+| `--output` |  | where to write: a directory for `messages download`, a file for `store export`. **`store export` and other commands use --output for a file; `messages download` takes --output-dir — e10** | `.` | `doctor report create`, `stats charts`, `store decrypt`, `store export` |
 | `--output-dir` | `<dir>` | the folder to write into, created if missing. **`attachments extract` takes it only with --download, and has no default there, so extraction never fills the working folder unasked** | `.` | `attachments extract`, `messages download` |
 | `--outside` | `<hours>` | answer outside this 24-hour window, such as 09:00-19:00 |  | `replies edit` |
 | `--page` | `<n>` | which page, starting at 1 |  | `attachments list`, `attachments show`, `bot search messages`, `chats documents list` (planned), `chats list`, `chats members list`, `chats requests list`, `contacts list`, `mentions list` (planned), `runs list`, `runs search`, `search all`, `search mail`, `search messages`, `search notes`, `searches history`, `sends list`, `store jobs list` |
@@ -1172,16 +1172,14 @@ whose values are levels. It holds for a command the owner types and for an agent
 5. **A group's moderation rules use the same four levels** for each kind of action (delete,
    remove, accept, decline), `readonly` meaning "report it, do nothing". A rule's level can only be
    as loose as the profile's level for `chats.moderate`.
-6. **The settings it replaces** — `read_only`, `allow`, max's `mcpTools`, and the moderation words
-   `forbid`, `flag`, `confirm` — are translated once by `config migrate`, then refused with a
-   message naming the new key.
+6. **`permissions` is the only access setting.** A file that still holds `read_only` or `allow` is
+   refused as an unknown setting, like any misspelled one.
 
 7. **A bot's keys are the personal ones under `bot`**: `bot.messages.send`,
    `bot.chats.members.remove`, `bot.webhooks`. A profile can allow its bot what it does not allow
    its personal account, and the other way round; `bot` alone covers every bot command. The default
    is the personal one's: `bot.messages.delete: ask`. Housekeeping under `bot` is never gated —
-   `bot auth`, `bot list`, `bot recipients`, `bot sends`, `bot mcp`. The bot's old `read_only` and
-   `allow` words are translated by `config migrate` with the personal ones.
+   `bot auth`, `bot list`, `bot recipients`, `bot sends`, `bot mcp`.
 
 What it does not decide stays separate: the recipient list (which chats), `sends_per_hour` (how
 many), `--allow-any-file` (which files).

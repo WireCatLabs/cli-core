@@ -4,7 +4,6 @@ import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { currentArgv } from "../../background/renamed-paths.js"
 import { FETCHING, type Fetched, type FetchedAll } from "../../services/archive.js"
 import { JOBS_QUERY, jobItems } from "../../services/job-query.js"
 import { momentOf } from "../../services/moment.js"
@@ -483,7 +482,7 @@ const launchJob = (
 
 /** A job recorded before it kept its argv: what it did keep, the pause and window back at their defaults. */
 const argvOf = (command: Command, messenger: Messenger, job: Job): string[] => {
-  if (job.argv) return currentArgv(job.argv)
+  if (job.argv) return [...job.argv]
   const fetching = messenger.fetching ?? FETCHING
   return fetchArgv(command, {
     chat: job.chat,

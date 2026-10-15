@@ -1,6 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { settingAt } from "../cli/config-keys.js"
 import { endpoint } from "../models/endpoint.js"
 import { modelSettingsShape, resolveModelSettings } from "../models/settings.js"
 
@@ -50,7 +49,7 @@ export const resolveAISettings = (
       const raw = env[variable]?.trim() || undefined
       const candidates: [string, unknown][] = [
         [variable, raw === undefined ? undefined : key === "embeddingDims" ? Number(raw) : raw],
-        ...layers.map(([from, scope]): [string, unknown] => [from, settingAt(scope, fileKey(key))]),
+        ...layers.map(([from, scope]): [string, unknown] => [from, scope?.[fileKey(key)]]),
       ]
       const [from, value] = candidates.find(([, value]) => value !== undefined) ?? [
         "default",

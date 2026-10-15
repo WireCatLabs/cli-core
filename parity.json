@@ -736,7 +736,7 @@
     "--output": {
       "meaning": "where to write: a directory for `messages download`, a file for `store export`",
       "default": ".",
-      "note": "MAX `messages download --output <dir>` remains a compatibility alias for `--output-dir`; other commands use --output for a file — e10"
+      "note": "`store export` and other commands use --output for a file; `messages download` takes --output-dir — e10"
     },
     "--output-dir": {
       "value": "<dir>",
@@ -2131,14 +2131,6 @@
     "config": {
       "in": "all"
     },
-    "config migrate": {
-      "in": "all",
-      "options": {
-        "--dry-run": {
-          "in": "all"
-        }
-      }
-    },
     "config set": {
       "in": "all",
       "options": {
@@ -2514,19 +2506,31 @@
     "mcp": {
       "in": "all",
       "options": {
-        "--allow-dangerous": "all",
-        "--allow-delete": "all",
-        "--allow-mark-read": "all",
-        "--allow-moderate": {
-          "in": ["max"],
-          "planned": {
-            "tg": "P7"
-          }
+        "--allow-dangerous": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
         },
-        "--allow-send": "all",
-        "--confirm-send": "all",
+        "--allow-delete": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--allow-mark-read": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--allow-send": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--confirm-send": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
         "--http": "all",
-        "--http-confirmation": "all",
+        "--http-confirmation": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
         "--permission": "all",
         "--port": "all",
         "--public-url": "all",
@@ -2543,17 +2547,26 @@
     "mcp config": {
       "in": "all",
       "options": {
-        "--allow-dangerous": "all",
-        "--allow-delete": "all",
-        "--allow-mark-read": "all",
-        "--allow-moderate": {
-          "in": ["max"],
-          "planned": {
-            "tg": "P7"
-          }
+        "--allow-dangerous": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
         },
-        "--allow-send": "all",
-        "--confirm-send": "all",
+        "--allow-delete": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--allow-mark-read": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--allow-send": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--confirm-send": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
         "--permission": "all",
         "--yes": {
           "in": [],
@@ -2567,31 +2580,53 @@
     "mcp doctor": {
       "in": "all",
       "options": {
-        "--allow-dangerous": "all",
-        "--allow-delete": "all",
-        "--allow-mark-read": "all",
-        "--allow-moderate": {
-          "in": ["max"],
-          "reason": "max MCP offers a moderation flag"
+        "--allow-dangerous": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
         },
-        "--allow-send": "all",
-        "--confirm-send": "all",
+        "--allow-delete": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--allow-mark-read": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--allow-send": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--confirm-send": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
         "--permission": "all"
       }
     },
     "mcp setup": {
       "in": "all",
       "options": {
-        "--allow-dangerous": "all",
-        "--allow-delete": "all",
-        "--allow-mark-read": "all",
-        "--allow-moderate": {
-          "in": ["max"],
-          "reason": "max MCP offers a moderation flag"
+        "--allow-dangerous": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
         },
-        "--allow-send": "all",
+        "--allow-delete": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--allow-mark-read": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
+        "--allow-send": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
         "--allow-writes": "all",
-        "--confirm-send": "all",
+        "--confirm-send": {
+          "in": ["tg"],
+          "reason": "max dropped the retired access flags (max-cli#639); tg still accepts them with a warning"
+        },
         "--permission": "all"
       }
     },
@@ -2724,10 +2759,6 @@
           "in": "all"
         },
         "--extract": "all",
-        "--output": {
-          "in": ["max"],
-          "reason": "MAX retains --output as a compatibility alias for --output-dir after shared adoption"
-        },
         "--output-dir": {
           "in": "all"
         },

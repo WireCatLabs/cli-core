@@ -1,14 +1,12 @@
-import { CliError, configFilePath, pathsAreOverridden, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
+import { CliError, pathsAreOverridden } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import * as v from "valibot"
 import { type AppIdentity, envName } from "./app.js"
-import { declaredSettingName, loadSnakeCaseConfig } from "./config-keys.js"
+import { loadSnakeCaseConfig } from "./config-keys.js"
 import { baseContext } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { knownBeside, knownPermissionKeys, type PermissionKeyOf } from "./permission-keys.js"
-import { hasPermissionConfig, migratePermissionConfig } from "./permission-migration.js"
 import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
 import { nextStep } from "./steps.js"
 import { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
@@ -23,39 +21,6 @@ export const configCommand = (
   { permissionKey }: { permissionKey?: PermissionKeyOf } = {},
 ): Command => {
   const command = new Command("config").description("the settings in force, and where each one came from")
-
-  command.addCommand(
-    grantsAuthority(annotate(new Command("migrate"), { effects: LOCAL_WRITE }))
-      .description("replace legacy access settings with permissions, preserving this file's effective levels")
-      .option("--dry-run", "show the migration without writing the file")
-      .action(function () {
-        const dryRun = this.opts<{ dryRun?: boolean }>().dryRun === true
-        const context = baseContext(this, (flags, options) =>
-          config.resolveSettings(flags, { ...options, needsProfile: false, readOnly: dryRun }),
-        )
-        const { env } = context
-        if (!dryRun && env[envName(app, "PROFILE_LOCK")])
-          throw new CliError("permission_error", "config migrate changes every profile — run outside the profile lock")
-        const path = configFilePath(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).config)
-        const migrated = migratePermissionConfig(
-          loadSnakeCaseConfig(path, config.schema, () => ({ profiles: {} }), { rewrite: !dryRun }),
-        )
-        if (migrated.changed) {
-          const checked = v.safeParse(config.schema, migrated.config)
-          if (!checked.success)
-            throw new CliError(
-              "configuration_error",
-              "the migrated configuration is not valid — the file was not changed",
-            )
-          if (!dryRun) saveConfigFile(path, checked.output)
-        }
-        renderAnswer(
-          this,
-          context,
-          itemOf({ config_file: path, changed: migrated.changed, dry_run: dryRun, changes: migrated.changes }),
-        )
-      }),
-  )
 
   annotate(command.command("show"), { effects: LOCAL_READ })
     .description("the profile, the profiles that exist, and each setting with where it came from")
@@ -111,11 +76,7 @@ export const configCommand = (
         .description("save a setting to the configuration file")
     else sub.description("remove a setting from the configuration file")
 
-    sub.action(async function (this: Command, typed: string, given: unknown) {
-      const head = typed.split(".")[0] ?? typed
-      const setting = config.allSettings.includes(head) || isStoreSetting(typed) ? typed : declaredSettingName(typed)
-      if (setting !== typed && isStoreSetting(setting))
-        throw new CliError("validation_error", `no setting called "${typed}" — the store-wide one is ${setting}`)
+    sub.action(async function (this: Command, setting: string, given: unknown) {
       const {
         defaults: everyone,
         personal,
@@ -165,15 +126,6 @@ export const configCommand = (
         throw new CliError(
           "permission_error",
           `this process is locked to profile ${settings.profile} (${lock}) — ${setting === "default_profile" ? setting : "--defaults"} changes other profiles`,
-        )
-      }
-      if (
-        ["read_only", "allow", "mcpTools"].includes(setting) &&
-        hasPermissionConfig(loadSnakeCaseConfig(settings.configPath, config.schema, () => ({ profiles: {} })))
-      ) {
-        throw new CliError(
-          "validation_error",
-          `${setting} is a legacy setting — use permissions instead; config migrate --dry-run previews the translation`,
         )
       }
       if (action === "set") refuseUnknownKey(this, setting, String(given), permissionKey)

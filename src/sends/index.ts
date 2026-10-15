@@ -29,7 +29,6 @@ export {
 export {
   assertStatsPermissionsCurrent,
   DEFAULT_PERMISSIONS,
-  fromOldSettings,
   keyForCommand,
   keyForWrite,
   LEVELS,

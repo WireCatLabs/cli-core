@@ -578,24 +578,6 @@ describe("store fetch in the background", () => {
     expect((await call(["store", "jobs", "retry"], idle, env, dead)).stderr).toContain("name a job, or --failed")
   })
 
-  it("retry runs a job saved as store fetch under messages sync", async () => {
-    const env = setup()
-    const dead = spawned(2 ** 22 + 12346)
-    const dir = jobsDir(app, env)
-    saveJob(dir, {
-      id: "20260101T000000-bbbbbb",
-      chat: "7",
-      profile: "default",
-      pid: 2 ** 22 + 12346,
-      startedAt: "2026-01-01T00:00:00.000Z",
-      argv: ["store", "fetch", "7", "--limit", "40", "--json"],
-      log: join(dir, "20260101T000000-bbbbbb.log"),
-    })
-
-    expect((await call(["store", "jobs", "retry", "20260101T000000-bbbbbb"], idle, env, dead)).code).toBe(0)
-    expect(dead.calls[0]?.argv).toEqual(["messages", "sync", "7", "--limit", "40", "--json"])
-  })
-
   it("store fetch is gone: messages sync took its place", async () => {
     const { code } = await call(["store", "fetch", "7", "--json"], idle, setup())
     expect(code).not.toBe(0)
@@ -802,7 +784,7 @@ describe("post-fetch catch-up controls", () => {
       JSON.stringify({
         profiles: {
           default: {
-            searchCatchUp: true,
+            search_catch_up: true,
             permissions: { "conversations.links": "readonly", "conversations.embed": "allow" },
           },
         },
@@ -830,7 +812,7 @@ describe("post-fetch catch-up controls", () => {
     const root = dirname(base.MESSAGING_STORE)
     const config = join(root, "config")
     mkdirSync(config)
-    writeFileSync(join(config, "config.json"), JSON.stringify({ profiles: { default: { searchCatchUp: true } } }))
+    writeFileSync(join(config, "config.json"), JSON.stringify({ profiles: { default: { search_catch_up: true } } }))
     const env = { ...base, CHAT_CONFIG_DIR: config, WIRECAT_STATE_DIR: join(root, "empty-models") }
     const state = { newest: 2, asked: [] as (string | undefined)[] }
     const enabled = await call(["messages", "sync", "7", "--json", "--pause", "1ms"], chatOf(state), env)

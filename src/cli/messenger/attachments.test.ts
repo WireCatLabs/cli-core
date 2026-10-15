@@ -222,7 +222,7 @@ describe("attachments extract", () => {
   it("aborts a bulk OCR request at the command deadline and leaves no indexed answer", async () => {
     const { call, files } = await setup({
       config: {
-        defaults: { models: { ocr: { provider: "openai", model: "fixture", baseUrl: "https://example.test/v1" } } },
+        defaults: { models: { ocr: { provider: "openai", model: "fixture", base_url: "https://example.test/v1" } } },
       },
     })
     writeFileSync(join(files, "5-1.jpg"), PNG.sync.write(new PNG({ width: 2, height: 2 })))
@@ -309,7 +309,7 @@ describe("attachments extract", () => {
     const { call, env, files } = await setup({
       config: {
         defaults: {
-          models: { ocr: { provider: "openai", model: "vision-fixture", baseUrl: "https://example.test/v1" } },
+          models: { ocr: { provider: "openai", model: "vision-fixture", base_url: "https://example.test/v1" } },
         },
       },
     })

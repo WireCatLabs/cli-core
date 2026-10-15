@@ -17,7 +17,7 @@ const cli = async (argv: string[]) => {
   const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
   mkdirSync(env.CHAT_CONFIG_DIR)
   const file = join(env.CHAT_CONFIG_DIR, "config.json")
-  const original = JSON.stringify({ defaults: { read_only: true, permissions: { "messages.send": "deny" } } })
+  const original = JSON.stringify({ defaults: { permissions: { "messages.send": "deny" } } })
   writeFileSync(file, original)
   const messenger: Messenger = {
     app,
