@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- MCP meeting preparation enforces its item byte budget after making hidden characters visible.
+  Oversized notes, accepted knowledge and meeting history are trimmed in the same priority as CLI
+  output, with truncation metadata retained. Transcript content byte counts describe the escaped
+  cues an MCP client receives; metadata that cannot fit is refused explicitly.
+
 ## 0.289.0 — 15.10.2026
 
 ### Added
