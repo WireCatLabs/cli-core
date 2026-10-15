@@ -4,7 +4,7 @@ export default defineConfig({
   // Oxc's tsconfig loader does not follow package exports; TypeScript still checks the full project configs.
   tsconfig: "./node_modules/@wirecat/cli-base/config/tsconfig.base.json",
   test: {
-    include: ["src/**/*.test.ts", "scripts/parity/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/parity/**/*.test.ts", "scripts/release/**/*.test.ts"],
     setupFiles: ["src/testing/sandbox.ts"],
     globals: false,
     // Agents run suites side by side on 24 cores; one worker per core ran the machine out of memory (2026-10-11).
