@@ -45,6 +45,13 @@ describe("a title that holds the query comes first", () => {
     },
   )
 
+  it("lifts a title whose capitals are not Latin", async () => {
+    const { store } = await seeded([...repeated, { title: "СемЯдро План", text: filler }])
+    const hits = (await searchNotes(store, "семядро план", { env })).hits
+    expect(hits[0]).toMatchObject({ title: "СемЯдро План", found_by: expect.arrayContaining(["title"]) })
+    expect(await titles(store, "title:ЯДРО")).toEqual(["СемЯдро План"])
+  })
+
   it("puts a title equal to the query before one that only contains it", async () => {
     const { store } = await seeded([
       { title: "Alpha beta gamma", text: "alpha beta" },

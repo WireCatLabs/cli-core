@@ -55,6 +55,12 @@ shape of this file.
   `tasks merge` write. `TaskStore.findBySource` takes `{ linked: true }` for that, and an optional
   `reviewDuplicates`; `RuleResult` and the sync answer's `tasks` gain `review`.
 
+### Fixed
+
+- **A title with Cyrillic or other non-Latin capitals is found by a lowercase query**: `title:` ignored case only for
+  Latin letters, so such a title never matched, and a plain word search did not put it first. Titles now fold the
+  same way as the query, for every alphabet.
+
 ## 0.284.0 — 15.10.2026
 
 ### Added
