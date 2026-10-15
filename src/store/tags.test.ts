@@ -72,6 +72,13 @@ const found = async (store: MessageStore, text: string) =>
   (await searchStore(store, OWNER, { text, limit: 100 })).items.map(({ id }) => id).sort()
 
 describe("tags in the store (version 16)", () => {
+  it("finds a label stored with capitals or a slash again instead of reviewing it as a new one", async () => {
+    const { store } = await seeded()
+    const email = { type: "message" as const, chatId: "2", messageId: "4" }
+    expect(await store.addTags(OWNER, { type: "chat", chatId: "1" }, ["Clients/Acme"])).toEqual(["Clients/Acme"])
+    expect(await store.addTags(OWNER, email, ["Clients/Acme"])).toEqual(["Clients/Acme"])
+    expect(await store.addTags(OWNER, email, ["clients/acme"])).toEqual([])
+  })
   it("**adds only what is new and removes only what was there**, answering each", async () => {
     const { store } = await seeded()
     expect(await store.addTags(OWNER, { type: "chat", chatId: "1" }, ["work", "family"])).toEqual(["work", "family"])

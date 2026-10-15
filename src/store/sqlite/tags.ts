@@ -125,7 +125,17 @@ export const tagNamed = (database: CacheDatabase, name: string): TagRow | undefi
 /** An explicit alias reuses its target; similarity never chooses a canonical label. */
 export const canonicalTagNamed = (database: CacheDatabase, name: string): TagRow | undefined => {
   const normalized = normalizeVocabularyName(name)
-  const direct = tagNamed(database, normalized)
+  // createTag stores the name as given, so "Projects/Acme" must be found again by its folded form.
+  const foldedNamed = (): TagRow | undefined => {
+    const rows = database
+      .prepare("SELECT id, name, kind FROM tags WHERE lower(name) = lower(?) LIMIT 3")
+      .all(normalized)
+      .filter((row) => normalizeVocabularyName(String(row.name)) === normalized)
+    if (rows.length > 1) throw new CliError("configuration_error", "the label name has conflicting canonical targets")
+    const row = rows[0]
+    return row ? { id: Number(row.id), name: String(row.name), kind: row.kind as TagKind } : undefined
+  }
+  const direct = tagNamed(database, normalized) ?? foldedNamed()
   const aliases = database
     .prepare(
       "SELECT DISTINCT t.id,t.name,t.kind FROM aliases a JOIN tags t ON t.id=a.aliasable_id " +
