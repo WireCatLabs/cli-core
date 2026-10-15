@@ -36,6 +36,14 @@ it("returns bounded meeting context and source links without exposing the join U
     startedAt: null,
   })
 })
+it("preflights source URL bytes before hydrating summary context", async () => {
+  const { store, accountId, db } = await fixture()
+  await store.meetings.indexSearch({ accountId })
+  db.prepare("UPDATE meeting_summaries SET doc_url=?").run(`https://example.invalid/${"x".repeat(2000000)}`)
+  await expect(store.meetings.searchHits("example", { accountId, maxReadBytes: 4096 })).rejects.toMatchObject({
+    code: "validation_error",
+  })
+})
 afterEach(async () => {
   for (const item of opened.splice(0)) await item.close()
 })

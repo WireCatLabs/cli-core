@@ -130,7 +130,7 @@ it("does not hydrate or parse huge unrelated summary metadata within a small tex
   const { store, db, accountId } = await fixture()
   db.prepare("UPDATE meeting_summaries SET metadata=?,doc_url=?").run(
     "Private AliceExample invalid metadata ".repeat(100000),
-    `https://example.invalid/${"x".repeat(2000000)}`,
+    null,
   )
   expect((await store.meetings.indexSearch({ accountId, maxReadBytes: 4096 })).remaining).toBe(0)
   const page = await store.meetings.searchHits("example", { accountId, maxReadBytes: 4096 })
