@@ -110,6 +110,8 @@ const ACCOUNT_METHODS = [
   "addTags",
   "removeTags",
   "tags",
+  "taskRulesStop",
+  "setTaskRulesStop",
 ] as const satisfies readonly AccountMethod[]
 
 type AccountMethod = {

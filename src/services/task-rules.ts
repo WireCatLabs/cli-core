@@ -93,10 +93,16 @@ export const applyTaskRulesToStored = async (
   store: MessageStore,
   account: AccountKey,
   since?: string,
+  newerThan?: string,
 ): Promise<RuleResult & { until: string | null }> => {
   const result: RuleResult & { until: string | null } = { added: 0, closed: 0, until: since ?? null }
   for (const chat of await store.chatStats(account)) {
     if (chat.lastStoredAt === null || (since !== undefined && chat.lastStoredAt <= since)) continue
+    // A skipped chat still moves the stop point, or the next pass would read all of it as new.
+    if (newerThan !== undefined && (chat.newestAt === null || chat.newestAt < newerThan)) {
+      if (result.until === null || chat.lastStoredAt > result.until) result.until = chat.lastStoredAt
+      continue
+    }
     const fresh = since === undefined ? 0 : await store.countMessages(account, chat.chatId, { since })
     const page = await store.messages(account, chat.chatId, {
       limit: Math.min(ARRIVAL_WINDOW + fresh, STORED_PASS_LIMIT),
@@ -113,6 +119,26 @@ export const applyTaskRulesToStored = async (
     if (result.until === null || chat.lastStoredAt > result.until) result.until = chat.lastStoredAt
   }
   return result
+}
+
+/** How far back the first pass after a sync looks, by the newest message's time: older chats are history, not work. */
+export const FIRST_PASS_DAYS = 14
+
+/**
+ * The task rules over what a sync stored, from where the account's last pass stopped. The first pass reads only
+ * chats with a message in the last FIRST_PASS_DAYS, so a store that already holds years of chats opens no task
+ * for a question asked long ago.
+ */
+export const applyTaskRulesSinceLastPass = async (
+  store: MessageStore,
+  account: AccountKey,
+  now = new Date(),
+): Promise<RuleResult> => {
+  const since = await store.taskRulesStop(account)
+  const newerThan = since === null ? new Date(now.getTime() - FIRST_PASS_DAYS * 86_400_000).toISOString() : undefined
+  const { added, closed, until } = await applyTaskRulesToStored(store, account, since ?? undefined, newerThan)
+  if (until !== null && until !== since) await store.setTaskRulesStop(account, until)
+  return { added, closed }
 }
 
 /**

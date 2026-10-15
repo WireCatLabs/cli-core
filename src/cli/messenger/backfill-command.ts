@@ -9,6 +9,7 @@ import { FETCHING, type Fetched, type FetchedAll } from "../../services/archive.
 import { JOBS_QUERY, jobItems } from "../../services/job-query.js"
 import { momentOf } from "../../services/moment.js"
 import { validateCatchUpBounds } from "../../services/search-catchup.js"
+import { applyTaskRulesSinceLastPass, type RuleResult } from "../../services/task-rules.js"
 import { envName } from "../app.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
@@ -213,12 +214,13 @@ export const syncCommand = (messenger: Messenger): Command => {
             chat === undefined ? services.archive.fetchAll(options) : services.archive.fetch(chat, options),
         )
         if (jobId) finishJob(messenger.app, jobs, jobId, { finishedAt: new Date().toISOString(), result })
+        const tasks = await taskRulesAfterSync(context)
         const prepared = "prepared" in result ? result.prepared : undefined
         const unprepared = prepared && !prepared.complete && "chat" in result && result.chat !== null
         renderAnswer(
           this,
           context,
-          itemOf(snakeKeys(result), {
+          itemOf(snakeKeys(tasks && tasks.added + tasks.closed > 0 ? { ...result, tasks } : result), {
             next: unprepared
               ? [
                   nextStep("conversations.build", { args: { chat: result.chat } }),
@@ -238,6 +240,21 @@ export const syncCommand = (messenger: Messenger): Command => {
         stop.release()
       }
     })
+}
+
+/**
+ * What the sync stored, through the task rules (owner, 2026-10-14). A failure is noted, never the sync's failure:
+ * the messages are already kept, and the next sync's pass starts from the same stop point.
+ */
+const taskRulesAfterSync = async (context: MessengerContext): Promise<RuleResult | undefined> => {
+  try {
+    return await context.withStore((store, account) => applyTaskRulesSinceLastPass(store, account), {
+      name: "sync tasks",
+    })
+  } catch (error) {
+    context.renderer.note(`task rules skipped: ${error instanceof Error ? error.message : String(error)}`)
+    return undefined
+  }
 }
 
 /** `store jobs`: the background runs `messages sync --background` started. */

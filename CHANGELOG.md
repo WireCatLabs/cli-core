@@ -30,6 +30,11 @@ shape of this file.
   task's holder and hides tasks someone else holds unless `--claimed`; it takes `--holder` too (MCP: `claimed`,
   `holder`). New permission keys `tasks.claim` and `tasks.release`.
 - Task relations `duplicate-of` and `discovered-from`, for `tasks link task:<id> --kind` and `store.tasks.linkTask`.
+- **`messages sync` opens tasks from what it stored** (owner, 2026-10-14): the task rules `review` and `serve` run —
+  a question nobody answered, a mention of the owner; closed once the owner answers — over the chats the sync stored
+  into, from where the account's last pass stopped (kept in `store_settings`). The first pass reads only chats with
+  a message in the last 14 days. The answer carries `tasks: {added, closed}` when a rule opened or closed one; a
+  failed pass is a note, never the sync's failure. `applyTaskRulesSinceLastPass` from `./services`.
 
 ### Changed — may break callers
 

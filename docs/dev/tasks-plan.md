@@ -223,6 +223,11 @@ apart. If real answers show "likely" pairs are almost always accepted, merging t
 store, then the chain above for each task the rules would open. The answer says how many tasks were opened,
 attached and sent to review.
 
+Built 2026-10-15 (`applyTaskRulesSinceLastPass`): the stop point is a `store_settings` row per account, the first
+pass reads only chats with a message in the last 14 days (a store holding years of chats opens no task for an old
+question), and the answer carries `tasks: {added, closed}`. Until step 5, rule-made tasks open as before — one per
+source message; the chain joins when it is built.
+
 ## Test set
 
 Before the weights decide anything: a synthetic set in cli-testing (`performance/tasks/duplicates/`) —
