@@ -202,12 +202,12 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
     },
 
     estimate: async (chat, { limit, pageSize, pauseMs }) => {
-      pushed(deps, "--estimate")
+      pushed(deps, "--dry-run")
       const fetching = deps.messenger.fetching ?? FETCHING
       if (fetching.orderBy === "time") {
         throw new CliError(
           "validation_error",
-          "--estimate counts the message ids missing between what is held; this messenger's ids do not count messages",
+          "--dry-run counts the message ids missing between what is held; this messenger's ids do not count messages",
         )
       }
       const { store, account, chatId } = await found(chat)

@@ -145,7 +145,7 @@ describe("messages sync", () => {
     expect(answer).toMatchObject({ complete: true })
     expect(asked.every((one) => one.reactions === false)).toBe(true)
     expect(asked[1]?.before).toBe(new Date(Date.parse(message(5).timestamp) + 1).toISOString())
-    const estimate = await call(["messages", "sync", "7", "--estimate", "--json"], timedChatOf(7, []), env, {
+    const estimate = await call(["messages", "sync", "7", "--dry-run", "--json"], timedChatOf(7, []), env, {
       fetching,
     })
     expect(estimate.code).toBe(2)
@@ -370,7 +370,7 @@ describe("messages sync", () => {
     expect(state.asked).toEqual([undefined])
     expect((await call(["messages", "sync", "7", "--since-time", "7"], chatOf(state), setup())).code).not.toBe(0)
     expect(
-      (await call(["messages", "sync", "7", "--since-time", since, "--estimate"], chatOf(state), setup())).code,
+      (await call(["messages", "sync", "7", "--since-time", since, "--dry-run"], chatOf(state), setup())).code,
     ).not.toBe(0)
   })
 
@@ -747,7 +747,7 @@ describe("store fetch in the background", () => {
   })
 })
 
-describe("store fetch --estimate", () => {
+describe("store fetch --dry-run", () => {
   const untouchable = {
     self: () => "500",
     close: async () => {},
@@ -761,7 +761,7 @@ describe("store fetch --estimate", () => {
     await call(["messages", "sync", "7", "--limit", "100", "--pause", "1ms"], chatOf({ newest: 250, asked: [] }), env)
 
     const { code, answer } = await call(
-      ["messages", "sync", "7", "--estimate", "--limit", "100", "--json"],
+      ["messages", "sync", "7", "--dry-run", "--limit", "100", "--json"],
       untouchable,
       env,
     )
@@ -781,7 +781,7 @@ describe("store fetch --estimate", () => {
     const env = setup()
     await call(["messages", "sync", "7", "--pause", "1ms"], chatOf({ newest: 50, asked: [] }), env)
 
-    expect((await call(["messages", "sync", "7", "--estimate", "--json"], untouchable, env)).answer).toMatchObject({
+    expect((await call(["messages", "sync", "7", "--dry-run", "--json"], untouchable, env)).answer).toMatchObject({
       missing: 0,
       requests: 0,
     })
@@ -791,7 +791,7 @@ describe("store fetch --estimate", () => {
     const env = setup()
     await call(["messages", "sync", "7", "--pause", "1ms"], chatOf({ newest: 5, asked: [] }), env)
 
-    const { answer, stderr } = await call(["messages", "sync", "8", "--estimate", "--json"], untouchable, env)
+    const { answer, stderr } = await call(["messages", "sync", "8", "--dry-run", "--json"], untouchable, env)
     expect(answer).toMatchObject({ held: 0, missing: null, requests: null })
     expect(stderr).toContain("--limit 100")
   })

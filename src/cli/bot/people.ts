@@ -176,21 +176,21 @@ export const botContactsCommand = (bot: BotMessenger): Command => {
   acrossOptions(annotate(command.command("show"), { effects: REMOTE_READ }))
     .argument("<who>", "an id, @username or part of a name")
     .option("--limit <n>", "how many messages from the private chat", positiveCount("--limit"))
-    .option("--refresh", "read the private chat with them again from the messenger first — one request")
+    .option("--sync-first", "read the private chat with them again from the messenger first — one request")
     .description(
       "one person: the chats they wrote in (with their last message there) and the latest messages of their " +
         "private chat with the bot",
     )
-    .action(async function (this: Command, who: string, options: Across & { refresh?: boolean; limit?: number }) {
+    .action(async function (this: Command, who: string, options: Across & { syncFirst?: boolean; limit?: number }) {
       const context = botContext(this, bot)
       const across = { allBots: options.allBots === true, bots: options.bots ?? [] }
       const limit = options.limit ?? context.settings.limit
       const read = () => context.copy.read((store) => cardOf(store, context, bot, who, across, limit))
       await context.run(async (events) => {
         let { card, dialogs } = await read()
-        if (options.refresh) {
+        if (options.syncFirst) {
           if (context.settings.offline)
-            throw new CliError("validation_error", "--refresh asks the messenger; drop --offline")
+            throw new CliError("validation_error", "--sync-first asks the messenger; drop --offline")
           const adapter = await context.authenticated({ events })
           const history = botCan(adapter, "history", bot, "read a chat back")
           const self = context.registry.botId()

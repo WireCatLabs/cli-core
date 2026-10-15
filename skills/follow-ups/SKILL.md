@@ -57,7 +57,7 @@ For a chat in `owed` or `waiting`: read around its `lastMessage` the same way.
 | `tasks add` refuses with `task.duplicate-candidates` | read the listed tasks: the same job → repeat with `--attach <key>`; a different one → repeat with `--new` |
 | `tasks duplicates` lists pairs a rule opened | one job → `tasks merge <task> --into <other>`; two jobs → `tasks duplicates reject <task> <other>`; the meaning cannot tell (mum's gift or dad's) → `tasks duplicates unsure <task> <other>` for the owner. A wrong merge: `tasks unmerge <task>` |
 | A task that is done (the reply came, the file was sent) | `tasks close <key> --as done --reason "<one line>"` |
-| A task still open, nothing new | `tasks plan <key> --check <when>` — 1d if hot, 3d–7d if not |
+| A task still open, nothing new | `tasks plan <key> --remind-time <when>` — 1d if hot, 3d–7d if not |
 | A task with the wrong category | `tasks plan <key> --category <name>` |
 | A task you are about to work on with other agents around | `tasks claim <key>`, and `tasks release <key>` when you stop |
 | An `owed` chat that needs no answer (thanks, a sticker) | nothing; it leaves the agenda on the next message |
@@ -66,7 +66,7 @@ For a chat in `owed` or `waiting`: read around its `lastMessage` the same way.
 Every task gets a plan, so the next run needs no rereading:
 
 ```sh
-{{command}} tasks plan <key> --title "<action and its object>" --due <when> --check <when> \
+{{command}} tasks plan <key> --title "<action and its object>" --due <when> --remind-time <when> \
   --description "Owes: <me → them | them → me>
 Counterpart: <name>
 Done when: <one observable line>

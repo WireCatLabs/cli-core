@@ -35,19 +35,19 @@ type Harness = (typeof HARNESSES)[number]
 interface WhenOptions {
   every?: string
   at?: string
-  once?: string
+  atTime?: string
 }
 
-const whenOf = ({ every, at, once }: WhenOptions, minimum: number): When => {
-  if ([every ?? at, once].filter(Boolean).length !== 1) {
+const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
+  if ([every ?? at, atTime].filter(Boolean).length !== 1) {
     throw new CliError(
       "validation_error",
-      "say when: --every <30m|2h|1d>, --at HH:MM (daily), or --once <30m|2d|ISO time>",
+      "say when: --every <30m|2h|1d>, --at HH:MM (daily), or --at-time <30m|2d|ISO time>",
     )
   }
-  if (once) {
-    const time = aheadOf(once, "--once")
-    if (time <= Date.now()) throw new CliError("validation_error", "--once is in the past")
+  if (atTime) {
+    const time = aheadOf(atTime, "--at-time")
+    if (time <= Date.now()) throw new CliError("validation_error", "--at-time is in the past")
     return { once: new Date(time).toISOString() }
   }
   if (at) {
@@ -79,7 +79,7 @@ const withWhen = (command: Command) =>
   command
     .option("--every <duration>", "repeat: 30m, 2h, 1d")
     .option("--at <HH:MM>", "every day at this local time")
-    .option("--once <when>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
+    .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
 
 /**
  * Runs the CLI's own commands, or an agent, later or on a timer — through systemd (Linux), launchd

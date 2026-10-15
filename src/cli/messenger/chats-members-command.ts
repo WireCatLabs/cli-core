@@ -52,9 +52,9 @@ export const membersCommand = (messenger: Messenger): Command => {
           )
           .argument("<chat>", messenger.chatArgument)
           .option(
-            "--budget <pages>",
+            "--max-pages <pages>",
             `at most this many pages of ${AUDIT_PAGE} members, a pause between them (default: ${AUDIT_BUDGET})`,
-            positiveCount("--budget"),
+            positiveCount("--max-pages"),
           )
           .option(
             "--deep <n>",
@@ -70,18 +70,18 @@ export const membersCommand = (messenger: Messenger): Command => {
       AUDIT_QUERY,
     ).action(async function (this: Command, chat: string, words: string[]) {
       const context = messengerContext(this, messenger)
-      const { budget, deep } = this.opts<{ budget?: number; deep?: number }>()
+      const { maxPages, deep } = this.opts<{ maxPages?: number; deep?: number }>()
       const key = deep === undefined ? undefined : casKey(messenger.app, context.env)
       const { audit, body } = await context.withServices((services) =>
         membersAudit(services, chat, words, {
-          ...(budget === undefined ? {} : { budget }),
+          ...(maxPages === undefined ? {} : { budget: maxPages }),
           ...(deep === undefined ? {} : { deep }),
           ...(key ? { registry: { casKey: key } } : {}),
         }),
       )
       if (audit.more) {
         const of = audit.participantsCount === null ? "" : ` of ${audit.participantsCount}`
-        context.renderer.note(`${audit.read}${of} members read; a higher --budget reads more`)
+        context.renderer.note(`${audit.read}${of} members read; a higher --max-pages reads more`)
       }
       renderAnswer(
         this,
@@ -149,23 +149,23 @@ export const membersCommand = (messenger: Messenger): Command => {
   members.addCommand(
     fetch
       .option(
-        "--budget <pages>",
+        "--max-pages <pages>",
         `at most this many pages of ${AUDIT_PAGE} members, a pause between them (default: ${AUDIT_BUDGET})`,
-        positiveCount("--budget"),
+        positiveCount("--max-pages"),
       )
       .action(async function (this: Command, chat: string) {
         const context = messengerContext(this, messenger)
-        const { track, budget } = this.opts<{ track?: boolean; budget?: number }>()
+        const { track, maxPages } = this.opts<{ track?: boolean; maxPages?: number }>()
         const fetched = await context.withServices((services) =>
           services.chats.fetchMembers(chat, {
-            ...(budget === undefined ? {} : { budget }),
+            ...(maxPages === undefined ? {} : { budget: maxPages }),
             ...(track ? { track } : {}),
           }),
         )
         if (!fetched.complete) {
           context.renderer.note(
             fetched.more
-              ? `${fetched.read} members read; a higher --budget reads more — until then nobody is recorded as gone`
+              ? `${fetched.read} members read; a higher --max-pages reads more — until then nobody is recorded as gone`
               : "the chat's own member count is unknown or larger than the list — nobody is recorded as gone",
           )
         }

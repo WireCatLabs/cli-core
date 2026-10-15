@@ -134,17 +134,17 @@ export const contactsCommand = (messenger: Messenger): Command => {
       `a chat, by id or name; repeat it for more — then their newest messages in each, ${CHAT_MESSAGES} unless --limit, short unless -v`,
       collect,
     )
-    .option("--refresh", "with --chat, read their newest messages in each from the messenger first")
+    .option("--sync-first", "with --chat, read their newest messages in each from the messenger first")
     .action(async function (this: Command, person: string) {
-      const { limit, sinceTime, chat, refresh } = this.opts<{
+      const { limit, sinceTime, chat, syncFirst } = this.opts<{
         limit?: number
         sinceTime?: string
         chat?: string[]
-        refresh?: boolean
+        syncFirst?: boolean
       }>()
       const context = messengerContext(this, messenger)
       if (chat === undefined) {
-        if (refresh) throw new CliError("validation_error", "--refresh reads the chats named with --chat")
+        if (syncFirst) throw new CliError("validation_error", "--sync-first reads the chats named with --chat")
       } else {
         if (sinceTime !== undefined) throw new CliError("validation_error", "--since-time is not used with --chat")
         const found = await context.withServices((services) =>
@@ -152,7 +152,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
             chats: chat,
             ...(limit === undefined ? {} : { limit }),
             detail: context.settings.detail,
-            fetch: refresh === true,
+            fetch: syncFirst === true,
           }),
         )
         renderAnswer(

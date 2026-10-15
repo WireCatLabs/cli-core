@@ -14,13 +14,13 @@ import {
 export interface RuleEdits {
   do?: string
   kinds?: string
-  chats?: string
-  notChats?: string
+  allowChats?: string
+  denyChats?: string
   words?: string
   question?: boolean
   mentionsMe?: boolean
-  people?: string
-  notPeople?: string
+  allowPeople?: string
+  denyPeople?: string
   contactsOnly?: boolean
   template?: string
   model?: string
@@ -86,13 +86,13 @@ export const editRule = (path: string, provider: string, id: string, edits: Rule
   }
   if (edits.do !== undefined) rule.do = choices(list(edits.do), REPLY_ACTIONS, "--do")
   if (edits.kinds !== undefined) rule.where.kinds = choices(list(edits.kinds), REPLY_KINDS, "--kinds")
-  if (edits.chats !== undefined) rule.where.chats = list(edits.chats)
-  if (edits.notChats !== undefined) rule.where.notChats = list(edits.notChats)
+  if (edits.allowChats !== undefined) rule.where.chats = list(edits.allowChats)
+  if (edits.denyChats !== undefined) rule.where.notChats = list(edits.denyChats)
   if (edits.words !== undefined) rule.when.words = list(edits.words)
   if (edits.question !== undefined) rule.when.question = edits.question
   if (edits.mentionsMe !== undefined) rule.when.mentionsMe = edits.mentionsMe
-  if (edits.people !== undefined) rule.when.from.people = list(edits.people)
-  if (edits.notPeople !== undefined) rule.when.from.notPeople = list(edits.notPeople)
+  if (edits.allowPeople !== undefined) rule.when.from.people = list(edits.allowPeople)
+  if (edits.denyPeople !== undefined) rule.when.from.notPeople = list(edits.denyPeople)
   if (edits.contactsOnly !== undefined) rule.when.from.contactsOnly = edits.contactsOnly
   if (edits.template !== undefined) rule.reply.template = edits.template
   if (edits.model !== undefined) rule.reply.model = choices([edits.model], REPLY_MODELS, "--model")[0] ?? "fill-only"

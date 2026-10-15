@@ -209,7 +209,7 @@ describe("tasks", () => {
         "Send the invoice",
         "--due",
         "2d",
-        "--check",
+        "--remind-time",
         "1d",
         "--json",
       ),
@@ -220,7 +220,9 @@ describe("tasks", () => {
       next_check_at: expect.any(String),
     })
 
-    const planned = item(await call("tasks", "plan", added.id, "--due", "none", "--check", "2026-01-01", "--json"))
+    const planned = item(
+      await call("tasks", "plan", added.id, "--due", "none", "--remind-time", "2026-01-01", "--json"),
+    )
     expect(planned).toMatchObject({ due_at: null, next_check_at: "2026-01-01T00:00:00.000Z" })
     expect((await call("tasks", "plan", added.id)).code).not.toBe(0)
     expect((await call("tasks", "plan", added.id, "--due", "soon")).stderr).toContain("--due takes")

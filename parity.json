@@ -103,7 +103,8 @@
     },
     "--at-time": {
       "value": "<time>",
-      "meaning": "let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m"
+      "meaning": "let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m",
+      "note": "schedule agent and schedule command take it for their one run: a duration from now or an ISO 8601 time"
     },
     "--attach": {
       "value": "<task>",
@@ -146,10 +147,6 @@
     "--brief": {
       "meaning": "found messages and mail as reference, title, time, sender and excerpt only"
     },
-    "--budget": {
-      "value": "<pages>",
-      "meaning": "at most this many pages of a list, with a pause between them"
-    },
     "--by": {
       "value": "<grouping>",
       "meaning": "what to count by",
@@ -168,7 +165,7 @@
       "meaning": "show the text above the --photo or --file, not below it"
     },
     "--catch-up": {
-      "meaning": "prepare local search after this run"
+      "meaning": "prepare local search: after this run, or before a search reads it"
     },
     "--catch-up-chunks": {
       "meaning": "at most this many local vector chunks",
@@ -203,13 +200,8 @@
       "value": "<who>",
       "meaning": "who may add the account to groups and channels: everyone, contacts or nobody"
     },
-    "--chats": {
-      "meaning": "only these chat ids, comma-separated; empty for any",
-      "value": "<ids>"
-    },
     "--check": {
-      "meaning": "say whether a newer version exists, and install nothing",
-      "note": "tasks add and tasks plan instead take a time or duration for the next review; none clears it"
+      "meaning": "say whether a newer version exists, and install nothing"
     },
     "--checkpoints": {
       "value": "<durations>",
@@ -332,10 +324,6 @@
       "value": "<code>",
       "meaning": "filter diagnostic runs by a stable error code"
     },
-    "--estimate": {
-      "meaning": "only say what the fetch would cost, from this machine's copy; nothing is sent",
-      "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13)"
-    },
     "--events": {
       "meaning": "also print edits, deletions and reactions; every line then names its event",
       "note": "watch updates use this flag independently of the group event --type filter"
@@ -350,6 +338,10 @@
     "--exclude-chat": {
       "value": "<chat>",
       "meaning": "never show this chat in the folder; repeat it for more"
+    },
+    "--expected-fingerprint": {
+      "value": "<hash>",
+      "meaning": "require the whole retained file to match this previous SHA256"
     },
     "--expire-time": {
       "value": "<time>",
@@ -441,10 +433,6 @@
     "--idle": {
       "value": "<duration>",
       "meaning": "stop after this long with nobody using it — 15m, 1h"
-    },
-    "--if-sha256": {
-      "value": "<hash>",
-      "meaning": "require the whole retained file to match this previous SHA256"
     },
     "--include": {
       "value": "<kinds>",
@@ -555,6 +543,10 @@
       "meaning": "at most this many serialized bytes of machine data; 0 disables the bound",
       "default": "4194304"
     },
+    "--max-pages": {
+      "value": "<pages>",
+      "meaning": "at most this many pages of a list, with a pause between them"
+    },
     "--max-replies": {
       "value": "<n>",
       "meaning": "maximum observed discussion replies"
@@ -635,7 +627,7 @@
     "--no-backup": {
       "meaning": "delete the store without backing it up first"
     },
-    "--no-ban": {
+    "--no-block": {
       "meaning": "remove without banning; by default a removed person cannot come back by the link"
     },
     "--no-catch-up": {
@@ -672,14 +664,6 @@
     "--no-serve": {
       "meaning": "do not start it; log in on this command's own connection unless one is running"
     },
-    "--not-chats": {
-      "meaning": "leave these chat ids out, comma-separated; empty clears",
-      "value": "<ids>"
-    },
-    "--not-people": {
-      "meaning": "leave these sender ids out, comma-separated; empty clears",
-      "value": "<ids>"
-    },
     "--notification": {
       "value": "<text>",
       "meaning": "a note only the person who pressed sees"
@@ -701,10 +685,6 @@
     "--older-than": {
       "value": "<duration>",
       "meaning": "minimum age of a question without an observed qualifying answer"
-    },
-    "--once": {
-      "value": "<when>",
-      "meaning": "one run: a duration from now or an ISO 8601 time"
     },
     "--online": {
       "meaning": "also log in once, read one chat and start the MCP server; sends nothing",
@@ -779,10 +759,6 @@
       "value": "<text>",
       "meaning": "the start parameter the bot reads; a link's own ?start= when not given"
     },
-    "--people": {
-      "meaning": "only these sender ids, comma-separated; empty for any",
-      "value": "<ids>"
-    },
     "--per-chat": {
       "meaning": "at most this many per chat, such as 1/12h",
       "value": "<limit>"
@@ -855,12 +831,9 @@
       "meaning": "keep this run under `runs` — ids and timings, never message content",
       "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13)"
     },
-    "--refresh": {
-      "meaning": "read the private chat with them from MAX first — one request",
-      "note": "one idea, two sources: bring what the answer is read from up to date first. `bot contacts show` reads the private chat again from the messenger; `conversations search` builds and embeds, on this machine, the chats that changed (NEED-551 A, awaiting the owner's wording)"
-    },
-    "--refresh-metadata": {
-      "meaning": "read current descriptions from the messenger before classifying"
+    "--remind-time": {
+      "value": "<time>",
+      "meaning": "when to look at it again: an ISO 8601 time or a duration from now; none clears it"
     },
     "--remove": {
       "value": "<chat>",
@@ -1092,7 +1065,11 @@
       "meaning": "only the pairs the reviewing agent left to the owner"
     },
     "--until": {
-      "value": "<message>",
+      "value": "<time>",
+      "meaning": "only until then: a local time, or a duration from now"
+    },
+    "--until-id": {
+      "value": "<id>",
       "meaning": "only up to this message id, inclusive; the newest by default"
     },
     "--until-time": {
@@ -1325,7 +1302,7 @@
         "--chunk-bytes": {
           "in": "all"
         },
-        "--if-sha256": {
+        "--expected-fingerprint": {
           "in": "all"
         },
         "--offset-bytes": {
@@ -1449,7 +1426,7 @@
         "--allow-dangerous": "all",
         "--dry-run": "all",
         "--max-actions": "all",
-        "--no-ban": "all",
+        "--no-block": "all",
         "--since-time": "all"
       }
     },
@@ -1493,7 +1470,7 @@
         "--all-bots": "all",
         "--bots": "all",
         "--limit": "all",
-        "--refresh": "all"
+        "--sync-first": "all"
       }
     },
     "bot list": {
@@ -1937,7 +1914,7 @@
       "in": "all",
       "options": {
         "--topic": "all",
-        "--until": "all"
+        "--until-id": "all"
       }
     },
     "chats media": {
@@ -1981,14 +1958,14 @@
     "chats members audit": {
       "in": "all",
       "options": {
-        "--budget": "all",
-        "--deep": "all"
+        "--deep": "all",
+        "--max-pages": "all"
       }
     },
     "chats members fetch": {
       "in": "all",
       "options": {
-        "--budget": "all",
+        "--max-pages": "all",
         "--track": "all"
       }
     },
@@ -2201,8 +2178,8 @@
       "options": {
         "--chat": "all",
         "--limit": "all",
-        "--refresh": "all",
-        "--since-time": "all"
+        "--since-time": "all",
+        "--sync-first": "all"
       }
     },
     "contacts import": {
@@ -2949,7 +2926,7 @@
         "--catch-up-chunks": "all",
         "--catch-up-messages": "all",
         "--catch-up-time": "all",
-        "--estimate": "all",
+        "--dry-run": "all",
         "--last": "all",
         "--limit": "all",
         "--no-catch-up": "all",
@@ -3135,10 +3112,13 @@
     "replies edit": {
       "in": "all",
       "options": {
+        "--allow-chats": "all",
+        "--allow-people": "all",
         "--as-reply": "all",
-        "--chats": "all",
         "--contacts-only": "all",
         "--days": "all",
+        "--deny-chats": "all",
+        "--deny-people": "all",
         "--do": "all",
         "--kinds": "all",
         "--mentions-me": "all",
@@ -3148,10 +3128,7 @@
         "--no-hours": "all",
         "--no-mentions-me": "all",
         "--no-question": "all",
-        "--not-chats": "all",
-        "--not-people": "all",
         "--outside": "all",
-        "--people": "all",
         "--per-chat": "all",
         "--per-person": "all",
         "--question": "all",
@@ -3244,17 +3221,17 @@
       "in": "all",
       "options": {
         "--at": "all",
+        "--at-time": "all",
         "--every": "all",
-        "--max-cost": "all",
-        "--once": "all"
+        "--max-cost": "all"
       }
     },
     "schedule command": {
       "in": "all",
       "options": {
         "--at": "all",
-        "--every": "all",
-        "--once": "all"
+        "--at-time": "all",
+        "--every": "all"
       }
     },
     "schedule exec": {
@@ -3314,6 +3291,9 @@
       "in": "all",
       "options": {
         "--base-url": "all",
+        "--catch-up": {
+          "in": "all"
+        },
         "--chat": "all",
         "--dims": "all",
         "--filter": {
@@ -3331,9 +3311,6 @@
         },
         "--model": "all",
         "--provider": "all",
-        "--refresh": {
-          "in": "all"
-        },
         "--since-time": "all",
         "--source": {
           "in": "all"
@@ -4012,7 +3989,7 @@
         "--chat": "all",
         "--dry-run": "all",
         "--limit": "all",
-        "--refresh-metadata": "all"
+        "--sync-first": "all"
       }
     },
     "tags list": {
@@ -4046,10 +4023,10 @@
       "options": {
         "--attach": "all",
         "--category": "all",
-        "--check": "all",
         "--description": "all",
         "--due": "all",
         "--new": "all",
+        "--remind-time": "all",
         "--title": "all",
         "--type": {
           "in": "all"
@@ -4128,9 +4105,9 @@
       "in": "all",
       "options": {
         "--category": "all",
-        "--check": "all",
         "--description": "all",
         "--due": "all",
+        "--remind-time": "all",
         "--title": "all"
       }
     },

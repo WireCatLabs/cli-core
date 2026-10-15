@@ -117,8 +117,8 @@ describe("bot contacts show", () => {
     expect(allowed.answer.item.chats.map((chat: { id: string }) => chat.id)).toContain("-200")
   })
 
-  it("refuses --refresh for a bot that cannot read a chat back", async () => {
-    const { code, stderr } = await call(["first", "bot", "contacts", "show", "@ann", "--refresh", "--limit", "5"])
+  it("refuses --sync-first for a bot that cannot read a chat back", async () => {
+    const { code, stderr } = await call(["first", "bot", "contacts", "show", "@ann", "--sync-first", "--limit", "5"])
 
     expect(code).toBe(2)
     expect(stderr).toContain("cannot read a chat back")

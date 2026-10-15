@@ -91,7 +91,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         "Members of a group that look like bots, highest score first: { id, name, username, score, reasons }. " +
         "Reasons: bot, scam, fake, deleted, no_photo, no_username, odd_name, never_wrote, link_first, burst_join, " +
         "mass_invited. A score is a hint, never a verdict; the owner and admins are left out. query sets the lowest " +
-        "score shown (score>=3; score>=2 unless named). Reads the member list a page at a time (budget pages); " +
+        "score shown (score>=3; score>=2 unless named). Reads the member list a page at a time, at most max_pages; " +
         "meta.truncated says some members were not read. With deep, the top members also get the full contacts_check, " +
         "one person a second" +
         (registriesCover(messenger.provider)
@@ -101,7 +101,9 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({
         chat,
         query: queryArgument(AUDIT_QUERY),
-        budget: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description("pages of members to read"))),
+        max_pages: v.optional(
+          v.pipe(v.number(), v.integer(), v.minValue(1), v.description("pages of members to read")),
+        ),
         deep: v.optional(
           v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(50), v.description("check the top n in full")),
         ),
@@ -111,7 +113,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       online: async (adapter, args, { guard, env }) => {
         const key = args.deep === undefined ? undefined : casKey(messenger.app, env)
         const { body } = await membersAudit(servicesFor(onlineDeps(messenger, adapter, guard)), args.chat, args.query, {
-          ...(args.budget === undefined ? {} : { budget: args.budget }),
+          ...(args.max_pages === undefined ? {} : { budget: args.max_pages }),
           ...(args.deep === undefined ? {} : { deep: args.deep }),
           ...(key ? { registry: { casKey: key } } : {}),
         })

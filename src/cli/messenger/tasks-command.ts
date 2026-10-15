@@ -105,9 +105,9 @@ const planOptions = (command: Command, verb: string) =>
       dateOrNone("--due"),
     )
     .option(
-      "--check <when>",
+      "--remind-time <time>",
       "when to look at it again: an ISO 8601 time or 2h, 3d from now; none clears it",
-      dateOrNone("--check"),
+      dateOrNone("--remind-time"),
     )
 
 const categoryHelp = "what it is about, from the list tasks categories prints: money, documents, meeting, …"
@@ -122,7 +122,7 @@ const planFrom = (options: {
   title?: string
   description?: string
   due?: Date | "none"
-  check?: Date | "none"
+  remindTime?: Date | "none"
   category?: string
 }) => {
   const plan: TaskPlan = {}
@@ -130,7 +130,7 @@ const planFrom = (options: {
   if (options.title !== undefined) plan.title = options.title
   if (options.description !== undefined) plan.description = options.description
   if (options.due !== undefined) plan.dueAt = options.due === "none" ? null : options.due
-  if (options.check !== undefined) plan.nextCheckAt = options.check === "none" ? null : options.check
+  if (options.remindTime !== undefined) plan.nextCheckAt = options.remindTime === "none" ? null : options.remindTime
   return plan
 }
 
@@ -226,7 +226,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
     refuseLocalWrite(context, messenger.app.command, "tasks.plan")
     const plan = planFrom(this.opts())
     if (Object.keys(plan).length === 0)
-      throw new CliError("validation_error", "give at least one of --title, --description, --due, --check, --category")
+      throw new CliError(
+        "validation_error",
+        "give at least one of --title, --description, --due, --remind-time, --category",
+      )
     const planned = await context.withServices((services) => services.tasks.plan(id, plan, "owner"))
     renderAnswer(this, context, itemOf(snakeKeys(planned)), () => `${card(planned)}\n`)
   })
@@ -406,7 +409,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     )
     .option("--waiting <span>", "list chats where you wrote last this long ago (default 7d)", durationOf("--waiting"))
     .option(
-      "--within <span>",
+      "--within <duration>",
       "leave out chats silent longer than this: they ended (default 30d)",
       durationOf("--within"),
     )

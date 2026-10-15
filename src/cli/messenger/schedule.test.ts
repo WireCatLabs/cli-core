@@ -148,7 +148,7 @@ describe.runIf(posix)("schedule under the read-only lock", () => {
 
     const locked = { ...env, CHAT_READ_ONLY: "1" }
     const send = await call(
-      ["command", "later", "--once", "30m", "--", "messages", "send", "42", "--text", "hi"],
+      ["command", "later", "--at-time", "30m", "--", "messages", "send", "42", "--text", "hi"],
       locked,
       system,
     )

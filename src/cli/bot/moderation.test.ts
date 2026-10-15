@@ -112,13 +112,13 @@ describe("bot chats moderate", () => {
     expect(calls).toEqual(["history -100 true"])
   })
 
-  it("**removes what a rule allows, banning unless --no-ban**", async () => {
+  it("**removes what a rule allows, banning unless --no-block**", async () => {
     rules().set("-100", null, "invites", "remove")
     rules().set("-100", null, "consent.remove", "allow")
     const since = new Date(now - 3_600_000).toISOString()
 
     await call(["moderate", "-100", "--since-time", since, "--json"])
-    await call(["moderate", "-100", "--since-time", since, "--no-ban", "--json"])
+    await call(["moderate", "-100", "--since-time", since, "--no-block", "--json"])
 
     expect(calls.filter((one) => one.startsWith("remove"))).toEqual(["remove -100 42 block", "remove -100 42"])
   })

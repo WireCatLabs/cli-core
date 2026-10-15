@@ -954,7 +954,7 @@ describe("the shared read commands", () => {
     expect(lonelyModel.stderr.join("\n")).toContain("add --transcribe")
   })
 
-  it("**mark a chat read, to its newest message or --until one**, journaled as a read", async () => {
+  it("**mark a chat read, to its newest message or --until-id one**, journaled as a read", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const marks: unknown[] = []
@@ -966,7 +966,7 @@ describe("the shared read commands", () => {
     }
 
     const all = await call(["chats", "mark-read", "Book", "--json"], async () => reading, env)
-    const some = await call(["chats", "mark-read", "Book", "--until", "3", "--json"], async () => reading, env)
+    const some = await call(["chats", "mark-read", "Book", "--until-id", "3", "--json"], async () => reading, env)
 
     expect(JSON.parse(all.stdout[0] ?? "").item).toEqual({
       operation_id: expect.any(String),
@@ -2608,7 +2608,7 @@ describe("the shared read commands", () => {
     )
     expect(JSON.parse(detailed.stdout[0] ?? "null").item.chats[0].messages[0].locator).toBe("msg:telegram/500/11/1")
     const lonely = await call(
-      ["contacts", "context", "11", "--refresh", "--offline", "--json"],
+      ["contacts", "context", "11", "--sync-first", "--offline", "--json"],
       never,
       env,
       {},
@@ -3016,7 +3016,7 @@ describe("the shared read commands", () => {
     expect(related.stderr.join("\n")).toContain("conversations embed --chat 7")
   })
 
-  it("**catches up every changed chat** with build, embed and search --refresh, on this machine only", async () => {
+  it("**catches up every changed chat** with build, embed and search --catch-up, on this machine only", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -3053,7 +3053,7 @@ describe("the shared read commands", () => {
         const embed = await call(["conversations", "embed", ...remote, "--yes", "--json"], never, env)
         expect([embed.code, embed.stdout]).toEqual([2, []])
         expect(embed.stderr.join("\n")).toContain("on this machine only")
-        const search = await call(["search", "conversations", "chapter", "--refresh", ...remote, "--json"], never, env)
+        const search = await call(["search", "conversations", "chapter", "--catch-up", ...remote, "--json"], never, env)
         expect([search.code, search.stdout]).toEqual([2, []])
       }
       expect(sent).toEqual([])
@@ -3063,7 +3063,7 @@ describe("the shared read commands", () => {
       expect(embed.stderr.join("\n")).toContain("models text download e5-small")
 
       const found = await call(
-        ["search", "conversations", "chapter", "--refresh", "--max-chunks", "10", "--json"],
+        ["search", "conversations", "chapter", "--catch-up", "--max-chunks", "10", "--json"],
         never,
         env,
       )
@@ -3079,7 +3079,7 @@ describe("the shared read commands", () => {
         join(env.CHAT_CONFIG_DIR, "config.json"),
         JSON.stringify({ profiles: { default: { permissions: { "conversations.embed": "readonly" } } } }),
       )
-      const refused = await call(["search", "conversations", "chapter", "--refresh", "--json"], never, env)
+      const refused = await call(["search", "conversations", "chapter", "--catch-up", "--json"], never, env)
       expect([refused.code, refused.stdout]).toEqual([5, []])
       expect((await call(["search", "conversations", "chapter", "--json"], never, env)).code).toBe(0)
     } finally {

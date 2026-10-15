@@ -13,7 +13,7 @@ export const chatsReadTools = (messenger: Messenger): Record<string, AnyTool> =>
       "Only when the owner asked for it.",
     input: v.object({
       chat: chatOf(messenger),
-      until: v.optional(message),
+      until_id: v.optional(message),
       topic: v.optional(
         v.pipe(v.string(), v.minLength(1), v.description("only this forum topic; unsupported without topics")),
       ),
@@ -26,7 +26,7 @@ export const chatsReadTools = (messenger: Messenger): Record<string, AnyTool> =>
         snakeKeys(
           await servicesFor(onlineDeps(messenger, adapter, guard)).chats.markRead({
             chat: args.chat,
-            ...(args.until === undefined ? {} : { until: args.until }),
+            ...(args.until_id === undefined ? {} : { until: args.until_id }),
             ...(args.topic === undefined ? {} : { threadId: args.topic }),
           }),
         ),

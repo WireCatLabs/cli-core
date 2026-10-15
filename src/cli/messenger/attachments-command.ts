@@ -164,15 +164,15 @@ const showCommand = (messenger: Messenger): Command =>
     .option("--page <n>", "render one PDF page as PNG, from 1; optional unpdf/canvas, no OCR", Number)
     .option("--offset-bytes <n>", "byte offset from 0", Number)
     .option("--chunk-bytes <n>", "bytes to return, 1–1048576 (default524288)", Number)
-    .option("--if-sha256 <hash>", "require the whole file SHA-256 from the preceding chunk")
+    .option("--expected-fingerprint <hash>", "require the whole file SHA-256 from the preceding chunk")
     .action(async function (this: Command, chat: string, message: string | undefined) {
       const context = messengerContext(this, messenger)
-      const options = this.opts<{
+      const { expectedFingerprint, ...options } = this.opts<{
         attachment?: number
         page?: number
         offsetBytes?: number
         chunkBytes?: number
-        ifSha256?: string
+        expectedFingerprint?: string
       }>()
       const stop = stopOnSignal(this)
       try {
@@ -181,6 +181,7 @@ const showCommand = (messenger: Messenger): Command =>
             chat,
             ...(message === undefined ? {} : { message }),
             ...options,
+            ...(expectedFingerprint === undefined ? {} : { ifSha256: expectedFingerprint }),
             signal: AbortSignal.any([
               stop.signal,
               ...[environmentOf(this).signal, environmentOf(this).commandSignal].filter(

@@ -24,18 +24,18 @@ of the whole file. `complete: true` means this answer contains the entire file, 
 its text has been recognized.
 
 Decode each base64 chunk, append in byte-offset order and follow nextOffsetBytes until
-it is null. Pass the first sha256 as `--if-sha256` on subsequent requests; a changed source
+it is null. Pass the first sha256 as `--expected-fingerprint` on subsequent requests; a changed source
 fails without returning changed bytes. Verify the assembled file against that hash.
 
 ```sh
-chat attachments show msg:chat/500/7/204 --offset-bytes 524288 --if-sha256 <sha256> --json
+chat attachments show msg:chat/500/7/204 --offset-bytes 524288 --expected-fingerprint <sha256> --json
 ```
 
 ## MCP and host capabilities
 
 Discover `attachments show` through the normal three-tool surface.
 Arguments use message (a locator, or an id with chat), attachment, offset_bytes,
-chunk_bytes and if_sha256. Complete supported images appear as image content;
+chunk_bytes and expected_fingerprint. Complete supported images appear as image content;
 other files appear as embedded binary resources. Partial resources are byte chunks,
 not complete PDFs or images. The resource URI is an identifier, not a download URL.
 

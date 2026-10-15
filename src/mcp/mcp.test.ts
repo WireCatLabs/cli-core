@@ -931,7 +931,7 @@ describe("the MCP server", () => {
       }),
     )
 
-    const { body } = await call("chats members audit", { chat: "7", budget: 1 })
+    const { body } = await call("chats members audit", { chat: "7", max_pages: 1 })
 
     expect(body).toMatchObject({ items: [{ id: "40", score: 4 }], page: { has_more: false } })
     expect(body.meta.truncated).toBeUndefined()
@@ -2933,7 +2933,7 @@ describe("sending over MCP", () => {
     const { client, call } = await connect(telegram, {})
 
     const tools = await client.commands()
-    const { body } = await call("chats mark-read", { chat: "Book", until: "1" })
+    const { body } = await call("chats mark-read", { chat: "Book", until_id: "1" })
 
     expect(denied).not.toContain("chats mark-read")
     expect(denied).toContain("messages send")
