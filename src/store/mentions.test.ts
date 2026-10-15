@@ -182,6 +182,35 @@ describe("deciding a mention", () => {
     await store.close()
   })
 
+  it("links a t.me link to the stored chat it names, by id or by username, and explains one it cannot", async () => {
+    const { path, store } = await fresh()
+    await store.saveMessages(
+      OWNER,
+      "-1001234567890",
+      [{ ...message("1", "пост https://t.me/c/1234567890/5"), chatId: "-1001234567890" }],
+      {
+        via: "history",
+      },
+    )
+    await store.saveMessages(OWNER, "-1", [message("2", "канал t.me/book_club и t.me/joinchat/AbCdEf")], {
+      via: "history",
+    })
+    const raw = new DatabaseSync(path)
+    raw.prepare("UPDATE chats SET username = 'Book_Club' WHERE external_id = '-1'").run()
+    raw.close()
+    await store.rebuildMentions({ kinds: ["url"] })
+
+    const links = (await store.mentions(OWNER, q("kind:url"), { offset: 0 })).items
+    const status = (value: string) => links.find((one) => one.value === value)
+    expect(status("https://t.me/c/1234567890/5")).toMatchObject({ status: "linked", author: "rules" })
+    expect(status("https://t.me/book_club")).toMatchObject({ status: "linked" })
+    expect(status("https://t.me/book_club")?.target).toMatch(/^chat:/)
+    const invite = status("https://t.me/joinchat/AbCdEf")
+    expect(invite?.status).toBe("found")
+    await expect(store.confirmMention(OWNER, invite?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(/t\.me/)
+    await store.close()
+  })
+
   it("links an address that already is someone's identity without asking", async () => {
     const { path, store } = await fresh()
     await store.savePeople(OWNER, [{ id: "8", name: "Bo" }])

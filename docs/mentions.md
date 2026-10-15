@@ -92,7 +92,8 @@ tg work mentions reject 12                    # not a phone: an order number
 - **A name is decided where it is written.** «Ольга» in two chats can be two people, so a name is confirmed or
   rejected one mention at a time. `--all-in-chat` decides every undecided «Ольга» of the same chat with it; places
   you or an agent already decided keep their decision.
-- **A link has nothing to be linked to yet.** Reject it if it is not worth keeping.
+- **A Telegram link is linked to its chat or person** when that chat or account is in the store: `t.me/book_club`,
+  `t.me/c/…/5`. Other links have nothing to be linked to yet; reject one if it is not worth keeping.
 - A document is confirmed only when it is in the store; sync it from Drive first.
 
 The store records who decided. When an agent's terminal runs the command (`AI_AGENT` or `CLAUDECODE` is set), the
@@ -149,5 +150,6 @@ log, an error message or a run record. Nothing is fetched from an outside servic
 ## Not yet
 
 - Mentions in notes, Drive documents and mail.
-- Links resolved to a stored chat or document, and a list of sites by number of links.
+- Links to anything but a Telegram chat or account resolved to what they name, and a list of sites by number of
+  links.
 - Names of people the store does not know, and addresses.

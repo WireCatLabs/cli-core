@@ -230,8 +230,9 @@ an index lookup.
 
 1. **1a, 1b — built** (0.264.0 and this release): `mentions list|show|rebuild|confirm|reject`, message text.
    **1c** — organizations own identities: built (store version 11, `organization_identities`).
-   **1d** — fields `phone:`, `email:`, `url:`, `domain:` in `search messages`: built. Still to come: links resolved
-   to stored documents and chats, and `links domains list` (sites by number of links).
+   **1d** — fields `phone:`, `email:`, `url:`, `domain:` in `search messages`: built. Links resolved: a Google
+   document link through its `document` row, a `t.me` link to the stored chat (by username or `t.me/c/<id>`) or the
+   Telegram account it names — built. Still to come: `links domains list` (sites by number of links).
    **1e** — the other texts: file texts and voice transcripts built (store version 10); notes, documents and mail
    to come.
 2. `person-name` for known people (stems against names and aliases); `mentions:<reference>` — built: people met
