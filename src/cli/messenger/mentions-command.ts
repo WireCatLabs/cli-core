@@ -20,7 +20,7 @@ const line = ({ id, kind, value, domain, status, sentAt, locator, field }: Menti
 export const mentionsCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
   const mentions = new Command("mentions").description(
-    "phones, e-mail, links, documents and people's names found in stored messages",
+    "phones, e-mail, links, documents, people's names and addresses found in stored messages",
   )
 
   annotate(mentions.command("list"), {
@@ -110,6 +110,24 @@ export const mentionsCommand = (messenger: Messenger): Command => {
       )
     })
 
+  annotate(mentions.command("places"), { effects: LOCAL_READ, examples: [`${tool} mentions places`] })
+    .description("confirmed addresses, in every account, most mentioned first; `mentions confirm <id>` adds one")
+    .option("--limit <n>", "how many to show", positiveCount("--limit"))
+    .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
+    .action(async function (this: Command) {
+      const context = messengerContext(this, messenger)
+      const places = await context.withServices((services) => services.mentions.places(window(context.settings)))
+      renderAnswer(
+        this,
+        context,
+        pagedList("mentions places", context.settings, {
+          items: places.items.map(snakeKeys),
+          has_more: places.hasMore,
+        }),
+        () => places.items.map(({ id, address, mentions }) => `${id}  ${address}  ${mentions} mentioned\n`).join(""),
+      )
+    })
+
   annotate(mentions.command("show"), { effects: LOCAL_READ, examples: [`${tool} mentions show 12`] })
     .description("one mention, the text around it, and how many other places hold its value")
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
@@ -137,12 +155,12 @@ export const mentionsCommand = (messenger: Messenger): Command => {
   })
     .summary("say what a mention is, everywhere its value is written")
     .description(
-      "say what a mention is: a phone's owner everywhere it is written, the stored document, who a name means",
+      "say what a mention is: a phone's owner everywhere it is written, the stored document, who a name means, an address as a place",
     )
     .argument("<id>", "the mention's id, from mentions list", positiveCount("<id>"))
     .argument(
       "[person]",
-      "person:<uid> or organization:<id> that owns the phone or the address; person:<uid> a name means; a document needs none",
+      "person:<uid> or organization:<id> that owns the phone or the e-mail address; person:<uid> a name means; a document or a street address needs none",
     )
     .option("--all-in-chat", "a name: also every undecided place of the same name in its chat")
     .option("--as-owner", "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")

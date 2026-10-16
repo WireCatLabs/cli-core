@@ -109,7 +109,7 @@ describe("mentions", () => {
     expect((await chat("mentions", "list", "--json")).stderr).not.toContain("mentions rebuild")
     const names = await chat("mentions", "rebuild", "person-name", "--json")
     expect(names.code, names.stderr).toBe(0)
-    expect((await chat("mentions", "rebuild", "place")).code).not.toBe(0)
+    expect((await chat("mentions", "rebuild", "vehicle")).code).not.toBe(0)
   })
 
   it("refuses a kind it does not know and a mention of nothing, and lists its fields in help", async () => {

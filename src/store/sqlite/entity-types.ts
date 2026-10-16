@@ -25,6 +25,7 @@ export const ENTITY_TABLES = {
   note: "notes",
   organization: "organizations",
   person: "persons",
+  place: "places",
   project: "projects",
   tag: "tags",
   task: "tasks",

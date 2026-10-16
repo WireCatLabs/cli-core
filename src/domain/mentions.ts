@@ -3,8 +3,9 @@ import { domainToUnicode } from "node:url"
 import psl from "psl"
 import { googleDocumentId, trimUrl } from "./google-documents.js"
 import { DEFAULT_PHONE_COUNTRIES, nationalPhone } from "./phones.js"
+import { findPlaces } from "./places.js"
 
-export const MENTION_KINDS = ["phone", "email", "url", "document", "person-name"] as const
+export const MENTION_KINDS = ["phone", "email", "url", "document", "person-name", "place"] as const
 export type MentionKind = (typeof MENTION_KINDS)[number]
 
 /** Who decides, and for a name whether every undecided place of it in the same chat follows. */
@@ -19,7 +20,8 @@ export const MENTION_VERSIONS: Record<MentionKind, number> = {
   email: 1,
   url: 2,
   document: 1,
-  "person-name": 1,
+  "person-name": 2,
+  place: 1,
 }
 
 // Paths of t.me that are not a chat or a person: invites, stickers, proxies, the instant view.
@@ -191,13 +193,17 @@ const phones = (text: string, urlSpans: FoundMention[], countries: readonly stri
   return found
 }
 
-/** Every phone, e-mail address, link and Google document in the text, in the order they are written. */
+/** Every phone, e-mail address, link, Google document and address in the text, in the order they are written. */
 export const findMentions = (text: string, { phoneCountries = DEFAULT_PHONE_COUNTRIES }: PhoneOptions = {}) => {
   const mail = emails(text)
   const links = urls(text).filter((url) => !mail.some((one) => url.start < one.end && url.end > one.start))
-  return [...mail, ...links, ...phones(text, [...links, ...mail], phoneCountries)].sort(
-    (a, b) => a.start - b.start || a.end - b.end,
+  const places = findPlaces(text)
+    .filter((place) => ![...mail, ...links].some((one) => place.start < one.end && place.end > one.start))
+    .map((place): FoundMention => ({ kind: "place", ...place, domain: null }))
+  const numbers = phones(text, [...links, ...mail], phoneCountries).filter(
+    (phone) => !places.some((place) => phone.start < place.end && phone.end > place.start),
   )
+  return [...mail, ...links, ...numbers, ...places].sort((a, b) => a.start - b.start || a.end - b.end)
 }
 
 // A mail link with a query or a long opaque token is mostly a one-off tracking redirect: hundreds of thousands per

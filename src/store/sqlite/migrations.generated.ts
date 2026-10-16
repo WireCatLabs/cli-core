@@ -483,5 +483,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `tasks` ADD `close_suggested_at` integer;",
       "CREATE INDEX `tasks_by_close_suggested_by_type_close_suggested_by_id` ON `tasks` (`close_suggested_by_type`,`close_suggested_by_id`);"
     ]
+  },
+  {
+    "name": "20261016205235_version-18-places",
+    "statements": [
+      "CREATE TABLE `places` (\n\t`id` integer PRIMARY KEY,\n\t`address` text NOT NULL,\n\t`folded` text NOT NULL UNIQUE,\n\t`author` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL\n);"
+    ]
   }
 ]

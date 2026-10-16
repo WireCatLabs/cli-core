@@ -109,7 +109,9 @@ export const sourceMentionStoreOver = (context: StoreContext): SourceMentionStor
   const located = (id: number, mail: readonly { provider: string; account: string }[]): LocatedMention => {
     const found = find(id, mail)
     if (!found) throw new CliError("not_found", `no mention ${id} in a document, a note or this mail`)
-    return { id, kind: String(found.row.kind) as MentionKind, value: String(found.row.value), chat: null }
+    const { row } = found
+    const written = String(row.text).slice(Number(row.start_offset), Number(row.end_offset))
+    return { id, kind: String(row.kind) as MentionKind, value: String(row.value), chat: null, written }
   }
   return {
     list: async (source, query, { limit, offset }, mail) => {

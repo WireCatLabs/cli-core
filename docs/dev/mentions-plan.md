@@ -241,8 +241,13 @@ an index lookup.
    the written name plus up to three letters of ending; a rule link only to the one fitting person who wrote in the
    chat; `mentions rebuild <kind>`. Builds of 0.264–0.270 delete a text's `person-name` rows when they read it
    again (they deleted every kind); from this one, a build keeps the kinds it does not know.
-3. Unknown names and `place`, with `places`; precision measured on a labelled sample of the owner's chats
-   (results private, totals to cli-testing).
+3. Unknown names and `place`, with `places` — built (store version 18). The owner chose (NEED-1383–1385): names and
+   places together; addresses of Europe, the United Kingdom and the United States; a small labelled sample. Chosen
+   in the build, open to the owner: Russian addresses count as European; both kinds are read in every source, mail
+   included; `places` keeps a confirmed address only — no coordinates and no `places add|show`, an address enters
+   by `mentions confirm`. Names and places go to people and organizations through `links` later. Precision on 30
+   names (15 from chats, 15 from mail) and 30 addresses, mostly from mail, which holds almost all of them (results
+   private, totals to cli-testing).
 
 ## Tests
 

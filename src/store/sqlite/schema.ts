@@ -264,6 +264,16 @@ export const organizations = sqliteTable("organizations", {
   deletedAt: integer("deleted_at"),
 })
 
+/** An address as a record of its own: a `place` mention once confirmed, found again by its folded form. */
+export const places = sqliteTable("places", {
+  id: integer("id").primaryKey(),
+  address: text("address").notNull(),
+  folded: text("folded").notNull().unique(),
+  author: text("author").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+})
+
 /** An identity an organization owns; apart from `identity_links`, so one identity can be someone's and an organization's. */
 export const organizationIdentities = sqliteTable(
   "organization_identities",

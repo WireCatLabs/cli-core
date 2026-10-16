@@ -2574,6 +2574,29 @@
         }
       }
     },
+    "mentions places": {
+      "in": [],
+      "planned": {
+        "max": "mentions (docs/dev/mentions-plan.md)",
+        "tg": "mentions (docs/dev/mentions-plan.md)"
+      },
+      "options": {
+        "--limit": {
+          "in": [],
+          "planned": {
+            "max": "mentions (docs/dev/mentions-plan.md)",
+            "tg": "mentions (docs/dev/mentions-plan.md)"
+          }
+        },
+        "--page": {
+          "in": [],
+          "planned": {
+            "max": "mentions (docs/dev/mentions-plan.md)",
+            "tg": "mentions (docs/dev/mentions-plan.md)"
+          }
+        }
+      }
+    },
     "mentions rebuild": {
       "in": [],
       "planned": {

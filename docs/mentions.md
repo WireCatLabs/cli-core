@@ -1,7 +1,7 @@
 # Mentions: phones, addresses, links, documents and names in your messages
 
 The store reads every message it keeps and notes what is written in it: phone numbers, e-mail addresses, links,
-Google documents and the names of people you know. Each one is a **mention**. A mention says where it was
+Google documents, names of people and street addresses. Each one is a **mention**. A mention says where it was
 written and what it is in a single form, so `+7 900 000-00-01` and `89000000001` are one number.
 
 Questions it answers:
@@ -10,6 +10,7 @@ Questions it answers:
 - Every link to one site, `docs.google.com` and `drive.google.com` together.
 - Which messages talk about Ольга, also when she is written «Ольге» or «Ольгу»?
 - Which chats mention this document?
+- Which letters give this street address, also written «C/ Colón 5» or «Calle Colón, 5»?
 
 Everything stays on your computer. Mentions are found by rules, not by a model, and nothing is sent anywhere.
 The examples use `tg`; `max` has the same commands.
@@ -88,6 +89,8 @@ tg work mentions confirm 12 organization:3    # this number is the company's
 tg work mentions confirm 15                   # a document link: the stored document
 tg work mentions confirm 31 person:7          # this «Ольга» is person 7
 tg work mentions confirm 31 person:7 --all-in-chat  # every undecided «Ольга» of that chat
+tg work mentions confirm 40                   # a street address: a place of its own
+tg work mentions places                       # the confirmed addresses, most mentioned first
 tg work mentions reject 12                    # not a phone: an order number
 ```
 
@@ -100,6 +103,8 @@ tg work mentions reject 12                    # not a phone: an order number
 - **A Telegram link is linked to its chat or person** when that chat or account is in the store: `t.me/book_club`,
   `t.me/c/…/5`. Other links have nothing to be linked to yet; reject one if it is not worth keeping.
 - A document is confirmed only when it is in the store; sync it from Drive first.
+- **A street address becomes a place.** Confirm it with no person: the store keeps it as a place, every mention
+  of the same address follows, and later ones are linked by themselves.
 
 The store records who decided. When an agent's terminal runs the command (`AI_AGENT` or `CLAUDECODE` is set), the
 decision is the agent's; `--as-owner` records it as yours.
@@ -108,7 +113,8 @@ Some mentions are linked without you:
 
 - a phone or an address that already belongs to someone in your contacts;
 - a Google document that is in the store;
-- a name, when exactly one person with that name wrote in that chat.
+- a name, when exactly one person with that name wrote in that chat;
+- an address that is already a confirmed place.
 
 ## Names
 
@@ -120,6 +126,21 @@ lists.
 A name is a word that starts with a capital letter and has at least four letters. Short words such as «Или»
 and «Ира» are skipped: in Russian they are more often ordinary words than names. Two names of one person in a
 row are one full name: «Аркадию Смирнову».
+
+Names of people the store does not know are found too, and wait for you: a common first name in any case
+(«Ольге», «Sarah»), a patronymic («Мамедович»), and the surname or second name beside them («Ольга Смирнова»,
+«John Smith»). A first name that is also a word — «Вера», «Надежда», «Grace», «Rosa» — counts only next to a
+second name. They are never linked by the rules: `mentions show` and `confirm` say who it is.
+
+## Addresses
+
+A street address is a street word next to a name and a house number: «ул. Ленина, д. 5», «Невский проспект 28»,
+«Calle Mayor, 12», «12 rue de la Paix», «Via Roma 10», «Hauptstraße 5», «221B Baker Street», «1600 Amphitheatre
+Parkway». Addresses in Russia, the rest of Europe, the United Kingdom and the United States are read. A number
+alone, a price or a postcode never makes an address. The mention takes the rest of the address — the flat, the
+postcode, the city, the region and the country, also from the next lines of a signature — and a confirmed place keeps it all. Matching uses the
+street and the house: «C/ Colón 5» and «Calle Colón, 5, 46004 Valencia» are one address, `calle colón 5`. Two
+streets of the same name in two cities are one address too, for now.
 
 ## Read what is already stored
 
@@ -159,4 +180,5 @@ log, an error message or a run record. Nothing is fetched from an outside servic
   mail, a tracking link (a query string or a long code in its path) is kept once per letter as its site; `url:` and
   `link:` still find the letter by that link, from its text.
 - Links to anything but a Telegram chat or account resolved to what they name.
-- Names of people the store does not know, and addresses.
+- Places other than street addresses: a city, a building's name, a place said in words.
+- An address's coordinates: nothing is looked up on a map.

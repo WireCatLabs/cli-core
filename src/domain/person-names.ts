@@ -1,4 +1,5 @@
 import type { Stemmer } from "../search/stem.js"
+import { FIRST_NAMES, NAME_WORDS, NOT_NAMES } from "./first-names.js"
 
 /** A person the store knows, with every name it was seen under: its own, its accounts' and its aliases. */
 export interface KnownPerson {
@@ -142,6 +143,91 @@ export const findNames = (text: string, index: NameIndex): FoundName[] => {
     }
     found.push({ start, end, value: key, people: [...bearers], confidence: 0.6 })
     previous = { start, end, key, bearers }
+  }
+  return found
+}
+
+// Case endings a Russian first name takes once its final vowel is dropped: Ольга → Ольге, Дмитрий → Дмитрию.
+const ENDINGS = ["а", "я", "у", "ю", "е", "и", "ы", "ой", "ей", "ом", "ем", "ою", "ею", "ью", "ий", "ия", "ию", "ием"]
+// Only real case endings: «Отлично», «Логично» and «Безусловно» end like a patronymic's stem, not its endings.
+const PATRONYMIC = /^\p{Lu}\p{Ll}+(?:(?:ов|ев)ич(?:а|у|ем|е)?|ьич(?:а|у|ом|ём|е)?|(?:ов|ев|ич)н(?:а|ы|е|у|ой|ою))$/u
+const SENTENCE_START = /(?:^|[.!?…\n]\s*)$/u
+// Russian surnames by their endings, in any case: Иванов, Петровой, Смирнову, Шевченко, Сухишвили.
+const SURNAME = /^\p{Lu}\p{Ll}+(?:ов|ев|ёв|ин|ын|ск|цк|енко|ук|юк|ян|дзе|швили)\p{Ll}{0,3}$/u
+const CYRILLIC_WORD = /^\p{Script=Cyrillic}+$/u
+
+type Role = "first" | "word" | "patronymic"
+let forms: Map<string, Role> | undefined
+
+const formsOf = (name: string): string[] => {
+  const lower = name.toLowerCase()
+  if (!CYRILLIC_WORD.test(lower)) return [lower, `${lower}'s`]
+  const base = lower.replace(/(?:ий|[аяйьо])$/u, "")
+  return [lower, ...ENDINGS.map((ending) => base + ending)]
+}
+
+/** Every written form of a listed first name, and whether it is also an ordinary word (Вера, Grace). */
+const nameForms = (): Map<string, Role> => {
+  if (forms) return forms
+  forms = new Map()
+  for (const name of FIRST_NAMES) for (const form of formsOf(name)) forms.set(form, "first")
+  for (const name of NAME_WORDS) for (const form of formsOf(name)) forms.set(form, "word")
+  for (const word of NOT_NAMES) forms.delete(word)
+  return forms
+}
+
+const roleOf = (word: string): Role | undefined =>
+  PATRONYMIC.test(word) ? "patronymic" : nameForms().get(word.toLowerCase())
+
+/**
+ * Names of people the store does not know, by rule: a listed first name, a patronymic, and the surname or second
+ * name beside them. A first name that is also a word (Вера, Grace) counts only with a neighbour. Never linked by
+ * rule; they wait for review.
+ */
+export const findUnknownNames = (
+  text: string,
+  stem: Stemmer,
+  taken: readonly { start: number; end: number }[],
+): FoundName[] => {
+  const words = [...text.matchAll(WORD)]
+    .map((match) => ({ text: match[0], start: match.index, end: match.index + match[0].length }))
+    .filter((word) => !taken.some((one) => word.start < one.end && word.end > one.start))
+  const adjacent = (a: number, b: number) => {
+    const left = words[a]
+    const right = words[b]
+    return left !== undefined && right !== undefined && text.slice(left.end, right.start) === " "
+  }
+  const found: FoundName[] = []
+  for (let at = 0; at < words.length; at++) {
+    const role = roleOf((words[at] as { text: string }).text)
+    if (role === undefined) continue
+    let first = at
+    let last = at
+    const cyrillic = CYRILLIC_WORD.test((words[at] as { text: string }).text)
+    if (role === "patronymic") {
+      // A patronymic alone is too often a word; the name before it counts unless it only opens a sentence
+      // («Спасибо Ивановичу»).
+      const before = words[at - 1]
+      if (!before || !adjacent(at - 1, at)) continue
+      if (roleOf(before.text) !== "first" && SENTENCE_START.test(text.slice(0, before.start))) continue
+      first = at - 1
+    } else {
+      if (cyrillic && adjacent(at - 1, at) && SURNAME.test(words[at - 1]?.text ?? "")) first = at - 1
+      if (adjacent(last, last + 1) && PATRONYMIC.test(words[last + 1]?.text ?? "")) last += 1
+      const next = words[last + 1]?.text ?? ""
+      const surname = cyrillic ? SURNAME.test(next) : !CYRILLIC_WORD.test(next) && roleOf(next) === undefined
+      if (last - first < 2 && adjacent(last, last + 1) && surname) last += 1
+    }
+    if (first === last && role === "word") continue
+    const span = words.slice(first, last + 1)
+    found.push({
+      start: (span[0] as { start: number }).start,
+      end: (span.at(-1) as { end: number }).end,
+      value: span.map((word) => stem.stemToken(word.text)).join(" "),
+      people: [],
+      confidence: first === last ? 0.4 : 0.5,
+    })
+    at = last
   }
   return found
 }
