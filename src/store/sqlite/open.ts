@@ -12,6 +12,8 @@ export interface OpenedSqlite {
 /** What each query module of the store takes: the connection seen both ways, and the clock. */
 export interface StoreContext extends OpenedSqlite {
   now: () => number
+  /** The owner's shared config file, whose `task_categories` edits the store's list; none in a bare context. */
+  sharedConfig?: string
 }
 
 /**

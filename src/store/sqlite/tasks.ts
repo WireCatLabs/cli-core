@@ -11,13 +11,19 @@ import {
   type TaskStore,
 } from "../../tasks/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import { taskCategoriesReader } from "../shared-config.js"
 import { actorOfOrigin, originOfActor } from "./actors.js"
 import { folded } from "./folded.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { type TaskSimilarity, taskSimilarityOver } from "./task-candidates.js"
-import { saveTaskCategories, storeTaskCategories, unlistedTaskCategories } from "./task-category-settings.js"
+import {
+  savedTaskCategories,
+  saveTaskCategories,
+  storeTaskCategories,
+  unlistedTaskCategories,
+} from "./task-category-settings.js"
 import { CLEAR_SUGGESTION, type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
 import { type TaskCloseStore, taskCloseOver } from "./task-close-store.js"
 import { inboxKey, typedKey } from "./task-keys.js"
@@ -36,9 +42,13 @@ export interface StoreTaskStore
     TaskSimilarity,
     TaskPairs,
     TaskCloseStore {
-  /** The task categories `config set task_categories.*` saved, or the default list: one per store. */
+  /** The default list (or one an older build saved here) with the shared config file's `task_categories` edits. */
   categories(): Promise<readonly TaskCategory[]>
-  /** `undefined` goes back to the default list. */
+  /** The shared config file whose `task_categories` edits the list. */
+  categoriesFile(): string | undefined
+  /** The list an older build saved in the store, if any. */
+  savedCategories(): Promise<TaskCategory[] | undefined>
+  /** The list an older build saved in the store; `undefined` drops it. The shared config file holds edits now. */
   saveCategories(categories: readonly TaskCategory[] | undefined): Promise<void>
   /** Categories tasks carry that the list no longer holds, across the store. */
   unlistedCategories(): Promise<UnlistedCategory[]>
@@ -119,6 +129,8 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     return row
   }
 
+  const edited = context.sharedConfig ? taskCategoriesReader(context.sharedConfig) : undefined
+  const listOf = () => (edited ? edited(storeTaskCategories(database)) : storeTaskCategories(database))
   const similarity = taskSimilarityOver(context)
   return {
     ...workTasksOver(context),
@@ -126,9 +138,11 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     ...taskPairsOver(context, similarity),
     ...taskCloseOver(context),
     rowOf: (id) => taskRowOf(database, id),
-    categories: async () => storeTaskCategories(database),
+    categories: async () => listOf(),
+    savedCategories: async () => savedTaskCategories(database),
+    categoriesFile: () => context.sharedConfig,
     saveCategories: async (categories) => write(database, () => saveTaskCategories(database, categories, now())),
-    unlistedCategories: async () => unlistedTaskCategories(database),
+    unlistedCategories: async () => unlistedTaskCategories(database, listOf()),
     query: async (account, where, { limit, offset }) => {
       const project = inbox(account, false)
       if (project === undefined) return []

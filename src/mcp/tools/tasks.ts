@@ -41,7 +41,7 @@ const ahead = (what: string) =>
       v.pipe(v.string(), v.minLength(1), v.description(`${what}: an ISO 8601 time or 2h, 3d from now; null clears it`)),
     ),
   )
-// The owner may edit the list (config set task_categories.*), so the store checks the name, not a picklist here.
+// The owner edits the list (the shared config file, or config set task_categories.*), so the store checks the name.
 // Names only: with each meaning the default list is ~1.9k characters in two tool schemas; tasks_categories has them.
 const category = text(
   30,
@@ -342,9 +342,10 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Task categories",
       description:
         "The categories a task takes, with what each means and the words a rule picks it by. The owner edits the list " +
-        "(config set task_categories.<name>); tasks_add and tasks_plan refuse a name not on it. `unlisted` names the " +
+        "in `file` (its task_categories section) or with config set task_categories.<name>; tasks_add and tasks_plan " +
+        "refuse a name not on it. `unlisted` names the " +
         "categories tasks still carry after they left the list; tasks_plan moves such a task to a listed one. " +
-        "Returns { item: { categories: [{ name, meaning, triggers }], unlisted: [{ name, open, total }] } }.",
+        "Returns { item: { categories: [{ name, meaning, triggers }], unlisted: [{ name, open, total }], file } }.",
       input: v.object({}),
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account, _args, defaults) => {
@@ -353,6 +354,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         return itemOf({
           categories: list.map(({ name, meaning, triggers }) => ({ name, meaning, triggers })),
           unlisted: await service.unlistedCategories(),
+          file: (await service.categoriesFile()) ?? null,
         })
       },
     }),

@@ -14,6 +14,13 @@ import { DEFAULT_STEMMERS, parseStemmers, type Stemmers } from "../search/stem.j
 import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
 import {
+  applyTaskCategoryEdits,
+  editsFrom,
+  readTaskCategoryEdits,
+  sharedConfigPath,
+  writeTaskCategoryEdits,
+} from "../store/shared-config.js"
+import {
   accountGroupsOf,
   DEFAULT_AGENT_CLOSE,
   openStore,
@@ -107,9 +114,13 @@ const changePhoneCountries = async (app: AppIdentity, env: NodeJS.ProcessEnv, va
   }
 }
 
+/** Category edits live in the shared config file; a list an older build saved in the store moves there first. */
 const changeCategory = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
   const store = await openStore({ env })
+  const file = sharedConfigPath(storePath(env), env)
   try {
+    const legacy = await store.tasks.savedCategories()
+    const edits = { ...(legacy ? editsFrom(legacy) : {}), ...readTaskCategoryEdits(file) }
     if (setting === TASK_CATEGORIES) {
       if (value !== undefined)
         throw new CliError(
@@ -117,29 +128,36 @@ const changeCategory = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting:
           `set one category at a time: config set ${CATEGORY_PREFIX}<name> "<meaning> | <words>"; ` +
             `config unset ${TASK_CATEGORIES} goes back to the default list`,
         )
-      await store.tasks.saveCategories(undefined)
+      writeTaskCategoryEdits(file, undefined)
+      if (legacy) await store.tasks.saveCategories(undefined)
       const unlisted = unlistedNote(await store.tasks.unlistedCategories(), app.command)
       return {
         result: {
           store: storePath(env),
-          scope: "store",
+          file,
+          scope: "shared",
           setting,
           value: DEFAULT_TASK_CATEGORIES.map(({ name }) => name),
         },
-        note: ["store-wide — the default task categories again; tasks keep the category they have", ...unlisted].join(
-          "\n",
-        ),
+        note: [
+          `the default task categories again (${TASK_CATEGORIES} removed from ${file}); tasks keep the category they have`,
+          ...unlisted,
+        ].join("\n"),
       }
     }
-    const name = setting.slice(CATEGORY_PREFIX.length)
+    const name = setting.slice(CATEGORY_PREFIX.length).trim().toLowerCase()
     const next = withTaskCategory(await store.tasks.categories(), name, value)
-    await store.tasks.saveCategories(next)
-    const set = next.find((one) => one.name === name.trim().toLowerCase())
+    const set = next.find((one) => one.name === name)
+    if (set) edits[name] = taskCategoryValue(set)
+    else if (DEFAULT_TASK_CATEGORIES.some((one) => one.name === name)) edits[name] = null
+    else delete edits[name]
+    writeTaskCategoryEdits(file, edits)
+    if (legacy) await store.tasks.saveCategories(undefined)
     const unlisted = unlistedNote(await store.tasks.unlistedCategories(), app.command)
     return {
-      result: { store: storePath(env), scope: "store", setting, value: set ? taskCategoryValue(set) : null },
+      result: { store: storePath(env), file, scope: "shared", setting, value: set ? taskCategoryValue(set) : null },
       note: [
-        "store-wide — rules, tasks add and tasks plan in tg, MAX and memo take categories from this list; " +
+        `saved in ${file} — rules, tasks add and tasks plan in tg, MAX and memo take categories from it; ` +
           "tasks keep the category they have",
         ...unlisted,
       ].join("\n"),
@@ -199,6 +217,31 @@ const changeGroup = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: st
   }
 }
 
+/** Each category as `config show` lists it, and where it comes from: the shared file, an older store's list, the default. */
+const categoryRows = (saved: readonly TaskCategory[] | undefined, file: string) => {
+  let edits: ReturnType<typeof readTaskCategoryEdits>
+  try {
+    edits = readTaskCategoryEdits(file)
+  } catch (error) {
+    return [
+      {
+        setting: TASK_CATEGORIES,
+        value: null,
+        from: `${file} unreadable: ${(error as Error).message}`,
+        scope: "shared",
+      },
+    ]
+  }
+  const base = saved ?? DEFAULT_TASK_CATEGORIES
+  const list = edits ? applyTaskCategoryEdits(base, edits, file) : base
+  return list.map((category) => ({
+    setting: `${CATEGORY_PREFIX}${category.name}`,
+    value: taskCategoryValue(category),
+    from: edits && category.name in edits ? file : saved ? "store" : "default",
+    scope: "shared",
+  }))
+}
+
 /** For `config show`: reads the file as it is — never creates, migrates or unseals it to say the defaults apply. */
 export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   const path = storePath(env)
@@ -248,12 +291,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
           from: phoneCountries ? "store" : "default",
           scope: "store",
         },
-    ...(unreadable ? [] : (categories ?? DEFAULT_TASK_CATEGORIES)).map((category) => ({
-      setting: `${CATEGORY_PREFIX}${category.name}`,
-      value: taskCategoryValue(category),
-      from: categories ? "store" : "default",
-      scope: "store",
-    })),
+    ...(unreadable ? [] : categoryRows(categories, sharedConfigPath(path, env))),
     ...(unreadable
       ? []
       : [
