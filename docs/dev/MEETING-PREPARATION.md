@@ -57,7 +57,7 @@ additional meetings are returned newest first, with ID ties descending and indep
 The service reads cited cues without refreshing the derived search index. If there are no included
 exact-series anchors, related history remains unqueried. When it is queried, person-history and
 project-wide coverage are replaced in `unqueried` by the narrower `person-nonmeeting-context` and `project-nonmeeting-context` gaps;
-project-alias candidates always remain unqueried. This covers related meeting transcripts, not
+project-alias candidates retain their broad unqueried marker because selecting one project cannot discover every possible project. This covers related meeting transcripts, not
 mail, messages or every source about a person. The optional notes section below adds a bounded subset of owner notes. The result is a factual context bundle for an agent, not an AI-generated summary.
 Stored facts and task provenance do not establish that their underlying evidence still holds.
 
@@ -135,6 +135,45 @@ custom host pages, refuses duplicates and byte overflows, and propagates read/ca
 Notes use the remaining output budget after accepted facts and meeting evidence. Public normalization
 trims notes first, then accepted knowledge, related meetings and exact history; truncation stays visible.
 
+### Word evidence for a selected project
+
+The optional `project` request names one existing project by name, key or explicit alias. Hosts
+opt in with `projectDiscovery: { vocabulary, search }`, the same narrow ports used by
+`readMeetingProjectDiscovery`. A requested project without those ports fails before the upcoming
+provider read. Omitting `project` preserves the previous reads and answer shape.
+
+Preparation searches the selected account across `[historyAfter, after)`, including other series
+and unlinked meetings. It does not infer which project the upcoming call concerns. `projectEvidence`
+contains up to four consecutive discovery pages, each with at most `min(contextLimit, 20)` hits.
+Pages retain the exact matched canonical name, key or alias, canonical project, vocabulary
+fingerprint, cue/meeting reference, excerpt, offset and source meeting title. Titles are provenance,
+not a separate title-matching lane. All matches remain `unconfirmed-word-evidence`; they neither
+confirm membership nor feed the accepted project/fact/note sections.
+
+A page may be empty and still have continuation. Multiple names may cite the same passage; these
+are repeated word matches, not independent corroboration, and each page retains the existing
+`may-repeat-between-terms` coverage. Four pages can stop within one name lane. The vocabulary
+fingerprint and frozen account/history selection bind every cursor; changes fail rather than
+silently advancing. Name resolution permits at most 32 distinct names and refuses excess names.
+There is no index refresh: pending indexing and unknown archive/index completeness remain visible.
+
+Each page performs one vocabulary read and one word read, both capped by `maxReadBytes`. The
+additional run therefore allows at most eight such bounded reads (at most eight times that byte
+limit); row limits do not bound SQL scan/sort work. Errors and cancellation propagate.
+
+Public `project_evidence.pages` reuse the registered project-evidence item schema.
+`project_evidence.continuation`, when present, names `meetings projects evidence` with `project`,
+absolute frozen `query`, `cursor`, `limit` and `max_read_bytes`. Continue with that command or its
+`meeting_project_evidence` MCP tool instead of fetching the upcoming schedule again. A null cursor
+means restart the first page: omit `--cursor` / `cursor` in that case. Continuation remains available
+after an empty page. The standalone command uses its normal vocabulary-read budget.
+
+Candidate pages are the first data removed under SDK, public normalization or escaped MCP output
+limits, before notes, accepted knowledge or meeting evidence. Trimming rewinds continuation to the
+last retained page (or the start); it never skips omitted hits. If even section metadata cannot fit,
+the section is absent and overall `outputLimited` remains true. The broad unqueried marker remains:
+this optional selection does not search all project vocabularies or nonmeeting communications.
+
 Defaults: five exact-series history meetings and up to five related meetings, ten cues per occurrence, twenty entries per context category,
 256 KiB stored text per read and 64 KiB for the serialized result. Hard limits are twenty meetings,
 one hundred cues, one hundred context entries per category, 4 MiB stored text per read and 4 MiB
@@ -167,14 +206,14 @@ because a participant, project alias or meeting title looks similar.
 ## Shared CLI and MCP adapters
 
 `addMeetingPreparationCommand(program, { read, output, signal, now? })` mounts `meetings prepare
-<series-id>` under an existing meetings group. Options are `--since-time`, `--before-time`, `--history-since-time`,
+<series-id>` under an existing meetings group. Options include `--project` for the optional selected-project evidence and `--since-time`, `--before-time`, `--history-since-time`,
 `--meetings`, `--cues`, `--context-limit`, `--max-read-bytes` and `--bytes`. Time options take valid ISO
 instants with an explicit zone. The default window starts at the injected clock, ends seven days
 later and reads thirty days of history before its start. The answer retains absolute normalized
 windows for replay. Limits use the SDK's shared bounds and defaults.
 
 `callMeetingPreparationTool(read, args, signal?, failure?, now?)` implements `meeting_prepare`.
-Arguments use `series_id`, `after`, `until`, `history_after`, `meetings`, `cues`, `context_limit`,
+Arguments use `series_id`, optional `project`, `after`, `until`, `history_after`, `meetings`, `cues`, `context_limit`,
 `max_read_bytes` and `bytes`. The handler refuses unknown fields by name before calling `read`;
 caller-controlled accounts, providers and credentials are never arguments. JSON Schema advertises
 integer ranges and disallows additional properties. All failures retain the shared error envelope.
@@ -187,7 +226,7 @@ The public item uses snake_case keys, string IDs, ISO timestamps and `ref` for c
 Cue `offset_ms` is relative to its meeting. Its strict entity schema includes every coverage field;
 no source packet is replaced with an unchecked record. Evidence `content_bytes` counts its public
 cue array. The item's `limits.bytes` bounds its JSON representation, excluding the outer envelope;
-normalization removes trailing related entries before exact-series entries to keep that bound,
+normalization removes project-evidence pages, notes, accepted knowledge and trailing related entries before exact-series entries to keep that bound,
 reporting `output_limited`. Related public fields are `anchors`, `items`, `has_more`, `output_limited`
 and `selection`; each item contains `ref`, `meeting`, `evidence`, `shared_person` and `shared_project`.
 MCP reapplies the same item budget after making hidden/control characters visible. It recalculates

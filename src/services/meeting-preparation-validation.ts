@@ -25,6 +25,7 @@ export const validateMeetingPreparationRequest = (externalId: string, original: 
   for (const key of Object.keys(input))
     if (
       ![
+        "project",
         "after",
         "until",
         "historyAfter",
@@ -47,6 +48,14 @@ export const validateMeetingPreparationRequest = (externalId: string, original: 
       throw new CliError("validation_error", `${key} must be an integer from ${limits.min} to ${limits.max}`)
     return result
   }
+  if (
+    input.project !== undefined &&
+    (typeof input.project !== "string" ||
+      !input.project.trim() ||
+      input.project.length > 200 ||
+      /[\p{Cc}\p{Cf}]/u.test(input.project))
+  )
+    throw new CliError("validation_error", "project must name one existing project, key or alias")
   const meetings = bounded("meetings")
   const cues = bounded("cues")
   const contextLimit = bounded("contextLimit")

@@ -25,6 +25,7 @@ export const addMeetingPreparationCommand = (
       .command("prepare")
       .argument("<series-id>", "exact provider series ID")
       .description("prepare cited context for one upcoming series")
+      .option("--project <project>", "include unconfirmed word evidence for one existing project name, key or alias")
       .option("--since-time <time>", "window start as ISO timestamp with zone (default now)")
       .option("--before-time <time>", "exclusive window end as ISO timestamp (default seven days after start)")
       .option("--history-since-time <time>", "history start as ISO timestamp (default thirty days before start)")
@@ -39,6 +40,7 @@ export const addMeetingPreparationCommand = (
             deps.read,
             {
               series_id: seriesId,
+              project: options.project,
               after: options.sinceTime,
               until: options.beforeTime,
               history_after: options.historySinceTime,

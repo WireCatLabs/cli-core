@@ -1,5 +1,6 @@
 import { isoTime, reference } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
+import { meetingProjectEvidence } from "../meetings/project-evidence-answer.js"
 import {
   preparationCount as count,
   preparationId as id,
@@ -96,6 +97,24 @@ export const meetingPreparation = v.strictObject({
         source_evidence: v.literal("not-revalidated"),
         other_sources: v.literal("not-queried"),
       }),
+    }),
+  ),
+  project_evidence: v.optional(
+    v.strictObject({
+      project: v.string(),
+      query: v.string(),
+      pages: v.array(meetingProjectEvidence),
+      continuation: v.nullable(
+        v.strictObject({
+          command: v.literal("meetings projects evidence"),
+          project: v.string(),
+          query: v.string(),
+          cursor: v.nullable(v.string()),
+          limit: count,
+          max_read_bytes: count,
+        }),
+      ),
+      coverage: v.strictObject({ page_limit: count, has_more: v.boolean(), output_limited: v.boolean() }),
     }),
   ),
   limits: v.strictObject({ meetings: count, cues: count, context_limit: count, max_read_bytes: count, bytes: count }),

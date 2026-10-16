@@ -23,6 +23,7 @@ shape of this file.
 - **A confirmed address becomes a place** (store version 18, table `places`): `mentions confirm <id>` with no
   person keeps it, every mention of the same address follows, and later ones are linked by the rules.
   `mentions places` lists the places, most mentioned first.
+- Meeting preparation accepts an optional existing project name, key or alias and includes up to four bounded, cited word-evidence pages in the selected account/history window. Matches remain unconfirmed; resumable continuation and index coverage stay visible, with no writes or automatic project inference. Hosts opt into the shared discovery ports; requests without a project retain their previous behavior.
 
 ## 0.307.0 — 17.10.2026
 

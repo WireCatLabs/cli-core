@@ -1,7 +1,7 @@
 # Project-word evidence interface
 
 The SDK's `readMeetingProjectDiscovery` and shared CLI/MCP adapters implement this interface.
-Hosts opt into the exports below; it is not mounted in a released application yet.
+Hosts opt into these exports. Meeting preparation can reuse the same reader for one explicitly selected project; see [preparation](MEETING-PREPARATION.md#word-evidence-for-a-selected-project).
 
 ## Commands and scope
 
