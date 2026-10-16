@@ -621,8 +621,10 @@ const emailWhere = (filter: EmailFilter): [string, SqlValue[]] => {
   }
   if (filter.mailbox !== undefined)
     add(
-      `e.id IN (SELECT m.email_id FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
-         WHERE b.external_id = ? AND b.account_id = e.account_id)`,
+      // Per email through the (email_id, mailbox_id) key: an IN over the account's membership rows is correlated by
+      // the account, so SQLite ran it again for every email, minutes on a mailbox of 250k.
+      `EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
+         WHERE m.email_id = e.id AND b.external_id = ? AND b.account_id = e.account_id)`,
       filter.mailbox,
     )
   if (filter.since !== undefined) add("coalesce(e.received_at, e.sent_at) >= ?", filter.since)

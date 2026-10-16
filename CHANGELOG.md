@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`mail.emails` and `mail.emailRefs` with a `mailbox` filter answer in seconds on a large mailbox.** The filter was
+  run again for every email: over 4.5 minutes on 257,000 emails (memo mail status never finished), 7.5 seconds now.
+
 ### Added
 
 - **`@wirecat/cli-core/update`**: `appUpdate({ packageName, command, version, entry, statePath, enabled, offVariables })`
