@@ -27,12 +27,51 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     },
   },
   {
-    name: "bills",
-    meaning: "a recurring bill: utilities, phone, internet, a subscription",
+    name: "investments",
+    meaning: "stocks, funds, crypto, a broker",
     triggers: {
-      en: ["utility", "utilities", "electricity", "subscription", "renewal", "heating"],
-      ru: ["коммуналка", "коммунальные", "электричество", "газ", "квитанция", "показания", "подписка", "абонентская"],
-      es: ["recibo", "recibos", "suministro", "suministros", "suscripción", "electricidad"],
+      en: [
+        "invest",
+        "investment",
+        "investments",
+        "stocks",
+        "broker",
+        "brokerage",
+        "portfolio",
+        "crypto",
+        "etf",
+        "dividend",
+        "dividends",
+      ],
+      ru: ["инвестиции", "инвестировать", "брокер", "облигации", "портфель", "крипта", "криптовалюта", "дивиденды"],
+      es: ["inversión", "invertir", "bróker", "dividendos", "cripto", "bolsa"],
+    },
+  },
+  {
+    name: "subscriptions",
+    meaning: "a service subscription to start, cancel or renew",
+    triggers: {
+      en: ["subscription", "subscriptions", "subscribe", "unsubscribe", "renewal", "membership", "trial"],
+      ru: ["подписка", "подписку", "абонентская", "абонемент", "продление"],
+      es: ["suscripción", "suscribirse", "renovación", "membresía"],
+    },
+  },
+  {
+    name: "bills",
+    meaning: "a recurring bill: utilities, phone, internet",
+    triggers: {
+      en: ["utility", "utilities", "electricity", "heating"],
+      ru: ["коммуналка", "коммунальные", "электричество", "газ", "квитанция", "показания"],
+      es: ["recibo", "recibos", "suministro", "suministros", "electricidad"],
+    },
+  },
+  {
+    name: "donations",
+    meaning: "a donation, a fundraiser, a charity",
+    triggers: {
+      en: ["donate", "donation", "donations", "charity", "fundraiser", "crowdfunding", "patreon"],
+      ru: ["пожертвование", "пожертвовать", "благотворительность", "донат", "фонд"],
+      es: ["donación", "donar", "benéfico", "beneficencia", "ong"],
     },
   },
   {
@@ -51,6 +90,15 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
       en: ["bank", "banking", "card", "iban", "swift", "wire", "overdraft"],
       ru: ["банк", "карта", "карту", "реквизиты", "выписка", "iban", "swift"],
       es: ["banco", "tarjeta", "iban", "swift"],
+    },
+  },
+  {
+    name: "civic",
+    meaning: "voting, a petition, a census, jury duty, the local council",
+    triggers: {
+      en: ["vote", "voting", "election", "elections", "petition", "census", "jury", "ballot"],
+      ru: ["выборы", "голосование", "проголосовать", "петиция", "перепись", "депутат"],
+      es: ["elecciones", "votar", "votación", "censo", "referéndum"],
     },
   },
   {
@@ -130,6 +178,15 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     },
   },
   {
+    name: "security",
+    meaning: "a hacked account, a scam, 2FA, a leak or breach",
+    triggers: {
+      en: ["hacked", "hack", "scam", "phishing", "breach", "2fa", "malware", "fraud", "spam"],
+      ru: ["взлом", "взломали", "мошенники", "мошенничество", "фишинг", "утечка", "спам"],
+      es: ["hackeado", "estafa", "fraude", "phishing", "suplantación"],
+    },
+  },
+  {
     name: "access",
     meaning: "a login, password, key, invite or permission to give or get",
     triggers: {
@@ -162,12 +219,57 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     },
   },
   {
-    name: "content",
-    meaning: "posts, articles, videos, designs to make or review",
+    name: "media",
+    meaning: "the press, a journalist, a podcast or an interview for the media",
     triggers: {
-      en: ["article", "blog", "video", "newsletter", "draft", "mockup", "mockups", "design", "brand", "logo"],
-      ru: ["пост", "блог", "видео", "ролик", "макет", "макеты", "черновик"],
-      es: ["artículo", "publicación", "vídeo", "video", "borrador", "diseño"],
+      en: ["press", "journalist", "podcast", "media"],
+      ru: ["журналист", "пресса", "сми", "подкаст", "интервью", "редакция"],
+      es: ["prensa", "periodista", "podcast", "entrevistarte"],
+    },
+  },
+  {
+    name: "marketing",
+    meaning: "campaigns, ads, SEO, newsletters, social media",
+    triggers: {
+      en: ["marketing", "campaign", "ads", "advertising", "seo", "promo", "newsletter", "instagram"],
+      ru: ["маркетинг", "реклама", "рекламу", "таргет", "кампания", "рассылка", "продвижение"],
+      es: ["marketing", "campaña", "publicidad", "anuncio", "anuncios", "boletín"],
+    },
+  },
+  {
+    name: "design",
+    meaning: "UI, mockups, a logo or a brand to design or review",
+    triggers: {
+      en: ["design", "designer", "mockup", "mockups", "logo", "brand", "branding", "figma", "wireframe", "ui", "ux"],
+      ru: ["дизайн", "дизайнер", "макет", "макеты", "логотип", "фигма", "брендинг"],
+      es: ["diseño", "diseñador", "logotipo", "maqueta", "marca"],
+    },
+  },
+  {
+    name: "research",
+    meaning: "research, a survey, an analysis or a benchmark",
+    triggers: {
+      en: ["research", "survey", "benchmark", "analysis", "experiment", "dataset"],
+      ru: ["исследование", "опрос", "бенчмарк", "эксперимент", "датасет"],
+      es: ["investigación", "encuesta", "experimento"],
+    },
+  },
+  {
+    name: "content",
+    meaning: "posts, articles, videos to write, film or review",
+    triggers: {
+      en: ["article", "blog", "video", "draft", "copywriting"],
+      ru: ["пост", "блог", "видео", "ролик", "черновик"],
+      es: ["artículo", "publicación", "vídeo", "video", "borrador"],
+    },
+  },
+  {
+    name: "vendors",
+    meaning: "a supplier, contractor or agency you pay for a service",
+    triggers: {
+      en: ["vendor", "vendors", "supplier", "suppliers", "contractor", "freelancer", "agency", "outsourcing"],
+      ru: ["поставщик", "подрядчик", "фрилансер", "агентство", "исполнитель"],
+      es: ["proveedor", "proveedores", "contratista", "agencia"],
     },
   },
   {
@@ -189,22 +291,37 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     },
   },
   {
-    name: "health",
-    meaning: "doctors, prescriptions, medicines, sport",
+    name: "pets",
+    meaning: "a pet: the vet, food, a sitter, walks",
     triggers: {
-      en: [
-        "doctor",
-        "dentist",
-        "clinic",
-        "hospital",
-        "prescription",
-        "pharmacy",
-        "medicine",
-        "medicines",
-        "gym",
-        "workout",
-        "vitamins",
-      ],
+      en: ["pet", "pets", "vet", "dog", "cat", "puppy", "kitten", "grooming"],
+      ru: ["ветеринар", "ветклиника", "собака", "собаку", "кошка", "кот", "щенок", "котёнок", "груминг"],
+      es: ["veterinario", "perro", "gato", "mascota", "cachorro"],
+    },
+  },
+  {
+    name: "fitness",
+    meaning: "the gym, training, a sport",
+    triggers: {
+      en: ["gym", "workout", "trainer", "yoga", "pilates", "fitness", "marathon", "swimming"],
+      ru: ["спортзал", "тренировка", "тренер", "йога", "фитнес", "бассейн", "пробежка"],
+      es: ["gimnasio", "entrenador", "entrenamiento", "yoga", "pilates", "piscina"],
+    },
+  },
+  {
+    name: "beauty",
+    meaning: "a haircut, nails, cosmetics, a salon",
+    triggers: {
+      en: ["haircut", "hairdresser", "barber", "salon", "manicure", "nails", "cosmetics", "spa"],
+      ru: ["парикмахер", "стрижка", "маникюр", "косметолог", "барбершоп", "салон", "косметика"],
+      es: ["peluquería", "peluquero", "manicura", "uñas", "estética", "cosmética"],
+    },
+  },
+  {
+    name: "health",
+    meaning: "doctors, prescriptions, medicines",
+    triggers: {
+      en: ["doctor", "dentist", "clinic", "hospital", "prescription", "pharmacy", "medicine", "medicines", "vitamins"],
       ru: [
         "врач",
         "стоматолог",
@@ -217,11 +334,9 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
         "рецепт",
         "аптека",
         "анализы",
-        "спортзал",
-        "тренировка",
         "витамины",
       ],
-      es: ["médico", "dentista", "clínica", "hospital", "receta", "farmacia", "medicamento", "gimnasio"],
+      es: ["médico", "dentista", "clínica", "hospital", "receta", "farmacia", "medicamento"],
     },
   },
   {
@@ -231,6 +346,33 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
       en: ["course", "lesson", "tutor", "university", "exam", "homework", "study"],
       ru: ["курсы", "урок", "репетитор", "университет", "экзамен", "учёба", "лекция", "книга"],
       es: ["curso", "universidad", "examen", "libro", "idioma"],
+    },
+  },
+  {
+    name: "celebrations",
+    meaning: "a birthday, wedding, anniversary or holiday to plan or mark",
+    triggers: {
+      en: ["birthday", "anniversary", "christmas", "celebration", "celebrate"],
+      ru: ["рождения", "свадьба", "юбилей", "годовщина", "праздник", "праздновать"],
+      es: ["cumpleaños", "boda", "aniversario", "navidad", "celebrar", "celebración"],
+    },
+  },
+  {
+    name: "childcare",
+    meaning: "a nanny, a babysitter, kindergarten, kids' clubs",
+    triggers: {
+      en: ["nanny", "babysitter", "babysitting", "kindergarten", "daycare", "nursery"],
+      ru: ["няня", "садик", "детсад", "кружок", "продлёнка"],
+      es: ["niñera", "guardería", "canguro", "extraescolares"],
+    },
+  },
+  {
+    name: "elder-care",
+    meaning: "care for an older relative: a carer, a care home",
+    triggers: {
+      en: ["carer", "caregiver", "eldercare", "elderly"],
+      ru: ["сиделка", "пансионат", "пожилой", "пожилых"],
+      es: ["cuidadora", "cuidador", "geriátrico", "mayores"],
     },
   },
   {
@@ -274,6 +416,24 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     },
   },
   {
+    name: "real-estate",
+    meaning: "buying, selling or letting a property; a mortgage",
+    triggers: {
+      en: ["mortgage", "property", "realtor", "tenant", "tenants"],
+      ru: ["ипотека", "недвижимость", "риелтор", "риэлтор", "арендатор", "арендаторы"],
+      es: ["hipoteca", "inmobiliaria", "inmueble", "compraventa", "tasación", "inquilino"],
+    },
+  },
+  {
+    name: "moving",
+    meaning: "moving house: movers, boxes, a new address",
+    triggers: {
+      en: ["movers", "relocation", "relocate", "removals"],
+      ru: ["переезд", "переехать", "переезжаем", "грузчики"],
+      es: ["mudanza", "mudarse", "mudanzas"],
+    },
+  },
+  {
     name: "home",
     meaning: "the flat: repairs, rent, the landlord, neighbours",
     triggers: {
@@ -305,21 +465,8 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
         "этаж",
         "коридор",
         "жильцы",
-        "переезд",
-        "роутер",
       ],
-      es: [
-        "piso",
-        "alquiler",
-        "casero",
-        "fontanero",
-        "avería",
-        "vecinos",
-        "portal",
-        "reforma",
-        "calefacción",
-        "mudanza",
-      ],
+      es: ["piso", "alquiler", "casero", "fontanero", "avería", "vecinos", "portal", "reforma", "calefacción"],
     },
   },
   {
@@ -332,12 +479,39 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     },
   },
   {
+    name: "devices",
+    meaning: "a phone, laptop or gadget to buy, fix or set up",
+    triggers: {
+      en: ["laptop", "iphone", "smartphone", "printer", "router", "charger", "headphones", "macbook", "gadget"],
+      ru: ["ноутбук", "смартфон", "айфон", "принтер", "роутер", "зарядка", "наушники", "макбук", "гаджет"],
+      es: ["portátil", "impresora", "cargador", "auriculares", "router", "smartphone"],
+    },
+  },
+  {
+    name: "food",
+    meaning: "groceries, cooking, a restaurant",
+    triggers: {
+      en: ["groceries", "restaurant", "cook", "cooking", "recipe", "takeaway"],
+      ru: ["продукты", "ресторан", "столик", "готовить", "кулинария"],
+      es: ["restaurante", "comida", "cocinar", "mercadona"],
+    },
+  },
+  {
     name: "shopping",
     meaning: "things to buy",
     triggers: {
-      en: ["buy", "purchase", "shop", "shopping", "groceries"],
+      en: ["buy", "purchase", "shop", "shopping"],
       ru: ["купить", "покупка", "магазин"],
       es: ["comprar", "compra", "tienda", "supermercado"],
+    },
+  },
+  {
+    name: "hobbies",
+    meaning: "a hobby: music, photography, crafts, a game you play",
+    triggers: {
+      en: ["hobby", "guitar", "piano", "photography", "painting", "knitting", "fishing", "chess"],
+      ru: ["хобби", "гитара", "фортепиано", "рисование", "фотография", "рыбалка", "шахматы"],
+      es: ["afición", "guitarra", "piano", "fotografía", "pintura", "pesca", "ajedrez"],
     },
   },
   {
@@ -353,30 +527,18 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     name: "events",
     meaning: "an event, tickets, a venue, an RSVP",
     triggers: {
-      en: [
-        "event",
-        "tickets",
-        "ticket",
-        "rsvp",
-        "venue",
-        "conference",
-        "festival",
-        "party",
-        "reservation",
-        "restaurant",
-      ],
-      ru: [
-        "мероприятие",
-        "билеты",
-        "конференция",
-        "фестиваль",
-        "свадьба",
-        "вечеринка",
-        "праздник",
-        "ресторан",
-        "столик",
-      ],
-      es: ["evento", "entradas", "boda", "fiesta", "congreso", "conferencia", "restaurante"],
+      en: ["event", "tickets", "ticket", "rsvp", "venue", "conference", "festival", "party", "reservation"],
+      ru: ["мероприятие", "билеты", "конференция", "фестиваль", "вечеринка"],
+      es: ["evento", "entradas", "fiesta", "congreso", "conferencia"],
+    },
+  },
+  {
+    name: "religion",
+    meaning: "church, a service, a religious holiday or rite",
+    triggers: {
+      en: ["church", "mosque", "synagogue", "temple", "prayer", "priest", "baptism"],
+      ru: ["церковь", "храм", "батюшка", "молитва", "крещение", "литургия"],
+      es: ["iglesia", "misa", "parroquia", "bautizo", "sacerdote"],
     },
   },
   {
@@ -455,6 +617,15 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     },
   },
   {
+    name: "admin",
+    meaning: "office admin: supplies, errands, paperwork with no closer area",
+    triggers: {
+      en: ["admin", "paperwork", "errand", "errands", "stationery", "supplies"],
+      ru: ["канцелярия", "канцтовары", "поручение", "бумажки"],
+      es: ["papeleo", "recado", "recados", "gestiones"],
+    },
+  },
+  {
     name: "meeting",
     meaning: "a call, meeting or appointment to arrange or attend",
     triggers: {
@@ -521,9 +692,9 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
     name: "personal",
     meaning: "friends, gifts, favours",
     triggers: {
-      en: ["friend", "friends", "gift", "favour", "favor", "birthday"],
-      ru: ["подруга", "подарок", "просьба", "рождения", "друзья"],
-      es: ["amigo", "amiga", "regalo", "favor", "cumpleaños"],
+      en: ["friend", "friends", "gift", "favour", "favor"],
+      ru: ["подруга", "подарок", "просьба", "друзья"],
+      es: ["amigo", "amiga", "regalo", "favor"],
     },
   },
   { name: "other", meaning: "none of the above", triggers: { en: [], ru: [], es: [] } },
@@ -533,7 +704,7 @@ export const FALLBACK_CATEGORY = "other"
 
 const LANGUAGES = ["en", "ru", "es"] as const
 const NAME = /^[a-z][a-z0-9-]{0,29}$/
-const MAX_CATEGORIES = 60
+const MAX_CATEGORIES = 80
 
 /**
  * One category as `config set task_categories.<name>` takes it: `<meaning> | <words>`. A word may say its language

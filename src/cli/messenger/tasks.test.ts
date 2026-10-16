@@ -219,7 +219,7 @@ describe("tasks", () => {
     )
     expect(
       (await call("tasks", "add", PROMISE, "--type", "promise", "--category", "finance", "--json")).stderr,
-    ).toContain("--category takes taxes, bills, insurance, bank, government, legal, hiring, sales,")
+    ).toContain("--category takes taxes, investments, subscriptions, bills, donations, insurance, bank,")
     expect((await call("tasks", "close", "nope", "--as", "done", "--json")).code).toBe(6)
 
     const readOnly = await setup({ profiles: { default: { permissions: { tasks: "readonly" } } } })

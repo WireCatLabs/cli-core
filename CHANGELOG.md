@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **23 more default task categories, 59 in all.** `investments`, `subscriptions`, `donations`, `civic`, `security`,
+  `media`, `marketing`, `design`, `research`, `vendors`, `pets`, `fitness`, `beauty`, `celebrations`, `childcare`,
+  `elder-care`, `real-estate`, `moving`, `devices`, `food`, `hobbies`, `religion`, `admin`. Some trigger words moved
+  to the narrower name: `gym` from `health` to `fitness`, `subscription` from `bills` to `subscriptions`, `logo` and
+  `mockup` from `content` to `design`, `birthday` from `personal` to `celebrations`, `restaurant` from `events` to
+  `food`, `переезд` from `home` to `moving`. A list now holds up to 80 categories (was 60). A store that saved its
+  own list keeps it; `config unset task_categories` takes the new default. On the cli-testing set the rule's
+  category is right 60% of the time against labels in the 59 names (58% for the 36 against theirs); the duplicate
+  check's precision is unchanged (cli-testing `performance/tasks/categories`).
+
 ### Fixed
 
 - **Spanish trigger words now match the other forms of a word.** A rule's category stemmed every Latin word with

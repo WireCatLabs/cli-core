@@ -94,16 +94,20 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
   task_categories.<name>`, back to the default with `config unset task_categories`. It is a `store_settings` row,
   not a profile setting: the rules run in tg, max, memo and `sync` and must agree, and a profile's config schema
   refuses unknown sections. `other` cannot be removed. A store that saved its own list keeps it; `config unset
-  task_categories` takes the default again. Up to 60 categories.
-- **Default list** (ruled 2026-10-16, `DEFAULT_TASK_CATEGORIES`), in the order a tie is resolved: `taxes`, `bills`,
-  `insurance`, `bank`, `government`, `legal`, `hiring`, `sales`, `partners`, `support`, `access`, `tech`,
-  `content`, `car`, `travel`, `health`, `education`, `family`, `home`, `delivery`, `shopping`, `entertainment`,
-  `events`, `community`, `intro`, `money`, `documents`, `meeting`, `clients`, `projects`, `team`, `follow-up`,
-  `reply`, `work`, `personal`, `other`. Narrow first, the generic actions (`money`, `documents`, `meeting`) after
-  them, `work` and `personal` last, so a tie never falls to a broad category. The seven names before it keep their
-  meaning, so stored tasks stay valid. Rule accuracy on the cli-testing duplicate set: 58% against labels in this
-  list (the old seven: 26%); for a rule's tasks the duplicate check's precision at maybe ≥ 5 rises from 67% to 75%
-  with recall unchanged (cli-testing `performance/tasks/categories`).
+  task_categories` takes the default again. Up to 80 categories.
+- **Default list** (ruled 2026-10-16: 36 names, then the 23 of NEED-1351 added), in the order a tie is resolved:
+  `taxes`, `investments`, `subscriptions`, `bills`, `donations`, `insurance`, `bank`, `civic`, `government`,
+  `legal`, `hiring`, `sales`, `partners`, `support`, `security`, `access`, `tech`, `media`, `marketing`, `design`,
+  `research`, `content`, `vendors`, `car`, `travel`, `pets`, `fitness`, `beauty`, `health`, `education`,
+  `celebrations`, `childcare`, `elder-care`, `family`, `real-estate`, `moving`, `home`, `delivery`, `devices`,
+  `food`, `shopping`, `hobbies`, `entertainment`, `events`, `religion`, `community`, `intro`, `money`, `documents`,
+  `admin`, `meeting`, `clients`, `projects`, `team`, `follow-up`, `reply`, `work`, `personal`, `other`. Narrow
+  first, the generic actions (`money`, `documents`, `meeting`) after them, `work` and `personal` last, so a tie
+  never falls to a broad category; what a message is about yields to what it asks (`delivery` before `devices`).
+  Meal words (`lunch`, `ужин`) are not `food` triggers: "lunch on Wednesday?" is a meeting. Rule accuracy on the
+  cli-testing duplicate set: 60% against labels in these 59 names (36 names: 58%; the old seven: 26%); for a
+  rule's tasks the duplicate check's precision at maybe ≥ 5 is 75% with recall 70% (cli-testing
+  `performance/tasks/categories`).
 - **An agent must name a category** (`tasks add --category money`); an unknown one is refused with the list, so
   "finance", "payments" and "деньги" never coexist. `tasks categories` prints the list with meanings.
 - **A rule picks the category** by matching the source message's stems against each category's trigger stems;
