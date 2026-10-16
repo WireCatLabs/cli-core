@@ -7,6 +7,29 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`@wirecat/cli-core/update`**: `appUpdate({ packageName, command, version, entry, statePath, enabled, offVariables })`
+  gives an app its installer, npm's latest version, the update run and the daily "a newer version exists" line —
+  one helper for the copies tg, max and memo keep in `src/update.ts`. The installer is read from the app's own entry
+  file, and a setting that cannot be read turns the check off.
+- **`writeFileAtomic` and `acquireLock` in `./files`**: a write that a reader sees whole or not at all (synced, then
+  renamed into place, or linked so an existing file is kept), with a last check before it takes the path; and a lock
+  built on the native writer lease that clears a dead local holder, refuses a live one with `file.locked`, and
+  answers `held()` before each write it guards.
+- `./services` exports the `TaskCard` and `ClosedTask` types beside `tasksService`.
+
+### Changed — may break callers
+
+- **The store's messaging methods are reached through areas.** `MessageStore`'s flat methods moved into `accounts`,
+  `chats`, `sync`, `messages`, `attachments`, `roster`, `people`, `conversations`, `vectors`, `counters`, `tags`,
+  `mentions`, `searches`, `queries` and `searchIndex`, beside `mail`, `notes` and the other areas. Names are unchanged,
+  so a call gains its area: `store.saveMessages(key, …)` is `store.messages.saveMessages(key, …)`, and on
+  `forAccount(key)` `bound.messages(chat, …)` is `bound.messages.messages(chat, …)`. No aliases. The area of each
+  method is in `src/store/store.ts`; the narrow ports `PersonMeetingReadStore` (`people: { personByUid,
+  personSeenInAccounts }`), `MeetingTaskStore` and `MeetingContextServiceStore` (`accounts: { storedAccount }`)
+  follow. The store's schema and version do not change.
+
 ### Fixed
 
 - A config file from an older version now reports the renamed key first (`clientId is an unknown setting; rename it to client_id`) instead of the missing new key, which said nothing about how to fix the file.
