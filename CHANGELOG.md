@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`mail.markRestored(accountId, externalIds, now)` clears the deleted mark of emails brought back at the source**
+  and recounts their threads. A mail cleanup that moves an email back out of Gmail's Trash calls it, so the email is
+  live in the store again without a listing that reaches back to its date. It does not bring back text, so pass only
+  emails that held none.
+
 ## 0.300.0 — 16.10.2026
 
 ### Changed — may break callers

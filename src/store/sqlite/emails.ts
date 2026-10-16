@@ -284,6 +284,11 @@ export interface MailStore {
   ): Promise<number>
   /** Marks emails gone at the source and drops their text; saving one again brings it back. Answers how many changed. */
   markDeleted(accountId: number, externalIds: string[], now: number): Promise<number>
+  /**
+   * Clears the deleted mark of emails brought back at the source. Their text is not restored, so pass only emails
+   * that held none (envelopes); a whole email comes back when the next listing that sees it saves it again.
+   */
+  markRestored(accountId: number, externalIds: string[], now: number): Promise<number>
   /** Every word of the query, as a prefix, in the subject or body; newest first. */
   search(query: string, filter?: Omit<EmailFilter, "includeDeleted">): Promise<Email[]>
   /** Text pieces of live emails with no vector of `model`, by content hash, for an embedder to fill. */
@@ -881,6 +886,18 @@ export const mailStoreOver = (
           return Number(r.email_thread_id)
         }),
       )
+      for (const id of new Set(threads)) recount(database, id, now)
+      return threads.length
+    })
+  },
+  async markRestored(accountId, externalIds, now) {
+    return write(database, () => {
+      const unmark = database.prepare(
+        `UPDATE emails SET deleted_at = NULL, updated_at = ?
+           WHERE account_id = ? AND external_id = ? AND deleted_at IS NOT NULL
+           RETURNING email_thread_id`,
+      )
+      const threads = externalIds.flatMap((id) => unmark.all(now, accountId, id).map((r) => Number(r.email_thread_id)))
       for (const id of new Set(threads)) recount(database, id, now)
       return threads.length
     })

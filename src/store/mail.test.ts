@@ -101,6 +101,13 @@ describe("mail store", () => {
     await mail.markDeleted(1, ["<first@example.com>"], 9000)
     expect(await mail.threads()).toEqual([])
     expect((await mail.threads({ includeDeleted: true }))[0]?.deletedAt).toBe(9000)
+
+    expect(await mail.markRestored(1, ["<first@example.com>", "<unknown@example.com>"], 10_000)).toBe(1)
+    expect(await mail.markRestored(1, ["<first@example.com>"], 11_000)).toBe(0)
+    expect((await mail.threads())[0]).toMatchObject({ deletedAt: null, emailsCount: 1 })
+    expect((await mail.emailRefs({ accountId: 1 })).map(({ externalId }) => externalId)).toEqual([
+      "<first@example.com>",
+    ])
   })
 
   it("lists emails by thread, participant, mailbox and received time", async () => {
