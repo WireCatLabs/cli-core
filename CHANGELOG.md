@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.304.0 — 16.10.2026
 
 ### Added
 
@@ -14,11 +14,6 @@ shape of this file.
 ### Fixed
 
 - Preserve known field types in `settingsFor(...).schema` when composing nested configuration. The short-error refactor widened entries to arbitrary keys, preventing consumers from extracting permission schemas and compiling their string setting lists.
-
-## 0.304.0 — 16.10.2026
-
-### Fixed
-
 - **`bin/release` restarts itself once when the release brings a newer `bin/release`**: folding the changelog and
   raising the version both fast-forward `main`, and the shell went on reading the old script from the byte it had
   reached, so the rest of the run was a mix of old and new text. It now starts the new script over with the same
