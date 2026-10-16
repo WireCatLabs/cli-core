@@ -24,6 +24,7 @@ export type {
   Email,
   EmailAddress,
   EmailAttachment,
+  EmailFacts,
   EmailFilter,
   EmailInput,
   EmailInThread,

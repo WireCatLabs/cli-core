@@ -232,6 +232,23 @@ export interface EmailRef {
   mailboxes: { externalId: string; kind: string | null }[]
 }
 
+/** What a mail rule can know of a stored email, without its text: enough to decide a whole mailbox locally. */
+export interface EmailFacts {
+  externalId: string
+  fromAddress: string | null
+  fromName: string | null
+  subject: string | null
+  receivedAt: number | null
+  size: number | null
+  read: boolean
+  flagged: boolean
+  outgoing: boolean
+  listId: string | null
+  /** To and Cc addresses. */
+  recipients: string[]
+  mailboxes: { externalId: string; name: string; kind: string | null }[]
+}
+
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
 export interface MailStore {
   saveThread(input: ThreadSave): Promise<ThreadDetails>
@@ -243,6 +260,8 @@ export interface MailStore {
   emails(filter?: EmailFilter): Promise<Email[]>
   /** Each matching email's Message-ID and mailboxes, without text or people: cheap over a whole mailbox. */
   emailRefs(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailRef[]>
+  /** Each matching email's sender, recipients, list, size, flag and mailboxes, oldest first; no text. */
+  emailFacts(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailFacts[]>
   mailboxes(accountId: number): Promise<Mailbox[]>
   /**
    * Sets each email's membership among the `scanned` mailboxes to the ones it was found in; membership outside
@@ -763,6 +782,35 @@ export const mailStoreOver = (
         externalId: String(row.external_id),
         deleted: Boolean(row.deleted),
         mailboxes: JSON.parse(String(row.boxes)) as EmailRef["mailboxes"],
+      }))
+  },
+  async emailFacts(filter = {}) {
+    const [where, params] = emailWhere(filter)
+    return database
+      .prepare(
+        `SELECT e.external_id, e.from_address, e.from_name, e.subject, coalesce(e.received_at, e.sent_at) AS at, e.size,
+           e.read, e.flagged,
+           e.outgoing, json_extract(e.metadata, '$.listId') AS list_id,
+           (SELECT json_group_array(r.address) FROM email_recipients r
+              WHERE r.email_id = e.id AND r.role IN ('to', 'cc')) AS recipients,
+           (SELECT json_group_array(json_object('externalId', b.external_id, 'name', b.name, 'kind', b.kind))
+              FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id WHERE m.email_id = e.id) AS boxes
+         FROM emails e WHERE ${where} ORDER BY at, e.id`,
+      )
+      .all(...params)
+      .map((row) => ({
+        externalId: String(row.external_id),
+        fromAddress: str(row.from_address),
+        fromName: str(row.from_name),
+        subject: str(row.subject),
+        receivedAt: row.at === null ? null : Number(row.at),
+        size: row.size === null ? null : Number(row.size),
+        read: Boolean(row.read),
+        flagged: Boolean(row.flagged),
+        outgoing: Boolean(row.outgoing),
+        listId: str(row.list_id),
+        recipients: JSON.parse(String(row.recipients)) as string[],
+        mailboxes: JSON.parse(String(row.boxes)) as EmailFacts["mailboxes"],
       }))
   },
   async mailboxes(accountId) {
