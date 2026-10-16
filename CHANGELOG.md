@@ -13,6 +13,15 @@ shape of this file.
   resume verified prefixes with the existing transfer service, supplying their own archive layout
   and byte limits. Metadata stays bounded to 16 KiB; cancelled or failed writers close their handles
   without acknowledging completion. Existing archive names and checkpoint bytes can be retained.
+- **Three more `Messenger` flags, each yes when unset: `inviteLinkCreate`, `joinRequestsAll`, `channelComments`.**
+  Set to `false`, the shared commands leave out `chats link create`, the `--all` and `--link` of `chats requests
+  accept` and `decline` (the person becomes required), and `messages send --comment-to`.
+- **`messages delete` takes ids separated by commas as well as spaces.**
+
+### Changed — may break callers
+
+- **`Messenger.topics: false` now also leaves `--topic` out of `messages send`, `chats mark-read` and `polls
+  create`, and `topic:` out of `messages list`.** A CLI no longer has to remove those after building the commands.
 
 ### Fixed
 

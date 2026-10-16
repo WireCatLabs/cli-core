@@ -14,6 +14,16 @@ export const HISTORY_QUERY = defineQuery({
   ],
 })
 
+const UNTOPICAL_HISTORY_QUERY = defineQuery({
+  entity: "message",
+  backend: "native",
+  fields: HISTORY_QUERY.fields.filter((field) => field.name !== "topic"),
+})
+
+/** The history query of a messenger: without `topic:` where it has no forum topics. */
+export const historyQuery = (messenger: { topics?: boolean }) =>
+  messenger.topics === false ? UNTOPICAL_HISTORY_QUERY : HISTORY_QUERY
+
 const COMMENTS_QUERY = defineQuery({
   entity: "message",
   backend: "native",
