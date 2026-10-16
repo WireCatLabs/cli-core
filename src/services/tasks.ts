@@ -204,6 +204,8 @@ export interface ClosedTask extends TaskView {
 
 export interface TaskCard extends TaskDetails {
   links: ThingLink[]
+  /** Other tasks' relations that point at this one, so a closed task shows the task that follows it up. */
+  linkedFrom: ThingLink[]
 }
 
 /** What waits on the owner, kept in the local store by `src/tasks/`; nothing here reaches the messenger. */
@@ -332,7 +334,11 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
   }
   const cardOf = async (store: MessageStore, id: string): Promise<TaskCard> => {
     const details = await store.tasks.details(id)
-    return { ...details, links: await store.notes.links({ from: details.ref }) }
+    const [links, incoming] = await Promise.all([
+      store.notes.links({ from: details.ref }),
+      store.notes.links({ to: details.ref }),
+    ])
+    return { ...details, links, linkedFrom: incoming.filter((link) => link.from.startsWith("task:")) }
   }
   const planOf = async (store: MessageStore, id: string, plan: TaskPlan, by: TaskOrigin) => {
     if (plan.category !== undefined) plan = { ...plan, category: await categoryOf(store, plan.category) }

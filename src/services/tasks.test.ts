@@ -219,7 +219,10 @@ it("**tasks add follows up a task closed in the last 14 days instead of refusing
     const second = await add("2")
     expect(second).toMatchObject({ created: true, followUpOf: { key: first.key, status: "done" } })
     expect((await tasks.show(second.task.id)).links).toMatchObject([{ kind: "follow-up-of", to: `task:${first.id}` }])
-    expect(await tasks.show(first.id)).toMatchObject({ status: "done" })
+    expect(await tasks.show(first.id)).toMatchObject({
+      status: "done",
+      linkedFrom: [{ kind: "follow-up-of", from: `task:${second.task.id}` }],
+    })
 
     await expect(add("3")).rejects.toMatchObject({
       details: { reason: "task.duplicate-candidates" },

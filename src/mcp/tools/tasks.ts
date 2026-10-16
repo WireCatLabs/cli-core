@@ -33,7 +33,8 @@ const CARD =
   "{ item: { id, ref, key, project, title, description, type, status, priority, parent, source, due_at, " +
   "next_check_at, closed_at, reason, verdict, category, claimed_by, claimed_until, close_certainty, close_suggestion, " +
   "assignments, created_at, updated_at, " +
-  "links: [{ id, from, to, kind, target_text, origin, … }] } }"
+  "links: [{ id, from, to, kind, target_text, origin, … }], " +
+  "linked_from: [{ id, from, to, kind, … }] — other tasks' relations to this one, as a follow-up-of } }"
 const text = (max: number, what: string) => v.pipe(v.string(), v.minLength(1), v.maxLength(max), v.description(what))
 const ahead = (what: string) =>
   v.optional(
