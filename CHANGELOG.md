@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.302.0 — 16.10.2026
+
 ### Changed — may break callers
 
 - **`search notes` takes the note type as the query field `type:` instead of `--type`.** `search notes "chapter
