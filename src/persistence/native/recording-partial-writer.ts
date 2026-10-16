@@ -36,6 +36,7 @@ export const partialWriter = async (input: {
     await file.sync()
     if (!partial.validator || !input.persistent) {
       await syncDirectory(input.root)
+      signal?.throwIfAborted()
       return
     }
     const content = JSON.stringify({ ...partial, offset: size, sha256: hash.copy().digest("hex") })
@@ -53,6 +54,7 @@ export const partialWriter = async (input: {
       await usable()
       await rename(temp, input.metadataPath)
       await syncDirectory(input.root)
+      signal?.throwIfAborted()
     } finally {
       await unlink(temp).catch((error) => {
         if (!missing(error)) throw error
@@ -82,6 +84,7 @@ export const partialWriter = async (input: {
     checkpoint,
     finish: async () => {
       await checkpoint()
+      signal?.throwIfAborted()
       const sha256 = hash.copy().digest("hex")
       input.complete(partial.validator ? { ...partial, offset: size, sha256 } : null)
       return { size, sha256 }
