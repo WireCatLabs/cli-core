@@ -470,8 +470,10 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     } else if (field === "mailbox" || field === "label") {
       fragment = mail
         ? bound(
-            `m.id IN (SELECT em.email_id FROM email_mailboxes em JOIN mailboxes b ON b.id = em.mailbox_id
-               WHERE b.account_id = m.account_id AND (lower(b.external_id) = lower(?) OR lower(b.name) = lower(?)))`,
+            // Not tied to m.account_id: a correlated subquery re-reads every mailbox link for each email (minutes on
+            // 880k links), and an email only ever links to its own account's mailboxes anyway.
+            `m.id IN (SELECT em.email_id FROM email_mailboxes em WHERE em.mailbox_id IN
+               (SELECT b.id FROM mailboxes b WHERE lower(b.external_id) = lower(?) OR lower(b.name) = lower(?)))`,
             value,
             value,
           )
