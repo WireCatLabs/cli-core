@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`mail.emailFacts(filter)`: what a mail rule reads of each stored email, oldest first, without text.** Sender
+  and name, subject, received time, size, read and flagged, outgoing, List-Id, To and Cc addresses, and mailboxes
+  with their names. memo's Gmail cleanup decides a whole mailbox from it locally (257k emails in about a second)
+  instead of re-reading every header from Gmail, which ran into Gmail's IMAP limits.
+
 ## 0.296.0 — 16.10.2026
 
 ### Added

@@ -162,6 +162,37 @@ describe("mail store", () => {
     expect(await mail.emailRefs({ accountId: 1, since: 3200 })).toEqual([])
   })
 
+  it("lists the facts a mail rule reads, oldest first, without text", async () => {
+    const { mail } = await seeded()
+    await mail.saveThread(
+      thread([
+        email({ externalId: "<new@example.com>", receivedAt: 3100 }),
+        email({
+          externalId: "<old@example.com>",
+          receivedAt: 3000,
+          size: 1200,
+          flagged: true,
+          metadata: { listId: "news.example.com" },
+          mailboxes: [{ externalId: "Label_1", name: "Projects", kind: "label" }],
+        }),
+      ]),
+    )
+
+    const [old, recent] = await mail.emailFacts({ accountId: 1 })
+    expect(old).toMatchObject({
+      externalId: "<old@example.com>",
+      receivedAt: 3000,
+      size: 1200,
+      flagged: true,
+      listId: "news.example.com",
+      fromAddress: "alice@example.com",
+      recipients: ["owner@example.com", "bob@example.com"],
+      mailboxes: [{ externalId: "Label_1", name: "Projects", kind: "label" }],
+    })
+    expect(recent?.externalId).toBe("<new@example.com>")
+    expect(recent?.listId).toBeNull()
+  })
+
   it("sets membership only among the scanned mailboxes", async () => {
     const { mail } = await seeded()
     const archive = { externalId: "Archive", name: "Archive", kind: "archive" }
