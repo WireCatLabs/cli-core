@@ -325,6 +325,24 @@ describe("pairs from the cli-testing duplicate set", () => {
     })
   })
 
+  it("scores a Spanish reminder likely when it names the same day another way", () => {
+    const first = task({
+      title: "Enviar a Lucía el informe trimestral",
+      description: "¿Puedes enviarme el informe trimestral el jueves?",
+      person: "person:lucia",
+      category: "documents",
+      createdAt: "2026-10-12T09:00:00.000Z",
+    })
+    const reminder = task({
+      title: "Enviar el informe trimestral a Lucía",
+      description: "No olvides el informe trimestral para mañana",
+      person: "person:lucia",
+      category: "documents",
+      createdAt: "2026-10-14T17:00:00.000Z",
+    })
+    expect(compareTasks(reminder, first)).toMatchObject({ band: "likely", levels: { due: "near" } })
+  })
+
   it("leaves a reply that asks for something new in maybe, not attached", () => {
     const contract = task({
       title: "Send Alice the updated contract",
