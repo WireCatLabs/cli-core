@@ -10,18 +10,20 @@ export const ownedNativeLease = (
   owner: NativeLeaseOwner,
   folder: string,
   identity: BigIntStats,
-): WriterLease => {
+): WriterLease & { held(): Promise<boolean> } => {
   let releasing: Promise<void> | undefined
-  const release = async () => {
-    if (!(await sameOrdinaryFile(path, identity)))
-      throw new CliError("configuration_error", "owned archive lock changed before release")
+  const held = async () => {
+    if (!(await sameOrdinaryFile(path, identity))) return false
     const current = await readLeaseOwner(path, name)
-    if (!current || current.host !== owner.host || current.pid !== owner.pid || current.nonce !== owner.nonce)
-      throw new CliError("configuration_error", "owned archive lock changed before release")
+    return current?.host === owner.host && current.pid === owner.pid && current.nonce === owner.nonce
+  }
+  const release = async () => {
+    if (!(await held())) throw new CliError("configuration_error", "owned archive lock changed before release")
     await unlink(path)
     await rmdir(folder).catch(() => undefined)
   }
   return {
+    held,
     release: () =>
       (releasing ??= release().catch((error) => {
         releasing = undefined
