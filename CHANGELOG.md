@@ -11,6 +11,10 @@ shape of this file.
 
 - Add `NativeRecordingPublication` to `./persistence/native`: host-coded bounded journals, verified no-overwrite publication and scoped interruption recovery, with durable host manifest callbacks.
 
+### Fixed
+
+- Preserve known field types in `settingsFor(...).schema` when composing nested configuration. The short-error refactor widened entries to arbitrary keys, preventing consumers from extracting permission schemas and compiling their string setting lists.
+
 ## 0.304.0 — 16.10.2026
 
 ### Fixed
