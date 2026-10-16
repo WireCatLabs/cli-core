@@ -238,6 +238,7 @@ describe("a reply rule's task", () => {
   it("**reads an English message as English**, so a word on a short Spanish stem fires nothing", () => {
     expect(categorize("update the landing page")).toBe("other")
     expect(categorize("please don't cite me on that")).toBe("other")
+    expect(categorize("ask Al about the landing page, su to root if you must")).toBe("other")
   })
 })
 

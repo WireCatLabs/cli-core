@@ -38,11 +38,7 @@ const stemmersOf = () =>
   })
 
 const SPANISH_LETTERS = /[ñáéíóú¿¡]/u
-const SPANISH_WORDS = new Set(
-  "de del la las el los al lo que por para con una unos unas mi mis tu tus su sus nos hay tengo hola gracias".split(
-    " ",
-  ),
-)
+const SPANISH_WORDS = new Set("de del la las el los que por para una unos unas hay tengo hola gracias".split(" "))
 const readsSpanish = (text: string) =>
   SPANISH_LETTERS.test(text.toLowerCase()) ||
   (text.toLowerCase().match(/\p{L}+/gu) ?? []).some((word) => SPANISH_WORDS.has(word))
