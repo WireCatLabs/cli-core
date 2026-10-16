@@ -151,7 +151,7 @@ const { prepareLucene } = (await import(join(BENCH_DIR, "../../dist/services/mes
 const compiled = async (text: string) => {
   const { execution } = await prepareLucene(store, KEY, { text, language: "lucene", limit: LIMIT }, {})
   const t = performance.now()
-  await store.matchQuery(execution)
+  await store.queries.matchQuery(execution)
   return performance.now() - t
 }
 const timedWords = async (words: string[]) => {
@@ -215,7 +215,7 @@ for (let p = 0; p < (2 * INGEST * ROUNDS) / PAGE; p++) {
   setAnalyzer.run(drain === "on" ? identity : "bench-drain-off")
   const batch = texts.slice(p * PAGE, (p + 1) * PAGE).map((text, i) => message(N + 1 + p * PAGE + i, text))
   const t = performance.now()
-  await store.saveMessages(KEY, "1", batch, { via: "history" })
+  await store.messages.saveMessages(KEY, "1", batch, { via: "history" })
   ingest[drain] += performance.now() - t
   side.exec("DELETE FROM message_stems_pending")
 }

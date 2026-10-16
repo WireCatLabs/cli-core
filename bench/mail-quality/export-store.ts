@@ -27,7 +27,7 @@ const questions = JSON.parse(readFileSync(values.queries, "utf8")) as Question[]
 
 const store = await openStore({ path: copy })
 try {
-  const { id: accountId } = await store.storedAccount({ provider: "email", account: values.account })
+  const { id: accountId } = await store.accounts.storedAccount({ provider: "email", account: values.account })
   const threads = new Map<number, { id: string; subject: string; emails: unknown[] }>()
   for (let offset = 0; ; offset += 500) {
     const page = await store.mail.threads({ accountId, limit: 500, offset })

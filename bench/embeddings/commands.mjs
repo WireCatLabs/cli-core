@@ -55,7 +55,7 @@ if (mode === "setup") {
   const n = Number(rest[0])
   rememberAccount(app, "default", account.account, process.env)
   const store = await openStore({ path: process.env.MESSAGING_STORE })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: CHAT, title: "Bench", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
   const start = Date.parse("2026-01-01T00:00:00Z")
@@ -83,7 +83,7 @@ if (mode === "setup") {
       reactions: null,
     })
     if (batch.length === 10_000 || ids.length === n) {
-      await store.saveMessages(account, CHAT, batch, { via: "history" })
+      await store.messages.saveMessages(account, CHAT, batch, { via: "history" })
       batch = []
     }
     if (ids.length === n) break

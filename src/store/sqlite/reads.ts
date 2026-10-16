@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Attachment, ChatKind, Id, Message, Page, WindowedMessage } from "../../domain/models.js"
-import type { ChatActivity, ChatStats, SenderChatStats } from "../store.js"
+import type { ChatActivity, ChatStats, SenderChatStats } from "../types.js"
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or, type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
 import type { ColumnMap, Where } from "./query-filter.js"

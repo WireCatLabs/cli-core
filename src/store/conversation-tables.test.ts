@@ -42,10 +42,10 @@ const withDatabase = async <T>(path: string, body: (run: (sql: string) => Record
 /** Two messages, the second answering the first, grouped into one conversation of an enabled chat. */
 const conversationIn = async (path: string) => {
   const store = await openStore({ path })
-  await store.saveChats(OWNER, [
+  await store.chats.saveChats(OWNER, [
     { id: "-1", title: "Group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(OWNER, "-1", [message("1"), message("2", "1")], { via: "history" })
+  await store.messages.saveMessages(OWNER, "-1", [message("1"), message("2", "1")], { via: "history" })
   await store.close()
   await withDatabase(path, (run) => {
     run(`INSERT INTO message_links (chat_id, message_id, parent_id, source, kind, confidence, method, created_at, build,updated_at)
@@ -82,7 +82,7 @@ describe("conversation tables (store version 13)", () => {
     })
 
     const store = await openStore({ path })
-    await store.purge(OWNER)
+    await store.accounts.purge(OWNER)
     await store.close()
 
     expect(await counts(path)).toEqual({
@@ -124,7 +124,7 @@ describe("chunk tables (store version 14)", () => {
     })
 
     const store = await openStore({ path })
-    await store.purge(OWNER)
+    await store.accounts.purge(OWNER)
     await store.close()
 
     expect(

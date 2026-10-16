@@ -17,8 +17,8 @@ export const statsStore = async (
   messenger: Saved = {},
 ): Promise<MessageStats> => {
   const stop = Date.now() + SEARCH_FILL_MS
-  await store.fillSearchIndex({ until: () => Date.now() >= stop })
-  await store.fillStems({ until: () => Date.now() >= stop })
+  await store.searchIndex.fillSearchIndex({ until: () => Date.now() >= stop })
+  await store.searchIndex.fillStems({ until: () => Date.now() >= stop })
   return statsLucene(store, account, request, messenger)
 }
 
@@ -45,8 +45,8 @@ const withThreads = async (store: MessageStore, found: SearchFound, request: Sea
 // A large file builds its word index a slice per search as well as in `store migrate` (NEED-453 A).
 export const topUp = async (store: MessageStore) => {
   const stop = Date.now() + SEARCH_FILL_MS
-  await store.fillSearchIndex({ until: () => Date.now() >= stop })
-  await store.fillStems({ until: () => Date.now() >= stop })
+  await store.searchIndex.fillSearchIndex({ until: () => Date.now() >= stop })
+  await store.searchIndex.fillStems({ until: () => Date.now() >= stop })
 }
 
 /** How deep a search pages: each page reads every hit before it again. */

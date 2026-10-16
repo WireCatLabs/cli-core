@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Id, Page } from "../../domain/models.js"
-import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredHit } from "../store.js"
+import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredHit } from "../types.js"
 import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"

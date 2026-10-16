@@ -40,7 +40,7 @@ afterEach(async () => {
 const setup = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "refresh-")), "m.db") })
   stores.push(store)
-  await store.saveChats(
+  await store.chats.saveChats(
     account,
     ["7", "8", "9", "10", "11", "12"].map(
       (id, i): Chat => ({
@@ -53,7 +53,7 @@ const setup = async () => {
       }),
     ),
   )
-  await store.saveMessages(account, "7", [message("7")], { via: "history" })
+  await store.messages.saveMessages(account, "7", [message("7")], { via: "history" })
   const asked: string[] = []
   const markRead = vi.fn(() => {
     throw new Error("must never mark read")
@@ -64,7 +64,7 @@ const setup = async () => {
     history: vi.fn(async (chat: string) => {
       asked.push(chat)
       const items = [message(chat, "2"), message(chat)]
-      await store.saveMessages(account, chat, items, { via: "history" })
+      await store.messages.saveMessages(account, chat, items, { via: "history" })
       return { items, hasMore: false }
     }),
   } as unknown as MessengerAdapter
@@ -155,7 +155,7 @@ describe("bounded search refresh", () => {
 
   it("conversation cross-account refresh reports unconnected accounts", async () => {
     const one = await setup()
-    await one.store.saveAccount({ provider: "test", account: "600" }, { name: "Other" })
+    await one.store.accounts.saveAccount({ provider: "test", account: "600" }, { name: "Other" })
     const answer = await one.services.embeddings.search("chapter", {
       source: "all",
       limit: 20,
@@ -259,10 +259,10 @@ describe("bounded search refresh", () => {
   it("does not fetch another account over the current account's connection", async () => {
     const one = await setup()
     const other = { provider: "test", account: "600" }
-    await one.store.saveChats(other, [
+    await one.store.chats.saveChats(other, [
       { id: "7", title: "Other", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await one.store.saveMessages(other, "7", [message("7", "3")], { via: "history" })
+    await one.store.messages.saveMessages(other, "7", [message("7", "3")], { via: "history" })
     const found = await one.services.messages.search({
       text: "chapter",
       source: "all",
@@ -321,7 +321,7 @@ describe("bounded search refresh", () => {
     one.adapter.history = async (chat) => {
       one.asked.push(chat)
       await vi.advanceTimersByTimeAsync(31)
-      await one.store.saveMessages(account, chat, [message(chat, "2")], { via: "history" })
+      await one.store.messages.saveMessages(account, chat, [message(chat, "2")], { via: "history" })
       return { items: [message(chat, "2")], hasMore: true }
     }
     const result = await refreshSearch(one.deps, {

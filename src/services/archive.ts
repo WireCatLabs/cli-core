@@ -157,21 +157,21 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       const store = await deps.store()
       const account = await deps.account()
       const only = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
-      const stats = await store.chatStats(account, only)
-      return Promise.all(stats.map(async (one) => ({ ...one, held: await store.ranges(account, one.chatId) })))
+      const stats = await store.chats.chatStats(account, only)
+      return Promise.all(stats.map(async (one) => ({ ...one, held: await store.sync.ranges(account, one.chatId) })))
     },
 
-    held: async (chatId) => (await deps.store()).ranges(await deps.account(), chatId),
+    held: async (chatId) => (await deps.store()).sync.ranges(await deps.account(), chatId),
 
-    left: async (options) => (await deps.store()).leftChats(await deps.account(), options),
+    left: async (options) => (await deps.store()).chats.leftChats(await deps.account(), options),
 
     export: async (chat, { since } = {}) => {
       const { store, account, chatId } = await found(chat)
       const window = { limit: Number.MAX_SAFE_INTEGER, ...(since === undefined ? {} : { since }) }
       return {
         account,
-        title: (await store.chatStats(account, chatId))[0]?.title ?? chatId,
-        messages: (await store.messages(account, chatId, window)).items,
+        title: (await store.chats.chatStats(account, chatId))[0]?.title ?? chatId,
+        messages: (await store.messages.messages(account, chatId, window)).items,
       }
     },
 
@@ -180,10 +180,10 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       const account = await deps.account()
       if (chats !== undefined && chats.length > 0) {
         const named = await Promise.all(chats.map((chat) => storedChatId(deps.messenger, chat, store, account)))
-        const titles = new Map((await store.chatStats(account)).map((one) => [one.chatId, one.title]))
+        const titles = new Map((await store.chats.chatStats(account)).map((one) => [one.chatId, one.title]))
         return { account, chats: [...new Set(named)].map((id) => ({ id, title: titles.get(id) ?? null })) }
       }
-      const stored = (await store.chats(account, {})).items
+      const stored = (await store.chats.chats(account, {})).items
       return {
         account,
         chats: stored
@@ -196,8 +196,8 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       const store = await deps.store()
       const account = await deps.account()
       const mark = new Date().toISOString()
-      if (after !== undefined) return { ...(await store.changes(account, chatId, after)), mark }
-      const { items } = await store.messages(account, chatId, { limit: Number.MAX_SAFE_INTEGER })
+      if (after !== undefined) return { ...(await store.messages.changes(account, chatId, after)), mark }
+      const { items } = await store.messages.messages(account, chatId, { limit: Number.MAX_SAFE_INTEGER })
       return { messages: items, deleted: [], mark }
     },
 
@@ -211,12 +211,12 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
         )
       }
       const { store, account, chatId } = await found(chat)
-      const newest = Number((await store.messages(account, chatId, { limit: 1 })).items[0]?.id)
+      const newest = Number((await store.messages.messages(account, chatId, { limit: 1 })).items[0]?.id)
       return {
         chat: chatId,
         ...estimateBackfill({
-          ranges: await store.ranges(account, chatId),
-          held: (await store.chatStats(account, chatId))[0]?.messages ?? 0,
+          ranges: await store.sync.ranges(account, chatId),
+          held: (await store.chats.chatStats(account, chatId))[0]?.messages ?? 0,
           newest: Number.isSafeInteger(newest) ? newest : undefined,
           page: pageSize,
           maxPages: Math.ceil(limit / pageSize),
@@ -425,14 +425,16 @@ export const fetchInto = async ({
     fetched += fresh
     // This run's pages are contiguous, so everything from `low` to its first message is held.
     const coveredFrom = window === undefined ? low : Math.max(window.from, low + (byTime && page.hasMore ? 1 : 0))
-    const held = coveredFrom <= top ? await store.markRange(account, chatId, coveredFrom, top) : { from: low, to: top }
+    const held =
+      coveredFrom <= top ? await store.sync.markRange(account, chatId, coveredFrom, top) : { from: low, to: top }
     if (window !== undefined && (low < window.from || (!byTime && low === window.from))) {
-      await store.markRange(account, chatId, window.from, window.to)
+      await store.sync.markRange(account, chatId, window.from, window.to)
       windowComplete = true
       onPage({ fetched, chatId, oldest: window.from })
       break
     }
-    if (window === undefined && before === undefined) await store.setSyncState(account, fetchedKey(chatId), String(top))
+    if (window === undefined && before === undefined)
+      await store.sync.setSyncState(account, fetchedKey(chatId), String(top))
     onPage({ fetched, chatId, oldest: held.from })
     // Nothing new: by id the messenger ignored `before`; by time a second such page did after the step past.
     // Repeats do not count towards the limit, so without this the run would never end.
@@ -451,7 +453,7 @@ export const fetchInto = async ({
       first.timestamp,
     )
     const fromAt = held.from === low ? oldestAt : await timeOfKey(store, account, chatId, held.from, byTime, oldestAt)
-    if (last !== undefined && (await store.countMessages(account, chatId, { since: fromAt })) >= last) {
+    if (last !== undefined && (await store.messages.countMessages(account, chatId, { since: fromAt })) >= last) {
       reachedLast = true
       break
     }
@@ -466,10 +468,10 @@ export const fetchInto = async ({
     await sleep(wait, undefined, { signal: stop }).catch(() => {})
   }
 
-  const ranges = chatId === undefined ? [] : await store.ranges(account, chatId)
+  const ranges = chatId === undefined ? [] : await store.sync.ranges(account, chatId)
   // What a search says about completeness: a stretch held from the chat's very first message.
   if (reachedStart && chatId !== undefined && ranges[0]) {
-    await store.setSyncState(account, historyStartKey(chatId), String(ranges[0].from))
+    await store.sync.setSyncState(account, historyStartKey(chatId), String(ranges[0].from))
   }
   return {
     chat: chatId ?? null,
@@ -496,16 +498,17 @@ const heldToNewest =
     if (options.window || options.catchUp || options.last !== undefined) return false
     const lastAt = Date.parse(chat.lastMessageAt ?? "")
     if (Number.isNaN(lastAt)) return false
-    const [newest] = (await store.messages(account, chat.id, { limit: 1 }).catch(() => ({ items: [] }))).items
+    const [newest] = (await store.messages.messages(account, chat.id, { limit: 1 }).catch(() => ({ items: [] }))).items
     if (!newest || Date.parse(newest.timestamp) < lastAt) return false
-    const ranges = await store.ranges(account, chat.id)
+    const ranges = await store.sync.ranges(account, chat.id)
     const top = ranges.reduce<Range | undefined>(
       (best, range) => (best && best.to >= range.to ? best : range),
       undefined,
     )
     const key = keyOf(fetching)(newest)
     if (!top || key > top.to || key < top.from) return false
-    if (ranges.length === 1 && (await store.syncState(account, historyStartKey(chat.id))) !== undefined) return true
+    if (ranges.length === 1 && (await store.sync.syncState(account, historyStartKey(chat.id))) !== undefined)
+      return true
     if (options.sinceMs === undefined) return false
     const startedAt = Date.parse(await timeOfKey(store, account, chat.id, top.from, fetching.orderBy === "time", ""))
     return !Number.isNaN(startedAt) && startedAt < options.sinceMs
@@ -521,6 +524,6 @@ const timeOfKey = async (
   fallback: string,
 ): Promise<string> => {
   if (byTime) return new Date(key).toISOString()
-  const [message] = await store.around(account, chatId, String(key), { before: 0, after: 0 }).catch(() => [])
+  const [message] = await store.messages.around(account, chatId, String(key), { before: 0, after: 0 }).catch(() => [])
   return message?.timestamp ?? fallback
 }

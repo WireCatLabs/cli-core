@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../../domain/models.js"
-import type { AgentAnswer, BatchMessage, LinkBatch } from "../store.js"
+import type { AgentAnswer, BatchMessage, LinkBatch } from "../types.js"
 import { type SQL, sql } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
 import { toIso } from "./values.js"

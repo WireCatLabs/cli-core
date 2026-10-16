@@ -33,7 +33,7 @@ it("**documents, notes and mail are read for mentions from version 16**, and reb
   ])
   after.close()
 
-  expect(await upgraded.rebuildMentions()).toMatchObject({ documents: 1, notes: 1, emails: 1, mentions: 3 })
+  expect(await upgraded.mentions.rebuildMentions()).toMatchObject({ documents: 1, notes: 1, emails: 1, mentions: 3 })
   const check = new DatabaseSync(path)
   expect(check.prepare("SELECT source_type, kind, value FROM mentions ORDER BY source_type").all()).toEqual([
     { source_type: "document", kind: "url", value: "https://example.org/a" },
@@ -50,7 +50,7 @@ it("**documents, notes and mail are read for mentions from version 16**, and reb
     value: "8 900 000-00-01",
     span: { start: 0, end: 21 },
   } as unknown as ResolvedNode
-  const mail = await upgraded.matchQuery({
+  const mail = await upgraded.queries.matchQuery({
     root: phone,
     accounts: [{ provider: "email", account: "a@example.com" }],
     limit: 10,

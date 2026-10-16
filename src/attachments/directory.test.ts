@@ -27,7 +27,7 @@ const fixture = async () => {
   const folder = join(root, "files")
   mkdirSync(folder)
   const store = await openStore({ path: join(root, "fixture.db") })
-  await store.saveMessages(owner, "1", [message("1", ["same.txt", "other.txt"]), message("2", ["same.txt"])], {
+  await store.messages.saveMessages(owner, "1", [message("1", ["same.txt", "other.txt"]), message("2", ["same.txt"])], {
     via: "history",
   })
   return { store, folder }
@@ -40,7 +40,7 @@ describe("directory attachment matching", () => {
       writeFileSync(join(folder, "1-1-same.txt"), "first")
       writeFileSync(join(folder, "1-2-other.txt"), "second")
       const paths = await directoryPaths(store.forAccount(owner), "1", folder, app, process.env)
-      const held = await store.attachments(owner, { chatId: "1", limit: 10 })
+      const held = await store.attachments.attachments(owner, { chatId: "1", limit: 10 })
       expect(paths.get(held.find((file) => file.messageId === "1" && file.position === 0)?.pk as number)).toBe(
         join(folder, "1-1-same.txt"),
       )

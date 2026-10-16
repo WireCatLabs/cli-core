@@ -28,7 +28,7 @@ const flush = async (key: string) => {
   const batch = pending.get(key)
   if (!batch?.length) return
   const [provider, chatId] = key.split("\t")
-  await store.saveMessages({ provider, account: "bench" }, chatId, batch, { via: "backfill" })
+  await store.messages.saveMessages({ provider, account: "bench" }, chatId, batch, { via: "backfill" })
   pending.set(key, [])
 }
 

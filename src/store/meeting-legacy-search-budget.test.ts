@@ -14,7 +14,10 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-test-legacy-search-budget-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path } })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "AliceExample" }, { name: "Alice Example" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice Example" },
+  )
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   const saved = await store.meetings.saveMeeting(input)

@@ -85,10 +85,10 @@ if (action === "prepare") {
   mkdirSync(join(data, "agent", split), { recursive: true })
   for (const name of files()) {
     const { store, conversations } = await service(name)
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: CHAT, title: name, kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(account, CHAT, loaded(name).map(toMessage), { via: "history" })
+    await store.messages.saveMessages(account, CHAT, loaded(name).map(toMessage), { via: "history" })
     await conversations.build(CHAT)
     console.log(name, JSON.stringify(await conversations.batchStatus(CHAT, 50)))
     await store.close()

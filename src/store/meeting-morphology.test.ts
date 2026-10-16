@@ -14,8 +14,14 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-test-morphology-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path }, now: () => 1000 })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "AliceExample" }, { name: "Alice Example" })
-  const otherId = await store.saveAccount({ provider: "example", account: "BobSample" }, { name: "Bob Sample" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice Example" },
+  )
+  const otherId = await store.accounts.saveAccount(
+    { provider: "example", account: "BobSample" },
+    { name: "Bob Sample" },
+  )
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   const original = input.transcripts[0].rows[0]
@@ -83,7 +89,7 @@ it("honors none/changed/unknown analyzers, normalizer provenance and cursor bind
   await fill(store, accountId)
   const first = await store.meetings.searchHits("example", { accountId, limit: 1 })
   if (!first.nextCursor) throw new Error("missing synthetic cursor")
-  await store.saveStemmers({ cyrillic: "none", latin: "none" })
+  await store.searchIndex.saveStemmers({ cyrillic: "none", latin: "none" })
   await expect(store.meetings.searchHits("example", { accountId, after: first.nextCursor })).rejects.toMatchObject({
     code: "validation_error",
   })
@@ -91,7 +97,7 @@ it("honors none/changed/unknown analyzers, normalizer provenance and cursor bind
   expect((await store.meetings.searchHits("running", { accountId })).coverage.indexing).toBe("pending")
   await fill(store, accountId)
   expect((await store.meetings.searchHits("running", { accountId })).items).toEqual([])
-  await store.saveStemmers({ cyrillic: "russian", latin: "english,spanish" })
+  await store.searchIndex.saveStemmers({ cyrillic: "russian", latin: "english,spanish" })
   await fill(store, accountId)
   db.prepare("UPDATE search_index_state SET normalizer_version=0 WHERE name=?").run(`meeting_stems:${accountId}`)
   expect((await store.meetings.searchHits("running", { accountId })).items).toEqual([])

@@ -13,7 +13,7 @@ const twinStore = async () => {
   const twin = await openTwinStore()
   opened.push(twin.store)
   for (const day of [1, 2, 3]) await twin.store.notes.addNote({ text: `${SHARED_WORD} written in memo, day ${day}` })
-  await twin.store.fillSearchIndex({})
+  await twin.store.searchIndex.fillSearchIndex({})
   return twin
 }
 
@@ -66,7 +66,7 @@ describe("search notes --source", () => {
   it("finds memo's notes beside a folder by meaning too", async () => {
     const { store, twins } = await twinStore()
     const chunks = await store.notes.chunksToEmbed("test:model:2", { limit: 100 })
-    await store.saveVectors(
+    await store.vectors.saveVectors(
       "test:model:2",
       2,
       chunks.map(({ hash }) => ({ hash, vector: new Float32Array([1, 0]) })),

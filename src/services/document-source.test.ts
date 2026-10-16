@@ -14,7 +14,7 @@ describe("imported document search provenance", () => {
     const store = await openStore({ path: join(directory, "store.db") })
     try {
       const folder = await store.notes.addFolder({ name: "google-drive:synthetic-owner" })
-      await store.saveProfile("drive", "personal", { provider: "folder", account: folder.name })
+      await store.accounts.saveProfile("drive", "personal", { provider: "folder", account: folder.name })
       const { note } = await store.notes.saveFileNote({
         folderId: folder.id,
         path: "synthetic-doc.md",

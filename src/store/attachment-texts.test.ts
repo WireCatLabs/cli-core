@@ -47,13 +47,13 @@ const raw = async (path: string, sql: string) => {
 const seeded = async (path = fresh()) => {
   const store = await openStore({ path })
   live.push(store)
-  await store.saveMessages(
+  await store.messages.saveMessages(
     OWNER,
     "-1",
     [message("1", "see attached", [{ kind: "file", name: "a.pdf" }]), message("2", "invoice", [])],
     { via: "history" },
   )
-  const [file] = await store.fileAttachments(OWNER, { limit: 10 })
+  const [file] = await store.attachments.fileAttachments(OWNER, { limit: 10 })
   return { store, path, pk: file?.pk as number }
 }
 
@@ -63,7 +63,11 @@ const found = async (store: MessageStore, text: string) =>
 describe("text of attachments in the store (version 19)", () => {
   it("**content: finds the message whose file holds the words; text: does not look inside files**", async () => {
     const { store, pk } = await seeded()
-    await store.keepAttachmentText(pk, { text: "Счёт за ремонт, invoice 42", origin: "extracted", extractor: "plain" })
+    await store.attachments.keepAttachmentText(pk, {
+      text: "Счёт за ремонт, invoice 42",
+      origin: "extracted",
+      extractor: "plain",
+    })
 
     expect(await found(store, "content:invoice")).toEqual(["1"])
     expect(await found(store, "content:счет")).toEqual(["1"])
@@ -76,25 +80,29 @@ describe("text of attachments in the store (version 19)", () => {
 
   it("**an extraction never replaces an agent's text; an agent replaces anything**", async () => {
     const { store, path, pk } = await seeded()
-    expect(await store.keepAttachmentText(pk, { text: "scan", origin: "extracted", extractor: "pdf:unpdf@1" })).toBe(
-      true,
-    )
-    expect(await store.keepAttachmentText(pk, { text: "read by eye", origin: "agent", extractor: "agent" })).toBe(true)
-    expect(await store.keepAttachmentText(pk, { text: "again", origin: "extracted", extractor: "plain" })).toBe(false)
+    expect(
+      await store.attachments.keepAttachmentText(pk, { text: "scan", origin: "extracted", extractor: "pdf:unpdf@1" }),
+    ).toBe(true)
+    expect(
+      await store.attachments.keepAttachmentText(pk, { text: "read by eye", origin: "agent", extractor: "agent" }),
+    ).toBe(true)
+    expect(
+      await store.attachments.keepAttachmentText(pk, { text: "again", origin: "extracted", extractor: "plain" }),
+    ).toBe(false)
 
     expect(await raw(path, "SELECT text, extraction AS origin FROM attachments")).toEqual([
       { text: "read by eye", origin: "agent" },
     ])
-    expect(await store.fileAttachments(OWNER, { limit: 10 })).toEqual([])
+    expect(await store.attachments.fileAttachments(OWNER, { limit: 10 })).toEqual([])
     expect(await found(store, "content:eye")).toEqual(["1"])
     expect(await found(store, "content:scan")).toEqual([])
   })
 
   it("**deleting the message erases its files' text and words (NEED-393 A)**", async () => {
     const { store, path, pk } = await seeded()
-    await store.keepAttachmentText(pk, { text: "secret contract", origin: "extracted", extractor: "plain" })
+    await store.attachments.keepAttachmentText(pk, { text: "secret contract", origin: "extracted", extractor: "plain" })
 
-    expect(await store.markDeleted(OWNER, ["1"], { chatId: "-1" })).toBe(1)
+    expect(await store.messages.markDeleted(OWNER, ["1"], { chatId: "-1" })).toBe(1)
 
     expect(await raw(path, "SELECT count(*) AS n FROM attachments WHERE text IS NOT NULL")).toEqual([{ n: 0 }])
     expect(await raw(path, "SELECT count(*) AS n FROM attachment_words WHERE attachment_words MATCH 'secret'")).toEqual(
@@ -105,7 +113,7 @@ describe("text of attachments in the store (version 19)", () => {
 
   it("a deleted attachment or message row takes its text with it", async () => {
     const { store, path, pk } = await seeded()
-    await store.keepAttachmentText(pk, { text: "words", origin: "extracted", extractor: "plain" })
+    await store.attachments.keepAttachmentText(pk, { text: "words", origin: "extracted", extractor: "plain" })
     await store.close()
     live.splice(0)
     const database = await openCache(path)
@@ -115,7 +123,11 @@ describe("text of attachments in the store (version 19)", () => {
     expect(await raw(path, "SELECT count(*) AS n FROM attachments WHERE text IS NOT NULL")).toEqual([{ n: 0 }])
 
     const again = await seeded()
-    await again.store.keepAttachmentText(again.pk, { text: "words", origin: "extracted", extractor: "plain" })
+    await again.store.attachments.keepAttachmentText(again.pk, {
+      text: "words",
+      origin: "extracted",
+      extractor: "plain",
+    })
     await again.store.close()
     live.splice(0)
     const other = await openCache(again.path)
@@ -127,7 +139,7 @@ describe("text of attachments in the store (version 19)", () => {
 
   it("**`store reindex` rebuilds the files' word index from the kept text**", async () => {
     const { store, path, pk } = await seeded()
-    await store.keepAttachmentText(pk, { text: "Ёлка invoice", origin: "extracted", extractor: "plain" })
+    await store.attachments.keepAttachmentText(pk, { text: "Ёлка invoice", origin: "extracted", extractor: "plain" })
     await store.close()
     live.splice(0)
     const database = await openCache(path)
@@ -147,10 +159,10 @@ describe("text of attachments in the store (version 19)", () => {
   it("**`store reindex` gives a voice note the transcript kept before transcripts reached the attachment index**", async () => {
     const path = fresh()
     const store = await openStore({ path })
-    await store.saveMessages(OWNER, "-1", [message("3", "", [{ kind: "voice", mime: "audio/ogg" }])], {
+    await store.messages.saveMessages(OWNER, "-1", [message("3", "", [{ kind: "voice", mime: "audio/ogg" }])], {
       via: "history",
     })
-    await store.keepTranscript(OWNER, "-1", "3", "synthetic heron", "gigaam-v3")
+    await store.messages.keepTranscript(OWNER, "-1", "3", "synthetic heron", "gigaam-v3")
     await store.close()
     const database = await openCache(path)
     database.exec("UPDATE attachments SET text = NULL, normalized_text = NULL, extraction = NULL, extractor = NULL")

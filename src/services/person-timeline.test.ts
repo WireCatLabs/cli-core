@@ -29,11 +29,11 @@ const said = (id: string, timestamp: string) => ({
 const fixture = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "person-timeline-paging-")), "store.db") })
   opened.push(store)
-  await store.saveChats(tg, [
+  await store.chats.saveChats(tg, [
     { id: "31", title: "Example group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
   ])
   const days = ["01", "02", "03", "03", "04", "05", "06"]
-  await store.saveMessages(
+  await store.messages.saveMessages(
     tg,
     "31",
     days.map((day, at) => said(String(at + 1), `2026-09-${day}T10:00:00.000Z`)),

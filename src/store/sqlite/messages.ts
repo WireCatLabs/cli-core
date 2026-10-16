@@ -1,7 +1,7 @@
 import { validCounter } from "../../domain/counters.js"
 import type { ChatKind, Id, Message, Reactions } from "../../domain/models.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
-import type { AccountKey, DeletionScope } from "../store.js"
+import type { AccountKey, DeletionScope } from "../types.js"
 import { findChatPk } from "./chats.js"
 import { applyCounterObservations } from "./counters.js"
 import { and, eq, isNull, type Placeholder, sql } from "./drizzle/core.js"

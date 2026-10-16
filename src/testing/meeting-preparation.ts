@@ -12,8 +12,8 @@ export const preparationFixture = async (provider = "example-calendar") => {
   const store = await openStore({ path, now: () => 5000 })
   const db = await openCache(path)
   const key = { provider, account: "AliceExample" }
-  const accountId = await store.saveAccount(key, { name: "Alice Example" })
-  const otherId = await store.saveAccount({ ...key, account: "BobSample" }, { name: "Bob Sample" })
+  const accountId = await store.accounts.saveAccount(key, { name: "Alice Example" })
+  const otherId = await store.accounts.saveAccount({ ...key, account: "BobSample" }, { name: "Bob Sample" })
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   const saved = await store.meetings.saveMeeting(input)

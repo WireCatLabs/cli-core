@@ -32,10 +32,10 @@ const setup = async (permissions?: object) => {
   const account = { provider: "chat", account: "500" }
   rememberAccount(app, "default", account.account, env)
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Synthetic club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     [1, 2, 3].map((id) => ({

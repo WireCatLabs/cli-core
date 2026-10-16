@@ -119,7 +119,7 @@ const targetOf = async (
   }
   if (contact !== undefined) {
     if (chat !== undefined || message !== undefined) throw new CliError("validation_error", ONE_TARGET)
-    const person = pickPerson(contact, await store.people(account.provider, { account: account.account }))
+    const person = pickPerson(contact, await store.people.people(account.provider, { account: account.account }))
     return { type: "contact", personId: person.id }
   }
   if (message !== undefined && isLocator(message)) {
@@ -148,7 +148,7 @@ export const tagsService = (deps: ServiceDeps): TagsService => {
       inStore(async (store, account) => {
         const tags = tagsOf(list)
         const target = await targetOf(deps, store, account, given)
-        const added = await store.addTags(account, target, tags)
+        const added = await store.tags.addTags(account, target, tags)
         return { target: viewOf(account, target), added, unchanged: tags.filter((tag) => !added.includes(tag)) }
       }),
 
@@ -156,14 +156,17 @@ export const tagsService = (deps: ServiceDeps): TagsService => {
       inStore(async (store, account) => {
         const tags = tagsOf(list)
         const target = await targetOf(deps, store, account, given)
-        const removed = await store.removeTags(account, target, tags, source)
+        const removed = await store.tags.removeTags(account, target, tags, source)
         return { target: viewOf(account, target), removed, unchanged: tags.filter((tag) => !removed.includes(tag)) }
       }),
 
     list: ({ query, limit, offset }) =>
       inStore(async (store, account) => {
         const where = query ? queryFilter(query, TAGGING_COLUMNS, { command: "tags list" }) : undefined
-        const rows = await store.tags(account, { ...(where ? { where } : {}), window: { limit: limit + 1, offset } })
+        const rows = await store.tags.tags(account, {
+          ...(where ? { where } : {}),
+          window: { limit: limit + 1, offset },
+        })
         return { items: rows.slice(0, limit).map((one) => taggingOf(account, one)), has_more: rows.length > limit }
       }),
   }

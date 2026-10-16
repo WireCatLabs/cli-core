@@ -63,7 +63,7 @@ export const botCheckService = (deps: ServiceDeps): BotCheckService => {
     }
     const store = await deps.store()
     const account = await deps.account()
-    const found = pickPerson(reference, await store.people(account.provider, { account: account.account }))
+    const found = pickPerson(reference, await store.people.people(account.provider, { account: account.account }))
     return { subject: { id: found.id, name: found.name, usernames: found.username ? [found.username] : [] } }
   }
 
@@ -71,11 +71,11 @@ export const botCheckService = (deps: ServiceDeps): BotCheckService => {
     const held = await storeIfOpen(deps)
     if (!held) return undefined
     const { store, account } = held
-    const page = await store.find({ account, senders: [id], limit: ACTIVITY_MESSAGES })
+    const page = await store.messages.find({ account, senders: [id], limit: ACTIVITY_MESSAGES })
     return {
       messages: page.items,
       complete: !page.hasMore,
-      chatsStored: (await store.chatsWith(account, id)).length,
+      chatsStored: (await store.chats.chatsWith(account, id)).length,
     }
   }
 

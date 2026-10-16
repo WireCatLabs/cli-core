@@ -170,7 +170,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({}),
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account) =>
-        wholeList("chats tracking list", (await store.trackedChats(account)).map(snakeKeys)),
+        wholeList("chats tracking list", (await store.roster.trackedChats(account)).map(snakeKeys)),
     }),
 
     chats_tracking_show: tool({

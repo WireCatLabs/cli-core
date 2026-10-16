@@ -46,7 +46,7 @@ const opened: MessageStore[] = []
 const emptyStore = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "services-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, [chat])
+  await store.chats.saveChats(account, [chat])
   return store
 }
 
@@ -63,7 +63,7 @@ describe("the archive service", () => {
       history: async (_chat: string, { limit, before }: { limit: number; before?: string }) => {
         const older = history.filter((one) => before === undefined || Number(one.id) < Number(before))
         const items = older.slice(-limit)
-        await store.saveMessages(account, "7", items, { via: "history" })
+        await store.messages.saveMessages(account, "7", items, { via: "history" })
         return { items, hasMore: older.length > items.length }
       },
     } as unknown as MessengerAdapter
@@ -88,8 +88,8 @@ describe("the archive service", () => {
     expect(exported.title).toBe("Book club")
     expect(exported.messages.map((one) => one.id)).toEqual(["1", "2", "3", "4", "5"])
     expect(await service.held("7")).toEqual([{ from: 1, to: 5 }])
-    expect(await store.syncState(account, historyStartKey("7"))).toMatchObject({ value: "1" })
-    expect(await store.syncState(account, fetchedKey("7"))).toMatchObject({ value: "5" })
+    expect(await store.sync.syncState(account, historyStartKey("7"))).toMatchObject({ value: "1" })
+    expect(await store.sync.syncState(account, fetchedKey("7"))).toMatchObject({ value: "5" })
   })
 })
 
@@ -106,7 +106,7 @@ describe("fetching every chat", () => {
         asked.push(reference)
         if (reference === "9") throw new Error("private provider detail")
         const items = [messageAt(1)].map((one) => ({ ...one, chatId: reference }))
-        await store.saveMessages(account, reference, items, { via: "history" })
+        await store.messages.saveMessages(account, reference, items, { via: "history" })
         return { items, hasMore: false }
       },
     } as unknown as MessengerAdapter
@@ -146,7 +146,7 @@ describe("fetching every chat", () => {
         asked.push(before ?? "newest")
         const older = history.filter((one) => before === undefined || Number(one.id) < Number(before))
         const items = older.slice(-limit)
-        await store.saveMessages(account, reference, items, { via: "history" })
+        await store.messages.saveMessages(account, reference, items, { via: "history" })
         return { items, hasMore: older.length > items.length }
       },
     } as unknown as MessengerAdapter
@@ -177,8 +177,8 @@ describe("fetching every chat", () => {
 
   it("still asks for a chat whose stored history does not reach back as far as the run wants", async () => {
     const store = await emptyStore()
-    await store.saveMessages(account, "7", [messageAt(5)], { via: "history" })
-    await store.markRange(account, "7", 5, 5)
+    await store.messages.saveMessages(account, "7", [messageAt(5)], { via: "history" })
+    await store.sync.markRange(account, "7", 5, 5)
     const asked: string[] = []
     const adapter = {
       self: () => "500",
@@ -217,7 +217,7 @@ describe("fetching every chat", () => {
         return { items: [chat], hasMore: false }
       },
       history: async () => {
-        await store.saveMessages(account, "7", [messageAt(1)], { via: "history" })
+        await store.messages.saveMessages(account, "7", [messageAt(1)], { via: "history" })
         return { items: [messageAt(1)], hasMore: false }
       },
     } as unknown as MessengerAdapter
@@ -247,13 +247,13 @@ describe("what a search says about the archive", () => {
   it("counts what it searched, lists the chats a fetch would improve and names the one command", async () => {
     const store = await emptyStore()
     const quiet = { ...chat, id: "8", title: "Quiet", lastMessageAt: "2026-01-01T00:00:00.000Z" }
-    await store.saveChats(account, [quiet])
-    await store.saveMessages(account, "8", [{ ...messageAt(9), chatId: "8" }], { via: "context" })
+    await store.chats.saveChats(account, [quiet])
+    await store.messages.saveMessages(account, "8", [{ ...messageAt(9), chatId: "8" }], { via: "context" })
     const history = [1, 2, 3, 4, 5].map(messageAt)
     const adapter = {
       self: () => "500",
       history: async () => {
-        await store.saveMessages(account, "7", history, { via: "history" })
+        await store.messages.saveMessages(account, "7", history, { via: "history" })
         return { items: history, hasMore: false }
       },
     } as unknown as MessengerAdapter
@@ -264,8 +264,8 @@ describe("what a search says about the archive", () => {
     }
     const options = { limit: 100, pageSize: 100, pauseMs: 0, note: () => {}, onPage: () => {} }
     await archiveService(deps).fetch("7", { ...options, stop: new AbortController().signal })
-    await store.fillSearchIndex()
-    await store.fillStems()
+    await store.searchIndex.fillSearchIndex()
+    await store.searchIndex.fillStems()
     const search = (query: { chat?: string }) =>
       servicesFor(deps).messages.search({ text: "chapter", limit: 20, ...query })
 
@@ -303,7 +303,7 @@ it("keeps earlier history pages and tells the caller when and where to resume", 
       calls += 1
       if (calls > 1) throw new CliError("rate_limited", "provider asks to wait", { retry_after_ms: 600000 })
       const items = [messageAt(5), messageAt(4)]
-      await store.saveMessages(account, "7", items, { via: "history" })
+      await store.messages.saveMessages(account, "7", items, { via: "history" })
       return { items, hasMore: true }
     },
   } as unknown as MessengerAdapter

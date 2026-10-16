@@ -17,7 +17,7 @@ afterEach(async () => {
 const setup = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "ranking-service-")), "fixture.db") })
   live.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     {
       id: "room",
       title: "Synthetic room",
@@ -42,7 +42,7 @@ const setup = async () => {
     reactions: { total: i, mine: null, counts: [] },
     providerMetadata: { views: i, graph: { version: 1, reply: null } },
   }))
-  await store.saveMessages(account, "room", messages, { via: "history" })
+  await store.messages.saveMessages(account, "room", messages, { via: "history" })
   const messenger = {
     provider: "fixture",
     app: { command: "fixture", envPrefix: "FIXTURE", configName: "fixture", stateName: "fixture" },
@@ -80,7 +80,7 @@ describe("ranking services and drilldown selection", () => {
   it("discloses field freshness and invalidates a cursor when only observation time changes", async () => {
     const { store, service } = await setup()
     const before = Date.now() - 2000
-    await store.updateCounterObservations?.(account, "room", "3", {
+    await store.counters.updateCounterObservations?.(account, "room", "3", {
       views: { value: 3, observedAt: new Date(before).toISOString(), source: "remote_fetch" },
     })
     const ranked = await service.top("messages", { measure: "views", limit: 1 })
@@ -95,7 +95,7 @@ describe("ranking services and drilldown selection", () => {
     const options = { component: "reactions", limit: 1 }
     const page = await service.evidence("contacts", "alice", alice?.drilldown.selection, options)
     expect(page.nextCursor).toBeTruthy()
-    await store.updateCounterObservations?.(account, "room", "2", {
+    await store.counters.updateCounterObservations?.(account, "room", "2", {
       reactions: { value: 2, observedAt: new Date(Date.now() - 1000).toISOString(), source: "remote_fetch" },
     })
     await expect(
@@ -109,7 +109,7 @@ describe("ranking services and drilldown selection", () => {
   it("records repeatable ranking parameters rather than results", async () => {
     const { store, service } = await setup()
     const result = await service.top("contacts", { weights: { messages: 1, words: 0 }, minMessages: 2, limit: 10 })
-    const record = (await store.searchHistory(1))[0]
+    const record = (await store.searches.searchHistory(1))[0]
     expect(record).toMatchObject({
       command: "author-top",
       params: { target: "contacts", weights: { messages: 1, words: 0 }, minMessages: 2 },
@@ -168,9 +168,11 @@ describe("ranking services and drilldown selection", () => {
     })
     expect(second.items.map(({ message }) => message.id)).toEqual(["2"])
     expect(second.hasMore).toBe(false)
-    const one = (await store.messages(account, "room", { limit: 10 })).items.find(({ id }) => id === "1")
+    const one = (await store.messages.messages(account, "room", { limit: 10 })).items.find(({ id }) => id === "1")
     if (!one) throw new Error("fixture message missing")
-    await store.saveMessages(account, "room", [{ ...one, text: "Changed synthetic fixture" }], { via: "history" })
+    await store.messages.saveMessages(account, "room", [{ ...one, text: "Changed synthetic fixture" }], {
+      via: "history",
+    })
     await expect(
       service.evidence("contacts", row.id, row.drilldown.selection, {
         component: "messages",
@@ -187,11 +189,11 @@ describe("ranking services and drilldown selection", () => {
   })
   it("returns direct reply and answer pairs from the same scoped calculation", async () => {
     const { store, service } = await setup()
-    const all = (await store.messages(account, "room", { limit: 10 })).items
+    const all = (await store.messages.messages(account, "room", { limit: 10 })).items
     const question = all.find(({ id }) => id === "1")
     const answer = all.find(({ id }) => id === "3")
     if (!question || !answer) throw new Error("fixture messages missing")
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "room",
       [
@@ -242,9 +244,9 @@ describe("ranking services and drilldown selection", () => {
   })
   it("keeps invalid reaction snapshots unknown in contributing evidence", async () => {
     const { service, store } = await setup()
-    const one = (await store.messages(account, "room", { limit: 10 })).items.find(({ id }) => id === "1")
+    const one = (await store.messages.messages(account, "room", { limit: 10 })).items.find(({ id }) => id === "1")
     if (!one) throw new Error("fixture message missing")
-    await store.saveMessages(account, "room", [{ ...one, reactions: { total: -1, mine: null, counts: [] } }], {
+    await store.messages.saveMessages(account, "room", [{ ...one, reactions: { total: -1, mine: null, counts: [] } }], {
       via: "history",
     })
     const row = (await service.top("contacts", { measure: "reactions", limit: 10 })).items.find(
@@ -260,9 +262,9 @@ describe("ranking services and drilldown selection", () => {
   })
   it("refuses an oversized evidence row with a usable locator instruction", async () => {
     const { service, store } = await setup()
-    const one = (await store.messages(account, "room", { limit: 10 })).items.find(({ id }) => id === "1")
+    const one = (await store.messages.messages(account, "room", { limit: 10 })).items.find(({ id }) => id === "1")
     if (!one) throw new Error("fixture message missing")
-    await store.saveMessages(account, "room", [{ ...one, text: "x".repeat(70 * 1024) }], { via: "history" })
+    await store.messages.saveMessages(account, "room", [{ ...one, text: "x".repeat(70 * 1024) }], { via: "history" })
     const row = (await service.top("contacts", { measure: "messages", limit: 10 })).items[0]
     if (!row) throw new Error("fixture row missing")
     await expect(
@@ -271,7 +273,7 @@ describe("ranking services and drilldown selection", () => {
   })
   it("expands a channel to its held discussion and keeps replay scope pinned", async () => {
     const { service, store } = await setup()
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       {
         id: "channel",
         title: "Synthetic channel",
@@ -289,9 +291,9 @@ describe("ranking services and drilldown selection", () => {
         participantsCount: null,
       },
     ])
-    const template = (await store.messages(account, "room", { limit: 1 })).items[0]
+    const template = (await store.messages.messages(account, "room", { limit: 1 })).items[0]
     if (!template) throw new Error("fixture message missing")
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "channel",
       [
@@ -306,7 +308,7 @@ describe("ranking services and drilldown selection", () => {
       ],
       { via: "history" },
     )
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "discussion",
       [
@@ -343,10 +345,10 @@ describe("ranking services and drilldown selection", () => {
   })
   it("bounds serialized fingerprint bytes including JSON escaping", async () => {
     const { service, store } = await setup()
-    const messages = (await store.messages(account, "room", { limit: 10 })).items.filter(
+    const messages = (await store.messages.messages(account, "room", { limit: 10 })).items.filter(
       ({ senderId }) => senderId === "alice",
     )
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "room",
       messages.map((message) => ({ ...message, text: "\u0000".repeat(710_000) })),

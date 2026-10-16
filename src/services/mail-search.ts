@@ -1,13 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
 import type { Chat, Message, Page } from "../domain/models.js"
-import type { AccountKey, MessageStore, ScoredHit, StoredHit } from "../store/store.js"
+import type { AccountKey, ChatsStore, MessageStore, ScoredHit, StoredHit } from "../store/store.js"
 import { messageOfEmail } from "../store/store.js"
 
 const THREADS_PAGE = 500
 
 const threadsOf = async (store: MessageStore, key: AccountKey): Promise<Chat[]> => {
-  const account = await store.storedAccount(key).catch(() => undefined)
+  const account = await store.accounts.storedAccount(key).catch(() => undefined)
   if (!account) return []
   const chats: Chat[] = []
   for (let offset = 0; ; offset += THREADS_PAGE) {
@@ -30,19 +30,21 @@ const threadsOf = async (store: MessageStore, key: AccountKey): Promise<Chat[]> 
  * The store, with each mail account's email threads among its chats, so `--chat` and `chat:` name a thread
  * by id or subject as they name a chat. A thread that is also an older import's chat is listed once.
  */
-export const withMailThreads = (store: MessageStore): MessageStore =>
-  new Proxy(store, {
-    get(target, key, receiver) {
-      if (key !== "chats") return Reflect.get(target, key, receiver)
-      return async (account: AccountKey, window: Parameters<MessageStore["chats"]>[1]): Promise<Page<Chat>> => {
-        const held = await target.chats(account, window)
-        if (window.limit !== undefined || window.offset !== undefined) return held
-        const known = new Set(held.items.map(({ id }) => id))
-        const threads = (await threadsOf(target, account)).filter(({ id }) => !known.has(id))
-        return { ...held, items: [...held.items, ...threads] }
-      }
+export const withMailThreads = (store: MessageStore): MessageStore => {
+  const chats: ChatsStore = {
+    ...store.chats,
+    chats: async (account, window) => {
+      const held = await store.chats.chats(account, window)
+      if (window.limit !== undefined || window.offset !== undefined) return held
+      const known = new Set(held.items.map(({ id }) => id))
+      const threads = (await threadsOf(store, account)).filter(({ id }) => !known.has(id))
+      return { ...held, items: [...held.items, ...threads] }
     },
+  }
+  return new Proxy(store, {
+    get: (target, key, receiver) => (key === "chats" ? chats : Reflect.get(target, key, receiver)),
   })
+}
 
 const before = (newest: boolean) => (a: ScoredHit, b: ScoredHit) => {
   if (!newest) {
@@ -80,7 +82,7 @@ export const mailAround = async (
   count: number,
 ): Promise<(Message & { anchor?: true })[] | undefined> => {
   const { provider, account } = parseLocator(hit.locator)
-  const stored = await store.storedAccount({ provider, account }).catch(() => undefined)
+  const stored = await store.accounts.storedAccount({ provider, account }).catch(() => undefined)
   if (!stored) return undefined
   const emails = (await store.mail.emails({ accountId: stored.id, threadExternalId: hit.chatId })).reverse()
   const at = emails.findIndex(({ externalId }) => externalId === hit.id)
@@ -105,7 +107,7 @@ export const readMail = async (
 ): Promise<(StoredHit & { anchor?: true })[]> => {
   const { provider, account, chat, message } = parseLocator(locator)
   if (provider !== "email") throw new CliError("validation_error", `${locator} is not an email — it names ${provider}`)
-  const stored = await store.storedAccount({ provider, account }).catch(() => undefined)
+  const stored = await store.accounts.storedAccount({ provider, account }).catch(() => undefined)
   if (!stored) throw new CliError("not_found", `no mail of ${account} is stored`)
   const thread = await store.mail.threadHits(stored.id, chat)
   const at = thread.findIndex(({ id }) => id === message)

@@ -59,8 +59,8 @@ const opened: MessageStore[] = []
 const keptStore = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "services-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, [chat])
-  await store.saveMessages(account, "7", thread, { via: "history" })
+  await store.chats.saveChats(account, [chat])
+  await store.messages.saveMessages(account, "7", thread, { via: "history" })
   return store
 }
 
@@ -163,8 +163,10 @@ describe("the messages service", () => {
 
   it("reads a stored chat offline by an id that is not digits", async () => {
     const store = await keptStore()
-    await store.saveChats(account, [{ ...chat, id: "room-b", title: "Garden" }])
-    await store.saveMessages(account, "room-b", [{ ...thread[0], chatId: "room-b" } as Message], { via: "history" })
+    await store.chats.saveChats(account, [{ ...chat, id: "room-b", title: "Garden" }])
+    await store.messages.saveMessages(account, "room-b", [{ ...thread[0], chatId: "room-b" } as Message], {
+      via: "history",
+    })
 
     const page = await messagesService(storedDeps(messenger, store, account, guard)).list("room-b", { limit: 5 })
 
@@ -194,12 +196,16 @@ describe("the messages service", () => {
   it("**builds a slice of the word index first**, bounded in time", async () => {
     const store = await keptStore()
     const spentAtStart: (boolean | undefined)[] = []
-    const watched: MessageStore = Object.assign(Object.create(store) as MessageStore, {
-      fillSearchIndex: async (options: Parameters<MessageStore["fillSearchIndex"]>[0]) => {
-        spentAtStart.push(options?.until?.())
-        return store.fillSearchIndex(options)
+    const watched: MessageStore = {
+      ...store,
+      searchIndex: {
+        ...store.searchIndex,
+        fillSearchIndex: async (options: Parameters<MessageStore["searchIndex"]["fillSearchIndex"]>[0]) => {
+          spentAtStart.push(options?.until?.())
+          return store.searchIndex.fillSearchIndex(options)
+        },
       },
-    })
+    }
 
     await messagesService(storedDeps(messenger, watched, account, guard)).search({ text: "chapter", limit: 10 })
 
@@ -218,8 +224,8 @@ describe("searchStore", () => {
       [bot("1"), "11"],
       [bot("2"), "21"],
     ] as const) {
-      await store.saveChats(key, [chat])
-      await store.saveMessages(key, "7", [said(id, "8", "chapter one"), said(`${id}0`, "6", "chapter two")], {
+      await store.chats.saveChats(key, [chat])
+      await store.messages.saveMessages(key, "7", [said(id, "8", "chapter one"), said(`${id}0`, "6", "chapter two")], {
         via: "history",
       })
     }

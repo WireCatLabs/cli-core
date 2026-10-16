@@ -39,9 +39,9 @@ const fixture = async () => {
   }
   rememberAccount(app, "default", account.account, env)
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveMessages(account, "7", [message(1), message(3), message(7), message(9)], { via: "history" })
-  await store.markRange(account, "7", 1, 3)
-  await store.markRange(account, "7", 7, 9)
+  await store.messages.saveMessages(account, "7", [message(1), message(3), message(7), message(9)], { via: "history" })
+  await store.sync.markRange(account, "7", 1, 3)
+  await store.sync.markRange(account, "7", 7, 9)
   await store.close()
   const connect = vi.fn(
     async () =>

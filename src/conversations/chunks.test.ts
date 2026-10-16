@@ -136,10 +136,10 @@ describe("chunks in a build", () => {
   it("**are written with each build**; a rebuild keeps every hash, an edit changes only its chunk's", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "chunks-")), "m.db")
     const store = await openStore({ path })
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "9", title: "Group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "9",
       [message("1", "where do we meet"), message("2", "at the station", "1"), message("40", "new topic")],
@@ -160,7 +160,7 @@ describe("chunks in a build", () => {
     await conversations.build("9")
     expect(chunkRows(path)).toEqual(first)
 
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "9",
       [{ ...message("40", "a new topic"), editedAt: "2026-10-03T00:00:00.000Z" }],

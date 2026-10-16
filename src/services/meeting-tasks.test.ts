@@ -17,7 +17,7 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-task-example-")), "store.db")
   const store = await openStore({ path })
   handles.push(store)
-  const accountId = await store.saveAccount(account, { name: "Alice Example" })
+  const accountId = await store.accounts.saveAccount(account, { name: "Alice Example" })
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   input.transcripts[0].rows[0].text = "Alice Example will send the invented draft"
@@ -76,13 +76,13 @@ describe("explicit meeting task provenance", () => {
         { source, kind: "request", origin: "owner" },
       ),
     ).rejects.toMatchObject({ code: "not_found" })
-    expect(await reopened.storedAccounts()).toHaveLength(1)
+    expect(await reopened.accounts.storedAccounts()).toHaveLength(1)
   })
 
   it("denies foreign task and source accounts before returning content or writing", async () => {
     const { store, source, accountId } = await fixture()
     const created = await createTaskFromMeeting(store, account, { source, kind: "request", origin: "owner" })
-    await store.saveAccount({ provider: "example", account: "bob-sample" }, { name: "Bob Sample" })
+    await store.accounts.saveAccount({ provider: "example", account: "bob-sample" }, { name: "Bob Sample" })
     await expect(
       readMeetingTask(store, { provider: "example", account: "bob-sample" }, created.task.id),
     ).rejects.toMatchObject({ code: "not_found" })
@@ -100,7 +100,7 @@ describe("explicit meeting task provenance", () => {
     const { store, source } = await fixture()
     const created = await createTaskFromMeeting(store, account, { source, kind: "request", origin: "owner" })
     const unavailable: MeetingTaskStore = {
-      storedAccount: (key) => store.storedAccount(key),
+      accounts: { storedAccount: (key) => store.accounts.storedAccount(key) },
       tasks: store.tasks,
       meetings: {
         ...store.meetings,
@@ -128,7 +128,7 @@ describe("explicit meeting task provenance", () => {
 
   it("validates source, kind, origin and due date before account lookup", async () => {
     const storedAccount = vi.fn()
-    const port = { storedAccount } as unknown as MeetingTaskStore
+    const port = { accounts: { storedAccount } } as unknown as MeetingTaskStore
     const valid = { source: "meeting:1/2/3/0", kind: "request" as const, origin: "owner" as const }
     for (const input of [
       { ...valid, source: "msg:example/alice/chat/1" },
@@ -154,12 +154,14 @@ describe("explicit meeting task provenance", () => {
     const port: MeetingTaskStore = {
       meetings: store.meetings,
       tasks: store.tasks,
-      storedAccount: async (key) => {
-        const found = await store.storedAccount(key)
-        selected.account = "bob-sample"
-        input.dueAt.setFullYear(2030)
-        Object.assign(input, { kind: "request", origin: "agent", source: "meeting:999/999" })
-        return found
+      accounts: {
+        storedAccount: async (key) => {
+          const found = await store.accounts.storedAccount(key)
+          selected.account = "bob-sample"
+          input.dueAt.setFullYear(2030)
+          Object.assign(input, { kind: "request", origin: "agent", source: "meeting:999/999" })
+          return found
+        },
       },
     }
     const result = await createTaskFromMeeting(port, selected, input)
@@ -187,12 +189,15 @@ it("rejects invalid account metadata before reading a meeting", async () => {
     { ...base, id: 0 },
     { ...base, account: "bob-sample" },
   ]) {
-    const port = { storedAccount: async () => value, meetings: { meeting } } as unknown as MeetingTaskStore
+    const port = {
+      accounts: { storedAccount: async () => value },
+      meetings: { meeting },
+    } as unknown as MeetingTaskStore
     await expect(createTaskFromMeeting(port, account, input)).rejects.toMatchObject({
       code: value.id === 0 ? "invalid_response" : "not_found",
     })
   }
-  const port = { storedAccount: async () => base, meetings: { meeting } } as unknown as MeetingTaskStore
+  const port = { accounts: { storedAccount: async () => base }, meetings: { meeting } } as unknown as MeetingTaskStore
   await expect(createTaskFromMeeting(port, { ...account, scope: "work" }, input)).rejects.toMatchObject({
     code: "not_found",
   })

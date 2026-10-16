@@ -461,7 +461,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
           note
             ? note.text
             : locator
-              ? ((await store.message(account, locator.message, { chatId: locator.chat }))?.text ?? "")
+              ? ((await store.messages.message(account, locator.message, { chatId: locator.chat }))?.text ?? "")
               : ""
         const { task: added, created } = await service(store).add({
           source: note ? note.ref : source,
@@ -745,7 +745,7 @@ export const taskView = async (store: MessageStore, account: AccountKey, task: T
           : null,
     }
   }
-  const found = locator ? await store.message(account, locator.message, { chatId: locator.chat }) : undefined
+  const found = locator ? await store.messages.message(account, locator.message, { chatId: locator.chat }) : undefined
   return {
     ...task,
     message: found

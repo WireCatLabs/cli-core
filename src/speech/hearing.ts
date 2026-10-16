@@ -55,8 +55,9 @@ export const openKept = async (messenger: Messenger, profile: string, env: NodeJ
   if (!account) return { get: async () => undefined, keep: async () => {}, close: async () => {} }
   const store = await openStore({ env })
   return {
-    get: ({ chatId, messageId }) => store.transcript(account, chatId, messageId),
-    keep: ({ chatId, messageId }, text, source) => store.keepTranscript(account, chatId, messageId, text, source),
+    get: ({ chatId, messageId }) => store.messages.transcript(account, chatId, messageId),
+    keep: ({ chatId, messageId }, text, source) =>
+      store.messages.keepTranscript(account, chatId, messageId, text, source),
     close: () => store.close(),
   }
 }

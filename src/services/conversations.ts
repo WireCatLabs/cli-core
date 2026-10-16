@@ -126,7 +126,7 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
       let after: string | undefined
       for (;;) {
         check?.()
-        const page = await store.linkInputs(chatId, { limit: READ_PAGE, ...(after ? { after } : {}) })
+        const page = await store.conversations.linkInputs(chatId, { limit: READ_PAGE, ...(after ? { after } : {}) })
         if (maxMessages !== undefined && inputs.length + page.items.length > maxMessages)
           throw new CliError("validation_error", "the chat exceeds the catch-up message budget")
         inputs.push(...page.items)
@@ -139,8 +139,8 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
       check?.()
       const { links, conversations } = linkMessages(inputs, {
         check,
-        handles: await store.senderHandles(chatId),
-        answers: await store.agentAnswers(chatId),
+        handles: await store.conversations.senderHandles(chatId),
+        answers: await store.conversations.agentAnswers(chatId),
       })
       const byId = new Map(inputs.map((input) => [input.id, input]))
       const chunks = conversations.map((ids) =>
@@ -153,7 +153,7 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
           check,
         ).map(({ firstId, lastId, hash, range }) => ({ firstId, lastId, hash, ...(range ? { range } : {}) })),
       )
-      await store.replaceConversations(chatId, {
+      await store.conversations.replaceConversations(chatId, {
         check,
         startedAt,
         algorithmVersion: RULES_VERSION,
@@ -173,9 +173,9 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
 
     list: async (chat, { limit, offset = 0, query }) => {
       const { store, chatId } = await found(chat)
-      if (!(await store.conversationState(chatId))?.builtAt) throw notBuilt(chatId)
+      if (!(await store.conversations.conversationState(chatId))?.builtAt) throw notBuilt(chatId)
       const where = query ? queryFilter(query, CONVERSATION_COLUMNS, { command: "conversations list" }) : undefined
-      const page = await store.conversations(chatId, { limit, offset, ...(where ? { where } : {}) })
+      const page = await store.conversations.conversations(chatId, { limit, offset, ...(where ? { where } : {}) })
       const account = await deps.account()
       return { items: page.items.map((one) => conversationItem(account, one)), has_more: page.hasMore }
     },
@@ -187,14 +187,14 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
         id = target.id
       } else {
         const { chatId } = await found(target.chat)
-        const of = await store.conversationOf(chatId, target.message)
+        const of = await store.conversations.conversationOf(chatId, target.message)
         if (of === undefined) {
-          if (!(await store.conversationState(chatId))?.builtAt) throw notBuilt(chatId)
+          if (!(await store.conversations.conversationState(chatId))?.builtAt) throw notBuilt(chatId)
           throw new CliError("not_found", `message ${target.message} is in no conversation of chat ${chatId}`)
         }
         id = of
       }
-      const conversation = await store.conversation(id)
+      const conversation = await store.conversations.conversation(id)
       if (!conversation) {
         throw new CliError("not_found", `no conversation ${id} — a rebuild gives new ids; \`conversations list\``)
       }
@@ -203,7 +203,7 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
 
     batchStatus: async (chat, size) => {
       const { store, chatId } = await found(chat)
-      const { messages, characters } = await store.batchStatus(chatId)
+      const { messages, characters } = await store.conversations.batchStatus(chatId)
       return {
         chat: chatId,
         messages,
@@ -215,28 +215,28 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
 
     nextBatch: async (chat, size) => {
       const { store, chatId } = await found(chat)
-      return store.nextBatch(chatId, { size: sized(size) })
+      return store.conversations.nextBatch(chatId, { size: sized(size) })
     },
 
     addAnswers: async (batch, answer) => {
-      return (await accountStore(deps)).saveAnswers(batch, answer)
+      return (await accountStore(deps)).conversations.saveAnswers(batch, answer)
     },
 
     clearAnswers: async (chat, model) => {
       const { store, chatId } = await found(chat)
-      return { chat: chatId, cleared: await store.clearAnswers(chatId, model) }
+      return { chat: chatId, cleared: await store.conversations.clearAnswers(chatId, model) }
     },
 
     links: async (chat, message) => {
       const { store, chatId } = await found(chat)
       const chosenOf = (links: StoredLink[]) => links.find((link) => !link.stale)
-      const own = await store.links(chatId, message)
+      const own = await store.conversations.links(chatId, message)
       const chosen = chosenOf(own)
       const chain: Id[] = []
       for (let parent = chosen?.parentId ?? null; parent !== null && chain.length < CHAIN; ) {
         if (chain.includes(parent)) break
         chain.push(parent)
-        parent = chosenOf(await store.links(chatId, parent))?.parentId ?? null
+        parent = chosenOf(await store.conversations.links(chatId, parent))?.parentId ?? null
       }
       return { chat: chatId, message, links: own.map((link) => ({ ...link, chosen: link === chosen })), chain }
     },

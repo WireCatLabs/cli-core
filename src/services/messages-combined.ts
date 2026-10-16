@@ -50,7 +50,7 @@ export const searchCombined = async (
   )
     throw new CliError("validation_error", "invalid internal combined search bounds")
   const prepared = await prepareLucene(store, account, request, messenger)
-  const execute = store.matchQuery.bind(store)
+  const execute = store.queries.matchQuery.bind(store.queries)
   const execution = prepared.execution
   const started = performance.now()
   const check = () => {
@@ -80,7 +80,7 @@ export const searchCombined = async (
     )
     .flatMap((leaf) => tokensOf(leaf.value))
   const corrections = expanding
-    ? await correctWords(store, [...new Set(eligible.map((leaf) => normalize(leaf.value)))])
+    ? await correctWords(store.searchIndex, [...new Set(eligible.map((leaf) => normalize(leaf.value)))])
     : new Map<string, string[]>()
   check()
   const bySpan = new Map(eligible.map((leaf) => [leaf.span.start, leaf]))
@@ -224,7 +224,7 @@ export const searchCombined = async (
         const { provider, account } = parseLocator(hit.locator)
         return {
           ...hit,
-          context: await store.around({ provider, account }, hit.chatId, hit.id, {
+          context: await store.messages.around({ provider, account }, hit.chatId, hit.id, {
             before: request.context,
             after: request.context,
           }),

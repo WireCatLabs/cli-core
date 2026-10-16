@@ -92,7 +92,7 @@ export const readRankingSelection = async (store: MessageStore, input: unknown):
   const execution = object(fields.execution)
   if (!execution || !Array.isArray(execution.accounts) || execution.accounts.length === 0) invalid()
   const accounts = execution.accounts.map(accountOf)
-  const held = await store.accounts()
+  const held = await store.accounts.accounts()
   if (accounts.some((account) => !held.some((candidate) => same(candidate, account))))
     throw new CliError("permission_error", "ranking selection names an account not held in this store", {
       reason: "selection.out-of-scope",

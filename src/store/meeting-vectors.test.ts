@@ -9,11 +9,14 @@ import { openStore } from "./store.js"
 const fixture = async (now?: () => number) => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-vectors-example-")), "store.db")
   const store = await openStore({ path, now })
-  const accountId = await store.saveAccount(
+  const accountId = await store.accounts.saveAccount(
     { provider: "example", account: "alice-example" },
     { name: "Alice Example" },
   )
-  const foreignId = await store.saveAccount({ provider: "example", account: "bob-sample" }, { name: "Bob Sample" })
+  const foreignId = await store.accounts.saveAccount(
+    { provider: "example", account: "bob-sample" },
+    { name: "Bob Sample" },
+  )
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   input.transcripts[0].rows[0].text = "Alice Example will review the draft. ".repeat(100)
@@ -29,7 +32,7 @@ describe("meeting transcript vectors", () => {
       const missing = await store.meetingVectors.chunksToEmbed("invented-model", { accountId, limit: 1 })
       expect(missing.hasMore).toBe(true)
       const all = await store.meetingVectors.chunksToEmbed("invented-model", { accountId, limit: 100 })
-      await store.saveVectors(
+      await store.vectors.saveVectors(
         "invented-model",
         2,
         all.items.map((item) => ({ hash: item.hash, vector: new Float32Array([1, 0]) })),
@@ -94,7 +97,7 @@ describe("meeting transcript vectors", () => {
         store.meetingVectors.nearest("", new Float32Array([1]), { accountId, limit: 1 }),
       ).rejects.toMatchObject({ code: "validation_error" })
       const pending = await store.meetingVectors.chunksToEmbed("invented-model", { accountId, limit: 10 })
-      await store.saveVectors(
+      await store.vectors.saveVectors(
         "invented-model",
         2,
         pending.items.map((item) => ({ hash: item.hash, vector: new Float32Array([1, 0]) })),
@@ -163,7 +166,7 @@ it("rejects aggregate text budgets and stale chunks before exposing mismatched e
     await expect(
       store.meetingVectors.nearest("invented-model", new Float32Array([NaN]), { accountId, limit: 1 }),
     ).rejects.toMatchObject({ code: "validation_error" })
-    await store.saveVectors(
+    await store.vectors.saveVectors(
       "invented-model",
       2,
       current.items.map((item) => ({ hash: item.hash, vector: new Float32Array([1, 0]) })),

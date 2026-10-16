@@ -1,679 +1,86 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
-import { CliError } from "@wirecat/cli-base"
-import type { QueryAst } from "@wirecat/cli-base/query"
-import type { TextRange } from "../conversations/chunks.js"
-import type { Link, LinkInput } from "../conversations/link.js"
-import type { DownloadedFile } from "../domain/attachments.js"
-import type { ChannelTagMatch } from "../domain/channel-tags.js"
-import type { CounterObservations, CounterState } from "../domain/counters.js"
-import type { Decider, MentionKind } from "../domain/mentions.js"
-import type {
-  Chat,
-  ChatKind,
-  Contact,
-  Id,
-  Member,
-  Message,
-  MessageHit,
-  Page,
-  PersonAlias,
-  Provider,
-  Reactions,
-  WindowedMessage,
-} from "../domain/models.js"
-import type { RetentionOptions } from "../domain/retention.js"
-import type { PeopleLookup } from "../resolve.js"
-import { ACCOUNT_GROUPS, type AccountGroups, type Profiles } from "../search/account-list.js"
-import type { QueryExecution } from "../search/lucene/resolved.js"
-import type { Stemmers } from "../search/stem.js"
-import { type AccountStore, bindAccount } from "./account-store.js"
+import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
+import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
+import {
+  type AccountAttachments,
+  type AttachmentsStore,
+  accountAttachmentsOver,
+  attachmentsStoreOver,
+} from "./attachments.js"
+import { type ChatsStore, chatsStoreOver } from "./chats.js"
+import { type ConversationsStore, conversationsStoreOver } from "./conversations.js"
+import { type AccountCounters, accountCountersOver, type CountersStore, countersStoreOver } from "./counters.js"
+import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
+import { type AccountMessages, accountMessagesOver, type MessagesStore, messagesStoreOver } from "./messages.js"
 import { migrate } from "./migrations.js"
 import { storeCapable } from "./open.js"
 import { storePath } from "./path.js"
+import { type AccountPeople, accountPeopleOver, type PeopleStore, peopleStoreOver } from "./people.js"
+import { type QueriesStore, queriesStoreOver } from "./queries.js"
+import { type RosterStore, rosterStoreOver } from "./roster.js"
+import { type SearchIndexStore, searchIndexStoreOver } from "./search-index.js"
+import { type SearchesStore, searchesStoreOver } from "./searches.js"
 import { sharedConfigPath } from "./shared-config.js"
-import { accountGroupsOf, profilesOf, saveProfile } from "./sqlite/account-groups.js"
 import * as accounts from "./sqlite/accounts.js"
-import { type AdminStoreRequest, type AdminStoreResult, adminStatisticsQuery } from "./sqlite/admin-statistics.js"
 import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
-import type { AttachmentTextEntry, AttachmentView, FileAttachment } from "./sqlite/attachment-texts.js"
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
-import * as attachmentRows from "./sqlite/attachments.js"
 import { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
-import * as batches from "./sqlite/batches.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
-import type { ChatMetadata } from "./sqlite/chats.js"
-import * as metadataQueries from "./sqlite/chats.js"
-import * as chatQueries from "./sqlite/chats.js"
-import type { ChatCompleteness } from "./sqlite/completeness.js"
-import * as completeness from "./sqlite/completeness.js"
-import { type ConversationEligibility, conversationEligibility } from "./sqlite/conversation-eligibility.js"
-import * as conversationQueries from "./sqlite/conversations.js"
-import { applyCounterObservations, type CounterTarget, counterStates, counterTargets } from "./sqlite/counters.js"
-import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
-import { drainEmailIndex } from "./sqlite/email-index.js"
-import { type MailStore, mailStoreOver, threadConversation } from "./sqlite/emails.js"
+import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import { fillFolded } from "./sqlite/folded.js"
-import type { ContactFilter } from "./sqlite/identities.js"
-import * as identities from "./sqlite/identities.js"
-import * as imageChunks from "./sqlite/image-chunks.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
-import type { QueryGroup, QueryGrouping } from "./sqlite/lucene.js"
-import * as lucene from "./sqlite/lucene.js"
 import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
 import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
 import { type SourceMentionStore, sourceMentionStoreOver } from "./sqlite/mention-sources.js"
-import {
-  confirmMention,
-  listMentions,
-  type MentionDecision,
-  type MentionsRebuild,
-  type MentionsState,
-  mentionOfAccount,
-  mentionOwner,
-  mentionsState,
-  rebuildMentions,
-  rejectMention,
-  type StoredMention,
-  showMention,
-} from "./sqlite/mentions.js"
-import * as messageWrites from "./sqlite/messages.js"
 import { noteSearchOver } from "./sqlite/note-search.js"
 import { type NotesStore, notesStoreOver } from "./sqlite/notes.js"
 import { openSqlite, type StoreContext } from "./sqlite/open.js"
-import * as personLinks from "./sqlite/person-links.js"
-import { personSeenInAccounts } from "./sqlite/person-scope.js"
-import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
-import * as privatePeople from "./sqlite/private-people.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
-import type { Where } from "./sqlite/query-filter.js"
-import * as ranges from "./sqlite/ranges.js"
-import { type RankedEvidence, type RankingEvidenceRequest, rankingEvidence } from "./sqlite/ranking-evidence.js"
-import { type RankedStoreFound, type RankingRequest, rankQuery } from "./sqlite/rankings.js"
-import * as reads from "./sqlite/reads.js"
-import { type RetentionResult, retentionQuery } from "./sqlite/retention.js"
-import type {
-  MemberCount,
-  MemberStay,
-  ProfileRevision,
-  RosterChange,
-  RosterRead,
-  TrackedChat,
-} from "./sqlite/roster.js"
-import * as roster from "./sqlite/roster.js"
-import * as search from "./sqlite/search.js"
-import type { SearchIndexFill, SearchIndexState } from "./sqlite/search-index.js"
-import * as searchIndex from "./sqlite/search-index.js"
-import type { SearchRecord, StoredSearch } from "./sqlite/searches.js"
-import * as searchRecords from "./sqlite/searches.js"
-import type { StemsFill, StemsState } from "./sqlite/stems.js"
 import * as stems from "./sqlite/stems.js"
 import { fillStems, followDefaultStemmers } from "./sqlite/stems-fill.js"
-import * as sync from "./sqlite/sync.js"
-import type { AnyTagTarget, StoredTag, TagFilter } from "./sqlite/tags.js"
-import * as tagQueries from "./sqlite/tags.js"
-import { setTaskRulesStop, taskRulesStop } from "./sqlite/task-rule-stops.js"
-import { linkInbox, type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
-import { read, write } from "./sqlite/transaction.js"
-import * as transcripts from "./sqlite/transcripts.js"
-import type { ChunkToEmbed } from "./sqlite/vectors.js"
-import * as vectors from "./sqlite/vectors.js"
-import type { ScoredHit } from "./sqlite/words.js"
-import * as words from "./sqlite/words.js"
-
-/** Which account of which messenger a call is about. */
-export type PictureInput = imageChunks.PictureInput
-export interface AccountKey {
-  provider: Provider
-  account: Id
-  scope?: "personal" | "work"
-}
-
-/** An account as the store holds it: `id` is what `meetings` and `mail` take. */
-export interface StoredAccount {
-  id: number
-  provider: Provider
-  account: Id
-  name: string | null
-  scope: "personal" | "work"
-}
-
-/** Whether a stored chat may hold a message deleted without naming its chat. */
-export type DeletionScope = (chat: Pick<Chat, "id" | "kind" | "providerMetadata">) => boolean
-
-/** How a message reached the store — `history`, `send`, `backfill`, `update`. Diagnostic. */
-export type IngestedVia = string
-
-export interface StoredHit extends MessageHit {
-  locator: string
-}
-
-/** What a provider says about a person. `null` or absent never erases what was known. */
-export interface PersonFacts {
-  id: Id
-  name: string | null
-  username?: string | null
-  isBot?: boolean | null
-  description?: string | null
-}
-
-/**
- * Which messages `find` returns. At least `text` or `senders`.
- *
- * `together` keeps only the chats where **every** sender has a message in this store — written
- * there, as far as this copy knows, which is not the same as being a member.
- */
-/** One identity in one messenger, by the messenger's own id. `provider` is any string: `email` is one. */
-export interface IdentityRef {
-  provider: Provider
-  id: Id
-}
-
-/** How a link was decided (`manual`, `same-email`) and who decided it (`owner`, a program's name). */
-export interface LinkOptions {
-  method: string
-  by: string
-}
-
-export interface LinkedIdentity extends IdentityRef {
-  name: string | null
-  username: string | null
-  isBot: boolean | null
-  /** The accounts in this store that have seen it. */
-  accounts: Id[]
-  method: string
-  linkedBy: string
-  linkedAt: string
-}
-
-/** A person across messengers: `uid` stays the same however their names change. */
-export interface PersonRecord {
-  uid: string
-  name: string | null
-  identities: LinkedIdentity[]
-}
-
-/** What a search of one account's messages takes, the account given apart. */
-export interface AccountMessageFilter {
-  senders?: Id[]
-  together?: boolean
-  text?: string
-  /** Only this chat of the account. */
-  chatId?: Id
-  /** With `perChat`, the newest `limit` of each chat rather than of all of them together. */
-  limit: number
-  perChat?: boolean
-}
-
-/** A chat id is one account's, so `chatId` comes only with `account`. */
-export type MessageFilter = AccountMessageFilter & {
-  provider?: Provider
-  /** Several accounts of `provider`, by native id — a read across some of them, never all by accident. */
-  accounts?: Id[]
-} & ({ account: AccountKey } | { account?: undefined; chatId?: undefined })
-
-export interface Delta {
-  chats?: Chat[]
-  people?: PersonFacts[]
-  members?: Map<Id, Id[]>
-  state?: Record<string, string>
-}
-
-/** A chat list's query, compiled over `CHAT_COLUMNS`. */
-export interface StoredChatFilter {
-  where?: Where
-}
+import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
+import { type SyncStore, syncStoreOver } from "./sync.js"
+import { type TagsStore, tagsStoreOver } from "./tags.js"
+import type { AccountKey } from "./types.js"
+import { type AccountVectors, accountVectorsOver, type VectorsStore, vectorsStoreOver } from "./vectors.js"
 
 export interface MessageStore {
-  /** Answers the store's id for the account, which `meetings` and `mail` take. */
-  saveAccount(key: AccountKey, account: { name: string | null }): Promise<number>
-  saveChats(key: AccountKey, chats: Chat[]): Promise<void>
-  /** A scheduled message is not kept: it is not history yet. */
-  /**
-   * `seenAt` is when the messenger was asked: a message it still returned is not deleted, so a
-   * tombstone older than that is lifted. A tombstone set after it stays — the deletion is newer.
-   */
-  saveMessages(
-    key: AccountKey,
-    chatId: Id,
-    messages: Message[],
-    options: { via: IngestedVia; seenAt?: number },
-  ): Promise<void>
-  /** Newest first. `query` matches three letters or more of a title; `unread` keeps chats with unread messages. */
-  chats(key: AccountKey, window: { limit?: number; offset?: number } & StoredChatFilter): Promise<Page<Chat>>
-  countChats(key: AccountKey, filter?: StoredChatFilter): Promise<number>
-  /** Replaces who is in a chat with this list, whole: a person left out has left. */
-  saveMembers(key: AccountKey, chatId: Id, memberIds: Id[]): Promise<void>
-  /** Who is in a chat, by name, as the last list said; empty when no list was ever saved. */
-  members(key: AccountKey, chatId: Id): Promise<Member[]>
-  /**
-   * One read of a group's member list: stays opened and kept, a stay closed only when the read was whole,
-   * profiles revised when they differ, today's count. The chat's present members become the list read whole.
-   */
-  saveRoster(key: AccountKey, chatId: Id, read: RosterRead): Promise<RosterChange>
-  /** Stays open at `since` (ISO) or begun after it, oldest first; every stay without it. */
-  memberStays(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<MemberStay[]>
-  /** One row a day, oldest first; from `since` (`YYYY-MM-DD`) when given. */
-  memberCounts(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<MemberCount[]>
-  /** Every profile the chat's members were seen with, oldest first. */
-  profileRevisions(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<ProfileRevision[]>
-  /** Starts or stops `serve`'s daily fetch of the chat's members; history already kept stays. */
-  trackMembers(key: AccountKey, chatId: Id, tracked: boolean): Promise<void>
-  trackedChats(key: AccountKey): Promise<TrackedChat[]>
-  /** The chats a person is in, newest first — as far as the saved member lists go. */
-  chatsWith(key: AccountKey, memberId: Id): Promise<Chat[]>
-  /** What a sync remembered under `name` for this account, and when; a caller encodes a number itself. */
-  syncState(key: AccountKey, name: string): Promise<{ value: string; at: string } | undefined>
-  setSyncState(key: AccountKey, name: string, value: string): Promise<void>
-  clearSyncState(key: AccountKey, name: string): Promise<void>
-  /**
-   * A catch-up's whole answer in one transaction, so a reader never sees half of it: chats, people,
-   * each listed chat's members (replaced whole) and sync state such as a delta marker.
-   */
-  applyDelta(key: AccountKey, delta: Delta): Promise<void>
-  /**
-   * Takes the stretch of a chat at `anchor` for `forMs`; answers whether `holder` has it. Refused
-   * while another holder's lease runs; the same holder renews its own.
-   */
-  claim(key: AccountKey, chatId: Id, anchor: string, holder: string, forMs: number): Promise<boolean>
-  /** Gives the stretch back, if `holder` still has it. */
-  release(key: AccountKey, chatId: Id, anchor: string, holder: string): Promise<void>
-  /** What a voice message said, when it was heard before, and by what. */
-  transcript(key: AccountKey, chatId: Id, messageId: Id): Promise<{ text: string; source: string } | undefined>
-  /** Keeps a finished transcript; an empty one is not kept, so the message is heard again. */
-  keepTranscript(key: AccountKey, chatId: Id, messageId: Id, text: string, source: string): Promise<void>
-  /**
-   * Where `messages download` saved a held message's files, for reading them later. Answers how many
-   * attachments it recorded: a file it cannot tell apart from another is not recorded.
-   */
-  keepDownloads(key: AccountKey, chatId: Id, messageId: Id, files: readonly DownloadedFile[]): Promise<number>
-  /** File attachments of this account's live messages, newest first, below `beforePk`; never one an agent wrote. */
-  fileAttachments(
-    key: AccountKey,
-    page: { chatId?: Id; messageId?: Id; beforePk?: number; limit: number },
-  ): Promise<FileAttachment[]>
-  /**
-   * File attachments of live messages and what is held of their text, newest first; never the text. `where` is a
-   * list query compiled over `attachmentColumns`.
-   */
-  attachments(
-    key: AccountKey,
-    filter: { chatId?: Id; messageId?: Id; where?: Where; offset?: number; limit: number },
-  ): Promise<AttachmentView[]>
-  /** Where the file of one attachment was saved, when that is recorded. */
-  localPathOf(attachmentPk: number): Promise<string | null>
-  /** An extraction never replaces an agent's text; answers whether it was kept. */
-  keepAttachmentText(attachmentPk: number, entry: AttachmentTextEntry): Promise<boolean>
-  /** A chat's live messages for the conversation rules, oldest first; pass `next` back as `after`. */
-  linkInputs(
-    key: AccountKey,
-    chatId: Id,
-    page: { after?: string; limit: number },
-  ): Promise<{ items: LinkInput[]; next: string | null }>
-  /** Who wrote in the chat, by lowercased username: what an `@mention` names. */
-  senderHandles(key: AccountKey, chatId: Id): Promise<Map<string, Id>>
-  /**
-   * The chat's provider and rule links and its conversations, rebuilt: written as a new build in short
-   * transactions and made current in one, so readers never see half of it and a failed build changes nothing.
-   */
-  replaceConversations(key: AccountKey, chatId: Id, build: ConversationBuild): Promise<void>
-  /** Newest first; `where` is a list query compiled over `CONVERSATION_COLUMNS`. */
-  conversations(
-    key: AccountKey,
-    chatId: Id,
-    window: { limit: number; offset?: number; where?: Where },
-  ): Promise<Page<ConversationSummary>>
-  /** Its messages oldest first; `undefined` when the account has no such conversation. */
-  conversation(key: AccountKey, id: string): Promise<{ summary: ConversationSummary; messages: Message[] } | undefined>
-  /** Which conversation a message is in, once the chat is built. */
-  conversationOf(key: AccountKey, chatId: Id, messageId: Id): Promise<string | undefined>
-  /** The conversation of the current build each message is in, in the same order; `undefined` where none. */
-  conversationsOfMessages(
-    key: AccountKey,
-    refs: { chatId: Id; messageId: Id }[],
-  ): Promise<(ConversationSummary | undefined)[]>
-  /** Every link a message has, the messenger's first. */
-  links(key: AccountKey, chatId: Id, messageId: Id, options?: { limit: number }): Promise<StoredLink[]>
-  replies(key: AccountKey, chatId: Id, messageId: Id, limit: number): Promise<Page<{ messageId: Id }>>
-  /** The user's agent's current answer per message: its parent, or `null` for "starts a conversation". */
-  agentAnswers(key: AccountKey, chatId: Id): Promise<Map<Id, Id | null>>
-  /** Stores the agent's answer to a batch, checked whole first; answers how many were stored (A5). */
-  saveAnswers(key: AccountKey, batch: string, answer: AgentAnswer): Promise<{ chat: Id; stored: number }>
-  /** Drops the agent's answers for a chat, or one model's; answers how many. Messages are never touched. */
-  clearAnswers(key: AccountKey, chatId: Id, model?: string): Promise<number>
-  /** How many messages still need the user's agent, and their characters (phase 4). */
-  batchStatus(key: AccountKey, chatId: Id): Promise<{ messages: number; characters: number }>
-  /** The earliest window holding a message the agent has not answered; `undefined` when none is left. */
-  nextBatch(key: AccountKey, chatId: Id, options: { size: number }): Promise<LinkBatch | undefined>
-  /** Chunks of the chat's current build with no vector of `model`, by hash after `after` (phase 5). */
-  chunksToEmbed(
-    key: AccountKey,
-    chatId: Id,
-    model: string,
-    options: { after?: string; limit: number },
-  ): Promise<ChunkToEmbed[]>
-  saveVectors(model: string, dims: number, vectors: { hash: string; vector: Float32Array }[]): Promise<void>
-  /** The chat's live image attachments with the messages around each, and the chunk each already has. */
-  imagesToDescribe(
-    key: AccountKey,
-    chatId: Id,
-    window: { messages: number; withinMs: number },
-  ): Promise<imageChunks.ImageInput[]>
-  /** Makes these the chunks of their images, and drops the chat's image chunks not in `keep` (attachment pks). */
-  saveImageChunks(key: AccountKey, chatId: Id, chunks: imageChunks.ImageChunk[], keep: number[]): Promise<void>
-  /** Which of these chunk hashes already have a vector of `model`. */
-  embeddedHashes(model: string, hashes: string[]): Promise<Set<string>>
-  /** The images nearest in meaning to `query` by the text around them, as their message in its conversation. */
-  nearestImages(
-    key: AccountKey,
-    options: { chatId?: Id; model: string; since?: string; limit: number; query: Float32Array },
-  ): Promise<ConversationHit[]>
-  /** Live image attachments with no picture vector yet, in attachment order after `after`; `chatId` narrows it. */
-  picturesToEmbed(key: AccountKey, options: { chatId?: Id; after?: number; limit: number }): Promise<PictureInput[]>
-  /** Keeps each picture's vector of `model` and makes its hash the image's picture chunk. */
-  savePictures(
-    key: AccountKey,
-    model: string,
-    dims: number,
-    pictures: { attachmentPk: number; hash: string; bytes: number; occurredAt: number; vector: Float32Array }[],
-  ): Promise<void>
-  /** The images nearest to `query` by their picture vector of `model`, best first, as their message. */
-  nearestPictures(
-    key: AccountKey,
-    options: { chatId?: Id; model: string; since?: string; limit: number; query: Float32Array },
-  ): Promise<{ chatId: Id; messageId: Id; score: number }[]>
-  /** The current build's distinct chunks, and how many have a vector of `model`. */
-  vectorStatus(key: AccountKey, chatId: Id, model: string): Promise<{ chunks: number; embedded: number }>
-  /** Drops the chat's vectors, or one model's; a vector another chat's chunk shares stays. */
-  clearVectors(key: AccountKey, chatId: Id, model?: string): Promise<number>
-  /** The conversations nearest in meaning to `query`, in one chat or every one of the account, best first. */
-  nearestConversations(
-    key: AccountKey,
-    options: {
-      chatId?: Id
-      model: string
-      since?: string
-      limit: number
-      query: Float32Array
-      exclude?: string
-      conversations?: string[]
-      scope?: "personal" | "work"
-      projectId?: string
-      personId?: string
-      before?: string
-    },
-  ): Promise<ConversationHit[]>
-  /**
-   * A conversation of the current build: how many chunks it has, and the vectors of `model` of those whose
-   * messages did not change since — none when it is not the account's or not current.
-   */
-  conversationVectors(key: AccountKey, id: string, model: string): Promise<{ chunks: number; vectors: Float32Array[] }>
-  /**
-   * How fresh each built chat's conversations and `model`'s vectors are — one chat, or every chat whose
-   * conversations were ever built. A chat never built answers `builtAt: null`.
-   */
-  readiness(key: AccountKey, options: { chatId?: Id; model: string }): Promise<StoredReadiness[]>
-  /** Group chats with stored messages whose conversations were never built, the newest message first. */
-  unbuiltGroups(key: AccountKey): Promise<Id[]>
-  /** Chats in scope embedded with another model and not with `model`, which a search with it cannot see. */
-  embeddedOnlyElsewhere(key: AccountKey, options: { chatId?: Id; model: string }): Promise<Id[]>
-  /** Whether the chat's conversations were built, and when; `undefined` when never. */
-  conversationState(
-    key: AccountKey,
-    chatId: Id,
-  ): Promise<{ enabledAt: string; builtAt: string | null; algorithmVersion: number | null } | undefined>
-  /** Oldest to newest, like a provider's history page. */
-  /** `threadId` keeps one forum topic's; `outgoing` only the owner's (true) or only the others' (false). */
-  messages(
-    key: AccountKey,
-    chatId: Id,
-    window: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean },
-  ): Promise<Page<Message>>
-  /** How many stored messages the chat has, sent at `since` or later when it is given. */
-  countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
-  /** The chat's messages that may hold a Google document link, newest first, with the documents linked from each. */
-  documentLinkMessages(key: AccountKey, chatId: Id): Promise<DocumentLinkMessage[]>
-  /** The account's phones, e-mail addresses, links and documents that match the query, newest message first. */
-  mentions(
-    key: AccountKey,
-    query: QueryAst | undefined,
-    window: { limit?: number; offset: number; foundAfter?: number },
-  ): Promise<{ items: StoredMention[]; hasMore: boolean }>
-  /** One mention of the account, with the text around it; `undefined` for another account's or a missing id. */
-  mention(
-    key: AccountKey,
-    id: number,
-  ): Promise<(StoredMention & { before: string; after: string; sameValue: number; candidates: string[] }) | undefined>
-  /**
-   * Says what a mention's value is, everywhere it is written: a phone or an address belongs to its owner
-   * (`person:<uid>` or `organization:<id>`), a document id names the stored document.
-   */
-  confirmMention(key: AccountKey, id: number, owner: string | undefined, by: Decider): Promise<MentionDecision>
-  /** Dismisses a mention's value everywhere it is written, and on later syncs. */
-  rejectMention(key: AccountKey, id: number, by: Decider): Promise<MentionDecision>
-  /** Finds the mentions of every stored message again, every account's; decisions stay. */
-  rebuildMentions(options?: {
-    kinds?: readonly MentionKind[]
-    onBatch?: (done: number, total: number) => void
-  }): Promise<MentionsRebuild>
-  mentionsState(): Promise<MentionsState>
-  /** Where the account's last task-rule pass stopped: the newest store time it read. */
-  taskRulesStop(key: AccountKey): Promise<string | null>
-  setTaskRulesStop(key: AccountKey, until: string): Promise<void>
-  /** Saved or edited after `at` (ISO, this machine's clock), oldest first, and the ids deleted after it. */
-  changes(key: AccountKey, chatId: Id, at: string): Promise<{ messages: Message[]; deleted: Id[] }>
-  /**
-   * By time rather than by id: `before` messages sent at `at` or earlier and `after` sent later,
-   * oldest first. `around` answers the same question for a message id.
-   */
-  messagesWindow(key: AccountKey, chatId: Id, window: { at: string; before: number; after: number }): Promise<Message[]>
-  /**
-   * A stored message and its stored neighbours, oldest first, the one asked for with `anchor`. Until
-   * backfill records which stretches are complete, a neighbour here is the nearest one kept, not
-   * necessarily the next one sent.
-   */
-  around(
-    key: AccountKey,
-    chatId: Id,
-    messageId: Id,
-    window: { before: number; after: number },
-  ): Promise<WindowedMessage[]>
-  /**
-   * One message by its id. Without `chatId` it is looked up across the account, which is enough
-   * where ids are unique per account (MAX) and refused where two chats share one (Telegram).
-   */
-  message(key: AccountKey, messageId: Id, options?: { chatId?: Id }): Promise<Message | undefined>
-  /**
-   * Everything one account holds — its chats, messages, members, state, leases, transcripts and whom
-   * it has seen — for `cache clear`. Other accounts, and identities they share, stay.
-   */
-  purge(key: AccountKey): Promise<void>
-  /**
-   * Given every chat the account is in, marks the rest `left` and says how many it marked. Only
-   * ever from a complete list: a page or a cut list says nothing about the chats it leaves out.
-   * Remembers when, so a search can say the store knows the account's whole chat list.
-   */
-  markChatsLeft(key: AccountKey, present: Id[]): Promise<number>
-  /** The chats marked left and the messages they hold; with `clear`, deletes them and all under them. */
-  leftChats(key: AccountKey, options?: { clear?: boolean }): Promise<{ chats: number; messages: number }>
-  /**
-   * A tombstone, not a removal: the row stays, so a copy fetched before the deletion does not bring
-   * the message back, and reads and search stop returning it. Its text goes — from the row, the
-   * search copy, the edit history and the transcript. Only the messenger returning it again, when
-   * asked after the deletion, lifts the tombstone (`saveMessages`' `seenAt`).
-   *
-   * Without `chatId`, a message is tombstoned only when exactly one live message with its id is left
-   * in the chats `among` accepts. Without `among`, nothing is: only the messenger knows which of its
-   * chats a deletion without one may belong to (`Messenger.deletedWithoutChat`).
-   */
-  markDeleted(key: AccountKey, messageIds: Id[], options?: { chatId?: Id; among?: DeletionScope }): Promise<number>
-  /** Newest first. At least three characters: a trigram index answers a shorter query with nothing. */
-  search(query: string, options: { limit: number; account?: AccountKey }): Promise<Page<StoredHit>>
-  /** Newest first — by text, by who wrote it, or both. */
-  find(filter: MessageFilter): Promise<Page<StoredHit>>
-  rankingDiscussionChats(account: AccountKey, chatId: string): Promise<string[]>
-  rankingEvidence(execution: QueryExecution, request: RankingEvidenceRequest): Promise<RankedEvidence>
-  retention(
-    key: AccountKey,
-    chatId: Id,
-    options: RetentionOptions,
-    evidence?: { cohort: string; cursor?: string },
-  ): Promise<RetentionResult>
-  adminStatisticsQuery(execution: QueryExecution, request: AdminStoreRequest): Promise<AdminStoreResult>
-  rankQuery(execution: QueryExecution, request: RankingRequest): Promise<RankedStoreFound>
-  directReplies(parents: { account: AccountKey; chatId: Id; id: Id }[], limit: number): Promise<Page<StoredHit>>
-  matchQuery(execution: QueryExecution): Promise<Page<ScoredHit>>
-  conversationEligibility(execution: QueryExecution): Promise<ConversationEligibility>
-  /** The same matches as `matchQuery`, each counted once, grouped by chat, sender or quarter hour. */
-  countQuery(execution: QueryExecution, by: QueryGrouping): Promise<QueryGroup[]>
-  /** Per chat: whether its history is held up to date, without gaps, back to its start. */
-  chatCompleteness(key: AccountKey, chatIds: Id[]): Promise<ChatCompleteness[]>
-  /** Of `terms`, those the index knows as a word or the beginning of one. */
-  knownTerms(terms: string[]): Promise<Set<string>>
-  /** Known words sharing these trigrams, within the lengths, most shared first. */
-  termCandidates(
-    trigrams: string[],
-    lengths: { shortest: number; longest: number },
-  ): Promise<{ term: string; docs: number }[]>
-  /** How far the word index is built; `undefined` on a file before it existed. */
-  searchIndexState(): Promise<SearchIndexState | undefined>
-  /**
-   * Builds the word index towards "ready" in short batches — the normalized text, the messages up to
-   * the watermark, the typo vocabulary — until done or `until` says stop. Each batch is its own write.
-   */
-  fillSearchIndex(options?: { until?: () => boolean }): Promise<SearchIndexFill>
-  /** How far the stems are built, and by which stemmer choices; `undefined` on a file before they existed. */
-  stemsState(): Promise<StemsState | undefined>
-  /** Builds the stems towards "ready" in short batches until done or `until` says stop; never rebuilds. */
-  fillStems(options?: { until?: () => boolean }): Promise<StemsFill>
-  /**
-   * The stemmer choices saved in the store for every profile, tg and MAX; `undefined` while the defaults
-   * apply, `null` when a newer tool saved one this build does not know.
-   */
-  stemmers(): Promise<Stemmers | null | undefined>
-  /** Saves them; stems built by other choices wait for `store reindex` or `store migrate`. */
-  saveStemmers(stemmers: Stemmers): Promise<void>
-  /** The account groups `--source group:<name>` reads: each group's entries as saved, store-wide. */
-  accountGroups(): Promise<AccountGroups>
-  /** Saves one group's entries; `undefined` removes the group. */
-  saveAccountGroup(name: string, members: string[] | undefined): Promise<void>
-  /** Per app command, each profile's account: how `--source max:default` finds a profile of another app. */
-  profiles(): Promise<Profiles>
-  /** Records which account a profile of `app` is; a no-op when the store already says so. */
-  saveProfile(app: string, profile: string, key: AccountKey): Promise<void>
-  savePeople(key: AccountKey, people: PersonFacts[]): Promise<void>
-  /**
-   * The people this account has a one-to-one chat with — as far as the saved member lists go —
-   * newest conversation first or by name.
-   */
-  contacts(
-    key: AccountKey,
-    options: { order: "recent" | "name"; limit: number; offset?: number } & ContactFilter,
-  ): Promise<Page<Contact>>
-  countContacts(key: AccountKey, options?: ContactFilter): Promise<number>
-  /** Works out again when each contact was last written to, from their one-to-one chats. */
-  refreshRecency(key: AccountKey): Promise<void>
-  /** Every account of every messenger the file holds, by messenger then id. */
-  accounts(): Promise<AccountKey[]>
-  /** Every account with the store's id for it, by provider then external id. */
-  storedAccounts(): Promise<StoredAccount[]>
-  /** One account by provider and external id, never created: `not_found` when the store has none. */
-  storedAccount(key: AccountKey): Promise<StoredAccount>
-  /** The name the messenger last gave for this account; `null` when it never did. */
-  accountName(key: AccountKey): Promise<string | null>
-  /** Everyone this provider's accounts have seen; with `account`, only who that account has seen. */
-  people(provider: Provider, options?: { account?: Id; accounts?: Id[] }): Promise<PeopleLookup>
-  personOf(identity: IdentityRef): Promise<PersonRecord | undefined>
-  /** The person a `person:<uid>` reference names. */
-  personSeenInAccounts(uid: string, accountIds: readonly number[]): Promise<boolean>
-  personByUid(uid: string): Promise<PersonRecord | undefined>
-  /** Records the decision in `identity_link_events`; `unlinkIdentity` undoes it. */
-  linkIdentities(person: IdentityRef, other: IdentityRef, options: LinkOptions): Promise<PersonRecord>
-  unlinkIdentity(identity: IdentityRef, options: LinkOptions): Promise<PersonRecord>
-  /** Messages of the account that name this person, newest first. */
-  mentioning(key: AccountKey, person: { id: Id; username: string | null }, limit: number): Promise<Page<StoredHit>>
-  /** A message's reactions as they are now; answers whether the message is held at all. */
-  saveReactions(
-    key: AccountKey,
-    chatId: Id,
-    messageId: Id,
-    reactions: Reactions,
-    options?: { observation?: CounterObservations["reactions"] },
-  ): Promise<boolean>
-  counterTargets(
-    execution: QueryExecution,
-    options: { now: number; maxAge: number },
-  ): Promise<{ items: CounterTarget[]; hasMore: boolean }>
-  counterStates(
-    key: AccountKey,
-    chatId: Id,
-    messageId: Id,
-    options: { now: number; maxAge: number },
-  ): Promise<CounterState[]>
-  updateCounterObservations(
-    key: AccountKey,
-    chatId: Id,
-    messageId: Id,
-    observations: CounterObservations,
-  ): Promise<number>
-  /**
-   * Records that every message from `from` to `to` (inclusive, by ordering key) is held, merging it
-   * with the stretches it overlaps or touches. Answers the merged stretch.
-   */
-  markRange(key: AccountKey, chatId: Id, from: number, to: number): Promise<Range>
-  /** Per chat that has messages: how many, the oldest and newest, and when the last one was stored. */
-  chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>
-  /** Per chat that spoke since `since` (ms): its newest message and who sent it when stored, never the text. */
-  /** `where` is a `tasks agenda` query compiled over `AGENDA_COLUMNS`. */
-  chatActivity(
-    key: AccountKey,
-    since: number,
-    where?: Where,
-  ): Promise<{ chats: ChatActivity[]; storedAt: string | null }>
-  /** One person's stored messages per chat of this account, newest first. */
-  senderStats(key: AccountKey, senderId: Id): Promise<SenderChatStats[]>
-  /** Every name and username this account's store recorded for one person, the current ones included. */
-  personNames(key: AccountKey, personId: Id): Promise<PersonAlias[]>
-  /** The stretches held completely, oldest first. */
-  ranges(key: AccountKey, chatId: Id): Promise<Range[]>
-  /** Labels one stored chat, person or message; answers the tags it did not have. `not_found` for one not held. */
-  chatMetadata(key: AccountKey, chatId: Id): Promise<ChatMetadata | undefined>
-  saveChatMetadata(key: AccountKey, entry: Omit<ChatMetadata, "fetchedAt">): Promise<ChatMetadata>
-  replaceAutoTags(key: AccountKey, chatId: Id, algorithm: string, tags: ChannelTagMatch[]): Promise<void>
-  privateContact(key: AccountKey, personId: Id): Promise<PrivateContact>
-  setContactAlias(key: AccountKey, personId: Id, alias: string | null): Promise<{ personId: Id; alias: string | null }>
-  addContactNote(key: AccountKey, personId: Id, text: string): Promise<PrivateContactNote>
-  contactNote(key: AccountKey, personId: Id, id: string): Promise<PrivateContactNote>
-  editContactNote(
-    key: AccountKey,
-    personId: Id,
-    id: string,
-    text: string,
-    revision: number,
-  ): Promise<PrivateContactNote>
-  removeContactNote(key: AccountKey, personId: Id, id: string): Promise<{ id: string; personId: Id; removed: boolean }>
-  addTags(key: AccountKey, target: AnyTagTarget, tags: string[]): Promise<string[]>
-  /** Answers the tags it had. */
-  removeTags(key: AccountKey, target: AnyTagTarget, tags: string[], source?: "manual" | "auto"): Promise<string[]>
-  /** The account's tagged chats and messages, and its messenger's tagged people. */
-  tags(key: AccountKey, filter?: TagFilter): Promise<StoredTag[]>
-  /** One run of a search or stats; the same unnamed run again counts on its row. `saved` is the saved search it ran. */
-  recordSearch(run: SearchRecord, options?: { saved?: string }): Promise<void>
-  /** A saved search by name; a name already taken is refused unless `replace`. */
-  saveSearch(name: string, search: SearchRecord, options?: { replace?: boolean }): Promise<StoredSearch>
-  /** A saved search by name, or any row by id. */
-  storedSearch(reference: string): Promise<StoredSearch | undefined>
-  savedSearches(): Promise<StoredSearch[]>
-  /** Runs, newest first, one more than `limit` when there are more. */
-  searchHistory(limit: number, offset?: number): Promise<StoredSearch[]>
-  deleteSearch(reference: string): Promise<StoredSearch>
-  /** Drops the unnamed runs; answers how many. */
-  clearSearchHistory(): Promise<number>
+  /** Accounts, account groups and which account each app profile is. */
+  readonly accounts: AccountsStore
+  /** One account's chats: the list, what left, what is complete, their metadata. */
+  readonly chats: ChatsStore
+  /** Sync markers, catch-up deltas, stretch leases and the stretches held completely. */
+  readonly sync: SyncStore
+  /** Messages: writes, reads, tombstones, reactions, transcripts and the plain text search. */
+  readonly messages: MessagesStore
+  /** Downloaded files and the text held of them. */
+  readonly attachments: AttachmentsStore
+  /** Who is in a chat, and its member history. */
+  readonly roster: RosterStore
+  /** People and contacts, the links between their identities, and the owner's private notes on them. */
+  readonly people: PeopleStore
+  /** Reply links, conversation builds and the user's agent's batches. */
+  readonly conversations: ConversationsStore
+  /** Chunk, image and picture vectors, and the nearest conversations by meaning. */
+  readonly vectors: VectorsStore
+  /** View, forward and reaction counters as they were observed. */
+  readonly counters: CountersStore
+  /** The search history and saved searches. */
+  readonly searches: SearchesStore
+  /** A resolved Lucene query run over the store. */
+  readonly queries: QueriesStore
+  /** The word index, the stems and the stemmer choices. */
+  readonly searchIndex: SearchIndexStore
+  /** Tags on chats, people and messages. */
+  readonly tags: TagsStore
+  /** Phones, addresses, links and documents found in messages, and the owner's decisions on them. */
+  readonly mentions: MentionsStore
   /** Open tasks waiting on the owner, for the task service in `src/tasks/`. */
   readonly botUpdates: BotUpdateStore
   readonly involvements: InvolvementStore
@@ -700,138 +107,6 @@ export interface MessageStore {
   /** The same store with this account bound — what a service of one account reads and writes through. */
   forAccount(key: AccountKey): AccountStore
   close(): Promise<void>
-}
-
-/** One sender's stored messages in one chat. */
-export interface SenderChatStats {
-  chatId: Id
-  title: string | null
-  kind: ChatKind
-  messages: number
-  firstAt: string | null
-  lastAt: string | null
-}
-
-export interface ChatActivity {
-  chatId: Id
-  title: string | null
-  kind: ChatKind
-  lastMessageAt: string
-  /** `null` while the newest message is not stored: the chat list says the chat moved, nothing more. */
-  lastMessageId: Id | null
-  /** `null` when the newest message is not stored, or the messenger did not say who sent it. */
-  lastFromOwner: boolean | null
-}
-
-export interface ChatStats {
-  chatId: Id
-  title: string | null
-  messages: number
-  oldestAt: string | null
-  newestAt: string | null
-  lastStoredAt: string | null
-}
-
-/** One build of a chat's conversations, by message id; phase 3 plan C3. */
-export interface ConversationBuild {
-  check?: () => void
-  /** When the build started reading: a change after it is not in the build. */
-  startedAt: number
-  algorithmVersion: number
-  links: Link[]
-  /** Message ids, each conversation oldest first. */
-  conversations: Id[][]
-  /** Each conversation's chunks, in the same order as `conversations` (phase 5). */
-  chunks?: { firstId: Id; lastId: Id; hash: string; range?: TextRange }[][]
-}
-
-/**
- * A conversation found by meaning: the chunk that matched best, and how near it is (−1 to 1). `stale` when
- * the chunk's messages no longer read as they did when it was embedded (NEED-550 B).
- */
-export interface ConversationHit {
-  summary: ConversationSummary
-  chunk: { firstMessageId: Id; lastMessageId: Id }
-  score: number
-  stale: boolean
-  /** Set when the hit is an image, found by the text around it: its message is the chunk. */
-  matchedIn?: "context"
-}
-
-export interface StoredReadiness {
-  chatId: Id
-  builtAt: string | null
-  algorithmVersion: number | null
-  /** Messages the current build has not seen. */
-  pending: { new: number; edited: number; deleted: number }
-  /** The current build's distinct chunk texts: `current` + `stale` + `missing`; `embedded` have any vector. */
-  vectors: { chunks: number; embedded: number; current: number; stale: number; missing: number }
-}
-
-export interface ConversationSummary {
-  id: string
-  chatId: Id
-  firstMessageId: Id
-  firstAt: string
-  lastAt: string
-  messageCount: number
-  /** How many people wrote in it. */
-  senders: number
-  builtAt: string
-  algorithmVersion: number
-}
-
-/** One message as the user's agent sees it in a batch (phase 4 plan A4). */
-export interface BatchMessage {
-  id: Id
-  at: string
-  sender: { id: Id | null; name: string | null }
-  text: string
-  /** The message it answers, by the messenger's own record. */
-  replyTo?: Id
-  thread?: Id
-  mentions?: Id[]
-  /** `true`: the agent is asked which earlier message this one answers. `false`: context only. */
-  answer: boolean
-  /** For a message to answer: the current build's messenger and rule links, strongest first. */
-  candidates?: { parent: Id | null; source: string; kind: string; confidence: number }[]
-}
-
-/** What the user's agent returns for a batch (phase 4 plan A5), as read from stdin. */
-export interface AgentAnswer {
-  /** The model that answered; stored as the link's method. */
-  model: string
-  /** The skill's version, when the skill sends it. */
-  skill?: string
-  answers: { message: Id; parent: Id | null; confidence: number }[]
-}
-
-/** A window of a chat for the agent: the messages to answer and the ones before them (A1). */
-export interface LinkBatch {
-  /** Names the window, so an answer can be checked against it (A3). */
-  batch: string
-  chat: Id
-  messages: BatchMessage[]
-  /** Messages still needing the agent after this batch, and their characters. */
-  remaining: { messages: number; characters: number }
-}
-
-export interface StoredLink {
-  /** `null`: the source says the message starts a conversation. */
-  parentId: Id | null
-  source: "provider" | "rule" | "agent"
-  kind: string
-  confidence: number
-  method: string
-  version: string | null
-  createdAt: string
-  /** An end changed after the link was written; it is not chosen. */
-  stale: boolean
-}
-
-export interface Range {
-  from: number
-  to: number
 }
 
 export interface StoreOptions {
@@ -874,989 +149,170 @@ export const openStore = async ({ path, env, now = Date.now, command }: StoreOpt
   return storeOver({ database, orm, now, sharedConfig: sharedConfigPath(file, env ?? process.env) })
 }
 
+/** Built on first use, once, so a spy on an area sees every call. */
+const once = <T>(build: () => T): (() => T) => {
+  let built: T | undefined
+  return () => {
+    built ??= build()
+    return built
+  }
+}
+
+const areaOf = <K extends Keyed<K>, A extends K>(keyed: () => K, whole: (keyed: K) => A): (() => Area<K, A>) =>
+  once(() => {
+    const part = keyed()
+    return { keyed: part, whole: whole(part) }
+  })
+
 const storeOver = (context: StoreContext): MessageStore => {
   const { database } = context
   const stemmerFor = stems.stemmerCache()
   const pruneLogsWhenDue = logPruner(database, context.now)
+  const own = <K extends Keyed<K>>(keyed: K): K => ({ ...keyed })
 
-  const mailIndexed = (execution: QueryExecution) => {
-    if (execution.corpus === "mail") drainEmailIndex(database, stemmerFor)
-    return execution
+  // Built on first use: an area that prepares its statements must not stop the store opening for the rest.
+  const mail = once(() => mailStoreOver(context, stemmerFor))
+  const areas = {
+    accounts: areaOf(
+      () => accountAccountsOver(context),
+      (keyed: AccountAccounts) => accountsStoreOver(context, keyed),
+    ),
+    chats: areaOf((): ChatsStore => chatsStoreOver(context), own),
+    sync: areaOf((): SyncStore => syncStoreOver(context), own),
+    messages: areaOf(
+      () => accountMessagesOver(context),
+      (keyed: AccountMessages) => messagesStoreOver(context, keyed),
+    ),
+    attachments: areaOf(
+      () => accountAttachmentsOver(context),
+      (keyed: AccountAttachments) => attachmentsStoreOver(context, keyed),
+    ),
+    roster: areaOf((): RosterStore => rosterStoreOver(context), own),
+    people: areaOf(
+      () => accountPeopleOver(context),
+      (keyed: AccountPeople) => peopleStoreOver(context, keyed),
+    ),
+    conversations: areaOf((): ConversationsStore => conversationsStoreOver(context), own),
+    vectors: areaOf(
+      () => accountVectorsOver(context, mail),
+      (keyed: AccountVectors) => vectorsStoreOver(context, keyed),
+    ),
+    counters: areaOf(
+      () => accountCountersOver(context),
+      (keyed: AccountCounters) => countersStoreOver(context, keyed),
+    ),
+    tags: areaOf((): TagsStore => tagsStoreOver(context), own),
+    mentions: areaOf(
+      () => accountMentionsOver(context),
+      (keyed: AccountMentions) => mentionsStoreOver(context, keyed),
+    ),
   }
-  const accountPk = (key: AccountKey, name: string | null = null) => accounts.accountPk(context, key, name)
-  const findAccountPk = (key: AccountKey) => accounts.findAccountPk(context, key)
-
-  const findChatPk = (accountKey: number, chatId: Id) => chatQueries.findChatPk(context, accountKey, chatId)
-  const chatKeyOf = (key: AccountKey, chatId: Id) => {
-    const accountKey = findAccountPk(key)
-    return accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
-  }
-  const chatPkFor = (accountKey: number, chatId: Id) => chatQueries.chatPkFor(context, accountKey, chatId)
-
-  const identityPk = (
-    accountKey: number,
-    provider: Provider,
-    nativeId: Id,
-    name: string | null,
-    facts?: Omit<PersonFacts, "id" | "name">,
-  ) => identities.identityPk(context, accountKey, provider, nativeId, name, facts)
-
-  const upsertMessage = (
-    key: AccountKey,
-    accountKey: number,
-    chatKey: number,
-    message: Message,
-    via: string,
-    seenAt?: number,
-  ) => messageWrites.upsertMessage(context, key, accountKey, chatKey, message, via, seenAt)
-
-  const writeMembers = (key: AccountKey, accountKey: number, chatId: Id, memberIds: Id[]) =>
-    chatQueries.writeMembers(context, key, accountKey, chatId, memberIds)
-
-  const writeState = (accountKey: number, name: string, value: string) =>
-    sync.writeState(context, accountKey, name, value)
-  let botUpdates: BotUpdateStore | undefined
-  let involvements: InvolvementStore | undefined
-  let tasks: MessageStore["tasks"] | undefined
-  let sourceMentions: SourceMentionStore | undefined
-  let knowledge: MessageStore["knowledge"] | undefined
-  let notes: MessageStore["notes"] | undefined
-  let catalog: CatalogStore | undefined
-  let facts: MessageStore["facts"] | undefined
-  let memories: MessageStore["memories"] | undefined
-  let proposedActions: MessageStore["proposedActions"] | undefined
-  let agentActions: MessageStore["agentActions"] | undefined
-  let meetings: MessageStore["meetings"] | undefined
-  let mail: MessageStore["mail"] | undefined
-  const mailOf = () => {
-    mail ??= mailStoreOver(context, stemmerFor)
-    return mail
-  }
+  const searches = once(() => searchesStoreOver(context))
+  const queries = once(() => queriesStoreOver(context, stemmerFor))
+  const searchIndex = once(() => searchIndexStoreOver(context))
+  const botUpdates = once(() => botUpdateStoreOver(context, pruneLogsWhenDue))
+  const involvements = once(() => involvementStoreOver(context))
+  const tasks = once(() => taskStoreOver(context))
+  const sourceMentions = once(() => sourceMentionStoreOver(context))
+  const knowledge = once(() => knowledgeStoreOver(context))
+  const notes = once(() => ({ ...notesStoreOver(context), ...noteSearchOver(context) }))
+  const catalog = once(() => catalogStoreOver(context))
+  const facts = once(() => factsStoreOver(context))
+  const memories = once(() => memoriesStoreOver(context))
+  const proposedActions = once(() => proposedActionsStoreOver(context))
+  const agentActions = once(() => agentActionsStoreOver(context, pruneLogsWhenDue))
+  const meetings = once(() => meetingStoreOver(context))
 
   const store: MessageStore = {
     meetingVectors: meetingVectorsOver(context),
-    saveAccount: async (key, { name }) => {
-      const pk = accountPk(key, name)
-      linkInbox(database, `${key.provider}:${key.account}`, pk)
-      return pk
+    get accounts() {
+      return areas.accounts().whole
     },
-
-    saveChats: async (key, list) =>
-      write(database, () => {
-        const accountKey = accountPk(key)
-        for (const chat of list) chatQueries.upsertChat(context, accountKey, chat)
-      }),
-
-    saveMessages: async (key, chatId, messages, { via, seenAt }) =>
-      write(database, () => {
-        const accountKey = accountPk(key)
-        const chatKey = chatPkFor(accountKey, chatId)
-        for (const message of messages) {
-          if (message.scheduledFor === undefined) upsertMessage(key, accountKey, chatKey, message, via, seenAt)
-        }
-      }),
-
-    saveMembers: async (key, chatId, memberIds) =>
-      write(database, () => writeMembers(key, accountPk(key), chatId, memberIds)),
-
-    saveRoster: async (key, chatId, read) => {
-      let change: RosterChange = { joined: [], gone: [], changed: [] }
-      write(database, () => {
-        const accountKey = accountPk(key)
-        change = roster.saveRoster(context, accountKey, key.provider, chatPkFor(accountKey, chatId), read)
-      })
-      return change
+    get chats() {
+      return areas.chats().whole
     },
-
-    memberStays: async (key, chatId, { since } = {}) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined
-        ? []
-        : roster.memberStaysOf(context, chatKey, since === undefined ? undefined : Date.parse(since))
+    get sync() {
+      return areas.sync().whole
     },
-
-    memberCounts: async (key, chatId, { since } = {}) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? [] : roster.memberCountsOf(context, chatKey, since)
+    get messages() {
+      return areas.messages().whole
     },
-
-    profileRevisions: async (key, chatId, { since } = {}) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined
-        ? []
-        : roster.profileRevisionsOf(context, chatKey, since === undefined ? undefined : Date.parse(since))
+    get attachments() {
+      return areas.attachments().whole
     },
-
-    trackMembers: async (key, chatId, tracked) =>
-      write(database, () => roster.setTracked(context, chatPkFor(accountPk(key), chatId), tracked)),
-
-    trackedChats: async (key) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? [] : roster.trackedChats(context, accountKey)
+    get roster() {
+      return areas.roster().whole
     },
-
-    members: async (key, chatId) => {
-      const accountKey = findAccountPk(key)
-      const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
-      return chatKey === undefined ? [] : chatQueries.members(context, chatKey)
+    get people() {
+      return areas.people().whole
     },
-
-    personOf: async (identity) => personLinks.personOf(context, identity),
-    personSeenInAccounts: async (uid, accountIds) => personSeenInAccounts(context, uid, accountIds),
-    personByUid: async (uid) => personLinks.personByUid(context, uid),
-    linkIdentities: async (person, other, options) => {
-      return write(database, () => personLinks.linkIdentities(context, person, other, options))
+    get conversations() {
+      return areas.conversations().whole
     },
-    unlinkIdentity: async (identity, options) => {
-      return write(database, () => personLinks.unlinkIdentity(context, identity, options))
+    get vectors() {
+      return areas.vectors().whole
     },
-    mentioning: async (key, person, limit) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined
-        ? { items: [], hasMore: false }
-        : personLinks.mentioning(context, accountKey, person, limit)
+    get counters() {
+      return areas.counters().whole
     },
-
-    chatsWith: async (key, memberId) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? [] : chatQueries.chatsWith(context, accountKey, key, memberId)
+    get tags() {
+      return areas.tags().whole
     },
-
-    syncState: async (key, name) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? undefined : sync.syncStateOf(context, accountKey, name)
+    get mentions() {
+      return areas.mentions().whole
     },
-
-    setSyncState: async (key, name, value) => write(database, () => writeState(accountPk(key), name, value)),
-
-    applyDelta: async (key, { chats = [], people = [], members = new Map(), state = {} }) =>
-      write(database, () => {
-        const accountKey = accountPk(key)
-        for (const chat of chats) chatQueries.upsertChat(context, accountKey, chat)
-        for (const person of people) identityPk(accountKey, key.provider, person.id, person.name, person)
-        for (const [chatId, ids] of members) writeMembers(key, accountKey, chatId, ids)
-        for (const [name, value] of Object.entries(state)) writeState(accountKey, name, value)
-      }),
-
-    clearSyncState: async (key, name) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey !== undefined) sync.clearState(context, accountKey, name)
+    get searches() {
+      return searches()
     },
-
-    claim: async (key, chatId, anchor, holder, forMs) => {
-      let taken = false
-      write(database, () => {
-        taken = sync.claim(context, chatPkFor(accountPk(key), chatId), anchor, holder, forMs)
-      })
-      return taken
+    get queries() {
+      return queries()
     },
-
-    release: async (key, chatId, anchor, holder) => {
-      const accountKey = findAccountPk(key)
-      const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
-      if (chatKey !== undefined) sync.release(context, chatKey, anchor, holder)
+    get searchIndex() {
+      return searchIndex()
     },
-
-    transcript: async (key, chatId, messageId) => {
-      const accountKey = findAccountPk(key)
-      const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
-      return chatKey === undefined ? undefined : transcripts.transcript(context, chatKey, messageId)
-    },
-
-    keepTranscript: async (key, chatId, messageId, text, source) => {
-      if (text.trim() === "") return
-      write(database, () =>
-        transcripts.keepTranscript(context, chatPkFor(accountPk(key), chatId), messageId, text, source),
-      )
-    },
-
-    fileAttachments: async (key, { chatId, ...page }) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined) return []
-      if (chatId === undefined) return attachmentTexts.fileAttachments(context, accountKey, page)
-      const chatKey = findChatPk(accountKey, chatId)
-      return chatKey === undefined ? [] : attachmentTexts.fileAttachments(context, accountKey, { ...page, chatKey })
-    },
-
-    attachments: async (key, { chatId, ...filter }) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined) return []
-      if (chatId === undefined) return attachmentTexts.attachmentViews(context, accountKey, filter)
-      const chatKey = findChatPk(accountKey, chatId)
-      return chatKey === undefined ? [] : attachmentTexts.attachmentViews(context, accountKey, { ...filter, chatKey })
-    },
-
-    localPathOf: async (attachmentPk) => attachmentTexts.localPathOf(context, attachmentPk),
-
-    keepAttachmentText: async (attachmentPk, entry) => {
-      let kept = false
-      write(database, () => {
-        kept = attachmentTexts.keepText(context, attachmentPk, entry)
-      })
-      return kept
-    },
-
-    keepDownloads: async (key, chatId, messageId, files) => {
-      const chatKey = chatKeyOf(key, chatId)
-      if (chatKey === undefined || files.length === 0) return 0
-      let kept = 0
-      write(database, () => {
-        kept = attachmentRows.keepDownloads(context, chatKey, messageId, files)
-      })
-      return kept
-    },
-
-    linkInputs: async (key, chatId, page) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? { items: [], next: null } : conversationQueries.linkInputs(context, chatKey, page)
-    },
-
-    senderHandles: async (key, chatId) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? new Map() : conversationQueries.senderHandles(context, chatKey)
-    },
-
-    replaceConversations: async (key, chatId, build) => {
-      const chatKey = chatKeyOf(key, chatId)
-      if (chatKey === undefined) throw new CliError("not_found", `chat ${chatId} is not in the local copy`)
-      await conversationQueries.replaceConversations(context, chatKey, build)
-    },
-
-    conversations: async (key, chatId, window) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined
-        ? { items: [], hasMore: false }
-        : conversationQueries.conversationPage(context, chatKey, window)
-    },
-
-    conversation: async (key, id) => {
-      const accountKey = findAccountPk(key)
-      const pk = Number(id)
-      return accountKey === undefined || !Number.isSafeInteger(pk)
-        ? undefined
-        : conversationQueries.conversation(context, accountKey, pk)
-    },
-
-    conversationOf: async (key, chatId, messageId) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? undefined : conversationQueries.conversationOf(context, chatKey, messageId)
-    },
-
-    conversationsOfMessages: async (key, refs) => {
-      const accountPk = findAccountPk(key)
-      if (accountPk === undefined) return refs.map(() => undefined)
-      const pks = refs.map(({ chatId, messageId }) => {
-        const chatKey = findChatPk(accountPk, chatId)
-        const id = chatKey === undefined ? undefined : conversationQueries.conversationOf(context, chatKey, messageId)
-        return id === undefined ? undefined : Number(id)
-      })
-      const found = conversationQueries.summariesOf(
-        context,
-        accountPk,
-        pks.filter((pk) => pk !== undefined),
-      )
-      return pks.map((pk) => (pk === undefined ? undefined : found.get(pk)))
-    },
-
-    links: async (key, chatId, messageId, options) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? [] : conversationQueries.linksOf(context, chatKey, messageId, options?.limit)
-    },
-
-    replies: async (key, chatId, messageId, limit) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined
-        ? { items: [], hasMore: false }
-        : conversationQueries.repliesTo(context, chatKey, messageId, limit)
-    },
-
-    agentAnswers: async (key, chatId) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? new Map() : conversationQueries.agentAnswers(context, chatKey)
-    },
-
-    saveAnswers: async (key, batch, answer) => {
-      const chatKey = batches.chatOfBatch(batch)
-      const accountKey = findAccountPk(key)
-      const chat =
-        chatKey === undefined || accountKey === undefined ? undefined : chatQueries.chatOf(context, accountKey, chatKey)
-      if (chatKey === undefined || chat === undefined) {
-        throw new CliError("validation_error", `the answer was not stored: ${batch} is not a batch of this account`)
-      }
-      let stored = 0
-      write(database, () => {
-        stored = batches.saveAnswers(context, batch, answer)
-      })
-      return { chat, stored }
-    },
-
-    clearAnswers: async (key, chatId, model) => {
-      const chatKey = chatKeyOf(key, chatId)
-      if (chatKey === undefined) return 0
-      let cleared = 0
-      write(database, () => {
-        cleared = batches.clearAnswers(context, chatKey, model)
-      })
-      return cleared
-    },
-
-    batchStatus: async (key, chatId) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? { messages: 0, characters: 0 } : batches.batchStatus(context, chatKey)
-    },
-
-    nextBatch: async (key, chatId, { size }) => {
-      const chatKey = chatKeyOf(key, chatId)
-      if (chatKey === undefined) return undefined
-      const found = batches.nextBatch(context, chatKey, chatId, size)
-      if (!found) return undefined
-      const answered = found.messages.filter(({ answer }) => answer)
-      const left = batches.batchStatus(context, chatKey)
-      return {
-        ...found,
-        remaining: {
-          messages: left.messages - answered.length,
-          characters: left.characters - answered.reduce((sum, { text }) => sum + [...text].length, 0),
-        },
-      }
-    },
-
-    chunksToEmbed: async (key, chatId, model, options) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? [] : vectors.chunksToEmbed(context, chatKey, model, options)
-    },
-
-    saveVectors: async (model, dims, rows) => {
-      write(database, () => vectors.saveVectors(context, model, dims, rows))
-    },
-
-    imagesToDescribe: async (key, chatId, window) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? [] : imageChunks.imagesOfChat(context, chatKey, window)
-    },
-
-    saveImageChunks: async (key, chatId, chunks, keep) => {
-      const accountPk = findAccountPk(key)
-      const chatKey = chatKeyOf(key, chatId)
-      if (accountPk === undefined || chatKey === undefined) return
-      write(database, () => imageChunks.saveImageChunks(context, accountPk, chatKey, chunks, keep))
-    },
-
-    embeddedHashes: async (model, hashes) => imageChunks.embeddedHashes(context, model, hashes),
-
-    nearestImages: async (key, { chatId, model, since, limit, query }) => {
-      const accountPk = findAccountPk(key)
-      if (accountPk === undefined) return []
-      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
-      if (chatId !== undefined && chatKey === undefined) return []
-      const nearest = imageChunks.nearestImages(context, accountPk, {
-        ...(chatKey === undefined ? {} : { chatKey }),
-        ...(since === undefined ? {} : { since: Date.parse(since) }),
-        model,
-        limit,
-        query,
-      })
-      const hits: ConversationHit[] = []
-      for (const { chatId: chat, messageId, score } of nearest) {
-        const chatPk = findChatPk(accountPk, chat)
-        const conversation =
-          chatPk === undefined ? undefined : conversationQueries.conversationOf(context, chatPk, messageId)
-        const summary =
-          conversation === undefined
-            ? undefined
-            : conversationQueries.summariesOf(context, accountPk, [Number(conversation)]).get(Number(conversation))
-        if (summary)
-          hits.push({
-            summary,
-            chunk: { firstMessageId: messageId, lastMessageId: messageId },
-            score,
-            stale: false,
-            matchedIn: "context",
-          })
-      }
-      return hits
-    },
-
-    picturesToEmbed: async (key, { chatId, after, limit }) => {
-      const accountPk = findAccountPk(key)
-      if (accountPk === undefined) return []
-      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
-      if (chatId !== undefined && chatKey === undefined) return []
-      return imageChunks.picturesToEmbed(context, accountPk, {
-        ...(chatKey === undefined ? {} : { chatKey }),
-        ...(after === undefined ? {} : { after }),
-        limit,
-      })
-    },
-
-    savePictures: async (key, model, dims, pictures) => {
-      const accountPk = findAccountPk(key)
-      if (accountPk === undefined) return
-      write(database, () => {
-        vectors.saveVectors(
-          context,
-          model,
-          dims,
-          pictures.map(({ hash, vector }) => ({ hash, vector })),
-        )
-        imageChunks.savePictureChunks(context, accountPk, pictures)
-      })
-    },
-
-    nearestPictures: async (key, { chatId, model, since, limit, query }) => {
-      const accountPk = findAccountPk(key)
-      if (accountPk === undefined) return []
-      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
-      if (chatId !== undefined && chatKey === undefined) return []
-      return imageChunks.nearestImages(context, accountPk, {
-        ...(chatKey === undefined ? {} : { chatKey }),
-        ...(since === undefined ? {} : { since: Date.parse(since) }),
-        model,
-        limit,
-        query,
-        position: imageChunks.PICTURE_POSITION,
-      })
-    },
-
-    vectorStatus: async (key, chatId, model) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? { chunks: 0, embedded: 0 } : vectors.vectorStatus(context, chatKey, model)
-    },
-
-    clearVectors: async (key, chatId, model) => {
-      const chatKey = chatKeyOf(key, chatId)
-      if (chatKey === undefined) return 0
-      let cleared = 0
-      write(database, () => {
-        cleared = vectors.clearVectors(context, chatKey, model)
-      })
-      return cleared
-    },
-
-    nearestConversations: async (
-      key,
-      { chatId, model, since, limit, query, exclude, conversations, scope, projectId, personId, before },
-    ) => {
-      const accountPk = findAccountPk(key)
-      if (accountPk === undefined) return []
-      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
-      const mailToo =
-        key.provider === "email" &&
-        conversations === undefined &&
-        scope === undefined &&
-        projectId === undefined &&
-        personId === undefined &&
-        before === undefined
-      const mailHits = async (): Promise<ConversationHit[]> =>
-        mailToo
-          ? (
-              await mailOf().nearest(model, query, {
-                accountId: accountPk,
-                limit,
-                ...(chatId === undefined ? {} : { threadExternalId: chatId }),
-                ...(since === undefined ? {} : { since: Date.parse(since) }),
-              })
-            ).map((hit) => ({
-              summary: threadConversation(hit, context.now()),
-              chunk: { firstMessageId: hit.externalId, lastMessageId: hit.externalId },
-              score: hit.score,
-              stale: false,
-            }))
-          : []
-      if (chatId !== undefined && chatKey === undefined) return mailHits()
-      const nearest = vectors.nearestChunks(context, accountPk, {
-        ...(chatKey === undefined ? {} : { chatKey }),
-        ...(since === undefined ? {} : { since: Date.parse(since) }),
-        ...(exclude === undefined ? {} : { exclude: Number(exclude) }),
-        model,
-        limit,
-        query,
-        ...(conversations === undefined ? {} : { conversations }),
-        ...(scope === undefined ? {} : { scope }),
-        ...(projectId === undefined ? {} : { projectId: Number(projectId) }),
-        ...(personId === undefined ? {} : { personId: Number(personId) }),
-        ...(before === undefined ? {} : { before: Date.parse(before) }),
-      })
-      const found = conversationQueries.summariesOf(
-        context,
-        accountPk,
-        nearest.map(({ conversationPk }) => conversationPk),
-      )
-      const ids = vectors.messageIds(
-        context,
-        nearest.flatMap(({ firstMessagePk, lastMessagePk }) => [firstMessagePk, lastMessagePk]),
-      )
-      const messageHits: ConversationHit[] = nearest.flatMap((chunk) => {
-        const summary = found.get(chunk.conversationPk)
-        const first = ids.get(chunk.firstMessagePk)
-        const last = ids.get(chunk.lastMessagePk)
-        const freshness = vectors.chunkFreshness(context, chunk)
-        return summary && first && last && freshness !== "deleted"
-          ? [
-              {
-                summary,
-                chunk: { firstMessageId: first, lastMessageId: last },
-                score: chunk.score,
-                stale: freshness === "stale",
-              },
-            ]
-          : []
-      })
-      if (!mailToo) return messageHits
-      return [...messageHits, ...(await mailHits())].sort((a, b) => b.score - a.score).slice(0, limit)
-    },
-
-    conversationVectors: async (key, id, model) => {
-      const accountPk = findAccountPk(key)
-      const pk = Number(id)
-      if (accountPk === undefined || !conversationQueries.summariesOf(context, accountPk, [pk]).has(pk)) {
-        return { chunks: 0, vectors: [] }
-      }
-      return vectors.conversationVectors(context, pk, model)
-    },
-
-    readiness: async (key, { chatId, model }) => {
-      const accountPk = findAccountPk(key)
-      if (accountPk === undefined) return []
-      const chats =
-        chatId === undefined
-          ? vectors.builtChats(context, accountPk)
-          : [{ chatKey: chatKeyOf(key, chatId), id: chatId }].flatMap(({ chatKey, id }) =>
-              chatKey === undefined ? [] : [{ chatKey, id }],
-            )
-      return chats.map(({ chatKey, id }) => {
-        const found = vectors.readiness(context, chatKey, model)
-        return found
-          ? { chatId: id, ...found, builtAt: new Date(found.builtAt).toISOString() }
-          : {
-              chatId: id,
-              builtAt: null,
-              algorithmVersion: null,
-              pending: { new: 0, edited: 0, deleted: 0 },
-              vectors: { chunks: 0, embedded: 0, current: 0, stale: 0, missing: 0 },
-            }
-      })
-    },
-
-    unbuiltGroups: async (key) => {
-      const accountPk = findAccountPk(key)
-      return accountPk === undefined ? [] : vectors.unbuiltGroups(context, accountPk)
-    },
-
-    embeddedOnlyElsewhere: async (key, { chatId, model }) => {
-      const accountPk = findAccountPk(key)
-      if (accountPk === undefined) return []
-      const chatKey = chatId === undefined ? undefined : chatKeyOf(key, chatId)
-      if (chatId !== undefined && chatKey === undefined) return []
-      return vectors.embeddedOnlyElsewhere(context, accountPk, { ...(chatKey === undefined ? {} : { chatKey }), model })
-    },
-
-    conversationState: async (key, chatId) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? undefined : conversationQueries.stateOf(context, chatKey)
-    },
-
-    chats: async (key, window) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined
-        ? { items: [], hasMore: false }
-        : chatQueries.listChats(context, accountKey, window)
-    },
-
-    countChats: async (key, filter = {}) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? 0 : chatQueries.countChats(context, accountKey, filter)
-    },
-
-    countMessages: async (key, chatId, { since } = {}) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? 0 : reads.countMessages(context, chatKey, since)
-    },
-
-    documentLinkMessages: async (key, chatId) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? [] : documentLinkMessages(context, chatKey)
-    },
-
-    mentions: async (key, query, window) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined
-        ? { items: [], hasMore: false }
-        : listMentions(database, accountKey, query, window)
-    },
-
-    mention: async (key, id) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? undefined : showMention(database, accountKey, id)
-    },
-
-    confirmMention: async (key, id, ownerRef, by) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined) throw new CliError("not_found", `no mention ${id} in this account`)
-      const mention = mentionOfAccount(database, accountKey, id)
-      return write(database, () => confirmMention(context, mention, mentionOwner(context, ownerRef), by))
-    },
-
-    rejectMention: async (key, id, by) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined) throw new CliError("not_found", `no mention ${id} in this account`)
-      return write(database, () => rejectMention(context, mentionOfAccount(database, accountKey, id), by))
-    },
-
-    rebuildMentions: async (options = {}) => rebuildMentions(database, { now: context.now(), ...options }),
-
-    mentionsState: async () => mentionsState(database),
-    taskRulesStop: async (key) => taskRulesStop(database, key),
-    setTaskRulesStop: async (key, until) => setTaskRulesStop(database, key, until, context.now()),
-
-    changes: async (key, chatId, at) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined
-        ? { messages: [], deleted: [] }
-        : reads.changesSince(context, chatKey, Date.parse(at))
-    },
-
-    messagesWindow: async (key, chatId, window) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? [] : reads.messagesWindow(context, chatKey, window)
-    },
-
-    messages: async (key, chatId, window) => {
-      const chatKey = chatKeyOf(key, chatId)
-      return chatKey === undefined ? { items: [], hasMore: false } : reads.messagePage(context, chatKey, window)
-    },
-
-    around: async (key, chatId, messageId, window) => reads.around(context, chatKeyOf(key, chatId), messageId, window),
-
-    message: async (key, messageId, { chatId } = {}) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? undefined : reads.message(context, accountKey, messageId, chatId)
-    },
-
-    markDeleted: async (key, messageIds, { chatId, among } = {}) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined || messageIds.length === 0) return 0
-      let changed = 0
-      write(database, () => {
-        changed = messageWrites.markDeleted(context, accountKey, messageIds, chatId, among)
-      })
-      return changed
-    },
-
-    purge: async (key) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined) return
-      write(database, () => accounts.purgeAccount(context, accountKey))
-    },
-
-    markChatsLeft: async (key, present) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined) return 0
-      let marked = 0
-      write(database, () => {
-        marked = chatQueries.markLeft(context, accountKey, present)
-        writeState(accountKey, completeness.CHAT_LIST_KEY, String(present.length))
-      })
-      return marked
-    },
-
-    leftChats: async (key, { clear = false } = {}) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined) return { chats: 0, messages: 0 }
-      let found = { pks: [] as number[], messages: 0 }
-      write(database, () => {
-        found = chatQueries.leftChats(context, accountKey)
-        if (clear) chatQueries.purgeChats(context, found.pks)
-      })
-      return { chats: found.pks.length, messages: found.messages }
-    },
-
-    search: async (query, { limit, account }) =>
-      search.find(context, { text: query, limit, ...(account ? { account } : {}) }),
-
-    find: async (filter) => search.find(context, filter),
-
-    rankingDiscussionChats: async (account, chatId) => {
-      const rows = database
-        .prepare(
-          "SELECT DISTINCT json_extract(CASE WHEN json_valid(m.metadata) THEN m.metadata ELSE '{}' END,'$.graph.discussionChatId') AS id FROM messages m JOIN chats c ON c.id=m.chat_id JOIN accounts ac ON ac.id=m.account_id WHERE ac.provider=? AND ac.external_id=? AND c.external_id=? AND c.kind='channel' AND m.deleted_at IS NULL AND json_extract(CASE WHEN json_valid(m.metadata) THEN m.metadata ELSE '{}' END,'$.graph.version')=1 AND json_type(CASE WHEN json_valid(m.metadata) THEN m.metadata ELSE '{}' END,'$.graph.discussionChatId')='text' LIMIT 101",
-        )
-        .all(account.provider, account.account, chatId)
-      if (rows.length > 100)
-        throw new CliError("validation_error", "too many linked discussion groups — narrow the channel scope")
-      return rows.map(({ id }) => String(id))
-    },
-    rankingEvidence: async (execution, request) => rankingEvidence(context, execution, request),
-    retention: async (key, chatId, options, evidence) => {
-      const accountKey = findAccountPk(key)
-      const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
-      if (accountKey === undefined || chatKey === undefined)
-        throw new CliError("validation_error", "retention needs a stored chat and membership observations")
-      return read(database, () => retentionQuery(context, accountKey, chatKey, chatId, options, evidence))
-    },
-    adminStatisticsQuery: async (execution, request) => adminStatisticsQuery(context, execution, request),
-    rankQuery: async (execution, request) => rankQuery(context, execution, request),
-    directReplies: async (parents, limit) => search.directReplies(context, parents, limit),
-    matchQuery: async (execution) => lucene.matchQuery(context, mailIndexed(execution)),
-    conversationEligibility: async (execution) => conversationEligibility(context, execution),
-    countQuery: async (execution, by) => lucene.countQuery(context, mailIndexed(execution), by),
-
-    accounts: async () => accounts.heldAccounts(context),
-    storedAccounts: async () => accounts.storedAccounts(context),
-    storedAccount: async (key) => accounts.storedAccount(context, key),
-    accountName: async (key) => accounts.accountName(context, key),
-
-    chatCompleteness: async (key, chatIds) => {
-      const accountKey = accounts.findAccountPk(context, key)
-      return accountKey === undefined ? [] : completeness.chatCompleteness(context, accountKey, chatIds)
-    },
-
-    knownTerms: async (terms) => words.knownTerms(context, terms),
-
-    termCandidates: async (trigrams, lengths) => words.termCandidates(context, trigrams, lengths),
-
-    searchIndexState: async () => searchIndex.searchIndexState(database),
-
-    fillSearchIndex: async ({ until } = {}) =>
-      searchIndex.fillSearchIndex(database, { now: context.now, ...(until ? { until } : {}) }),
-
-    stemsState: async () => stems.stemsState(database),
-
-    fillStems: async ({ until } = {}) => fillStems(database, { now: context.now, ...(until ? { until } : {}) }),
-
-    stemmers: async () => stems.savedStemmers(database),
-
-    saveStemmers: async (stemmers) => write(database, () => stems.saveStoreStemmers(database, stemmers, context.now())),
-
-    accountGroups: async () => accountGroupsOf(database),
-
-    profiles: async () => profilesOf(database),
-
-    saveProfile: async (app, profile, key) =>
-      write(database, () => saveProfile(database, app, profile, key, context.now())),
-
-    saveAccountGroup: async (name, members) =>
-      write(database, () => {
-        const groups = accountGroupsOf(database)
-        if (members === undefined) delete groups[name]
-        else groups[name] = members
-        database
-          .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
-          .run(ACCOUNT_GROUPS, JSON.stringify(groups), context.now())
-      }),
-
-    contacts: async (key, options) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey === undefined) return { items: [], hasMore: false }
-      return identities.contacts(context, accountKey, key, options)
-    },
-
-    countContacts: async (key, filter = {}) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? 0 : identities.countContacts(context, accountKey, key, filter)
-    },
-
-    refreshRecency: async (key) => {
-      const accountKey = findAccountPk(key)
-      if (accountKey !== undefined) identities.refreshRecency(context, accountKey)
-    },
-
-    savePeople: async (key, people) =>
-      write(database, () => {
-        const accountKey = accountPk(key)
-        for (const person of people) identityPk(accountKey, key.provider, person.id, person.name, person)
-      }),
-
-    people: async (provider, options = {}) => identities.people(context, provider, options),
-
-    counterTargets: async (execution, options) => counterTargets(context, execution, options),
-    counterStates: async (key, chatId, messageId, options) => {
-      const row = database
-        .prepare(
-          "SELECT m.id AS pk FROM messages m JOIN chats c ON c.id=m.chat_id JOIN accounts ac ON ac.id=m.account_id WHERE ac.provider=? AND ac.external_id=? AND c.external_id=? AND m.external_id=? AND m.deleted_at IS NULL",
-        )
-        .get(key.provider, key.account, chatId, messageId)
-      return row ? counterStates(context, Number(row.pk), options.now, options.maxAge) : []
-    },
-    updateCounterObservations: async (key, chatId, messageId, observations) => {
-      let updated = 0
-      write(database, () => {
-        const row = database
-          .prepare(
-            "SELECT m.id AS pk FROM messages m JOIN chats c ON c.id=m.chat_id JOIN accounts ac ON ac.id=m.account_id WHERE ac.provider=? AND ac.external_id=? AND c.external_id=? AND m.external_id=? AND m.deleted_at IS NULL",
-          )
-          .get(key.provider, key.account, chatId, messageId)
-        if (row) updated = applyCounterObservations(context, Number(row.pk), observations)
-      })
-      return updated
-    },
-    saveReactions: async (key, chatId, messageId, reactions, options = {}) => {
-      const accountKey = findAccountPk(key)
-      const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
-      if (chatKey === undefined) return false
-      let saved = false
-      write(database, () => {
-        saved = messageWrites.saveReactions(context, chatKey, messageId, reactions)
-        const row = database
-          .prepare("SELECT id AS pk FROM messages WHERE chat_id=? AND external_id=? AND deleted_at IS NULL")
-          .get(chatKey, messageId)
-        if (row && options.observation)
-          applyCounterObservations(context, Number(row.pk), { reactions: options.observation })
-      })
-      return saved
-    },
-
-    markRange: async (key, chatId, from, to) => {
-      let merged: Range = { from, to }
-      write(database, () => {
-        merged = ranges.markRange(context, chatPkFor(accountPk(key), chatId), from, to)
-      })
-      return merged
-    },
-
-    senderStats: async (key, senderId) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? [] : reads.senderStats(context, accountKey, key.provider, senderId)
-    },
-
-    personNames: async (key, personId) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? [] : identities.namesOf(context, accountKey, key.provider, personId)
-    },
-
-    chatStats: async (key, chatId) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined ? [] : reads.chatStats(context, accountKey, chatId)
-    },
-
-    chatActivity: async (key, since, where) => {
-      const accountKey = findAccountPk(key)
-      return accountKey === undefined
-        ? { chats: [], storedAt: null }
-        : reads.chatActivity(context, accountKey, since, where)
-    },
-
-    ranges: async (key, chatId) => {
-      const accountKey = findAccountPk(key)
-      const chatKey = accountKey === undefined ? undefined : findChatPk(accountKey, chatId)
-      return chatKey === undefined ? [] : ranges.ranges(context, chatKey)
-    },
-
-    chatMetadata: async (key, chatId) => metadataQueries.metadata(context, key, chatId),
-    saveChatMetadata: async (key, entry) => metadataQueries.saveMetadata(context, key, entry),
-    replaceAutoTags: async (key, chatId, algorithm, matches) =>
-      write(database, () => metadataQueries.replaceAutoTags(context, key, chatId, algorithm, matches)),
-    privateContact: async (key, person) => privatePeople.privateContact(context, key, person),
-    setContactAlias: async (key, person, alias) => {
-      return write(database, () => privatePeople.setAlias(context, key, person, alias))
-    },
-    addContactNote: async (key, person, text) => {
-      return write(database, () => privatePeople.addNote(context, key, person, text))
-    },
-    contactNote: async (key, person, id) => privatePeople.note(context, key, person, id),
-    editContactNote: async (key, person, id, text, revision) => {
-      return write(database, () => privatePeople.editNote(context, key, person, id, text, revision))
-    },
-    removeContactNote: async (key, person, id) => privatePeople.removeNote(context, key, person, id),
-
-    addTags: async (key, target, list) => {
-      let added: string[] = []
-      write(database, () => {
-        added = tagQueries.addTags(context, tagQueries.targetThing(context, key, target), list)
-      })
-      return added
-    },
-
-    removeTags: async (key, target, list, source) => {
-      let removed: string[] = []
-      write(database, () => {
-        removed = tagQueries.removeTags(context, tagQueries.targetThing(context, key, target), list, source)
-      })
-      return removed
-    },
-
-    tags: async (key, filter = {}) => tagQueries.tagsOf(context, key, filter),
-
-    recordSearch: async (run, { saved } = {}) => write(database, () => searchRecords.recordRun(context, run, saved)),
-
-    saveSearch: async (name, search, { replace = false } = {}) => {
-      return write(database, () => searchRecords.saveSearch(context, name, search, replace))
-    },
-
-    storedSearch: async (reference) => searchRecords.findSearch(context, reference),
-
-    savedSearches: async () => searchRecords.savedSearches(context),
-
-    searchHistory: async (limit, offset) => searchRecords.searchHistory(context, limit, offset),
-
-    deleteSearch: async (reference) => {
-      return write(database, () => searchRecords.deleteSearch(context, reference))
-    },
-
-    clearSearchHistory: async () => {
-      let cleared = 0
-      write(database, () => {
-        cleared = searchRecords.clearHistory(context)
-      })
-      return cleared
-    },
-
-    // Built on first use: an area that prepares its statements must not stop the store opening for the rest.
     get botUpdates() {
-      botUpdates ??= botUpdateStoreOver(context, pruneLogsWhenDue)
-      return botUpdates
+      return botUpdates()
     },
     get involvements() {
-      involvements ??= involvementStoreOver(context)
-      return involvements
+      return involvements()
     },
     get tasks() {
-      tasks ??= taskStoreOver(context)
-      return tasks
+      return tasks()
     },
     get sourceMentions() {
-      sourceMentions ??= sourceMentionStoreOver(context)
-      return sourceMentions
+      return sourceMentions()
     },
     get knowledge() {
-      knowledge ??= knowledgeStoreOver(context)
-      return knowledge
+      return knowledge()
     },
     get notes() {
-      notes ??= { ...notesStoreOver(context), ...noteSearchOver(context) }
-      return notes
+      return notes()
     },
     get catalog() {
-      catalog ??= catalogStoreOver(context)
-      return catalog
+      return catalog()
     },
     get facts() {
-      facts ??= factsStoreOver(context)
-      return facts
+      return facts()
     },
     get memories() {
-      memories ??= memoriesStoreOver(context)
-      return memories
+      return memories()
     },
     get proposedActions() {
-      proposedActions ??= proposedActionsStoreOver(context)
-      return proposedActions
+      return proposedActions()
     },
     get agentActions() {
-      agentActions ??= agentActionsStoreOver(context, pruneLogsWhenDue)
-      return agentActions
+      return agentActions()
     },
     get meetings() {
-      meetings ??= meetingStoreOver(context)
-      return meetings
+      return meetings()
     },
     get mail() {
-      return mailOf()
+      return mail()
     },
 
     forAccount: (key) =>
-      bindAccount(store, key, {
-        accountPk: () => findAccountPk(key),
+      bindAccount(store, key, areas, {
+        accountPk: () => accounts.findAccountPk(context, key),
         attachmentAccount: (attachmentPk) => attachmentTexts.accountOf(context, attachmentPk),
       }),
     close: async () => database.close(),
@@ -1866,6 +322,18 @@ const storeOver = (context: StoreContext): MessageStore => {
 
 export type { CounterField, CounterObservations, CounterState } from "../domain/counters.js"
 export type { RetentionOptions } from "../domain/retention.js"
+export type { AccountAccounts, AccountsStore } from "./accounts.js"
+export type { AccountAttachments, AttachmentsStore } from "./attachments.js"
+export type { ChatsStore } from "./chats.js"
+export type { ConversationsStore } from "./conversations.js"
+export type { AccountCounters, CountersStore } from "./counters.js"
+export type { AccountMentions, MentionsStore } from "./mentions.js"
+export type { AccountMessages, MessagesStore } from "./messages.js"
+export type { AccountPeople, PeopleStore } from "./people.js"
+export type { QueriesStore } from "./queries.js"
+export type { RosterStore } from "./roster.js"
+export type { SearchIndexStore } from "./search-index.js"
+export type { SearchesStore } from "./searches.js"
 export { accountGroupsOf } from "./sqlite/account-groups.js"
 export type { AdminStoreRequest, AdminStoreResult } from "./sqlite/admin-statistics.js"
 export {
@@ -1935,3 +403,35 @@ export { DEFAULT_AGENT_CLOSE, savedAgentClose } from "./sqlite/task-close.js"
 export { inboxKey } from "./sqlite/tasks.js"
 export type { MatchPlace, ScoredHit } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"
+export type { SyncStore } from "./sync.js"
+export type { TagsStore } from "./tags.js"
+export type {
+  AccountKey,
+  AccountMessageFilter,
+  AgentAnswer,
+  BatchMessage,
+  ChatActivity,
+  ChatStats,
+  ConversationBuild,
+  ConversationHit,
+  ConversationSummary,
+  DeletionScope,
+  Delta,
+  IdentityRef,
+  IngestedVia,
+  LinkBatch,
+  LinkedIdentity,
+  LinkOptions,
+  MessageFilter,
+  PersonFacts,
+  PersonRecord,
+  PictureInput,
+  Range,
+  SenderChatStats,
+  StoredAccount,
+  StoredChatFilter,
+  StoredHit,
+  StoredLink,
+  StoredReadiness,
+} from "./types.js"
+export type { AccountVectors, VectorsStore } from "./vectors.js"

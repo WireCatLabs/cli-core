@@ -139,7 +139,9 @@ export const searchAll = async (
     if (found.server) server = found.server
     hasMore ||= found.hasMore
     const read =
-      found.coverage?.accounts ?? given ?? (await store.accounts()).filter(({ provider }) => kindOf(provider) === kind)
+      found.coverage?.accounts ??
+      given ??
+      (await store.accounts.accounts()).filter(({ provider }) => kindOf(provider) === kind)
     accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
     return found.items.map((hit): SearchAllItem => {
       const at = parseLocator(hit.locator)

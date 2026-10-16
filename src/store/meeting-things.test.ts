@@ -10,11 +10,14 @@ import { openStore } from "./store.js"
 it("persists canonical meeting, retained revision and actual cue references as memory and fact evidence", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-things-example-")), "store.db")
   let store = await openStore({ path })
-  const accountId = await store.saveAccount(
+  const accountId = await store.accounts.saveAccount(
     { provider: "example", account: "alice-example" },
     { name: "Alice Example" },
   )
-  const foreignId = await store.saveAccount({ provider: "example", account: "bob-sample" }, { name: "Bob Sample" })
+  const foreignId = await store.accounts.saveAccount(
+    { provider: "example", account: "bob-sample" },
+    { name: "Bob Sample" },
+  )
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   input.transcripts[0].rows[0].position = 7
@@ -97,8 +100,8 @@ it("annotates and tags a meeting of the named account, and lists notes about a m
   try {
     const alice = { provider: "example", account: "alice-example" }
     const bob = { provider: "example", account: "bob-sample" }
-    const accountId = await store.saveAccount(alice, { name: "Alice Example" })
-    await store.saveAccount(bob, { name: "Bob Sample" })
+    const accountId = await store.accounts.saveAccount(alice, { name: "Alice Example" })
+    await store.accounts.saveAccount(bob, { name: "Bob Sample" })
     const input = sampleMeeting()
     input.meeting.accountId = accountId
     const saved = await store.meetings.saveMeeting(input)

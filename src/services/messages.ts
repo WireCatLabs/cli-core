@@ -271,7 +271,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
    */
   const remember = async (store: MessageStore, command: SearchCommand, query: SearchQuery & { by?: StatsGrouping }) => {
     if (deps.history === false) return
-    await store
+    await store.searches
       .recordSearch(searchRecordOf(command, paramsOf(command, query)), {
         ...(query.saved === undefined ? {} : { saved: query.saved }),
       })
@@ -312,7 +312,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     const window = { limit, ...(before === undefined ? {} : { before }) }
     if (fromStore(deps)) {
       return inStore(async (store, account) =>
-        store.messages(account, await readChatId(deps, chat, store, account), { ...window, threadId }),
+        store.messages.messages(account, await readChatId(deps, chat, store, account), { ...window, threadId }),
       )
     }
     return capability(await deps.connection(), "topicHistory", "read one forum topic")(chat, threadId, window)
@@ -341,7 +341,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     const window = { limit, ...(before === undefined ? {} : { before }) }
     if (fromStore(deps)) {
       return inStore(async (store, account) =>
-        store.messages(account, await readChatId(deps, chat, store, account), window),
+        store.messages.messages(account, await readChatId(deps, chat, store, account), window),
       )
     }
     return capability(await deps.connection(), "history", "read a chat's history")(chat, window)
@@ -382,7 +382,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
       }
       if (fromStore(deps)) {
         return inStore(async (store, account) =>
-          store.around(account, await readChatId(deps, target.chat, store, account), target.message, window),
+          store.messages.around(account, await readChatId(deps, target.chat, store, account), target.message, window),
         )
       }
       return capability(await deps.connection(), "around", "read the messages around one")(
@@ -433,7 +433,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
       if (fromStore(deps)) {
         const store = await deps.store()
         const chat = await readChatId(deps, target.chat, store, account)
-        const found = await store.around(account, chat, target.message, { before: 0, after: 0 })
+        const found = await store.messages.around(account, chat, target.message, { before: 0, after: 0 })
         if (!found.some((item) => item.id === target.message && item.chatId === chat))
           throw new CliError("not_found", "no such message in this account's stored chat")
         return {
@@ -470,7 +470,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         const chatId =
           (await storedChatId(deps.messenger, chat, store, account).catch(() => undefined)) ??
           (await (await deps.connection()).resolve(chat)).id
-        return store.keepDownloads(account, chatId, message, files)
+        return store.attachments.keepDownloads(account, chatId, message, files)
       }),
 
     search: (request) => {

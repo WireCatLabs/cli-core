@@ -194,7 +194,7 @@ describe("bot messages list and show", () => {
 
     expect(listed.answer.items.map((item: Message) => item.text)).toEqual(["first", "second"])
     const handles = await botCopy("chat-bot").read((store) =>
-      store.senderHandles({ provider: "chat-bot", account: botId }, "-100"),
+      store.conversations.senderHandles({ provider: "chat-bot", account: botId }, "-100"),
     )
     expect(handles.get("sales_bot")).toBe(botId)
     expect((await call(["sales", "bot", "messages", "show", "Team", "2", "--json"])).answer.item.text).toBe(

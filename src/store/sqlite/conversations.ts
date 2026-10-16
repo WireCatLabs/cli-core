@@ -1,7 +1,7 @@
 import { setTimeout } from "node:timers/promises"
 import type { Link, LinkInput } from "../../conversations/link.js"
 import type { Id, Message, Page } from "../../domain/models.js"
-import type { ConversationBuild, ConversationSummary, StoredLink } from "../store.js"
+import type { ConversationBuild, ConversationSummary, StoredLink } from "../types.js"
 import { and, asc, desc, eq, isNull, type SQL, sql } from "./drizzle/core.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"

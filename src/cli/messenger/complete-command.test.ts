@@ -55,9 +55,9 @@ describe("local completion", () => {
     rememberAccount(app, "home", "500", env)
     const store = await openStore({ env })
     try {
-      await store.savePeople({ provider: "chat", account: "500" }, [{ id: "7", name: "Friend" }])
-      await store.savePeople({ provider: "chat", account: "600" }, [{ id: "8", name: "Other account" }])
-      await store.saveChats({ provider: "chat", account: "500" }, [
+      await store.people.savePeople({ provider: "chat", account: "500" }, [{ id: "7", name: "Friend" }])
+      await store.people.savePeople({ provider: "chat", account: "600" }, [{ id: "8", name: "Other account" }])
+      await store.chats.saveChats({ provider: "chat", account: "500" }, [
         { id: "101", title: "Dialog", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
       ])
     } finally {
@@ -72,8 +72,8 @@ describe("local completion", () => {
     rememberAccount(app, "home", "600", env)
     const store = await openStore({ env })
     try {
-      await store.savePeople({ provider: "chat", account: "500" }, [{ id: "7", name: "Friend" }])
-      await store.savePeople({ provider: "chat", account: "600" }, [{ id: "8", name: "Stale account" }])
+      await store.people.savePeople({ provider: "chat", account: "500" }, [{ id: "7", name: "Friend" }])
+      await store.people.savePeople({ provider: "chat", account: "600" }, [{ id: "8", name: "Stale account" }])
     } finally {
       await store.close()
     }

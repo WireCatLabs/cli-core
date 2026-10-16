@@ -1822,12 +1822,17 @@ describe("the shared read commands", () => {
     const store = await openStore({ path: env.MESSAGING_STORE })
     const email = { provider: "email", account: "owner@example.test" }
     for (const id of ["9001", "9002"]) {
-      await store.saveChats(email, [{ ...chat, id, title: "Synthetic mail" }])
-      await store.saveMessages(email, id, [{ ...thread[0], id, chatId: id, text: "chapter in mail" } as Message], {
-        via: "himalaya",
-      })
+      await store.chats.saveChats(email, [{ ...chat, id, title: "Synthetic mail" }])
+      await store.messages.saveMessages(
+        email,
+        id,
+        [{ ...thread[0], id, chatId: id, text: "chapter in mail" } as Message],
+        {
+          via: "himalaya",
+        },
+      )
     }
-    await store.fillSearchIndex()
+    await store.searchIndex.fillSearchIndex()
     await store.close()
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -1855,10 +1860,15 @@ describe("the shared read commands", () => {
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const other = { provider: "chat", account: "999" }
-    await store.saveChats(other, [{ ...chat, id: "70", title: "Other" }])
-    await store.saveMessages(other, "70", [{ ...thread[0], id: "70", chatId: "70", text: "nothing here" } as Message], {
-      via: "test",
-    })
+    await store.chats.saveChats(other, [{ ...chat, id: "70", title: "Other" }])
+    await store.messages.saveMessages(
+      other,
+      "70",
+      [{ ...thread[0], id: "70", chatId: "70", text: "nothing here" } as Message],
+      {
+        via: "test",
+      },
+    )
     await store.close()
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -1877,7 +1887,10 @@ describe("the shared read commands", () => {
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
-    const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
+    const accountId = await store.accounts.saveAccount(
+      { provider: "email", account: "owner@example.test" },
+      { name: null },
+    )
     const sent = (externalId: string, day: number, bodyText: string) => ({
       externalId,
       subject: "Reading group",
@@ -1910,7 +1923,10 @@ describe("the shared read commands", () => {
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
-    const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
+    const accountId = await store.accounts.saveAccount(
+      { provider: "email", account: "owner@example.test" },
+      { name: null },
+    )
     const body = `${"A long note about the reading group. ".repeat(20)}End.`
     const sent = (externalId: string, day: number, bodyText: string) => ({
       externalId,
@@ -1982,8 +1998,8 @@ describe("the shared read commands", () => {
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const email = { provider: "email", account: "owner@example.test" }
-    await store.saveChats(email, [{ ...chat, id: "9001", title: "Synthetic mail" }])
-    await store.saveMessages(
+    await store.chats.saveChats(email, [{ ...chat, id: "9001", title: "Synthetic mail" }])
+    await store.messages.saveMessages(
       email,
       "9001",
       [{ ...thread[0], id: "9001", chatId: "9001", text: "chapter in mail" } as Message],
@@ -1992,7 +2008,7 @@ describe("the shared read commands", () => {
       },
     )
     await store.notes.addNote({ title: "Reading list", text: "the chapter to read next" })
-    await store.fillSearchIndex()
+    await store.searchIndex.fillSearchIndex()
     await store.close()
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -2043,9 +2059,11 @@ describe("the shared read commands", () => {
     const store = await openStore({ path: env.MESSAGING_STORE })
     await store.notes.addNote({ title: "Reading list", text: "the chapter to read next" })
     const other = { provider: "chat", account: "999" }
-    await store.saveChats(other, [{ ...chat, id: "7", title: "Other" }])
-    await store.saveMessages(other, "7", [{ ...message, id: "40", text: "chapter forty elsewhere" }], { via: "test" })
-    await store.fillSearchIndex()
+    await store.chats.saveChats(other, [{ ...chat, id: "7", title: "Other" }])
+    await store.messages.saveMessages(other, "7", [{ ...message, id: "40", text: "chapter forty elsewhere" }], {
+      via: "test",
+    })
+    await store.searchIndex.fillSearchIndex()
     await store.close()
     const searchMessages = vi.fn(async () => ({
       items: [{ ...message, id: "40", text: "chapter four", chatTitle: "Book club" }],
@@ -2108,7 +2126,7 @@ describe("the shared read commands", () => {
     const meetingIn = async (account: string) => {
       const store = await openStore({ path: env.MESSAGING_STORE })
       try {
-        const accountId = await store.saveAccount({ provider: "zoom", account }, { name: "Invented" })
+        const accountId = await store.accounts.saveAccount({ provider: "zoom", account }, { name: "Invented" })
         const sample = sampleMeeting()
         await store.meetings.saveMeeting({
           ...sample,
@@ -2173,7 +2191,10 @@ describe("the shared read commands", () => {
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     try {
-      const accountId = await store.saveAccount({ provider: "zoom", account: "zm-profile:carol" }, { name: "Invented" })
+      const accountId = await store.accounts.saveAccount(
+        { provider: "zoom", account: "zm-profile:carol" },
+        { name: "Invented" },
+      )
       const sample = sampleMeeting()
       for (const [externalId, startedAt, text] of [
         ["older", 1000, "Bob Sample reads the chapter aloud"],
@@ -2285,7 +2306,7 @@ describe("the shared read commands", () => {
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), MESSAGING_STORE: join(root, "m.db") }
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const held = await openStore({ path: join(root, "m.db") })
-    await held.saveAccount({ provider: "zoom", account: "z1" }, { name: null })
+    await held.accounts.saveAccount({ provider: "zoom", account: "z1" }, { name: null })
     await held.close()
     const never = vi.fn(async (): Promise<MessengerAdapter> => {
       throw new Error("search must never connect")
@@ -2311,8 +2332,8 @@ describe("the shared read commands", () => {
     await call(["messages", "context", "Book", "2", "--json"], async () => fake, env)
     const other = await openStore({ path: join(root, "m.db") })
     const elsewhere = { provider: "other", account: "600" }
-    await other.saveChats(elsewhere, [{ ...chat, title: "Reading circle" }])
-    await other.saveMessages(
+    await other.chats.saveChats(elsewhere, [{ ...chat, title: "Reading circle" }])
+    await other.messages.saveMessages(
       elsewhere,
       "7",
       [{ ...thread[0], id: "40", text: "chapter four", timestamp: "2026-09-27T11:00:00.000Z" } as Message],
@@ -2547,12 +2568,12 @@ describe("the shared read commands", () => {
       forwardedFrom: null,
       reactions: null,
     })
-    await store.saveChats(tg, [{ ...dialog, id: "11", title: "Ana" }])
-    await store.saveMessages(tg, "11", [said("11", "11")], { via: "test" })
-    await store.saveMembers(tg, "11", ["11", "500"])
-    await store.saveChats(max, [{ ...dialog, id: "m1", title: "Ana" }])
-    await store.saveMessages(max, "m1", [said("m1", "m5")], { via: "test" })
-    await store.saveMembers(max, "m1", ["m5", "900"])
+    await store.chats.saveChats(tg, [{ ...dialog, id: "11", title: "Ana" }])
+    await store.messages.saveMessages(tg, "11", [said("11", "11")], { via: "test" })
+    await store.roster.saveMembers(tg, "11", ["11", "500"])
+    await store.chats.saveChats(max, [{ ...dialog, id: "m1", title: "Ana" }])
+    await store.messages.saveMessages(max, "m1", [said("m1", "m5")], { via: "test" })
+    await store.roster.saveMembers(max, "m1", ["m5", "900"])
     await store.close()
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("contacts context must never connect")
@@ -2638,17 +2659,22 @@ describe("the shared read commands", () => {
       forwardedFrom: null,
       reactions: null,
     })
-    await store.saveChats(tg, [
+    await store.chats.saveChats(tg, [
       { id: "31", title: "Example group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
     ])
-    await store.saveMessages(tg, "31", [said("1", "2026-09-01T10:00:00.000Z"), said("2", "2026-09-03T10:00:00.000Z")], {
-      via: "test",
-    })
+    await store.messages.saveMessages(
+      tg,
+      "31",
+      [said("1", "2026-09-01T10:00:00.000Z"), said("2", "2026-09-03T10:00:00.000Z")],
+      {
+        via: "test",
+      },
+    )
     const other = { provider: "telegram", account: "600" }
-    await store.saveChats(other, [
+    await store.chats.saveChats(other, [
       { id: "31", title: "Example group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
     ])
-    await store.saveMessages(other, "31", [said("3", "2026-09-04T10:00:00.000Z")], { via: "test" })
+    await store.messages.saveMessages(other, "31", [said("3", "2026-09-04T10:00:00.000Z")], { via: "test" })
     await store.close()
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("contacts timeline must never connect")
@@ -2719,12 +2745,12 @@ describe("the shared read commands", () => {
       reactions: null,
     })
     const chat = { unreadCount: 0, lastMessageAt: "2026-09-03T10:00:00.000Z", participantsCount: null }
-    await store.saveChats(tg, [
+    await store.chats.saveChats(tg, [
       { ...chat, id: "11", title: "Ana", kind: "dialog" },
       { ...chat, id: "-70", title: "Club", kind: "group" },
     ])
-    await store.saveMessages(tg, "11", [said("1", "11", "2026-09-01T10:00:00.000Z")], { via: "test" })
-    await store.saveMessages(
+    await store.messages.saveMessages(tg, "11", [said("1", "11", "2026-09-01T10:00:00.000Z")], { via: "test" })
+    await store.messages.saveMessages(
       tg,
       "-70",
       [said("5", "-70", "2026-09-02T10:00:00.000Z"), said("6", "-70", "2026-09-03T10:00:00.000Z")],
@@ -2793,10 +2819,10 @@ describe("the shared read commands", () => {
     rememberAccount(app, "default", "500", env)
     const store = await openStore({ path: env.MESSAGING_STORE })
     const tg = { provider: "telegram", account: "500" }
-    await store.saveChats(tg, [
+    await store.chats.saveChats(tg, [
       { id: "11", title: "Ana", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMembers(tg, "11", ["11", "500"])
+    await store.roster.saveMembers(tg, "11", ["11", "500"])
     await store.close()
     const never = async (): Promise<MessengerAdapter> => {
       throw new Error("--offline must never connect")
@@ -3345,7 +3371,7 @@ describe("the shared read commands", () => {
     const unchanged = await exported()
     const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"))
     const store = await openStore({ path: env.MESSAGING_STORE })
-    await store.markDeleted({ provider: manifest.provider, account: manifest.account }, ["2"], { chatId: "7" })
+    await store.messages.markDeleted({ provider: manifest.provider, account: manifest.account }, ["2"], { chatId: "7" })
     await store.close()
     const after = await exported()
 

@@ -69,7 +69,7 @@ const byMessage = new Map<string, string>()
 const sizes = new Map<string, number>()
 try {
   for (const chatId of [...new Set(corpus.documents.map((d) => d.chat))]) {
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       {
         id: chatId,
         title: `Synthetic group ${chatId}`,
@@ -103,23 +103,23 @@ try {
         }),
       )
       .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-    await store.saveMessages(account, chatId, messages, { via: "synthetic" })
+    await store.messages.saveMessages(account, chatId, messages, { via: "synthetic" })
     await conversationsService(deps).build(chatId)
     sizes.set(chatId, documents.length)
   }
   const embedder = await warm.get(key, () => openEmbedder(model, textModelsDirectory(realEnv), { threads: 8 }))
   for (const [chatId, size] of sizes) {
-    const summaries = (await store.conversations(account, chatId, { limit: size + 1 })).items
+    const summaries = (await store.conversations.conversations(account, chatId, { limit: size + 1 })).items
     assert.equal(summaries.length, size, "each labelled document must be one built conversation")
     for (const summary of summaries) {
-      const found = await store.conversation(account, summary.id)
+      const found = await store.conversations.conversation(account, summary.id)
       assert.ok(found)
       const chunks = cutChunks(found.messages.map((m) => ({ id: m.id, sender: m.senderName, text: m.text })))
       const vectors = await embedder.embed(
         chunks.map((c) => c.text),
         "passage",
       )
-      await store.saveVectors(
+      await store.vectors.saveVectors(
         key,
         model.dims,
         chunks.map((c, i) => ({ hash: c.hash, vector: vectors[i] as Float32Array })),
@@ -129,7 +129,7 @@ try {
   const measured: Measured[] = []
   for (const query of corpus.queries) {
     const [vector] = await embedder.embed([query.text], "query")
-    const meaning = await store.nearestConversations(account, { model: key, limit: 100, query: vector as Float32Array })
+    const meaning = await store.vectors.nearestConversations(account, { model: key, limit: 100, query: vector as Float32Array })
     const words = (await wordsOnly.search(query.text, { limit: 100 })).hits
     const hybrid = (await service.search(query.text, { limit: 100 })).hits
     assert.deepEqual(

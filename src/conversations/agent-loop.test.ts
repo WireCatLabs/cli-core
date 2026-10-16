@@ -55,11 +55,11 @@ const groupsOf = (parents: Map<string, string | null>) => {
 describe("the agent loop, end to end", () => {
   it("**reproduces the true conversations** when the agent answers every batch from them", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "loop-")), "m.db") })
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "9", title: "Group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
     const { parents, messages } = goldChat(400)
-    await store.saveMessages(account, "9", messages, { via: "history" })
+    await store.messages.saveMessages(account, "9", messages, { via: "history" })
     const conversations = conversationsService(
       storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard),
     )

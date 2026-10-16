@@ -10,7 +10,7 @@ const n=Number(process.argv[2]),rounds=20
 const file=join(DATA_DIR,`store-${n}-node`,'messages.db')
 if (!Number.isInteger(n) || !existsSync(file)) throw new Error('generate/build the synthetic corpus first')
 const store=await openStore({path:file})
-await store.fillSearchIndex()
+await store.searchIndex.fillSearchIndex()
 const account={provider:'max',account:'bench'}
 const queries=[['exact','valencia'],['implicit AND','pasaporte contrato'],['OR','valencia OR whatsapp'],['NOT','valencia NOT whatsapp'],['phrase','"hola gracias"'],['term regex','text:/valencia/'],['scoped body regex','chat:42 AND body:/.*valencia.*/']] as const
 const fingerprint=createHash('sha256').update(readFileSync(new URL('../../dist/store/sqlite/lucene.js',import.meta.url))).digest('hex')

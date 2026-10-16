@@ -9,7 +9,7 @@ export interface AnalysisConsent {
 }
 export const analysisConsents = (store: MessageStore, account: AccountKey) => {
   const list = async (): Promise<AnalysisConsent[]> => {
-    const state = await store.syncState(account, KEY)
+    const state = await store.sync.syncState(account, KEY)
     if (!state) return []
     try {
       const items = JSON.parse(state.value) as AnalysisConsent[]
@@ -32,7 +32,7 @@ export const analysisConsents = (store: MessageStore, account: AccountKey) => {
       (await list()).some((item) => item.chat === chat && item.provider === provider),
     remember: async (chat: string, provider: string) => {
       const items = (await list()).filter((item) => item.chat !== chat || item.provider !== provider)
-      await store.setSyncState(
+      await store.sync.setSyncState(
         account,
         KEY,
         JSON.stringify([...items, { chat, provider, at: new Date().toISOString() }]),
@@ -40,14 +40,14 @@ export const analysisConsents = (store: MessageStore, account: AccountKey) => {
     },
     revoke: async (chat?: string, provider?: string) => {
       if (chat === undefined && provider === undefined) {
-        await store.clearSyncState(account, KEY)
+        await store.sync.clearSyncState(account, KEY)
         return
       }
       const items = (await list()).filter(
         (item) =>
           !((chat === undefined || item.chat === chat) && (provider === undefined || item.provider === provider)),
       )
-      await store.setSyncState(account, KEY, JSON.stringify(items))
+      await store.sync.setSyncState(account, KEY, JSON.stringify(items))
     },
   }
 }

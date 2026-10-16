@@ -40,7 +40,7 @@ export const retentionService = (deps: ServiceDeps) => ({
     const store = await deps.store(),
       account = await deps.account()
     const chatId = await storedChatId(deps.messenger, chat, store, account)
-    const result = await store.retention(account, chatId, options)
+    const result = await store.roster.retention(account, chatId, options)
     return {
       ...result,
       items: result.items.map((item) => ({
@@ -98,7 +98,7 @@ export const retentionService = (deps: ServiceDeps) => ({
     )
       throw new CliError("validation_error", "invalid or out-of-scope retention selection")
     query.signal?.throwIfAborted()
-    const found = await store.retention(
+    const found = await store.roster.retention(
       account,
       raw.chatId,
       { ...raw.options, limit: query.limit },

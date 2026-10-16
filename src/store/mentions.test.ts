@@ -38,27 +38,29 @@ const kinds = (items: { kind: string; value: string }[]) => items.map(({ kind, v
 describe("mentions", () => {
   it("finds them as messages are written, again on an edit, and drops them with the message", async () => {
     const { store } = await fresh()
-    await store.saveMessages(OWNER, "-1", [message("1", "звони +7 900 000-00-01 или пиши ana@example.com")], {
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "звони +7 900 000-00-01 или пиши ana@example.com")], {
       via: "history",
     })
-    expect(kinds((await store.mentions(OWNER, undefined, { offset: 0 })).items)).toEqual([
+    expect(kinds((await store.mentions.mentions(OWNER, undefined, { offset: 0 })).items)).toEqual([
       "phone +79000000001",
       "email ana@example.com",
     ])
 
-    await store.saveMessages(OWNER, "-1", [message("1", "теперь только https://example.org/a?utm_source=x")], {
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "теперь только https://example.org/a?utm_source=x")], {
       via: "update",
     })
-    expect(kinds((await store.mentions(OWNER, undefined, { offset: 0 })).items)).toEqual(["url https://example.org/a"])
+    expect(kinds((await store.mentions.mentions(OWNER, undefined, { offset: 0 })).items)).toEqual([
+      "url https://example.org/a",
+    ])
 
-    await store.markDeleted(OWNER, ["1"], { chatId: "-1" })
-    expect((await store.mentions(OWNER, undefined, { offset: 0 })).items).toEqual([])
+    await store.messages.markDeleted(OWNER, ["1"], { chatId: "-1" })
+    expect((await store.mentions.mentions(OWNER, undefined, { offset: 0 })).items).toEqual([])
     await store.close()
   })
 
   it("filters by kind, site and value, and pages", async () => {
     const { store } = await fresh()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-1",
       [
@@ -68,14 +70,14 @@ describe("mentions", () => {
       ],
       { via: "history" },
     )
-    const site = await store.mentions(OWNER, q("kind:url domain:docs.google.com"), { offset: 0 })
+    const site = await store.mentions.mentions(OWNER, q("kind:url domain:docs.google.com"), { offset: 0 })
     expect(site.items.map(({ messageId }) => messageId)).toEqual(["2", "1"])
-    expect(kinds((await store.mentions(OWNER, q("kind:document"), { offset: 0 })).items)).toEqual([
+    expect(kinds((await store.mentions.mentions(OWNER, q("kind:document"), { offset: 0 })).items)).toEqual([
       "document 2SyntheticFileId_xyz",
       "document 1SyntheticFileId_abc",
     ])
-    expect((await store.mentions(OWNER, q("89000000001"), { offset: 0 })).items).toHaveLength(1)
-    const first = await store.mentions(OWNER, undefined, { limit: 2, offset: 0 })
+    expect((await store.mentions.mentions(OWNER, q("89000000001"), { offset: 0 })).items).toHaveLength(1)
+    const first = await store.mentions.mentions(OWNER, undefined, { limit: 2, offset: 0 })
     expect(first.hasMore).toBe(true)
     expect(first.items).toHaveLength(2)
     await store.close()
@@ -83,12 +85,14 @@ describe("mentions", () => {
 
   it("reads only the bound account, and shows what was written around a mention", async () => {
     const { store } = await fresh()
-    await store.saveMessages(OWNER, "-1", [message("1", "Ольга: 8 (900) 000-00-01, после обеда")], { via: "history" })
-    await store.saveMessages(OTHER, "-1", [message("1", "тот же 89000000001")], { via: "history" })
-    const [mine] = (await store.mentions(OWNER, undefined, { offset: 0 })).items
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "Ольга: 8 (900) 000-00-01, после обеда")], {
+      via: "history",
+    })
+    await store.messages.saveMessages(OTHER, "-1", [message("1", "тот же 89000000001")], { via: "history" })
+    const [mine] = (await store.mentions.mentions(OWNER, undefined, { offset: 0 })).items
     expect(mine?.written).toBe("8 (900) 000-00-01")
-    expect(await store.mention(OTHER, mine?.id ?? 0)).toBeUndefined()
-    expect(await store.mention(OWNER, mine?.id ?? 0)).toMatchObject({
+    expect(await store.mentions.mention(OTHER, mine?.id ?? 0)).toBeUndefined()
+    expect(await store.mentions.mention(OWNER, mine?.id ?? 0)).toMatchObject({
       before: "Ольга: ",
       after: ", после обеда",
       sameValue: 1,
@@ -98,10 +102,15 @@ describe("mentions", () => {
 
   it("rebuilds messages stored before mentions existed and keeps a decision", async () => {
     const { path, store } = await fresh()
-    await store.saveMessages(OWNER, "-1", [message("1", "ana@example.com"), message("2", "+7 900 000-00-01")], {
-      via: "history",
-    })
-    expect((await store.mentionsState()).rebuiltAt).toBeNull()
+    await store.messages.saveMessages(
+      OWNER,
+      "-1",
+      [message("1", "ana@example.com"), message("2", "+7 900 000-00-01")],
+      {
+        via: "history",
+      },
+    )
+    expect((await store.mentions.mentionsState()).rebuiltAt).toBeNull()
     await store.close()
 
     const raw = new DatabaseSync(path)
@@ -110,7 +119,7 @@ describe("mentions", () => {
     raw.close()
 
     const reopened = await openStore({ path, now: () => Date.parse("2026-10-13T21:00:00Z") })
-    expect(await reopened.rebuildMentions()).toEqual({
+    expect(await reopened.mentions.rebuildMentions()).toEqual({
       messages: 2,
       attachments: 0,
       documents: 0,
@@ -118,55 +127,65 @@ describe("mentions", () => {
       emails: 0,
       mentions: 2,
     })
-    const items = (await reopened.mentions(OWNER, undefined, { offset: 0 })).items
+    const items = (await reopened.mentions.mentions(OWNER, undefined, { offset: 0 })).items
     expect(items.map(({ kind, status }) => `${kind} ${status}`).sort()).toEqual(["email dismissed", "phone found"])
-    expect(await reopened.mentionsState()).toEqual({ pending: 0, rebuiltAt: "2026-10-13T21:00:00.000Z" })
+    expect(await reopened.mentions.mentionsState()).toEqual({ pending: 0, rebuiltAt: "2026-10-13T21:00:00.000Z" })
 
-    expect(await reopened.rebuildMentions({ kinds: ["phone"] })).toMatchObject({
+    expect(await reopened.mentions.rebuildMentions({ kinds: ["phone"] })).toMatchObject({
       messages: 2,
       attachments: 0,
       mentions: 1,
     })
-    expect((await reopened.mentions(OWNER, q("kind:email"), { offset: 0 })).items[0]?.status).toBe("dismissed")
+    expect((await reopened.mentions.mentions(OWNER, q("kind:email"), { offset: 0 })).items[0]?.status).toBe("dismissed")
     await reopened.close()
   })
 })
 
 describe("deciding a mention", () => {
   const status = async (store: Awaited<ReturnType<typeof openStore>>, value: string) =>
-    (await store.mentions(OWNER, q(value), { offset: 0 })).items.map((one) => one.status)
+    (await store.mentions.mentions(OWNER, q(value), { offset: 0 })).items.map((one) => one.status)
 
   it("gives a phone an identity owned by a person, everywhere it is written and in later messages", async () => {
     const { store } = await fresh()
-    await store.savePeople(OWNER, [{ id: "7", name: "Ana" }])
-    const ana = await store.personOf({ provider: "max", id: "7" })
-    await store.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01"), message("2", "или 89000000001")], {
-      via: "history",
-    })
-    const [one] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    await store.people.savePeople(OWNER, [{ id: "7", name: "Ana" }])
+    const ana = await store.people.personOf({ provider: "max", id: "7" })
+    await store.messages.saveMessages(
+      OWNER,
+      "-1",
+      [message("1", "+7 900 000-00-01"), message("2", "или 89000000001")],
+      {
+        via: "history",
+      },
+    )
+    const [one] = (await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
 
-    const decided = await store.confirmMention(OWNER, one?.id ?? 0, `person:${ana?.uid}`, { by: "owner" })
+    const decided = await store.mentions.confirmMention(OWNER, one?.id ?? 0, `person:${ana?.uid}`, { by: "owner" })
 
     expect(decided).toMatchObject({ kind: "phone", value: "+79000000001", status: "linked", mentions: 2 })
     expect(await status(store, "89000000001")).toEqual(["linked", "linked"])
-    const owner = await store.personOf({ provider: "phone", id: "+79000000001" })
+    const owner = await store.people.personOf({ provider: "phone", id: "+79000000001" })
     expect(owner?.uid).toBe(ana?.uid)
 
-    await store.saveMessages(OWNER, "-1", [message("3", "тот же 8 900 000-00-01", "2026-10-02T10:00:00.000Z")], {
-      via: "update",
-    })
+    await store.messages.saveMessages(
+      OWNER,
+      "-1",
+      [message("3", "тот же 8 900 000-00-01", "2026-10-02T10:00:00.000Z")],
+      {
+        via: "update",
+      },
+    )
     expect(await status(store, "89000000001")).toEqual(["linked", "linked", "linked"])
     await store.close()
   })
 
   it("keeps a confirmed owner and when it was found when phone_countries gives a bare number its country", async () => {
     const { path, store } = await fresh()
-    await store.savePeople(OWNER, [{ id: "7", name: "Ana" }])
-    const ana = await store.personOf({ provider: "max", id: "7" })
-    await store.saveMessages(OWNER, "-1", [message("1", "móvil 612 345 678")], { via: "history" })
-    const [bare] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    await store.people.savePeople(OWNER, [{ id: "7", name: "Ana" }])
+    const ana = await store.people.personOf({ provider: "max", id: "7" })
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "móvil 612 345 678")], { via: "history" })
+    const [bare] = (await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
     expect(bare?.value).toBe("612345678")
-    await store.confirmMention(OWNER, bare?.id ?? 0, `person:${ana?.uid}`, { by: "owner" })
+    await store.mentions.confirmMention(OWNER, bare?.id ?? 0, `person:${ana?.uid}`, { by: "owner" })
 
     const firstFound = () => {
       const raw = new DatabaseSync(path)
@@ -180,11 +199,11 @@ describe("deciding a mention", () => {
       .prepare("INSERT INTO store_settings (key, value, at) VALUES ('phoneCountries', ?, ?)")
       .run(JSON.stringify(["es", "ru"]), Date.now())
     settings.close()
-    await store.rebuildMentions({ kinds: ["phone"] })
+    await store.mentions.rebuildMentions({ kinds: ["phone"] })
 
-    const [read] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    const [read] = (await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
     expect(read).toMatchObject({ value: "+34612345678", status: "linked" })
-    expect((await store.personOf({ provider: "phone", id: "+34612345678" }))?.uid).toBe(ana?.uid)
+    expect((await store.people.personOf({ provider: "phone", id: "+34612345678" }))?.uid).toBe(ana?.uid)
     expect(firstFound()).toEqual(before)
     const found = async (text: string) =>
       (await searchStore(store, OWNER, { text, limit: 10 })).items.map(({ id }) => id)
@@ -195,7 +214,7 @@ describe("deciding a mention", () => {
 
   it("links a t.me link to the stored chat it names, by id or by username, and explains one it cannot", async () => {
     const { path, store } = await fresh()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-1001234567890",
       [{ ...message("1", "пост https://t.me/c/1234567890/5"), chatId: "-1001234567890" }],
@@ -203,28 +222,30 @@ describe("deciding a mention", () => {
         via: "history",
       },
     )
-    await store.saveMessages(OWNER, "-1", [message("2", "канал t.me/book_club и t.me/joinchat/AbCdEf")], {
+    await store.messages.saveMessages(OWNER, "-1", [message("2", "канал t.me/book_club и t.me/joinchat/AbCdEf")], {
       via: "history",
     })
     const raw = new DatabaseSync(path)
     raw.prepare("UPDATE chats SET username = 'Book_Club' WHERE external_id = '-1'").run()
     raw.close()
-    await store.rebuildMentions({ kinds: ["url"] })
+    await store.mentions.rebuildMentions({ kinds: ["url"] })
 
-    const links = (await store.mentions(OWNER, q("kind:url"), { offset: 0 })).items
+    const links = (await store.mentions.mentions(OWNER, q("kind:url"), { offset: 0 })).items
     const status = (value: string) => links.find((one) => one.value === value)
     expect(status("https://t.me/c/1234567890/5")).toMatchObject({ status: "linked", author: "rules" })
     expect(status("https://t.me/book_club")).toMatchObject({ status: "linked" })
     expect(status("https://t.me/book_club")?.target).toMatch(/^chat:/)
     const invite = status("https://t.me/joinchat/AbCdEf")
     expect(invite?.status).toBe("found")
-    await expect(store.confirmMention(OWNER, invite?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(/t\.me/)
+    await expect(store.mentions.confirmMention(OWNER, invite?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
+      /t\.me/,
+    )
     await store.close()
   })
 
   it("links an address that already is someone's identity without asking", async () => {
     const { path, store } = await fresh()
-    await store.savePeople(OWNER, [{ id: "8", name: "Bo" }])
+    await store.people.savePeople(OWNER, [{ id: "8", name: "Bo" }])
     await store.close()
     const raw = new DatabaseSync(path)
     const person = raw.prepare("SELECT person_id FROM identity_links").get()?.person_id
@@ -240,14 +261,14 @@ describe("deciding a mention", () => {
     raw.close()
 
     const reopened = await openStore({ path })
-    await reopened.saveMessages(OWNER, "-1", [message("1", "пиши Bo@Example.com")], { via: "history" })
+    await reopened.messages.saveMessages(OWNER, "-1", [message("1", "пиши Bo@Example.com")], { via: "history" })
     expect(await status(reopened, "kind:email")).toEqual(["linked"])
     await reopened.close()
   })
 
   it("dismisses a value everywhere and keeps it dismissed when it comes again", async () => {
     const { store } = await fresh()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-1",
       [message("1", "https://example.com/a"), message("2", "https://example.com/a")],
@@ -255,30 +276,39 @@ describe("deciding a mention", () => {
         via: "history",
       },
     )
-    const [one] = (await store.mentions(OWNER, q("kind:url"), { offset: 0 })).items
+    const [one] = (await store.mentions.mentions(OWNER, q("kind:url"), { offset: 0 })).items
 
-    expect(await store.rejectMention(OWNER, one?.id ?? 0, { by: "claude-code" })).toMatchObject({
+    expect(await store.mentions.rejectMention(OWNER, one?.id ?? 0, { by: "claude-code" })).toMatchObject({
       status: "dismissed",
       mentions: 2,
     })
-    await store.saveMessages(OWNER, "-1", [message("3", "снова https://example.com/a", "2026-10-02T10:00:00.000Z")], {
-      via: "update",
-    })
+    await store.messages.saveMessages(
+      OWNER,
+      "-1",
+      [message("3", "снова https://example.com/a", "2026-10-02T10:00:00.000Z")],
+      {
+        via: "update",
+      },
+    )
     expect(await status(store, "kind:url")).toEqual(["dismissed", "dismissed", "dismissed"])
     await store.close()
   })
 
   it("refuses a phone without a person, a link, and another account's mention", async () => {
     const { store } = await fresh()
-    await store.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01 https://example.com")], { via: "history" })
-    const [phone, link] = (await store.mentions(OWNER, undefined, { offset: 0 })).items.sort((a, b) =>
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01 https://example.com")], {
+      via: "history",
+    })
+    const [phone, link] = (await store.mentions.mentions(OWNER, undefined, { offset: 0 })).items.sort((a, b) =>
       a.kind.localeCompare(b.kind),
     )
-    await expect(store.confirmMention(OWNER, phone?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
+    await expect(store.mentions.confirmMention(OWNER, phone?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
       /person:<uid>/,
     )
-    await expect(store.confirmMention(OWNER, link?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(/reject it/)
-    await expect(store.rejectMention(OTHER, phone?.id ?? 0, { by: "owner" })).rejects.toThrow(/no mention/)
+    await expect(store.mentions.confirmMention(OWNER, link?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
+      /reject it/,
+    )
+    await expect(store.mentions.rejectMention(OTHER, phone?.id ?? 0, { by: "owner" })).rejects.toThrow(/no mention/)
     await store.close()
   })
 })
@@ -289,7 +319,7 @@ describe("mention fields in a message search", () => {
 
   it("finds a phone written any way, an address, a link and a site; a dismissed value is not found", async () => {
     const { store } = await fresh()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-1",
       [
@@ -307,8 +337,8 @@ describe("mention fields in a message search", () => {
     expect(await found(store, 'url:"https://example.com/a#top"')).toEqual(["4"])
     expect(await found(store, 'phone:89000000001 -email:"ana@example.com"')).toEqual(["1"])
 
-    const [link] = (await store.mentions(OWNER, q("kind:url domain:example.com"), { offset: 0 })).items
-    await store.rejectMention(OWNER, link?.id ?? 0, { by: "owner" })
+    const [link] = (await store.mentions.mentions(OWNER, q("kind:url domain:example.com"), { offset: 0 })).items
+    await store.mentions.rejectMention(OWNER, link?.id ?? 0, { by: "owner" })
     expect(await found(store, "domain:example.com")).toEqual(["2"])
     expect(await found(store, 'url:"https://example.com/a"')).toEqual([])
     await store.close()
@@ -318,7 +348,7 @@ describe("mention fields in a message search", () => {
 describe("mentions in files and voice notes", () => {
   it("finds them in a file's text and a transcript, lists them with the message, and drops them with the text", async () => {
     const { store } = await fresh()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-1",
       [
@@ -327,22 +357,22 @@ describe("mentions in files and voice notes", () => {
       ],
       { via: "history" },
     )
-    const attached = await store.fileAttachments(OWNER, { limit: 10 })
+    const attached = await store.attachments.fileAttachments(OWNER, { limit: 10 })
     const file = attached.find((one) => one.messageId === "1")
     const voice = attached.find((one) => one.messageId === "2")
-    await store.keepAttachmentText(file?.pk ?? 0, {
+    await store.attachments.keepAttachmentText(file?.pk ?? 0, {
       text: "Подрядчик: ana@example.com",
       origin: "extracted",
       extractor: "plain",
     })
-    await store.keepAttachmentText(voice?.pk ?? 0, {
+    await store.attachments.keepAttachmentText(voice?.pk ?? 0, {
       text: "перезвони на +7 900 000-00-01",
       origin: "extracted",
       extractor: "speech:whisper",
     })
-    await store.saveMessages(OWNER, "-1", [message("3", "ещё")], { via: "update" })
+    await store.messages.saveMessages(OWNER, "-1", [message("3", "ещё")], { via: "update" })
 
-    const items = (await store.mentions(OWNER, undefined, { offset: 0 })).items
+    const items = (await store.mentions.mentions(OWNER, undefined, { offset: 0 })).items
     expect(items.map(({ kind, field, messageId, written }) => [kind, field, messageId, written]).sort()).toEqual([
       ["email", "file_text", "1", "ana@example.com"],
       ["phone", "transcript", "2", "+7 900 000-00-01"],
@@ -352,10 +382,10 @@ describe("mentions in files and voice notes", () => {
     expect(await found('phone:"89000000001"')).toEqual(["2"])
     expect(await found('email:"ana@example.com"')).toEqual(["1"])
 
-    expect(await store.rebuildMentions()).toMatchObject({ messages: 3, attachments: 2, mentions: 2 })
-    await store.keepAttachmentText(file?.pk ?? 0, { text: "ничего", origin: "agent", extractor: "agent" })
-    await store.saveMessages(OWNER, "-1", [message("4", "ещё раз")], { via: "update" })
-    expect((await store.mentions(OWNER, q("kind:email"), { offset: 0 })).items).toEqual([])
+    expect(await store.mentions.rebuildMentions()).toMatchObject({ messages: 3, attachments: 2, mentions: 2 })
+    await store.attachments.keepAttachmentText(file?.pk ?? 0, { text: "ничего", origin: "agent", extractor: "agent" })
+    await store.messages.saveMessages(OWNER, "-1", [message("4", "ещё раз")], { via: "update" })
+    expect((await store.mentions.mentions(OWNER, q("kind:email"), { offset: 0 })).items).toEqual([])
     await store.close()
   })
 })
@@ -364,26 +394,25 @@ describe("an organization's number", () => {
   it("is owned by the organization apart from any person, and later mentions of it are linked", async () => {
     const { path, store } = await fresh()
     const shop = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Shop" })
-    await store.saveMessages(OWNER, "-1", [message("1", "магазин: +7 900 000-00-02")], { via: "history" })
-    const [phone] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "магазин: +7 900 000-00-02")], { via: "history" })
+    const [phone] = (await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
 
-    expect(await store.confirmMention(OWNER, phone?.id ?? 0, `organization:${shop.id}`, { by: "owner" })).toMatchObject(
-      {
-        status: "linked",
-        target: expect.stringMatching(/^identity:/),
-      },
-    )
-    expect(await store.personOf({ provider: "phone", id: "+79000000002" })).toBeUndefined()
-    await store.saveMessages(OWNER, "-1", [message("2", "тот же 89000000002", "2026-10-02T10:00:00.000Z")], {
+    expect(
+      await store.mentions.confirmMention(OWNER, phone?.id ?? 0, `organization:${shop.id}`, { by: "owner" }),
+    ).toMatchObject({
+      status: "linked",
+      target: expect.stringMatching(/^identity:/),
+    })
+    expect(await store.people.personOf({ provider: "phone", id: "+79000000002" })).toBeUndefined()
+    await store.messages.saveMessages(OWNER, "-1", [message("2", "тот же 89000000002", "2026-10-02T10:00:00.000Z")], {
       via: "update",
     })
-    expect((await store.mentions(OWNER, q("89000000002"), { offset: 0 })).items.map((one) => one.status)).toEqual([
-      "linked",
-      "linked",
-    ])
-    await expect(store.confirmMention(OWNER, phone?.id ?? 0, "organization:999", { by: "owner" })).rejects.toThrow(
-      /no organization/,
-    )
+    expect(
+      (await store.mentions.mentions(OWNER, q("89000000002"), { offset: 0 })).items.map((one) => one.status),
+    ).toEqual(["linked", "linked"])
+    await expect(
+      store.mentions.confirmMention(OWNER, phone?.id ?? 0, "organization:999", { by: "owner" }),
+    ).rejects.toThrow(/no organization/)
     await store.close()
 
     const raw = new DatabaseSync(path)
@@ -402,53 +431,58 @@ describe("known people's names", () => {
   })
   const named = async () => {
     const { path, store } = await fresh()
-    await store.savePeople(OWNER, [
+    await store.people.savePeople(OWNER, [
       { id: "7", name: "Arkady Belkin" },
       { id: "8", name: "Аркадий Смирнов" },
     ])
-    const belkin = await store.personOf({ provider: "max", id: "7" })
-    const smirnov = await store.personOf({ provider: "max", id: "8" })
+    const belkin = await store.people.personOf({ provider: "max", id: "7" })
+    const smirnov = await store.people.personOf({ provider: "max", id: "8" })
     return { path, store, belkin: `person:${belkin?.uid}`, smirnov: `person:${smirnov?.uid}` }
   }
   const names = async (store: Awaited<ReturnType<typeof openStore>>) =>
-    (await store.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items
+    (await store.mentions.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items
       .map(({ messageId, written, status, target }) => `${messageId} ${written} ${status} ${target}`)
       .sort()
 
   it("links a name by rule only to the one person it fits who wrote in that chat", async () => {
     const { store, belkin } = await named()
-    await store.saveMessages(OWNER, "-1", [from("1", "7", "Аркадий придёт, Смирнову передам")], { via: "history" })
-    await store.saveMessages(OWNER, "-2", [from("2", "9", "Белкину привет", "-2")], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-1", [from("1", "7", "Аркадий придёт, Смирнову передам")], {
+      via: "history",
+    })
+    await store.messages.saveMessages(OWNER, "-2", [from("2", "9", "Белкину привет", "-2")], { via: "history" })
 
     expect(await names(store)).toEqual([`1 Аркадий linked ${belkin}`, "1 Смирнову found null", "2 Белкину found null"])
-    const [smirnov] = (await store.mentions(OWNER, q("kind:person-name status:found"), { offset: 0 })).items.filter(
-      (one) => one.messageId === "1",
-    )
-    expect((await store.mention(OWNER, smirnov?.id ?? 0))?.candidates).toHaveLength(1)
+    const [smirnov] = (
+      await store.mentions.mentions(OWNER, q("kind:person-name status:found"), { offset: 0 })
+    ).items.filter((one) => one.messageId === "1")
+    expect((await store.mentions.mention(OWNER, smirnov?.id ?? 0))?.candidates).toHaveLength(1)
     await store.close()
   })
 
   it("decides a name where it is written, keeps the decision on a rebuild, and finds the person's messages", async () => {
     const { store, smirnov } = await named()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-2",
       [from("1", "9", "Смирнов звонил", "-2"), from("2", "9", "Смирнов это фирма", "-2")],
       { via: "history" },
     )
-    const [call, firm] = (await store.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items.sort((a, b) =>
-      a.messageId.localeCompare(b.messageId),
+    const [call, firm] = (await store.mentions.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items.sort(
+      (a, b) => a.messageId.localeCompare(b.messageId),
     )
 
-    expect(await store.confirmMention(OWNER, call?.id ?? 0, smirnov, { by: "owner" })).toMatchObject({ mentions: 1 })
-    expect(await store.rejectMention(OWNER, firm?.id ?? 0, { by: "owner" })).toMatchObject({ mentions: 1 })
-    await store.rebuildMentions({ kinds: ["person-name"] })
+    expect(await store.mentions.confirmMention(OWNER, call?.id ?? 0, smirnov, { by: "owner" })).toMatchObject({
+      mentions: 1,
+    })
+    expect(await store.mentions.rejectMention(OWNER, firm?.id ?? 0, { by: "owner" })).toMatchObject({ mentions: 1 })
+    await store.mentions.rebuildMentions({ kinds: ["person-name"] })
     expect(await names(store)).toEqual([`1 Смирнов linked ${smirnov}`, "2 Смирнов dismissed null"])
 
     const found = await searchStore(store, OWNER, { text: `mentions:"${smirnov}"`, limit: 10 })
     expect(found.items.map(({ id }) => id)).toEqual(["1"])
-    const [dismissed] = (await store.mentions(OWNER, q("kind:person-name status:dismissed"), { offset: 0 })).items
-    await expect(store.confirmMention(OWNER, dismissed?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
+    const [dismissed] = (await store.mentions.mentions(OWNER, q("kind:person-name status:dismissed"), { offset: 0 }))
+      .items
+    await expect(store.mentions.confirmMention(OWNER, dismissed?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
       /person:<uid>/,
     )
     await store.close()
@@ -456,8 +490,8 @@ describe("known people's names", () => {
 
   it("finds a person by the owner's own name for their contact", async () => {
     const { store, belkin } = await named()
-    await store.setContactAlias(OWNER, "7", "Кузнечик")
-    await store.saveMessages(OWNER, "-1", [from("1", "7", "Кузнечику привет")], { via: "history" })
+    await store.people.setContactAlias(OWNER, "7", "Кузнечик")
+    await store.messages.saveMessages(OWNER, "-1", [from("1", "7", "Кузнечику привет")], { via: "history" })
 
     expect(await names(store)).toEqual([`1 Кузнечику linked ${belkin}`])
     await store.close()
@@ -465,7 +499,7 @@ describe("known people's names", () => {
 
   it("decides a name in every undecided place of its chat with --all-in-chat, and nowhere else", async () => {
     const { store, smirnov } = await named()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-2",
       [
@@ -475,16 +509,19 @@ describe("known people's names", () => {
       ],
       { via: "history" },
     )
-    await store.saveMessages(OWNER, "-3", [from("4", "9", "Смирнов тут", "-3")], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-3", [from("4", "9", "Смирнов тут", "-3")], { via: "history" })
     const byMessage = async () =>
       Object.fromEntries(
-        (await store.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items.map((one) => [one.messageId, one]),
+        (await store.mentions.mentions(OWNER, q("kind:person-name"), { offset: 0 })).items.map((one) => [
+          one.messageId,
+          one,
+        ]),
       )
     const before = await byMessage()
-    await store.rejectMention(OWNER, before["2"]?.id ?? 0, { by: "owner" })
+    await store.mentions.rejectMention(OWNER, before["2"]?.id ?? 0, { by: "owner" })
 
     expect(
-      await store.confirmMention(OWNER, before["1"]?.id ?? 0, smirnov, { by: "owner", inChat: true }),
+      await store.mentions.confirmMention(OWNER, before["1"]?.id ?? 0, smirnov, { by: "owner", inChat: true }),
     ).toMatchObject({
       mentions: 2,
     })
@@ -500,7 +537,7 @@ describe("known people's names", () => {
 
   it("leaves the kinds a later build finds when it reads a text again", async () => {
     const { path, store } = await fresh()
-    await store.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01")], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "+7 900 000-00-01")], { via: "history" })
     await store.close()
     const raw = new DatabaseSync(path)
     raw
@@ -513,7 +550,7 @@ describe("known people's names", () => {
     raw.close()
 
     const reopened = await openStore({ path })
-    await reopened.rebuildMentions()
+    await reopened.mentions.rebuildMentions()
     const raw2 = new DatabaseSync(path)
     expect(raw2.prepare("SELECT kind FROM mentions ORDER BY kind").all()).toEqual([
       { kind: "phone" },
@@ -530,7 +567,7 @@ describe("mentions outside a chat", () => {
 
   const seeded = async () => {
     const { path, store } = await fresh()
-    await store.saveMessages(OWNER, "-1", [message("1", "her number +7 900 000-00-01")], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "her number +7 900 000-00-01")], { via: "history" })
     const raw = new DatabaseSync(path)
     raw.exec(`INSERT INTO accounts (id, provider, external_id, created_at, updated_at) VALUES
         (90, 'email', 'a@example.com', 1, 1), (91, 'email', 'b@example.com', 1, 1);
@@ -552,7 +589,7 @@ describe("mentions outside a chat", () => {
       INSERT INTO notes (id, notable_type, notable_id, title, body, created_at, updated_at)
         VALUES (6, 'person', 40, 'Olga', 'ana@example.com', 1, 1);`)
     raw.close()
-    await store.rebuildMentions()
+    await store.mentions.rebuildMentions()
     return store
   }
 
@@ -570,7 +607,7 @@ describe("mentions outside a chat", () => {
       "phone +79000000001 Invoice olga@example.org",
     ])
     expect(await listed("email", [])).toEqual([])
-    const messenger = (await store.mentions(OWNER, undefined, { offset: 0 })).items
+    const messenger = (await store.mentions.mentions(OWNER, undefined, { offset: 0 })).items
     expect(messenger.map(({ messageId, written }) => `${messageId} ${written}`)).toEqual(["1 +7 900 000-00-01"])
     const page = await store.sourceMentions.list("email", q("kind:phone"), { offset: 0, limit: 1 }, MAIL)
     expect(page.hasMore).toBe(true)
@@ -582,8 +619,8 @@ describe("mentions outside a chat", () => {
     const shown = await store.sourceMentions.show(Number(mail?.id), MAIL)
     expect(shown).toMatchObject({ written: "+7 900 000-00-01", sameValue: 3, candidates: ["person:40", "person:41"] })
     expect(await store.sourceMentions.show(Number(mail?.id), [])).toBeUndefined()
-    const [inChat] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
-    expect((await store.mention(OWNER, Number(inChat?.id)))?.candidates).toEqual(["person:40", "person:41"])
+    const [inChat] = (await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    expect((await store.mentions.mention(OWNER, Number(inChat?.id)))?.candidates).toEqual(["person:40", "person:41"])
   })
 
   it("decides a value found in mail everywhere, and refuses a chat-wide decision outside a chat", async () => {
@@ -593,7 +630,7 @@ describe("mentions outside a chat", () => {
       status: "linked",
       mentions: 4,
     })
-    const [inChat] = (await store.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
+    const [inChat] = (await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items
     expect(inChat?.status).toBe("linked")
     const [note] = (await store.sourceMentions.list("note", undefined, { offset: 0 }, [])).items
     await expect(store.sourceMentions.reject(Number(note?.id), { by: "owner", inChat: true }, [])).rejects.toThrow(
@@ -607,14 +644,16 @@ describe("mentions outside a chat", () => {
 describe("links in mail", () => {
   it("keeps a tracking link once per letter and site, and a message's link whole", async () => {
     const { path, store } = await fresh()
-    await store.saveMessages(OWNER, "-1", [message("1", "https://news.example.com/click?id=1")], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "https://news.example.com/click?id=1")], {
+      via: "history",
+    })
     const raw = new DatabaseSync(path)
     raw.exec(`INSERT INTO accounts (id, provider, external_id, created_at, updated_at) VALUES (90, 'email', 'a@x.org', 1, 1);
       INSERT INTO email_threads (id, account_id, external_id, created_at, updated_at) VALUES (1, 90, 't1', 1, 1);
       INSERT INTO emails (id, account_id, email_thread_id, external_id, body_text, created_at, updated_at) VALUES
         (1, 90, 1, 'e1', 'https://news.example.com/click?id=1 https://news.example.com/click?id=2 https://example.org/a', 1, 1);`)
     raw.close()
-    await store.rebuildMentions({ kinds: ["url"] })
+    await store.mentions.rebuildMentions({ kinds: ["url"] })
     const mail = await store.sourceMentions.list("email", undefined, { offset: 0 }, [
       { provider: "email", account: "a@x.org" },
     ])
@@ -622,7 +661,7 @@ describe("links in mail", () => {
       "https://news.example.com https://news.example.com/click?id=1",
       "https://example.org/a https://example.org/a",
     ])
-    expect((await store.mentions(OWNER, undefined, { offset: 0 })).items.map(({ value }) => value)).toEqual([
+    expect((await store.mentions.mentions(OWNER, undefined, { offset: 0 })).items.map(({ value }) => value)).toEqual([
       "https://news.example.com/click?id=1",
     ])
   })
@@ -637,10 +676,10 @@ describe("links in mail", () => {
         (2, 90, 1, 'e2', 'read https://news.example.com/click?id=2 or https://example.org/Price/list', 1, 1),
         (3, 90, 1, 'e3', 'no link here, id=1', 1, 1);`)
     raw.close()
-    await store.rebuildMentions({ kinds: ["url"] })
+    await store.mentions.rebuildMentions({ kinds: ["url"] })
     const found = async (field: string, value: string) =>
       (
-        await store.matchQuery({
+        await store.queries.matchQuery({
           root: { kind: "predicate", field, operator: "phrase", value, span: { start: 0, end: 1 } } as never,
           accounts: [{ provider: "email", account: "a@x.org" }],
           limit: 10,
@@ -664,7 +703,7 @@ describe("links in mail", () => {
 
   it("finds a message by a part of its link", async () => {
     const { store } = await fresh()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-1",
       [

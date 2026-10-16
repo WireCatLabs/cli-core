@@ -38,12 +38,12 @@ const message = (
   ...(reply ? { replyToId: reply } : {}),
 })
 const save = (store: MessageStore, chat: string, messages: Message[]) =>
-  store.saveMessages(account, chat, messages, { via: "test" })
+  store.messages.saveMessages(account, chat, messages, { via: "test" })
 const setup = async () => {
   vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-08T12:00:00Z"))
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "admin-stats-")), "fixture.db") })
   stores.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     {
       id: "room",
       title: "Synthetic room",
@@ -111,7 +111,7 @@ describe("administrator stored reports", () => {
   })
   it("resolves names, aliases and usernames locally, rejects guesses and preserves a pinned identity after renaming", async () => {
     const { service, store } = await setup()
-    await store.saveRoster(account, "room", {
+    await store.roster.saveRoster(account, "room", {
       members: [
         { id: "admin", name: "Alex Rivera", username: "alex_rivera", role: "member" },
         { id: "other", name: "Alex Kim", username: "alex_kim", role: "member" },
@@ -120,13 +120,13 @@ describe("administrator stored reports", () => {
       complete: false,
       participants: 3,
     })
-    await store.setContactAlias(account, "admin", "Project lead")
+    await store.people.setContactAlias(account, "admin", "Project lead")
     for (const reference of ["Alex Rivera", "@alex_rivera", "Project lead", "Rivera"]) {
       const found = await service.report("responses", { answerers: [reference], limit: 20 })
       expect(found.items[0]).toMatchObject({ id: "admin", answered: 1, identityKnown: true, status: "observed" })
       const row = found.items[0]
       if (!row) throw new Error("missing resolved row")
-      await store.setContactAlias(account, "admin", "New alias")
+      await store.people.setContactAlias(account, "admin", "New alias")
       expect(
         (
           await service.evidence("contacts", "admin", row.drilldown.arguments.selection, {
@@ -135,7 +135,7 @@ describe("administrator stored reports", () => {
           })
         ).items[0]?.message.id,
       ).toBe("a")
-      await store.setContactAlias(account, "admin", "Project lead")
+      await store.people.setContactAlias(account, "admin", "Project lead")
     }
     await expect(service.report("responses", { answerers: ["Alex"], limit: 20 })).rejects.toMatchObject({
       code: "validation_error",
@@ -160,7 +160,7 @@ describe("administrator stored reports", () => {
   })
   it("does not choose between matching names in different selected accounts", async () => {
     const { service, store } = await setup()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       { provider: "fixture", account: "other-owner" },
       "room",
       [message("other-q", "Another question?", 1, "admin")],
@@ -221,7 +221,7 @@ describe("administrator stored reports", () => {
   })
   it("separates known joins and first observations and keeps newcomer windows bounded", async () => {
     const { store, service } = await setup()
-    await store.saveRoster(account, "room", {
+    await store.roster.saveRoster(account, "room", {
       members: [
         { id: "member", name: "Synthetic member", username: null, role: "member", joinedAt: "2026-10-01T00:00:00Z" },
         { id: "unknown", name: "Synthetic unknown", username: null, role: "member" },
@@ -350,7 +350,7 @@ describe("administrator stored reports", () => {
     await expect(service.report("unanswered", { saved: "waiting", source: "fixture", limit: 20 })).rejects.toThrow(
       "resolved query",
     )
-    const history = await store.searchHistory(10)
+    const history = await store.searches.searchHistory(10)
     expect(history.every((one) => one.command === "admin-statistics")).toBe(true)
   })
   it("refuses oversized evidence bodies and supports cancellation", async () => {

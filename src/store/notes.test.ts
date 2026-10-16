@@ -30,7 +30,7 @@ const open = async (path: string, now = () => Date.parse("2026-10-08T12:00:00Z")
 describe("people named in notes", () => {
   const withNote = async (before: (store: MessageStore) => Promise<void> = async () => {}) => {
     const store = await open(fresh())
-    await store.saveAccount(telegram, { name: "Owner" })
+    await store.accounts.saveAccount(telegram, { name: "Owner" })
     await before(store)
     const folder = await store.notes.addFolder({ name: "Vault" })
     const { note } = await store.notes.saveFileNote({
@@ -56,8 +56,8 @@ describe("people named in notes", () => {
       ["Rin Example", null],
       ["@Rinny", null],
     ])
-    await store.savePeople(telegram, [{ id: "101", name: "rin example" }])
-    const person = await store.personOf({ provider: "telegram", id: "101" })
+    await store.people.savePeople(telegram, [{ id: "101", name: "rin example" }])
+    const person = await store.people.personOf({ provider: "telegram", id: "101" })
     expect(await targets(store, note.id)).toEqual([
       ["Rin Example", `person:${person?.uid}`],
       ["@Rinny", null],
@@ -66,12 +66,12 @@ describe("people named in notes", () => {
 
   it("leaves a name two people share unresolved until they are linked as one", async () => {
     const { store, note } = await withNote(async (store) => {
-      await store.saveAccount({ provider: "max", account: "9" }, { name: "Owner" })
-      await store.savePeople(telegram, [{ id: "101", name: "Rin Example" }])
-      await store.savePeople({ provider: "max", account: "9" }, [{ id: "202", name: "Rin Example" }])
+      await store.accounts.saveAccount({ provider: "max", account: "9" }, { name: "Owner" })
+      await store.people.savePeople(telegram, [{ id: "101", name: "Rin Example" }])
+      await store.people.savePeople({ provider: "max", account: "9" }, [{ id: "202", name: "Rin Example" }])
     })
     expect((await targets(store, note.id))[0]).toEqual(["Rin Example", null])
-    const merged = await store.linkIdentities(
+    const merged = await store.people.linkIdentities(
       { provider: "telegram", id: "101" },
       { provider: "max", id: "202" },
       { method: "manual", by: "owner" },
@@ -81,12 +81,12 @@ describe("people named in notes", () => {
 
   it("resolves a link by a local alias and by a username", async () => {
     const { store, note } = await withNote()
-    await store.savePeople(telegram, [{ id: "101", name: "Somebody Else", username: "rinny" }])
-    const person = await store.personOf({ provider: "telegram", id: "101" })
+    await store.people.savePeople(telegram, [{ id: "101", name: "Somebody Else", username: "rinny" }])
+    const person = await store.people.personOf({ provider: "telegram", id: "101" })
     expect((await targets(store, note.id))[1]).toEqual(["@Rinny", `person:${person?.uid}`])
-    await store.savePeople(telegram, [{ id: "102", name: "Another Person" }])
-    await store.setContactAlias(telegram, "102", "Rin Example")
-    const aliased = await store.personOf({ provider: "telegram", id: "102" })
+    await store.people.savePeople(telegram, [{ id: "102", name: "Another Person" }])
+    await store.people.setContactAlias(telegram, "102", "Rin Example")
+    const aliased = await store.people.personOf({ provider: "telegram", id: "102" })
     expect((await targets(store, note.id))[0]).toEqual(["Rin Example", `person:${aliased?.uid}`])
   })
 })

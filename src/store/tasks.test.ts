@@ -113,11 +113,11 @@ describe("tasks in the store", () => {
     const store = await openStore({ path })
     const tasks = createTaskService({ store: store.tasks })
     await tasks.add(question)
-    const accountId = await store.saveAccount({ provider: "telegram", account: "100" }, { name: null })
+    const accountId = await store.accounts.saveAccount({ provider: "telegram", account: "100" }, { name: null })
     const database = await openCache(path)
     expect(database.prepare("SELECT account_id FROM projects").all()).toEqual([{ account_id: accountId }])
 
-    await store.purge({ provider: "telegram", account: "100" })
+    await store.accounts.purge({ provider: "telegram", account: "100" })
     expect(database.prepare("SELECT account_id FROM projects").all()).toEqual([{ account_id: null }])
     database.close()
     await store.close()

@@ -13,26 +13,26 @@ describe("fetch leases", () => {
     let clock = 1_000
     const store = await openStore({ path: fresh(), now: () => clock })
 
-    expect(await store.claim(OWNER, "-1", "newest", "a", 5_000)).toBe(true)
-    expect(await store.claim(OWNER, "-1", "newest", "b", 5_000)).toBe(false)
-    expect(await store.claim(OWNER, "-1", "older", "b", 5_000)).toBe(true)
-    expect(await store.claim(OWNER, "-1", "newest", "a", 5_000)).toBe(true)
+    expect(await store.sync.claim(OWNER, "-1", "newest", "a", 5_000)).toBe(true)
+    expect(await store.sync.claim(OWNER, "-1", "newest", "b", 5_000)).toBe(false)
+    expect(await store.sync.claim(OWNER, "-1", "older", "b", 5_000)).toBe(true)
+    expect(await store.sync.claim(OWNER, "-1", "newest", "a", 5_000)).toBe(true)
 
     clock += 5_000
-    expect(await store.claim(OWNER, "-1", "newest", "b", 5_000)).toBe(true)
+    expect(await store.sync.claim(OWNER, "-1", "newest", "b", 5_000)).toBe(true)
 
-    await store.release(OWNER, "-1", "newest", "a")
-    expect(await store.claim(OWNER, "-1", "newest", "a", 5_000)).toBe(false)
-    await store.release(OWNER, "-1", "newest", "b")
-    expect(await store.claim(OWNER, "-1", "newest", "a", 5_000)).toBe(true)
+    await store.sync.release(OWNER, "-1", "newest", "a")
+    expect(await store.sync.claim(OWNER, "-1", "newest", "a", 5_000)).toBe(false)
+    await store.sync.release(OWNER, "-1", "newest", "b")
+    expect(await store.sync.claim(OWNER, "-1", "newest", "a", 5_000)).toBe(true)
     await store.close()
   })
 
   it("keeps two accounts' leases apart, even on chats with the same id", async () => {
     const store = await openStore({ path: fresh() })
-    expect(await store.claim(OWNER, "-1", "newest", "a", 60_000)).toBe(true)
-    expect(await store.claim(OTHER, "-1", "newest", "b", 60_000)).toBe(true)
-    await store.release({ provider: "max", account: "3" }, "-1", "newest", "a")
+    expect(await store.sync.claim(OWNER, "-1", "newest", "a", 60_000)).toBe(true)
+    expect(await store.sync.claim(OTHER, "-1", "newest", "b", 60_000)).toBe(true)
+    await store.sync.release({ provider: "max", account: "3" }, "-1", "newest", "a")
     await store.close()
   })
 })

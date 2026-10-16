@@ -180,7 +180,9 @@ const listCommand = (bot: BotMessenger): Command =>
       const limit = this.opts<{ limit?: number }>().limit ?? context.settings.limit
       await context.run(async (events) => {
         const fromCopy = async (botId: string) => {
-          const page = await context.copy.read((store) => store.messages(context.copy.accountOf(botId), ref, { limit }))
+          const page = await context.copy.read((store) =>
+            store.messages.messages(context.copy.accountOf(botId), ref, { limit }),
+          )
           return page.items
         }
         if (context.settings.offline) {
@@ -214,7 +216,7 @@ const showCommand = (bot: BotMessenger): Command =>
       await context.run(async (events) => {
         const fromCopy = async (botId: string) => {
           const kept = await context.copy.read((store) =>
-            store.message(context.copy.accountOf(botId), messageId, { chatId: ref }),
+            store.messages.message(context.copy.accountOf(botId), messageId, { chatId: ref }),
           )
           if (!kept) throw new CliError("not_found", `message ${messageId} is not in this bot's local copy`)
           return kept

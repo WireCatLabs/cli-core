@@ -16,8 +16,8 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-project-test-")), "fixture.db")
   const store = await openStore({ path, now: () => 3000 })
   opened.push(store)
-  const accountId = await store.saveAccount(key, { name: "Alice Example" })
-  await store.saveAccount(other, { name: "Bob Sample" })
+  const accountId = await store.accounts.saveAccount(key, { name: "Alice Example" })
+  await store.accounts.saveAccount(other, { name: "Bob Sample" })
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   const saved = await store.meetings.saveMeeting(input)

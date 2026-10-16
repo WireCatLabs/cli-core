@@ -16,7 +16,7 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "zm-test-native-append-")), "fixture.db")
   const store = await openStore({ path, now: () => 4000 })
   opened.push(store)
-  const accountId = await store.saveAccount(account, { name: "Invented" })
+  const accountId = await store.accounts.saveAccount(account, { name: "Invented" })
   const db = await openCache(path)
   opened.push(db)
   return { path, store, accountId, db }
@@ -117,15 +117,15 @@ describe("stable meeting identity associations", () => {
       identity: { ...participant.identity, externalId: "invented-guest-two", associatePerson: false },
     })
     await store.meetings.saveMeeting(input)
-    expect(await store.personOf({ provider: "example", id: "alice-example" })).toBeUndefined()
-    expect(await store.personOf({ provider: "example", id: "invented-guest-two" })).toBeUndefined()
+    expect(await store.people.personOf({ provider: "example", id: "alice-example" })).toBeUndefined()
+    expect(await store.people.personOf({ provider: "example", id: "invented-guest-two" })).toBeUndefined()
     expect(db.prepare("SELECT count(*) AS n FROM persons").get()?.n).toBe(beforePeople)
     expect(db.prepare("SELECT count(*) AS n FROM account_identities").get()?.n).toBe(0)
-    await store.savePeople(account, [
+    await store.people.savePeople(account, [
       { id: "alice-example", name: "Alice Example" },
       { id: "invented-guest-two", name: "Bob Sample" },
     ])
-    await store.linkIdentities(
+    await store.people.linkIdentities(
       { provider: "example", id: "alice-example" },
       { provider: "example", id: "invented-guest-two" },
       { method: "manual", by: "owner" },
@@ -146,13 +146,13 @@ describe("stable meeting identity associations", () => {
     participant.identity.metadata = { source: "invented-participant" }
     input.participants.push({ ...participant, identity: { ...participant.identity, externalId: "bob-sample" } })
     await store.meetings.saveMeeting(input)
-    const alice = await store.personOf({ provider: "example", id: "alice-example" })
-    const bob = await store.personOf({ provider: "example", id: "bob-sample" })
+    const alice = await store.people.personOf({ provider: "example", id: "alice-example" })
+    const bob = await store.people.personOf({ provider: "example", id: "bob-sample" })
     expect(alice?.uid).toBeDefined()
     expect(bob?.uid).toBeDefined()
     expect(alice?.uid).not.toBe(bob?.uid)
     expect(db.prepare("SELECT count(*) AS n FROM account_identities WHERE account_id = ?").get(accountId)?.n).toBe(2)
-    expect(await store.countContacts(account)).toBe(0)
+    expect(await store.people.countContacts(account)).toBe(0)
     expect(
       JSON.parse(
         String(db.prepare("SELECT metadata FROM identities WHERE external_id = 'alice-example'").get()?.metadata),
@@ -163,7 +163,7 @@ describe("stable meeting identity associations", () => {
         .forPerson(Number(alice?.uid))
         .some((row) => row.subjectType === "meeting" && row.accountId === accountId),
     ).toBe(true)
-    const linked = await store.linkIdentities(
+    const linked = await store.people.linkIdentities(
       { provider: "example", id: "alice-example" },
       { provider: "example", id: "bob-sample" },
       { method: "manual", by: "owner" },
@@ -171,7 +171,7 @@ describe("stable meeting identity associations", () => {
     const before = db.prepare("SELECT * FROM identity_links ORDER BY identity_id").all()
     await store.meetings.saveMeeting({ ...input, now: 6000 })
     expect(db.prepare("SELECT * FROM identity_links ORDER BY identity_id").all()).toEqual(before)
-    const second = await store.saveAccount(
+    const second = await store.accounts.saveAccount(
       { provider: "example", account: "invented-two" },
       { name: "Second invented" },
     )
@@ -179,7 +179,7 @@ describe("stable meeting identity associations", () => {
     expect(db.prepare("SELECT count(*) AS n FROM account_identities WHERE account_id = ?").get(second)?.n).toBe(2)
     const reopened = await openStore({ path })
     opened.push(reopened)
-    expect((await reopened.personOf({ provider: "example", id: "alice-example" }))?.uid).toBe(linked.uid)
+    expect((await reopened.people.personOf({ provider: "example", id: "alice-example" }))?.uid).toBe(linked.uid)
   })
 
   it("repairs old orphan identities on either meeting ingestion or ordinary stable-key profile ingestion", async () => {
@@ -190,20 +190,20 @@ describe("stable meeting identity associations", () => {
     )
     insert.run("alice-example")
     insert.run("bob-sample")
-    expect(await store.personOf({ provider: "example", id: "alice-example" })).toBeUndefined()
+    expect(await store.people.personOf({ provider: "example", id: "alice-example" })).toBeUndefined()
     const input = sampleMeeting()
     input.participants[0].identity = { ...input.participants[0].identity, associatePerson: true }
     input.meeting.accountId = accountId
     await store.meetings.saveMeeting(input)
-    const alice = await store.personOf({ provider: "example", id: "alice-example" })
+    const alice = await store.people.personOf({ provider: "example", id: "alice-example" })
     expect(alice?.uid).toBeDefined()
-    await store.savePeople(account, [{ id: "bob-sample", name: "Alice Example" }])
-    const bob = await store.personOf({ provider: "example", id: "bob-sample" })
+    await store.people.savePeople(account, [{ id: "bob-sample", name: "Alice Example" }])
+    const bob = await store.people.personOf({ provider: "example", id: "bob-sample" })
     expect(bob?.uid).toBeDefined()
     expect(bob?.uid).not.toBe(alice?.uid)
     expect(db.prepare("SELECT count(*) AS n FROM identity_link_events WHERE method='initial'").get()?.n).toBe(2)
     await store.meetings.saveMeeting(input)
-    await store.savePeople(account, [{ id: "bob-sample", name: "Alice Example" }])
+    await store.people.savePeople(account, [{ id: "bob-sample", name: "Alice Example" }])
     expect(db.prepare("SELECT count(*) AS n FROM persons").get()?.n).toBe(beforePeople + 2)
     expect(db.prepare("SELECT count(*) AS n FROM identity_link_events WHERE method='initial'").get()?.n).toBe(2)
   })

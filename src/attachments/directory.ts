@@ -46,7 +46,7 @@ export const directoryPaths = async (
       throw new CliError("validation_error", "a file escapes --from-dir")
     files.set(name, canonical)
   }
-  const held = await store.attachments({ chatId: chat, limit: MAX_FILES + 1 })
+  const held = await store.attachments.attachments({ chatId: chat, limit: MAX_FILES + 1 })
   if (held.length > MAX_FILES)
     throw new CliError(
       "validation_error",

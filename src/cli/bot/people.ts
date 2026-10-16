@@ -96,7 +96,7 @@ const acrossOptions = (command: Command): Command =>
     )
 
 const resolve = async (store: MessageStore, bot: BotMessenger, references: string[], scope: PeopleScope) => {
-  const people = await store.people(bot.provider, scope)
+  const people = await store.people.people(bot.provider, scope)
   return references.map((reference) => pickPerson(reference, people))
 }
 
@@ -140,14 +140,14 @@ const cardOf = async (
 ) => {
   const { filter, people } = scopeOf(context, bot, across)
   const [person] = (await resolve(store, bot, [who], people)) as [Contact]
-  const rows = (await store.find({ ...filter, senders: [person.id], perChat: true, limit: 1 })).items
+  const rows = (await store.messages.find({ ...filter, senders: [person.id], perChat: true, limit: 1 })).items
   const latest = rows.filter((hit, index) => rows.findIndex((other) => other.chatId === hit.chatId) === index)
   const kindOf = bot.chatKindOf ?? kindByNumber
   const dialogs = latest.filter((hit) => kindOf(hit) === "dialog")
   const pages = await Promise.all(
     dialogs.map(async (hit) => {
       const { account } = parseLocator(hit.locator)
-      const page = await store.messages({ provider: bot.provider, account }, hit.chatId, { limit })
+      const page = await store.messages.messages({ provider: bot.provider, account }, hit.chatId, { limit })
       return page.items.map((message) => ({
         ...message,
         locator: formatLocator({ provider: bot.provider, account, chat: message.chatId, message: message.id }),
@@ -323,7 +323,7 @@ export const addBotCopyReads = (messages: Command, bot: BotMessenger): void => {
         const { filter, people } = scopeOf(context, bot, options)
         const page = await context.copy.read(async (store) => {
           const senders = (await resolve(store, bot, references, people)).map(({ id }) => id)
-          return store.find({ ...filter, senders, together: true, perChat: true, limit })
+          return store.messages.find({ ...filter, senders, together: true, perChat: true, limit })
         })
         const chats = new Map<string, { id: string; title: string | null; messages: StoredHit[] }>()
         for (const hit of once(page.items)) {

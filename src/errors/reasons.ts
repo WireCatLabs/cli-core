@@ -26,6 +26,7 @@ const OTHERS: Entry[] = [
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
   ["extraction.invalid-proposals", "invalid_response", "the model's memory proposals could not be used"],
   validation("extraction.text-too-long", "the text is too long for memory extraction"),
+  validation("file.locked", "another process holds the file's lock"),
   ["profile.wrong-account", "authentication_error", "the signed-in source account does not match this profile"],
   validation("store.refused", "the local store refused the document text"),
   validation("catalog.scope-limit", "the selected catalog exceeds its entry limit"),

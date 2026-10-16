@@ -28,8 +28,14 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "core-meeting-batch-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path }, now: () => 10000 })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "AliceExample" }, { name: "Alice Example" })
-  const foreign = await store.saveAccount({ provider: "example", account: "BobSample" }, { name: "Bob Sample" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice Example" },
+  )
+  const foreign = await store.accounts.saveAccount(
+    { provider: "example", account: "BobSample" },
+    { name: "Bob Sample" },
+  )
   const data = sampleMeeting()
   data.meeting.accountId = accountId
   const row = data.transcripts[0].rows[0]

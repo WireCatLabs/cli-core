@@ -20,7 +20,7 @@ for (const suffix of ["", "-wal", "-shm"]) rmSync(`${file}${suffix}`, { force: t
 
 const ACCOUNT = { provider: "tg", account: "1" } as const
 const setup = await openStore({ path: file })
-await setup.saveChats(ACCOUNT, [
+await setup.chats.saveChats(ACCOUNT, [
   { id: "-1", title: "Group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
 ])
 await setup.close()
@@ -52,14 +52,14 @@ const read = performance.now()
 const inputs: LinkInput[] = []
 let after: string | undefined
 for (;;) {
-  const page = await store.linkInputs(ACCOUNT, "-1", { limit: 5_000, ...(after === undefined ? {} : { after }) })
+  const page = await store.conversations.linkInputs(ACCOUNT, "-1", { limit: 5_000, ...(after === undefined ? {} : { after }) })
   inputs.push(...page.items)
   if (page.next === null) break
   after = page.next
 }
 const readMs = performance.now() - read
 const rules = performance.now()
-const { links, conversations } = linkMessages(inputs, { handles: await store.senderHandles(ACCOUNT, "-1") })
+const { links, conversations } = linkMessages(inputs, { handles: await store.conversations.senderHandles(ACCOUNT, "-1") })
 const rulesMs = performance.now() - rules
 
 // Another process's view: a small write every 10 ms, and the longest it waited for the lock.
@@ -84,7 +84,7 @@ tick()
 const timeWrite = async () => {
   const writer = new Worker(WRITER, { eval: true, workerData: file })
   const at = performance.now()
-  await store.replaceConversations(ACCOUNT, "-1", { startedAt: Date.now(), algorithmVersion: RULES_VERSION, links, conversations })
+  await store.conversations.replaceConversations(ACCOUNT, "-1", { startedAt: Date.now(), algorithmVersion: RULES_VERSION, links, conversations })
   const took = performance.now() - at
   const waited = await new Promise<number>((resolve) => {
     writer.once("message", resolve)

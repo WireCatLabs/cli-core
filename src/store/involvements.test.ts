@@ -11,10 +11,10 @@ it("rebuilds a person's ordered timeline across sources and uses the person inde
   const account = { provider: "synthetic", account: "owner" }
   const database = await openCache(path)
   try {
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "room", title: "Synthetic room", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 1 },
     ])
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "room",
       [
@@ -115,10 +115,10 @@ it("keeps the index current as the store writes, and ends where a full rebuild e
     ...extra,
   })
   try {
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "room", title: "Synthetic room", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
     ])
-    await store.saveMessages(account, "room", [message("1", "alice"), message("2", "bob")], { via: "history" })
+    await store.messages.saveMessages(account, "room", [message("1", "alice"), message("2", "bob")], { via: "history" })
     expect(store.involvements.pending()).toBe(0)
     expect(rows().filter((row) => row.role === "sender")).toHaveLength(2)
     database.prepare("UPDATE messages SET mentions=json_array('alice') WHERE external_id='2'").run()

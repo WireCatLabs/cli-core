@@ -30,10 +30,10 @@ it("upgrades a store 0.218.0 created in place, keeping its rows", async () => {
 
   const store = await openStore({ path })
   try {
-    expect(await store.storedAccounts()).toMatchObject([
+    expect(await store.accounts.storedAccounts()).toMatchObject([
       { provider: "telegram", account: "100", name: "Alice Example" },
     ])
-    expect((await store.chats({ provider: "telegram", account: "100" }, {})).items).toMatchObject([
+    expect((await store.chats.chats({ provider: "telegram", account: "100" }, {})).items).toMatchObject([
       { id: "-1001", title: "Garden club" },
     ])
   } finally {

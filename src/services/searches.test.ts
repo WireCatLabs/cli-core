@@ -45,8 +45,8 @@ const setup = async (history?: boolean) => {
   const path = join(mkdtempSync(join(tmpdir(), "searches-")), "messages.db")
   const store = await openStore({ path })
   live.push(store)
-  await store.saveChats(OWNER, [chat])
-  await store.saveMessages(
+  await store.chats.saveChats(OWNER, [chat])
+  await store.messages.saveMessages(
     OWNER,
     "1",
     [
@@ -105,7 +105,7 @@ describe("search history", () => {
 
   it("answers the search even when the history cannot be written", async () => {
     const { store, messages } = await setup()
-    store.recordSearch = async () => {
+    store.searches.recordSearch = async () => {
       throw new Error("database is locked")
     }
     expect((await messages.search({ text: "invoice", limit: 5 })).items).toHaveLength(2)
@@ -115,7 +115,7 @@ describe("search history", () => {
     const { store, searches } = await setup()
     await searches.create("kept", { text: "invoice" })
     for (let n = 0; n <= HISTORY_KEPT; n++)
-      await store.recordSearch(searchRecordOf("search", { text: `word${n}`, limit: 1 }))
+      await store.searches.recordSearch(searchRecordOf("search", { text: `word${n}`, limit: 1 }))
     const history = await searches.history(HISTORY_KEPT + 10)
     expect(history.items).toHaveLength(HISTORY_KEPT)
     expect(history.items[0]?.params.text).toBe(`word${HISTORY_KEPT}`)
@@ -188,7 +188,7 @@ describe("saved searches", () => {
 
   it("**re-checks the stored query against today's fields**, naming the saved search when it fails", async () => {
     const { store, searches } = await setup()
-    await store.saveSearch("old", searchRecordOf("search", { text: "renamed:field" }))
+    await store.searches.saveSearch("old", searchRecordOf("search", { text: "renamed:field" }))
     await expect(searches.resolve("old", {})).rejects.toMatchObject({
       code: "validation_error",
       message: expect.stringContaining('saved search "old": search: query.unknown-field'),

@@ -29,25 +29,28 @@ describe("what changed after a mark", () => {
       path: join(mkdtempSync(join(tmpdir(), "changes-")), "messages.db"),
       now: () => clock,
     })
-    await store.saveMessages(OWNER, "-1", [message("1", "old"), message("2", "kept"), message("3", "gone")], {
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "old"), message("2", "kept"), message("3", "gone")], {
       via: "history",
     })
     const mark = new Date(clock).toISOString()
 
     clock += 60_000
-    await store.saveMessages(OWNER, "-1", [message("1", "old, edited a year later")], { via: "update" })
-    await store.saveMessages(OWNER, "-1", [message("4", "new", "2026-10-01T10:01:00.000Z")], { via: "update" })
-    await store.markDeleted(OWNER, ["3"], { chatId: "-1" })
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "old, edited a year later")], { via: "update" })
+    await store.messages.saveMessages(OWNER, "-1", [message("4", "new", "2026-10-01T10:01:00.000Z")], { via: "update" })
+    await store.messages.markDeleted(OWNER, ["3"], { chatId: "-1" })
 
-    const { messages, deleted } = await store.changes(OWNER, "-1", mark)
+    const { messages, deleted } = await store.messages.changes(OWNER, "-1", mark)
 
     expect(messages.map((one) => [one.id, one.text])).toEqual([
       ["1", "old, edited a year later"],
       ["4", "new"],
     ])
     expect(deleted).toEqual(["3"])
-    expect(await store.changes(OWNER, "-1", new Date(clock).toISOString())).toEqual({ messages: [], deleted: [] })
-    expect(await store.changes(OWNER, "-404", mark)).toEqual({ messages: [], deleted: [] })
+    expect(await store.messages.changes(OWNER, "-1", new Date(clock).toISOString())).toEqual({
+      messages: [],
+      deleted: [],
+    })
+    expect(await store.messages.changes(OWNER, "-404", mark)).toEqual({ messages: [], deleted: [] })
     await store.close()
   })
 })

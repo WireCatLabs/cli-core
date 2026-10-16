@@ -98,7 +98,7 @@ const gatherer =
     const read = adapter.historySince
       ? await adapter.historySince(chatId, since, CHECK_READS)
       : await context.copy.read(async (store) => {
-          const page = await store.messages(context.copy.accountOf(botId), chatId, {
+          const page = await store.messages.messages(context.copy.accountOf(botId), chatId, {
             limit: CHECK_READS,
             since: new Date(since).toISOString(),
           })

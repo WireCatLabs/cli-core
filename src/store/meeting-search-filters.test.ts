@@ -16,8 +16,11 @@ const fixture = async () => {
   const store = await openStore({ path, env: { MESSAGING_STORE: path }, now: () => 3000 })
   opened.push(store)
   const key = { provider: "example", account: "AliceExample" }
-  const accountId = await store.saveAccount(key, { name: "Alice Example" })
-  const otherId = await store.saveAccount({ provider: "second-example", account: "BobSample" }, { name: "Bob Sample" })
+  const accountId = await store.accounts.saveAccount(key, { name: "Alice Example" })
+  const otherId = await store.accounts.saveAccount(
+    { provider: "second-example", account: "BobSample" },
+    { name: "Bob Sample" },
+  )
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   const first = await store.meetings.saveMeeting(input)

@@ -19,12 +19,12 @@ const member = (id: string, known = true): GroupMember => ({
 const setup = async () => {
   let now = START
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "retention-")), "store.db"), now: () => now })
-  await store.saveChats(OWNER, [
+  await store.chats.saveChats(OWNER, [
     { id: "7", title: "Synthetic group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 4 },
   ])
   const roster = async (days: number, members: GroupMember[], complete: boolean) => {
     now = START + days * DAY
-    return store.saveRoster(OWNER, "7", {
+    return store.roster.saveRoster(OWNER, "7", {
       members,
       complete,
       participants: 4,
@@ -51,7 +51,7 @@ describe("observed retention", () => {
       await roster(0, [member("2"), member("3"), member("4", false)], true)
       await roster(1.25, [member("2")], false)
       await roster(7.5, [member("2")], true)
-      const found = await store.retention?.(OWNER, "7", options())
+      const found = await store.roster.retention?.(OWNER, "7", options())
       expect(found).toMatchObject({
         unknownJoin: 1,
         eligibleStays: 2,
@@ -100,11 +100,11 @@ describe("observed retention", () => {
     try {
       await roster(0, [member("2")], true)
       await roster(3, [member("2")], true)
-      const found = await store.retention?.(OWNER, "7", options())
+      const found = await store.roster.retention?.(OWNER, "7", options())
       expect(found?.evidence[0]?.checkpoints[0]).toMatchObject({ state: "unknown", observedAt: null })
       const before = found?.fingerprint
       await roster(4, [member("2")], true)
-      expect((await store.retention?.(OWNER, "7", options()))?.fingerprint).not.toBe(before)
+      expect((await store.roster.retention?.(OWNER, "7", options()))?.fingerprint).not.toBe(before)
     } finally {
       await store.close()
     }
@@ -112,10 +112,10 @@ describe("observed retention", () => {
   it("rejects invalid and unbounded durations before querying", async () => {
     const { store, options } = await setup()
     try {
-      await expect(store.retention?.(OWNER, "7", { ...options(), checkpoints: [DAY, DAY] })).rejects.toThrow(
+      await expect(store.roster.retention?.(OWNER, "7", { ...options(), checkpoints: [DAY, DAY] })).rejects.toThrow(
         "increasing",
       )
-      await expect(store.retention?.(OWNER, "7", { ...options(), limit: 101 })).rejects.toThrow("1–100")
+      await expect(store.roster.retention?.(OWNER, "7", { ...options(), limit: 101 })).rejects.toThrow("1–100")
     } finally {
       await store.close()
     }
@@ -126,12 +126,12 @@ describe("observed retention", () => {
     try {
       await roster(0, [member("2"), member("3")], true)
       await roster(1, [member("2")], false)
-      await store.purge(OWNER)
-      await store.saveChats(OWNER, [
+      await store.accounts.purge(OWNER)
+      await store.chats.saveChats(OWNER, [
         { id: "7", title: "Synthetic group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 4 },
       ])
 
-      expect((await store.retention?.(OWNER, "7", options()))?.eligibleStays).toBe(0)
+      expect((await store.roster.retention?.(OWNER, "7", options()))?.eligibleStays).toBe(0)
     } finally {
       await store.close()
     }

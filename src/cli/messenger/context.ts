@@ -252,7 +252,7 @@ const warnUnserved = async (
   if (servingProfiles(messenger.app, env).includes(profile)) return
   const account = recalledAccount(messenger.app, messenger.provider, profile, env)
   if (!account) return
-  const newest = (await store.chatStats(account))
+  const newest = (await store.chats.chatStats(account))
     .map((one) => one.newestAt)
     .reduce<string | null>((latest, at) => (at !== null && (latest === null || at > latest) ? at : latest), null)
   renderer.warn(

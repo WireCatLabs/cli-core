@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { AccountKey } from "../store.js"
+import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import type { StoreContext } from "./open.js"
 

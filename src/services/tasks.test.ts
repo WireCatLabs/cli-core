@@ -129,7 +129,7 @@ it("**a message linked to a task sends the tasks it now looks like to review**; 
       forwardedFrom: null,
       reactions: null,
     })
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "7",
       [
@@ -175,7 +175,7 @@ it("**a message linked to a task sends the tasks it now looks like to review**; 
 
 const boilerStore = async (texts: string[]) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-close-")), "m.db") })
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     texts.map((text, index) => ({

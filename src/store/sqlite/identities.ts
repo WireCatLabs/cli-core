@@ -3,7 +3,7 @@ import type { Contact, Id, Page, PersonAlias, Provider } from "../../domain/mode
 import type { IdentityInput } from "../../meetings/index.js"
 import type { PeopleLookup } from "../../resolve.js"
 import { fold } from "../normalize.js"
-import type { AccountKey, PersonFacts } from "../store.js"
+import type { AccountKey, PersonFacts } from "../types.js"
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "./drizzle/core.js"
 import type { Orm, StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"

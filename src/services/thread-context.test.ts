@@ -39,10 +39,10 @@ const setup = async (build = true, items = records) => {
   const path = join(mkdtempSync(join(tmpdir(), "thread-")), "m.db")
   const store = await openStore({ path, now: () => clock })
   stores.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Synthetic group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(account, "7", items, { via: "history" })
+  await store.messages.saveMessages(account, "7", items, { via: "history" })
   const connection = vi.fn(async () => {
     throw new Error("thread context must remain local")
   })
@@ -118,28 +118,33 @@ describe("graph context around a hit", () => {
   it("labels changed endpoints stale before a rebuild and does not follow their links", async () => {
     const one = await setup()
     one.advance()
-    await one.store.saveMessages(account, "7", [{ ...message(3, 1), text: "edited synthetic endpoint" }], {
+    await one.store.messages.saveMessages(account, "7", [{ ...message(3, 1), text: "edited synthetic endpoint" }], {
       via: "update",
     })
     const found = await one.services.messages.thread("7", "5")
     expect(ids(found)).toEqual(["5"])
     expect(found.stale).toBe(true)
     expect(found.links).toMatchObject([{ messageId: "5", parentId: "3", stale: true, chosen: false }])
-    expect((await one.store.links(account, "7", "3"))[0]?.stale).toBe(true)
+    expect((await one.store.conversations.links(account, "7", "3"))[0]?.stale).toBe(true)
   })
 
   it("handles equal-clock revisions conservatively", async () => {
     const one = await setup()
-    await one.store.saveMessages(account, "7", [{ ...message(3, 1), text: "changed in the build millisecond" }], {
-      via: "update",
-    })
-    expect((await one.store.links(account, "7", "5"))[0]?.stale).toBe(true)
+    await one.store.messages.saveMessages(
+      account,
+      "7",
+      [{ ...message(3, 1), text: "changed in the build millisecond" }],
+      {
+        via: "update",
+      },
+    )
+    expect((await one.store.conversations.links(account, "7", "5"))[0]?.stale).toBe(true)
   })
 
   it("does not return deleted text and labels links to deleted endpoints stale", async () => {
     const one = await setup()
     one.advance()
-    await one.store.markDeleted(account, ["3"], { chatId: "7" })
+    await one.store.messages.markDeleted(account, ["3"], { chatId: "7" })
     const found = await one.services.messages.thread("7", "5")
     expect(ids(found)).toEqual(["5"])
     expect(found.links[0]?.stale).toBe(true)
@@ -149,7 +154,7 @@ describe("graph context around a hit", () => {
   it("detects changed native reply targets even when the text did not change", async () => {
     const one = await setup()
     one.advance()
-    await one.store.saveMessages(account, "7", [message(5, 2)], { via: "update" })
+    await one.store.messages.saveMessages(account, "7", [message(5, 2)], { via: "update" })
     const found = await one.services.messages.thread("7", "5")
     expect(ids(found)).toEqual(["5"])
     expect(found.links[0]?.stale).toBe(true)
@@ -158,7 +163,7 @@ describe("graph context around a hit", () => {
   it("uses a labelled time fallback for a hit not included in the graph snapshot", async () => {
     const one = await setup()
     one.advance()
-    await one.store.saveMessages(account, "7", [message(7, 5)], { via: "history" })
+    await one.store.messages.saveMessages(account, "7", [message(7, 5)], { via: "history" })
     expect(await one.services.messages.thread("7", "7")).toMatchObject({
       mode: "time",
       fallback: "not_linked",
@@ -203,7 +208,9 @@ describe("graph context around a hit", () => {
       ]),
     )
     one.advance()
-    await one.store.saveMessages(account, "7", [{ ...message(2), text: "edited agent endpoint" }], { via: "update" })
+    await one.store.messages.saveMessages(account, "7", [{ ...message(2), text: "edited agent endpoint" }], {
+      via: "update",
+    })
     expect((await one.services.messages.thread("7", "2")).links[0]).toMatchObject({ stale: true, chosen: false })
   })
 
@@ -255,7 +262,7 @@ describe("graph context around a hit", () => {
   it("keeps other accounts and chats isolated even with the same message ids", async () => {
     const one = await setup()
     const other = { ...account, account: "600" }
-    await one.store.saveMessages(other, "7", records, { via: "history" })
+    await one.store.messages.saveMessages(other, "7", records, { via: "history" })
     expect(await readThreadContext(one.store, other, "7", "5")).toMatchObject({
       mode: "time",
       fallback: "not_built",
@@ -275,7 +282,7 @@ describe("graph context around a hit", () => {
 
   it("caps time fallback reads before retrieving neighbours", async () => {
     const one = await setup(false)
-    const around = vi.spyOn(one.store, "around")
+    const around = vi.spyOn(one.store.messages, "around")
     const found = await one.services.messages.thread("7", "3", { before: 100, after: 100, maxMessages: 1 })
     expect(ids(found)).toEqual(["3"])
     for (const [, , , window] of around.mock.calls) expect(window.before + window.after + 1).toBeLessThanOrEqual(1)
@@ -334,11 +341,15 @@ describe("graph context around a hit", () => {
 
   it("does not hide errors reading the store", async () => {
     const one = await setup()
-    const broken: MessageStore = Object.assign(Object.create(one.store) as MessageStore, {
-      around: async () => {
-        throw new Error("store unavailable")
+    const broken: MessageStore = {
+      ...one.store,
+      messages: {
+        ...one.store.messages,
+        around: async () => {
+          throw new Error("store unavailable")
+        },
       },
-    })
+    }
     await expect(readThreadContext(broken, account, "7", "5")).rejects.toThrow("store unavailable")
   })
 

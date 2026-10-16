@@ -14,13 +14,13 @@ export const metadataService = (deps: ServiceDeps) => {
   const refresh = async (reference: string) => {
     if (deps.offline) throw new CliError("validation_error", "metadata refresh needs a connection; omit --offline")
     const { store, account, chatId } = await held(reference)
-    const found = (await store.chats(account, {})).items.find((chat) => chat.id === chatId)
+    const found = (await store.chats.chats(account, {})).items.find((chat) => chat.id === chatId)
     if (!found || (found.kind !== "group" && found.kind !== "channel"))
       throw new CliError("validation_error", "metadata refresh applies to groups and channels")
     const read = async (adapter: Awaited<ReturnType<ServiceDeps["connection"]>>) =>
       capability(adapter, "group", "read group or channel metadata")(chatId)
     const card = deps.withConnection ? await deps.withConnection(read) : await read(await deps.connection())
-    return store.saveChatMetadata(account, {
+    return store.chats.saveChatMetadata(account, {
       chatId,
       title: card.title,
       description: card.description,
@@ -34,19 +34,19 @@ export const metadataService = (deps: ServiceDeps) => {
       const account = await deps.account()
       const chats = references.length
         ? references
-        : (await store.chats(account, {})).items
+        : (await store.chats.chats(account, {})).items
             .filter((chat) => chat.kind === "group" || chat.kind === "channel")
             .map((chat) => chat.id)
       const missing = []
       for (const reference of chats) {
         const chatId = await storedChatId(deps.messenger, reference, store, account).catch(() => undefined)
-        if (chatId === undefined || !(await store.chatMetadata(account, chatId))) missing.push(reference)
+        if (chatId === undefined || !(await store.chats.chatMetadata(account, chatId))) missing.push(reference)
       }
       return missing
     },
     get: async (reference: string) => {
       const { store, account, chatId } = await held(reference)
-      return { chatId, metadata: (await store.chatMetadata(account, chatId)) ?? null }
+      return { chatId, metadata: (await store.chats.chatMetadata(account, chatId)) ?? null }
     },
     refresh,
     auto: async (options: { chats?: string[]; limit?: number; refresh?: boolean; dryRun?: boolean }) => {
@@ -59,15 +59,15 @@ export const metadataService = (deps: ServiceDeps) => {
       const account = await deps.account()
       const chats = options.chats?.length
         ? options.chats
-        : (await store.chats(account, {})).items
+        : (await store.chats.chats(account, {})).items
             .filter((chat) => chat.kind === "group" || chat.kind === "channel")
             .map((chat) => chat.id)
       const items = []
       for (const reference of chats.slice(0, limit)) {
         try {
           const chatId = await storedChatId(deps.messenger, reference, store, account)
-          const metadata = options.refresh ? await refresh(chatId) : await store.chatMetadata(account, chatId)
-          const chat = (await store.chats(account, {})).items.find((entry) => entry.id === chatId)
+          const metadata = options.refresh ? await refresh(chatId) : await store.chats.chatMetadata(account, chatId)
+          const chat = (await store.chats.chats(account, {})).items.find((entry) => entry.id === chatId)
           if (!chat || (chat.kind !== "group" && chat.kind !== "channel"))
             throw new CliError("validation_error", "automatic tags apply to groups and channels")
           const input = metadata ?? {
@@ -76,7 +76,7 @@ export const metadataService = (deps: ServiceDeps) => {
             description: null,
           }
           const tags = classifyChannel(input)
-          if (!options.dryRun) await store.replaceAutoTags(account, chatId, CHANNEL_TAG_RULES_VERSION, tags)
+          if (!options.dryRun) await store.chats.replaceAutoTags(account, chatId, CHANNEL_TAG_RULES_VERSION, tags)
           items.push({
             chatId,
             tags,

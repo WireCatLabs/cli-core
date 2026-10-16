@@ -71,33 +71,33 @@ const fixture = async () => {
 describe("cross-source knowledge metadata", () => {
   it("shares contact annotations with existing private note commands and preserves their IDs", async () => {
     const f = await fixture()
-    await f.store.savePeople(key, [{ id: "101", name: "Rin Synthetic" }])
-    const legacy = await f.store.addContactNote(key, "101", "Existing private note")
+    await f.store.people.savePeople(key, [{ id: "101", name: "Rin Synthetic" }])
+    const legacy = await f.store.people.addContactNote(key, "101", "Existing private note")
     expect(await f.store.knowledge.annotation(key, legacy.id)).toMatchObject({
       target: { type: "contact", id: "101" },
       text: legacy.text,
     })
     const newer = await f.store.knowledge.addAnnotation(key, { type: "contact", id: "101" }, "New owner note")
-    expect((await f.store.privateContact(key, "101")).notes.map((note) => note.id).sort()).toEqual(
+    expect((await f.store.people.privateContact(key, "101")).notes.map((note) => note.id).sort()).toEqual(
       [legacy.id, newer.id].sort(),
     )
-    expect(await f.store.editContactNote(key, "101", newer.id, "Edited through existing API", 1)).toMatchObject({
+    expect(await f.store.people.editContactNote(key, "101", newer.id, "Edited through existing API", 1)).toMatchObject({
       revision: 2,
     })
     expect(await f.store.knowledge.editAnnotation(key, legacy.id, "Edited through Memo API", 1)).toMatchObject({
       revision: 2,
     })
     expect((await f.store.knowledge.annotations(key, { target: { type: "contact", id: "101" } })).items).toHaveLength(2)
-    await f.store.removeContactNote(key, "101", newer.id)
+    await f.store.people.removeContactNote(key, "101", newer.id)
     await f.store.knowledge.removeAnnotation(key, legacy.id)
-    expect((await f.store.privateContact(key, "101")).notes).toEqual([])
+    expect((await f.store.people.privateContact(key, "101")).notes).toEqual([])
     expect(await f.store.knowledge.taskIds(key, { sources: [f.locator], state: "open", limit: 1 })).toEqual({
       items: [f.task.id],
       hasMore: false,
     })
     await expect(f.store.knowledge.taskIds(key, { limit: 0 })).rejects.toMatchObject({ code: "validation_error" })
     await f.store.knowledge.addTags(key, f.target, ["budget"])
-    expect(await f.store.tags(key, { tag: "budget" })).toHaveLength(1)
+    expect(await f.store.tags.tags(key, { tag: "budget" })).toHaveLength(1)
   })
   it("retains multiple revisioned user annotations after source deletion and store reopening", async () => {
     const f = await fixture()
@@ -137,8 +137,8 @@ describe("cross-source knowledge metadata", () => {
     expect(await f.store.knowledge.tags(other, target)).toEqual([])
     expect(await f.store.knowledge.removeTags(key, target, ["follow-up"])).toEqual(["follow-up"])
     await expect(f.store.knowledge.addTags(other, target, ["work"])).rejects.toMatchObject({ code: "not_found" })
-    await f.store.savePeople(key, [{ id: "101", name: "Rin Synthetic" }])
-    const person = await f.store.personOf({ provider: key.provider, id: "101" })
+    await f.store.people.savePeople(key, [{ id: "101", name: "Rin Synthetic" }])
+    const person = await f.store.people.personOf({ provider: key.provider, id: "101" })
     const organization = await f.store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
     const relation = await f.store.knowledge.relate(key, {
       from: `person:${person?.uid}`,

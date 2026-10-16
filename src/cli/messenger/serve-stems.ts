@@ -36,11 +36,11 @@ export const stemFills = ({
 
   const fillOnce = () =>
     withStore(async (store) => {
-      const state = await store.stemsState()
+      const state = await store.searchIndex.stemsState()
       if (!state || state.ready || state.cause !== "building") return false
       const stop = Date.now() + sliceMs
-      stemmed += (await store.fillStems({ until: () => stopped || Date.now() >= stop })).stemmed
-      return !(await store.stemsState())?.ready
+      stemmed += (await store.searchIndex.fillStems({ until: () => stopped || Date.now() >= stop })).stemmed
+      return !(await store.searchIndex.stemsState())?.ready
     })
 
   const tick = () => {

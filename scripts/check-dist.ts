@@ -50,8 +50,8 @@ const message = {
   forwardedFrom: null,
   reactions: null,
 }
-await messages.saveMessages(key, "-1002", [message], { via: "check" })
-const read = await messages.messages(key, "-1002", { limit: 5 })
+await messages.messages.saveMessages(key, "-1002", [message], { via: "check" })
+const read = await messages.messages.messages(key, "-1002", { limit: 5 })
 const { readEvidencePacket } = await import(join(root, "services/index.js"))
 const storedEvidence = await readEvidencePacket(messages, key, { chat: "-1002", limit: 5 })
 if (storedEvidence.items[0]?.locator !== "msg:telegram/1/-1002/3" || storedEvidence.nextBeforeId !== null)
@@ -177,3 +177,17 @@ try {
 if (sampleCount !== 16000 || mediaPlan.media.durationMs !== 1000 || JSON.stringify(mediaPlan).includes(mediaPath))
   throw new Error("public WAV streaming or path redaction failed from dist")
 console.log("dist: ./files and ./speech/wav verify and decode an invented bounded file")
+
+const { appUpdate } = await import("@wirecat/cli-core/update")
+const update = appUpdate({
+  packageName: "@wirecat/demo-cli",
+  command: "demo",
+  version: "1.0.0",
+  entry: import.meta.url,
+  statePath: () => join(mediaFolder, "update-check.json"),
+  enabled: () => true,
+  offVariables: [],
+})
+if (update.installer({ scriptPath: "/usr/lib/node_modules/@wirecat/demo-cli/dist/bin/demo.js" }) !== "npm")
+  throw new Error("./update did not read the installer from the app's script")
+console.log("dist: ./update reads an app's installer")

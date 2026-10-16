@@ -74,7 +74,7 @@ const answerers = async (
   const lookups = await Promise.all(
     accounts.map(async (account) => ({
       account,
-      people: await store.people(account.provider, { account: account.account }),
+      people: await store.people.people(account.provider, { account: account.account }),
     })),
   )
   const found = refs.map((reference) => {
@@ -218,7 +218,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
       account = await deps.account()
     if (report === "newcomers" && (!query.chat || query.text || query.ast))
       invalid("newcomers requires one stored chat and join-date options, without a message query")
-    const saved = query.saved === undefined ? undefined : await store.storedSearch(query.saved)
+    const saved = query.saved === undefined ? undefined : await store.searches.storedSearch(query.saved)
     if (query.saved !== undefined && !saved) invalid("saved administrator report not found")
     if (saved && saved.params.adminReport !== report) invalid("saved report belongs to another report kind")
     const pinned = saved ? await readAdminSelection(store, saved.params.selection) : undefined
@@ -296,11 +296,11 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
     if (options.joinSince > options.joinUntil) invalid("join dates are reversed")
     if (report === "responses" && !options.answerers.length)
       invalid("responses requires at least one --answerer identity")
-    const result = await store.adminStatisticsQuery(prepared.execution, { options })
+    const result = await store.queries.adminStatisticsQuery(prepared.execution, { options })
     const known = new Set<string>()
     if (report === "responses")
       for (const person of options.answerers) {
-        const people = await store.people(person.provider, { account: person.account })
+        const people = await store.people.people(person.provider, { account: person.account })
         if (people.get(person.id)) known.add(JSON.stringify([person.provider, person.account, person.id]))
       }
     const firstAccount = prepared.execution.accounts[0]
@@ -315,7 +315,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
         prepared.selectedChat,
       )
       const selection: AdminSelection = { kind: "admin-statistics", version: 1, base, options, entity }
-      await store.recordSearch(
+      await store.searches.recordSearch(
         searchRecordOf("admin-statistics", {
           adminReport: report,
           selection,
@@ -402,7 +402,7 @@ export const adminStatisticsService = (deps: ServiceDeps): AdminStatisticsServic
       ...(request.signal ? { signal: request.signal } : {}),
     }
     await stemExecution(execution, store)
-    const result = await store.adminStatisticsQuery(execution, {
+    const result = await store.queries.adminStatisticsQuery(execution, {
       options: o,
       evidence: { entity, ...(request.cursor ? { cursor: request.cursor } : {}) },
     })

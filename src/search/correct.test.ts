@@ -68,7 +68,7 @@ describe("correctWords over the store", () => {
   it("**corrects valenca to valencia** from the messages held, and not to a word only a deleted message had", async () => {
     const account = { provider: "telegram", account: "100" }
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "correct-")), "messages.db") })
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "1", title: "Chat", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
     const message = (id: string, text: string) => ({
@@ -85,13 +85,13 @@ describe("correctWords over the store", () => {
       forwardedFrom: null,
       reactions: null,
     })
-    await store.saveMessages(account, "1", [message("1", "Piso en Valencia"), message("2", "Valenza")], {
+    await store.messages.saveMessages(account, "1", [message("1", "Piso en Valencia"), message("2", "Valenza")], {
       via: "history",
     })
-    await store.fillSearchIndex()
-    await store.markDeleted(account, ["2"], { chatId: "1" })
+    await store.searchIndex.fillSearchIndex()
+    await store.messages.markDeleted(account, ["2"], { chatId: "1" })
 
-    expect(await correctWords(store, ["piso", "valenca"])).toEqual(new Map([["valenca", ["valencia"]]]))
+    expect(await correctWords(store.searchIndex, ["piso", "valenca"])).toEqual(new Map([["valenca", ["valencia"]]]))
     await store.close()
   })
 })

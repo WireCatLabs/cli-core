@@ -50,24 +50,24 @@ const people = () => peopleService(storedDeps(messenger, store, tg, {} as SendGu
 
 beforeEach(async () => {
   store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "person-")), "m.db") })
-  await store.saveChats(tg, [
+  await store.chats.saveChats(tg, [
     chat("11", "dialog", "Ana", "2026-09-02T10:02:00.000Z"),
     chat("12", "dialog", "Ana", "2026-09-02T10:01:00.000Z"),
     chat("-7", "group", "Club"),
   ])
-  await store.savePeople(tg, [
+  await store.people.savePeople(tg, [
     { id: "11", name: "Ana", username: "ana_a" },
     { id: "12", name: "Ana", username: "ana_ab" },
     { id: "13", name: "Bo" },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     tg,
     "11",
     [message("11", "1", "11", "from the first Ana"), message("11", "2", "500", "to the first Ana", { outgoing: true })],
     { via: "test" },
   )
-  await store.saveMessages(tg, "12", [message("12", "1", "12", "from the second Ana")], { via: "test" })
-  await store.saveMessages(
+  await store.messages.saveMessages(tg, "12", [message("12", "1", "12", "from the second Ana")], { via: "test" })
+  await store.messages.saveMessages(
     tg,
     "-7",
     [
@@ -78,21 +78,21 @@ beforeEach(async () => {
     ],
     { via: "test" },
   )
-  await store.saveMembers(tg, "11", ["11", "500"])
-  await store.saveMembers(tg, "12", ["12", "500"])
-  await store.saveMembers(tg, "-7", ["11", "12", "13", "500"])
+  await store.roster.saveMembers(tg, "11", ["11", "500"])
+  await store.roster.saveMembers(tg, "12", ["12", "500"])
+  await store.roster.saveMembers(tg, "-7", ["11", "12", "13", "500"])
   for (const [id, last] of [
     ["11", 2],
     ["12", 1],
   ] as const) {
-    await store.markRange(tg, id, 1, last)
-    await store.setSyncState(tg, historyStartKey(id), "1")
+    await store.sync.markRange(tg, id, 1, last)
+    await store.sync.setSyncState(tg, historyStartKey(id), "1")
   }
 
-  await store.saveChats(max, [chat("m1", "dialog", "Ana")])
-  await store.savePeople(max, [{ id: "m5", name: "Ana" }])
-  await store.saveMessages(max, "m1", [message("m1", "5", "m5", "from Ana on MAX")], { via: "test" })
-  await store.saveMembers(max, "m1", ["m5", "900"])
+  await store.chats.saveChats(max, [chat("m1", "dialog", "Ana")])
+  await store.people.savePeople(max, [{ id: "m5", name: "Ana" }])
+  await store.messages.saveMessages(max, "m1", [message("m1", "5", "m5", "from Ana on MAX")], { via: "test" })
+  await store.roster.saveMembers(max, "m1", ["m5", "900"])
 })
 
 afterEach(async () => {
@@ -103,7 +103,7 @@ const texts = (items: { text: string }[]) => items.map((one) => one.text)
 
 describe("contacts context", () => {
   it("finds direct messages and the last each way when the dialog has no recorded members", async () => {
-    await store.saveMembers(tg, "11", [])
+    await store.roster.saveMembers(tg, "11", [])
 
     const found = await people().context("11")
     expect(texts(found.recent.direct)).toEqual(["to the first Ana", "from the first Ana"])
@@ -117,7 +117,7 @@ describe("contacts context", () => {
     expect(texts(newestOnly.recent.direct)).toEqual(["to the first Ana"])
     expect(newestOnly.last.fromThem?.text).toBe("from the first Ana")
 
-    await store.saveMessages(tg, "11", [message("11", "3", "11", "from the first Ana again")], { via: "test" })
+    await store.messages.saveMessages(tg, "11", [message("11", "3", "11", "from the first Ana again")], { via: "test" })
     expect((await personContext(store, tg, "11", { messages: 1 })).last.fromMe?.text).toBe("to the first Ana")
   })
 
@@ -160,7 +160,7 @@ describe("contacts context", () => {
 
   it("keeps a renamed person's history and key", async () => {
     const before = await people().context("11")
-    await store.savePeople(tg, [{ id: "11", name: "Ana María" }])
+    await store.people.savePeople(tg, [{ id: "11", name: "Ana María" }])
     const after = await people().context("11")
     expect(after.person.uid).toBe(before.person.uid)
     expect(texts(after.recent.direct)).toEqual(texts(before.recent.direct))
@@ -169,7 +169,7 @@ describe("contacts context", () => {
 
 describe("contacts context in named chats", () => {
   beforeEach(async () => {
-    await store.saveMessages(
+    await store.messages.saveMessages(
       tg,
       "-7",
       [
@@ -213,7 +213,7 @@ describe("contacts context in named chats", () => {
   })
 
   it("calls a chat named by the person's own id their dialog when the store has no such chat", async () => {
-    await store.saveMessages(tg, "13", [message("13", "40", "13", "hello")], { via: "test" })
+    await store.messages.saveMessages(tg, "13", [message("13", "40", "13", "hello")], { via: "test" })
     const found = await people().messagesIn("13", { chats: ["13"] })
 
     expect(found.chats[0]?.chat.kind).toBe("dialog")
@@ -249,9 +249,9 @@ describe("identityIn", () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "person-ref-")), "store.db") })
     try {
       const telegram = { provider: "telegram", account: "1" }
-      await store.savePeople(telegram, [{ id: "101", name: "Ana Example" }])
+      await store.people.savePeople(telegram, [{ id: "101", name: "Ana Example" }])
       const mail = { provider: "email", account: "owner@example.test" }
-      const accountId = await store.saveAccount(mail, { name: null })
+      const accountId = await store.accounts.saveAccount(mail, { name: null })
       await store.mail.saveThread({
         accountId,
         externalId: "thread-1",
@@ -266,7 +266,7 @@ describe("identityIn", () => {
           },
         ],
       })
-      const person = await store.linkIdentities(
+      const person = await store.people.linkIdentities(
         { provider: "email", id: "ana@example.test" },
         { provider: "telegram", id: "101" },
         { method: "manual", by: "owner" },

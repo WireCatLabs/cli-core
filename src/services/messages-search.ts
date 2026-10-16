@@ -131,7 +131,7 @@ export const prepareLucene = async (
           }
         : validateFields(parseLucene(request.text, { ...SEARCH_QUERY, defaultField: request.exact ? "exact" : "text" }))
   const timezone = timezoneOf(request.timezone)
-  const stored = await store.accounts()
+  const stored = await store.accounts.accounts()
   // A fresh store has no row yet for the account it runs as; "every account" still means that one.
   const held = stored.some((one) => one.provider === account.provider && one.account === account.account)
     ? stored
@@ -216,9 +216,9 @@ export const prepareLucene = async (
     if (!globalChat && (chats.length !== 1 || !requiresChat(ast.root, chats[0] as QueryNode)))
       searchError("query.topic-scope", { start: 0, end: 0 }, "name one chat with chat:, required")
   }
-  const wordsReady = (await store.searchIndexState())?.ready === true
+  const wordsReady = (await store.searchIndex.searchIndexState())?.ready === true
   if (hasText(ast.root) && !wordsReady) await indexNotReady(store, messenger.app?.command)
-  const stems = await store.stemsState()
+  const stems = await store.searchIndex.stemsState()
   const stemsReady = stems?.ready === true
   const { stemmer, unstemmed } = hasStems(ast.root) ? await searchStemming(store, messenger.app?.command) : {}
   const execution: QueryExecution = {
@@ -253,9 +253,9 @@ export const searchStemming = async (
   store: MessageStore,
   command?: string,
 ): Promise<{ stemmer?: Stemmer; unstemmed?: QueryStemming }> => {
-  const stems = await store.stemsState()
+  const stems = await store.searchIndex.stemsState()
   // Ready means the setting is one this build knows, so `null` cannot reach here.
-  if (stems?.ready) return { stemmer: createStemmer((await store.stemmers()) ?? DEFAULT_STEMMERS) }
+  if (stems?.ready) return { stemmer: createStemmer((await store.searchIndex.stemmers()) ?? DEFAULT_STEMMERS) }
   if (stems?.cause !== "building" && stems?.cause !== "stemmer_unknown") return stemsNotReady(stems, command)
   return {
     unstemmed: {
@@ -323,7 +323,7 @@ const stemsNotReady = (state: StemsState | undefined, command: string | undefine
   )
 }
 const indexNotReady = async (store: MessageStore, command: string | undefined): Promise<never> => {
-  const state = await store.searchIndexState()
+  const state = await store.searchIndex.searchIndexState()
   const migrate = `\`${command ? `${command} ` : ""}store migrate\``
   const progress = !state
     ? "this store file has no word index yet"
@@ -346,7 +346,7 @@ export const coverageOf = async (
   let inventoryComplete = scopeAccounts.length > 0
   let ownInventory = true
   for (const selected of scopeAccounts) {
-    if (!(await store.syncState(selected, CHAT_LIST_KEY))) {
+    if (!(await store.sync.syncState(selected, CHAT_LIST_KEY))) {
       inventoryComplete = false
       if (messenger.provider === undefined || selected.provider === messenger.provider) ownInventory = false
     }
@@ -354,10 +354,11 @@ export const coverageOf = async (
       ? selected.provider === selectedChat.account.provider && selected.account === selectedChat.account.account
         ? [selectedChat.chatId]
         : []
-      : (await store.chats(selected, {})).items.map(({ id }) => id)
-    for (const chat of await store.chatCompleteness(selected, chatIds)) completeness.push({ ...chat, ...selected })
+      : (await store.chats.chats(selected, {})).items.map(({ id }) => id)
+    for (const chat of await store.chats.chatCompleteness(selected, chatIds))
+      completeness.push({ ...chat, ...selected })
     const wanted = new Set(chatIds)
-    for (const one of await store.chatStats(selected))
+    for (const one of await store.chats.chatStats(selected))
       if (wanted.has(one.chatId)) stats.set(statKey(selected, one.chatId), one)
   }
   // Only this messenger's chats can be fetched by its command; another source's say nothing about it.
@@ -435,7 +436,7 @@ export const searchLucene = async (
   messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
 ): Promise<SearchFound> => {
   const prepared = await prepareLucene(store, account, request, messenger)
-  const execute = store.matchQuery.bind(store)
+  const execute = store.queries.matchQuery.bind(store.queries)
   const mailAccounts = prepared.scopeAccounts.filter(({ provider }) => provider === MAIL)
   const inMailTables = async () => {
     try {
@@ -464,7 +465,7 @@ export const searchLucene = async (
         ...hit,
         context:
           (locator.provider === MAIL ? await mailAround(store, hit, request.context) : undefined) ??
-          (await store.around({ provider: locator.provider, account: locator.account }, hit.chatId, hit.id, {
+          (await store.messages.around({ provider: locator.provider, account: locator.account }, hit.chatId, hit.id, {
             before: request.context,
             after: request.context,
           })),
@@ -520,7 +521,7 @@ export const statsLucene = async (
   messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
 ): Promise<MessageStats> => {
   const prepared = await prepareLucene(store, account, request, messenger)
-  const count = store.countQuery.bind(store)
+  const count = store.queries.countQuery.bind(store.queries)
   const { by } = request
   const calendar = by === "day" || by === "hour"
   const groups = prepared.scopeAccounts.length ? await count(prepared.execution, calendar ? "time" : by) : []

@@ -172,13 +172,13 @@ describe("serve's rule pass", () => {
   it("opens a task when a question arrives and closes it when the owner's answer arrives", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-arrival-")), "messages.db") })
     const question = said("1", 1, "who has the keys?")
-    await store.saveMessages(account, "-1001", [said("0", 0, "morning"), question], { via: "test" })
+    await store.messages.saveMessages(account, "-1001", [said("0", 0, "morning"), question], { via: "test" })
 
     expect(await applyTaskRulesOnArrival(store, account, question)).toEqual({ added: 1, closed: 0, review: 0 })
     expect(await applyTaskRulesOnArrival(store, account, question)).toEqual({ added: 0, closed: 0, review: 0 })
 
     const answer = said("2", 2, "I do", { outgoing: true, replyToId: "1" })
-    await store.saveMessages(account, "-1001", [answer], { via: "test" })
+    await store.messages.saveMessages(account, "-1001", [answer], { via: "test" })
     expect(await applyTaskRulesOnArrival(store, account, answer)).toEqual({ added: 0, closed: 1, review: 0 })
     expect((await store.tasks.list({})).map((task) => task.state)).toEqual(["done"])
     await store.close()
@@ -245,7 +245,7 @@ describe("a reply rule's task", () => {
 describe("the rule pass over the store", () => {
   it("reads only chats stored into after the stop point, and opens and closes as review did", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-stored-")), "messages.db") })
-    await store.saveMessages(account, "-1001", [said("0", 0, "morning"), said("1", 1, "who has the keys?")], {
+    await store.messages.saveMessages(account, "-1001", [said("0", 0, "morning"), said("1", 1, "who has the keys?")], {
       via: "test",
     })
 
@@ -259,7 +259,7 @@ describe("the rule pass over the store", () => {
     })
 
     await new Promise((resolve) => setTimeout(resolve, 5))
-    await store.saveMessages(account, "-1001", [said("2", 2, "I do", { outgoing: true, replyToId: "1" })], {
+    await store.messages.saveMessages(account, "-1001", [said("2", 2, "I do", { outgoing: true, replyToId: "1" })], {
       via: "test",
     })
     const second = await applyTaskRulesToStored(store, account, first.until ?? undefined)
@@ -272,8 +272,8 @@ describe("the rule pass over the store", () => {
   it("**after a sync, starts where the last pass stopped**; the first reads only chats active in the last 14 days", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-since-")), "messages.db") })
     const now = new Date(Date.UTC(2026, 9, 10))
-    await store.saveMessages(account, "-1001", [said("1", 1, "who has the keys?")], { via: "test" })
-    await store.saveMessages(
+    await store.messages.saveMessages(account, "-1001", [said("1", 1, "who has the keys?")], { via: "test" })
+    await store.messages.saveMessages(
       account,
       "-2002",
       [said("1", 1, "anyone seen the invoice?", { chatId: "-2002", timestamp: "2025-01-01T10:00:00.000Z" })],
@@ -281,11 +281,11 @@ describe("the rule pass over the store", () => {
     )
 
     expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 1, closed: 0, review: 0 })
-    expect(await store.taskRulesStop(account)).toEqual(expect.any(String))
+    expect(await store.sync.taskRulesStop(account)).toEqual(expect.any(String))
     expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 0, review: 0 })
 
     await new Promise((resolve) => setTimeout(resolve, 5))
-    await store.saveMessages(account, "-1001", [said("2", 2, "I do", { outgoing: true, replyToId: "1" })], {
+    await store.messages.saveMessages(account, "-1001", [said("2", 2, "I do", { outgoing: true, replyToId: "1" })], {
       via: "test",
     })
     expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 1, review: 0 })

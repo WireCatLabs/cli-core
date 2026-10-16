@@ -25,7 +25,7 @@ const unread = (meeting: MeetingReadStore["meetingMetadata"]): MeetingReadStore 
 const fixture = async () => {
   const owner = await openStore({ path: join(mkdtempSync(join(tmpdir(), "zm-test-bounded-evidence-")), "store.db") })
   opened.push(owner)
-  await owner.saveAccount({ provider: "example", account: "alice-example" }, { name: "Alice Example" })
+  await owner.accounts.saveAccount({ provider: "example", account: "alice-example" }, { name: "Alice Example" })
   const store = owner.meetings
   const input = sampleMeeting()
   input.meeting.title = "Alice Example and Bob Sample"
@@ -225,7 +225,7 @@ describe("meeting evidence references", () => {
   it("persists historical references across a real store reopen without creating tasks", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "meeting-evidence-example-")), "store.db")
     let store = await openStore({ path })
-    const accountId = await store.saveAccount(
+    const accountId = await store.accounts.saveAccount(
       { provider: "example", account: "alice-example" },
       { name: "Alice Example" },
     )
@@ -270,8 +270,10 @@ it("person context honors explicit account scope and reports mixed-index scan li
   }
   const port: PersonMeetingReadStore = {
     meetings,
-    personSeenInAccounts: async () => true,
-    personByUid: vi.fn(async () => ({ uid: "1", name: "Alice Example", identities: [] })),
+    people: {
+      personSeenInAccounts: async () => true,
+      personByUid: vi.fn(async () => ({ uid: "1", name: "Alice Example", identities: [] })),
+    },
     involvements: {
       pending: () => 3,
       forPerson: () => [foreign, { ...foreign, subjectId: details.meeting.id, accountId: input.meeting.accountId }],
@@ -316,8 +318,10 @@ it("person context skips stale missing meetings while preserving other typed fai
   }
   const port: PersonMeetingReadStore = {
     meetings,
-    personSeenInAccounts: async () => true,
-    personByUid: async () => ({ uid: "1", name: "Alice Example", identities: [] }),
+    people: {
+      personSeenInAccounts: async () => true,
+      personByUid: async () => ({ uid: "1", name: "Alice Example", identities: [] }),
+    },
     involvements: {
       pending: () => 1,
       forPerson: () => [row, { ...row, subjectId: details.meeting.id }],

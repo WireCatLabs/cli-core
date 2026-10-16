@@ -19,10 +19,10 @@ it("finds a file name among more messages with files than the candidate row limi
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "lucene-limits-")), "messages.db") })
   live.push(store)
   const account = { provider: "max", account: "1" }
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "1", title: "Chat 1", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "1",
     Array.from({ length: 21 }, (_, at) => ({

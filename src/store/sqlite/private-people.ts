@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { fold } from "../normalize.js"
-import type { AccountKey } from "../store.js"
+import type { AccountKey } from "../types.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { toIso } from "./values.js"

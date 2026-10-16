@@ -27,7 +27,7 @@ export const readEvidencePacket = async (
     throw new CliError("validation_error", "evidence before id must not be empty")
 
   const chatId = await storedChatId(messenger, chat, store, account)
-  const page = await store.messages(account, chatId, { limit, ...(before === undefined ? {} : { before }) })
+  const page = await store.messages.messages(account, chatId, { limit, ...(before === undefined ? {} : { before }) })
   const items = page.items.toReversed()
   const packet = prepareEvidencePacket({
     kind: "chats",

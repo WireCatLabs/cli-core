@@ -86,15 +86,16 @@ export const readThreadContext = async (
     return result
   }
   const around = (id: Id, before = 0, after = 0) =>
-    store.around(account, chat, id, { before, after }).catch((error: unknown) => {
+    store.messages.around(account, chat, id, { before, after }).catch((error: unknown) => {
       if (isCliFailure(error) && error.code === "not_found") return []
       throw error
     })
   const [anchor] = await around(message)
-  const state = await store.conversationState(account, chat)
+  const state = await store.conversations.conversationState(account, chat)
   result.builtAt = state?.builtAt ?? null
-  const linked = anchor && state?.builtAt ? (await store.conversationOf(account, chat, message)) !== undefined : false
-  const repliesTo = store.replies.bind(store)
+  const linked =
+    anchor && state?.builtAt ? (await store.conversations.conversationOf(account, chat, message)) !== undefined : false
+  const repliesTo = store.conversations.replies.bind(store.conversations)
   if (!anchor || !state?.builtAt || !linked) {
     result.mode = "time"
     result.fallback = !anchor ? "not_stored" : !state?.builtAt ? "not_built" : "not_linked"
@@ -141,7 +142,7 @@ export const readThreadContext = async (
   const cache = new Map<Id, StoredLink[]>()
   const linksOf = async (id: Id) => {
     if (!cache.has(id)) {
-      const rows = await store.links(account, chat, id, { limit: bounds.maxMessages + 1 })
+      const rows = await store.conversations.links(account, chat, id, { limit: bounds.maxMessages + 1 })
       if (rows.length > bounds.maxMessages) stopped("links")
       cache.set(
         id,

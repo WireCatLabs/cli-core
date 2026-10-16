@@ -33,7 +33,7 @@ const msg = (id: string, text: string, extra: Partial<Message> = {}): Message =>
 const open = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "discovery-test-")), "synthetic.db") })
   stores.push(store)
-  await store.saveChats(
+  await store.chats.saveChats(
     account,
     ["101", "102"].map((id) => ({
       id,
@@ -44,7 +44,7 @@ const open = async () => {
       participantsCount: 10,
     })),
   )
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "101",
     [
@@ -56,8 +56,8 @@ const open = async () => {
     ],
     { via: "synthetic" },
   )
-  await store.fillSearchIndex({})
-  await store.fillStems({})
+  await store.searchIndex.fillSearchIndex({})
+  await store.searchIndex.fillStems({})
   return store
 }
 const request = (text: string) => ({ text, discover: true, limit: 10, timezone: "UTC" })
@@ -91,23 +91,23 @@ describe("archive discovery", () => {
   })
   it("preserves used correction provenance for keyword discovery", async () => {
     const store = await open()
-    await store.saveMessages(account, "101", [msg("6", "Helix rollout confirmed")], { via: "synthetic" })
-    await store.fillSearchIndex({})
-    await store.fillStems({})
+    await store.messages.saveMessages(account, "101", [msg("6", "Helix rollout confirmed")], { via: "synthetic" })
+    await store.searchIndex.fillSearchIndex({})
+    await store.searchIndex.fillStems({})
     const found = await searchStore(store, account, request("Helix rolluot"))
     expect(found.items.find((m) => m.id === "6")?.match).toBe("corrected")
     expect(found.corrections).toEqual([{ from: "rolluot", to: ["rollout"] }])
   })
   it("retains eligible replies when the lexical shortlist is full", async () => {
     const store = await open()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "101",
       Array.from({ length: 400 }, (_, n) => msg(String(2000 + n), "Helix export discussion heading")),
       { via: "synthetic" },
     )
-    await store.fillSearchIndex({})
-    await store.fillStems({})
+    await store.searchIndex.fillSearchIndex({})
+    await store.searchIndex.fillStems({})
     const found = await searchStore(store, account, request("What time does Helix export run?"))
     expect(ids(found)).toContain("2")
     expect(found.query?.discovery?.candidates).toBeLessThanOrEqual(300)
@@ -139,16 +139,16 @@ describe("archive discovery", () => {
   it("isolates accounts/chats and excludes deleted parents and children", async () => {
     const store = await open()
     const other = { provider: "synthetic", account: "600" }
-    await store.saveChats(other, [
+    await store.chats.saveChats(other, [
       { id: "101", title: "Other", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 10 },
     ])
-    await store.saveMessages(
+    await store.messages.saveMessages(
       other,
       "101",
       [msg("1", "Helix export foreign parent"), msg("9", "Foreign reply", { replyToId: "1" })],
       { via: "synthetic" },
     )
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "102",
       [
@@ -157,11 +157,11 @@ describe("archive discovery", () => {
       ],
       { via: "synthetic" },
     )
-    await store.markDeleted(account, ["3"], { chatId: "101" })
-    const replies = await store.directReplies?.([{ account, chatId: "101", id: "1" }], 100)
+    await store.messages.markDeleted(account, ["3"], { chatId: "101" })
+    const replies = await store.messages.directReplies?.([{ account, chatId: "101", id: "1" }], 100)
     expect(replies?.items.map((m) => m.id)).toEqual(["2", "4"])
-    await store.markDeleted(account, ["1"], { chatId: "101" })
-    expect((await store.directReplies?.([{ account, chatId: "101", id: "1" }], 100))?.items).toEqual([])
+    await store.messages.markDeleted(account, ["1"], { chatId: "101" })
+    expect((await store.messages.directReplies?.([{ account, chatId: "101", id: "1" }], 100))?.items).toEqual([])
   })
   it.each([
     "Helix AND export",

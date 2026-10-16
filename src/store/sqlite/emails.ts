@@ -6,7 +6,7 @@ import type { Attachment, Metadata } from "../../meetings/index.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
-import type { ConversationSummary, StoredHit } from "../store.js"
+import type { ConversationSummary, StoredHit } from "../types.js"
 import {
   chunkAttachments,
   drainEmailIndex,

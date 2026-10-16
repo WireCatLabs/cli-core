@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { canonicalMeetingReference, formatMeetingReference } from "../meetings/index.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+import type { AccountKey, AccountsStore, MessageStore } from "../store/store.js"
 import {
   createTaskService,
   TASK_KINDS,
@@ -12,7 +12,9 @@ import {
 import { resolveMeetingReference } from "./meeting-reference.js"
 import { taskAccount } from "./task-rules.js"
 
-export type MeetingTaskStore = Pick<MessageStore, "storedAccount" | "meetings" | "tasks">
+export type MeetingTaskStore = Pick<MessageStore, "meetings" | "tasks"> & {
+  accounts: Pick<AccountsStore, "storedAccount">
+}
 export interface CreateMeetingTaskInput {
   source: string
   kind: TaskKind
@@ -40,7 +42,7 @@ const accountSnapshot = (key: AccountKey): AccountKey => {
   return { provider, account, ...(scope ? { scope } : {}) }
 }
 const authorizedAccount = async (store: MeetingTaskStore, key: AccountKey): Promise<number> => {
-  const account = await store.storedAccount(key)
+  const account = await store.accounts.storedAccount(key)
   if (
     account.provider !== key.provider ||
     account.account !== key.account ||

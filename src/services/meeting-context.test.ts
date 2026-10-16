@@ -27,7 +27,7 @@ const fixture = async () => {
   }
   const store = await openStore({ path, env, now: () => 5000 })
   handles.push(store)
-  const accountId = await store.saveAccount(account, { name: "Alice Example" })
+  const accountId = await store.accounts.saveAccount(account, { name: "Alice Example" })
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   const details = await store.meetings.saveMeeting(input)
@@ -103,7 +103,7 @@ it("shares meeting notes, tags and memories with existing records and retains or
 it("denies foreign/deleted meeting and memory evidence before writing", async () => {
   const { store, accountId, details, root, input } = await fixture()
   const other: AccountKey = { provider: "other", account: "BobSample" }
-  const otherId = await store.saveAccount(other, { name: "Bob Sample" })
+  const otherId = await store.accounts.saveAccount(other, { name: "Bob Sample" })
   const otherInput = sampleMeeting()
   otherInput.meeting.accountId = otherId
   const foreign = await store.meetings.saveMeeting(otherInput)
@@ -219,7 +219,12 @@ it("captures account and approval, preserves cancellation and dispatches scoped 
   expect(addNote).not.toHaveBeenCalled()
   await expect(
     createMeetingContextService(
-      { ...store, storedAccount: async () => ({ ...(await store.storedAccount(account)), provider: "foreign" }) },
+      {
+        ...store,
+        accounts: {
+          storedAccount: async () => ({ ...(await store.accounts.storedAccount(account)), provider: "foreign" }),
+        },
+      },
       account,
     ),
   ).rejects.toMatchObject({ code: "not_found" })

@@ -56,10 +56,10 @@ const fakeEmbedder = (): PictureEmbedder & { images: number } => {
 
 const setUp = async ({ pictures = true }: { pictures?: boolean } = {}) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "pictures-")), "m.db") })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "9", title: "Chat 9", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(account, "9", [photo("1", 0), photo("2", 1), photo("3", 2)], { via: "history" })
+  await store.messages.saveMessages(account, "9", [photo("1", 0), photo("2", 1), photo("3", 2)], { via: "history" })
   const embedder = fakeEmbedder()
   const downloads: string[] = []
   const adapter = {
@@ -119,8 +119,8 @@ describe("images embed", () => {
   it("is not undone by the text-side image chunks, which sit at another position", async () => {
     const { store, service } = await setUp()
     await service.embed({ limit: 10, pauseMs: 0 })
-    await store.saveImageChunks(account, "9", [], [])
-    expect(await store.picturesToEmbed(account, { limit: 10 })).toEqual([])
+    await store.vectors.saveImageChunks(account, "9", [], [])
+    expect(await store.vectors.picturesToEmbed(account, { limit: 10 })).toEqual([])
     await store.close()
   })
 })
@@ -159,10 +159,10 @@ describe("the pictures lane", () => {
 
   it("keeps to the one chat a chat: in the query chose", async () => {
     const { store, service } = await setUp()
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "8", title: "Chat 8", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(account, "8", [{ ...photo("2", 5), chatId: "8" }], { via: "history" })
+    await store.messages.saveMessages(account, "8", [{ ...photo("2", 5), chatId: "8" }], { via: "history" })
     await service.embed({ limit: 10, pauseMs: 0 })
     const found = { items: [], hasMore: false, coverage: { chat: "9" } }
     const search = withPictures({ search: async () => found } as unknown as MessagesService, service)

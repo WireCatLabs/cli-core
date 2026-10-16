@@ -52,8 +52,14 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-test-hit-search-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path }, now: () => 1000 })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "AliceExample" }, { name: "Alice Example" })
-  const otherId = await store.saveAccount({ provider: "example", account: "BobSample" }, { name: "Bob Sample" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice Example" },
+  )
+  const otherId = await store.accounts.saveAccount(
+    { provider: "example", account: "BobSample" },
+    { name: "Bob Sample" },
+  )
   const db = await openCache(path)
   opened.push(db)
   const input = sampleMeeting()

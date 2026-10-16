@@ -69,12 +69,12 @@ export const gapsService = (deps: ServiceDeps) => {
     const account = await deps.account()
     const chatId = await storedChatId(deps.messenger, chat, store, account)
     const ordering = (deps.messenger.fetching ?? FETCHING).orderBy ?? "id"
-    const held = await store.ranges(account, chatId)
+    const held = await store.sync.ranges(account, chatId)
     const gaps = held.slice(1).flatMap((range, index) => {
       const prior = held[index]
       return prior && prior.to + 1 < range.from ? [{ from: prior.to + 1, to: range.from - 1 }] : []
     })
-    const knownStart = await store.syncState(account, historyStartKey(chatId))
+    const knownStart = await store.sync.syncState(account, historyStartKey(chatId))
     const start = knownStart === null ? NaN : Number(knownStart?.value)
     const unknown = { older: !Number.isSafeInteger(start) || !held[0] || held[0].from > start, newer: true as const }
     const identity = { account, chat: chatId, ordering, held }
@@ -103,7 +103,7 @@ export const gapsService = (deps: ServiceDeps) => {
       throw new CliError("validation_error", "the gap plan changed; inspect it again before repairing")
     const store = await deps.store()
     const holder = randomUUID()
-    if (!(await store.claim(before.account, before.chat, "gaps", holder, timeMs + 5000)))
+    if (!(await store.sync.claim(before.account, before.chat, "gaps", holder, timeMs + 5000)))
       throw new CliError("validation_error", "another gap repair holds this chat; retry after it finishes")
     const started = Date.now()
     const controller = new AbortController()
@@ -184,7 +184,7 @@ export const gapsService = (deps: ServiceDeps) => {
       }
     } finally {
       clearTimeout(timer)
-      await store.release(before.account, before.chat, "gaps", holder)
+      await store.sync.release(before.account, before.chat, "gaps", holder)
     }
   }
   return { plan, repair }

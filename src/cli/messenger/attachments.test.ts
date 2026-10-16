@@ -106,8 +106,8 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
     ["6", "6-1.ogg", new Uint8Array([0x4f, 0x67])],
   ]
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveChats(OWNER, [chat])
-  await store.saveMessages(
+  await store.chats.saveChats(OWNER, [chat])
+  await store.messages.saveMessages(
     OWNER,
     "7",
     [
@@ -118,7 +118,7 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
   )
   for (const [id, name, bytes] of saved) {
     writeFileSync(join(files, name), bytes)
-    await store.keepDownloads(OWNER, "7", id, [
+    await store.attachments.keepDownloads(OWNER, "7", id, [
       { kind: id === "5" ? "photo" : id === "6" ? "voice" : "file", name, path: join(files, name) },
     ])
   }
@@ -314,10 +314,12 @@ describe("attachments extract", () => {
       },
     })
     const store = await openStore({ path: env.MESSAGING_STORE })
-    await store.saveMessages(OWNER, "7", [message("8", [{ kind: "photo", name: "8.png" }])], { via: "history" })
+    await store.messages.saveMessages(OWNER, "7", [message("8", [{ kind: "photo", name: "8.png" }])], {
+      via: "history",
+    })
     const path = join(files, "8.png")
     writeFileSync(path, PNG.sync.write(new PNG({ width: 2, height: 2 })))
-    await store.keepDownloads(OWNER, "7", "8", [{ kind: "photo", name: "8.png", path }])
+    await store.attachments.keepDownloads(OWNER, "7", "8", [{ kind: "photo", name: "8.png", path }])
     await store.close()
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
       const body = JSON.parse(String(init?.body))
@@ -424,12 +426,17 @@ describe("attachments extract", () => {
   it("**--limit moves on past photos: a photo is noted once, for an agent, and not read again**", async () => {
     const { call, env, files } = await setup()
     const store = await openStore({ path: env.MESSAGING_STORE })
-    await store.saveMessages(OWNER, "7", [message("8", [{ kind: "photo" }]), message("9", [{ kind: "photo" }])], {
-      via: "history",
-    })
+    await store.messages.saveMessages(
+      OWNER,
+      "7",
+      [message("8", [{ kind: "photo" }]), message("9", [{ kind: "photo" }])],
+      {
+        via: "history",
+      },
+    )
     for (const id of ["8", "9"]) {
       writeFileSync(join(files, `${id}-1.jpg`), new Uint8Array([0xff, 0xd8]))
-      await store.keepDownloads(OWNER, "7", id, [{ kind: "photo", path: join(files, `${id}-1.jpg`) }])
+      await store.attachments.keepDownloads(OWNER, "7", id, [{ kind: "photo", path: join(files, `${id}-1.jpg`) }])
     }
     await store.close()
 
@@ -659,7 +666,9 @@ describe("an agent's text for a file", () => {
     expect((await piped("x")("attachments", "text", "set", "msg:chat/501/7/4")).stderr).toContain("another account")
     expect((await piped("x")("attachments", "text", "set", "7")).stderr).toContain("which message")
     const store = await openStore({ path: env.MESSAGING_STORE })
-    await store.saveMessages(OWNER, "7", [message("8", [{ kind: "photo" }, { kind: "photo" }])], { via: "history" })
+    await store.messages.saveMessages(OWNER, "7", [message("8", [{ kind: "photo" }, { kind: "photo" }])], {
+      via: "history",
+    })
     await store.close()
     expect((await piped("x")("attachments", "text", "set", "7", "8")).stderr).toContain("has 2 files")
     expect(json(await piped("x")("attachments", "text", "set", "7", "8", "--attachment", "2", "--json"))).toMatchObject(

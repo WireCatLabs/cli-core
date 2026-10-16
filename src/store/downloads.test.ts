@@ -79,13 +79,13 @@ describe("where downloads went", () => {
     const path = fresh()
     const store = await openStore({ path })
     const attachments: Attachment[] = [{ kind: "photo" }, { kind: "poll" }, { kind: "file", name: "a.pdf" }]
-    await store.saveMessages(OWNER, "-1", [message(attachments)], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-1", [message(attachments)], { via: "history" })
 
-    const kept = await store.keepDownloads(OWNER, "-1", "42", [
+    const kept = await store.attachments.keepDownloads(OWNER, "-1", "42", [
       { kind: "photo", path: "/saved/42-1.jpg" },
       { kind: "file", name: "a.pdf", path: "/saved/a.pdf" },
     ])
-    await store.saveMessages(OWNER, "-1", [message(attachments)], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-1", [message(attachments)], { via: "history" })
     await store.close()
 
     expect(kept).toBe(2)
@@ -99,10 +99,10 @@ describe("where downloads went", () => {
   it("records nothing for a message or chat the store does not hold", async () => {
     const path = fresh()
     const store = await openStore({ path })
-    await store.saveMessages(OWNER, "-1", [message([{ kind: "file" }])], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-1", [message([{ kind: "file" }])], { via: "history" })
 
-    expect(await store.keepDownloads(OWNER, "-2", "42", [{ kind: "file", path: "/x" }])).toBe(0)
-    expect(await store.keepDownloads(OWNER, "-1", "43", [{ kind: "file", path: "/x" }])).toBe(0)
+    expect(await store.attachments.keepDownloads(OWNER, "-2", "42", [{ kind: "file", path: "/x" }])).toBe(0)
+    expect(await store.attachments.keepDownloads(OWNER, "-1", "43", [{ kind: "file", path: "/x" }])).toBe(0)
     await store.close()
     expect(await paths(path)).toEqual([{ position: 0, path: null }])
   })

@@ -77,9 +77,9 @@ export const changeStoreSetting = async (
   const script = SCRIPTS[setting] as keyof Stemmers
   const store = await openStore({ env })
   try {
-    const current = (await store.stemmers()) ?? DEFAULT_STEMMERS
+    const current = (await store.searchIndex.stemmers()) ?? DEFAULT_STEMMERS
     const next = parseStemmers({ ...current, [script]: value ?? DEFAULT_STEMMERS[script] })
-    await store.saveStemmers(next)
+    await store.searchIndex.saveStemmers(next)
     return {
       result: { store: storePath(env), scope: "store", setting, value: next[script] },
       note: "store-wide — every profile, tg and MAX",
@@ -205,7 +205,7 @@ const changeGroup = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: st
   const members = value === undefined ? undefined : groupMembers(value)
   const store = await openStore({ env })
   try {
-    await store.saveAccountGroup(name, members)
+    await store.accounts.saveAccountGroup(name, members)
     return {
       result: { store: storePath(env), scope: "store", setting, value: members ?? null },
       note:

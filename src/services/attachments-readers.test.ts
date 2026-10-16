@@ -40,14 +40,14 @@ const setup = async (bytes: Uint8Array, extension: string) => {
     reactions: null,
   }
   for (const account of [owner, other]) {
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "7", title: "Fixture", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(account, "7", [message], { via: "test" })
+    await store.messages.saveMessages(account, "7", [message], { via: "test" })
   }
   writeFileSync(path, bytes)
-  await store.keepDownloads(owner, "7", "1", [{ kind: "file", name: `fixture.${extension}`, path }])
-  const file = (await store.fileAttachments(owner, { limit: 1 }))[0]
+  await store.attachments.keepDownloads(owner, "7", "1", [{ kind: "file", name: `fixture.${extension}`, path }])
+  const file = (await store.attachments.fileAttachments(owner, { limit: 1 }))[0]
   if (!file) throw new Error("fixture attachment missing")
   const service = attachmentsService(storedDeps(messenger, store, owner, { check: vi.fn(), record: vi.fn() }))
   return { store, service, path, pk: file.pk, sha: createHash("sha256").update(bytes).digest("hex") }
@@ -86,7 +86,7 @@ describe("local attachment readers in the shared index", () => {
       mapping = new Map(Array.from({ length: 256 }, (_, i) => [decoder.decode(new Uint8Array([i])), i]))
     const bytes = new Uint8Array([...text].map((character) => mapping.get(character) ?? 0))
     const { store, service, pk, sha } = await setup(bytes, "txt")
-    await store.keepAttachmentText(pk, {
+    await store.attachments.keepAttachmentText(pk, {
       text: "",
       origin: "extracted",
       extractor: "plain",
@@ -95,12 +95,12 @@ describe("local attachment readers in the shared index", () => {
     })
     expect(await service.extract()).toMatchObject({ extracted: 1, unchanged: 0 })
     expect(await found(store, "договор")).toEqual(["1"])
-    const row = (await store.attachments(owner, { limit: 1 }))[0]
+    const row = (await store.attachments.attachments(owner, { limit: 1 }))[0]
     expect(row?.text).toMatchObject({ extractor: "plain:v2:windows-1251", error: null })
   })
   it("invalidates obsolete reader provenance even when the content hash matches", async () => {
     const { store, service, pk, sha } = await setup(officeFixture("odt"), "odt")
-    await store.keepAttachmentText(pk, {
+    await store.attachments.keepAttachmentText(pk, {
       text: "oldneedle",
       origin: "extracted",
       extractor: "document:v0:odt",
@@ -117,7 +117,7 @@ describe("local attachment readers in the shared index", () => {
     expect(await service.extract()).toMatchObject({ failed: 1, extracted: 0 })
     expect(await found(store, "readerneedle")).toEqual(["1"])
     expect(
-      await store.keepAttachmentText(pk, {
+      await store.attachments.keepAttachmentText(pk, {
         text: "",
         origin: "extracted",
         extractor: "document:v1:odt",
@@ -128,7 +128,7 @@ describe("local attachment readers in the shared index", () => {
   })
   it("protects agent text and skips it in extraction", async () => {
     const { store, service, pk } = await setup(officeFixture("odt"), "odt")
-    await store.keepAttachmentText(pk, { text: "agentneedle", origin: "agent", extractor: "agent" })
+    await store.attachments.keepAttachmentText(pk, { text: "agentneedle", origin: "agent", extractor: "agent" })
     expect(await service.extract()).toMatchObject({ extracted: 0, failed: 0, items: [] })
     expect(await found(store, "agentneedle")).toEqual(["1"])
     expect(await found(store, "readerneedle")).toEqual([])

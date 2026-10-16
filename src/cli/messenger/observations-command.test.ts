@@ -32,17 +32,17 @@ const setup = async (permissions?: object) => {
   const account = { provider: "chat", account: "500" }
   rememberAccount(app, "default", account.account, env)
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Synthetic", kind: "group", unreadCount: null, lastMessageAt: null, participantsCount: 1 },
   ])
   const joined = Date.now() - 10 * 86_400_000
-  await store.saveRoster(account, "7", {
+  await store.roster.saveRoster(account, "7", {
     members: [{ id: "2", name: "Synthetic", username: null, role: "member", joinedAt: new Date(joined).toISOString() }],
     complete: true,
     participants: 1,
     observation: { observedAt: new Date(joined + 86_400_000).toISOString(), source: "remote_fetch" },
   })
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     [

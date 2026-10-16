@@ -33,10 +33,10 @@ const message = (id: number, text: string): Message => ({
 const open = async (texts: string[], path = join(mkdtempSync(join(tmpdir(), "stemmed-")), "messages.db")) => {
   const store = await openStore({ path })
   live.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Chat 7", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     texts.map((text, i) => message(i + 1, text)),
@@ -146,7 +146,7 @@ describe("stemmed strict search", () => {
 
   it("**refuses a stemmed search while the stems are built by other choices**; exact: still runs", async () => {
     const { store, path } = await open(["running late", "she runs", "run now"])
-    await store.saveStemmers({ cyrillic: "russian", latin: "english" })
+    await store.searchIndex.saveStemmers({ cyrillic: "russian", latin: "english" })
     const refused = await failure(search(store, "running"))
     expect(refused.details).toMatchObject({
       reason: "index.not-ready",
@@ -178,7 +178,7 @@ describe("stemmed strict search", () => {
 
   it("**still refuses stems the owner chose until store reindex**", async () => {
     const { store } = await open(TEXTS)
-    await store.saveStemmers({ cyrillic: "none", latin: "english" })
+    await store.searchIndex.saveStemmers({ cyrillic: "none", latin: "english" })
     const refused = await failure(searchLucene(store, account, { text: "квартира", limit: 10 }))
     expect(refused.details).toMatchObject({ reason: "index.not-ready", cause: "stemmer_changed" })
   })

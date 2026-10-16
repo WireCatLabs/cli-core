@@ -33,7 +33,7 @@ const clocked = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "aliases-")), "messages.db")
   let at = START
   const store = await openStore({ path, now: () => at })
-  await store.saveChats(OWNER, [
+  await store.chats.saveChats(OWNER, [
     { id: "-1", title: "Club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
   const people = peopleService(
@@ -45,9 +45,9 @@ const clocked = async () => {
 describe("past names", () => {
   it("keeps a renamed person's earlier name and username, with a link, and does not repeat the current one", async () => {
     const { store, people, nextDay } = await clocked()
-    await store.savePeople(OWNER, [{ id: "10", name: "Ann Old", username: "ann_old" }])
+    await store.people.savePeople(OWNER, [{ id: "10", name: "Ann Old", username: "ann_old" }])
     nextDay()
-    await store.savePeople(OWNER, [{ id: "10", name: "Ann New", username: "ann_new" }])
+    await store.people.savePeople(OWNER, [{ id: "10", name: "Ann New", username: "ann_new" }])
 
     expect((await people.profile("10")).aliases).toEqual([
       {
@@ -64,7 +64,7 @@ describe("past names", () => {
 
   it("reads a sender's earlier name off stored messages, and never merges two people who shared one", async () => {
     const { path, store } = await clocked()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       OWNER,
       "-1",
       [
@@ -97,18 +97,24 @@ describe("past names", () => {
 
   it("does not report a member as changed when a list read only adds what a message did not say", async () => {
     const { store, nextDay } = await clocked()
-    await store.saveMessages(OWNER, "-1", [message("1", "10", "Ann", "2026-08-01T00:00:00.000Z")], { via: "fetch" })
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "10", "Ann", "2026-08-01T00:00:00.000Z")], {
+      via: "fetch",
+    })
     nextDay()
-    await store.saveMessages(OWNER, "-1", [message("2", "10", "Ann B", "2026-08-02T00:00:00.000Z")], { via: "fetch" })
+    await store.messages.saveMessages(OWNER, "-1", [message("2", "10", "Ann B", "2026-08-02T00:00:00.000Z")], {
+      via: "fetch",
+    })
     nextDay()
     const member = { id: "10", name: "Ann B", username: null, role: "member" as const, hasPhoto: true }
 
-    expect(await store.saveRoster(OWNER, "-1", { members: [member], complete: false, participants: null })).toEqual({
+    expect(
+      await store.roster.saveRoster(OWNER, "-1", { members: [member], complete: false, participants: null }),
+    ).toEqual({
       joined: ["10"],
       gone: [],
       changed: [],
     })
-    expect((await store.profileRevisions(OWNER, "-1")).map(({ name, marks }) => ({ name, marks }))).toEqual([
+    expect((await store.roster.profileRevisions(OWNER, "-1")).map(({ name, marks }) => ({ name, marks }))).toEqual([
       { name: "Ann", marks: {} },
       { name: "Ann B", marks: { photo: true } },
     ])

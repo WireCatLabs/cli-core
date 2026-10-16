@@ -19,7 +19,7 @@ const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", descripti
 const opened = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "proposal-tasks-")), "store.db") })
   live.push(store)
-  await store.saveAccount(account, { name: "Alice Example" })
+  await store.accounts.saveAccount(account, { name: "Alice Example" })
   return store
 }
 

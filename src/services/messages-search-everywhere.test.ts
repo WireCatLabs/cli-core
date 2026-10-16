@@ -34,10 +34,10 @@ const message = (id: string, text: string, attachments: Attachment[] = []): Mess
 const seeded = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "everywhere-")), "messages.db") })
   live.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "1", title: "Chat", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "1",
     [
@@ -49,9 +49,11 @@ const seeded = async () => {
     ],
     { via: "history" },
   )
-  await store.keepTranscript(account, "1", "2", "a heron landed by the river", "gigaam-v3")
-  const sheet = (await store.fileAttachments(account, { limit: 10 })).find(({ messageId }) => messageId === "3")
-  await store.keepAttachmentText(sheet?.pk as number, {
+  await store.messages.keepTranscript(account, "1", "2", "a heron landed by the river", "gigaam-v3")
+  const sheet = (await store.attachments.fileAttachments(account, { limit: 10 })).find(
+    ({ messageId }) => messageId === "3",
+  )
+  await store.attachments.keepAttachmentText(sheet?.pk as number, {
     text: "# Birds\nRow 2: Bird: heron; Count: 42",
     origin: "extracted",
     extractor: "document:v2:xlsx",
@@ -100,21 +102,32 @@ describe("a plain word searches everywhere", () => {
 
   it("finds a Russian file name whatever its case, й and ё", async () => {
     const store = await seeded()
-    await store.saveMessages(account, "1", [message("8", "", [{ kind: "document", name: "Мой_ДОГОВОР Ёлка.docx" }])], {
-      via: "history",
-    })
+    await store.messages.saveMessages(
+      account,
+      "1",
+      [message("8", "", [{ kind: "document", name: "Мой_ДОГОВОР Ёлка.docx" }])],
+      {
+        via: "history",
+      },
+    )
     for (const word of ["мой", "договор", "ёлка", "елка"]) expect(ids(await search(store, word))).toEqual(["8"])
   })
 
   it("**ranks a message that says it above a long spreadsheet that repeats it**", async () => {
     const store = await seeded()
-    await store.saveMessages(account, "1", [message("9", "", [{ kind: "document", name: "ledger.xlsx" }])], {
+    await store.messages.saveMessages(account, "1", [message("9", "", [{ kind: "document", name: "ledger.xlsx" }])], {
       via: "history",
     })
-    const ledger = (await store.fileAttachments(account, { limit: 20 })).find(({ messageId }) => messageId === "9")
+    const ledger = (await store.attachments.fileAttachments(account, { limit: 20 })).find(
+      ({ messageId }) => messageId === "9",
+    )
     const rows = Array.from({ length: 2_300 }, (_, at) => `Row ${at + 2}: Bird: heron; Count: ${at}`).join("\n")
     expect(rows.length).toBeGreaterThan(75_000)
-    await store.keepAttachmentText(ledger?.pk as number, { text: rows, origin: "extracted", extractor: "x" })
+    await store.attachments.keepAttachmentText(ledger?.pk as number, {
+      text: rows,
+      origin: "extracted",
+      extractor: "x",
+    })
 
     const order = (await search(store, "heron")).items.map(({ id }) => id)
     expect(order[0]).toBe("1")

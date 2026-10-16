@@ -43,8 +43,8 @@ describe("shared vector hash survival", () => {
       forwardedFrom: null,
       reactions: null,
     }
-    await store.saveMessages(account, "room", [message], { via: "fixture" })
-    await store.replaceConversations(account, "room", {
+    await store.messages.saveMessages(account, "room", [message], { via: "fixture" })
+    await store.conversations.replaceConversations(account, "room", {
       startedAt: 1000,
       algorithmVersion: 1,
       links: [],
@@ -53,13 +53,17 @@ describe("shared vector hash survival", () => {
     })
     const note = await store.notes.addNote({ text })
     expect((await store.notes.chunksToEmbed("invented-model", { limit: 1 }))[0]?.hash).toBe(hash)
-    await store.saveVectors("invented-model", 2, [{ hash, vector: new Float32Array([1, 0]) }])
-    await store.markDeleted(account, ["one"], { chatId: "room" })
+    await store.vectors.saveVectors("invented-model", 2, [{ hash, vector: new Float32Array([1, 0]) }])
+    await store.messages.markDeleted(account, ["one"], { chatId: "room" })
     expect((await store.notes.nearest("invented-model", new Float32Array([1, 0]), { limit: 1 }))[0]?.note.id).toBe(
       note.id,
     )
     expect(
-      await store.nearestConversations(account, { model: "invented-model", query: new Float32Array([1, 0]), limit: 1 }),
+      await store.vectors.nearestConversations(account, {
+        model: "invented-model",
+        query: new Float32Array([1, 0]),
+        limit: 1,
+      }),
     ).toEqual([])
   })
 
@@ -78,7 +82,10 @@ describe("shared vector hash survival", () => {
         })
       }
       if (corpus === "meeting_transcript") {
-        const accountId = await store.saveAccount({ provider: "example", account: "invented" }, { name: "Invented" })
+        const accountId = await store.accounts.saveAccount(
+          { provider: "example", account: "invented" },
+          { name: "Invented" },
+        )
         const sample = sampleMeeting()
         sample.meeting.accountId = accountId
         const saved = await store.meetings.saveMeeting(sample)
@@ -96,7 +103,7 @@ describe("shared vector hash survival", () => {
         hash = chunk.hash
       }
       for (const model of ["invented-model-one", "invented-model-two"])
-        await store.saveVectors(model, 2, [{ hash, vector: new Float32Array([1, 0]) }])
+        await store.vectors.saveVectors(model, 2, [{ hash, vector: new Float32Array([1, 0]) }])
       const before = context.database
         .prepare("SELECT * FROM embeddings WHERE content_hash = ? ORDER BY model")
         .all(hash)
@@ -121,7 +128,7 @@ describe("shared vector hash survival", () => {
       )
       .run(used)
     for (const model of ["invented-model-one", "invented-model-two"])
-      await store.saveVectors(model, 2, [
+      await store.vectors.saveVectors(model, 2, [
         { hash: used, vector: new Float32Array([1, 0]) },
         { hash: unused, vector: new Float32Array([0, 1]) },
       ])
