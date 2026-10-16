@@ -151,6 +151,8 @@ const samples: Record<EntityName, unknown> = {
     fingerprint: "b".repeat(64),
     status: "proposed",
     author: { type: "bot", id: "2", name: "synthetic" },
+    decided_by: null,
+    decided_at: null,
     previous: [],
     receipt: null,
   },

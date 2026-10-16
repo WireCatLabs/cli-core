@@ -123,6 +123,7 @@ describe("reviewed meeting findings", () => {
     expect(await f.store.meetingFindings.stage(account, f.input, agent)).toEqual(batch)
     const decision = { fingerprint: batch.fingerprint, accept: ["decision", "followup"] }
     const reviewed = await f.store.meetingFindings.review(account, batch.id, decision)
+    expect(reviewed).toMatchObject({ decidedBy: { type: "person" }, decidedAt: new Date(1000).toISOString() })
     expect(reviewed.receipt?.items.map((x) => x.status)).toEqual(["accepted", "accepted"])
     expect((await f.store.meetingFindings.list(account, { status: "proposed" })).items).toEqual([])
     expect((await f.store.meetingFindings.list(account, { status: "reviewed" })).items.map((item) => item.id)).toEqual([

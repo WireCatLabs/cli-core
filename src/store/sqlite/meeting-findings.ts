@@ -78,6 +78,8 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
       fingerprint: findingHash({ input, author: proposal.proposedBy.id }),
       status: proposal.status === "proposed" ? "proposed" : "reviewed",
       author: proposal.proposedBy,
+      decidedBy: proposal.decidedBy,
+      decidedAt: proposal.decidedAt,
       previous: proposal.result
         ? (proposal.result as MeetingFindingsReceipt).items
         : input.findings.flatMap((finding) => {

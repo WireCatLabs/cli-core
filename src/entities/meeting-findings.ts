@@ -33,6 +33,8 @@ export const meetingFindings = v.strictObject({
   fingerprint: text,
   status: v.picklist(["proposed", "reviewed"]),
   author,
+  decided_by: v.nullable(v.strictObject({ type: v.picklist(["person", "bot"]), id })),
+  decided_at: v.nullable(time),
   previous: v.array(outcome),
   receipt: v.nullable(v.strictObject({ preview_fingerprint: text, accepted: v.array(id), items: v.array(outcome) })),
 })
