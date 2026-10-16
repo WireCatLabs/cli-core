@@ -24,6 +24,10 @@ shape of this file.
   person keeps it, every mention of the same address follows, and later ones are linked by the rules.
   `mentions places` lists the places, most mentioned first.
 
+### Changed — may break callers
+
+- `meeting_findings` is reserved for the validated findings intake API. Generic proposed-action creation and state transitions refuse that kind; use `MessageStore.meetingFindings` for its staging and review.
+
 ## 0.307.0 — 17.10.2026
 
 ### Fixed
