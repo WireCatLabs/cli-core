@@ -105,7 +105,7 @@ export interface OwnerLogin {
 /**
  * An OAuth 2.1 authorization server for exactly one owner (CLI-58). Anyone may register a client —
  * the browser apps need dynamic registration — but nobody gets a token without the one-time code
- * printed in the owner's terminal. Five wrong codes lock the page until the server restarts.
+ * printed in the owner's terminal. Five wrong codes delay further attempts for thirty seconds.
  */
 export const ownerLogin = ({
   issuer,
