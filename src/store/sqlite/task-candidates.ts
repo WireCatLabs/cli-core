@@ -3,13 +3,13 @@ import { isLocator } from "../../domain/locator.js"
 import { DEFAULT_STEMMERS, type Stemmer } from "../../search/stem.js"
 import type { TaskAmount } from "../../search/task-signature.js"
 import {
-  compareTasks,
+  compareViews,
   type PreparedTask,
   prepareTask,
   rankCandidates,
   type Similarity,
-  taskStemsOf,
 } from "../../search/task-similarity.js"
+import { linkKind } from "./link-kinds.js"
 import { CORPORA, drainCorpus } from "./note-index.js"
 import type { StoreContext } from "./open.js"
 import { stemmerCache, storeStemmers } from "./stems.js"
@@ -62,18 +62,24 @@ const FIELD_LIMIT = 10
 export const CANDIDATE_LIMIT = 40
 const WINDOW_LIMIT = 2000
 const REPLY_DEPTH = 20
+/** The newest messages linked to a task that the comparison reads: enough for a reminder, cheap on a long thread. */
+export const LINKED_MESSAGES = 5
+/** A message linked by any of these is about the task; `answered-by` is the owner's own answer. */
+const ABOUT_TASK = ["related-to", "evidence", "created-from"] as const
 
 type Row = Record<string, unknown>
 
-type Source = { message: number; person?: string }
+type Message = { message: number; text: string; sentAt: Date; person?: string }
 
 type Side = {
   row?: number
   project: number
+  /** Read only for the subject and the chosen candidates: the window holds up to 2000 tasks. */
+  linked?: Message[]
   title: string
   description: string
   category?: string
-  source?: Source
+  source?: Message
   amount?: TaskAmount | null
   due?: Date | null
   person?: string
@@ -86,7 +92,22 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
   const { database, now } = context
   const stemmerFor = stemmerCache()
 
-  const sourceOf = (locator: unknown): Source | undefined => {
+  const MESSAGE =
+    "SELECT m.id, m.text, m.sent_at, m.outgoing, p.id AS person, p.owner FROM messages m " +
+    "LEFT JOIN identity_links il ON il.identity_id = m.sender_identity_id LEFT JOIN persons p ON p.id = il.person_id"
+
+  const messageOf = (row: Row): Message => {
+    // The owner's own message (a promise) names no other person: every promise would match every promise.
+    const own = Number(row.outgoing) === 1 || Number(row.owner) === 1
+    return {
+      message: Number(row.id),
+      text: String(row.text ?? ""),
+      sentAt: new Date(Number(row.sent_at)),
+      ...(own || row.person == null ? {} : { person: `person:${row.person}` }),
+    }
+  }
+
+  const sourceOf = (locator: unknown): Message | undefined => {
     if (typeof locator !== "string" || !isLocator(locator)) return undefined
     let thing: ReturnType<typeof thingOf>
     try {
@@ -95,16 +116,21 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
       return undefined
     }
     if (thing?.type !== "message") return undefined
-    const sender = database
+    const row = database.prepare(`${MESSAGE} WHERE m.id = ?`).get(thing.id)
+    return row ? messageOf(row) : undefined
+  }
+
+  const linkedOf = (side: Side): Side => {
+    if (side.row === undefined || side.linked) return side
+    const linked = database
       .prepare(
-        "SELECT m.outgoing, p.id AS person, p.owner FROM messages m " +
-          "LEFT JOIN identity_links l ON l.identity_id = m.sender_identity_id LEFT JOIN persons p ON p.id = l.person_id " +
-          "WHERE m.id = ?",
+        `${MESSAGE} JOIN links l ON l.to_type = 'message' AND l.to_id = m.id WHERE l.from_type = 'task' AND l.from_id = ? ` +
+          `AND l.kind IN (${ABOUT_TASK.map(linkKind).join(", ")}) AND m.deleted_at IS NULL AND m.id <> ? ` +
+          "GROUP BY m.id ORDER BY m.sent_at DESC, m.id DESC LIMIT ?",
       )
-      .get(thing.id)
-    // The owner's own message (a promise) names no other person: every promise would match every promise.
-    const own = Number(sender?.outgoing) === 1 || Number(sender?.owner) === 1
-    return { message: thing.id, ...(own || sender?.person == null ? {} : { person: `person:${sender.person}` }) }
+      .all(side.row, side.source?.message ?? -1, LINKED_MESSAGES)
+      .map(messageOf)
+    return { ...side, linked }
   }
 
   const sideOf = (row: Row): Side => {
@@ -123,19 +149,32 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
     }
   }
 
-  const prepared = (side: Side, stemmer: Stemmer): PreparedTask =>
-    prepareTask(
-      {
-        title: side.title,
-        description: side.description,
-        createdAt: side.createdAt,
-        ...(side.person === undefined ? {} : { person: side.person }),
-        ...(side.category === undefined ? {} : { category: side.category }),
-        ...(side.amount === undefined ? {} : { amount: side.amount }),
-        ...(side.due === undefined ? {} : { due: side.due }),
-      },
-      stemmer,
-    )
+  const messagesOf = (side: Side): Message[] => [...(side.source ? [side.source] : []), ...(side.linked ?? [])]
+
+  /** The task's own text, then that text with each message it stands on: its source and its newest linked ones. */
+  const viewsOf = (side: Side, stemmer: Stemmer): PreparedTask[] => {
+    const view = (message?: Message): PreparedTask => {
+      // The source's sender is already the task's person, unless an agent named another (`--person`).
+      const person = message === side.source ? side.person : (message?.person ?? side.person)
+      return prepareTask(
+        {
+          title: side.title,
+          description: side.description,
+          createdAt: side.createdAt,
+          ...(person === undefined ? {} : { person }),
+          ...(side.category === undefined ? {} : { category: side.category }),
+          ...(side.amount === undefined ? {} : { amount: side.amount }),
+          ...(side.due === undefined ? {} : { due: side.due }),
+          ...(message === undefined ? {} : { message: { text: message.text, sentAt: message.sentAt } }),
+        },
+        stemmer,
+      )
+    }
+    return [view(), ...messagesOf(side).map(view)]
+  }
+
+  const chainOf = (side: Side): Set<number> =>
+    new Set(messagesOf(side).flatMap(({ message }) => [...replyChain(message)]))
 
   /** The source message, the messages it replies to and the replies to it, in one chat. */
   const replyChain = (message: number): Set<number> => {
@@ -199,15 +238,17 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
       const row = id === undefined ? undefined : rowOf(id)
       if (!side || !row) throw new CliError("not_found", `no task ${other}`)
       const stemmer = stemmerFor(storeStemmers(database) ?? DEFAULT_STEMMERS)
-      const otherSide = sideOf(row)
-      const chain = side.source ? replyChain(side.source.message) : new Set<number>()
-      return compareTasks(prepared(side, stemmer), prepared(otherSide, stemmer), {
-        replyChain: otherSide.source !== undefined && chain.has(otherSide.source.message),
+      const one = linkedOf(side)
+      const otherSide = linkedOf(sideOf(row))
+      const chain = chainOf(one)
+      return compareViews(viewsOf(one, stemmer), viewsOf(otherSide, stemmer), {
+        replyChain: messagesOf(otherSide).some(({ message }) => chain.has(message)),
       })
     },
     similar: async (subject, { limit = 10 } = {}) => {
-      const side = subjectOf(subject)
-      if (!side) return []
+      const named = subjectOf(subject)
+      if (!named) return []
+      const side = linkedOf(named)
       drainCorpus(database, CORPORA.task, stemmerFor)
       const stemmer = stemmerFor(storeStemmers(database) ?? DEFAULT_STEMMERS)
       const since = now() - RECENTLY_CLOSED_MS
@@ -217,7 +258,8 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
       const found = new Map<number, Set<CandidateLookup>>()
       const add = (id: number, by: CandidateLookup) => found.set(id, (found.get(id) ?? new Set()).add(by))
 
-      const stems = [...taskStemsOf(`${side.title}\n${side.description}`, stemmer)]
+      const views = viewsOf(side, stemmer)
+      const stems = [...new Set(views.flatMap((view) => [...view.stems]))]
       if (stems.length > 0) {
         const match = `stems : (${stems.map((stem) => `"${stem.replaceAll('"', '""')}"`).join(" OR ")})`
         for (const one of database
@@ -233,14 +275,24 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
         .prepare(`SELECT ${COLUMNS} FROM tasks t WHERE ${live} ORDER BY t.created_at DESC, t.id DESC LIMIT ?`)
         .all(...scope, WINDOW_LIMIT)
       const sides = new Map(window.map((row) => [Number(row.id), { row, side: sideOf(row) }]))
-      const chain = side.source ? replyChain(side.source.message) : new Set<number>()
-      const inChain = (other: Side) => other.source !== undefined && chain.has(other.source.message)
+      const chain = chainOf(side)
+      const inChain = (other: Side) => messagesOf(other).some(({ message }) => chain.has(message))
       // No lookup by chat: a chat holds many unrelated tasks, and one request can arrive in two chats.
       const newest = (by: CandidateLookup, same: (other: Side) => boolean) => {
         for (const [id] of [...sides].filter(([, one]) => same(one.side)).slice(0, FIELD_LIMIT)) add(id, by)
       }
       for (const [id, { side: other }] of sides) if (inChain(other)) add(id, "reply")
-      if (side.person) newest("person", (other) => other.person === side.person)
+      if (chain.size > 0)
+        for (const one of database
+          .prepare(
+            `SELECT DISTINCT t.id FROM links l JOIN tasks t ON t.id = l.from_id WHERE l.from_type = 'task' AND ` +
+              `l.to_type = 'message' AND l.kind IN (${ABOUT_TASK.map(linkKind).join(", ")}) AND ` +
+              `l.to_id IN (${[...chain].map(() => "?").join(", ")}) AND ${live}`,
+          )
+          .all(...chain, ...scope))
+          add(Number(one.id), "reply")
+      const persons = new Set(views.flatMap(({ person }) => (person === undefined ? [] : [person])))
+      if (persons.size > 0) newest("person", (other) => other.person !== undefined && persons.has(other.person))
       if (side.category) newest("category", (other) => other.category === side.category)
 
       const order: CandidateLookup[] = ["reply", "text", "person", "category"]
@@ -250,14 +302,14 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
         chosen.map(([id]) => {
           const known = sides.get(id)
           const row = known?.row ?? (rowOf(id) as Row)
-          return [id, { row, side: known?.side ?? sideOf(row) }]
+          return [id, { row, side: linkedOf(known?.side ?? sideOf(row)) }]
         }),
       )
       const ranked = rankCandidates(
-        prepared(side, stemmer),
+        views,
         chosen.map(([id]) => {
           const other = rows.get(id)?.side as Side
-          return { id, task: prepared(other, stemmer), replyChain: inChain(other) }
+          return { id, views: viewsOf(other, stemmer), replyChain: inChain(other) }
         }),
       )
       return ranked.slice(0, Math.min(Math.max(limit, 1), CANDIDATE_LIMIT)).map(({ id, ...similarity }) => {

@@ -189,13 +189,17 @@ export interface TasksService {
     origin: TaskOrigin,
     plan?: TaskPlan,
     choice?: DuplicateChoice,
-  ): Promise<{ task: TaskView; created: boolean; attached?: boolean; card?: TaskCard }>
+  ): Promise<{ task: TaskView; created: boolean; attached?: boolean; review?: number; card?: TaskCard }>
   /** Pairs a rule left for review — or, with `unsure`, the ones the reviewing agent passed to the owner — newest first. */
   duplicates(options: { decision: PairDecision; limit: number; offset: number }): Promise<TaskPair[]>
   /** `rejected`: not the same job, never offered again. `unsure`: the owner decides. */
   decideDuplicate(dup: string, task: string, decision: "rejected" | "unsure", by: TaskOrigin): Promise<TaskPair>
   /** Links every message of `dup` to `into` and closes `dup` as its duplicate; `unmerge` undoes it. */
-  merge(dup: string, into: string, by: TaskOrigin): Promise<{ pair: TaskPair; linked: number; task: TaskCard }>
+  merge(
+    dup: string,
+    into: string,
+    by: TaskOrigin,
+  ): Promise<{ pair: TaskPair; linked: number; review: number; task: TaskCard }>
   unmerge(dup: string, by: TaskOrigin): Promise<{ pair: TaskPair; task: TaskCard }>
   close(id: string, options: { as: ClosedState; reason?: string; by: TaskOrigin }): Promise<TaskView>
   stats(filter?: { chat?: string; type?: TaskKind }): Promise<GroupStats[]>
@@ -203,13 +207,14 @@ export interface TasksService {
   plan(id: string, plan: TaskPlan, by: TaskOrigin): Promise<TaskCard>
   /**
    * Links a task to stored things (`msg:`, `chat:`, `person:`, `document:`…) or, for what the store does
-   * not hold, to the text as written — a URL, a message not saved yet.
+   * not hold, to the text as written — a URL, a message not saved yet. After a `msg:` target, `review` counts the
+   * pairs the duplicate check sent to `tasks duplicates`.
    */
   link(
     id: string,
     targets: { references?: readonly string[]; chats?: readonly string[] },
     options: { kind: TaskLinkOptionKind; by: TaskOrigin },
-  ): Promise<TaskCard | { relations: TaskRelation[] }>
+  ): Promise<(TaskCard & { review?: number }) | { relations: TaskRelation[] }>
   show(id: string): Promise<TaskCard>
   /** The list a task's category comes from, with what each one means. */
   categories(): Promise<readonly TaskCategory[]>
@@ -283,6 +288,12 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
     await store.tasks.edit(id, plan, by === "owner" ? "owner" : { bot: by })
     return cardOf(store, id)
   }
+  /**
+   * A message linked to a task is read by the comparison, so the task may now look like another one: the pairs go to
+   * the review list, never to a merge, and the link stands whatever they score. A closed task is not checked.
+   */
+  const reviewAfterLink = async (store: MessageStore, id: string): Promise<number> =>
+    (await store.tasks.get(id))?.state === "open" ? store.tasks.reviewDuplicates(id) : 0
 
   return {
     list: ({ query, limit, offset, previews }) =>
@@ -359,7 +370,8 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
             await store.notes.addLink({ ...link, targetText: source })
           }
           await store.tasks.recordPair({ source, other: target.id, decision: "attached", similarity, by })
-          return { task: await taskView(store, account, target), created: false, attached: true }
+          const review = await reviewAfterLink(store, target.id)
+          return { task: await taskView(store, account, target), created: false, attached: true, review }
         }
         const candidates = (await store.tasks.similar(subject, { limit: 40 })).filter((one) => one.band !== "different")
         if (candidates.length > 0 && !choice.new) {
@@ -426,7 +438,8 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         await owned(store, account, dup)
         await owned(store, account, into)
         const merged = await store.tasks.merge(dup, into, by === "owner" ? "owner" : { bot: by })
-        return { ...merged, task: await cardOf(store, into) }
+        const review = await reviewAfterLink(store, into)
+        return { ...merged, review, task: await cardOf(store, into) }
       }),
 
     unmerge: (dup, by) =>
@@ -533,7 +546,9 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
             await store.notes.addLink({ from, targetText: target, kind: kind as TaskLinkKind, origin })
           }
         }
-        return cardOf(store, id)
+        if (!written.some((target) => target.startsWith("msg:"))) return cardOf(store, id)
+        const review = await reviewAfterLink(store, id)
+        return { ...(await cardOf(store, id)), review }
       })
     },
 

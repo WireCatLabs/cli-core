@@ -7,6 +7,22 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **The duplicate check reads the messages a task stands on**: its source message and its 5 newest linked messages,
+  one at a time beside the title and description; the best pair counts, so a message only raises a pair's score. A
+  rule's task, whose title says nothing, now compares by its message's words: on the cli-testing duplicate set it
+  finds 74% of duplicates instead of 8%, and sends 10% of new tasks to review instead of 2%; `tasks add` may refuse
+  a task whose message shares words with an open one. Tasks with their own text score the same on the set. Messages
+  are read at compare time; a task still stores no message text. Weights and bands are unchanged.
+
+### Added
+
+- **Linking a message to a task runs the duplicate check again**: after `tasks link <task> msg:…` (MCP
+  `tasks_link`), `tasks add --into` and `tasks merge`, tasks the linked one now looks like go to `tasks duplicates`,
+  and the answer's `review` counts them. The link always stands, nothing merges on a score, and a closed task is not
+  checked.
+
 ## 0.295.0 — 16.10.2026
 
 ### Changed — may break callers

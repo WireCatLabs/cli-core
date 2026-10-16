@@ -119,6 +119,57 @@ describe("similar tasks", () => {
     await store.close()
   })
 
+  it("**reads the messages linked to a task**: a reminder like a linked message scores higher, never lower", async () => {
+    const { store, add } = await setup([
+      said("1", "9", "Can you call the plumber?"),
+      said("2", "9", "The boiler repair is 15 000 rub, pay by Friday"),
+      said("3", "9", "x"),
+      said("4", "8", "unrelated chatter"),
+    ])
+    const plumber = await add("1", { title: "Call the plumber", category: "money" })
+    const reminder = await add("3", { title: "Pay 15000 rub for the boiler repair by Friday", category: "money" })
+    const before = await store.tasks.compare({ task: reminder }, plumber)
+    expect(before).toMatchObject({ band: "different", levels: { text: "low", amount: "missing" } })
+
+    const ref = (await store.tasks.details(plumber)).ref
+    await store.notes.addLink({ from: ref, to: "msg:chat/500/7/4", kind: "related-to" })
+    expect((await store.tasks.compare({ task: reminder }, plumber)).score).toBe(before.score)
+    await store.notes.addLink({ from: ref, to: "msg:chat/500/7/2", kind: "evidence" })
+    const after = await store.tasks.compare({ task: reminder }, plumber)
+    expect(after).toMatchObject({ band: "likely", levels: { amount: "equal", person: "same" } })
+    expect((await store.tasks.similar({ task: reminder })).map(({ key }) => key)).toEqual([plumber])
+    await store.close()
+  })
+
+  it("**reads a rule task's source message**, whose placeholder title says nothing", async () => {
+    const { store, add } = await setup([said("1", "9", "Could you pay the 15 000 rub invoice?"), said("2", "9", "x")])
+    const rule = await add("1")
+    const agent = await add("2", { title: "Pay the 15000 rub invoice" })
+    expect((await store.tasks.similar({ task: agent }))[0]).toMatchObject({
+      key: rule,
+      foundBy: ["person"],
+      levels: { text: "high", amount: "equal" },
+    })
+    await store.close()
+  })
+
+  it("**takes a task whose linked message the new one replies to**", async () => {
+    const { store, add, similar } = await setup([
+      said("1", "9", "Book the venue"),
+      said("2", "8", "the caterer said yes"),
+      said("3", "7", "great, and the band?", "2"),
+    ])
+    const venue = await add("1", { title: "Book the venue" })
+    await store.notes.addLink({
+      from: (await store.tasks.details(venue)).ref,
+      to: "msg:chat/500/7/2",
+      kind: "evidence",
+    })
+    const band = await add("3", { title: "Hire a band" })
+    expect((await similar(band))[venue]).toMatchObject({ foundBy: ["reply"], levels: { reply: "yes" } })
+    await store.close()
+  })
+
   it("**scores a draft** not added yet against the account's tasks", async () => {
     const { store, add } = await setup([said("1", "9", "a"), said("2", "9", "b")])
     const existing = await add("1", { title: "Send Alice the signed contract by Friday" })

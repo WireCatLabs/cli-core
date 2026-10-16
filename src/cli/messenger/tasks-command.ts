@@ -42,6 +42,9 @@ const line = ({ id, key, state, kind, group, createdAt, message, note }: TaskVie
 
 const when = (at: string | null) => (at === null ? "—" : at.slice(0, 16).replace("T", " "))
 
+const toReview = (count: number | undefined) =>
+  count ? `; ${count} possible duplicate pair(s) went to tasks duplicates` : ""
+
 const card = (task: TaskCard) =>
   [
     `${task.key}  ${task.status}  ${task.type}  ${task.category ?? "—"}  ${task.title}`,
@@ -199,6 +202,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       task,
       created,
       attached,
+      review,
       card: planned,
     } = await context.withServices((services) =>
       services.tasks.add(message, options.type, "owner", plan, {
@@ -209,11 +213,18 @@ export const tasksCommand = (messenger: Messenger): Command => {
     renderAnswer(
       this,
       context,
-      itemOf(snakeKeys({ ...task, created, ...(attached ? { attached } : {}), ...(planned ? { card: planned } : {}) })),
+      itemOf(
+        snakeKeys({
+          ...task,
+          created,
+          ...(attached ? { attached, review } : {}),
+          ...(planned ? { card: planned } : {}),
+        }),
+      ),
       () => `${planned ? card(planned) : line(task)}\n`,
     )
     if (attached && context.format === "pretty")
-      context.renderer.note(`the message is linked to ${task.key ?? task.id}; no task was opened`)
+      context.renderer.note(`the message is linked to ${task.key ?? task.id}; no task was opened${toReview(review)}`)
     else if (!created && context.format === "pretty")
       context.renderer.note("this source already has a task — that one is shown, unchanged")
   })
@@ -269,6 +280,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
           ? `${linked.relations.map((one) => `${one.from} ${one.kind} ${one.to}`).join("\n")}\n`
           : `${card(linked)}\n`,
       )
+      if (!("relations" in linked) && linked.review && context.format === "pretty")
+        context.renderer.note(`${linked.review} possible duplicate pair(s) went to tasks duplicates`)
     })
 
   annotate(tasks.command("show"), { effects: LOCAL_READ })
@@ -392,7 +405,9 @@ export const tasksCommand = (messenger: Messenger): Command => {
         this,
         context,
         itemOf(snakeKeys(merged)),
-        () => `${dup} merged into ${merged.task.key}; ${merged.linked} message(s) linked\n${card(merged.task)}\n`,
+        () =>
+          `${dup} merged into ${merged.task.key}; ${merged.linked} message(s) linked${toReview(merged.review)}\n` +
+          `${card(merged.task)}\n`,
       )
     })
 

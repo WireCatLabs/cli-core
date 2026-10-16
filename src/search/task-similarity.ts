@@ -22,6 +22,8 @@ export type TaskSide = {
   /** Given by an agent (`--due`); when absent the text is read for one. `null` says there is none. */
   due?: Date | null
   createdAt: Date
+  /** One message the task stands on, read with its own text at compare time; a task never stores message text. */
+  message?: { text: string; sentAt: Date }
 }
 
 export type PreparedTask = {
@@ -85,18 +87,20 @@ export const prepareTask = (task: TaskSide, stemmer: Stemmer = defaultStemmer): 
   const description = task.description ?? ""
   const createdMs = task.createdAt.getTime()
   const signatureText = normalize(joinDigitGroups(`${description}\n${task.title}`))
+  const { message } = task
+  const messageText = message === undefined ? "" : normalize(joinDigitGroups(message.text))
+  // The task's own words first; a message's "tomorrow" is read from when that message was sent.
+  const amountIn = () => amountOf(signatureText) ?? (message === undefined ? null : amountOf(messageText))
+  const dueIn = () =>
+    dueDayOf(signatureText, createdMs) ??
+    (message === undefined ? null : dueDayOf(messageText, message.sentAt.getTime()))
   return {
-    stems: taskStemsOf(`${task.title}\n${description}`, stemmer),
+    stems: taskStemsOf(`${task.title}\n${description}${message === undefined ? "" : `\n${message.text}`}`, stemmer),
     trigrams: trigramsOf(normalize(joinDigitGroups(task.title))),
     ...(task.person === undefined ? {} : { person: task.person }),
     ...(task.category === undefined ? {} : { category: task.category }),
-    amount: task.amount === undefined ? amountOf(signatureText) : task.amount,
-    dueDay:
-      task.due === undefined
-        ? dueDayOf(signatureText, createdMs)
-        : task.due === null
-          ? null
-          : dayOf(task.due.getTime()),
+    amount: task.amount === undefined ? amountIn() : task.amount,
+    dueDay: task.due === undefined ? dueIn() : task.due === null ? null : dayOf(task.due.getTime()),
     createdMs,
   }
 }
@@ -238,16 +242,36 @@ export const compareTasks = (
   }
 }
 
-export type TaskCandidate<Id> = { id: Id; task: PreparedTask; replyChain?: boolean }
+/**
+ * A task read several ways — its own text alone, then its text with each message it stands on — compared view by
+ * view; the best pair counts whole, so the text never comes from one message and the amount from another. Keeping
+ * the own-text view means a linked message can raise a score, never lower it.
+ */
+export const compareViews = (
+  a: readonly PreparedTask[],
+  b: readonly PreparedTask[],
+  options: { replyChain?: boolean } = {},
+): Similarity => {
+  let best: Similarity | undefined
+  for (const one of a)
+    for (const other of b) {
+      const scored = compareTasks(one, other, options)
+      if (!best || scored.score > best.score) best = scored
+    }
+  if (!best) throw new Error("compareViews needs at least one view on each side")
+  return best
+}
+
+export type TaskCandidate<Id> = { id: Id; views: readonly PreparedTask[]; replyChain?: boolean }
 
 /** Every candidate scored against the new task, best first; ties keep the order they came in. */
 export const rankCandidates = <Id>(
-  task: PreparedTask,
+  views: readonly PreparedTask[],
   candidates: readonly TaskCandidate<Id>[],
 ): (Similarity & { id: Id })[] =>
   candidates
-    .map(({ id, task: candidate, replyChain }) => ({
+    .map(({ id, views: candidate, replyChain }) => ({
       id,
-      ...compareTasks(task, candidate, replyChain === undefined ? {} : { replyChain }),
+      ...compareViews(views, candidate, replyChain === undefined ? {} : { replyChain }),
     }))
     .sort((a, b) => b.score - a.score)

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
 import { listQuery } from "../cli/list-query.js"
+import type { Message } from "../domain/models.js"
 import { openStore } from "../store/store.js"
 import { storeOnlyDeps } from "./deps.js"
 import { TASK_QUERY, type TasksService, tasksService } from "./tasks.js"
@@ -106,6 +107,67 @@ it("**links two project tasks as a relation when a target is task:**, a bare id 
     await expect(
       tasks.link(a.id, { references: [`task:${b.id}`] }, { kind: "blocked-by", by: "agent" }),
     ).rejects.toMatchObject({ code: "permission_error" })
+  } finally {
+    await store.close()
+  }
+})
+
+it("**a message linked to a task sends the tasks it now looks like to review**; the link stands, nothing merges", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-link-check-")), "m.db") })
+  try {
+    const said = (id: string, text: string): Message => ({
+      id,
+      chatId: "7",
+      senderId: "9",
+      senderName: "Alice Example",
+      timestamp: `2026-10-06T10:0${id}:00.000Z`,
+      editedAt: null,
+      text,
+      outgoing: false,
+      attachments: [],
+      replyTo: null,
+      forwardedFrom: null,
+      reactions: null,
+    })
+    await store.saveMessages(
+      account,
+      "7",
+      [
+        said("1", "Can you call the plumber?"),
+        said("2", "The boiler repair is 15 000 rub"),
+        said("3", "x"),
+        said("4", "y"),
+      ],
+      { via: "test" },
+    )
+    const tasks = tasksService(storeOnlyDeps(store, account, { app }))
+    const add = async (message: string, title: string) =>
+      (await tasks.add(`msg:chat/500/7/${message}`, "request", "agent", { title, category: "money" }, { new: true }))
+        .task
+    const plumber = await add("1", "Call the plumber")
+    const boiler = await add("3", "Pay 15000 rub for the boiler repair")
+    const pairs = () => store.tasks.pairs("chat:500", { decision: "review", limit: 10, offset: 0 })
+    expect(await pairs()).toEqual([])
+
+    const linked = await tasks.link(plumber.id, { references: ["msg:chat/500/7/2"] }, { kind: "evidence", by: "agent" })
+    expect(linked).toMatchObject({ review: 1, links: [{ kind: "evidence" }] })
+    expect(await pairs()).toMatchObject([
+      { task: { key: boiler.key }, other: { key: plumber.key }, band: "likely", decision: "review" },
+    ])
+    expect(
+      await tasks.link(plumber.id, { references: ["msg:chat/500/7/2"] }, { kind: "evidence", by: "agent" }),
+    ).toMatchObject({ review: 0 })
+    expect(
+      await tasks.link(plumber.id, { references: ["https://example.com"] }, { kind: "related-to", by: "agent" }),
+    ).not.toHaveProperty("review")
+
+    await tasks.close(boiler.id, { as: "done", by: "owner" })
+    const other = await add("4", "Pay 15000 rub for the boiler repair again")
+    await tasks.close(other.id, { as: "done", by: "owner" })
+    expect(
+      await tasks.link(other.id, { references: ["msg:chat/500/7/2"] }, { kind: "evidence", by: "agent" }),
+    ).toMatchObject({ review: 0 })
+    expect(await tasks.show(plumber.id)).toMatchObject({ status: "open" })
   } finally {
     await store.close()
   }

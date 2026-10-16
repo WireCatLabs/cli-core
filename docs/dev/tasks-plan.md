@@ -43,9 +43,8 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
    candidate and takes `--into` or `--new`; a rule-made task opens and its candidates go to `task_pairs` as
    `review` (`src/store/sqlite/task-pairs.ts`); `tasks duplicates`, `merge`, `unmerge`, `duplicates reject` /
    `unsure` decide. A message attached or merged into a task is linked as `evidence`, and a rule opens no second
-   task for it (`findBySource(…, { linked: true })`). Not yet: the chain on a new message linked to an existing
-   task — the comparison reads only a task's title, description and source message, so a linked message changes
-   no score until the comparison reads linked messages too.
+   task for it (`findBySource(…, { linked: true })`). The chain on a message linked to an existing task — built
+   2026-10-16, no store change (§ 8).
 5. **Rules run in `review` and `serve`, not in `sync`** (`src/services/inbox.ts:359`,
    `src/cli/messenger/serve-command.ts:232`). `applyTaskRulesToStored(store, account, since)` (0.274.0) runs
    them over what is stored, from a stop point.
@@ -225,6 +224,35 @@ Every merge, rejection, `--into` and `--new` after a candidate list is a labelle
 the bands move. A score never merges on its own: the test set shows the fields cannot tell some look-alikes
 apart. If real answers show "likely" pairs are almost always accepted, merging them is the owner's call.
 
+### 8. A message linked to a task — built 2026-10-16
+
+- **The comparison reads the messages a task stands on**: its source message and its 5 newest linked messages
+  (`links` to a message of kind `related-to`, `evidence` or `created-from`; not `answered-by`, the owner's own
+  answer). Each is a view: the task's title and description plus that one message. Two tasks score as their best
+  pair of views, taken whole — text, person, amount and due date come from the same message, never mixed. The
+  title-and-description view stays, so a message can raise a pair's score and never lower it; the text lookup now
+  matches the stems of every view, so its top 20 can change. A message's amount and due
+  date count only when the task's own text has none; its "tomorrow" is read from when it was sent. The time field
+  stays the tasks' creation dates.
+- Messages are read from the store at compare time (`src/store/sqlite/task-candidates.ts`); a task stores no
+  message text, and `task_stems` still holds only title and description. Linked messages are read for the subject
+  and the chosen candidates only, not for the 2000-task window. A reply to a linked message finds the task through
+  the reply lookup.
+- **After a link the check runs again** for that task (`reviewDuplicates`): `tasks link` / MCP `tasks_link` with a
+  `msg:` target, `tasks add --into`, and `tasks merge` (which links the duplicate's messages to the task that stays).
+  New likely or maybe pairs go to `tasks duplicates`, with the newer task as the would-be duplicate; the answer's
+  `review` counts them. The link always stands, nothing merges on a score, and a closed task is not checked. No
+  rule links a message to an existing task (a rule only skips a message already attached), so rules add no trigger.
+- The source message's text was not read before, so a rule's task — whose title is a placeholder — compared on no
+  words at all. Reading it brings the store in line with the test set, whose tasks always carry their message.
+- Measured ([cli-testing#95](https://github.com/WireCatLabs/cli-testing/pull/95), `linked.mjs`): the set replayed
+  with an agent that answers every refusal right, before and after — the same numbers (maybe or likely 65 / 45, 59%
+  precision, 92% recall; likely 30 / 6, 83%, 42%), and the check after a link sent no new pair. In the set each task
+  already carries its whole message, so a linked one adds nothing the first did not; the gain is for tasks whose
+  own text lacks what a later message says (store tests). Rule tasks, with an empty title: maybe or likely found 8%
+  of duplicates before (6 / 3) and 74% at 69% precision after (59 / 27; likely 27 / 3, 90%, 34%); 18 of 180 new
+  tasks now go to review, 3 before.
+
 ## Rules on `sync`
 
 `sync` runs `applyTaskRulesToStored` over the chats it stored into, from a stop point per account kept in the
@@ -259,7 +287,8 @@ found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`)
 3. **`task_words` / `task_stems`**, the normalizer + signature extraction, digit groups joined, a stop-word list.
 4. **Scoring module** (candidates, comparison, weights, bands), tuned on the test set.
 5. **`tasks add` check** (`--into`, `--new`), rules through the chain, `tasks duplicates`, `merge`, `unmerge`;
-   relations between message tasks — built (store version 15, `task_pairs`).
+   relations between message tasks — built (store version 15, `task_pairs`). The check on a message linked to a
+   task (§ 8) — built, no store change.
 6. **`agenda --category --tag`**, the MCP tools `tasks_claim` / `tasks_release`, and the category list in the
    store (`config set task_categories.*`) — built.
 7. **Rules on `sync`.**
