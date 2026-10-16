@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.296.0 — 16.10.2026
+
 ### Added
 
 - **23 more default task categories, 59 in all.** `investments`, `subscriptions`, `donations`, `civic`, `security`,
