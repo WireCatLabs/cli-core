@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.299.0 — 16.10.2026
+
 ### Added
 
 - **Reusable native recording partials** through `./persistence/native`. Other meeting connectors can
