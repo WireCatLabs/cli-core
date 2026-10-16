@@ -74,6 +74,42 @@ describe("dueDayOf", () => {
     expect(dueDayOf(normalize(text), wednesday)).toBe(day(due))
   })
 
+  it.each([
+    ["envíamelo mañana", "2026-10-15"],
+    ["mañana por la mañana", "2026-10-15"],
+    ["lo de la mesa es para mañana por la noche", "2026-10-15"],
+    ["pasado mañana", "2026-10-16"],
+    ["hoy", "2026-10-14"],
+    ["el viernes", "2026-10-16"],
+    ["el próximo lunes", "2026-10-19"],
+    ["el miércoles", "2026-10-21"],
+    ["el sábado", "2026-10-17"],
+    ["a fin de mes", "2026-10-31"],
+    ["antes del final del mes", "2026-10-31"],
+    ["el 15 de noviembre", "2026-11-15"],
+    ["15 de setiembre", "2026-09-15"],
+    ["antes del día 20", "2026-10-20"],
+    ["antes del 5", "2026-11-05"],
+    ["antes del 5 de diciembre", "2026-12-05"],
+    ["para el día 3 de mayo", "2026-05-03"],
+    ["antes del 3.12", "2026-12-03"],
+  ])("reads the Spanish %j", (text, due) => {
+    expect(dueDayOf(normalize(text), wednesday)).toBe(day(due))
+  })
+
+  it.each([
+    "llámame por la mañana",
+    "a las 10 de la mañana",
+    "esta mañana te mandé la factura",
+    "los viernes hay reunión",
+    "antes del 3/11",
+    "hasta el 50% de descuento",
+    "el 5 de los 10 pagos",
+    "buy 2 mayo jars",
+  ])("reads no date in the Spanish %j", (text) => {
+    expect(dueDayOf(normalize(text), wednesday)).toBeNull()
+  })
+
   it("counts days in the machine's time zone", () => {
     const lateEvening = Date.parse("2026-10-14T22:30:00Z")
     process.env.TZ = "Europe/Madrid"

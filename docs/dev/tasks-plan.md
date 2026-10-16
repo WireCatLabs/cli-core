@@ -144,7 +144,7 @@ no model call.
 - Also the **character trigrams** of the normalized title (all three-letter windows), which catch typos and
   forms a stemmer misses.
 - The **signature**, by patterns: amount and currency (a number beside `₽`, `руб`, `€`, `$`, `usd` …), due date
-  (dates and phrases like `до пятницы`, `by Friday`), and the person (`person:<id>` of the source message's
+  (dates and phrases like `до пятницы`, `by Friday`, `el viernes`), and the person (`person:<id>` of the source message's
   sender, through `identities`). An agent may pass them explicitly (`--amount`, `--due`, `--person`).
 
 Stems and the normalized text are written to two new FTS5 tables, `task_words` and `task_stems`, built like

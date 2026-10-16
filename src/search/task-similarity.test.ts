@@ -170,6 +170,15 @@ describe("a task read with one of its messages", () => {
     expect(withMessage.stems).toEqual(new Set(["pay", "bill", "15000", "rub", "tomorrow"]))
   })
 
+  it("reads a Spanish message's due date from when it was sent", () => {
+    const spanish = prepareTask({
+      title: "Pagar la factura",
+      createdAt: at(0),
+      message: { text: "¿Me la pagas mañana?", sentAt: sent },
+    })
+    expect(spanish.dueDay).toBe(dayOf(sent.getTime()) + 1)
+  })
+
   it("counts the best view whole, so a message can raise a score and never lower it", () => {
     const other = prepareTask({ title: "Pay the bill", amount: { value: 9000, currency: "RUB" }, createdAt: at(0) })
     expect(compareViews([own, withMessage], [other])).toEqual(compareTasks(own, other))
@@ -314,6 +323,24 @@ describe("pairs from the cli-testing duplicate set", () => {
       band: "likely",
       levels: { text: "middle", amount: "equal", time: "near" },
     })
+  })
+
+  it("scores a Spanish reminder likely when it names the same day another way", () => {
+    const first = task({
+      title: "Enviar a Lucía el informe trimestral",
+      description: "¿Puedes enviarme el informe trimestral el jueves?",
+      person: "person:lucia",
+      category: "documents",
+      createdAt: "2026-10-12T09:00:00.000Z",
+    })
+    const reminder = task({
+      title: "Enviar el informe trimestral a Lucía",
+      description: "No olvides el informe trimestral para mañana",
+      person: "person:lucia",
+      category: "documents",
+      createdAt: "2026-10-14T17:00:00.000Z",
+    })
+    expect(compareTasks(reminder, first)).toMatchObject({ band: "likely", levels: { due: "near" } })
   })
 
   it("leaves a reply that asks for something new in maybe, not attached", () => {
