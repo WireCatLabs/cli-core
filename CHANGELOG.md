@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.301.0 — 16.10.2026
+
 ### Added
 
 - **`mail.markRestored(accountId, externalIds, now)` clears the deleted mark of emails brought back at the source**
