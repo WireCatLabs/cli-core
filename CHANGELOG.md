@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.308.0 — 17.10.2026
+
 ### Added
 
 - **Names of people the store does not know, and street addresses, are found as mentions** (mentions plan phase
