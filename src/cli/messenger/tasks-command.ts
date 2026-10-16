@@ -505,14 +505,21 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .description("the categories a task takes, with what each means and the words a rule picks it by")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
-      const [list, unlisted] = await context.withServices(async (services) =>
-        Promise.all([services.tasks.categories(), services.tasks.unlistedCategories()]),
+      const [list, unlisted, file] = await context.withServices(async (services) =>
+        Promise.all([
+          services.tasks.categories(),
+          services.tasks.unlistedCategories(),
+          services.tasks.categoriesFile(),
+        ]),
       )
       const items = list.map(({ name, meaning, triggers }) => ({ name, meaning, triggers }))
-      renderAnswer(this, context, itemOf({ categories: items, unlisted }), () =>
+      renderAnswer(this, context, itemOf({ categories: items, unlisted, file: file ?? null }), () =>
         [
           ...items.map(({ name, meaning }) => `${name.padEnd(13)} ${meaning}`),
           ...(unlisted.length > 0 ? ["", ...unlistedNote(unlisted, tool)] : []),
+          ...(file
+            ? ["", `edit the list in ${file} (task_categories), or with ${tool} config set task_categories.<name>`]
+            : []),
           "",
         ].join("\n"),
       )

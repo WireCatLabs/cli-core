@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The task category list is edited in one shared config file, `~/.config/WireCat/config.json`.** Its
+  `task_categories` section holds only your changes: `"garden": "plants | seedling, es:planta"` adds or replaces a
+  category, `"religion": null` drops a default one; categories a later release adds still arrive. tg, max and memo
+  read the same file, so they agree. `config set task_categories.<name>` and `config unset` now write this file
+  (keeping its other keys) instead of the store; `tasks categories` and MCP `tasks_categories` name it (`file`), and
+  `config show` says which categories come from it. A store that saved its own list keeps it until the next
+  `config set` or `unset` moves it into the file. A file that is not valid JSON or names a bad category is refused
+  with its path. A store moved by `MESSAGING_STORE` reads the `config.json` beside it; `WIRECAT_CONFIG_DIR` moves
+  the file. Builds before this one do not read it.
+
 ## 0.297.0 — 16.10.2026
 
 ### Added

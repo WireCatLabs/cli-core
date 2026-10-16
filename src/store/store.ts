@@ -31,6 +31,7 @@ import { type AccountStore, bindAccount } from "./account-store.js"
 import { migrate } from "./migrations.js"
 import { storeCapable } from "./open.js"
 import { storePath } from "./path.js"
+import { sharedConfigPath } from "./shared-config.js"
 import { accountGroupsOf, profilesOf, saveProfile } from "./sqlite/account-groups.js"
 import * as accounts from "./sqlite/accounts.js"
 import { type AdminStoreRequest, type AdminStoreResult, adminStatisticsQuery } from "./sqlite/admin-statistics.js"
@@ -870,7 +871,7 @@ export const openStore = async ({ path, env, now = Date.now, command }: StoreOpt
     database.close()
     throw error
   }
-  return storeOver({ database, orm, now })
+  return storeOver({ database, orm, now, sharedConfig: sharedConfigPath(file, env ?? process.env) })
 }
 
 const storeOver = (context: StoreContext): MessageStore => {

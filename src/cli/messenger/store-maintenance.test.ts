@@ -1,5 +1,14 @@
 import { spawn } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -561,9 +570,12 @@ describe("the stems", () => {
     expect(refused.stderr.join("\n")).toContain("not xx")
   })
 
-  it("**`config set task_categories.<name>` edits the one task category list** of the store, and unset resets it", async () => {
+  it("**`config set task_categories.<name>` edits the shared config file** every tool reads, and unset resets", async () => {
     const env = envFor()
     ;(await seeded(env)).close()
+    const file = join(dirname(env.MESSAGING_STORE as string), "config.json")
+    writeFileSync(file, JSON.stringify({ theme: "dark" }))
+    const section = () => JSON.parse(readFileSync(file, "utf8")).task_categories
     const listed = async () => {
       const store = await openStore({ env })
       try {
@@ -585,22 +597,54 @@ describe("the stems", () => {
     )
     expect(set.answer).toEqual({
       store: env.MESSAGING_STORE,
-      scope: "store",
+      file,
+      scope: "shared",
       setting: "task_categories.garden",
       value: "plants and seeds | en:seedling, en:compost, ru:рассада, es:semilla",
     })
     expect((await listed()).slice(-2)).toEqual(["garden", "other"])
     const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
-    expect(shown).toContainEqual(expect.objectContaining({ setting: "task_categories.garden", from: "store" }))
+    expect(shown).toContainEqual(expect.objectContaining({ setting: "task_categories.garden", from: file }))
+    expect(shown).toContainEqual(expect.objectContaining({ setting: "task_categories.money", from: "default" }))
 
     await call(["config", "unset", "task_categories.personal", "--json"], env)
     expect(await listed()).not.toContain("personal")
+    expect(section()).toEqual({ garden: expect.stringContaining("plants and seeds"), personal: null })
+    expect(JSON.parse(readFileSync(file, "utf8")).theme).toBe("dark")
+
+    writeFileSync(file, JSON.stringify({ task_categories: { ...section(), boats: "sailing | yacht" } }))
+    expect((await listed()).slice(-3)).toEqual(["garden", "boats", "other"])
+    writeFileSync(file, "{ broken")
+    const broken = await call(["config", "set", "task_categories.kites", "flying | kite", "--json"], env)
+    expect(broken.code).not.toBe(0)
+    expect(broken.stderr.join("\n")).toContain(file)
+    writeFileSync(file, JSON.stringify({ task_categories: { personal: null } }))
     const fallback = await call(["config", "unset", "task_categories.other", "--json"], env)
     expect([fallback.code, fallback.stderr.join("\n")]).toEqual([2, expect.stringContaining("other stays")])
     expect((await call(["config", "set", "task_categories.Bad Name", "x", "--json"], env)).code).toBe(2)
 
     await call(["config", "unset", "task_categories", "--json"], env)
     expect(await listed()).toEqual(DEFAULT_TASK_CATEGORIES.map(({ name }) => name))
+    expect(section()).toBeUndefined()
+  })
+
+  it("**moves a list an older build saved in the store into the shared file** on the next config write", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    const store = await openStore({ env })
+    await store.tasks.saveCategories(DEFAULT_TASK_CATEGORIES.filter(({ name }) => name !== "food"))
+    await store.close()
+    const file = join(dirname(env.MESSAGING_STORE as string), "config.json")
+
+    await call(["config", "set", "task_categories.boats", "sailing | yacht", "--json"], env)
+    expect(JSON.parse(readFileSync(file, "utf8")).task_categories).toEqual({ food: null, boats: "sailing | en:yacht" })
+    const after = await openStore({ env })
+    try {
+      expect(await after.tasks.savedCategories()).toBeUndefined()
+      expect((await after.tasks.categories()).map(({ name }) => name)).not.toContain("food")
+    } finally {
+      await after.close()
+    }
   })
 
   it("**`config set task_agent_close` and `task_agent_close_min` decide agent closes store-wide**, unset resets", async () => {

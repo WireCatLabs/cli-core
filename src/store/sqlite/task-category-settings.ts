@@ -8,19 +8,19 @@ import type { CacheDatabase } from "../driver.js"
 
 const SETTING = "taskCategories"
 
-/** What `config set task_categories.*` saved; `undefined` while the default list applies. */
+/** The list an older build saved with `config set task_categories.*`; `undefined` when none was. */
 export const savedTaskCategories = (database: CacheDatabase): TaskCategory[] | undefined => {
   const row = database.prepare("SELECT value FROM store_settings WHERE key = ?").get(SETTING)
   return row ? storedTaskCategories(String(row.value)) : undefined
 }
 
-/** The list every rule, `tasks add` and `tasks plan` take a category from: one per store, so tg, max and memo agree. */
+/** The base the shared config file's `task_categories` edits: a list an older build saved, else the default. */
 export const storeTaskCategories = (database: CacheDatabase): readonly TaskCategory[] =>
   savedTaskCategories(database) ?? DEFAULT_TASK_CATEGORIES
 
 /** Categories tasks still carry that the list no longer holds, with how many tasks of each are open. Store-wide. */
-export const unlistedTaskCategories = (database: CacheDatabase): UnlistedCategory[] => {
-  const listed = new Set(storeTaskCategories(database).map(({ name }) => name))
+export const unlistedTaskCategories = (database: CacheDatabase, list: readonly TaskCategory[]): UnlistedCategory[] => {
+  const listed = new Set(list.map(({ name }) => name))
   return database
     .prepare(
       "SELECT category, COUNT(*) AS total, SUM(status = 'open') AS open FROM tasks " +

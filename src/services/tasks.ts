@@ -268,6 +268,8 @@ export interface TasksService {
   show(id: string): Promise<TaskCard>
   /** The list a task's category comes from, with what each one means. */
   categories(): Promise<readonly TaskCategory[]>
+  /** The shared config file the owner edits the list in. */
+  categoriesFile(): Promise<string | undefined>
   /** Categories tasks still carry that the list no longer holds, across the store, with open and total counts. */
   unlistedCategories(): Promise<UnlistedCategory[]>
   /** Takes an open task for `holder` for `forMs`; refused, naming the holder, while someone else holds it. */
@@ -305,7 +307,7 @@ export const taskTypesOf = (typed: string): TaskKind[] => [
   ),
 ]
 
-/** `categories` fixes the list; left out, each call reads the store's (`config set task_categories.*`). */
+/** `categories` fixes the list; left out, each call reads the store's, with the shared config file's edits. */
 export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCategory[]): TasksService => {
   const listOf = async (store: MessageStore) => categories ?? (await store.tasks.categories())
   const categoryOf = async (store: MessageStore, name: string) => taskCategoryOf(await listOf(store))(name)
@@ -481,6 +483,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
 
     categories: () => inStore(async (store) => listOf(store)),
     unlistedCategories: () => inStore(async (store) => store.tasks.unlistedCategories()),
+    categoriesFile: () => inStore(async (store) => store.tasks.categoriesFile()),
 
     duplicates: ({ decision, limit, offset }) =>
       inStore(async (store, account) => store.tasks.pairs(taskAccount(account), { decision, limit, offset })),

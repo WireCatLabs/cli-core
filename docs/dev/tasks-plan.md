@@ -88,13 +88,23 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
 
 ## Categories and labels
 
-- **One list per store**, edited with `config set task_categories.<name> "<meaning> | <words>"` (a word may say its
-  language, `es:vuelo`; otherwise its script picks Russian or English; an `es:` word also matches by its Spanish
-  stem when the message reads as Spanish — an accent, `ñ`, `¿`, or a word like `la`, `que`, `para`), removed with `config unset
-  task_categories.<name>`, back to the default with `config unset task_categories`. It is a `store_settings` row,
-  not a profile setting: the rules run in tg, max, memo and `sync` and must agree, and a profile's config schema
-  refuses unknown sections. `other` cannot be removed. A store that saved its own list keeps it; `config unset
-  task_categories` takes the default again. Up to 80 categories.
+- **One list for every tool, edited in a shared config file** (owner's choice, 2026-10-16):
+  `~/.config/WireCat/config.json`, section `task_categories`, read by tg, max, memo and `sync` alike — the rules run
+  in all of them and must agree, so it is neither a profile's config (each app has its own, and its schema refuses
+  unknown sections) nor per app. The section holds only the owner's changes on top of the default list:
+  `"<name>": "<meaning> | <words>"` adds or replaces a category (a new one goes before `other`), `null` drops a
+  default one, so categories a later release adds still arrive. `config set task_categories.<name>` and `config
+  unset` write the same file, keeping its other keys; `config unset task_categories` drops the section. A word may
+  say its language (`es:vuelo`); otherwise its script picks Russian or English; an `es:` word also matches by its
+  Spanish stem when the message reads as Spanish. `other` cannot be dropped. Up to 80 categories.
+  - A store moved by `MESSAGING_STORE` (tests, `bin/tg`) reads the `config.json` beside it, and
+    `WIRECAT_CONFIG_DIR` moves the file, so a test never reads the owner's.
+  - The file is read only where a category is needed (rules, `tasks add`/`plan`/`categories`/`agenda`, `config
+    show`), again only when it changed. A file that is not valid JSON, or names a bad category, is refused with its
+    path; the list never falls back to the default silently.
+  - A list an older build saved in the store (`store_settings`) is still the base until the next `config set` or
+    `unset` moves it into the file as edits and drops the row.
+  - Builds before cli-core 0.298.0 do not read the file: their tools keep their own list until they update.
 - **Default list** (owner's choice, 2026-10-16: 36 names, then 23 more), in the order a tie is resolved:
   `taxes`, `investments`, `subscriptions`, `bills`, `donations`, `insurance`, `bank`, `civic`, `government`,
   `legal`, `hiring`, `sales`, `partners`, `support`, `security`, `access`, `tech`, `media`, `marketing`, `design`,
