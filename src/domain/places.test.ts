@@ -92,6 +92,16 @@ describe("findPlaces", () => {
       "Example Inc., 237 A St #2674, San Diego, California 92101-4003, United  States\n",
       "237 A St #2674, San Diego, California 92101-4003, United  States",
     ],
+    ["Example SL Calle Ferraz 7, 2A 28008 Madrid Spain. | VAT", "Calle Ferraz 7, 2A 28008 Madrid Spain"],
+    ["Example AG\nZugerstrasse 8a, 6340 Baar, Switzerland\nCHE", "Zugerstrasse 8a, 6340 Baar, Switzerland"],
+    [
+      "Example 350 Bush St. 2nd Floor San Francisco, CA, 94104, US\n If",
+      "350 Bush St. 2nd Floor San Francisco, CA, 94104, US",
+    ],
+    [
+      "123 Townsend Street, Suite 600, San Francisco, CA 94107 США\n©",
+      "123 Townsend Street, Suite 600, San Francisco, CA 94107 США",
+    ],
     ["Calle Mayor 12\nСпасибо за заказ", "Calle Mayor 12"],
     ["Calle Mayor 12 Мы ждём", "Calle Mayor 12"],
     ["Calle Mayor 12, Calle Luna 3", "Calle Mayor 12"],

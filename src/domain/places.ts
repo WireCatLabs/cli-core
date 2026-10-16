@@ -75,6 +75,7 @@ const POSTCODES = [
   /^\d{2}-\d{3}\b/, // PL
   /^\d{4}-\d{3}\b/, // PT
   /^[A-Z]{1,2}-\d{4,5}\b/, // LU, CH, AT with the country letter
+  /^\d{4}(?= \p{Lu}\p{Ll})/u, // CH, AT, BE, DK, NO before the city
 ]
 
 interface Token {
@@ -145,7 +146,7 @@ const numberAfter = (tokens: Token[], at: number, text: string): { number: strin
 
 // What follows the house number: the flat, the postcode, the city, the region, the country.
 const UNIT =
-  /^(?:(?:квартира|кв\.?|корпус|корп\.?|к\.|строение|стр\.?|офис|оф\.?|лит\.?|этаж|эт\.?|помещение|помещ\.?|пом\.?|комната|комн\.?|ком\.?|piso|puerta|planta|esc\.?|apt\.?|apartment|suite|ste\.?|unit|flat|floor|pmb)(?<=\.)\s?[\p{L}\d]{1,5}(?![\p{L}\d])|(?:квартира|кв|корпус|корп|строение|стр|офис|оф|лит|этаж|эт|помещение|помещ|пом|комната|комн|ком|piso|puerta|planta|esc|apt|apartment|suite|ste|unit|flat|floor|pmb)(?:\s|(?=\d))[\p{L}\d]{1,5}(?![\p{L}\d])|\d{1,2}(?:st|nd|rd|th) floor|#\d{1,6}(?:-\d{1,4})?|\d{1,2}\s?[ºª°](?:\s?(?:[A-Za-z]|\d{1,2}\s?[ºª]))?(?![\p{L}\d])|\d{1,2}-\d{1,2}(?![\d-])|(?:izq(?:da)?|dcha|izquierda|derecha)\.?(?![\p{L}]))/iu
+  /^(?:(?:квартира|кв\.?|корпус|корп\.?|к\.|строение|стр\.?|офис|оф\.?|лит\.?|этаж|эт\.?|помещение|помещ\.?|пом\.?|комната|комн\.?|ком\.?|piso|puerta|planta|esc\.?|apt\.?|apartment|suite|ste\.?|unit|flat|floor|pmb)(?<=\.)\s?[\p{L}\d]{1,5}(?![\p{L}\d])|(?:квартира|кв|корпус|корп|строение|стр|офис|оф|лит|этаж|эт|помещение|помещ|пом|комната|комн|ком|piso|puerta|planta|esc|apt|apartment|suite|ste|unit|flat|floor|pmb)(?:\s|(?=\d))[\p{L}\d]{1,5}(?![\p{L}\d])|\d{1,2}(?:st|nd|rd|th) floor|#\d{1,6}(?:-\d{1,4})?|\d{1,2}\s?[ºª°](?:\s?(?:[A-Za-z]|\d{1,2}\s?[ºª]))?(?![\p{L}\d])|\d{1,2}-\d{1,2}(?![\d-])|\d{1,2}[A-Za-z](?![\p{L}\d])|(?:izq(?:da)?|dcha|izquierda|derecha)\.?(?![\p{L}]))/iu
 // A US street's direction after its type: «Park Ave S», «Terry Avenue N.».
 const DIRECTION = /^(?:N|S|E|W|NE|NW|SE|SW)\.?(?![\p{L}\d])/u
 // Title-case words, a district number (Dublin 2), or a country's capitals alone (USA, UK): «NW1» or «CA» belong to
@@ -156,9 +157,9 @@ const CITY_WORD = /^(?:г\.|город|пос\.|посёлок|с\.|обл\.|о�
 // A city written with no comma before it is one only when its postcode or state follows: «Suite 900 San Francisco,
 // CA 94103», «PMB 22502 San Francisco, California 94104».
 const POSTCODE_AHEAD =
-  /^,?[ \t]{1,3}(?:[A-Z]{2}(?: US)? \d{5}|\p{Lu}\p{Ll}+ \d{5}|\d{5}|[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2})/u
+  /^,?[ \t]{1,3}(?:[A-Z]{2}(?: US)?,? \d{5}|\p{Lu}\p{Ll}+ \d{5}|\d{5}|[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2})/u
 const COUNTRY =
-  /^(?:USA|US|UK|RU|United[ \t\u00a0]+(?:States|Kingdom)|España|Spain|Germany|Deutschland|France|Italy|Italia|Ireland|Netherlands|Portugal|Poland|Polska|Россия|Canada|Luxembourg)(?![\p{L}])/u
+  /^(?:USA|US|UK|RU|United[ \t\u00a0]+(?:States|Kingdom)|España|Spain|Germany|Deutschland|France|Italy|Italia|Ireland|Netherlands|Portugal|Poland|Polska|Россия|США|Испания|Германия|Франция|Италия|Великобритания|Canada|Luxembourg|Switzerland|Schweiz|Suisse|Österreich|Austria|Belgium|België|Belgique)(?![\p{L}])/u
 // Before the street, in the Russian order: «190000, г. Санкт-Петербург, ул. …», «109316, Регион 77, Москва, …».
 const PLACE_PART =
   /(?:Регион \d{1,3}|(?:г\.|город)\s?\p{Lu}[\p{L}-]*(?:[ -]\p{Lu}[\p{L}-]*)?|\p{Lu}\p{Ll}+(?:[ -]\p{Lu}\p{Ll}+)? (?:обл\.|область|край)|\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)*)/u
