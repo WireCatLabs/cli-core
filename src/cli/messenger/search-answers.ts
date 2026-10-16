@@ -198,6 +198,7 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         account: item.account,
         title: item.title,
         timestamp: item.timestamp,
+        url: item.url,
         excerpt: item.text,
         sender_name: item.from?.name,
         sender_ref: item.from?.ref,

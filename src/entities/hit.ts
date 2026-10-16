@@ -3,9 +3,10 @@ import { count, reference, text, time } from "./fields.js"
 
 /** One result of `search all`: a message, a mail, a note or a meeting passage, best first. */
 export const hit = v.strictObject({
-  kind: v.picklist(["message", "mail", "note", "meeting"]),
+  kind: v.picklist(["message", "mail", "note", "document", "meeting"]),
   ref: reference,
   provider: text,
+  url: v.optional(text),
   /** The account it was found in; a note's folder id, or `internal` for a note written in memo. */
   account: text,
   /** The chat, the mail thread's subject, the note's or the meeting's title. */

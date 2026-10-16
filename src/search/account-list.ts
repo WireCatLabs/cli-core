@@ -111,6 +111,11 @@ const accountOf = (prefix: string, ref: string, held: readonly Held[], context: 
   const keyed = (key: AccountKey): Held =>
     ofProvider.find(({ account }) => account === key.account) ?? { ...key, name: null, kind: kindOf(key.provider) }
   const recorded = context.profiles[prefix.toLowerCase()]?.[ref]
+  if (recorded?.provider === FOLDER_PROVIDER) {
+    const folder = held.find((one) => one.provider === "notes" && one.name === recorded.account)
+    if (folder) return folder
+    return fail(`no stored folder for ${prefix}:${ref}; sync that profile first`)
+  }
   if (recorded) return keyed(recorded)
   const byProfile = [
     ...new Map(
@@ -138,6 +143,9 @@ const accountsOfWord = (word: string, held: readonly Held[], context: ListContex
   if (wanted === "personal" || wanted === "bots")
     return held.filter(({ provider, kind }) => kind === "messages" && isBotProvider(provider) === (wanted === "bots"))
   if (isKind(wanted)) return held.filter(({ kind }) => kind === wanted)
+  const recorded = context.profiles[wanted]
+  if (recorded && Object.values(recorded).every((key) => key.provider === FOLDER_PROVIDER))
+    return Object.keys(recorded).map((profile) => accountOf(word, profile, held, context))
   const provider = providerOf(word, held, context)
   return held.filter((one) => one.provider === provider)
 }

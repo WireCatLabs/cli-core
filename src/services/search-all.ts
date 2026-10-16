@@ -14,13 +14,14 @@ export const RESOURCES_SEARCHED = ["messages", "mail", "notes"] as const
 export type SearchedResource = (typeof RESOURCES_SEARCHED)[number]
 
 export interface SearchAllItem {
-  kind: "message" | "mail" | "note"
+  kind: "message" | "mail" | "note" | "document"
   /** `msg:…` for a message or a mail, `note:…` for a note. */
   ref: string
   provider: string
   /** The account it was found in; a note's folder id, or `internal` for a note written in memo. */
   account: string
   /** The chat, the mail thread's subject or the note's title. */
+  url?: string
   title: string | null
   timestamp: string
   /** An excerpt around the match: a note's matching line, about 240 characters of a message or mail. */
@@ -178,10 +179,11 @@ export const searchAll = async (
         }
         lists.push(
           found.hits.map((hit) => ({
-            kind: "note",
+            kind: hit.kind ?? "note",
             ref: hit.ref,
-            provider: "notes",
-            account: hit.folder_id ?? INTERNAL_NOTES,
+            provider: hit.provider ?? "notes",
+            account: hit.account ?? hit.folder_id ?? INTERNAL_NOTES,
+            ...(hit.url ? { url: hit.url } : {}),
             title: hit.title,
             timestamp: hit.updated_at,
             text: hit.excerpt,

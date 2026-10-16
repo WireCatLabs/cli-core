@@ -138,6 +138,10 @@ export const ENTITIES = {
   account_session: accountSession,
   note,
   "note.hit": v.pick(note, [
+    "kind",
+    "provider",
+    "account",
+    "url",
     "ref",
     "source",
     "folder_id",
