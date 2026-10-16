@@ -125,9 +125,9 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
     title: "Search notes",
     description:
       "Search the notes — written in memo, or imported from a notes folder — by words and, with the local text " +
-      "model, by meaning. Each item says which found it (found_by) and what it links to (links). type:internal in " +
-      "text keeps the notes written in memo, type:file those from a notes folder. `source` narrows " +
-      "which: notes:internal for notes written in memo, notes:<folder id> as an item's folder_id shows it, or a list " +
+      "model, by meaning. Each item says which found it (found_by) and what it links to (links). source:internal in " +
+      "text keeps the notes written in memo, source:file those from a notes folder. The `source` input narrows " +
+      "which accounts are read: notes:internal for notes written in memo, notes:<folder id> as an item's folder_id shows it, or a list " +
       "with group:<name>; an entry naming none is in meta.issues. `filter` is a query every item must also match, " +
       "tag:work among them, and leaves the search by meaning as it is. Returns { items, page, next?, missing?, meta }.",
     input: v.object({

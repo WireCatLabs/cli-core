@@ -150,7 +150,7 @@ const notesCommand = (messenger: Messenger): Command =>
     )
     .argument(
       "<query...>",
-      'strict Lucene query: words, "phrases", AND/OR/NOT, tag:, type:internal (written in memo) or type:file ' +
+      'strict Lucene query: words, "phrases", AND/OR/NOT, tag:, source:internal (written in memo) or source:file ' +
         "(from a notes folder) and date ranges",
     )
     .addHelpText(

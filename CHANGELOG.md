@@ -11,6 +11,15 @@ shape of this file.
 
 - The parity manifest requires `chats documents list` and its paging options in both Telegram and MAX, following their shared-command adoption. Storage and chat-link guides describe the implemented integration and its remaining incremental-edit limitation.
 
+### Changed — may break callers
+
+- **`search notes` filters by the query field `source:` instead of `type:`.** `source:internal` keeps the notes
+  written in memo, `source:file` the files from notes folders. A query field takes the name of the entity field it
+  filters, and the note's field is `source` — the name `--json=source` projects and memo's `notes list` already
+  filters by. `type:` is gone, with no alias. The `--source notes:<folder id>` option is unchanged and still chooses
+  which notes accounts are read; when the two leave nothing, the error names the query's `source:` and the
+  `--source` list apart.
+
 ## 0.302.0 — 16.10.2026
 
 ### Changed — may break callers

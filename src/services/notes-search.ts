@@ -365,10 +365,10 @@ const pictureLane = async (
 }
 
 /**
- * A `type:` every hit must match, and the query without it. The meaning half and the picture lane cannot read a
+ * A `source:` every hit must match, and the query without it. The meaning half and the picture lane cannot read a
  * field, so they get the source and the rest of the words; the words half still compiles the field itself.
  */
-export const noteTypeOfQuery = (query: string): { source?: Note["source"]; rest: string } => {
+export const noteSourceOfQuery = (query: string): { source?: Note["source"]; rest: string } => {
   let root: QueryNode
   try {
     root = parseLucene(query, { ...SEARCH_QUERY, defaultField: "text" }).root
@@ -380,7 +380,7 @@ export const noteTypeOfQuery = (query: string): { source?: Note["source"]; rest:
       ? [root]
       : root.clauses.flatMap(({ occur, node }) => (occur === "must" && node.kind === "predicate" ? [node] : []))
   const typed = required.find(
-    ({ field, operator }) => field === "type" && (operator === "term" || operator === "phrase"),
+    ({ field, operator }) => field === "source" && (operator === "term" || operator === "phrase"),
   )
   const source = typed?.value.toLowerCase()
   if (typed === undefined || (source !== "internal" && source !== "file")) return { rest: query }
@@ -419,7 +419,7 @@ export const searchNotes = async (
     pictureEmbedder,
   }: NotesQuery = {},
 ): Promise<NotesFound> => {
-  const typed = noteTypeOfQuery(query)
+  const typed = noteSourceOfQuery(query)
   const source = given ?? typed.source
   const words = typed.source !== undefined && typed.source === source ? typed.rest : query
   const label = tag === undefined ? undefined : normalizeTag(tag)
@@ -601,7 +601,7 @@ export const searchNotesOf = async (
     list === undefined
       ? { accounts: held, skipped: [] }
       : fitting(entriesOfList(list, await listContextOf(store, account, app)), ["notes", "documents"], what)
-  const source = query.source ?? noteTypeOfQuery(text).source
+  const source = query.source ?? noteSourceOfQuery(text).source
   const typed = named.accounts.filter(
     ({ account }) => source === undefined || (account === INTERNAL_NOTES) === (source === "internal"),
   )
@@ -609,8 +609,10 @@ export const searchNotesOf = async (
     throw new CliError(
       "validation_error",
       source === "internal"
-        ? "type:internal reads the notes written in memo, and --source names none: add notes:internal"
-        : "type:file reads notes folders, and --source names none: add notes:<folder id>",
+        ? "the query's source:internal keeps the notes written in memo, and the --source list names none of them: " +
+            "add notes:internal to --source, or drop source:internal from the query"
+        : "the query's source:file keeps the files from notes folders, and the --source list names none of them: " +
+            "add notes:<folder id> to --source, or drop source:file from the query",
     )
   const scope = list === undefined ? {} : notesScopeOf(typed)
   const found = await searchNotes(store, text, {

@@ -464,7 +464,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
             who.id,
           )
         : bound("0")
-    } else if (["title", "site", "lang", "author", "keyword", "type"].includes(field)) {
+    } else if (["title", "site", "lang", "author", "keyword", "source"].includes(field)) {
       // What a page says about itself, and whether a note is written or a file, exist for notes only.
       fragment = bound("0")
     } else if (field === "mailbox" || field === "label") {
