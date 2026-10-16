@@ -4,6 +4,7 @@ import { meetingPreparation } from "../entities/index.js"
 import type { MeetingPreparation } from "../services/index.js"
 import { itemOf, metaNow, sealed, snakeKeys } from "./envelope.js"
 import { boundMeetingPreparationItem } from "./meeting-preparation-budget.js"
+import { mapPreparationProjectEvidence } from "./meeting-preparation-projects.js"
 
 const id = (value: number | null) => (value === null ? null : String(value))
 const at = (value: number | null) => (value === null ? null : new Date(value).toISOString())
@@ -66,6 +67,9 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
             items: packet.notes.items.map((note) => ({ ...note, updatedAt: at(note.updatedAt) })),
           },
         }
+      : {}),
+    ...(packet.projectEvidence
+      ? { projectEvidence: mapPreparationProjectEvidence(packet.projectEvidence, packet.limits) }
       : {}),
     related: {
       ...packet.related,

@@ -16,9 +16,12 @@ import type {
   MeetingStore,
   UpcomingMeetingResult,
 } from "../meetings/index.js"
+import type { MeetingProjectDiscoveryPage } from "../meetings/project-discovery.js"
 import type { MeetingEvidencePacket } from "./meeting-evidence.js"
+import type { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
 
 export interface MeetingPreparationRequest {
+  project?: string
   after: number
   until: number
   historyAfter: number
@@ -36,6 +39,7 @@ export interface MeetingPreparationPorts {
     MeetingPreparationContextStore &
     MeetingRelatedHistoryStore &
     Partial<MeetingPreparationKnowledgeStore & MeetingPreparationNotesStore>
+  projectDiscovery?: Parameters<typeof readMeetingProjectDiscovery>[0]
   upcoming: ReturnType<typeof createUpcomingMeetingReader>
 }
 export interface MeetingPreparationEntry {
@@ -79,6 +83,12 @@ export interface MeetingPreparation {
       sourceEvidence: "not-revalidated"
       otherSources: "not-queried"
     }
+  }
+  projectEvidence?: {
+    project: string
+    query: string
+    pages: MeetingProjectDiscoveryPage[]
+    coverage: { pageLimit: number; hasMore: boolean; outputLimited: boolean }
   }
   limits: { meetings: number; cues: number; contextLimit: number; maxReadBytes: number; bytes: number }
   coverage: {

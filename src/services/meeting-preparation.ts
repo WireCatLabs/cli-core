@@ -9,6 +9,7 @@ import type {
   MeetingPreparationRequest,
 } from "./meeting-preparation-types.js"
 import { preparationCancelled, preparationRequest } from "./meeting-preparation-validation.js"
+import { appendProjectPreparation } from "./meeting-project-preparation.js"
 import { appendRelatedPreparation } from "./meeting-related-preparation.js"
 
 const size = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8")
@@ -50,6 +51,8 @@ export const createMeetingPreparationService = (
     async prepare(externalId: string, original: MeetingPreparationRequest): Promise<MeetingPreparation> {
       const input = preparationRequest(accountId, externalId, original)
       const { signal, meetings, cues, contextLimit, maxReadBytes, bytes } = input
+      if (input.project !== undefined && !ports.projectDiscovery)
+        throw new CliError("configuration_error", "Project evidence is unavailable in this preparation host")
       const owner = await store.account(accountId)
       preparationCancelled(signal)
       if (!owner || owner.provider !== fixed.provider || owner.account !== fixed.account)
@@ -101,7 +104,10 @@ export const createMeetingPreparationService = (
         throw new CliError("invalid_response", "The history reader returned another series or exceeded its bound")
       if (size(result) > bytes)
         throw new CliError("validation_error", "Preparation metadata exceeds bytes; increase the output budget")
-      if (!history.series) return structuredClone(result)
+      if (!history.series) {
+        await appendProjectPreparation(ports.projectDiscovery, result, input)
+        return structuredClone(result)
+      }
       const seriesId = history.series.id
       for (const meeting of history.items) {
         preparationCancelled(signal)
@@ -148,6 +154,7 @@ export const createMeetingPreparationService = (
       await appendRelatedPreparation(store, result, input)
       await appendKnowledgePreparation(store, result, input)
       await appendNotesPreparation(store, result, input)
+      await appendProjectPreparation(ports.projectDiscovery, result, input)
       preparationCancelled(signal)
       if (size(result) > bytes)
         throw new CliError("validation_error", "Preparation coverage exceeds bytes; increase the output budget")

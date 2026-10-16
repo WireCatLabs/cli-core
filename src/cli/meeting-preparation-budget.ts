@@ -6,6 +6,25 @@ export const boundMeetingPreparationItem = (item: MeetingPreparationItem): void 
   for (const entry of [...item.meetings, ...item.related.items])
     entry.evidence.content_bytes = Buffer.byteLength(JSON.stringify(entry.evidence.items), "utf8")
   const size = () => Buffer.byteLength(JSON.stringify(item), "utf8")
+  while (size() > item.limits.bytes && item.project_evidence?.pages.length) {
+    const section = item.project_evidence
+    section.pages.pop()
+    section.coverage.has_more = true
+    section.coverage.output_limited = item.coverage.output_limited = true
+    const last = section.pages.at(-1)?.page
+    section.continuation = {
+      command: "meetings projects evidence",
+      project: section.project,
+      query: section.query,
+      cursor: last?.mode === "cursor" ? (last.next_cursor ?? null) : null,
+      limit: Math.min(item.limits.context_limit, 20),
+      max_read_bytes: item.limits.max_read_bytes,
+    }
+  }
+  if (size() > item.limits.bytes && item.project_evidence) {
+    delete item.project_evidence
+    item.coverage.output_limited = true
+  }
   while (size() > item.limits.bytes && item.notes?.items.length) {
     item.notes.items.pop()
     item.notes.coverage.output_limited = item.coverage.output_limited = true

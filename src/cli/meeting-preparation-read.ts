@@ -20,6 +20,7 @@ const bound = (name: keyof typeof MEETING_PREPARATION_LIMITS) => {
 }
 export const meetingPreparationInput = v.strictObject({
   series_id: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
+  project: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(200))),
   after: v.optional(isoTime),
   until: v.optional(isoTime),
   history_after: v.optional(isoTime),
@@ -61,6 +62,7 @@ export const readMeetingPreparation = async (
   const until = instant(args.until, after + 7 * 86400000, "until")
   const historyAfter = instant(args.history_after, after - 30 * 86400000, "history_after")
   const request = validateMeetingPreparationRequest(args.series_id, {
+    ...(args.project === undefined ? {} : { project: args.project }),
     after,
     until,
     historyAfter,
@@ -77,6 +79,7 @@ export const readMeetingPreparation = async (
     throw new CliError("cancelled", "Meeting preparation was interrupted")
   }
   if (
+    (packet.projectEvidence !== undefined && packet.projectEvidence.project !== request.project?.trim()) ||
     packet.upcoming.meetingId !== args.series_id ||
     packet.upcoming.after !== request.after ||
     packet.upcoming.until !== request.until ||
