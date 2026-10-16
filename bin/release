@@ -11,6 +11,16 @@
 set -eu
 
 cd "$(dirname "$0")/.."
+self=$(git hash-object bin/release)
+# The fold and land() fast-forward main, and sh reads this file as it goes: a newer bin/release would run half old,
+# half new. Run the new one from the start instead: the second run finds the fold and the raise already on main.
+rerun_if_changed() {
+  [ "$(git hash-object bin/release)" != "$self" ] || return 0
+  [ -z "${WIRECAT_RELEASE_RERUN:-}" ] || { echo "bin/release changed again while releasing — run it again" >&2; exit 1; }
+  echo "bin/release changed on main — running the new one"
+  export WIRECAT_RELEASE_RERUN=1
+  exec ./bin/release "$@"
+}
 package=@wirecat/cli-core
 
 mode=ci
@@ -36,7 +46,7 @@ git fetch -q origin
 before=$(git rev-parse HEAD)
 git merge -q --ff-only origin/main
 # The shell keeps running the file it read before the merge; max-cli published with a stale copy.
-[ "$(git rev-parse HEAD)" = "$before" ] || exec "$0" "$@"
+[ "$(git rev-parse HEAD)" = "$before" ] || exec ./bin/release "$@"
 # The workflow publishes origin/main, so a local commit not pushed yet would silently not ship.
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "main is ahead of origin/main — push first" >&2; exit 1; }
 # One release at a time on this machine, across every package: two sessions published at once on 2026-10-08.
@@ -77,6 +87,7 @@ folded=""
 # cli-dev is pinned rather than taken from the dependencies: the peer range accepts only an older cli-base.
 published || folded=$(npx -y -p @wirecat/cli-base@0.36.0 cli-dev changelog fold --land --version "$version")
 [ -z "$folded" ] || echo "$folded"
+rerun_if_changed "$@"
 
 # Two sessions preparing the same number is normal; the second takes the next free one (2026-09-29).
 latest=$(npm view "$package" version --prefer-online 2>/dev/null || true)
@@ -96,6 +107,7 @@ if [ "$next" != "$version" ]; then
     else swap("CHANGELOG.md", `\n## ${o} — `, `\n## ${n} — `)' "$version" "$next" "$taken"
   body="bin/release: $why. Only the number changes: package.json and the CHANGELOG heading."
   land "release/$next" "chore: release $next" "$body"
+  rerun_if_changed "$@"
   version=$next
 fi
 if published; then
