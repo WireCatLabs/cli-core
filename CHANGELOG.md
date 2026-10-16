@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.297.0 — 16.10.2026
+
 ### Added
 
 - **`mail.emailFacts(filter)`: what a mail rule reads of each stored email, oldest first, without text.** Sender
