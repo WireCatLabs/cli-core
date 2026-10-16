@@ -85,7 +85,7 @@ describe("mentions", () => {
 
   it("reads only the bound account, and shows what was written around a mention", async () => {
     const { store } = await fresh()
-    await store.messages.saveMessages(OWNER, "-1", [message("1", "Ольга: 8 (900) 000-00-01, после обеда")], {
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "Номер: 8 (900) 000-00-01, после обеда")], {
       via: "history",
     })
     await store.messages.saveMessages(OTHER, "-1", [message("1", "тот же 89000000001")], { via: "history" })
@@ -93,7 +93,7 @@ describe("mentions", () => {
     expect(mine?.written).toBe("8 (900) 000-00-01")
     expect(await store.mentions.mention(OTHER, mine?.id ?? 0)).toBeUndefined()
     expect(await store.mentions.mention(OWNER, mine?.id ?? 0)).toMatchObject({
-      before: "Ольга: ",
+      before: "Номер: ",
       after: ", после обеда",
       sameValue: 1,
     })
@@ -313,6 +313,44 @@ describe("deciding a mention", () => {
   })
 })
 
+describe("places", () => {
+  it("finds an address in a message as an undecided place, its postcode and city in the span", async () => {
+    const { store } = await fresh()
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "Жду на C/ Colón 5, 46004 Valencia")], {
+      via: "history",
+    })
+
+    const [place] = (await store.mentions.mentions(OWNER, q("kind:place"), { offset: 0 })).items
+    expect(place).toMatchObject({ value: "calle colón 5", status: "found", written: "C/ Colón 5, 46004 Valencia" })
+    expect((await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items).toEqual([])
+    await store.close()
+  })
+
+  it("makes a confirmed address a place, links it everywhere, and links a later mention of it by rule", async () => {
+    const { store } = await fresh()
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "офис: Calle Mayor, 12")], { via: "history" })
+    const [first] = (await store.mentions.mentions(OWNER, q("kind:place"), { offset: 0 })).items
+    await expect(store.mentions.confirmMention(OWNER, first?.id ?? 0, "person:1", { by: "owner" })).rejects.toThrow(
+      /place of its own/,
+    )
+
+    expect(await store.mentions.confirmMention(OWNER, first?.id ?? 0, undefined, { by: "owner" })).toMatchObject({
+      status: "linked",
+      target: "place:1",
+    })
+    await store.messages.saveMessages(OWNER, "-1", [message("3", "встречаемся на Calle Mayor 12")], { via: "history" })
+    const later = (await store.mentions.mentions(OWNER, q("kind:place"), { offset: 0 })).items.find(
+      (one) => one.messageId === "3",
+    )
+    expect(later).toMatchObject({ status: "linked", target: "place:1", author: "rules" })
+    expect(await store.mentions.places({ offset: 0 })).toEqual({
+      items: [{ id: 1, address: "Calle Mayor, 12", mentions: 2 }],
+      hasMore: false,
+    })
+    await store.close()
+  })
+})
+
 describe("mention fields in a message search", () => {
   const found = async (store: Awaited<ReturnType<typeof openStore>>, text: string) =>
     (await searchStore(store, OWNER, { text, limit: 100 })).items.map(({ id }) => id).sort()
@@ -488,6 +526,16 @@ describe("known people's names", () => {
     await store.close()
   })
 
+  it("keeps a known name in its place and finds an unknown one beside it, undecided", async () => {
+    const { store, belkin } = await named()
+    await store.messages.saveMessages(OWNER, "-1", [from("1", "7", "Аркадий и Ольга Петровна придут")], {
+      via: "history",
+    })
+
+    expect(await names(store)).toEqual([`1 Аркадий linked ${belkin}`, "1 Ольга Петровна found null"])
+    await store.close()
+  })
+
   it("finds a person by the owner's own name for their contact", async () => {
     const { store, belkin } = await named()
     await store.people.setContactAlias(OWNER, "7", "Кузнечик")
@@ -543,7 +591,7 @@ describe("known people's names", () => {
     raw
       .prepare(
         "INSERT INTO mentions (kind, source_type, source_id, source_field, start_offset, end_offset, value, method, " +
-          "version, confidence, status, created_at, updated_at) SELECT 'place', 'message', id, 'text', 0, 2, 'x', " +
+          "version, confidence, status, created_at, updated_at) SELECT 'vehicle', 'message', id, 'text', 0, 2, 'x', " +
           "'rules', 1, 0.5, 'found', 1, 1 FROM messages",
       )
       .run()
@@ -554,7 +602,7 @@ describe("known people's names", () => {
     const raw2 = new DatabaseSync(path)
     expect(raw2.prepare("SELECT kind FROM mentions ORDER BY kind").all()).toEqual([
       { kind: "phone" },
-      { kind: "place" },
+      { kind: "vehicle" },
     ])
     raw2.close()
     await reopened.close()

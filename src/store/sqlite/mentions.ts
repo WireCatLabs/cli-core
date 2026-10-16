@@ -289,12 +289,20 @@ export interface LocatedMention {
   kind: MentionKind
   value: string
   chat: number | null
+  /** What was written there: an address becomes a place under it. */
+  written?: string
 }
 
 export const mentionOfAccount = (database: CacheDatabase, accountPk: number, id: number): LocatedMention => {
   const row = database.prepare(`${SELECT}WHERE mn.id = ? AND m.account_id = ?`).get(id, accountPk)
   if (!row) throw new CliError("not_found", `no mention ${id} in this account`)
-  return { id, kind: String(row.kind) as MentionKind, value: String(row.value), chat: Number(row.chat_pk) }
+  return {
+    id,
+    kind: String(row.kind) as MentionKind,
+    value: String(row.value),
+    chat: Number(row.chat_pk),
+    written: String(row.text).slice(Number(row.start_offset), Number(row.end_offset)),
+  }
 }
 
 /**
@@ -382,6 +390,21 @@ export const confirmMention = (
       throw new CliError("not_found", "that document is not in the store yet — sync it from Drive, then confirm")
     return decide(database, mention, "linked", { type: "document", id: Number(document.id) }, by, now)
   }
+  if (mention.kind === "place") {
+    if (owner !== undefined)
+      throw new CliError(
+        "validation_error",
+        "an address is confirmed as a place of its own, with no person or organization",
+      )
+    database
+      .prepare(
+        "INSERT INTO places (address, folded, author, created_at, updated_at) VALUES (?, ?, ?, ?, ?) " +
+          "ON CONFLICT (folded) DO NOTHING",
+      )
+      .run(mention.written ?? mention.value, mention.value, by.by, now, now)
+    const place = Number(database.prepare("SELECT id FROM places WHERE folded = ?").get(mention.value)?.id)
+    return decide(database, mention, "linked", { type: "place", id: place }, by, now)
+  }
   if (mention.kind === "person-name") {
     if (owner === undefined || !("person" in owner))
       throw new CliError("validation_error", "a name is confirmed to the person it means — person:<uid>")
@@ -424,4 +447,26 @@ export const mentionOwner = (
     .get(Number(uid) || 0)
   if (!found) throw new CliError("not_found", `no ${ref} in the store`)
   return { organization: Number(found.id) }
+}
+
+/** A confirmed address and how many mentions, in every account, name it. */
+export interface StoredPlace {
+  id: number
+  address: string
+  mentions: number
+}
+
+export const listPlaces = (
+  database: CacheDatabase,
+  { limit, offset }: { limit?: number; offset: number },
+): { items: StoredPlace[]; hasMore: boolean } => {
+  const rows = database
+    .prepare(
+      "SELECT p.id, p.address, count(mn.id) AS mentions FROM places p LEFT JOIN mentions mn ON mn.target_type = 'place' " +
+        "AND mn.target_id = p.id GROUP BY p.id ORDER BY mentions DESC, p.id LIMIT ? OFFSET ?",
+    )
+    .all(limit === undefined ? -1 : limit + 1, offset)
+    .map((row) => ({ id: Number(row.id), address: String(row.address), mentions: Number(row.mentions) }))
+  const hasMore = limit !== undefined && rows.length > limit
+  return { items: hasMore ? rows.slice(0, limit) : rows, hasMore }
 }

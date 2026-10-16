@@ -6,7 +6,7 @@ import {
   oneTrackedLinkPerSite,
   telegramTarget,
 } from "../../domain/mentions.js"
-import { findNames, type KnownPerson, nameIndex } from "../../domain/person-names.js"
+import { findNames, findUnknownNames, type KnownPerson, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { storePhoneCountries } from "./phone-countries.js"
@@ -39,7 +39,7 @@ export const telegramLink = (database: CacheDatabase) => {
 /**
  * What a new mention starts as when nothing was decided where it was written: dismissed if its value was
  * dismissed anywhere, linked when the value already has an original — an identity a person or an organization owns for a phone
- * or an address, the stored document for a document id.
+ * or an address, the stored document for a document id, the place for a confirmed address.
  */
 const originalOf = (database: CacheDatabase) => {
   const dismissed = database.prepare(
@@ -56,15 +56,18 @@ const originalOf = (database: CacheDatabase) => {
     "SELECT 'linked' AS status, 'document' AS target_type, id AS target_id, 'rules' AS author FROM documents " +
       "WHERE json_extract(front_matter, '$.fileId') = ? AND deleted_at IS NULL ORDER BY id LIMIT 1",
   )
+  const place = database.prepare(
+    "SELECT 'linked' AS status, 'place' AS target_type, id AS target_id, 'rules' AS author FROM places WHERE folded = ?",
+  )
+  const byKind: Partial<Record<MentionKind, (value: string) => unknown>> = {
+    phone: (value) => identity.get("phone", value),
+    email: (value) => identity.get("email", value),
+    document: (value) => document.get(value),
+    url: telegram,
+    place: (value) => place.get(value),
+  }
   return (kind: MentionKind, value: string): Decision | undefined =>
-    (dismissed.get(kind, value) as Decision | undefined) ??
-    ((kind === "phone" || kind === "email"
-      ? identity.get(kind, value)
-      : kind === "document"
-        ? document.get(value)
-        : kind === "url"
-          ? telegram(value)
-          : undefined) as Decision | undefined)
+    (dismissed.get(kind, value) ?? byKind[kind]?.(value)) as Decision | undefined
 }
 
 /**
@@ -177,29 +180,40 @@ export const writer = (database: CacheDatabase, now: number, kinds: readonly Men
   const phoneCountries = storePhoneCountries(database)
   const names = !kinds || kinds.includes("person-name") ? nameIndex(knownPeople(database), createStemmer()) : undefined
   const chatPeople = participants(database)
-  const found = (source: Source) => [
-    ...findMentions(source.text, { phoneCountries }).map((one) => ({
+  const found = (source: Source) => {
+    const ruled = findMentions(source.text, { phoneCountries }).map((one) => ({
       ...one,
       decision: undefined as Decision | undefined,
-    })),
-    ...(names
-      ? findNames(source.text, names).map(({ people, ...one }) => {
-          // One person can be a row per messenger until merged, so a name often fits several: the one who wrote
-          // in this chat settles it, if only one did.
-          const here = people.filter((one) => chatPeople(source.chat).has(one))
-          const [person] = here
-          const settled = here.length === 1 && person !== undefined
-          return {
-            ...one,
-            kind: "person-name" as const,
-            domain: null,
-            decision: settled
-              ? { status: "linked", target_type: "person", target_id: person, author: METHOD }
-              : { status: "found", target_type: null, target_id: null, author: null },
-          }
-        })
-      : []),
-  ]
+    }))
+    const known = names ? knownNames(source, names) : []
+    // Known names first: the table keeps one name per place, and an unknown one must not take a known one's place.
+    const unknown = names
+      ? findUnknownNames(source.text, names.stem, [...ruled, ...known]).map(({ people: _, ...one }) => ({
+          ...one,
+          kind: "person-name" as const,
+          domain: null,
+          // A name is decided where it is written: a dismissed «Вера» elsewhere says nothing about this one.
+          decision: { status: "found", target_type: null, target_id: null, author: null } as Decision,
+        }))
+      : []
+    return [...ruled, ...known, ...unknown]
+  }
+  const knownNames = (source: Source, index: NonNullable<typeof names>) =>
+    findNames(source.text, index).map(({ people, ...one }) => {
+      // One person can be a row per messenger until merged, so a name often fits several: the one who wrote
+      // in this chat settles it, if only one did.
+      const here = people.filter((one) => chatPeople(source.chat).has(one))
+      const [person] = here
+      const settled = here.length === 1 && person !== undefined
+      return {
+        ...one,
+        kind: "person-name" as const,
+        domain: null,
+        decision: settled
+          ? { status: "linked", target_type: "person", target_id: person, author: METHOD }
+          : { status: "found", target_type: null, target_id: null, author: null },
+      }
+    })
   return (type: SourceType, pk: number, source: Source | null): number => {
     const rows = existing.all(type, pk, ...scope)
     const decided = rows.filter((row) => row.status !== "found" && row.author !== METHOD)

@@ -16,14 +16,16 @@ That column comes from the provider; the `mentions` table comes from our rules.
 | `src/domain/mentions.ts` | the rules for `phone`, `email`, `url`, `document`; `MENTION_KINDS`, `MENTION_VERSIONS`, `siteOf` |
 | `src/domain/phones.ts` | `phone_countries`: the country plans, reading a national number (`nationalPhone`) |
 | `scripts/phone-plans.ts` | writes the country table from libphonenumber-js (a dev dependency only) |
-| `src/domain/person-names.ts` | `person-name`: the name index, Latin → Cyrillic, matching by stem or written form |
+| `src/domain/person-names.ts` | `person-name`: the name index, Latin → Cyrillic, matching by stem or written form; unknown names (`findUnknownNames`) |
+| `src/domain/first-names.ts` | the first names an unknown name is checked against, and those that are also words |
+| `src/domain/places.ts` | `place`: street addresses by their grammar (`findPlaces`) |
 | `src/store/sqlite/phone-countries.ts` | the setting in `store_settings`, and `valueMatch` for `phone:` and `value:` |
 | `src/store/sqlite/mention-drain.ts` | the writer and the queue drain |
 | `src/store/sqlite/mentions.ts` | `rebuildMentions`, list, show, confirm, reject, `newMentions`; `MENTION_QUERY` |
 | `src/cli/messenger/mention-points.ts` | where `mentions list --new` stopped, per profile |
 | `src/store/sqlite/lucene.ts` | the search fields `phone:` `email:` `domain:` `mentions:`; `url:` and `link:` in `mention-links.ts` |
 | `src/services/mentions.ts` | the service the commands call; `domains` groups the account's links by site |
-| `src/cli/messenger/mentions-command.ts` | `mentions list|domains|show|confirm|reject|rebuild` |
+| `src/cli/messenger/mentions-command.ts` | `mentions list|domains|places|show|confirm|reject|rebuild` |
 | `src/cli/author.ts` | who decided: the agent from `AI_AGENT`/`CLAUDECODE`, else the owner, `--as-owner` |
 
 ## Tables
@@ -38,9 +40,11 @@ That column comes from the provider; the `mentions` table comes from our rules.
   messages stored before mentions existed are not read yet.
 - `identities` with `provider` `phone` or `email` — made only when a number or an address gets an owner.
   `identity_links` gives it a person, `organization_identities` an organization.
+- `places` — a confirmed street address: `folded` is the mentions' `value`, `address` what was written where it
+  was confirmed. A `place` mention whose value is a place starts `linked`.
 
 Store versions: 7 added the tables, 10 the attachment sources, 11 `organization_identities`, 16 documents (`body`),
-notes (`body`) and mail (`body_text`, not the subject) as sources. Those have no chat, so a name in them is never
+notes (`body`) and mail (`body_text`, not the subject) as sources, 18 `places`. Those have no chat, so a name in them is never
 linked by rule; `mentions list` and `show` read message sources only, and mail search (`search mail` in memo) finds
 an email by `phone:`, `email:`, `url:`, `domain:` and `mentions:`. Each migration only
 adds; older builds keep reading the store.
@@ -86,7 +90,8 @@ rebuild; they are derived again, so a better rule can change them.
 | `url` | `http(s)://…`, or a bare domain with a listed suffix that does not look like code or a file name (`readme.md`, `items.parts[0]`); tracking parameters and the fragment dropped; `domain` from `psl` | 0.95 with a scheme, 0.9 with `www.`, 0.6 bare |
 | `document` | a Google Docs, Sheets or Drive link inside a `url`; the value is the file id | 0.95 |
 | `phone` | own rules over libphonenumber's numbering plans (`src/domain/phone-plans.generated.ts`, 47 countries): `+`/`00` is international; otherwise read in `phone_countries` (store-wide, default `ru`), grouped or named any valid number, bare only a mobile; dropped as a date, an IP, a sum or an order, invoice, tax or bank number. What fits no country is the digits alone | 0.9 / 0.7 / 0.5 |
-| `person-name` | see below | 0.9 full name, 0.6 one word |
+| `person-name` | see below | known: 0.9 full name, 0.6 one word; unknown: 0.5 with a second name, 0.4 alone |
+| `place` | a street word (ул., проспект, calle, C/, avda., rue, via, rua, ul., Straße, -straat, Street, Ave, Rd…) next to a capitalized name and a house number, before or after it. The span runs on, over the same line and the next lines of a signature when they hold a postcode or a country: flat (`кв.`, `3º B`, `piso`, `Flat`), postcode (GB, US, RU, NL, PL, PT, five digits), city, region and country, and back over `190000, г. …,` before a Russian street. The value is the street and house only, lower case with the street word in full; `places.address` keeps the whole span | 0.7 with a postcode, 0.5 without |
 
 `MENTION_VERSIONS` holds a version per kind. Bump it when a kind's rule changes, so the rows say which rule found
 them.
@@ -107,6 +112,11 @@ them.
   (`messages.sender_identity_id` → `identity_links`). One human can be a separate person per messenger until the
   rows are merged, so a name often fits several.
 - `mentions show` returns them as `candidates`.
+- **Unknown names** (`findUnknownNames`, after the known ones, so a known name keeps its place): a listed first
+  name in any case (a Russian name with its final vowel dropped plus a case ending), a patronymic (`-ович`,
+  `-евна`…), and beside them a Russian surname by its ending or a Latin second name. A listed name that is also a
+  word (`NAME_WORDS`: Вера, Grace) counts only with a neighbour. They start `found`, with no candidates, and a
+  rejected one does not dismiss the same name elsewhere.
 
 ## Search
 
@@ -155,6 +165,8 @@ per sync and names nothing; its mentions show up on the next `--new`.
 - A phone or an address in received mail is offered as its sender's (`candidates` in `show`), never linked by rule:
   most mail numbers are signatures, but a forwarded letter carries someone else's.
 - A `url` is confirmed only to the stored Telegram chat or account it names; other links can only be rejected.
-- Names are known people only. Words under four letters are skipped, so «Оля» or «Ира» are missed.
+- Unknown names need a listed first name or a patronymic: an unlisted foreign name alone is missed. Words under
+  four letters are skipped, so «Оля» or «Ира» are missed.
+- Addresses need a street word and a house number: «у Казанского собора» or «Calle Mayor» alone are missed.
 - Builds 0.264–0.270 delete a text's `person-name` rows when they read the text again; `mentions rebuild
   person-name` with a newer build finds them again.

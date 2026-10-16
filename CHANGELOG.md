@@ -5,6 +5,23 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Names of people the store does not know, and street addresses, are found as mentions** (mentions plan phase
+  3). A name is a common first name in any case, a patronymic, and the surname or second name beside them;
+  `Вера` or `Grace` counts only with a second name. An address is a street word next to a name and a house number,
+  in Russia, the rest of Europe, the United Kingdom and the United States (`ул. Ленина, д. 5`, `Calle Mayor, 12`,
+  `221B Baker Street`). The mention covers the rest of the address — flat, postcode, city, region and country, on
+  its line or the next lines of a signature, and in the Russian order the postcode and city before the street —
+  while its value stays the street and the house, so one address written fully and briefly is one value. Both
+  start undecided and are read in every text, mail included. `mentions rebuild person-name` and
+  `mentions rebuild place` find them in what is already stored (the `person-name` rule is now version 2).
+- **A confirmed address becomes a place** (store version 18, table `places`): `mentions confirm <id>` with no
+  person keeps it, every mention of the same address follows, and later ones are linked by the rules.
+  `mentions places` lists the places, most mentioned first.
+
 ## 0.307.0 — 17.10.2026
 
 ### Fixed

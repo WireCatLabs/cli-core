@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-86 tables, 19 full-text indexes.
+87 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -251,6 +251,19 @@ A company, team, family or community the owner deals with. Projects, work accoun
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+### `places`
+
+A street address as a record of its own: a confirmed `place` mention; later mentions of it start linked.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `address` | text | not null |  | as it was written where it was confirmed |
+| `folded` | text | not null, unique |  | the mentions' `value` |
+| `author` | text | not null |  | `owner` or an agent by name |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
 
 ### `organization_identities`
 
@@ -1742,21 +1755,21 @@ Which messages a conversation's chunk is cut from. One row per `conversation` ro
 
 ### `mentions`
 
-A phone, e-mail address, link, Google document or known person's name found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.
+A phone, e-mail address, link, Google document, person's name or street address found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value. `value` is normalized: `+` and digits for a phone with a known country, digits alone otherwise; a lower-case address; a link without tracking parameters or fragment; a Google file id; a name's stems; an address in lower case with its street word in full.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `kind` | text | not null |  | `phone`, `email`, `url`, `document` |
+| `kind` | text | not null |  | `phone`, `email`, `url`, `document`, `person-name`, `place` |
 | `source_type` | text | not null |  | the text's row: `message`, `attachment` (its file), `document`, `note` or `email` |
 | `source_id` | integer | not null |  | the row in the `source_type` table |
-| `source_field` | text | not null |  | which text of that row: a message's `text`, an attachment's `file_text` or `transcript` |
+| `source_field` | text | not null |  | `text`; an attachment's `file_text` or `transcript` |
 | `start_offset` | integer | not null |  | where it is written in that text, in UTF-16 units |
-| `end_offset` | integer | not null |  | where it ends, exclusive; what was written is read back from the source, never copied |
-| `value` | text | not null |  | normalized: `+` and digits for a phone with a known country, digits alone otherwise; a lower-case address; a link without tracking parameters or fragment; a Google file id |
-| `domain` | text |  |  | `url` and `email`: the site from the public suffix list, `google.com` for `docs.google.com` |
+| `end_offset` | integer | not null |  | exclusive; what was written is read back, never copied |
+| `value` | text | not null |  | normalized per kind, as the table's description says |
+| `domain` | text |  |  | `url` and `email`: the site, `google.com` for `docs.google.com` |
 | `method` | text | not null |  | what found it: `rules` |
-| `version` | integer | not null |  | the kind's rule version, so a changed rule redoes its kind alone |
+| `version` | integer | not null |  | the kind's rule version: a changed rule redoes that kind |
 | `confidence` | real | not null |  | the rule's own score, 0–1 |
 | `status` | text | not null |  | `found`, then `linked` or `dismissed` |
 | `target_type` | text |  |  | once linked: what it names, a singular table name |

@@ -404,6 +404,17 @@ const NEW = {
       ],
     },
     {
+      name: "places",
+      doc: "A street address as a record of its own: a confirmed `place` mention; later mentions of it start linked.",
+      cols: [
+        id(),
+        c("address", "text", { notnull: true, note: "as it was written where it was confirmed" }),
+        c("folded", "text", { notnull: true, unique: true, note: "the mentions' `value`" }),
+        c("author", "text", { notnull: true, note: "`owner` or an agent by name" }),
+        ...ts(),
+      ],
+    },
+    {
       name: "organization_identities",
       doc: "A phone, an address or an account an organization owns: a shop's number, `info@`. Apart from `identity_links`, which says which person an identity is: one identity may be both someone's and an organization's.",
       cols: [
@@ -773,32 +784,18 @@ const NEW = {
     },
     {
       name: "mentions",
-      doc: "A phone, e-mail address, link, Google document or known person's name found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value.",
+      doc: "A phone, e-mail address, link, Google document, person's name or street address found in one place of one stored text. Derived: `mentions rebuild` finds them again, and a `linked` or `dismissed` decision moves to the new row with the same kind and value. `value` is normalized: `+` and digits for a phone with a known country, digits alone otherwise; a lower-case address; a link without tracking parameters or fragment; a Google file id; a name's stems; an address in lower case with its street word in full.",
       cols: [
         id(),
-        c("kind", "text", { notnull: true, note: "`phone`, `email`, `url`, `document`" }),
+        c("kind", "text", { notnull: true, note: "`phone`, `email`, `url`, `document`, `person-name`, `place`" }),
         ...poly("source", "the text's row: `message`, `attachment` (its file), `document`, `note` or `email`"),
-        c("source_field", "text", {
-          notnull: true,
-          note: "which text of that row: a message's `text`, an attachment's `file_text` or `transcript`",
-        }),
+        c("source_field", "text", { notnull: true, note: "`text`; an attachment's `file_text` or `transcript`" }),
         c("start_offset", "integer", { notnull: true, note: "where it is written in that text, in UTF-16 units" }),
-        c("end_offset", "integer", {
-          notnull: true,
-          note: "where it ends, exclusive; what was written is read back from the source, never copied",
-        }),
-        c("value", "text", {
-          notnull: true,
-          note: "normalized: `+` and digits for a phone with a known country, digits alone otherwise; a lower-case address; a link without tracking parameters or fragment; a Google file id",
-        }),
-        c("domain", "text", {
-          note: "`url` and `email`: the site from the public suffix list, `google.com` for `docs.google.com`",
-        }),
+        c("end_offset", "integer", { notnull: true, note: "exclusive; what was written is read back, never copied" }),
+        c("value", "text", { notnull: true, note: "normalized per kind, as the table's description says" }),
+        c("domain", "text", { note: "`url` and `email`: the site, `google.com` for `docs.google.com`" }),
         c("method", "text", { notnull: true, note: "what found it: `rules`" }),
-        c("version", "integer", {
-          notnull: true,
-          note: "the kind's rule version, so a changed rule redoes its kind alone",
-        }),
+        c("version", "integer", { notnull: true, note: "the kind's rule version: a changed rule redoes that kind" }),
         c("confidence", "real", { notnull: true, note: "the rule's own score, 0–1" }),
         c("status", "text", { notnull: true, note: "`found`, then `linked` or `dismissed`" }),
         c("target_type", "text", { note: "once linked: what it names, a singular table name" }),

@@ -10,6 +10,7 @@ import {
   type MentionsRebuild,
   type MentionsState,
   type StoredMention,
+  type StoredPlace,
 } from "../store/store.js"
 import { accountStore, crossAccount, type ServiceDeps } from "./deps.js"
 
@@ -48,12 +49,14 @@ export interface MentionsService {
   list(query: string, window: { limit?: number; offset: number; foundAfter?: number }): Promise<Mentions>
   /** Undecided mentions found after `foundAfter` (ms), or at all: up to `REVIEW_COUNT`, and whether more wait. */
   newCount(foundAfter: number | undefined): Promise<{ count: number; more: boolean }>
+  /** Confirmed addresses, every account's, most mentioned first. */
+  places(window: { limit?: number; offset: number }): Promise<Page<StoredPlace>>
   show(id: number): Promise<MentionDetails>
   rebuild(options?: {
     kinds?: readonly MentionKind[]
     onBatch?: (done: number, total: number) => void
   }): Promise<MentionsRebuild>
-  /** `target` is `person:<uid>` or `organization:<id>` for a phone or an address; a document needs none. */
+  /** `target` is `person:<uid>` or `organization:<id>` for a phone or an address; a document or a place needs none. */
   confirm(id: number, target: string | undefined, by: string, inChat?: boolean): Promise<MentionDecision>
   /** `inChat`: a name is decided in every undecided place of its chat too. */
   reject(id: number, by: string, inChat?: boolean): Promise<MentionDecision>
@@ -116,6 +119,7 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
       const page = await (await accountStore(deps)).mentions.mentions(found, window)
       return { count: page.items.length, more: page.hasMore }
     },
+    places: async (window) => (await deps.store()).mentions.places(window),
     show: async (id) => {
       const { store, mention } = await located()
       const found = await store.mentions.mention(id)

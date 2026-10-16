@@ -5,6 +5,7 @@ import { keysOver } from "./keys.js"
 import {
   confirmMention,
   listMentions,
+  listPlaces,
   type MentionDecision,
   type MentionsRebuild,
   type MentionsState,
@@ -14,6 +15,7 @@ import {
   rebuildMentions,
   rejectMention,
   type StoredMention,
+  type StoredPlace,
   showMention,
 } from "./sqlite/mentions.js"
 import type { StoreContext } from "./sqlite/open.js"
@@ -48,6 +50,8 @@ export interface MentionsStore extends AccountMentions {
     onBatch?: (done: number, total: number) => void
   }): Promise<MentionsRebuild>
   mentionsState(): Promise<MentionsState>
+  /** Confirmed addresses, every account's, most mentioned first. */
+  places(window: { limit?: number; offset: number }): Promise<{ items: StoredPlace[]; hasMore: boolean }>
 }
 
 export const accountMentionsOver = (context: StoreContext): AccountMentions => {
@@ -85,4 +89,5 @@ export const mentionsStoreOver = (context: StoreContext, keyed: AccountMentions)
   ...keyed,
   rebuildMentions: async (options = {}) => rebuildMentions(context.database, { now: context.now(), ...options }),
   mentionsState: async () => mentionsState(context.database),
+  places: async (window) => listPlaces(context.database, window),
 })

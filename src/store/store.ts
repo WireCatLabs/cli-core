@@ -368,6 +368,7 @@ export {
   type MentionsRebuild,
   type MentionsState,
   type StoredMention,
+  type StoredPlace,
 } from "./sqlite/mentions.js"
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
