@@ -55,7 +55,9 @@ export interface MeetingFindingsBatch {
   input: MeetingFindingsInput
   fingerprint: string
   status: "proposed" | "reviewed"
-  author: { type: string; id: string; name: string | null }
+  author: { type: "person" | "bot"; id: string; name: string | null }
+  decidedBy: { type: "person" | "bot"; id: string } | null
+  decidedAt: string | null
   previous: FindingOutcome[]
   receipt: MeetingFindingsReceipt | null
 }
