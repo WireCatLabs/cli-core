@@ -189,6 +189,22 @@ describe("search mail over the mail tables", () => {
     expect(await sorted('to:"owner@example.com" AND from:"bob@example.com"')).toEqual(["<two@example.com>"])
     expect(await sorted("mailbox:Projects")).toEqual(["<four@example.com>"])
     expect(await sorted("mailbox:label_1")).toEqual(["<four@example.com>"])
+    const otherId = await store.saveAccount({ provider: "email", account: "other@example.com" }, { name: null })
+    await store.mail.saveThread({
+      accountId: otherId,
+      externalId: "thread-other",
+      now: at(12),
+      emails: [
+        email("<elsewhere@example.com>", {
+          subject: "Lunch",
+          bodyText: "Noon at the cafe.",
+          mailboxes: [{ externalId: "Label_1", name: "Projects", kind: "label" }],
+        }),
+      ],
+    })
+    // One account's search reads every mail account; each email still matches only its own account's mailboxes.
+    expect(await sorted("mailbox:Projects")).toEqual(["<elsewhere@example.com>", "<four@example.com>"])
+    expect(await sorted("roadmap NOT mailbox:Projects")).toEqual(["<one@example.com>", "<zero@example.com>"])
     expect(await sorted("subject:roadmap")).toEqual(["<four@example.com>"])
     expect(await sorted("roadmap")).toEqual(["<four@example.com>", "<one@example.com>", "<zero@example.com>"])
     expect(await sorted('subject:"quarterly planning"')).toEqual(["<one@example.com>", "<two@example.com>"])

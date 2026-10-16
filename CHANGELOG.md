@@ -23,6 +23,13 @@ shape of this file.
   and the answer's `review` counts them. The link always stands, nothing merges on a score, and a closed task is not
   checked.
 
+### Fixed
+
+- **`mailbox:` and `label:` in mail search no longer run past the time budget.** The filter was a subquery tied to
+  each email's account, so SQLite re-read every mailbox link for every candidate: `London NOT mailbox:bulk` took
+  67 s and failed with `query.too-large` on a 257k-email store with 880k mailbox links. The mailbox ids are now
+  looked up once; the same count takes 0.13 s. Which emails match is unchanged.
+
 ## 0.295.0 — 16.10.2026
 
 ### Changed — may break callers
