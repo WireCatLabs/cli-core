@@ -1,56 +1,28 @@
 import { CliError } from "@wirecat/cli-base"
-import { storedKinds } from "../../domain/attachments.js"
-import { siteOf } from "../../domain/mentions.js"
 import type { Page } from "../../domain/models.js"
-import { tagOf } from "../../domain/tags.js"
-import {
-  type Automaton,
-  compileAutomaton,
-  foldRegex,
-  type MatchBudget,
-  wildcardPattern,
-} from "../../search/lucene/automaton.js"
-import { PRESETS } from "../../search/lucene/presets.js"
-import { parseBytes } from "../../search/lucene/registry.js"
+import { type Automaton, compileAutomaton, type MatchBudget } from "../../search/lucene/automaton.js"
 import type { QueryExecution, ResolvedNode, ResolvedPredicate } from "../../search/lucene/resolved.js"
 import { isStemmed } from "../../search/lucene/resolved.js"
 import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
-import { inSource } from "../../search/query.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { emailHitsByPk } from "./emails.js"
-import { linkMatch } from "./mention-links.js"
+import {
+  type Corpus,
+  combine,
+  FIELD_COMPILERS,
+  type FieldScope,
+  type Fragment,
+  type Leaf,
+  quoted,
+  SPEECH,
+} from "./lucene-fields.js"
 import type { StoreContext } from "./open.js"
-import { valueMatch } from "./phone-countries.js"
 import { hitsByPk } from "./search.js"
 import { read } from "./transaction.js"
 import type { MatchPlace, ScoredHit } from "./words.js"
 
-interface Fragment {
-  sql: string
-  params: SqlValue[]
-  exact: boolean
-  fts?: string
-  /** The leaf as a phrase of stems, for ranking a stemmed search by `message_stems`. */
-  stems?: string
-  /** A bare word's other places — transcripts, file text, file names — as a set of item ids. */
-  elsewhere?: { sql: string; params: SqlValue[] }
-}
-interface Leaf {
-  node: ResolvedPredicate
-  fragment: Fragment
-  test?: (text: string, attachments: string[]) => boolean
-}
-/** The tables one kind of searchable item lives in; the compiler names its row `m` and its thread `c`. */
-export interface Corpus {
-  rows: string
-  threads: string
-  words: string
-  stems: string
-  vocab: string
-  item: string
-  thread: string
-}
+export { type Corpus, prefixOf } from "./lucene-fields.js"
 
 const MESSAGES: Corpus = {
   rows: "messages",
@@ -76,49 +48,6 @@ const MAIL: Corpus = {
   thread: "email_thread",
 }
 
-/** A voice note's transcript is its attachment's text, written by speech recognition (`speech:<model>`). */
-const SPEECH = "coalesce(att.extractor,'') LIKE 'speech:%'"
-const quoted = (value: string) => `"${value.replaceAll('"', '""')}"`
-const combine = (parts: Fragment[], operator: "AND" | "OR"): Fragment => ({
-  sql: parts.length ? `(${parts.map(({ sql }) => sql).join(` ${operator} `)})` : operator === "AND" ? "1" : "0",
-  params: parts.flatMap(({ params }) => params),
-  exact: parts.every(({ exact }) => exact),
-})
-export const prefixOf = (pattern: string): string => {
-  if (pattern.includes("|")) return ""
-  let prefix = ""
-  for (const c of pattern) {
-    if (!/[\p{L}\p{N}_ -]/u.test(c)) {
-      if (["?", "*", "{"].includes(c)) prefix = [...prefix].slice(0, -1).join("")
-      break
-    }
-    prefix += c
-  }
-  return prefix
-}
-
-const wordMatch = (corpus: Corpus, match: string): Fragment => ({
-  sql: `m.id IN (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)`,
-  params: [`normalized_text : (${match})`],
-  exact: true,
-  fts: match,
-})
-// The vocabulary is the whole store's, so a chat or date filter does not shorten it.
-const tooManyWords = ({ field, operator, value, span }: ResolvedPredicate, alone: boolean): never => {
-  const term = `${field}:${operator === "regex" ? `/${value}/` : value}`
-  throw new CliError(
-    "validation_error",
-    `search: ${term}${alone ? " matches" : " and the patterns before it match"} more than ${QUERY_LIMITS.expansions} indexed words, the term expansions budget — use a longer prefix, or body:/…/ inside one chat`,
-    {
-      reason: "query.too-large",
-      budget: "term expansions",
-      complete: false,
-      term,
-      limit: QUERY_LIMITS.expansions,
-      span,
-    },
-  )
-}
 export type QueryGrouping = "chat" | "sender" | "time"
 export interface QueryGroup {
   provider?: string
@@ -197,308 +126,29 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       elsewhere,
     }
   }
+  const fields: FieldScope = {
+    database,
+    execution,
+    corpus,
+    mail,
+    boundedAttachments,
+    budget,
+    check,
+    patternOf,
+    expanded,
+    attachmentWords,
+    everywhere,
+    expand: (count) => {
+      expansions += count
+      return expansions
+    },
+  }
   const createLeaf = (node: ResolvedPredicate): Leaf => {
-    const { field, operator, value, resolution } = node
-    let fragment: Fragment
-    let test: Leaf["test"]
-    const bound = (sql: string, ...params: SqlValue[]): Fragment => ({ sql, params, exact: true })
-    // The items whose mentions match: an email by its text; a message by its text, files and voice notes.
-    const mentioned = (where: string, params: SqlValue[]) =>
-      mail
-        ? bound(`m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='email' AND ${where})`, ...params)
-        : bound(
-            `m.id IN (SELECT mn.source_id FROM mentions mn WHERE mn.source_type='message' AND ${where} ` +
-              "UNION SELECT a.attachable_id FROM mentions mn JOIN attachments a ON a.id=mn.source_id " +
-              `AND a.attachable_type='message' WHERE mn.source_type='attachment' AND ${where})`,
-            ...params,
-            ...params,
-          )
-    const stemsOf = (text: string) => execution.stemmer?.phrases(text)
-    if ((field === "text" || field === "exact") && value === "") fragment = bound("0")
-    else if (field === "body" && value === "") fragment = bound("m.text = ?", "")
-    else if (isStemmed(node)) {
-      if (!execution.stemmer && !execution.unstemmed)
-        throw new Error("a stemmed leaf reached the compiler without the store's stemmer")
-      const text = normalize(value)
-      const stems = stemsOf(value)
-      // Words OR stems: two spellings can fold one word to different stems, and every exact hit must stay.
-      fragment = /[\p{L}\p{N}]/u.test(text)
-        ? everywhere(node, text, {
-            sql: `m.id IN (SELECT rowid FROM ${corpus.words} WHERE ${corpus.words} MATCH ?)${stems ? ` OR m.id IN (SELECT rowid FROM ${corpus.stems} WHERE ${corpus.stems} MATCH ?)` : ""}`,
-            params: [`normalized_text : (${quoted(text)})`, ...(stems ? [`stems : (${stems})`] : [])],
-            exact: true,
-            fts: quoted(text),
-            ...(stems ? { stems } : {}),
-          })
-        : bound("0")
-    } else if (field === "text" || field === "exact") {
-      if (operator === "term" || operator === "phrase") {
-        const text = normalize(value)
-        const stems = stemsOf(value)
-        fragment = /[\p{L}\p{N}]/u.test(text)
-          ? everywhere(node, text, { ...wordMatch(corpus, quoted(text)), ...(stems ? { stems } : {}) })
-          : bound("0")
-      } else {
-        const pattern = operator === "wildcard" ? wildcardPattern(normalize(value)) : foldRegex(value, node.span)
-        const automaton = patternOf(pattern, node)
-        const cached = expanded.get(pattern)
-        if (cached) return { node, fragment: cached }
-        const prefix = prefixOf(pattern)
-        const terms = database
-          .prepare(
-            `SELECT term FROM ${corpus.vocab} WHERE col='normalized_text'${prefix ? " AND term>=? AND term<=?" : ""} ORDER BY term LIMIT ?`,
-          )
-          .all(...(prefix ? [prefix, `${prefix}\u{10ffff}`] : []), QUERY_LIMITS.expansions + 1)
-        expansions += terms.length
-        if (expansions > QUERY_LIMITS.expansions) tooManyWords(node, terms.length > QUERY_LIMITS.expansions)
-        const matches = terms.flatMap(({ term }) => {
-          check()
-          return automaton.test(String(term), budget) ? [quoted(String(term))] : []
-        })
-        fragment = matches.length ? wordMatch(corpus, matches.join(" OR ")) : bound("0")
-        expanded.set(pattern, fragment)
-      }
-    } else if (field === "body") {
-      if (operator === "term" || operator === "phrase") fragment = bound("m.text = ?", value)
-      else {
-        const automaton = patternOf(operator === "wildcard" ? wildcardPattern(value) : value, node)
-        fragment = { sql: "1", params: [], exact: false }
-        test = (text) => automaton.test(text, budget)
-      }
-    } else if (field === "preset") {
-      fragment = { sql: "1", params: [], exact: false }
-      test = (text, attachments) => {
-        budget.work += text.length
-        if (budget.work > QUERY_LIMITS.work) exhausted("detector work")
-        return PRESETS[value.toLowerCase()]?.candidate(text, attachments) ?? false
-      }
-    } else if (field === "filename" || field === "mime") {
-      const column = field === "filename" ? "name" : "mime"
-      const wanted = normalize(value)
-      const automaton =
-        operator === "wildcard" || operator === "regex"
-          ? patternOf(operator === "wildcard" ? wildcardPattern(wanted) : foldRegex(value, node.span), node)
-          : undefined
-      const fits = (known: string) => {
-        const name = normalize(known)
-        budget.work += name.length
-        if (budget.work > QUERY_LIMITS.work) exhausted("detector work")
-        if (automaton) return automaton.test(name, budget)
-        return name === wanted || (column === "mime" && !wanted.includes("/") && name.startsWith(`${wanted}/`))
-      }
-      let scope = combine(
-        execution.accounts.map(({ provider, account }) =>
-          bound("ac.provider=? AND ac.external_id=?", provider, account),
-        ),
-        "OR",
-      )
-      if (boundedAttachments && execution.chat) {
-        const chat = execution.chat
-        scope = combine(
-          [
-            scope,
-            bound(
-              `ac.provider=? AND ac.external_id=? AND m.chat_id IN (SELECT id FROM ${corpus.threads} WHERE account_id=ac.id AND external_id=?)`,
-              chat.account.provider,
-              chat.account.account,
-              chat.chatId,
-            ),
-          ],
-          "AND",
-        )
-      }
-      const page = database.prepare(
-        `SELECT att.id AS id, att.attachable_id AS message, att.${column} AS value FROM attachments att JOIN ${corpus.rows} m ON m.id=att.attachable_id AND att.attachable_type='${corpus.item}' JOIN accounts ac ON ac.id=m.account_id WHERE att.id > ? AND att.${column} IS NOT NULL AND m.deleted_at IS NULL AND ${scope.sql} ORDER BY att.id LIMIT 5000`,
-      )
-      const messages = new Set<number>()
-      for (let rows = page.all(0, ...scope.params); rows.length > 0; ) {
-        check()
-        for (const row of rows) {
-          if (fits(String(row.value))) messages.add(Number(row.message))
-          if (boundedAttachments && messages.size > QUERY_LIMITS.candidates) exhausted("attachment message keys")
-        }
-        rows = page.all(Number(rows.at(-1)?.id), ...scope.params)
-      }
-      fragment = bound("m.id IN (SELECT value FROM json_each(?))", JSON.stringify([...messages]))
-    } else if (field === "size") {
-      const conditions =
-        operator === "range"
-          ? [
-              ...(value === "*"
-                ? []
-                : [bound(`att.size ${node.lower_inclusive ? ">=" : ">"} ?`, parseBytes(value, node.span))]),
-              ...(node.upper === undefined || node.upper === "*"
-                ? []
-                : [bound(`att.size ${node.upper_inclusive ? "<=" : "<"} ?`, parseBytes(node.upper, node.span))]),
-            ]
-          : [bound("att.size = ?", parseBytes(value, node.span))]
-      const range = combine(conditions, "AND")
-      fragment = bound(
-        `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.size IS NOT NULL AND ${range.sql})`,
-        ...range.params,
-      )
-    } else if (field === "content" || field === "transcript") {
-      const text = normalize(value)
-      // Never `fts`: the ranking ANDs every required word into message_words, where a file's words are not.
-      const set = attachmentWords(quoted(text), field === "content" ? "file" : "transcript")
-      fragment = /[\p{L}\p{N}]/u.test(text) ? bound(`m.id IN (${set.sql})`, ...set.params) : bound("0")
-    } else if (field === "date") {
-      const range = resolution?.date
-      if (!range) searchError("query.invalid-ast", node.span)
-      const conditions: Fragment[] = []
-      if (range.lower !== undefined)
-        conditions.push(bound(`m.sent_at ${range.lower_inclusive ? ">=" : ">"} ?`, range.lower))
-      if (range.upper !== undefined)
-        conditions.push(bound(`m.sent_at ${range.upper_inclusive ? "<=" : "<"} ?`, range.upper))
-      fragment = combine(conditions, "AND")
-    } else if (field === "chat") {
-      const chat = resolution?.chat
-      if (!chat) searchError("query.invalid-ast", node.span)
-      fragment = bound(
-        `m.chat_id IN (SELECT cc.id FROM ${corpus.threads} cc JOIN accounts aa ON aa.id=cc.account_id WHERE aa.provider=? AND aa.external_id=? AND cc.external_id=?)`,
-        chat.account.provider,
-        chat.account.account,
-        chat.chatId,
-      )
-    } else if (field === "from") {
-      const sender = resolution?.sender
-      if (resolution?.outgoing) fragment = bound("m.outgoing = 1")
-      else if (sender)
-        fragment = bound(
-          "m.sender_identity_id IN (SELECT ii.id FROM identities ii WHERE ii.provider=? AND ii.external_id=?)",
-          sender.provider,
-          sender.id,
-        )
-      else searchError("query.invalid-ast", node.span)
-    } else if (field === "mentions") {
-      const [type, id = ""] = value.split(":")
-      const pk = Number(id)
-      // A person is mentioned by name, or by a phone or an address that is theirs.
-      const linked: Record<string, [string, number[]]> = {
-        person: [
-          "(mn.target_type = 'person' AND mn.target_id = ?) OR (mn.target_type = 'identity' " +
-            "AND mn.target_id IN (SELECT identity_id FROM identity_links WHERE person_id = ?))",
-          [pk, pk],
-        ],
-        organization: [
-          "mn.target_type = 'identity' AND mn.target_id IN " +
-            "(SELECT identity_id FROM organization_identities WHERE organization_id = ?)",
-          [pk],
-        ],
-        document: ["mn.target_type = 'document' AND mn.target_id = ?", [pk]],
-      }
-      const target = linked[type ?? ""]
-      if (target === undefined) searchError("query.invalid-reference", node.span)
-      else fragment = mentioned(`mn.status = 'linked' AND (${target[0]})`, target[1])
-    } else if (field === "url" || field === "link")
-      fragment = { ...linkMatch(field, value, mail, mentioned), exact: true }
-    else if (field === "phone" || field === "email" || field === "domain") {
-      const match = field === "domain" ? undefined : valueMatch(database, value)
-      fragment =
-        match === undefined
-          ? mentioned("mn.domain = ? AND mn.status <> 'dismissed'", [siteOf(value.toLowerCase())])
-          : mentioned(`mn.kind = ? AND ${match.sql} AND mn.status <> 'dismissed'`, [field, ...match.params])
-    } else if (field === "tag") {
-      const tag = tagOf(value)
-      if (tag === undefined) searchError("query.invalid-tag", node.span)
-      fragment = bound(
-        `m.id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.item}') OR ` +
-          `m.chat_id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.thread}') OR ` +
-          "m.sender_identity_id IN (SELECT tg.taggable_id FROM taggings tg JOIN tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='identity')",
-        tag,
-        tag,
-        tag,
-      )
-    } else if (mail && (field === "topic" || field === "kind")) {
-      throw new CliError("validation_error", `search: ${field}: is a messenger field — mail has no ${field}`, {
-        reason: "query.unsupported-field",
-        span: node.span,
-      })
-    } else if (field === "topic") fragment = bound("m.thread_external_id = ?", value)
-    else if (field === "kind") {
-      const kind = value.toLowerCase()
-      fragment = bound(
-        "CASE WHEN json_extract(c.metadata,'$.peerKind') IN ('private','saved','bot','service','group','channel','unknown') THEN json_extract(c.metadata,'$.peerKind') WHEN c.kind='dialog' AND json_extract(c.metadata,'$.isBot')=1 THEN 'bot' WHEN c.kind='dialog' THEN 'private' ELSE c.kind END = ?",
-        kind,
-      )
-    } else if (field === "has") {
-      const kind = value.toLowerCase()
-      fragment =
-        kind === "text"
-          ? bound("length(trim(coalesce(m.text,''))) > 0")
-          : kind === "link"
-            ? bound(
-                `(${mail ? "m.text LIKE '%' || ? || '%'" : "m.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)"} OR EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.kind IN ('share','webpage')))`,
-                mail ? "://" : quoted("://"),
-              )
-            : kind === "attachment"
-              ? bound(
-                  `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id)`,
-                )
-              : bound(
-                  `EXISTS (SELECT 1 FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id AND att.kind IN (${storedKinds(
-                    kind,
-                  )
-                    .map(() => "?")
-                    .join(",")}))`,
-                  ...storedKinds(kind),
-                )
-    } else if (field === "in") {
-      const source = value.toLowerCase()
-      const chosen = execution.accounts.filter(({ provider }) => inSource(source, provider))
-      fragment = chosen.length
-        ? combine(
-            chosen.map(({ provider, account }) => bound("ac.provider=? AND ac.external_id=?", provider, account)),
-            "OR",
-          )
-        : bound("0")
-    } else if (field === "to" || field === "cc" || field === "bcc") {
-      const who = resolution?.sender
-      if (!who) searchError("query.invalid-ast", node.span)
-      fragment = mail
-        ? bound(
-            "m.id IN (SELECT r.email_id FROM email_recipients r JOIN identities ii ON ii.id = r.identity_id WHERE r.role = ? AND ii.provider = ? AND ii.external_id = ?)",
-            field,
-            who.provider,
-            who.id,
-          )
-        : bound("0")
-    } else if (["title", "site", "lang", "author", "keyword", "source"].includes(field)) {
-      // What a page says about itself, and whether a note is written or a file, exist for notes only.
-      fragment = bound("0")
-    } else if (field === "mailbox" || field === "label") {
-      fragment = mail
-        ? bound(
-            // Not tied to m.account_id: a correlated subquery re-reads every mailbox link for each email (minutes on
-            // 880k links), and an email only ever links to its own account's mailboxes anyway.
-            `m.id IN (SELECT em.email_id FROM email_mailboxes em WHERE em.mailbox_id IN
-               (SELECT b.id FROM mailboxes b WHERE lower(b.external_id) = lower(?) OR lower(b.name) = lower(?)))`,
-            value,
-            value,
-          )
-        : bound("0")
-    } else if (field === "is") {
-      const state = value.toLowerCase()
-      fragment = !mail
-        ? bound("0")
-        : state === "starred"
-          ? bound("m.flagged = 1")
-          : bound("m.read = ?", state === "read" ? 1 : 0)
-    } else if (field === "subject") {
-      const wanted = normalize(value)
-      const words = wanted.match(/[\p{L}\p{N}]+/gu) ?? []
-      if (!mail || !words.length) fragment = bound("0")
-      else {
-        // The word index holds subject and body together: it narrows, the subject itself decides.
-        fragment = { ...wordMatch(corpus, words.map(quoted).join(" AND ")), exact: false }
-        test = (text) => {
-          const subject = normalize(text.slice(0, Math.max(0, text.indexOf("\n\n"))))
-          return operator === "phrase"
-            ? subject.includes(wanted)
-            : words.every((word) => new RegExp(`(^|[^\\p{L}\\p{N}])${word}`, "u").test(subject))
-        }
-      }
-    } else searchError("query.unsupported-field", node.span)
+    const compiler = FIELD_COMPILERS[node.field]
+    if (!compiler) return searchError("query.unsupported-field", node.span)
+    const compiled = compiler(node, fields)
+    if ("node" in compiled) return compiled
+    const { fragment, test } = compiled
     return { node, fragment: { ...fragment, sql: `(${fragment.sql})` }, ...(test ? { test } : {}) }
   }
   const compile = (node: ResolvedNode): Fragment => {
