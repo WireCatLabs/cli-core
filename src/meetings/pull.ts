@@ -54,8 +54,18 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
   const meetings = await source.meetings(lookbackMs === 0 ? since : new Date(from).toISOString())
   for (const m of meetings) {
     const id = m.occurrence.id
+    const read = async <T>(part: string, call: () => Promise<T | null>): Promise<T | null | undefined> => {
+      try {
+        return await call()
+      } catch (error) {
+        failed = true
+        const message = error instanceof Error ? error.message : "could not be read"
+        report.warnings.push({ externalId: id, message: `${part}: ${message}` })
+        return undefined
+      }
+    }
     try {
-      const sourceParticipants = await source.participants(id)
+      const sourceParticipants = await read("participants", () => source.participants(id))
       const participants = (sourceParticipants ?? []).map((p, i) =>
         participantInput(p, source.provider, id, i, options.accountId),
       )
@@ -68,10 +78,10 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
         }
       if ([...names.values()].some((ids) => ids.size > 1))
         report.warnings.push({ externalId: id, message: "Participant names are ambiguous" })
-      const lines = await source.transcript(id)
-      const chat = await source.chat(id)
-      const summary = await source.summary(id)
-      const attachments = await source.files(id)
+      const lines = await read("transcript", () => source.transcript(id))
+      const chat = await read("chat", () => source.chat(id))
+      const summary = await read("summary", () => source.summary(id))
+      const attachments = await read("files", () => source.files(id))
       const startedAt = timestamp(m.occurrence.startedAt)
       const endedAt = m.occurrence.endedAt === null ? null : timestamp(m.occurrence.endedAt)
       if (endedAt !== null && endedAt < startedAt) throw new Error("Meeting ends before it starts")
@@ -103,13 +113,13 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
           metadata: null,
           deletedAt: null,
         }
+      const linked = sourceParticipants !== undefined
+      const format = source.transcriptFormat ?? null
       const transcripts =
-        lines === null
-          ? undefined
-          : [await transcriptInput(lines, participants, source.name, undefined, source.transcriptFormat ?? null)]
+        lines && linked ? [await transcriptInput(lines, participants, source.name, undefined, format)] : undefined
       const details = await store.saveMeeting({
         meeting,
-        participants: sourceParticipants === null ? undefined : participants,
+        participants: sourceParticipants ? participants : undefined,
         transcripts,
         chat: chat?.map((line) => ({
           externalId: null,
@@ -121,28 +131,39 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
           normalizedText: null,
           metadata: null,
         })),
-        summaries:
-          summary === null
-            ? undefined
-            : [
-                {
-                  ...summary,
-                  source: summary.source ?? source.name,
-                  content: summary.content ?? null,
-                  docUrl: summary.docUrl ?? null,
-                  externalCreatedAt: summary.externalCreatedAt ?? null,
-                  externalUpdatedAt: summary.externalUpdatedAt ?? null,
-                  metadata: summary.metadata ?? null,
-                },
-              ],
+        summaries: summary
+          ? [
+              {
+                ...summary,
+                source: summary.source ?? source.name,
+                content: summary.content ?? null,
+                docUrl: summary.docUrl ?? null,
+                externalCreatedAt: summary.externalCreatedAt ?? null,
+                externalUpdatedAt: summary.externalUpdatedAt ?? null,
+                metadata: summary.metadata ?? null,
+              },
+            ]
+          : undefined,
         attachments: attachments ?? undefined,
         now,
       })
+      // Without participants the rows cannot be linked: they are saved only when the meeting has no current
+      // transcript to downgrade, under a distinct hash so the retry that reads participants is not a replay.
+      if (
+        lines &&
+        !linked &&
+        !details.transcripts.some((t) => t.transcript.source === source.name && t.transcript.supersededAt === null)
+      )
+        await store.saveMeeting({
+          meeting,
+          transcripts: [await transcriptInput(lines, [], source.name, `${JSON.stringify(lines)}\nunlinked`, format)],
+          now,
+        })
       await linkEvent(store, details, now)
       report.meetings++
       report.participants += participants.length
       report.transcriptRows += lines?.length ?? 0
-      report.summaries += summary === null ? 0 : 1
+      report.summaries += summary ? 1 : 0
     } catch (error) {
       failed = true
       report.warnings.push({ externalId: id, message: error instanceof Error ? error.message : "Meeting pull failed" })

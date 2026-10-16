@@ -107,13 +107,90 @@ describe("pull", () => {
       return null
     }
     const report = await pull(source, store, { accountId: 1, now: 4000 })
-    expect(report.meetings).toBe(1)
-    expect(report.warnings[0]?.externalId).toBe("failed")
+    expect(report.meetings).toBe(2)
+    expect(report.warnings).toEqual([{ externalId: "failed", message: "participants: Unavailable participants" }])
     expect(await store.cursor(1)).toBe(options.since)
     source.participants = async () => {
       throw "unavailable"
     }
-    expect((await pull(source, store, options)).warnings[0]?.message).toBe("Meeting pull failed")
+    expect((await pull(source, store, options)).warnings[0]?.message).toBe("participants: could not be read")
+  })
+  it("saves the transcript and summary when participants fail, and links speakers on the retry", async () => {
+    let participantsFail = true
+    const source = fakeMeetingSource({
+      async participants() {
+        if (participantsFail) throw new Error("Example participants timeout")
+        return [participant()]
+      },
+      async summary() {
+        return { title: null, overview: "Example overview", sections: [], nextSteps: [] }
+      },
+    })
+    const store = memoryMeetingStore()
+    await store.setCursor(1, options.since, 0)
+    const report = await pull(source, store, { accountId: 1, now: 4000 })
+    expect(report).toMatchObject({ meetings: 1, transcriptRows: 1, summaries: 1 })
+    expect(report.warnings).toEqual([
+      { externalId: "example-occurrence", message: "participants: Example participants timeout" },
+    ])
+    expect(await store.cursor(1)).toBe(options.since)
+    const [m] = await store.meetings()
+    const first = await store.meeting(m?.id ?? 0)
+    expect(first?.summaries[0]?.overview).toBe("Example overview")
+    expect(first?.transcripts[0]?.rows[0]?.speakerParticipantId).toBeNull()
+
+    participantsFail = false
+    expect((await pull(source, store, { accountId: 1, now: 5000 })).warnings).toEqual([])
+    const after = await store.meeting(m?.id ?? 0)
+    const current = after?.transcripts.find((t) => t.transcript.supersededAt === null)
+    expect(current?.rows[0]?.speakerParticipantId).toBe(after?.participants[0]?.id)
+    expect(await store.cursor(1)).toBe("1970-01-01T00:00:05.000Z")
+  })
+  it("keeps a linked transcript when participants fail on a later pull", async () => {
+    let participantsFail = false
+    const source = fakeMeetingSource({
+      async participants() {
+        if (participantsFail) throw new Error("Example participants timeout")
+        return [participant()]
+      },
+    })
+    const store = memoryMeetingStore()
+    const linkedSpeaker = async () => {
+      const [m] = await store.meetings()
+      const d = await store.meeting(m?.id ?? 0)
+      const current = d?.transcripts.filter((t) => t.transcript.supersededAt === null) ?? []
+      expect(current).toHaveLength(1)
+      return current[0]?.rows[0]?.speakerParticipantId === d?.participants[0]?.id
+    }
+    await pull(source, store, options)
+    expect(await linkedSpeaker()).toBe(true)
+    participantsFail = true
+    await pull(source, store, options)
+    expect(await linkedSpeaker()).toBe(true)
+    participantsFail = false
+    await pull(source, store, options)
+    expect(await linkedSpeaker()).toBe(true)
+  })
+  it("keeps stored participants and transcript when the transcript fails", async () => {
+    const source = fakeMeetingSource({
+      async participants() {
+        return [participant()]
+      },
+    })
+    const store = memoryMeetingStore()
+    await pull(source, store, options)
+    const [m] = await store.meetings()
+    const before = await store.meeting(m?.id ?? 0)
+    source.transcript = async () => {
+      throw new Error("Example transcript still processing")
+    }
+    const cursor = await store.cursor(1)
+    const report = await pull(source, store, { accountId: 1, since: options.since, now: 6000 })
+    expect(report.warnings.map((w) => w.message)).toEqual(["transcript: Example transcript still processing"])
+    const after = await store.meeting(m?.id ?? 0)
+    expect(after?.participants.map((p) => p.id)).toEqual(before?.participants.map((p) => p.id))
+    expect(after?.transcripts).toEqual(before?.transcripts)
+    expect(await store.cursor(1)).toBe(cursor)
   })
   it("handles unavailable parts, no series, defaults and invalid timestamps", async () => {
     const source = fakeMeetingSource()
