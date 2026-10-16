@@ -170,13 +170,12 @@ describe("the default whole-command deadline", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
     const job = await hanging({ ...process.env, APP_BACKFILL_JOB: "20261011T000000-abcdef" })
     await vi.advanceTimersByTimeAsync(31_000)
-    vi.useRealTimers()
-    // A command the deadline ended settles within milliseconds of real time; give it far longer.
-    const outcome = await Promise.race([
-      job.done.then(() => "ended"),
-      new Promise((resolve) => setTimeout(() => resolve("running"), 1_000)),
-    ])
-    expect(outcome).toBe("running")
+    let ended = false
+    void job.done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(ended).toBe(false)
   })
 })
 
@@ -200,16 +199,39 @@ describe("a command's declared lifetime", () => {
         },
         { lifetime },
       ),
-      { streams: captureStreams(), tty: true, env: { ...process.env } },
+      { streams: captureStreams(), tty: true, env: { ...process.env, CI: undefined } },
     )
     await reached
     await vi.advanceTimersByTimeAsync(31_000)
-    vi.useRealTimers()
-    const outcome = await Promise.race([
-      done.then(() => "ended"),
-      new Promise((resolve) => setTimeout(() => resolve("running"), 1_000)),
-    ])
-    expect(outcome).toBe("running")
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(ended).toBe(false)
+  })
+  it("bounds an interactive command in CI even when a terminal is present", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    let entered: () => void = () => {}
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const done = run(
+      ["chats", "list"],
+      definition(
+        async (command) => {
+          await baseContext(command, resolveSettings).run(async () => {
+            entered()
+            await new Promise(() => {})
+          })
+        },
+        { lifetime: "interactive" },
+      ),
+      { streams: captureStreams(), tty: true, env: { ...process.env, CI: "true" } },
+    )
+    await started
+    await vi.advanceTimersByTimeAsync(31_000)
+    expect(await done).toBe(9)
   })
 })
 
