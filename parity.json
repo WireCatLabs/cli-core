@@ -1867,7 +1867,10 @@
     "chats mark-read": {
       "in": "all",
       "options": {
-        "--topic": "all",
+        "--topic": {
+          "in": ["tg"],
+          "reason": "MAX has no forum topics"
+        },
         "--until-id": "all"
       }
     },
@@ -1966,15 +1969,27 @@
     "chats requests accept": {
       "in": "all",
       "options": {
-        "--all": "all",
-        "--link": "all"
+        "--all": {
+          "in": ["tg"],
+          "reason": "MAX answers one join request at a time"
+        },
+        "--link": {
+          "in": ["tg"],
+          "reason": "MAX answers one join request at a time"
+        }
       }
     },
     "chats requests decline": {
       "in": "all",
       "options": {
-        "--all": "all",
-        "--link": "all"
+        "--all": {
+          "in": ["tg"],
+          "reason": "MAX answers one join request at a time"
+        },
+        "--link": {
+          "in": ["tg"],
+          "reason": "MAX answers one join request at a time"
+        }
       }
     },
     "chats requests list": {
@@ -2778,7 +2793,10 @@
             "tg": "tg-cli backlog: stickers"
           }
         },
-        "--topic": "all",
+        "--topic": {
+          "in": ["tg"],
+          "reason": "MAX has no forum topics"
+        },
         "--voice": "all"
       }
     },
@@ -2899,7 +2917,10 @@
           "in": ["tg"],
           "reason": "max-cli creates no quizzes"
         },
-        "--topic": "all"
+        "--topic": {
+          "in": ["tg"],
+          "reason": "MAX has no forum topics"
+        }
       }
     },
     "polls show": {
