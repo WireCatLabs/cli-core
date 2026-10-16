@@ -1017,7 +1017,7 @@
     "--type": {
       "value": "<names>",
       "meaning": "only these types",
-      "note": "each command names its own types — tasks add gives the new task question, request, mention or promise — and search notes internal or file — so it differs on purpose (Help text rule 4)"
+      "note": "each command names its own types — tasks add gives the new task question, request, mention or promise — so it differs on purpose (Help text rule 4)"
     },
     "--types": {
       "value": "<value>",
@@ -3280,8 +3280,7 @@
             "tg": "each CLI’s next cli-core bump"
           }
         },
-        "--timezone": "all",
-        "--type": "all"
+        "--timezone": "all"
       }
     },
     "search topics": {

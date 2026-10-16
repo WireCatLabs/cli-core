@@ -4,7 +4,6 @@ import { Command } from "commander"
 import { SAVE_HELP } from "../../meetings/index.js"
 import { searchNotesOf } from "../../services/notes-search.js"
 import type { SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
-import type { Note } from "../../store/index.js"
 import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
@@ -38,12 +37,6 @@ const maxMeetingsOf = (value: string): number | "all" => {
   if (!/^[1-9]\d*$/.test(value))
     throw new CliError("validation_error", "--max-meetings takes a whole number from 1, or all")
   return Number(value)
-}
-
-const noteTypeOf = (value: string): Note["source"] => {
-  if (value !== "internal" && value !== "file")
-    throw new CliError("validation_error", "--type takes internal (written in memo) or file (from a notes folder)")
-  return value
 }
 
 const allCommand = (messenger: Messenger): Command => {
@@ -155,13 +148,16 @@ const notesCommand = (messenger: Messenger): Command =>
       "search the notes — written in memo, or imported from a notes folder — by words and, with the local " +
         "text model, by meaning; each hit says which found it and what it links to",
     )
-    .argument("<query...>", 'strict Lucene query: words, "phrases", AND/OR/NOT, tag: and date ranges')
+    .argument(
+      "<query...>",
+      'strict Lucene query: words, "phrases", AND/OR/NOT, tag:, type:internal (written in memo) or type:file ' +
+        "(from a notes folder) and date ranges",
+    )
     .addHelpText(
       "after",
       "tag: in --filter keeps the notes with that tag and leaves the search by meaning as it is — --filter 'tag:work'. " +
         "--json: the list is items; each note's reference is ref.",
     )
-    .option("--type <internal|file>", "only notes written in memo, or only notes from a folder", noteTypeOf)
     .option(
       "--source <accounts>",
       "only these notes accounts, separated by commas: notes:internal for notes written in memo, notes:<folder id> " +
@@ -175,7 +171,6 @@ const notesCommand = (messenger: Messenger): Command =>
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
       const options = this.opts<{
-        type?: Note["source"]
         source?: string
         filter?: string
         limit?: number
@@ -191,7 +186,6 @@ const notesCommand = (messenger: Messenger): Command =>
           command: messenger.app.command,
           env: context.env,
           ...(offset === undefined ? {} : { offset }),
-          ...(options.type === undefined ? {} : { source: options.type }),
           ...(options.source === undefined ? {} : { accounts: options.source }),
           app: messenger.app,
           ...(options.filter === undefined ? {} : { filter: options.filter }),
@@ -205,7 +199,6 @@ const notesCommand = (messenger: Messenger): Command =>
       if (found.meaning_skipped) context.renderer.note(`by words only: ${found.meaning_skipped}`)
       const again = {
         query: words.join(" "),
-        ...(options.type === undefined ? {} : { type: options.type }),
         ...(options.source === undefined ? {} : { source: options.source }),
         ...(options.filter === undefined ? {} : { filter: options.filter }),
         ...(options.exact ? { exact: true } : {}),

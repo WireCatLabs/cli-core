@@ -2018,12 +2018,12 @@ describe("the shared read commands", () => {
     expect(fromField.meta.issues.map(({ source }: { source: string }) => source)).toContain("notes")
 
     const notes = JSON.parse(
-      (await call(["search", "notes", "chapter", "--type", "internal", "--json"], never, env)).stdout[0] ?? "",
+      (await call(["search", "notes", "chapter type:internal", "--json"], never, env)).stdout[0] ?? "",
     )
     expect(notes.items).toHaveLength(1)
     expect(notes.items[0].found_by).toEqual(["words"])
     const files = JSON.parse(
-      (await call(["search", "notes", "chapter", "--type", "file", "--json"], never, env)).stdout[0] ?? "",
+      (await call(["search", "notes", "chapter AND type:file", "--json"], never, env)).stdout[0] ?? "",
     )
     expect(files.items).toHaveLength(0)
     const written = JSON.parse(

@@ -50,14 +50,13 @@ describe("search notes --source", () => {
     )
   })
 
-  it("refuses a --type that leaves nothing of the list", async () => {
+  it("refuses a type: that leaves nothing of the list", async () => {
     const { store, twins } = await twinStore()
     await expect(
-      searchNotesOf(store, alpha, SHARED_WORD, { accounts: "notes:internal", source: "file", limit: 50 }),
-    ).rejects.toThrow("--type file reads notes folders, and --source names none")
-    const files = await searchNotesOf(store, alpha, SHARED_WORD, {
+      searchNotesOf(store, alpha, `${SHARED_WORD} type:file`, { accounts: "notes:internal", limit: 50 }),
+    ).rejects.toThrow("type:file reads notes folders, and --source names none")
+    const files = await searchNotesOf(store, alpha, `${SHARED_WORD} type:file`, {
       accounts: `notes:internal,notes:${twins.alpha.folderId}`,
-      source: "file",
       limit: 50,
     })
     expect(new Set(files.hits.map(accountOf))).toEqual(new Set([twins.alpha.folderId]))

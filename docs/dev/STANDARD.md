@@ -1155,7 +1155,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--trace` |  | one line per request on stderr: ids and timings, never message content. **max logs one line per request, tg the connection's own lines: the same option, a different mechanism (Help text rule 4)** |  | every command |
 | `--track` |  | also do it daily while serve runs |  | `chats members fetch` |
 | `--transcribe` |  | hear voice messages not heard yet, on this machine; slow, the model must be downloaded. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `inbox`, `messages list`, `review` |
-| `--type` | `<names>` | only these types. **each command names its own types — tasks add gives the new task question, request, mention or promise — and search notes internal or file — so it differs on purpose (Help text rule 4)** |  | `chats media` (planned), `search notes`, `stats tasks show`, `tasks add` |
+| `--type` | `<names>` | only these types. **each command names its own types — tasks add gives the new task question, request, mention or promise — so it differs on purpose (Help text rule 4)** |  | `chats media` (planned), `stats tasks show`, `tasks add` |
 | `--types` | `<value>` | Comma separated list of update types your bot want to receive |  | `bot watch`, `bot webhooks set` |
 | `--unanswered` | `[duration]` | only questions to you or a group's admins that nobody answered, asked at least this long ago — 4h, 1d. **max's own `review` still takes bare hours until T6 moves it (e2)** | `24h` | `review`, `tasks agenda` |
 | `--until` | `<time>` | only until then: a local time, or a duration from now |  | `chats mute` (planned) |

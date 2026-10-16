@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import type { Message } from "../domain/models.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { searchStore } from "./messages-archive-search.js"
-import { embedNotes, searchNotesQuery } from "./notes-search.js"
+import { embedNotes, noteTypeOfQuery, searchNotesQuery } from "./notes-search.js"
 
 const account: AccountKey = { provider: "telegram", account: "1" }
 const TEXT = "Budget review is running late. Los pisos en Valencia. Сдаю квартиру в мае."
@@ -216,5 +216,18 @@ describe("the notes' indexes", () => {
     const chunks = (await store.notes.chunksToEmbed("test:model:2", { limit: 20 })).map(({ text }) => text)
     expect(chunks.length).toBeGreaterThan(2)
     expect(chunks.filter((chunk) => chunk.includes("Revenue grew") && chunk.includes("Hosting"))).toEqual([])
+  })
+})
+
+describe("noteTypeOfQuery", () => {
+  it("lifts a required type: out of the words the meaning half reads", () => {
+    expect(noteTypeOfQuery("chapter type:internal")).toEqual({ source: "internal", rest: "chapter" })
+    expect(noteTypeOfQuery("chapter AND type:FILE AND draft")).toEqual({ source: "file", rest: "chapter draft" })
+    expect(noteTypeOfQuery("type:file")).toEqual({ source: "file", rest: "" })
+  })
+
+  it("leaves a type: it cannot require to the words half", () => {
+    expect(noteTypeOfQuery("chapter OR type:file")).toEqual({ rest: "chapter OR type:file" })
+    expect(noteTypeOfQuery("chapter -type:file")).toEqual({ rest: "chapter -type:file" })
   })
 })

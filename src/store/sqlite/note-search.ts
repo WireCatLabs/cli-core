@@ -61,6 +61,7 @@ export const NOTE_FIELDS = [
   "lang",
   "author",
   "keyword",
+  "type",
 ] as const
 
 interface Fragment {
@@ -249,6 +250,8 @@ const searchCorpus = (context: StoreContext, query: NoteQuery, corpus: Corpus): 
       // A label on a folder or subfolder labels every note under it, at any depth.
       return corpus.tagged(tag)
     }
+    if (field === "type")
+      return bound(value.toLowerCase() === (corpus.type === "note" ? "internal" : "file") ? "1" : "0")
     if (field === "has") {
       // A document drive could not read is kept by its name alone; `-has:text` lists those.
       if (value.toLowerCase() !== "text")

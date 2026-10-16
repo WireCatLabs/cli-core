@@ -125,15 +125,13 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
     title: "Search notes",
     description:
       "Search the notes — written in memo, or imported from a notes folder — by words and, with the local text " +
-      "model, by meaning. Each item says which found it (found_by) and what it links to (links). `source` narrows " +
+      "model, by meaning. Each item says which found it (found_by) and what it links to (links). type:internal in " +
+      "text keeps the notes written in memo, type:file those from a notes folder. `source` narrows " +
       "which: notes:internal for notes written in memo, notes:<folder id> as an item's folder_id shows it, or a list " +
       "with group:<name>; an entry naming none is in meta.issues. `filter` is a query every item must also match, " +
       "tag:work among them, and leaves the search by meaning as it is. Returns { items, page, next?, missing?, meta }.",
     input: v.object({
       text,
-      type: v.optional(
-        v.pipe(v.picklist(["internal", "file"]), v.description("internal: written in memo; file: from a notes folder")),
-      ),
       source: v.optional(
         v.pipe(
           v.string(),
@@ -159,7 +157,6 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
         command: messenger.app.command,
         env: defaults.env,
         ...(offset === undefined ? {} : { offset }),
-        ...(args.type === undefined ? {} : { source: args.type }),
         ...(args.source === undefined ? {} : { accounts: args.source }),
         app: messenger.app,
         ...(args.filter === undefined ? {} : { filter: args.filter }),
@@ -168,7 +165,6 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       })
       const again = {
         query: args.text,
-        ...(args.type === undefined ? {} : { type: args.type }),
         ...(args.source === undefined ? {} : { source: args.source }),
         ...(args.filter === undefined ? {} : { filter: args.filter }),
         ...(args.exact ? { exact: true } : {}),

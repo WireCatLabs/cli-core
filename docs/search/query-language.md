@@ -14,7 +14,8 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 
 Этот профиль — для всех команд `search`. В tg и max это `search messages` (сообщения мессенджеров) и
 `search notes` (заметки всех папок сразу, `--source notes:<id>` — только одной, `notes:internal` — написанные
-в memo; у них только поля `text`, `exact`, `body`, `tag`, `date`, `in`, `has:text`, а у файлов-страниц ещё
+в memo; у них только поля `text`, `exact`, `body`, `tag`, `date`, `in`, `has:text`, `type` (`type:internal` —
+написанные в memo, `type:file` — файлы из папок), а у файлов-страниц ещё
 `title`, `site`, `lang`, `author`, `keyword` — то, что страница сообщает о себе; у сообщений эти поля
 ничего не находят). `search all` ищет в сообщениях и заметках сразу. Почта принадлежит memo: `memo search mail`
 ищет только в почте, импортированной `memo sync --mail`, во всех почтовых аккаунтах сразу, а
@@ -352,6 +353,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `is` | enum | unread, read, starred | `is:unread` | term, phrase |
 | `chat` | kw | account-scoped resolution | `chat:"Work fixture"` | term, phrase |
 | `date` | time | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
+| `type` | enum | internal, file | `type:internal` | term, phrase |
 | `kind` | enum | private, saved, bot, service, group, channel, unknown | `kind:private` | term, phrase |
 | `has` | enum | text, attachment, link, file, photo, image, video, audio, voice, sticker, contact, location, poll | `has:file` | term, phrase |
 | `topic` | kw | string id, one chat required | `chat:7 AND topic:42` | term, phrase |

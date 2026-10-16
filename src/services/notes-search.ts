@@ -365,6 +365,37 @@ const pictureLane = async (
 }
 
 /**
+ * A `type:` every hit must match, and the query without it. The meaning half and the picture lane cannot read a
+ * field, so they get the source and the rest of the words; the words half still compiles the field itself.
+ */
+export const noteTypeOfQuery = (query: string): { source?: Note["source"]; rest: string } => {
+  let root: QueryNode
+  try {
+    root = parseLucene(query, { ...SEARCH_QUERY, defaultField: "text" }).root
+  } catch {
+    return { rest: query }
+  }
+  const required =
+    root.kind === "predicate"
+      ? [root]
+      : root.clauses.flatMap(({ occur, node }) => (occur === "must" && node.kind === "predicate" ? [node] : []))
+  const typed = required.find(
+    ({ field, operator }) => field === "type" && (operator === "term" || operator === "phrase"),
+  )
+  const source = typed?.value.toLowerCase()
+  if (typed === undefined || (source !== "internal" && source !== "file")) return { rest: query }
+  const rest = `${query.slice(0, typed.span.start).replace(/\s*(?:AND|&&)\s*$/u, "")} ${query
+    .slice(typed.span.end)
+    .replace(/^\s*(?:AND|&&)\s*/u, "")}`.trim()
+  try {
+    if (rest) parseLucene(rest, { ...SEARCH_QUERY, defaultField: "text" })
+  } catch {
+    return { source, rest: query }
+  }
+  return { source, rest }
+}
+
+/**
  * `search notes`: words and stems, and meaning when the local model is there, merged by reciprocal rank;
  * each hit says which half found it, and the answer lists what the notes found link to.
  */
@@ -378,7 +409,7 @@ export const searchNotes = async (
     filter: expression,
     folderIds,
     withInternal,
-    source,
+    source: given,
     exact = false,
     timezone,
     env,
@@ -388,6 +419,9 @@ export const searchNotes = async (
     pictureEmbedder,
   }: NotesQuery = {},
 ): Promise<NotesFound> => {
+  const typed = noteTypeOfQuery(query)
+  const source = given ?? typed.source
+  const words = typed.source !== undefined && typed.source === source ? typed.rest : query
   const label = tag === undefined ? undefined : normalizeTag(tag)
   const filter =
     [expression ? `(${expression})` : "", label === undefined ? "" : `tag:${label}`].filter(Boolean).join(" AND ") ||
@@ -403,9 +437,9 @@ export const searchNotes = async (
   let meaningSkipped: string | undefined
   let meaning: { ref: string; note: Note }[] | undefined
   if (exact) meaningSkipped = "--exact searches words as written"
-  else if (query.trim()) {
+  else if (words.trim()) {
     try {
-      const nearest = await nearestNotes(store, query, {
+      const nearest = await nearestNotes(store, words, {
         limit: Math.max(window, CANDIDATES),
         command,
         ...(env === undefined ? {} : { env }),
@@ -424,7 +458,7 @@ export const searchNotes = async (
       meaningSkipped = error.message
     }
   }
-  const titleWords = plainQueryWords(query)
+  const titleWords = plainQueryWords(words)
   const titled =
     titleWords === undefined
       ? { items: [], hasMore: false }
@@ -436,7 +470,7 @@ export const searchNotes = async (
   const tier = titleWords === undefined ? [] : titleTiers(titled.items, titleWords)
   const tierRefs = new Set(tier.map(({ ref }) => ref))
   const slice = meaning === undefined && tier.length === 0
-  const words = await searchNotesQuery(store, {
+  const matched = await searchNotesQuery(store, {
     text,
     limit: slice ? limit : Math.max(window, CANDIDATES) + tier.length,
     offset: slice ? offset : 0,
@@ -452,14 +486,14 @@ export const searchNotes = async (
       held.foundBy.push(by)
       ranked.set(ref, held)
     })
-  add(words.items, "words")
+  add(matched.items, "words")
   if (meaning !== undefined) add(meaning, "meaning")
   const ordered = [
     ...tier.map(({ ref, note }): [string, Held] => [ref, { note, score: 0, foundBy: ["title"] }]),
     ...[...ranked.entries()].sort(([, a], [, b]) => b.score - a.score),
   ]
   const page = slice ? ordered : ordered.slice(offset, window)
-  const hasMore = slice ? words.hasMore : ordered.length > window || words.hasMore || titled.hasMore
+  const hasMore = slice ? matched.hasMore : ordered.length > window || matched.hasMore || titled.hasMore
   const hits: FoundNote[] = []
   const counts = new Map<string, LinkedRecord>()
   const folders = await store.notes.folders()
@@ -478,7 +512,7 @@ export const searchNotes = async (
       path: note.path,
       title: note.title,
       ...documentSource(note, folders, profiles),
-      excerpt: firstLine(note.text, query),
+      excerpt: firstLine(note.text, words),
       links,
       found_by: foundBy,
     })
@@ -503,7 +537,7 @@ export const searchNotes = async (
       record.name = (await store.notes.note(record.ref).catch(() => undefined))?.title ?? record.name
   }
   const lane = withPictures
-    ? await pictureLane(store, query, {
+    ? await pictureLane(store, words, {
         folderIds,
         source,
         limit: pictureLimit,
@@ -567,21 +601,22 @@ export const searchNotesOf = async (
     list === undefined
       ? { accounts: held, skipped: [] }
       : fitting(entriesOfList(list, await listContextOf(store, account, app)), ["notes", "documents"], what)
+  const source = query.source ?? noteTypeOfQuery(text).source
   const typed = named.accounts.filter(
-    ({ account }) => query.source === undefined || (account === INTERNAL_NOTES) === (query.source === "internal"),
+    ({ account }) => source === undefined || (account === INTERNAL_NOTES) === (source === "internal"),
   )
   if (!typed.length && list !== undefined)
     throw new CliError(
       "validation_error",
-      query.source === "internal"
-        ? "--type internal reads the notes written in memo, and --source names none: add notes:internal"
-        : "--type file reads notes folders, and --source names none: add notes:<folder id>",
+      source === "internal"
+        ? "type:internal reads the notes written in memo, and --source names none: add notes:internal"
+        : "type:file reads notes folders, and --source names none: add notes:<folder id>",
     )
   const scope = list === undefined ? {} : notesScopeOf(typed)
   const found = await searchNotes(store, text, {
     ...query,
     ...scope,
-    ...(query.source ? { source: query.source } : {}),
+    ...(source ? { source } : {}),
   })
   return {
     ...found,

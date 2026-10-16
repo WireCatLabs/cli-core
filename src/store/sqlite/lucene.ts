@@ -464,8 +464,8 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
             who.id,
           )
         : bound("0")
-    } else if (field === "title" || field === "site" || field === "lang" || field === "author" || field === "keyword") {
-      // What a page says about itself is stored for files in notes folders only.
+    } else if (["title", "site", "lang", "author", "keyword", "type"].includes(field)) {
+      // What a page says about itself, and whether a note is written or a file, exist for notes only.
       fragment = bound("0")
     } else if (field === "mailbox" || field === "label") {
       fragment = mail
