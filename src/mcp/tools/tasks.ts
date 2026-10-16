@@ -42,10 +42,11 @@ const ahead = (what: string) =>
     ),
   )
 // The owner may edit the list (config set task_categories.*), so the store checks the name, not a picklist here.
+// Names only: with each meaning the default list is ~1.9k characters in two tool schemas; tasks_categories has them.
 const category = text(
   30,
-  "what it is about, a name from tasks_categories — by default " +
-    DEFAULT_TASK_CATEGORIES.map(({ name, meaning }) => `${name} (${meaning})`).join("; "),
+  "what it is about, a name from tasks_categories (it says what each means) — by default " +
+    DEFAULT_TASK_CATEGORIES.map(({ name }) => name).join(", "),
 )
 const PLAN = {
   title: v.optional(text(300, "one line: the action and its object — send Alex the API token")),

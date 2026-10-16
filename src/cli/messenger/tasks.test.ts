@@ -219,7 +219,7 @@ describe("tasks", () => {
     )
     expect(
       (await call("tasks", "add", PROMISE, "--type", "promise", "--category", "finance", "--json")).stderr,
-    ).toContain("--category takes money, documents, meeting, delivery, access, personal, other")
+    ).toContain("--category takes taxes, bills, insurance, bank, government, legal, hiring, sales,")
     expect((await call("tasks", "close", "nope", "--as", "done", "--json")).code).toBe(6)
 
     const readOnly = await setup({ profiles: { default: { permissions: { tasks: "readonly" } } } })
@@ -292,21 +292,13 @@ describe("tasks", () => {
   it("**keys, categorizes, tags and claims a task**: one holder at a time, hidden from others on the agenda", async () => {
     const call = await setup()
     const listed = item(await call("tasks", "categories", "--json")).categories
-    expect(listed.map(({ name }: { name: string }) => name)).toEqual([
-      "money",
-      "documents",
-      "meeting",
-      "delivery",
-      "access",
-      "personal",
-      "other",
-    ])
+    expect(listed.map(({ name }: { name: string }) => name)).toEqual(DEFAULT_TASK_CATEGORIES.map(({ name }) => name))
     const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
     expect(added).toMatchObject({ key: "PR-1", category: "money" })
     expect(item(await call("tasks", "plan", "PR-1", "--category", "Documents", "--json")).category).toBe("documents")
     expect(json(await call("tasks", "list", "category:documents", "key:PR-1", "--json")).items).toHaveLength(1)
     expect(json(await call("tasks", "list", "category:money", "--json")).items).toEqual([])
-    expect((await call("tasks", "plan", "PR-1", "--category", "finance")).stderr).toContain("--category takes money")
+    expect((await call("tasks", "plan", "PR-1", "--category", "finance")).stderr).toContain("--category takes taxes")
 
     expect((await call("tags", "add", "urgent", "--task", "PR-1", "--json")).code).toBe(0)
     expect(json(await call("tasks", "list", "tag:urgent", "--json")).items).toMatchObject([{ key: "PR-1" }])
@@ -402,18 +394,18 @@ it("**takes a category from the list the owner edited in the store**, and refuse
   const call = await setup()
   const store = await openStore({ path: join(call.root, "m.db") })
   await store.tasks.saveCategories(
-    withTaskCategory(withTaskCategory(DEFAULT_TASK_CATEGORIES, "travel", "trips | flight"), "personal", undefined),
+    withTaskCategory(withTaskCategory(DEFAULT_TASK_CATEGORIES, "garden", "plants | seedling"), "personal", undefined),
   )
   await store.close()
 
   expect(
     item(await call("tasks", "categories", "--json")).categories.map(({ name }: { name: string }) => name),
-  ).toContain("travel")
+  ).toContain("garden")
   expect(
-    item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "Travel", "--json")),
-  ).toMatchObject({ category: "travel" })
+    item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "Garden", "--json")),
+  ).toMatchObject({ category: "garden" })
   const removed = await call("tasks", "plan", "PR-1", "--category", "personal", "--json")
-  expect([removed.code, removed.stderr]).toEqual([2, expect.stringContaining("--category takes money")])
+  expect([removed.code, removed.stderr]).toEqual([2, expect.stringContaining("--category takes taxes")])
 })
 
 describe("tasks that may be one job", () => {

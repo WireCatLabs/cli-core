@@ -6,6 +6,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
+import { DEFAULT_TASK_CATEGORIES } from "../../domain/task-categories.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
@@ -573,18 +574,24 @@ describe("the stems", () => {
     }
 
     const set = await call(
-      ["config", "set", "task_categories.travel", "trips and tickets | flight, hotel, билет, es:vuelo", "--json"],
+      [
+        "config",
+        "set",
+        "task_categories.garden",
+        "plants and seeds | seedling, compost, рассада, es:semilla",
+        "--json",
+      ],
       env,
     )
     expect(set.answer).toEqual({
       store: env.MESSAGING_STORE,
       scope: "store",
-      setting: "task_categories.travel",
-      value: "trips and tickets | en:flight, en:hotel, ru:билет, es:vuelo",
+      setting: "task_categories.garden",
+      value: "plants and seeds | en:seedling, en:compost, ru:рассада, es:semilla",
     })
-    expect((await listed()).slice(-2)).toEqual(["travel", "other"])
+    expect((await listed()).slice(-2)).toEqual(["garden", "other"])
     const shown = (await call(["config", "show", "--json"], env)).answer.store_settings
-    expect(shown).toContainEqual(expect.objectContaining({ setting: "task_categories.travel", from: "store" }))
+    expect(shown).toContainEqual(expect.objectContaining({ setting: "task_categories.garden", from: "store" }))
 
     await call(["config", "unset", "task_categories.personal", "--json"], env)
     expect(await listed()).not.toContain("personal")
@@ -593,7 +600,7 @@ describe("the stems", () => {
     expect((await call(["config", "set", "task_categories.Bad Name", "x", "--json"], env)).code).toBe(2)
 
     await call(["config", "unset", "task_categories", "--json"], env)
-    expect(await listed()).toEqual(["money", "documents", "meeting", "delivery", "access", "personal", "other"])
+    expect(await listed()).toEqual(DEFAULT_TASK_CATEGORIES.map(({ name }) => name))
   })
 
   it("**`config set task_agent_close` and `task_agent_close_min` decide agent closes store-wide**, unset resets", async () => {

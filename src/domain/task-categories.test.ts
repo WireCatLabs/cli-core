@@ -20,8 +20,8 @@ describe("task categories as the owner writes them", () => {
   })
 
   it("**replaces a category in place, adds a new one before other, and never removes other**", () => {
-    const added = withTaskCategory(DEFAULT_TASK_CATEGORIES, "travel", "trips")
-    expect(added.map(({ name }) => name).slice(-2)).toEqual(["travel", "other"])
+    const added = withTaskCategory(DEFAULT_TASK_CATEGORIES, "garden", "plants")
+    expect(added.map(({ name }) => name).slice(-2)).toEqual(["garden", "other"])
     expect(withTaskCategory(added, "money", "bills").find(({ name }) => name === "money")?.meaning).toBe("bills")
     expect(() => withTaskCategory(added, "other", undefined)).toThrow(/other stays/)
     expect(() => withTaskCategory(added, "nope", undefined)).toThrow(/no task category/)

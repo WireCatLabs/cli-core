@@ -11,6 +11,7 @@ import { openStore } from "../store/store.js"
 import { memoryTaskStore } from "../tasks/testing/index.js"
 import { onlineDeps } from "./deps.js"
 import { inboxService } from "./inbox.js"
+import { categorize } from "./task-categories.js"
 import {
   applyTaskRules,
   applyTaskRulesOnArrival,
@@ -210,11 +211,20 @@ describe("a reply rule's task", () => {
 
   it("**picks the category from the list the owner saved in the store**", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-rule-")), "messages.db") })
-    await store.tasks.saveCategories(withTaskCategory(DEFAULT_TASK_CATEGORIES, "travel", "trips | flight, ru:рейс"))
+    await store.tasks.saveCategories(
+      withTaskCategory(DEFAULT_TASK_CATEGORIES, "garden", "plants | seedling, ru:рассада"),
+    )
 
-    await openRequestTask(store, account, said("42", 1, "can you book my flight?"))
-    expect((await store.tasks.list({})).map((task) => task.category)).toEqual(["travel"])
+    await openRequestTask(store, account, said("42", 1, "can you water my seedlings?"))
+    expect((await store.tasks.list({})).map((task) => task.category)).toEqual(["garden"])
     await store.close()
+  })
+
+  it("**gives a tie to the narrower category**, and no trigger fires on a common word it stems like", () => {
+    expect(categorize("Купи бабушке лекарства")).toBe("health")
+    expect(categorize("Оплати квитанцию за электричество")).toBe("bills")
+    expect(categorize("the billing page at this stage is fine")).toBe("other")
+    expect(categorize("это другая история")).toBe("other")
   })
 })
 
