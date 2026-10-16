@@ -98,6 +98,7 @@ export {
 export type { TagCreationOptions, TagCreationReview } from "./sqlite/tag-creation.js"
 export type { TagKind, TagRow } from "./sqlite/tags.js"
 export type { SimilarSubject, SimilarTask, TaskDraft } from "./sqlite/task-candidates.js"
+export { type AgentCloseSettings, type CloseSuggestion, certaintyOf } from "./sqlite/task-close.js"
 export type { TaskPair, TaskPairDecision, TaskPairSide } from "./sqlite/task-pairs.js"
 export { TASK_PAIR_DECISIONS } from "./sqlite/task-pairs.js"
 export type { TaskRelation, TaskRelationKind, TaskRelationsStore } from "./sqlite/task-relations.js"

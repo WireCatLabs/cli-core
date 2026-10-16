@@ -8,6 +8,7 @@ import { type Author, authorActor } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
+import { type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
 import { taskIdOf, taskRowOf } from "./things.js"
 import { write } from "./transaction.js"
@@ -24,6 +25,7 @@ export const TASK_EVENT_KINDS = [
   "linked",
   "unlinked",
   "category",
+  "close-suggestion",
 ] as const
 
 export type WorkTaskType = (typeof WORK_TASK_TYPES)[number]
@@ -82,6 +84,10 @@ export interface TaskDetails {
   /** Who works on it now; null when nobody does or the claim lapsed. */
   claimedBy: string | null
   claimedUntil: string | null
+  /** How sure the agent that closed it said it was; null when the owner or a rule closed it. */
+  closeCertainty: number | null
+  /** The close an agent would make, waiting on the owner. */
+  closeSuggestion: CloseSuggestion | null
   assignments: TaskAssignment[]
   createdAt: string
   updatedAt: string
@@ -217,6 +223,8 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
       verdict: row.verdict == null ? null : (row.verdict as TaskVerdict),
       category: row.category == null ? null : String(row.category),
       ...claimOf(row, now()),
+      closeCertainty: row.close_certainty == null ? null : Number(row.close_certainty),
+      closeSuggestion: closeSuggestionOf(database, row),
       assignments: database
         .prepare(
           "SELECT assignee_id, role FROM task_assignments WHERE task_id = ? AND assignee_type = 'person' ORDER BY id",
@@ -267,7 +275,8 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
         if (closed) {
           change("claimed_by", null)
           change("claimed_until", null)
-        }
+          for (const column of SUGGESTION_COLUMNS) change(column, null)
+        } else change("close_certainty", null)
       }
     }
     if (fields.reason !== undefined) {

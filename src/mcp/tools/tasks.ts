@@ -25,10 +25,14 @@ const LOCAL = { readOnlyHint: false, openWorldHint: false }
 const ROW =
   "{ item: { id, key, source, source_kind, account, group, kind, category, state, reason?, origin, created_at, due_at?, " +
   "closed_at?, closed_by?, message: { sender_name, text, timestamp } | null, note?: { id, title, text, updated_at } | null } }"
+const ROW_CLOSED =
+  "{ item: { id, key, state, kind, reason?, closed_at?, closed_by?, close_certainty, close_suggestion: { as, by, " +
+  "certainty, reason, at } | null, … } } — state open with close_suggestion set means the close waits on the owner"
 const type = v.picklist(TASK_KINDS)
 const CARD =
   "{ item: { id, ref, key, project, title, description, type, status, priority, parent, source, due_at, " +
-  "next_check_at, closed_at, reason, verdict, category, claimed_by, claimed_until, assignments, created_at, updated_at, " +
+  "next_check_at, closed_at, reason, verdict, category, claimed_by, claimed_until, close_certainty, close_suggestion, " +
+  "assignments, created_at, updated_at, " +
   "links: [{ id, from, to, kind, target_text, origin, … }] } }"
 const text = (max: number, what: string) => v.pipe(v.string(), v.minLength(1), v.maxLength(max), v.description(what))
 const ahead = (what: string) =>
@@ -100,11 +104,14 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         'Adds a task for a message the rules cannot see — "I\'ll send it tomorrow" has no question mark. `message` ' +
         "accepts a msg: locator or note:<id> in the selected account. A source that already has a task of this type keeps it (`created: " +
-        "false`). When an open or recent task may be the same job it refuses (reason task.duplicate-candidates) and " +
+        "false`). When an open task may be the same job it refuses (reason task.duplicate-candidates) and " +
         "lists up to 5 in `candidates` with score and reasons: read them, then call again with `into` (that task's " +
-        "key: the message is linked to it, no task opens) or `new: true` (open it anyway). Writes only to the local " +
-        "store; nothing is sent. After into, the task now reads that message too, so tasks it may duplicate go to " +
-        `tasks_duplicates. Returns ${ROW} with created and, after into, attached and review (how many pairs went there).`,
+        "key: the message is linked to it, no task opens) or `new: true` (open it anyway). When only tasks closed in " +
+        "the last 14 days match, it opens the task and links it follow-up-of the best one, which stays closed " +
+        "(`follow_up_of`); new: true does the same. Writes only to the local store; nothing is sent. After into, the " +
+        "task now reads that message too, so tasks it may duplicate go to tasks_duplicates. Returns " +
+        `${ROW} with created, follow_up_of { ref, key, title, status } when it follows one up and, after into, ` +
+        "attached and review (how many pairs went there).",
       input: v.object({
         message: v.pipe(v.string(), v.minLength(1), v.description("a msg: locator or note:<id>")),
         type,
@@ -115,7 +122,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
       stored: async (store, account, args, defaults) => {
-        const { task, created, attached, review, card } = await tasks(store, account, defaults.guard).add(
+        const { task, created, attached, review, followUpOf, card } = await tasks(store, account, defaults.guard).add(
           args.message,
           args.type,
           "agent",
@@ -123,7 +130,13 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           { ...(args.into === undefined ? {} : { attach: args.into }), ...(args.new ? { new: true } : {}) },
         )
         return itemOf(
-          snakeKeys({ ...task, created, ...(attached ? { attached, review } : {}), ...(card ? { card } : {}) }),
+          snakeKeys({
+            ...task,
+            created,
+            ...(attached ? { attached, review } : {}),
+            ...(followUpOf ? { followUpOf } : {}),
+            ...(card ? { card } : {}),
+          }),
         )
       },
     }),
@@ -131,11 +144,23 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
     tasks_close: tool({
       title: "Close a task",
       description:
-        "Closes a task as done, or as dismissed when it needs no answer; `reason` is kept with it. A closed task " +
-        `stays closed, and the rules never reopen it; only tasks_unmerge reopens a merged one. Writes only to the local store; nothing is sent. Returns ${ROW}.`,
+        "Closes a task as done, or as dismissed when it needs no answer; `reason` is kept with it. State your " +
+        "`certainty` that the task needs nothing more: when the owner allows agent closes and it is at least the " +
+        "owner's threshold (config task_agent_close_min, default 0.8), the task closes; otherwise it stays open " +
+        "with `close_suggestion` set, and the owner confirms or refuses it — do not ask again. A closed task stays " +
+        "closed, and the rules never reopen it; only tasks_unmerge reopens a merged one. Writes only to the local " +
+        `store; nothing is sent. Returns ${ROW_CLOSED}.`,
       input: v.object({
-        task: v.pipe(v.string(), v.minLength(1), v.description("the task's id, from tasks_list")),
+        task: v.pipe(v.string(), v.minLength(1), v.description("the task's id or key, from tasks_list")),
         as: v.picklist(["done", "dismissed"]),
+        certainty: v.pipe(
+          v.number(),
+          v.minValue(0),
+          v.maxValue(1),
+          v.description(
+            "how sure you are, 0 to 1, that the task needs nothing more; be honest — below the threshold the owner decides",
+          ),
+        ),
         reason: v.optional(v.pipe(v.string(), v.minLength(1), v.description("why — no-reply-needed, for example"))),
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: false },
@@ -145,6 +170,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
             await tasks(store, account, defaults.guard).close(args.task, {
               as: args.as,
               by: "agent",
+              certainty: args.certainty,
               ...(args.reason === undefined ? {} : { reason: args.reason }),
             }),
           ),

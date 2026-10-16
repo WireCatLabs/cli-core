@@ -16,8 +16,8 @@ import {
   taskLinkKindOf,
   taskTypeOf,
 } from "../../services/tasks.js"
-import type { TaskPair } from "../../store/index.js"
-import { holderOf as holderIn } from "../author.js"
+import type { CloseSuggestion, TaskPair } from "../../store/index.js"
+import { authorOf, holderOf as holderIn } from "../author.js"
 import { environmentOf } from "../context.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -45,11 +45,16 @@ const when = (at: string | null) => (at === null ? "—" : at.slice(0, 16).repla
 const toReview = (count: number | undefined) =>
   count ? `; ${count} possible duplicate pair(s) went to tasks duplicates` : ""
 
+const suggestionLine = ({ as, by, certainty, reason }: CloseSuggestion) =>
+  `close suggested: ${as} by ${by} at certainty ${certainty}${reason === null ? "" : ` — ${reason}`}; waits on the owner`
+
 const card = (task: TaskCard) =>
   [
     `${task.key}  ${task.status}  ${task.type}  ${task.category ?? "—"}  ${task.title}`,
     `due ${when(task.dueAt)}  next check ${when(task.nextCheckAt)}  source ${task.source ?? "—"}`,
     ...(task.claimedBy === null ? [] : [`claimed by ${task.claimedBy} until ${when(task.claimedUntil)}`]),
+    ...(task.closeSuggestion === null ? [] : [suggestionLine(task.closeSuggestion)]),
+    ...(task.closeCertainty === null ? [] : [`closed by an agent at certainty ${task.closeCertainty}`]),
     ...(task.description ? ["", task.description, ""] : []),
     ...task.links.map((link) => `${link.kind.padEnd(12)} ${link.to ?? link.targetText ?? "?"}`),
   ].join("\n")
@@ -114,6 +119,13 @@ const planOptions = (command: Command, verb: string) =>
       "when to look at it again: an ISO 8601 time or 2h, 3d from now; none clears it",
       dateOrNone("--remind-time"),
     )
+
+const certaintyArgument = (typed: string) => {
+  const value = Number(typed.trim())
+  if (typed.trim() === "" || !Number.isFinite(value) || value < 0 || value > 1)
+    throw new CliError("validation_error", `--certainty takes a number from 0 to 1 — not "${typed}"`)
+  return value
+}
 
 const categoryHelp = "what it is about, from the list tasks categories prints: money, documents, meeting, …"
 
@@ -203,6 +215,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       created,
       attached,
       review,
+      followUpOf,
       card: planned,
     } = await context.withServices((services) =>
       services.tasks.add(message, options.type, "owner", plan, {
@@ -218,6 +231,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
           ...task,
           created,
           ...(attached ? { attached, review } : {}),
+          ...(followUpOf ? { followUpOf } : {}),
           ...(planned ? { card: planned } : {}),
         }),
       ),
@@ -227,6 +241,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
       context.renderer.note(`the message is linked to ${task.key ?? task.id}; no task was opened${toReview(review)}`)
     else if (!created && context.format === "pretty")
       context.renderer.note("this source already has a task — that one is shown, unchanged")
+    else if (followUpOf && context.format === "pretty")
+      context.renderer.note(
+        `${task.key ?? task.id} follows up ${followUpOf.key} (${followUpOf.status}), which stays closed: linked follow-up-of`,
+      )
   })
 
   planOptions(
@@ -519,21 +537,75 @@ export const tasksCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(released)), () => `${card(released)}\n`)
     })
 
-  annotate(tasks.command("close"), { effects: LOCAL_WRITE })
+  annotate(tasks.command("close"), {
+    effects: LOCAL_WRITE,
+    examples: [
+      `${tool} tasks close Q-15 --as done --certainty 0.9 --reason answered-in-chat`,
+      `${tool} tasks close Q-15`,
+    ],
+  })
+    .summary("close a task: done, or dismissed when it needs no answer; an agent's unsure close waits on the owner")
     .description(
-      "close a task: done, or dismissed when it needs no answer; a closed task stays closed, unless tasks unmerge reopens a merged one",
+      "close a task: done, or dismissed when it needs no answer. An agent (AI_AGENT or CLAUDECODE set) states its " +
+        "--certainty; below config task_agent_close_min, or with task_agent_close off, the task stays open and the " +
+        "close waits on the owner, who confirms it with tasks close or refuses it with tasks reject. A closed task " +
+        "stays closed, unless tasks unmerge reopens a merged one",
     )
-    .argument("<task>", "the task's id, as tasks list shows it")
-    .requiredOption("--as <state>", "how it is closed: done, or dismissed — it needs no answer", closedStateOf)
+    .argument("<task>", "the task's id or key, as tasks list shows it")
+    .option(
+      "--as <state>",
+      "how it is closed: done, or dismissed — it needs no answer; the owner may leave it out to confirm an agent's close",
+      closedStateOf,
+    )
     .option("--reason <text>", "why, kept with the task — no-reply-needed, for example")
+    .option(
+      "--certainty <n>",
+      "an agent's: how sure it is, 0 to 1, that the task needs nothing more",
+      certaintyArgument,
+    )
+    .option("--as-owner", "close it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
     .action(async function (this: Command, id: string) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "tasks.close")
-      const { as, reason } = this.opts<{ as: "done" | "dismissed"; reason?: string }>()
+      const { as, reason, certainty, asOwner } = this.opts<{
+        as?: "done" | "dismissed"
+        reason?: string
+        certainty?: number
+        asOwner?: boolean
+      }>()
+      const author = authorOf(environmentOf(this).env ?? process.env, asOwner)
       const closed = await context.withServices((services) =>
-        services.tasks.close(id, { as, by: "owner", ...(reason === undefined ? {} : { reason }) }),
+        services.tasks.close(id, {
+          by: author === "owner" ? "owner" : "agent",
+          ...(author === "owner" ? {} : { agent: author }),
+          ...(as === undefined ? {} : { as }),
+          ...(reason === undefined ? {} : { reason }),
+          ...(certainty === undefined ? {} : { certainty }),
+        }),
       )
       renderAnswer(this, context, itemOf(snakeKeys(closed)), () => `${line(closed)}\n`)
+      if (closed.state === "open" && closed.closeSuggestion && context.format === "pretty")
+        context.renderer.note(
+          `${closed.key ?? id} stays open: the close waits on the owner — ${tool} tasks close ${closed.key ?? id} ` +
+            `confirms it, ${tool} tasks reject ${closed.key ?? id} refuses it`,
+        )
+    })
+
+  annotate(tasks.command("reject"), { effects: LOCAL_WRITE, examples: [`${tool} tasks reject Q-15`] })
+    .summary("refuse an agent's close of a task: it stays open and the suggestion goes")
+    .description(
+      "refuse the close an agent suggested: the task stays open and leaves close:suggested; the agent may close it again",
+    )
+    .argument("<task>", "the task's id or key, as tasks list shows it")
+    .option("--as-owner", "refuse it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)")
+    .action(async function (this: Command, id: string) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, messenger.app.command, "tasks.reject")
+      const author = authorOf(environmentOf(this).env ?? process.env, this.opts<{ asOwner?: boolean }>().asOwner)
+      const rejected = await context.withServices((services) =>
+        services.tasks.reject(id, author === "owner" ? "owner" : "agent"),
+      )
+      renderAnswer(this, context, itemOf(snakeKeys(rejected)), () => `${card(rejected)}\n`)
     })
 
   return tasks

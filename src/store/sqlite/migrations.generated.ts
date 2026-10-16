@@ -470,5 +470,18 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER mention_pending_email_au AFTER UPDATE OF body_text, deleted_at ON emails\n  WHEN old.body_text IS NOT new.body_text OR old.deleted_at IS NOT new.deleted_at BEGIN\n  INSERT OR IGNORE INTO mention_pending (source_type, source_id) VALUES ('email', new.id);\nEND;",
       "CREATE TRIGGER mentions_email_ad AFTER DELETE ON emails BEGIN\n  DELETE FROM mentions WHERE source_type = 'email' AND source_id = old.id;\n  DELETE FROM mention_pending WHERE source_type = 'email' AND source_id = old.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261016091439_version-17-agent-close",
+    "statements": [
+      "ALTER TABLE `tasks` ADD `close_certainty` real;",
+      "ALTER TABLE `tasks` ADD `close_suggested_as` text;",
+      "ALTER TABLE `tasks` ADD `close_suggested_by_type` text;",
+      "ALTER TABLE `tasks` ADD `close_suggested_by_id` integer;",
+      "ALTER TABLE `tasks` ADD `close_suggested_certainty` real;",
+      "ALTER TABLE `tasks` ADD `close_suggested_reason` text;",
+      "ALTER TABLE `tasks` ADD `close_suggested_at` integer;",
+      "CREATE INDEX `tasks_by_close_suggested_by_type_close_suggested_by_id` ON `tasks` (`close_suggested_by_type`,`close_suggested_by_id`);"
+    ]
   }
 ]

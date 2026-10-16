@@ -3,6 +3,16 @@ import { TASK_TYPES } from "../domain/knowledge.js"
 import { TASK_ORIGINS, TASK_STATES } from "../tasks/index.js"
 import { id, reference, text, time } from "./fields.js"
 
+export const closeSuggestion = v.strictObject({
+  as: v.picklist(["done", "dismissed"]),
+  /** The agent's name. */
+  by: text,
+  /** 0–1, as the agent rated it. */
+  certainty: v.number(),
+  reason: v.nullable(text),
+  at: time,
+})
+
 export const task = v.strictObject({
   ref: reference,
   id,
@@ -29,6 +39,8 @@ export const task = v.strictObject({
   /** Who works on it now, and until when; null when nobody does. */
   claimed_by: v.optional(v.nullable(text)),
   claimed_until: v.optional(v.nullable(time)),
+  /** The close an agent would make, waiting on the owner: `tasks close` confirms it, `tasks reject` refuses it. */
+  close_suggestion: v.optional(v.nullable(closeSuggestion)),
   created_at: time,
   updated_at: v.optional(time),
 })

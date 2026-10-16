@@ -55,8 +55,9 @@ For a chat in `owed` or `waiting`: read around its `lastMessage` the same way.
 | A promise, a request, a question someone waits on | `tasks add <msg> --type promise\|request\|question --category <name>` with a plan; `tasks categories` lists the names |
 | `tasks add` answers `created: false` | the message already has that task (a rule made it): `tasks plan` that one |
 | `tasks add` refuses with `task.duplicate-candidates` | read the listed tasks: the same job → repeat with `--into <key>`; a different one → repeat with `--new` |
+| `tasks add` answers `follow_up_of` | the message is about a task closed lately: a new task was opened and linked to it, the closed one stays closed — plan the new one |
 | `tasks duplicates` lists pairs a rule opened | one job → `tasks merge <task> --into <other>`; two jobs → `tasks duplicates reject <task> <other>`; the meaning cannot tell (mum's gift or dad's) → `tasks duplicates defer <task> <other>` for the owner. A wrong merge: `tasks unmerge <task>` |
-| A task that is done (the reply came, the file was sent) | `tasks close <key> --as done --reason "<one line>"` |
+| A task that is done (the reply came, the file was sent) | `tasks close <key> --as done --certainty <0..1> --reason "<one line>"` — say honestly how sure you are; below the owner's threshold the task stays open with `close_suggestion` and the owner decides, so do not close it again |
 | A task still open, nothing new | `tasks plan <key> --remind-time <when>` — 1d if hot, 3d–7d if not |
 | A task with the wrong category | `tasks plan <key> --category <name>` |
 | A task you are about to work on with other agents around | `tasks claim <key>`, and `tasks release <key>` when you stop |

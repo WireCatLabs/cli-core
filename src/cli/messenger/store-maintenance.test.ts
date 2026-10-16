@@ -596,6 +596,37 @@ describe("the stems", () => {
     expect(await listed()).toEqual(["money", "documents", "meeting", "delivery", "access", "personal", "other"])
   })
 
+  it("**`config set task_agent_close` and `task_agent_close_min` decide agent closes store-wide**, unset resets", async () => {
+    const env = envFor()
+    ;(await seeded(env)).close()
+    const shown = async () =>
+      (await call(["config", "show", "--json"], env)).answer.store_settings.filter(({ setting }: { setting: string }) =>
+        setting.startsWith("task_agent_close"),
+      )
+    expect(await shown()).toEqual([
+      { setting: "task_agent_close", value: "on", from: "default", scope: "store" },
+      { setting: "task_agent_close_min", value: 0.8, from: "default", scope: "store" },
+    ])
+
+    expect((await call(["config", "set", "task_agent_close", "off", "--json"], env)).answer).toMatchObject({
+      setting: "task_agent_close",
+      value: "off",
+    })
+    expect((await call(["config", "set", "task_agent_close_min", "0.95", "--json"], env)).answer).toMatchObject({
+      value: 0.95,
+    })
+    expect(await shown()).toEqual([
+      { setting: "task_agent_close", value: "off", from: "store", scope: "store" },
+      { setting: "task_agent_close_min", value: 0.95, from: "store", scope: "store" },
+    ])
+    expect((await call(["config", "set", "task_agent_close_min", "1.5", "--json"], env)).code).toBe(2)
+    expect((await call(["config", "set", "task_agent_close", "maybe", "--json"], env)).code).toBe(2)
+
+    await call(["config", "unset", "task_agent_close", "--json"], env)
+    await call(["config", "unset", "task_agent_close_min", "--json"], env)
+    expect((await shown()).map(({ from }: { from: string }) => from)).toEqual(["default", "default"])
+  })
+
   it("**refuses to change the store-wide setting from a process locked to one profile**", async () => {
     const env = { ...envFor(), CHAT_PROFILE_LOCK: "work" }
     const { code, stderr } = await call(["config", "set", "search_stemmers.latin", "english", "--json"], env)

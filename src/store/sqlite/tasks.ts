@@ -18,6 +18,8 @@ import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { type TaskSimilarity, taskSimilarityOver } from "./task-candidates.js"
 import { saveTaskCategories, storeTaskCategories } from "./task-category-settings.js"
+import { CLEAR_SUGGESTION, type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
+import { type TaskCloseStore, taskCloseOver } from "./task-close-store.js"
 import { inboxKey, typedKey } from "./task-keys.js"
 import { type TaskPairs, taskPairsOver } from "./task-pairs.js"
 import { taskRowOf, thingOf } from "./things.js"
@@ -28,7 +30,12 @@ export { inboxKey, linkInbox, taskAccountOf } from "./task-keys.js"
 export { taskIdOf, taskRowOf } from "./things.js"
 
 /** `TaskStore` for `src/tasks/`, plus a way from its task ids to the store's rows. */
-export interface StoreTaskStore extends Required<TaskStore>, WorkTasks, TaskSimilarity, TaskPairs {
+export interface StoreTaskStore
+  extends Omit<Required<TaskStore>, "reviewDuplicates">,
+    WorkTasks,
+    TaskSimilarity,
+    TaskPairs,
+    TaskCloseStore {
   /** The task categories `config set task_categories.*` saved, or the default list: one per store. */
   categories(): Promise<readonly TaskCategory[]>
   /** `undefined` goes back to the default list. */
@@ -40,7 +47,7 @@ export interface StoreTaskStore extends Required<TaskStore>, WorkTasks, TaskSimi
     account: string,
     where: Where | undefined,
     window: { limit: number; offset: number },
-  ): Promise<{ task: Task; title: string; updatedAt: Date }[]>
+  ): Promise<{ task: Task; title: string; updatedAt: Date; closeSuggestion: CloseSuggestion | null }[]>
 }
 
 const COLUMNS =
@@ -115,6 +122,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     ...workTasksOver(context),
     ...similarity,
     ...taskPairsOver(context, similarity),
+    ...taskCloseOver(context),
     rowOf: (id) => taskRowOf(database, id),
     categories: async () => storeTaskCategories(database),
     saveCategories: async (categories) => write(database, () => saveTaskCategories(database, categories, now())),
@@ -123,12 +131,18 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
       if (project === undefined) return []
       return database
         .prepare(
-          `SELECT ${COLUMNS}, t.title, t.updated_at FROM tasks t JOIN projects p ON p.id = t.project_id ` +
+          `SELECT ${COLUMNS}, t.title, t.updated_at, ${SUGGESTION_COLUMNS.map((column) => `t.${column}`).join(", ")} ` +
+            "FROM tasks t JOIN projects p ON p.id = t.project_id " +
             `WHERE t.package_id IS NOT NULL AND t.deleted_at IS NULL AND t.project_id = ? AND ${where?.sql ?? "1"} ` +
             "ORDER BY t.created_at, t.id LIMIT ? OFFSET ?",
         )
         .all(project, ...(where?.params ?? []), limit, offset)
-        .map((row) => ({ task: toTask(row), title: String(row.title), updatedAt: new Date(Number(row.updated_at)) }))
+        .map((row) => ({
+          task: toTask(row),
+          title: String(row.title),
+          updatedAt: new Date(Number(row.updated_at)),
+          closeSuggestion: closeSuggestionOf(database, row),
+        }))
     },
     get: async (id) => {
       const row = taskRowOf(database, id)
@@ -218,7 +232,8 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
           .prepare(
             "UPDATE tasks SET status = ?, close_reason = ?, close_reason_folded = ?, due_at = ?, closed_at = ?, " +
               "closed_by_type = ?, closed_by_id = ?, updated_at = ?, " +
-              "claimed_by = CASE WHEN ? = 'open' THEN claimed_by END, claimed_until = CASE WHEN ? = 'open' THEN claimed_until END " +
+              "claimed_by = CASE WHEN ? = 'open' THEN claimed_by END, claimed_until = CASE WHEN ? = 'open' THEN claimed_until END, " +
+              "close_certainty = CASE WHEN ? = 'open' THEN NULL ELSE close_certainty END " +
               "WHERE id = ?",
           )
           .run(
@@ -232,8 +247,10 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             at,
             task.state,
             task.state,
+            task.state,
             row,
           )
+        if (task.state !== "open") database.prepare(`UPDATE tasks SET ${CLEAR_SUGGESTION} WHERE id = ?`).run(row)
         if (before.status !== task.state)
           recordTaskEvent(database, row, closedBy ?? null, "status", { status: [before.status, task.state] }, at)
         if ((before.due_at ?? null) !== time(task.dueAt))

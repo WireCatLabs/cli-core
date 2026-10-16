@@ -52,7 +52,7 @@ Anchors on `origin/main` b654ee2a, 2026-10-14.
    `src/domain/task-categories.ts`), tags on tasks, keys per type, the claim lease (`tasks claim`, `release`,
    `agenda --claimed`) and the relation kinds `duplicate-of` and `discovered-from`. A relation joins only
    owner-project tasks (`liveTask`, `src/store/sqlite/task-relations.ts`), except `duplicate-of`, which joins two
-   live tasks of one project or account. Step 6 added the owner's category list in the store, MCP `tasks_claim` /
+   live tasks of one project or account, and `follow-up-of`, which joins any two live tasks (§ Follow-ups). Step 6 added the owner's category list in the store, MCP `tasks_claim` /
    `tasks_release` / `tasks_categories`, and `agenda --category --tag`.
 7. **What the comparison can reuse:** the text normalizer and the Snowball stemmers (Russian, English, Spanish;
    `src/search/stem.ts`) behind message and note search; FTS5 tables per domain (`message_words` /
@@ -203,6 +203,7 @@ module with the reason for each number; nothing else hard-codes them.
 | Likely | listed first; the agent must choose (below) | to the review list; the reviewing agent decides |
 | Maybe | `tasks add` refuses and lists up to 5 candidates with score and reasons ("same person, same amount, 2 of 5 stems shared"); the agent repeats with `--into <task>` or `--new` | to the review list; the reviewing agent decides |
 | Different | created | created |
+| Likely or maybe, closed in the last 14 days | created, linked `follow-up-of` (§ Follow-ups) | created, linked `follow-up-of` |
 
 - Refusing, not warning: an agent skips a warning; it cannot skip an exit code. Asking the creating agent costs
   no extra model call — it is already the judge (Mem0 decides add / update / nothing the same way,
@@ -252,6 +253,49 @@ apart. If real answers show "likely" pairs are almost always accepted, merging t
   own text lacks what a later message says (store tests). Rule tasks, with an empty title: maybe or likely found 8%
   of duplicates before (6 / 3) and 74% at 69% precision after (59 / 27; likely 27 / 3, 90%, 34%); 18 of 180 new
   tasks now go to review, 3 before.
+
+## Follow-ups and agent closes
+
+Owner's ruling, 2026-10-16 (cli-private journal `2026-10-11-channel-report.md`): "2 A and also if the agent sees
+that the open task could be closed I'd close it based on certainty level. and make it configure - allow agent to
+close tasks by default with changing via config and setting the threshold".
+
+**Follow-ups (answer A).** A new task whose likely or maybe candidates (the same chain and bands as duplicates)
+include a task closed in the last 14 days opens as a new task linked `follow-up-of` the best-scoring closed one. A
+closed task is never reopened by this, and the pair goes neither to the review list nor to `task_pairs`: a merge
+there would fold new work into a closed task, and the pair is not a labelled answer.
+
+- **A rule** (`review`, `serve`, `messages sync`): open candidates go to the review list as before; the closed one
+  gets the link (`reviewDuplicates` on creation). A merged duplicate is skipped: the task it was merged into is a
+  candidate of its own. The check after a link (§ 8) is unchanged.
+- **`tasks add` / MCP `tasks_add`** refuses only while an open task is likely or maybe the same job — only an open
+  task can be the job still waiting. When every candidate is closed, it opens the task, links it and answers
+  `follow_up_of`; `--new` after a refusal does the same for a closed candidate. `--new` alone records the `new`
+  pairs, since only then did the agent decide.
+- `tasks show` and the MCP card list the link (`follow-up-of  task:<id>`).
+
+**Agent closes by certainty.** `tasks close <task> --as done|dismissed --certainty <0..1> [--reason …]`, MCP
+`tasks_close` with `certainty`.
+
+- **Who closes** is decided as for `mentions confirm`: `authorOf` (`src/cli/author.ts`) — an agent when `AI_AGENT`
+  or `CLAUDECODE` is set, else the owner; `--as-owner` closes as the owner from an agent's terminal. MCP is always
+  an agent. An agent must state its certainty (`task.certainty-required`).
+- **Store-wide settings** (`store_settings`, like `task_categories`; rules and closes in tg, max and memo must
+  agree): `config set task_agent_close on|off` (default on) and `config set task_agent_close_min <0..1>` (default
+  0.8), shown in `config show`, reset by `config unset`.
+- With agent closes on and certainty ≥ the threshold the task closes as before and keeps `close_certainty`.
+  Otherwise it stays open with a **close suggestion** (as, by — the agent's name —, certainty, reason, at): the
+  claim is released, `tasks agenda` lists it with the reason `close-suggested`, and `tasks list close:suggested`
+  finds it. The owner confirms with `tasks close <task>` (`--as` may be left out: the suggestion's state and reason
+  are taken) or refuses with `tasks reject <task>` (STANDARD's verb for "the owner refuses what an agent
+  proposed"). A later suggestion replaces the earlier; every one is a `close-suggestion` event.
+- **0.8**: agents rate themselves high and in coarse steps, so the line falls where "probably" ends and "maybe"
+  begins. Too high and every close lands on the owner; too low and a hedged close passes. A close cannot be undone
+  (only `tasks unmerge` reopens, and only a merge), which is why a hedged one waits.
+- **Rule closes are not agent closes.** The rule that closes a question the owner answered (`applyTaskRules`) is
+  deterministic — it saw the owner's reply — and closes through the task package as before, with no certainty.
+- Store version 17: `tasks.close_certainty` and `close_suggested_as`, `_by_type` / `_by_id`, `_certainty`,
+  `_reason`, `_at`.
 
 ## Rules on `sync`
 
@@ -305,5 +349,6 @@ found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`)
 ## Open
 
 - The default category list — the owner adds or renames.
-- Whether a message that matches a task closed in the last 14 days reopens it or opens a new one linked
-  `follow-up-of`.
+- ~~Whether a message that matches a task closed in the last 14 days reopens it or opens a new one linked
+  `follow-up-of`.~~ Ruled 2026-10-16, A: a new task linked `follow-up-of`; agents also close tasks by certainty
+  (§ Follow-ups and agent closes).

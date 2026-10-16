@@ -1608,8 +1608,18 @@ describe("the MCP server", () => {
     expect((await call("tasks agenda", { due_within: "1d", query: "chat_kind:dialog" })).body.item.tasks).toMatchObject(
       [{ id: taskId, title: "Send the plan", reasons: ["due"] }],
     )
-    const closed = await call("tasks close", { task: taskId, as: "dismissed", reason: "no-reply-needed" })
-    expect(closed.body.item).toMatchObject({ state: "dismissed", reason: "no-reply-needed", closed_by: "agent" })
+    const closed = await call("tasks close", {
+      task: taskId,
+      as: "dismissed",
+      certainty: 0.9,
+      reason: "no-reply-needed",
+    })
+    expect(closed.body.item).toMatchObject({
+      state: "dismissed",
+      reason: "no-reply-needed",
+      closed_by: "agent",
+      close_certainty: 0.9,
+    })
     expect((await call("stats tasks show")).body).toMatchObject({
       item: { open: 0, rows: [{ chat: "chat:chat/500/7", open: 0 }] },
     })

@@ -69,7 +69,7 @@ export const AGENDA_QUERY = {
 } as const satisfies QueryRegistry
 
 /** Why a task is on the agenda; a task planned for later and not due soon is not on it. */
-export type AgendaReason = "overdue" | "due" | "check" | "unplanned"
+export type AgendaReason = "overdue" | "due" | "check" | "unplanned" | "close-suggested"
 
 export interface AgendaTask
   extends Pick<
@@ -84,6 +84,7 @@ export interface AgendaTask
     | "nextCheckAt"
     | "claimedBy"
     | "claimedUntil"
+    | "closeSuggestion"
     | "createdAt"
   > {
   reasons: AgendaReason[]
@@ -154,6 +155,7 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
         nextCheckAt: task.nextCheckAt,
         claimedBy: task.claimedBy,
         claimedUntil: task.claimedUntil,
+        closeSuggestion: task.closeSuggestion,
         createdAt: task.createdAt,
         reasons,
       }))
@@ -252,6 +254,7 @@ const reasonsOf = (task: TaskDetails, at: number, dueWithin: number): AgendaReas
   else if (due !== undefined && due <= at + dueWithin) reasons.push("due")
   if (check !== undefined && check <= at) reasons.push("check")
   if (due === undefined && check === undefined) reasons.push("unplanned")
+  if (task.closeSuggestion !== null) reasons.push("close-suggested")
   return reasons
 }
 
@@ -296,6 +299,7 @@ export const agendaItem = (shown: Agenda): AgendaItem => {
       next_check_at: task.nextCheckAt,
       claimed_by: task.claimedBy,
       claimed_until: task.claimedUntil,
+      close_suggestion: task.closeSuggestion,
       created_at: task.createdAt,
       reasons: task.reasons,
     })),

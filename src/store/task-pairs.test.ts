@@ -75,6 +75,36 @@ describe("task pairs", () => {
     await store.close()
   })
 
+  it("**a rule's task about a recently closed one follows it up**: the closed one stays closed and off the list", async () => {
+    const { store, agent, rule, pairs } = await setup([
+      said("1", "Could you pay the 15 000 rub invoice?"),
+      said("2", "Any news on the payment?", "1"),
+      said("3", "And the invoice payment?", "1"),
+    ])
+    const first = await agent("1", "Pay the 15 000 rub invoice")
+    const closed = (await store.tasks.details(first)).id
+    await createTaskService({ store: store.tasks }).close(closed, { as: "done", by: "owner" })
+
+    const opened = await rule("2")
+    expect(opened).toMatchObject({ created: true, review: 0 })
+    expect(await store.tasks.taskRelations(opened.task.id)).toMatchObject([
+      { from: `task:${opened.task.id}`, to: `task:${closed}`, kind: "follow-up-of" },
+    ])
+    expect(await store.tasks.details(first)).toMatchObject({ status: "done" })
+    expect(await pairs("review")).toEqual([])
+
+    const again = await rule("3")
+    expect(again).toMatchObject({ created: true, review: 1 })
+    const key = async (id: string) => (await store.tasks.details(id)).key
+    expect(await pairs("review")).toMatchObject([
+      { task: { key: await key(again.task.id) }, other: { key: await key(opened.task.id) } },
+    ])
+    expect(await store.tasks.taskRelations(again.task.id)).toMatchObject([
+      { to: `task:${closed}`, kind: "follow-up-of" },
+    ])
+    await store.close()
+  })
+
   it("**unsure passes a pair to the owner; rejected takes it off for good**, whichever way round it is named", async () => {
     const { store, agent, rule, pairs } = await setup([said("1", "pay the bill"), said("2", "and this?", "1")])
     const first = await agent("1", "Pay the bill")

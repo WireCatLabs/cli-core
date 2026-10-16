@@ -1113,6 +1113,16 @@ const NEW = {
         c("category", "text", { note: "a name from the list `tasks categories` prints; null on a project task" }),
         c("claimed_by", "text", { note: "who works on it now: `owner` or an agent's name" }),
         c("claimed_until", "integer", { note: "when the claim lapses; a lapsed claim holds nothing" }),
+        c("close_certainty", "real", {
+          note: "0–1, how sure the agent that closed it said it was; null when the owner or a rule closed it",
+        }),
+        c("close_suggested_as", "text", {
+          note: "done or dismissed: how an agent would close the open task, waiting on the owner because it was not sure enough or may not close; null when nothing waits",
+        }),
+        ...actor("close_suggested_by"),
+        c("close_suggested_certainty", "real", { note: "0–1, as the suggesting agent rated it" }),
+        c("close_suggested_reason", "text"),
+        c("close_suggested_at", "integer"),
       ],
       keys: [
         "UNIQUE (project_id, number)",

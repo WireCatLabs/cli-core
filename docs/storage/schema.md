@@ -1283,8 +1283,15 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `category` | text |  |  | a name from the list `tasks categories` prints; null on a project task |
 | `claimed_by` | text |  |  | who works on it now: `owner` or an agent's name |
 | `claimed_until` | integer |  |  | when the claim lapses; a lapsed claim holds nothing |
+| `close_certainty` | real |  |  | 0–1, how sure the agent that closed it said it was; null when the owner or a rule closed it |
+| `close_suggested_as` | text |  |  | done or dismissed: how an agent would close the open task, waiting on the owner because it was not sure enough or may not close; null when nothing waits |
+| `close_suggested_by_type` | text |  |  | `person` or `bot` |
+| `close_suggested_by_id` | integer |  |  | the row in the `close_suggested_by_type` table |
+| `close_suggested_certainty` | real |  |  | 0–1, as the suggesting agent rated it |
+| `close_suggested_reason` | text |  |  |  |
+| `close_suggested_at` | integer |  |  |  |
 
-*Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`
+*Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`, `INDEX (close_suggested_by_type, close_suggested_by_id)`
 
 ### `task_key_counters`
 

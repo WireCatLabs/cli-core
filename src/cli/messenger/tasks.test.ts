@@ -90,7 +90,7 @@ const setup = async (config?: object) => {
       )
       return { code, stdout: streams.stdout, stderr: streams.stderr.join("\n") }
     }
-  return Object.assign(runs(false), { pretty: runs(true), root })
+  return Object.assign(runs(false), { pretty: runs(true), root, env: env as NodeJS.ProcessEnv })
 }
 
 const json = (result: { stdout: string[] }) => JSON.parse(result.stdout[0] ?? "null")
@@ -124,6 +124,39 @@ describe("tasks", () => {
     const again = await call("tasks", "close", id, "--as", "done", "--json")
     expect([again.code, again.stderr]).toEqual([2, expect.stringContaining("a closed task stays closed")])
     expect(json(await call("tasks", "list", "state:open", "--json")).items).toEqual([])
+  })
+
+  it("**an agent's terminal closes with --certainty; an unsure close waits on the owner's agenda** until close or reject", async () => {
+    const call = await setup()
+    const { id, key } = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
+    call.env.AI_AGENT = "claude-code_2-1-296_agent"
+
+    const bare = await call("tasks", "close", key, "--as", "done", "--json")
+    expect([bare.code, bare.stderr]).toEqual([2, expect.stringContaining("certainty")])
+    const unsure = await call.pretty("tasks", "close", key, "--as", "done", "--certainty", "0.5", "--reason", "sent?")
+    expect(unsure.stderr).toContain(`chat tasks reject ${key}`)
+    expect(item(await call("tasks", "show", key, "--json"))).toMatchObject({
+      status: "open",
+      close_suggestion: { as: "done", by: "claude-code", certainty: 0.5, reason: "sent?" },
+    })
+    expect((await call("tasks", "reject", key, "--json")).code).toBe(5)
+
+    delete call.env.AI_AGENT
+    expect(json(await call("tasks", "list", "close:suggested", "--json")).items).toMatchObject([
+      { id, close_suggestion: { by: "claude-code" } },
+    ])
+    expect(item(await call("tasks", "agenda", "--json")).tasks).toMatchObject([
+      { key, reasons: expect.arrayContaining(["close-suggested"]), close_suggestion: { as: "done" } },
+    ])
+    expect(item(await call("tasks", "reject", key, "--json"))).toMatchObject({ status: "open", close_suggestion: null })
+    expect(json(await call("tasks", "list", "close:suggested", "--json")).items).toEqual([])
+
+    call.env.AI_AGENT = "codex_0-162_agent"
+    expect(item(await call("tasks", "close", key, "--as", "done", "--certainty", "0.9", "--json"))).toMatchObject({
+      state: "done",
+      close_certainty: 0.9,
+      closed_by: "agent",
+    })
   })
 
   it("**narrows by a query** over kind, chat and age, and names the fields it has", async () => {
