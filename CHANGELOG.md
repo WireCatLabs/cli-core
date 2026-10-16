@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.295.0 — 16.10.2026
 
 ### Changed — may break callers
 
@@ -31,25 +31,6 @@ shape of this file.
   to review (19 of 180 → 13). A store that saved its own list with `config set task_categories.*` keeps it;
   `config unset task_categories` takes the new default. A list now holds up to 60 categories (was 30), and the MCP
   `category` argument lists names only and points to `tasks_categories` for meanings.
-
-### Added
-
-- **A new task about a task closed in the last 14 days follows it up** (owner's ruling, 2026-10-16): rules on
-  `review`, `serve` and `messages sync`, `tasks add` and MCP `tasks_add` link it `follow-up-of` the best-scoring
-  closed candidate, which stays closed and stays off `tasks duplicates`. `tasks show` and the MCP card list the
-  link; `follow-up-of` now joins message tasks.
-- **Agent closes by certainty**: with `config set task_agent_close on` (the default) and a certainty at least
-  `config set task_agent_close_min` (default 0.8), an agent's close closes the task and keeps `close_certainty`.
-  Otherwise the task stays open with a close suggestion (as, by, certainty, reason, at) that `tasks agenda` lists
-  with the reason `close-suggested` and `tasks list close:suggested` finds; the owner confirms it with
-  `tasks close <task>` (`--as` may be left out) or refuses it with the new `tasks reject <task>`. Both settings are
-  store-wide and shown in `config show`. A rule closing a question the owner answered is not an agent close and is
-  unchanged. Store version 17 adds the columns.
-
-## 0.295.0 — 16.10.2026
-
-### Changed — may break callers
-
 - **cli-core needs `@wirecat/cli-base` 0.40** (peer `>=0.40.0 <0.41.0`). Raise it together with cli-core.
 - **The duplicate check reads the messages a task stands on**: its source message and its 5 newest linked messages,
   one at a time beside the title and description; the best pair counts, so a message only raises a pair's score. A
@@ -66,6 +47,17 @@ shape of this file.
 
 ### Added
 
+- **A new task about a task closed in the last 14 days follows it up** (owner's ruling, 2026-10-16): rules on
+  `review`, `serve` and `messages sync`, `tasks add` and MCP `tasks_add` link it `follow-up-of` the best-scoring
+  closed candidate, which stays closed and stays off `tasks duplicates`. `tasks show` and the MCP card list the
+  link; `follow-up-of` now joins message tasks.
+- **Agent closes by certainty**: with `config set task_agent_close on` (the default) and a certainty at least
+  `config set task_agent_close_min` (default 0.8), an agent's close closes the task and keeps `close_certainty`.
+  Otherwise the task stays open with a close suggestion (as, by, certainty, reason, at) that `tasks agenda` lists
+  with the reason `close-suggested` and `tasks list close:suggested` finds; the owner confirms it with
+  `tasks close <task>` (`--as` may be left out) or refuses it with the new `tasks reject <task>`. Both settings are
+  store-wide and shown in `config show`. A rule closing a question the owner answered is not an agent close and is
+  unchanged. Store version 17 adds the columns.
 - `documents` exports provider-neutral source/state ports and shared tree planning, resumable sync,
   ingestion, scoped document knowledge and evidence-backed memory extraction. Providers supply
   authentication, conversion, metadata and account-bound I/O; no Google SDK or database migration
