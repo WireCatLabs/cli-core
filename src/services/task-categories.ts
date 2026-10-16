@@ -7,6 +7,8 @@ export {
   FALLBACK_CATEGORY,
   parseTaskCategory,
   type TaskCategory,
+  type UnlistedCategory,
+  unlistedNote,
   withTaskCategory,
 } from "../domain/task-categories.js"
 

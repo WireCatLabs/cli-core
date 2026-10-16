@@ -702,6 +702,21 @@ export const DEFAULT_TASK_CATEGORIES: readonly TaskCategory[] = [
 
 export const FALLBACK_CATEGORY = "other"
 
+/** A category tasks still carry after it left the list: they keep it until someone moves them. */
+export interface UnlistedCategory {
+  name: string
+  open: number
+  total: number
+}
+
+/** One line per unlisted category that says how to find and move its tasks; none when every category is listed. */
+export const unlistedNote = (unlisted: readonly UnlistedCategory[], tool: string): string[] =>
+  unlisted.map(
+    ({ name, open, total }) =>
+      `${total} task${total === 1 ? "" : "s"} (${open} open) still use ${name}, which is not in the list: ` +
+      `${tool} tasks list category:${name} shows them, ${tool} tasks plan <id> --category <name> moves one`,
+  )
+
 const LANGUAGES = ["en", "ru", "es"] as const
 const NAME = /^[a-z][a-z0-9-]{0,29}$/
 const MAX_CATEGORIES = 80

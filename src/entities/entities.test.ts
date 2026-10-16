@@ -362,6 +362,7 @@ const samples: Record<EntityName, unknown> = {
     ],
     waiting: [],
     unsynced: [],
+    unlisted_categories: [{ name: "finance", open_tasks: 2 }],
   },
   conversation: {
     id: "1",

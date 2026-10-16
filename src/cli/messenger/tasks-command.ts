@@ -3,6 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { AGENDA_QUERY, type Agenda, agendaItem } from "../../services/agenda.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
+import { unlistedNote } from "../../services/task-categories.js"
 import {
   CLAIM_LEASE_MS,
   closedStateOf,
@@ -79,6 +80,11 @@ const agendaText = (agenda: Agenda) => {
     ...agenda.waiting.map(chat),
     `unsynced — moved, newest message not stored: read before judging (${agenda.unsynced.length})`,
     ...agenda.unsynced.map(chat),
+    ...agenda.unlistedCategories.map(
+      ({ name, openTasks }) =>
+        `${openTasks} open task${openTasks === 1 ? "" : "s"} use ${name}, which is not in the task categories: ` +
+        `tasks list category:${name} shows them`,
+    ),
   ].join("\n")
 }
 
@@ -499,13 +505,16 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .description("the categories a task takes, with what each means and the words a rule picks it by")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
-      const list = await context.withServices(async (services) => services.tasks.categories())
+      const [list, unlisted] = await context.withServices(async (services) =>
+        Promise.all([services.tasks.categories(), services.tasks.unlistedCategories()]),
+      )
       const items = list.map(({ name, meaning, triggers }) => ({ name, meaning, triggers }))
-      renderAnswer(
-        this,
-        context,
-        itemOf({ categories: items }),
-        () => `${items.map(({ name, meaning }) => `${name.padEnd(10)} ${meaning}`).join("\n")}\n`,
+      renderAnswer(this, context, itemOf({ categories: items, unlisted }), () =>
+        [
+          ...items.map(({ name, meaning }) => `${name.padEnd(13)} ${meaning}`),
+          ...(unlisted.length > 0 ? ["", ...unlistedNote(unlisted, tool)] : []),
+          "",
+        ].join("\n"),
       )
     })
 

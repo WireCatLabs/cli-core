@@ -29,7 +29,7 @@ import {
 } from "../tasks/index.js"
 import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
-import { categorize, type TaskCategory, taskCategoryOf } from "./task-categories.js"
+import { categorize, type TaskCategory, taskCategoryOf, type UnlistedCategory } from "./task-categories.js"
 import { taskAccount } from "./task-rules.js"
 
 export { TASK_KINDS, TASK_STATES }
@@ -268,6 +268,8 @@ export interface TasksService {
   show(id: string): Promise<TaskCard>
   /** The list a task's category comes from, with what each one means. */
   categories(): Promise<readonly TaskCategory[]>
+  /** Categories tasks still carry that the list no longer holds, across the store, with open and total counts. */
+  unlistedCategories(): Promise<UnlistedCategory[]>
   /** Takes an open task for `holder` for `forMs`; refused, naming the holder, while someone else holds it. */
   claim(id: string, holder: string, forMs: number): Promise<TaskCard>
   /** Gives a task back; only its holder or the owner may. */
@@ -478,6 +480,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
       }),
 
     categories: () => inStore(async (store) => listOf(store)),
+    unlistedCategories: () => inStore(async (store) => store.tasks.unlistedCategories()),
 
     duplicates: ({ decision, limit, offset }) =>
       inStore(async (store, account) => store.tasks.pairs(taskAccount(account), { decision, limit, offset })),

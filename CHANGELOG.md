@@ -18,6 +18,11 @@ shape of this file.
   own list keeps it; `config unset task_categories` takes the new default. On the cli-testing set the rule's
   category is right 60% of the time against labels in the 59 names (58% for the 36 against theirs); the duplicate
   check's precision is unchanged (cli-testing `performance/tasks/categories`).
+- **A category removed from the list while tasks still carry it is named, with how to find them.** Tasks keep
+  their category when it leaves the list, and nothing said so. Now `tasks categories` lists each such category with
+  its open and total task counts (`unlisted` in JSON, MCP `tasks_categories` too), `config set`/`unset
+  task_categories…` ends its note with the same lines, and `tasks agenda` names the ones open tasks carry
+  (`unlisted_categories`). `tasks list category:<name>` finds them; `tasks plan <id> --category <name>` moves one.
 
 ### Fixed
 

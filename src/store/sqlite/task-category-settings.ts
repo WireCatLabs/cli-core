@@ -1,4 +1,9 @@
-import { DEFAULT_TASK_CATEGORIES, storedTaskCategories, type TaskCategory } from "../../domain/task-categories.js"
+import {
+  DEFAULT_TASK_CATEGORIES,
+  storedTaskCategories,
+  type TaskCategory,
+  type UnlistedCategory,
+} from "../../domain/task-categories.js"
 import type { CacheDatabase } from "../driver.js"
 
 const SETTING = "taskCategories"
@@ -12,6 +17,19 @@ export const savedTaskCategories = (database: CacheDatabase): TaskCategory[] | u
 /** The list every rule, `tasks add` and `tasks plan` take a category from: one per store, so tg, max and memo agree. */
 export const storeTaskCategories = (database: CacheDatabase): readonly TaskCategory[] =>
   savedTaskCategories(database) ?? DEFAULT_TASK_CATEGORIES
+
+/** Categories tasks still carry that the list no longer holds, with how many tasks of each are open. Store-wide. */
+export const unlistedTaskCategories = (database: CacheDatabase): UnlistedCategory[] => {
+  const listed = new Set(storeTaskCategories(database).map(({ name }) => name))
+  return database
+    .prepare(
+      "SELECT category, COUNT(*) AS total, SUM(status = 'open') AS open FROM tasks " +
+        "WHERE category IS NOT NULL AND deleted_at IS NULL GROUP BY category ORDER BY category",
+    )
+    .all()
+    .map((row) => ({ name: String(row.category), open: Number(row.open), total: Number(row.total) }))
+    .filter(({ name }) => !listed.has(name))
+}
 
 /** `undefined` goes back to the default list. */
 export const saveTaskCategories = (

@@ -342,13 +342,18 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Task categories",
       description:
         "The categories a task takes, with what each means and the words a rule picks it by. The owner edits the list " +
-        "(config set task_categories.<name>); tasks_add and tasks_plan refuse a name not on it. " +
-        "Returns { item: { categories: [{ name, meaning, triggers }] } }.",
+        "(config set task_categories.<name>); tasks_add and tasks_plan refuse a name not on it. `unlisted` names the " +
+        "categories tasks still carry after they left the list; tasks_plan moves such a task to a listed one. " +
+        "Returns { item: { categories: [{ name, meaning, triggers }], unlisted: [{ name, open, total }] } }.",
       input: v.object({}),
       annotations: { ...READ, openWorldHint: false },
       stored: async (store, account, _args, defaults) => {
-        const list = await tasks(store, account, defaults.guard).categories()
-        return itemOf({ categories: list.map(({ name, meaning, triggers }) => ({ name, meaning, triggers })) })
+        const service = tasks(store, account, defaults.guard)
+        const list = await service.categories()
+        return itemOf({
+          categories: list.map(({ name, meaning, triggers }) => ({ name, meaning, triggers })),
+          unlisted: await service.unlistedCategories(),
+        })
       },
     }),
 

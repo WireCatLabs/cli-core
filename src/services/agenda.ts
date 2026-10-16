@@ -117,6 +117,8 @@ export interface Agenda {
    * until they are read. Never dropped, or a chat nobody synced would never come up.
    */
   unsynced: AgendaChat[]
+  /** Open tasks carry these categories, which the list no longer holds: move them, or put the category back. */
+  unlistedCategories: { name: string; openTasks: number }[]
 }
 
 export interface AgendaService {
@@ -175,6 +177,10 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
             }),
       openTasks: open.filter((task) => chatOf(task.source) === chat.chatId).map((task) => task.id),
     }))
+    const inList = new Set((await store.tasks.categories()).map(({ name }) => name))
+    const unlisted = new Map<string, number>()
+    for (const { category } of open)
+      if (category && !inList.has(category)) unlisted.set(category, (unlisted.get(category) ?? 0) + 1)
     const silentFor = (chat: AgendaChat) => at - Date.parse(chat.lastMessageAt)
     return {
       at: new Date(at).toISOString(),
@@ -185,6 +191,7 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
       owed: chats.filter((chat) => chat.lastFromOwner === false && silentFor(chat) >= unanswered),
       waiting: chats.filter((chat) => chat.lastFromOwner === true && silentFor(chat) >= waiting),
       unsynced: chats.filter((chat) => chat.lastMessage === null),
+      unlistedCategories: [...unlisted].sort().map(([name, openTasks]) => ({ name, openTasks })),
     }
   },
 })
@@ -306,5 +313,6 @@ export const agendaItem = (shown: Agenda): AgendaItem => {
     owed: shown.owed.map(chat),
     waiting: shown.waiting.map(chat),
     unsynced: shown.unsynced.map(chat),
+    unlisted_categories: shown.unlistedCategories.map(({ name, openTasks }) => ({ name, open_tasks: openTasks })),
   }
 }

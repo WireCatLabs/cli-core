@@ -95,7 +95,7 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
   not a profile setting: the rules run in tg, max, memo and `sync` and must agree, and a profile's config schema
   refuses unknown sections. `other` cannot be removed. A store that saved its own list keeps it; `config unset
   task_categories` takes the default again. Up to 80 categories.
-- **Default list** (ruled 2026-10-16: 36 names, then the 23 of NEED-1351 added), in the order a tie is resolved:
+- **Default list** (owner's choice, 2026-10-16: 36 names, then 23 more), in the order a tie is resolved:
   `taxes`, `investments`, `subscriptions`, `bills`, `donations`, `insurance`, `bank`, `civic`, `government`,
   `legal`, `hiring`, `sales`, `partners`, `support`, `security`, `access`, `tech`, `media`, `marketing`, `design`,
   `research`, `content`, `vendors`, `car`, `travel`, `pets`, `fitness`, `beauty`, `health`, `education`,

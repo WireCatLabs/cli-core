@@ -49,4 +49,6 @@ export const agenda = v.strictObject({
   waiting: v.array(agendaChat),
   /** The chat list says these moved and their newest message is not stored: read them first. */
   unsynced: v.array(agendaChat),
+  /** Open tasks carry these categories, which the list no longer holds: move them, or put the category back. */
+  unlisted_categories: v.array(v.strictObject({ name: text, open_tasks: v.number() })),
 })
