@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Reusable native recording partials** through `./persistence/native`. Other meeting connectors can
+  resume verified prefixes with the existing transfer service, supplying their own archive layout
+  and byte limits. Metadata stays bounded to 16 KiB; cancelled or failed writers close their handles
+  without acknowledging completion. Existing archive names and checkpoint bytes can be retained.
+
 ## 0.298.0 — 16.10.2026
 
 ### Added

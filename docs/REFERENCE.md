@@ -3,6 +3,13 @@
 The detailed contract of each entry point, for consumers and contributors. The [README](../README.md)
 explains what the package is and how it is built; this page is what to call.
 
+## Native recording partials
+
+`NativeRecordingPartialStore` from `./persistence/native` implements the existing meeting transfer
+storage port with bounded metadata, exact-prefix verification and owned native handles. The host
+supplies its dotfile prefix, persistence choice and byte limit. See the
+[native adapter guide](dev/NATIVE-RECORDING-PARTIALS.md) for ownership, compatibility and cleanup.
+
 ## Retained meeting references
 
 `parseMeetingReference`, `formatMeetingReference` and `canonicalMeetingReference` name local meeting

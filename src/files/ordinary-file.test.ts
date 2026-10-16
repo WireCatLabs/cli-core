@@ -24,7 +24,7 @@ vi.mock("node:fs/promises", async (original) => {
   }
 })
 
-it("validates real handles when Windows path metadata omits the volume identity", async () => {
+it.each([false, true])("validates Windows handles with omitted volume identity (writable: %s)", async (writable) => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform")
   if (!platform) throw new Error("process platform descriptor missing")
   const folder = await mkdtemp(join(tmpdir(), "cli-messaging-test-windows-path-stat-"))
@@ -34,7 +34,7 @@ it("validates real handles when Windows path metadata omits the volume identity"
   await writeFile(hooks.path, "Alice Example: invented archive")
   Object.defineProperty(process, "platform", { value: "win32" })
   try {
-    const file = await openOrdinaryFile(hooks.path)
+    const file = await openOrdinaryFile(hooks.path, { writable })
     try {
       expect(await file.readFile("utf8")).toBe("Alice Example: invented archive")
     } finally {
@@ -43,7 +43,7 @@ it("validates real handles when Windows path metadata omits the volume identity"
     expect(hooks.opens).toBe(2)
     hooks.opens = 0
     hooks.replace = true
-    await expect(openOrdinaryFile(hooks.path)).rejects.toMatchObject({ code: "validation_error" })
+    await expect(openOrdinaryFile(hooks.path, { writable })).rejects.toMatchObject({ code: "validation_error" })
     expect(await readFile(`${hooks.path}.original`, "utf8")).toBe("Alice Example: invented archive")
     await rename(hooks.path, `${hooks.path}.replacement`)
   } finally {
