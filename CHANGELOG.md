@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`search notes` takes the note type as the query field `type:` instead of `--type`.** `search notes "chapter
+  type:internal"` keeps the notes written in memo, `type:file` the files from notes folders; `--type` is gone, with
+  no alias, and so is the `type` input of the MCP `search_notes` tool. The field is filtered in SQL, so it also works
+  under OR and NOT, in `--filter` and in `search all`; a required `type:` scopes the search by meaning and the
+  picture lane as `--type` did. Messages and mail have no type, so `type:` finds none of them.
+
 ## 0.301.0 — 16.10.2026
 
 ### Added

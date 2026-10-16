@@ -178,6 +178,17 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     support: "A1",
   },
   {
+    name: "type",
+    example: "type:internal",
+    index: "notes (internal) / documents (file)",
+    aliases: [],
+    type: "enum",
+    operators: terms,
+    normalization: "lowercase; notes only: internal is written in memo, file is from a notes folder",
+    support: "A1",
+    values: ["internal", "file"],
+  },
+  {
     name: "kind",
     example: "kind:private",
     index: "chats.kind / peerKind metadata",
