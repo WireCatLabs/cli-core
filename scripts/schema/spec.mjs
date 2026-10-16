@@ -1121,8 +1121,8 @@ const NEW = {
         }),
         ...actor("close_suggested_by"),
         c("close_suggested_certainty", "real", { note: "0–1, as the suggesting agent rated it" }),
-        c("close_suggested_reason", "text"),
-        c("close_suggested_at", "integer"),
+        c("close_suggested_reason", "text", { note: "why the agent would close it, in a few words" }),
+        c("close_suggested_at", "integer", { note: "when the agent suggested closing it" }),
       ],
       keys: [
         "UNIQUE (project_id, number)",
