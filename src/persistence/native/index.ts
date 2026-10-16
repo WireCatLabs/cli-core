@@ -1,2 +1,6 @@
 export type { NativeRecordingPartialOptions } from "./recording-partial-store.js"
 export { NativeRecordingPartialStore } from "./recording-partial-store.js"
+export type { NativeRecordingPublicationOptions } from "./recording-publication.js"
+export { NativeRecordingPublication } from "./recording-publication.js"
+export type { RecordingPublicationFingerprint } from "./recording-publication-files.js"
+export type { RecordingPublicationCodec } from "./recording-publication-journal.js"

@@ -44,8 +44,8 @@ Symlinks and replacement races fail before their content can be used as a verifi
 
 The portable service decides whether a validator permits resume. Starting over atomically replaces
 only the owned partial name and removes its obsolete checkpoint; it never follows that name's
-symlink. The adapter never promotes or overwrites a final asset. Publication journals, manifests
-and recovery remain separate host capabilities.
+symlink. The adapter never promotes or overwrites a final asset. The shared [publication adapter](NATIVE-RECORDING-PUBLICATION.md) owns journal I/O and final-file
+recovery mechanics; the host supplies its manifest codec and durable commitment callback.
 
 Each writer owns its handle. The caller must close it in `finally`; `transferRecording` does so.
 Failed setup also closes acquired handles. Cancellation prevents a completion receipt and does not

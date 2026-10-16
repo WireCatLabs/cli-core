@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- Add `NativeRecordingPublication` to `./persistence/native`: host-coded bounded journals, verified no-overwrite publication and scoped interruption recovery, with durable host manifest callbacks.
+
 ## 0.304.0 — 16.10.2026
 
 ### Fixed

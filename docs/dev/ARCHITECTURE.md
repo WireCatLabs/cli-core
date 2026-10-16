@@ -19,7 +19,7 @@ provider applications own vendor translation and account/resource binding.
 | Module | Responsibility |
 |---|---|
 | Domain modules such as `src/meetings/` and `src/tasks/` | Models, references, validation and capability ports; no transport runtime or SQL implementation |
-| `src/persistence/native/` | Native recording partial storage over meeting transfer ports and ordinary-file helpers; hosts choose layout and limits ([guide](NATIVE-RECORDING-PARTIALS.md)) |
+| `src/persistence/native/` | Native recording partial storage and publication recovery over meeting ports and ordinary-file helpers; hosts choose layout, codecs and limits ([partials](NATIVE-RECORDING-PARTIALS.md), [publication](NATIVE-RECORDING-PUBLICATION.md)) |
 | `src/files/` | Ordinary-file validation and native writer leases behind narrow ownership contracts; hosts supply archive layout ([guide](FILE-LEASES.md)) |
 | `src/services/` | Use-case orchestration over injected narrow ports; no provider SDK or concrete store imports |
 | `src/store/sqlite/` and store drivers | Persistence adapters, SQL and transaction boundaries |
