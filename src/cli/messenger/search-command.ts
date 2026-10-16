@@ -31,7 +31,7 @@ const onlyOf = (value: string): SourceSearched[] => {
 const lineOf = (item: SearchAllIncludingMeetingsFound["items"][number]): string =>
   item.kind === "meeting"
     ? `meeting · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}\n  ${item.timestamp ?? "time unknown"}  ${singleLine(item.text).slice(0, 200)}\n`
-    : `${item.kind} · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}\n  ${item.timestamp}${item.from?.name ? `  ${singleLine(item.from.name)}` : ""}  ${singleLine(item.text)}\n`
+    : `${item.kind} · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}${item.url ? `\n  ${singleLine(item.url)}` : ""}\n  ${item.timestamp}${item.from?.name ? `  ${singleLine(item.from.name)}` : ""}  ${singleLine(item.text)}\n`
 
 const maxMeetingsOf = (value: string): number | "all" => {
   if (value === "all") return "all"
@@ -216,7 +216,7 @@ const notesCommand = (messenger: Messenger): Command =>
         return found.hits
           .map(
             (hit) =>
-              `${singleLine(hit.title ?? hit.path ?? hit.ref)}  ${hit.ref}  (${hit.found_by.join(", ")})\n  ${singleLine(hit.excerpt)}\n`,
+              `${singleLine(hit.title ?? hit.path ?? hit.ref)}  ${hit.ref}  (${hit.found_by.join(", ")})${hit.url ? `\n  ${singleLine(hit.url)}` : ""}\n  ${singleLine(hit.excerpt)}\n`,
           )
           .join("")
       })

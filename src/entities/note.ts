@@ -9,6 +9,10 @@ const link = {
 
 export const note = v.strictObject({
   ref: reference,
+  kind: v.optional(v.picklist(["note", "document"])),
+  provider: v.optional(text),
+  account: v.optional(text),
+  url: v.optional(text),
   id,
   source: v.picklist(["file", "internal"]),
   folder_id: v.nullable(id),

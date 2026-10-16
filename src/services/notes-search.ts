@@ -21,6 +21,7 @@ import { createStemmer, DEFAULT_STEMMERS } from "../search/stem.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { openPictureEmbedderFor } from "./document-pictures.js"
+import { documentSource } from "./document-source.js"
 import { plainQueryWords, titleQuery, titleTiers } from "./notes-title-tier.js"
 import { PICTURE_FLOOR, plainWords } from "./pictures.js"
 import { listContextOf } from "./search-kind.js"
@@ -228,6 +229,10 @@ export const nearestNotes = async (
 }
 
 export interface FoundNote {
+  kind?: "document" | "note"
+  provider?: string
+  account?: string
+  url?: string
   ref: string
   source: Note["source"]
   folder_id: string | null
@@ -457,6 +462,8 @@ export const searchNotes = async (
   const hasMore = slice ? words.hasMore : ordered.length > window || words.hasMore || titled.hasMore
   const hits: FoundNote[] = []
   const counts = new Map<string, LinkedRecord>()
+  const folders = await store.notes.folders()
+  const profiles = await store.profiles()
   for (const [ref, { note, foundBy }] of page) {
     const links = (await store.notes.links({ from: ref })).map(({ to, targetText, kind, anchor }) => ({
       to,
@@ -470,7 +477,7 @@ export const searchNotes = async (
       folder_id: note.folderId,
       path: note.path,
       title: note.title,
-      updated_at: note.updatedAt,
+      ...documentSource(note, folders, profiles),
       excerpt: firstLine(note.text, query),
       links,
       found_by: foundBy,

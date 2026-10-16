@@ -14,6 +14,8 @@ shape of this file.
   live in the store again without a listing that reaches back to its date. It does not bring back text, so pass only
   emails that held none.
 
+- Imported Google documents in notes and combined search carry their source URL, Google edit time and recorded Drive profile. `--source drive:<profile>` resolves Drive collections registered in the shared store.
+
 ## 0.300.0 — 16.10.2026
 
 ### Changed — may break callers
