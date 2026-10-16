@@ -44,8 +44,9 @@ export interface TaskPair {
 
 export interface TaskPairs {
   /**
-   * After a rule opened `task`: every open or recent task in the likely or maybe band goes to the review list,
-   * unless that pair was recorded before. A rule cannot judge meaning, so it never merges. Returns how many.
+   * After a rule opened `task`, or a message was linked to it: every open or recent task in the likely or maybe band
+   * goes to the review list, unless that pair was recorded before. A score cannot judge meaning, so it never merges.
+   * Returns how many.
    */
   reviewDuplicates(task: string): Promise<number>
   /** The pairs of one account waiting at `decision`, newest first. */
@@ -227,7 +228,9 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
         for (const one of found) {
           const other = required(one.key)
           if (heldPair(Number(row.id), Number(other.id))) continue
-          insertPair({ task: Number(row.id), other: Number(other.id), decision: "review" }, one, null)
+          // Checked again after a link, the task may be the older one; the newer stays the would-be duplicate.
+          const [newer, older] = Number(other.created_at) > Number(row.created_at) ? [other, row] : [row, other]
+          insertPair({ task: Number(newer.id), other: Number(older.id), decision: "review" }, one, null)
           added += 1
         }
         return added

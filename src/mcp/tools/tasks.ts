@@ -103,7 +103,8 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "false`). When an open or recent task may be the same job it refuses (reason task.duplicate-candidates) and " +
         "lists up to 5 in `candidates` with score and reasons: read them, then call again with `into` (that task's " +
         "key: the message is linked to it, no task opens) or `new: true` (open it anyway). Writes only to the local " +
-        `store; nothing is sent. Returns ${ROW} with created and, after into, attached.`,
+        "store; nothing is sent. After into, the task now reads that message too, so tasks it may duplicate go to " +
+        `tasks_duplicates. Returns ${ROW} with created and, after into, attached and review (how many pairs went there).`,
       input: v.object({
         message: v.pipe(v.string(), v.minLength(1), v.description("a msg: locator or note:<id>")),
         type,
@@ -114,14 +115,16 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
       stored: async (store, account, args, defaults) => {
-        const { task, created, attached, card } = await tasks(store, account, defaults.guard).add(
+        const { task, created, attached, review, card } = await tasks(store, account, defaults.guard).add(
           args.message,
           args.type,
           "agent",
           planOf(args),
           { ...(args.into === undefined ? {} : { attach: args.into }), ...(args.new ? { new: true } : {}) },
         )
-        return itemOf(snakeKeys({ ...task, created, ...(attached ? { attached } : {}), ...(card ? { card } : {}) }))
+        return itemOf(
+          snakeKeys({ ...task, created, ...(attached ? { attached, review } : {}), ...(card ? { card } : {}) }),
+        )
       },
     }),
 
@@ -169,8 +172,10 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Link a task",
       description:
         "Links a task to what it concerns, so the next look starts from there: msg: locators, chats, person:<id>, " +
-        "document:<id>, note:<id>, or a URL. A message the store has not saved yet is kept as written. Writes only " +
-        `to the local store; nothing is sent. Returns ${CARD}.`,
+        "document:<id>, note:<id>, or a URL. A message the store has not saved yet is kept as written. A linked " +
+        "message is read when tasks are compared, so after a msg: target the tasks this one may now duplicate go to " +
+        "tasks_duplicates and `review` counts them; the link stands either way. Writes only to the local store; " +
+        `nothing is sent. Returns ${CARD}, with review after a msg: target.`,
       input: v.object({
         task: text(200, "the task's id or key"),
         targets: v.optional(v.array(text(500, "a reference, a msg: locator or a URL"))),
@@ -284,7 +289,8 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         "One job seen twice: links every message of `dup` to `into`, closes `dup` dismissed with a duplicate-of " +
         "relation, and records the decision. Nothing is deleted; tasks_unmerge undoes it. Writes only to the local " +
-        "store. Returns { item: { pair, linked, task } }: `linked` counts the messages added to `into`, `task` is its card.",
+        "store. Returns { item: { pair, linked, review, task } }: `linked` counts the messages added to `into`, " +
+        "`review` the pairs its new messages sent to tasks_duplicates, `task` is its card.",
       input: v.object({
         dup: text(200, "the duplicate's key; it must be open"),
         into: text(200, "the task that stays"),

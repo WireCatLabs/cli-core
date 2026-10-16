@@ -417,7 +417,7 @@ describe("tasks that may be one job", () => {
     expect([both.code, both.stderr]).toEqual([2, expect.stringContaining("choose one")])
 
     const attached = item(await call(...request("msg:chat/500/7/2", "Invoice 15000 rub to send", "--into", invoice)))
-    expect(attached).toMatchObject({ key: invoice, created: false, attached: true })
+    expect(attached).toMatchObject({ key: invoice, created: false, attached: true, review: 0 })
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
     expect(item(await call("tasks", "show", invoice, "--json")).links).toMatchObject([
       { kind: "evidence", to: expect.stringContaining("msg:chat/500/7/2") },

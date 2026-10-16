@@ -3,6 +3,7 @@ import { dayOf } from "./task-signature.js"
 import {
   bandOf,
   compareTasks,
+  compareViews,
   type PreparedTask,
   prepareTask,
   rankCandidates,
@@ -155,6 +156,28 @@ describe("weights and bands", () => {
   })
 })
 
+describe("a task read with one of its messages", () => {
+  const sent = at(9)
+  const own = prepareTask({ title: "Pay the bill", createdAt: at(0) })
+  const withMessage = prepareTask({
+    title: "Pay the bill",
+    createdAt: at(0),
+    message: { text: "15 000 rub, by tomorrow", sentAt: sent },
+  })
+
+  it("reads the message's amount, and its due date from when it was sent", () => {
+    expect(withMessage).toMatchObject({ amount: { value: 15000, currency: "RUB" }, dueDay: dayOf(sent.getTime()) + 1 })
+    expect(withMessage.stems).toEqual(new Set(["pay", "bill", "15000", "rub", "tomorrow"]))
+  })
+
+  it("counts the best view whole, so a message can raise a score and never lower it", () => {
+    const other = prepareTask({ title: "Pay the bill", amount: { value: 9000, currency: "RUB" }, createdAt: at(0) })
+    expect(compareViews([own, withMessage], [other])).toEqual(compareTasks(own, other))
+    const same = prepareTask({ title: "Pay the bill", amount: { value: 15000, currency: "RUB" }, createdAt: at(0) })
+    expect(compareViews([own, withMessage], [same])).toEqual(compareTasks(withMessage, same))
+  })
+})
+
 describe("the worked example on the tasks architecture page", () => {
   const bob = "person:bob-sample"
   const fresh = prepareTask({
@@ -192,10 +215,13 @@ describe("the worked example on the tasks architecture page", () => {
   })
 
   it("ranks REQ-22 first", () => {
-    const ranked = rankCandidates(fresh, [
-      { id: "REQ-19", task: req19 },
-      { id: "REQ-22", task: req22 },
-    ])
+    const ranked = rankCandidates(
+      [fresh],
+      [
+        { id: "REQ-19", views: [req19] },
+        { id: "REQ-22", views: [req22] },
+      ],
+    )
     expect(ranked.map(({ id, score }) => [id, score])).toEqual([
       ["REQ-22", 15],
       ["REQ-19", 1],

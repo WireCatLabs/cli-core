@@ -31,7 +31,7 @@ const said = (chatId: string, id: string, days: number, outgoing: boolean): Mess
   chatId,
   senderId: outgoing ? "500" : "11",
   timestamp: daysAgo(days),
-  text: "synthetic",
+  text: `synthetic${chatId}x${id}`,
   senderName: outgoing ? "Owner" : "Synthetic author",
   editedAt: null,
   replyTo: null,
