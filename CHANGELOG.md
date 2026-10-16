@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.306.0 — 17.10.2026
+
 ### Added
 
 - Meeting preparation includes owner notes and annotations directly about selected stored meetings, with canonical meeting references and existing byte/row limits. It reuses the notes store and excludes foreign or unselected meeting subjects even through shared project links.
