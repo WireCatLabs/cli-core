@@ -89,7 +89,8 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
 ## Categories and labels
 
 - **One list per store**, edited with `config set task_categories.<name> "<meaning> | <words>"` (a word may say its
-  language, `es:vuelo`; otherwise its script picks Russian or English), removed with `config unset
+  language, `es:vuelo`; otherwise its script picks Russian or English; an `es:` word also matches by its Spanish
+  stem when the message reads as Spanish — an accent, `ñ`, `¿`, or a word like `la`, `que`, `para`), removed with `config unset
   task_categories.<name>`, back to the default with `config unset task_categories`. It is a `store_settings` row,
   not a profile setting: the rules run in tg, max, memo and `sync` and must agree, and a profile's config schema
   refuses unknown sections. `other` cannot be removed. A store that saved its own list keeps it; `config unset

@@ -226,6 +226,19 @@ describe("a reply rule's task", () => {
     expect(categorize("the billing page at this stage is fine")).toBe("other")
     expect(categorize("это другая история")).toBe("other")
   })
+
+  it("**stems a Spanish message as Spanish**, so a verb form meets its trigger", () => {
+    expect(categorize("pagar la factura")).toBe("money")
+    expect(categorize("cita con el médico")).toBe("health")
+    expect(categorize("vuelo a Madrid")).toBe("travel")
+    expect(categorize("Necesito que me pagues los 50 €")).toBe("money")
+    expect(categorize("Viajamos a Madrid el lunes")).toBe("travel")
+  })
+
+  it("**reads an English message as English**, so a word on a short Spanish stem fires nothing", () => {
+    expect(categorize("update the landing page")).toBe("other")
+    expect(categorize("please don't cite me on that")).toBe("other")
+  })
 })
 
 describe("the rule pass over the store", () => {

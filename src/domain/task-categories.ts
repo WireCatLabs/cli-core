@@ -537,8 +537,8 @@ const MAX_CATEGORIES = 60
 
 /**
  * One category as `config set task_categories.<name>` takes it: `<meaning> | <words>`. A word may say its language
- * (`es:vuelo`); one that does not is Russian when written in Cyrillic, English otherwise — the rule stems every word
- * by its script, so the language only labels it.
+ * (`es:vuelo`); one that does not is Russian when written in Cyrillic, English otherwise. Only `es:` words are also
+ * matched by their Spanish stem, in a message that reads as Spanish.
  */
 export const parseTaskCategory = (name: string, value: string): TaskCategory => {
   const named = name.trim().toLowerCase()

@@ -295,6 +295,27 @@ describe("pairs from the cli-testing duplicate set", () => {
     })
   })
 
+  it("scores two Spanish messages about one payment likely, the verb in two forms", () => {
+    const first = task({
+      title: "Pagar a Lucía la cena",
+      description: "¿Me pagas los 45 € de la cena del sábado?",
+      person: "person:lucia",
+      category: "money",
+      createdAt: "2026-10-12T19:00:00.000Z",
+    })
+    const reminder = task({
+      title: "Pago de la cena a Lucía",
+      description: "Recuerda que falta el pago de la cena, 45 euros",
+      person: "person:lucia",
+      category: "money",
+      createdAt: "2026-10-13T09:30:00.000Z",
+    })
+    expect(compareTasks(reminder, first)).toMatchObject({
+      band: "likely",
+      levels: { text: "middle", amount: "equal", time: "near" },
+    })
+  })
+
   it("leaves a reply that asks for something new in maybe, not attached", () => {
     const contract = task({
       title: "Send Alice the updated contract",
