@@ -178,8 +178,8 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     support: "A1",
   },
   {
-    name: "type",
-    example: "type:internal",
+    name: "source",
+    example: "source:internal",
     index: "notes (internal) / documents (file)",
     aliases: [],
     type: "enum",
