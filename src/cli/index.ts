@@ -3,7 +3,7 @@ export { parseDuration } from "../domain/duration.js"
 export { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 export { type AppErrors, failureContext } from "../errors/reasons.js"
 export { botInstructions } from "../mcp/bot/instructions.js"
-export { type BotServerOptions, botToolName, createBotServer, type RunBotCommand } from "../mcp/bot/server.js"
+export type { BotServerOptions, RunBotCommand } from "../mcp/bot/server.js"
 export {
   BOT_TOOLS,
   type BotTool,
@@ -18,8 +18,7 @@ export {
   text as botText,
   withAcross,
 } from "../mcp/bot/tools.js"
-export { revokeAll } from "../mcp/http/oauth.js"
-export { type HttpOptions, MCP_PATH, serveOverHttp } from "../mcp/http/serve.js"
+export type { HttpOptions } from "../mcp/http/serve.js"
 export { callMeetingPreparationTool, meetingPreparationTool } from "../mcp/meeting-preparation.js"
 export { registerLinkConversationsPrompt } from "../mcp/prompts.js"
 export { agentBody, agentJson, agentResult, UNTRUSTED, UNTRUSTED_INSTRUCTION } from "../mcp/text.js"
