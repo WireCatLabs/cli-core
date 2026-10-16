@@ -47,7 +47,7 @@ Automatic findings intake remains separate.
 | Facts | Accepted facts whose subject is this meeting, including decisions and promises | Proposed/reversed facts and facts about other subjects are excluded; evidence is not revalidated |
 | Tasks | Existing tasks with this exact meeting source group and a source beneath its reference | Includes current task status; excludes other-account projects and unrelated project tasks |
 | Related meetings | Other series joined through existing person links or confirmed global project memberships shared with included history | Same account and history window; dated live meetings only; no name, email or alias matching |
-| Owner notes | Owner-written notes and annotations about explicitly linked people or confirmed global projects | Optional port; current revisions only, no imported files, messages or mail; note text is distinct from accepted facts |
+| Owner notes | Owner-written notes and annotations about included meetings, explicitly linked people or confirmed global projects | Optional port; current revisions only, no imported files, messages or mail; note text is distinct from accepted facts |
 | Accepted knowledge | Global person/project facts through those explicit associations, with fact references and association flags | Optional port, accepted status only; no mail, messages or notes; source evidence is not revalidated |
 
 Related history records its anchor meeting references and separate `sharedPerson`/`sharedProject`
@@ -100,16 +100,21 @@ knowledge. It uses the same validated account, series, included anchor IDs and b
 there are no matching notes. No store migration is required.
 
 The native adapter reads owner-authored rows from the shared notes table, including annotations.
-A live note qualifies through its primary person/project subject or a confirmed additional `about`
-link to a currently linked person or confirmed global project from the included history. Its primary
-subject must itself be a live global person/project: account-scoped meeting/chat subjects are excluded
-even when an additional project link matches. Proposed links, bot-authored notes, deleted notes and
+A live note qualifies through its primary meeting/person/project subject or a confirmed additional
+`about` link to an included meeting, currently linked person or confirmed global project from the
+included history. Its primary subject must itself be a live global person/project or a live meeting in the selected account.
+Meeting-scoped notes additionally require a primary or confirmed additional association to an
+included anchor; a shared person/project association alone never qualifies them. Notes whose primary
+meeting belongs to another account are excluded even when an additional global project link matches. Chat subjects remain
+excluded. Proposed links, bot-authored notes, deleted notes and
 account-scoped or deleted projects are excluded. No name, email, title or alias matching takes place.
 Current revisions updated at or before the preparation start qualify, including notes older than the
 history window. This is a live read, not an historical snapshot.
 
 Items carry `ref` (`note:<id>`), nullable `title`, `text`, `revision`, `updatedAt` and nullable `person`
-and `project` references. Each association reference is the smallest matching stored ID of that type;
+and `project` references. Native pages also carry nullable `meeting`, a canonical reference to
+one qualifying included anchor. Custom legacy hosts may omit this field. Each association reference
+is the smallest matching stored ID of that type;
 it proves one qualifying association, rather than listing all subjects or attendees. A note matching
 both paths is returned once. Retrieve the referenced note separately for all its associations.
 
@@ -117,7 +122,10 @@ Up to `min(contextLimit, 20)` notes are returned, newest update then ID descendi
 lookahead determines `notes.coverage.hasMore`. UTF-8 title and body bytes, including lookahead,
 are checked in one read snapshot before body hydration; row limits do not bound SQL scan/sort work.
 `notes.anchors` records included history references, and `selection` is
-`owner-written-global-person/project-notes`. Coverage contains `hasMore`, `outputLimited`,
+`owner-written-meeting/person/project-notes` for the native adapter. Legacy hosts may omit the
+page selection and meeting field; the assembler retains `owner-written-global-person/project-notes`
+for those pages. A meeting association must name an included anchor and requires the extended
+selection. Coverage contains `hasMore`, `outputLimited`,
 `sourceEvidence: not-revalidated` and `otherSources: not-queried`. Public answers use snake_case
 and ISO timestamps; selecting `notes.items.ref` retains the nested coverage object.
 

@@ -6,7 +6,7 @@ import { preparationCancelled, type preparationRequest } from "./meeting-prepara
 const invalid = (): never => {
   throw new CliError("invalid_response", "Preparation notes returned an invalid selection")
 }
-const noteOf = (note: MeetingPreparationNote, before: number): MeetingPreparationNote => {
+const noteOf = (note: MeetingPreparationNote, before: number, anchors: ReadonlySet<string>): MeetingPreparationNote => {
   if (
     !note ||
     typeof note.ref !== "string" ||
@@ -21,7 +21,8 @@ const noteOf = (note: MeetingPreparationNote, before: number): MeetingPreparatio
     note.updatedAt > before ||
     (note.person !== null && (typeof note.person !== "string" || !/^person:[1-9]\d*$/.test(note.person))) ||
     (note.project !== null && (typeof note.project !== "string" || !/^project:[1-9]\d*$/.test(note.project))) ||
-    !(note.person || note.project)
+    (note.meeting !== undefined && note.meeting !== null && !anchors.has(note.meeting)) ||
+    !(note.person || note.project || note.meeting)
   )
     return invalid()
   return {
@@ -32,6 +33,7 @@ const noteOf = (note: MeetingPreparationNote, before: number): MeetingPreparatio
     updatedAt: note.updatedAt,
     person: note.person,
     project: note.project,
+    ...(note.meeting !== undefined ? { meeting: note.meeting } : {}),
   }
 }
 
@@ -55,7 +57,12 @@ export const appendNotesPreparation = async (
   preparationCancelled(input.signal)
   if (!page || !Array.isArray(page.items) || page.items.length > limit || typeof page.hasMore !== "boolean")
     return invalid()
-  const items = page.items.map((note) => noteOf(note, input.after))
+  const selection = page.selection === undefined ? "owner-written-global-person/project-notes" : page.selection
+  if (!["owner-written-global-person/project-notes", "owner-written-meeting/person/project-notes"].includes(selection))
+    return invalid()
+  const anchors = new Set(result.items.map((item) => item.reference))
+  const items = page.items.map((note) => noteOf(note, input.after, anchors))
+  if (items.some((note) => note.meeting) && selection !== "owner-written-meeting/person/project-notes") return invalid()
   if (new Set(items.map((note) => note.ref)).size !== items.length) return invalid()
   if (
     items.reduce((total, note) => total + Buffer.byteLength((note.title ?? "") + note.text, "utf8"), 0) >
@@ -65,7 +72,7 @@ export const appendNotesPreparation = async (
   const notes: NonNullable<MeetingPreparation["notes"]> = {
     anchors: result.items.map((item) => item.reference),
     items: [],
-    selection: "owner-written-global-person/project-notes",
+    selection,
     coverage: {
       hasMore: page.hasMore,
       outputLimited: false,

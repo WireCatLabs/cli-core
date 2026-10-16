@@ -108,7 +108,11 @@ export type {
   MeetingPreparationKnowledgeRequest,
   MeetingPreparationKnowledgeStore,
 } from "./preparation-knowledge.js"
-export type { MeetingPreparationNote, MeetingPreparationNotesStore } from "./preparation-notes.js"
+export type {
+  MeetingPreparationNote,
+  MeetingPreparationNotesSelection,
+  MeetingPreparationNotesStore,
+} from "./preparation-notes.js"
 export type {
   MeetingProjectDiscoveryOptions,
   MeetingProjectDiscoveryPage,
