@@ -605,6 +605,80 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/documents/**", "!src/documents/index.ts", "!src/documents/**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/store/**", "**/services/**", "**/cli/**", "**/mcp/**", "**/models/**"],
+                    "message": "document domain types and scope helpers must not depend on persistence, workflows or transports"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/services/documents/**", "!src/services/documents/**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "**/store/sqlite/**",
+                      "**/store/drivers/**",
+                      "**/cli/**",
+                      "**/mcp/**",
+                      "@googleapis/*",
+                      "google-auth-library",
+                      "@microsoft/*",
+                      "box-node-sdk"
+                    ],
+                    "message": "document workflows use public store contracts and injected provider ports, never SQL, CLI or vendor adapters"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/**", "!src/documents/**", "!src/services/documents/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "**/documents/model.js",
+                      "**/documents/scope.js",
+                      "**/documents/catalog.js",
+                      "**/services/documents/*"
+                    ],
+                    "message": "use the public documents.ts entry point outside the document module"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }
