@@ -68,7 +68,7 @@ export interface MeetingFindingsStore {
   get(account: AccountKey, id: string): Promise<MeetingFindingsBatch>
   list(
     account: AccountKey,
-    options?: { limit?: number; offset?: number },
+    options?: { limit?: number; offset?: number; status?: "proposed" | "reviewed" },
   ): Promise<{ items: MeetingFindingsBatch[]; hasMore: boolean }>
   review(
     account: AccountKey,

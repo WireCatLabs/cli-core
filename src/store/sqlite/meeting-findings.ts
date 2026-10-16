@@ -232,13 +232,24 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
       })
     },
     get: async (key, id) => view(load(accountId(key), id)),
-    list: async (key, { limit = 20, offset = 0 } = {}) => {
+    list: async (key, { limit = 20, offset = 0, status } = {}) => {
+      if (status !== undefined && status !== "proposed" && status !== "reviewed")
+        return invalid("finding status is proposed or reviewed")
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50 || !Number.isSafeInteger(offset) || offset < 0)
         return invalid("findings lists take 1–50 items and a nonnegative offset")
       const account = accountId(key)
       const ids = database
-        .prepare("SELECT id FROM proposed_actions WHERE account_id=? AND kind=? ORDER BY id DESC LIMIT ? OFFSET ?")
-        .all(account, MEETING_FINDINGS_KIND, limit + 1, offset)
+        .prepare(
+          "SELECT id FROM proposed_actions WHERE account_id=? AND kind=? AND (? IS NULL OR status=?) ORDER BY id DESC LIMIT ? OFFSET ?",
+        )
+        .all(
+          account,
+          MEETING_FINDINGS_KIND,
+          status ?? null,
+          status === "reviewed" ? "approved" : (status ?? null),
+          limit + 1,
+          offset,
+        )
       return {
         items: ids.slice(0, limit).map((row) => view(load(account, String(row.id)))),
         hasMore: ids.length > limit,
