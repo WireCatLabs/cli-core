@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- The parity manifest requires `chats documents list` and its paging options in both Telegram and MAX, following their shared-command adoption. Storage and chat-link guides describe the implemented integration and its remaining incremental-edit limitation.
+
 ## 0.302.0 — 16.10.2026
 
 ### Changed — may break callers

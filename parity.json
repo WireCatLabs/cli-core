@@ -1679,33 +1679,13 @@
       }
     },
     "chats documents": {
-      "in": [],
-      "planned": {
-        "max": "chat documents (docs/dev/chat-documents-plan.md)",
-        "tg": "chat documents (docs/dev/chat-documents-plan.md)"
-      }
+      "in": "all"
     },
     "chats documents list": {
-      "in": [],
-      "planned": {
-        "max": "chat documents (docs/dev/chat-documents-plan.md)",
-        "tg": "chat documents (docs/dev/chat-documents-plan.md)"
-      },
+      "in": "all",
       "options": {
-        "--limit": {
-          "in": [],
-          "planned": {
-            "max": "chat documents (docs/dev/chat-documents-plan.md)",
-            "tg": "chat documents (docs/dev/chat-documents-plan.md)"
-          }
-        },
-        "--page": {
-          "in": [],
-          "planned": {
-            "max": "chat documents (docs/dev/chat-documents-plan.md)",
-            "tg": "chat documents (docs/dev/chat-documents-plan.md)"
-          }
-        }
+        "--limit": { "in": "all" },
+        "--page": { "in": "all" }
       }
     },
     "chats events": {
