@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **`createBotServer`, `botToolName`, `serveOverHttp`, `MCP_PATH` and `revokeAll` moved from `@wirecat/cli-core/cli`
+  to the new `@wirecat/cli-core/mcp`.** The `cli` entry no longer loads the MCP SDK and zod: 801 files instead of
+  913, so every CLI's `--help` and one-shot command start with about a tenth less to load. Their types stay in `cli`.
+
 ## 0.299.0 — 16.10.2026
 
 ### Added

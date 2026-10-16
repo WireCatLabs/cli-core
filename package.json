@@ -63,6 +63,10 @@
       "types": "./dist/parity/index.d.ts",
       "default": "./dist/parity/index.js"
     },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "default": "./dist/mcp/index.js"
+    },
     "./testing": {
       "types": "./dist/kit/index.d.ts",
       "default": "./dist/kit/index.js"

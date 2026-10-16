@@ -5,10 +5,12 @@
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { checkCliEntry } from "./check-cli-entry.ts"
 import { checkFileLeases } from "./check-file-leases.ts"
 import { checkRecordingPartials } from "./check-recording-partials.ts"
 
 const root = join(import.meta.dirname, "../dist")
+checkCliEntry(root)
 await checkFileLeases(root)
 await checkRecordingPartials(root)
 const dist = join(root, "store/sqlite")
