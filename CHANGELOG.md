@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.300.0 — 16.10.2026
+
 ### Changed — may break callers
 
 - **`createBotServer`, `botToolName`, `serveOverHttp`, `MCP_PATH` and `revokeAll` moved from `@wirecat/cli-core/cli`
