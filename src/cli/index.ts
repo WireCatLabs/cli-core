@@ -253,6 +253,7 @@ export {
   withQuery,
 } from "./list-query.js"
 export { addMeetingBatchCommand, formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
+export { parseMeetingFindingsJson } from "./meeting-findings-input.js"
 export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 export { addMeetingPreparationCommand } from "./meeting-preparation-command.js"
 export {

@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { MEETING_FINDINGS_KIND } from "../meetings/findings.js"
 import type { MessageStore, ProposedAction } from "../store/store.js"
 import { createTaskService, type Task } from "../tasks/index.js"
 import { taskAccount } from "./task-rules.js"
@@ -17,6 +18,10 @@ export const approveAsTask = async (
   id: string,
 ): Promise<{ proposal: ProposedAction; task: Task }> => {
   const proposal = await store.proposedActions.get(id)
+  if (proposal.kind === MEETING_FINDINGS_KIND)
+    throw new CliError("validation_error", "review meeting findings through the dedicated findings command", {
+      reason: "meeting-findings.dedicated-review",
+    })
   if (proposal.status !== "proposed")
     throw new CliError("validation_error", `a ${proposal.status} action cannot be approved`, {
       reason: "proposal.wrong-state",

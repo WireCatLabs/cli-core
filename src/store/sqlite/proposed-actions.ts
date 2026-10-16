@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { MEETING_FINDINGS_KIND } from "../../meetings/findings.js"
 import type { AccountKey } from "../types.js"
 import type { Actor } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
@@ -67,7 +68,13 @@ const NAMED =
   "LEFT JOIN bots b ON p.proposed_by_type = 'bot' AND b.id = p.proposed_by_id"
 const json = (value: unknown) => (value == null ? null : JSON.parse(String(value)))
 
-export const proposedActionsStoreOver = (context: StoreContext): ProposedActionsStore => {
+type ProposalOperations = {
+  [K in keyof ProposedActionsStore]: ProposedActionsStore[K] extends (...args: infer A) => Promise<infer R>
+    ? (...args: A) => R
+    : never
+}
+
+export const proposalOperationsOver = (context: StoreContext): ProposalOperations => {
   const { database, now } = context
   const actionOf = (row: Row): ProposedAction => {
     const account =
@@ -137,7 +144,7 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
   }
 
   return {
-    propose: async ({ kind, by, account, target, payload, reason }) => {
+    propose: ({ kind, by, account, target, payload, reason }) => {
       if (!/^[a-z][a-z_]{0,39}$/.test(kind))
         throw new CliError("validation_error", "an action's kind is a lower-case word, e.g. reply, ban, create_task")
       if (reason !== undefined && reason.length > 2000)
@@ -179,13 +186,13 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
       })
       return actionOf(rowOf(String(id)))
     },
-    get: async (id) => actionOf(rowOf(id)),
-    pending: async ({ limit = 100 } = {}) =>
+    get: (id) => actionOf(rowOf(id)),
+    pending: ({ limit = 100 } = {}) =>
       database
         .prepare(`${NAMED} WHERE p.status = 'proposed' ORDER BY p.created_at, p.id LIMIT ?`)
         .all(Math.min(Math.max(limit, 1), 500))
         .map(actionOf),
-    list: async ({ status, limit = 100 } = {}) => {
+    list: ({ status, limit = 100 } = {}) => {
       if (status !== undefined && !PROPOSAL_STATUSES.includes(status))
         throw new CliError("validation_error", `a status is one of ${PROPOSAL_STATUSES.join(", ")}`)
       return database
@@ -193,19 +200,19 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
         .all(status ?? null, status ?? null, Math.min(Math.max(limit, 1), 500))
         .map(actionOf)
     },
-    approve: async (id, result) => decide(id, "approved", result),
-    reject: async (id) => decide(id, "rejected"),
-    executed: async (id, result) =>
+    approve: (id, result) => decide(id, "approved", result),
+    reject: (id) => decide(id, "rejected"),
+    executed: (id, result) =>
       move(id, ["approved"], "executed", ", executed_at = ?, result = ?", [
         now(),
         result === undefined ? null : JSON.stringify(result),
       ]),
-    failed: async (id, error) =>
+    failed: (id, error) =>
       move(id, ["approved"], "failed", ", executed_at = ?, error = ?", [
         now(),
         error.trim().slice(0, 2000) || "failed",
       ]),
-    judge: async (id, verdict) => {
+    judge: (id, verdict) => {
       if (verdict !== null && !PROPOSAL_VERDICTS.includes(verdict))
         throw new CliError("validation_error", `a verdict is one of ${PROPOSAL_VERDICTS.join(", ")}`)
       rowOf(id)
@@ -214,5 +221,42 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
         .run(verdict, now(), Number(id))
       return actionOf(rowOf(id))
     },
+  }
+}
+
+export const proposedActionsStoreOver = (context: StoreContext): ProposedActionsStore => {
+  const operations = proposalOperationsOver(context)
+  const generic = (id: string) => {
+    if (operations.get(id).kind === MEETING_FINDINGS_KIND)
+      throw new CliError("validation_error", "review meeting findings through the dedicated findings command", {
+        reason: "meeting-findings.dedicated-review",
+      })
+  }
+  return {
+    propose: async (input) => {
+      if (input.kind === MEETING_FINDINGS_KIND)
+        throw new CliError("validation_error", "stage meeting findings through the dedicated findings command")
+      return operations.propose(input)
+    },
+    get: async (id) => operations.get(id),
+    pending: async (options) => operations.pending(options),
+    list: async (options) => operations.list(options),
+    approve: async (id, result) => {
+      generic(id)
+      return operations.approve(id, result)
+    },
+    reject: async (id) => {
+      generic(id)
+      return operations.reject(id)
+    },
+    executed: async (id, result) => {
+      generic(id)
+      return operations.executed(id, result)
+    },
+    failed: async (id, error) => {
+      generic(id)
+      return operations.failed(id, error)
+    },
+    judge: async (id, verdict) => operations.judge(id, verdict),
   }
 }

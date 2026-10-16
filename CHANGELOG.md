@@ -33,6 +33,8 @@ shape of this file.
 
 ### Added
 
+- Shared meeting findings intake stages bounded, cited fact and task proposals, then creates selected records and one review receipt atomically. Exact retries reuse receipts and records; stale sources and generic approve-as-task paths are refused.
+
 - **Names of people the store does not know, and street addresses, are found as mentions** (mentions plan phase
   3). A name is a common first name in any case, a patronymic, and the surname or second name beside them;
   `Вера` or `Grace` counts only with a second name. An address is a street word next to a name and a house number,
