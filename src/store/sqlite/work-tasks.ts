@@ -164,7 +164,12 @@ const priorityOf = (value: number | null): number | null => {
   return value
 }
 
-export const workTasksOver = (context: StoreContext): WorkTasks => {
+type WorkTaskOperations = Omit<WorkTasks, "create" | "assign"> & {
+  create(input: NewWorkTask, by: Author): TaskDetails
+  assign(id: string, assignment: TaskAssignment, by: Author): TaskDetails
+}
+
+export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperations => {
   const { database, now } = context
   const required = (id: string): number => {
     const bare = id.startsWith("task:") ? id.slice("task:".length) : id
@@ -293,7 +298,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
     ...taskRelationsStoreOver(context, (task, actor, kind, changes, at) =>
       recordTaskEvent(database, task, actor, kind, changes, at),
     ),
-    create: async (input, by) => {
+    create: (input, by) => {
       if (!WORK_TASK_TYPES.includes(input.type))
         throw new CliError("validation_error", `a task made here is one of ${WORK_TASK_TYPES.join(", ")}`)
       const made = write(database, () => {
@@ -340,7 +345,7 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
       write(database, () => edit(task, fields, authorActor(context, by).actor))
       return details(task)
     },
-    assign: async (id, { to, role }, by) => {
+    assign: (id, { to, role }, by) => {
       if (!TASK_ROLES.includes(role))
         throw new CliError("validation_error", `a role is one of ${TASK_ROLES.join(", ")}`)
       const task = required(id)
@@ -463,5 +468,14 @@ export const workTasksOver = (context: StoreContext): WorkTasks => {
           changes: row.changes == null ? null : JSON.parse(String(row.changes)),
           at: iso(row.created_at) as string,
         })),
+  }
+}
+
+export const workTasksOver = (context: StoreContext): WorkTasks => {
+  const operations = workTaskOperationsOver(context)
+  return {
+    ...operations,
+    create: async (input, by) => operations.create(input, by),
+    assign: async (id, assignment, by) => operations.assign(id, assignment, by),
   }
 }

@@ -75,7 +75,11 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: st
   return value as T
 }
 
-export const factsStoreOver = (context: StoreContext): FactsStore => {
+type FactOperations = {
+  [K in keyof FactsStore]: FactsStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never
+}
+
+export const factOperationsOver = (context: StoreContext): FactOperations => {
   const { database, now } = context
   const factOf = (row: Row): Fact => ({
     id: String(row.id),
@@ -125,7 +129,7 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
   }
 
   return {
-    add: async (input) => {
+    add: (input) => {
       const type = oneOf(input.type, FACT_TYPES, "a fact's type")
       const statement = input.statement?.trim() ?? ""
       if (!statement || statement.length > 2000)
@@ -186,8 +190,8 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
       })
       return factOf(rowOf(`fact:${id}`))
     },
-    get: async (reference) => factOf(rowOf(reference)),
-    list: async (options = {}) => {
+    get: (reference) => factOf(rowOf(reference)),
+    list: (options = {}) => {
       const project =
         options.project === undefined ? undefined : requiredThing(database, options.project, "the project")
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
@@ -211,17 +215,28 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
         )
         .map(factOf)
     },
-    accept: async (reference) => {
+    accept: (reference) => {
       const id = Number(rowOf(reference).id)
       write(database, () => accept(id))
       return factOf(rowOf(reference))
     },
-    reverse: async (reference) => {
+    reverse: (reference) => {
       const row = rowOf(reference)
       if (row.type !== "decision") throw new CliError("validation_error", "only a decision can be reversed")
       if (row.status !== "accepted") throw new CliError("validation_error", "only an accepted decision can be reversed")
       database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
       return factOf(rowOf(reference))
     },
+  }
+}
+
+export const factsStoreOver = (context: StoreContext): FactsStore => {
+  const operations = factOperationsOver(context)
+  return {
+    add: async (input) => operations.add(input),
+    get: async (reference) => operations.get(reference),
+    list: async (options) => operations.list(options),
+    accept: async (reference) => operations.accept(reference),
+    reverse: async (reference) => operations.reverse(reference),
   }
 }

@@ -7,6 +7,17 @@ export {
   TASK_TYPES,
   WORK_TASK_TYPES,
 } from "../domain/knowledge.js"
+export type {
+  FindingEvidence,
+  FindingOutcome,
+  MeetingFactFinding,
+  MeetingFinding,
+  MeetingFindingsBatch,
+  MeetingFindingsInput,
+  MeetingFindingsReceipt,
+  MeetingFindingsStore,
+  MeetingTaskFinding,
+} from "../meetings/findings.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
 export type { CacheDatabase, CacheStatement, OpenDatabase, SqlValue } from "./driver.js"
 export { PRAGMAS } from "./driver.js"

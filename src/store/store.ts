@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
+import type { MeetingFindingsStore } from "../meetings/findings.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
 import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
 import {
@@ -34,6 +35,7 @@ import { fillFolded } from "./sqlite/folded.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
+import { meetingFindingsStoreOver } from "./sqlite/meeting-findings.js"
 import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
 import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
@@ -92,6 +94,7 @@ export interface MessageStore {
   readonly notes: NotesStore
   readonly catalog: CatalogStore
   /** Choices that hold until replaced, each with its evidence. */
+  readonly meetingFindings: MeetingFindingsStore
   readonly facts: FactsStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
   readonly memories: MemoriesStore
@@ -217,6 +220,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const knowledge = once(() => knowledgeStoreOver(context))
   const notes = once(() => ({ ...notesStoreOver(context), ...noteSearchOver(context) }))
   const catalog = once(() => catalogStoreOver(context))
+  const meetingFindings = once(() => meetingFindingsStoreOver(context))
   const facts = once(() => factsStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
@@ -291,6 +295,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     get catalog() {
       return catalog()
     },
+    get meetingFindings() {
+      return meetingFindings()
+    },
     get facts() {
       return facts()
     },
@@ -320,119 +327,4 @@ const storeOver = (context: StoreContext): MessageStore => {
   return store
 }
 
-export type { CounterField, CounterObservations, CounterState } from "../domain/counters.js"
-export type { RetentionOptions } from "../domain/retention.js"
-export type { AccountAccounts, AccountsStore } from "./accounts.js"
-export type { AccountAttachments, AttachmentsStore } from "./attachments.js"
-export type { ChatsStore } from "./chats.js"
-export type { ConversationsStore } from "./conversations.js"
-export type { AccountCounters, CountersStore } from "./counters.js"
-export type { AccountMentions, MentionsStore } from "./mentions.js"
-export type { AccountMessages, MessagesStore } from "./messages.js"
-export type { AccountPeople, PeopleStore } from "./people.js"
-export type { QueriesStore } from "./queries.js"
-export type { RosterStore } from "./roster.js"
-export type { SearchIndexStore } from "./search-index.js"
-export type { SearchesStore } from "./searches.js"
-export { accountGroupsOf } from "./sqlite/account-groups.js"
-export type { AdminStoreRequest, AdminStoreResult } from "./sqlite/admin-statistics.js"
-export {
-  type AttachmentTextEntry,
-  type AttachmentView,
-  attachmentColumns,
-  type FileAttachment,
-  resetAttachmentWords,
-  type TextOrigin,
-} from "./sqlite/attachment-texts.js"
-export { pendingNormalization } from "./sqlite/backfill.js"
-export { CHAT_COLUMNS, titlePart } from "./sqlite/chats.js"
-export { CHAT_LIST_KEY, type ChatCompleteness, fetchedKey, historyStartKey } from "./sqlite/completeness.js"
-export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
-export type { CounterTarget } from "./sqlite/counters.js"
-export { messageOfEmail, threadConversation } from "./sqlite/emails.js"
-export { orphanPointers } from "./sqlite/entity-types.js"
-export { involvementStoreOver } from "./sqlite/involvements.js"
-export type {
-  MeetingContextReadCapabilities,
-  MeetingReadCapabilities,
-  TranscriptContextInput,
-  TranscriptContextPage,
-} from "./sqlite/meeting-reads.js"
-export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
-export { OTHER_SOURCES, type OtherSource, type SourceMention } from "./sqlite/mention-sources.js"
-export {
-  MENTION_QUERY,
-  MENTION_STATUSES,
-  type MentionDecision,
-  type MentionStatus,
-  type MentionsRebuild,
-  type MentionsState,
-  type StoredMention,
-  type StoredPlace,
-} from "./sqlite/mentions.js"
-export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
-export type { Link as ThingLink } from "./sqlite/notes.js"
-export { savedPhoneCountries, saveStorePhoneCountries } from "./sqlite/phone-countries.js"
-export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
-export type { ProposedAction } from "./sqlite/proposed-actions.js"
-export { type ColumnMap, queryFilter, type Where } from "./sqlite/query-filter.js"
-export type { RankedEvidence, RankingEvidenceItem, RankingEvidenceRequest } from "./sqlite/ranking-evidence.js"
-export type { RankedStoreFound, RankedStoreRow, RankingRequest } from "./sqlite/rankings.js"
-export { AGENDA_COLUMNS } from "./sqlite/reads.js"
-export type { RetentionResult } from "./sqlite/retention.js"
-export type {
-  MemberCount,
-  MemberStay,
-  ProfileRevision,
-  RosterChange,
-  RosterRead,
-  TrackedChat,
-} from "./sqlite/roster.js"
-export { fillSearchIndex, resetSearchIndex, searchIndexState } from "./sqlite/search-index.js"
-export type { SearchCommand, SearchRecord, StoredSearch } from "./sqlite/searches.js"
-export {
-  type StemsState,
-  savedStemmers,
-  stemmerCache,
-  stemmersOrigin,
-  stemsState,
-} from "./sqlite/stems.js"
-export { fillStems, resetStems } from "./sqlite/stems-fill.js"
-export type { StoredTag, TagFilter, TagTarget, TaskTagTarget } from "./sqlite/tags.js"
-export { savedTaskCategories } from "./sqlite/task-category-settings.js"
-export { DEFAULT_AGENT_CLOSE, savedAgentClose } from "./sqlite/task-close.js"
-export { inboxKey } from "./sqlite/tasks.js"
-export type { MatchPlace, ScoredHit } from "./sqlite/words.js"
-export type { TaskDetails } from "./sqlite/work-tasks.js"
-export type { SyncStore } from "./sync.js"
-export type { TagsStore } from "./tags.js"
-export type {
-  AccountKey,
-  AccountMessageFilter,
-  AgentAnswer,
-  BatchMessage,
-  ChatActivity,
-  ChatStats,
-  ConversationBuild,
-  ConversationHit,
-  ConversationSummary,
-  DeletionScope,
-  Delta,
-  IdentityRef,
-  IngestedVia,
-  LinkBatch,
-  LinkedIdentity,
-  LinkOptions,
-  MessageFilter,
-  PersonFacts,
-  PersonRecord,
-  PictureInput,
-  Range,
-  SenderChatStats,
-  StoredAccount,
-  StoredChatFilter,
-  StoredHit,
-  StoredLink,
-  StoredReadiness,
-} from "./types.js"
-export type { AccountVectors, VectorsStore } from "./vectors.js"
+export * from "./exports.js"

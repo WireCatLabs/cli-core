@@ -30,6 +30,18 @@ export {
   type MeetingExportOptions,
   serializeVtt,
 } from "./export.js"
+export {
+  type FindingEvidence,
+  type FindingOutcome,
+  type MeetingFactFinding,
+  type MeetingFinding,
+  type MeetingFindingsBatch,
+  type MeetingFindingsInput,
+  type MeetingFindingsReceipt,
+  type MeetingFindingsStore,
+  type MeetingTaskFinding,
+  validateMeetingFindings,
+} from "./findings.js"
 export { type ImportFile, importFiles } from "./import.js"
 export { MEETING_QUERY, type MeetingItem, type MeetingOwner, meeting, meetingItem } from "./item.js"
 export {
