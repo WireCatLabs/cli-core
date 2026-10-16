@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.295.0 — 16.10.2026
 
 ### Changed — may break callers
 
@@ -16,6 +16,12 @@ shape of this file.
   finds 74% of duplicates instead of 8%, and sends 10% of new tasks to review instead of 2%; `tasks add` may refuse
   a task whose message shares words with an open one. Tasks with their own text score the same on the set. Messages
   are read at compare time; a task still stores no message text. Weights and bands are unchanged.
+- **`run()` reads how long a command runs from its metadata, not its name**: a command annotated
+  `lifetime: "persistent"` (cli-core's `watch`, `serve`, `mcp`, `bot watch`, `bot mcp`) has no default deadline and ends
+  on Ctrl-C with 0; `lifetime: "interactive"` waits for a person; `cooperative: true` (`messages sync`) stops at its
+  own pace when aborted from outside. An app's own long-running command must declare it — before, `setup`,
+  `session start` and any command named `watch`, `serve` or `mcp` were matched by name. `mcp config`, `mcp setup` and
+  `mcp doctor` are no longer treated as long-running. Needs cli-base 0.38.0.
 
 ### Added
 
@@ -32,20 +38,6 @@ shape of this file.
   looked up once; the same count takes 0.13 s. Which emails match is unchanged.
 - **An email address works unquoted in a mail search**: `from:alice@example.com`, and `to:` or `cc:` with a bare
   address, failed with `query.unsupported-operator`. cli-base 0.40.0 reads `user@host.tld` as one word.
-
-## 0.295.0 — 16.10.2026
-
-### Changed — may break callers
-
-- **`run()` reads how long a command runs from its metadata, not its name**: a command annotated
-  `lifetime: "persistent"` (cli-core's `watch`, `serve`, `mcp`, `bot watch`, `bot mcp`) has no default deadline and ends
-  on Ctrl-C with 0; `lifetime: "interactive"` waits for a person; `cooperative: true` (`messages sync`) stops at its
-  own pace when aborted from outside. An app's own long-running command must declare it — before, `setup`,
-  `session start` and any command named `watch`, `serve` or `mcp` were matched by name. `mcp config`, `mcp setup` and
-  `mcp doctor` are no longer treated as long-running. Needs cli-base 0.38.0.
-
-### Fixed
-
 - **Release scripts report observed lock holders separately from stale release labels.** Shared
   diagnostics no longer attribute a live lock to a previous run; wait for the holders to finish, then
   retry.
