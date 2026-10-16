@@ -288,6 +288,7 @@ describe("the configuration file", () => {
   it("**has nowhere to put a secret**, so a config carrying one is refused", () => {
     withConfig(JSON.stringify({ profiles: { default: { token: "whatever-this-is" } } }))
     expect(() => settings()).toThrowError(/token/)
+    expect(() => settings()).not.toThrowError(/whatever-this-is/)
   })
 
   it("refuses a setting of the wrong type, naming it", () => {
@@ -295,23 +296,33 @@ describe("the configuration file", () => {
     expect(() => settings()).toThrowError(/profiles\.default\.limit/)
   })
 
-  it("**says in plain words what is wrong and what is allowed**, not the validation library's", () => {
+  it("**names the first problem in plain words**, not the validation library's, and no list of keys", () => {
     withConfig(JSON.stringify({ profiles: { default: { limitt: 5 } } }))
-    expect(() => settings()).toThrowError(
-      "profiles.default.limitt: unknown setting — the known ones are limit, timeout_ms, color, sender_colors, record, " +
-        "keep_runs_for_days, permissions, sends_per_hour",
-    )
+    expect(() => settings()).toThrowError(/config\.json: profiles\.default\.limitt is an unknown setting$/)
 
     withConfig(JSON.stringify({ profiles: { default: { limit: 0, color: "yes" } } }))
-    expect(() => settings()).toThrowError("profiles.default.limit: has to be a whole number, 1 or more, not 0")
-    expect(() => settings()).toThrowError('profiles.default.color: has to be true or false, not "yes"')
+    expect(() => settings()).toThrowError(/: profiles\.default\.limit has an invalid value \(and 1 more problem\)$/)
 
-    withConfig(JSON.stringify({ profiles: { default: { limit: 2.5 } }, defaultProfil: "x" }))
-    expect(() => settings()).toThrowError("limit: has to be a whole number, 1 or more, not 2.5")
-    expect(() => settings()).toThrowError(
-      "defaultProfil: unknown setting — the known ones are default_profile, defaults, profiles",
-    )
-    expect(() => settings()).not.toThrowError(/Expected|Invalid/)
+    withConfig(JSON.stringify({ profiles: { default: { limit: 2.5, color: 1 } }, defaultProfil: "x", other: 1 }))
+    expect(() => settings()).toThrowError(/: profiles\.default\.limit has an invalid value \(and 2 more problems\)$/)
+    expect(() => settings()).not.toThrowError(/Expected|Invalid|2\.5|known/)
+  })
+
+  it("**never prints a setting's value**, only its key", () => {
+    withConfig(JSON.stringify({ profiles: { default: { color: "secret-looking-value" } } }))
+    expect(() => settings()).toThrowError(/: profiles\.default\.color has the wrong type$/)
+    expect(() => settings()).not.toThrowError(/secret-looking-value/)
+  })
+
+  it("**says which snake_case key a camelCase one should become**", () => {
+    withConfig(JSON.stringify({ defaultProfile: "personal" }))
+    expect(() => settings()).toThrowError(/: defaultProfile is an unknown setting; rename it to default_profile$/)
+
+    withConfig(JSON.stringify({ profiles: { work: { timeoutMs: 5 } } }))
+    expect(() => settings()).toThrowError(/: profiles\.work\.timeoutMs is an unknown setting; rename it to timeout_ms$/)
+
+    withConfig(JSON.stringify({ profiles: { work: { fooBar: 5 } } }))
+    expect(() => settings()).not.toThrowError(/rename/)
   })
 
   it("says the file is not JSON rather than reporting a missing setting", () => {

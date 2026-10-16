@@ -20,6 +20,11 @@ shape of this file.
   for that part, and the meeting is saved with the rest. The cursor still stays put, so the next pull retries the
   missing part. A transcript first saved while participants failed gets its speaker links on that retry; one
   already stored with links is kept, not replaced by an unlinked copy.
+- **A broken config file is reported in one line: the first bad key, a fixed reason, and a count of the rest** —
+  `config.json: defaultProfile is an unknown setting; rename it to default_profile (and 2 more problems)`. The
+  error no longer lists every problem or every known key, and never prints a value: valibot's own messages quoted
+  what they received, which can be a token pasted into the wrong field. A camelCase key whose snake_case form
+  exists at that level gets the rename hint; the file is not rewritten. The code stays `configuration_error`.
 
 ## 0.303.0 — 16.10.2026
 

@@ -51,12 +51,8 @@ const permissionLevels = v.record(
 )
 
 /** valibot's own words ("Expected never but received …") mean nothing to someone editing a file. */
-const objectMessage =
-  (known: string[]): v.ErrorMessage<v.StrictObjectIssue> =>
-  (issue) =>
-    issue.expected === "never"
-      ? `unknown setting — the known ones are ${known.join(", ")}`
-      : "has to be an object, in braces"
+const objectMessage: v.ErrorMessage<v.StrictObjectIssue> = (issue) =>
+  issue.expected === "never" ? "unknown setting" : "has to be an object, in braces"
 
 /**
  * What every messenger CLI's profile can set. ⚠ Read through `strictObject`, so an unknown key is an
@@ -276,30 +272,26 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const profileEntries = { ...SHARED_PROFILE_ENTRIES, ...extension.profile }
   const defaultsOnly = { ...SHARED_DEFAULTS_ONLY, ...extension.defaults }
   const defaultsEntries = { ...profileEntries, ...defaultsOnly }
-  const strictOf = (entries: v.ObjectEntries) => v.strictObject(entries, objectMessage(Object.keys(entries)))
+  const strictOf = (entries: v.ObjectEntries) => v.strictObject(entries, objectMessage)
   const kindSection = (entries: v.ObjectEntries) =>
     v.strictObject(
       {
         defaults: v.optional(strictOf(entries)),
         profiles: v.optional(v.record(v.string(), strictOf(entries), "has to be an object of profiles, by name")),
       },
-      objectMessage(["defaults", "profiles"]),
+      objectMessage,
     )
   const configEntries = {
     default_profile: v.optional(v.string(plain("has to be a profile name, in quotes"))),
-    defaults: v.optional(v.strictObject(defaultsEntries, objectMessage(Object.keys(defaultsEntries)))),
+    defaults: v.optional(strictOf(defaultsEntries)),
     profiles: v.optional(
-      v.record(
-        v.string(),
-        v.strictObject(profileEntries, objectMessage(Object.keys(profileEntries))),
-        "has to be an object of profiles, by name",
-      ),
+      v.record(v.string(), strictOf(profileEntries), "has to be an object of profiles, by name"),
       {},
     ),
     personal: v.optional(kindSection(profileEntries)),
     bot: v.optional(kindSection({ ...profileEntries, ...BOT_ONLY_ENTRIES })),
   }
-  const schema = v.strictObject(configEntries, objectMessage(Object.keys(configEntries)))
+  const schema = strictOf(configEntries)
   const defaultsOnlyKeys = Object.keys(defaultsOnly)
   const botOnlyKeys = Object.keys(BOT_ONLY_ENTRIES)
   const allSettings = [...Object.keys(profileEntries), ...botOnlyKeys, ...defaultsOnlyKeys, "default_profile"]
