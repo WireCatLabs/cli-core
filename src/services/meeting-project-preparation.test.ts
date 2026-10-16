@@ -107,6 +107,9 @@ it("keeps old preparation unchanged, supports an unstored series, and refuses un
     meetings: f.store.meetings,
     upcoming: f.upcoming,
   })
+  expect(() =>
+    createMeetingPreparationService(f.key, f.accountId, { ...f.ports, projectDiscovery: {} as never }),
+  ).toThrow("Meeting preparation requires bounded meeting reads")
   const reads = f.reads()
   await expect(legacy.prepare("example-series", { ...f.request, project: "HAR" })).rejects.toMatchObject({
     code: "configuration_error",

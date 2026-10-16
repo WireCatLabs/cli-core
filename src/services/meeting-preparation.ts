@@ -23,6 +23,7 @@ export const createMeetingPreparationService = (
   if (!Number.isSafeInteger(accountId) || accountId < 1)
     throw new CliError("validation_error", "accountId must be a positive safe integer")
   const store = ports?.meetings
+  const projectDiscovery = ports?.projectDiscovery
   if (
     !store ||
     [
@@ -37,7 +38,11 @@ export const createMeetingPreparationService = (
     ].some((key) => typeof store[key as keyof typeof store] !== "function") ||
     typeof ports?.upcoming?.next !== "function" ||
     (store.preparationKnowledge !== undefined && typeof store.preparationKnowledge !== "function") ||
-    (store.preparationNotes !== undefined && typeof store.preparationNotes !== "function")
+    (store.preparationNotes !== undefined && typeof store.preparationNotes !== "function") ||
+    (projectDiscovery !== undefined &&
+      (!projectDiscovery ||
+        typeof projectDiscovery.vocabulary?.resolveVocabulary !== "function" ||
+        typeof projectDiscovery.search?.searchHits !== "function"))
   )
     throw new CliError(
       "configuration_error",
@@ -51,7 +56,7 @@ export const createMeetingPreparationService = (
     async prepare(externalId: string, original: MeetingPreparationRequest): Promise<MeetingPreparation> {
       const input = preparationRequest(accountId, externalId, original)
       const { signal, meetings, cues, contextLimit, maxReadBytes, bytes } = input
-      if (input.project !== undefined && !ports.projectDiscovery)
+      if (input.project !== undefined && !projectDiscovery)
         throw new CliError("configuration_error", "Project evidence is unavailable in this preparation host")
       const owner = await store.account(accountId)
       preparationCancelled(signal)
@@ -105,7 +110,7 @@ export const createMeetingPreparationService = (
       if (size(result) > bytes)
         throw new CliError("validation_error", "Preparation metadata exceeds bytes; increase the output budget")
       if (!history.series) {
-        await appendProjectPreparation(ports.projectDiscovery, result, input)
+        await appendProjectPreparation(projectDiscovery, result, input)
         return structuredClone(result)
       }
       const seriesId = history.series.id
@@ -154,7 +159,7 @@ export const createMeetingPreparationService = (
       await appendRelatedPreparation(store, result, input)
       await appendKnowledgePreparation(store, result, input)
       await appendNotesPreparation(store, result, input)
-      await appendProjectPreparation(ports.projectDiscovery, result, input)
+      await appendProjectPreparation(projectDiscovery, result, input)
       preparationCancelled(signal)
       if (size(result) > bytes)
         throw new CliError("validation_error", "Preparation coverage exceeds bytes; increase the output budget")
