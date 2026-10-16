@@ -22,9 +22,12 @@ export const sendCommand = (messenger: Messenger): Command => {
     .description("send a text message; without [text], the text is read from stdin")
     .argument("<chat>", messenger.chatArgument)
     .argument("[text]", "the message")
-    .option("--topic <id>", "send to this forum topic; unsupported by messengers without topics")
-    .option("--reply-to <message>", "answer this message, by its id in the same chat")
-    .option("--comment-to <post>", "comment on this post of the channel; it goes to the post's discussion group")
+  // Offered only where the messenger has them, so a CLI never shows a flag it would refuse.
+  if (messenger.topics !== false) send.option("--topic <id>", "send to this forum topic")
+  send.option("--reply-to <message>", "answer this message, by its id in the same chat")
+  if (messenger.channelComments !== false)
+    send.option("--comment-to <post>", "comment on this post of the channel; it goes to the post's discussion group")
+  send
     .option(
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists; required where the chat posts as someone else by default",
@@ -45,7 +48,6 @@ export const sendCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, chat: string, text: string | undefined) {
       await sendText(this, messenger, chat, text)
     })
-  // Offered only where the messenger lists them, so a CLI never shows a flag it would refuse.
   if (messenger.mediaOptions?.includes("spoiler"))
     send.option("--spoiler", "hide the --photo or video behind a spoiler until tapped")
   if (messenger.mediaOptions?.includes("captionAbove"))

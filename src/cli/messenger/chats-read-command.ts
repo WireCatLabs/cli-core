@@ -4,28 +4,29 @@ import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 
-export const markReadCommand = (messenger: Messenger): Command =>
-  annotate(new Command("mark-read"), { effects: REMOTE_WRITE })
+export const markReadCommand = (messenger: Messenger): Command => {
+  const read = annotate(new Command("mark-read"), { effects: REMOTE_WRITE })
     .description("mark a chat read; the other side sees that you read it")
     .argument("<chat>", messenger.chatArgument)
     .option("--until-id <id>", "only up to this message id; the newest by default")
-    .option("--topic <id>", "mark only this forum topic read; unsupported by messengers without topics")
-    .action(async function (this: Command, chat: string) {
-      const context = messengerContext(this, messenger)
-      const { untilId, topic } = this.opts<{ untilId?: string; topic?: string }>()
-      renderAnswer(
-        this,
-        context,
-        itemOf(
-          snakeKeys(
-            await context.withServices((services) =>
-              services.chats.markRead({
-                chat,
-                ...(untilId === undefined ? {} : { until: untilId.trim() }),
-                ...(topic === undefined ? {} : { threadId: topic }),
-              }),
-            ),
+  if (messenger.topics !== false) read.option("--topic <id>", "mark only this forum topic read")
+  return read.action(async function (this: Command, chat: string) {
+    const context = messengerContext(this, messenger)
+    const { untilId, topic } = this.opts<{ untilId?: string; topic?: string }>()
+    renderAnswer(
+      this,
+      context,
+      itemOf(
+        snakeKeys(
+          await context.withServices((services) =>
+            services.chats.markRead({
+              chat,
+              ...(untilId === undefined ? {} : { until: untilId.trim() }),
+              ...(topic === undefined ? {} : { threadId: topic }),
+            }),
           ),
         ),
-      )
-    })
+      ),
+    )
+  })
+}

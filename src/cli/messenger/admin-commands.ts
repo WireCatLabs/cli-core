@@ -76,33 +76,34 @@ const linkCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       renderItem(this, context, await context.withServices((services) => services.admin.link(chat)))
     })
-  link.addCommand(
-    annotate(new Command("create"), { effects: REMOTE_WRITE })
-      .description("make another invite link; nobody is told until you share it")
-      .argument("<chat>", messenger.chatArgument)
-      .option("--approval", "who joins by it asks first, and an admin lets them in; it then has no use limit")
-      .option("--expire-time <time>", "it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now")
-      .option("--max-uses <n>", "at most this many people join by it, 1 to 99999", positiveCount("--max-uses"))
-      .action(async function (this: Command, chat: string) {
-        const context = messengerContext(this, messenger)
-        const { approval, expireTime, maxUses } = this.opts<{
-          approval?: boolean
-          expireTime?: string
-          maxUses?: number
-        }>()
-        renderItem(
-          this,
-          context,
-          await context.withServices((services) =>
-            services.admin.createLink(chat, {
-              approval: approval === true,
-              ...(expireTime === undefined ? {} : { expires: expireTime }),
-              ...(maxUses === undefined ? {} : { maxUses }),
-            }),
-          ),
-        )
-      }),
-  )
+  if (messenger.inviteLinkCreate !== false)
+    link.addCommand(
+      annotate(new Command("create"), { effects: REMOTE_WRITE })
+        .description("make another invite link; nobody is told until you share it")
+        .argument("<chat>", messenger.chatArgument)
+        .option("--approval", "who joins by it asks first, and an admin lets them in; it then has no use limit")
+        .option("--expire-time <time>", "it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now")
+        .option("--max-uses <n>", "at most this many people join by it, 1 to 99999", positiveCount("--max-uses"))
+        .action(async function (this: Command, chat: string) {
+          const context = messengerContext(this, messenger)
+          const { approval, expireTime, maxUses } = this.opts<{
+            approval?: boolean
+            expireTime?: string
+            maxUses?: number
+          }>()
+          renderItem(
+            this,
+            context,
+            await context.withServices((services) =>
+              services.admin.createLink(chat, {
+                approval: approval === true,
+                ...(expireTime === undefined ? {} : { expires: expireTime }),
+                ...(maxUses === undefined ? {} : { maxUses }),
+              }),
+            ),
+          )
+        }),
+    )
   if (messenger.inviteLinkList !== false)
     link.addCommand(
       withQuery(
@@ -268,34 +269,37 @@ const requestsCommand = (messenger: Messenger): Command => {
       )
     }),
   )
+  const everyone = messenger.joinRequestsAll !== false
   for (const [verb, accept, help] of [
     ["accept", true, "let them in; the group sees them join"],
     ["decline", false, "turn the request away"],
   ] as const) {
-    requests.addCommand(
-      annotate(new Command(verb), { effects: REMOTE_WRITE })
-        .description(help)
-        .argument("<chat>", messenger.chatArgument)
-        .argument("[person]", "who asked: an id from `chats requests list`")
+    const answer = annotate(new Command(verb), { effects: REMOTE_WRITE })
+      .description(help)
+      .argument("<chat>", messenger.chatArgument)
+      .argument(everyone ? "[person]" : "<person>", "who asked: an id from `chats requests list`")
+    if (everyone)
+      answer
         .option("--all", "every pending request, counted against the hourly limit first")
         .option("--link <link>", "with --all: only the requests made by this invite link")
-        .action(async function (this: Command, chat: string, person: string | undefined) {
-          const context = messengerContext(this, messenger)
-          const { all, link } = this.opts<{ all?: boolean; link?: string }>()
-          if ((person === undefined) === (all !== true))
-            throw new CliError("validation_error", "give one person, or --all — not both, not neither")
-          if (link !== undefined && all !== true) throw new CliError("validation_error", "--link goes with --all")
-          renderItem(
-            this,
-            context,
-            await context.withServices(
-              (services): Promise<object> =>
-                person === undefined
-                  ? services.admin.answerAllRequests(chat, accept, link === undefined ? {} : { link })
-                  : services.admin.answerRequest(chat, person, accept),
-            ),
-          )
-        }),
+    requests.addCommand(
+      answer.action(async function (this: Command, chat: string, person: string | undefined) {
+        const context = messengerContext(this, messenger)
+        const { all, link } = this.opts<{ all?: boolean; link?: string }>()
+        if ((person === undefined) === (all !== true))
+          throw new CliError("validation_error", "give one person, or --all — not both, not neither")
+        if (link !== undefined && all !== true) throw new CliError("validation_error", "--link goes with --all")
+        renderItem(
+          this,
+          context,
+          await context.withServices(
+            (services): Promise<object> =>
+              person === undefined
+                ? services.admin.answerAllRequests(chat, accept, link === undefined ? {} : { link })
+                : services.admin.answerRequest(chat, person, accept),
+          ),
+        )
+      }),
     )
   }
   return requests

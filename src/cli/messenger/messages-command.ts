@@ -24,7 +24,7 @@ import {
   spokenItems,
   TRANSCRIBE_OPTION,
 } from "./hearing-command.js"
-import { cursorOf, HISTORY_QUERY, historyWindow } from "./history-query.js"
+import { cursorOf, historyQuery, historyWindow } from "./history-query.js"
 import { threadAnswer } from "./message-answers.js"
 import { messageItem, messageItems, type ReadMessage, viewOf } from "./message-items.js"
 import { commentsCommand } from "./messages-comments-command.js"
@@ -45,12 +45,18 @@ export const messagesCommand = (messenger: Messenger): Command => {
   const messages = new Command("messages").description("read and send messages")
   messages.addCommand(evidenceCommand(messenger))
 
+  const history = historyQuery(messenger)
   const list = annotate(messages.command("list"), { effects: REMOTE_READ })
     .description("a chat's messages, oldest to newest")
     .addHelpText("after", SAVE_HELP)
-    .addHelpText("after", queryHelp(HISTORY_QUERY))
+    .addHelpText("after", queryHelp(history))
     .argument("<chat>", messenger.chatArgument)
-    .argument("[query...]", "where to start and which topic: id<42, date>2026-10-01, topic:12")
+    .argument(
+      "[query...]",
+      messenger.topics === false
+        ? "where to start: id<42, date>2026-10-01"
+        : "where to start and which topic: id<42, date>2026-10-01, topic:12",
+    )
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--cursor <cursor>", "go on from where the last page stopped; page.next gives it")
     .option(...TRANSCRIBE_OPTION)
@@ -64,7 +70,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
         model?: string
         markRead?: boolean
       }>()
-      const window = historyWindow(query, cursor, "messages list")
+      const window = historyWindow(query, cursor, "messages list", history)
       const hearWith = modelWith(transcribe, model)
       if (markRead && window.threadId !== undefined) {
         throw new CliError(
@@ -103,7 +109,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
         () => renderMessages(spokenItems(page.items, hearing), viewOf(context, messenger)),
       )
     })
-  annotate(list, { output: { entity: "message" }, query: HISTORY_QUERY })
+  annotate(list, { output: { entity: "message" }, query: history })
 
   const readWindow = async (command: Command, chat: string, message: string | undefined, window: Window) => {
     const context = messengerContext(command, messenger)

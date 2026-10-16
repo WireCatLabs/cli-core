@@ -54,7 +54,7 @@ export interface Messenger extends ServiceMessenger {
   pollCloseSeconds?: readonly [min: number, max: number]
   /** Whether `polls voters` lists who voted for what; no when unset. */
   pollVoters?: boolean
-  /** Whether the messenger has forum topics, so the MCP server offers the `topics_*` tools; yes when unset. */
+  /** Whether the messenger has forum topics: `--topic`, `topic:` in `messages list` and the `topics_*` tools; yes when unset. */
   topics?: boolean
   /** Whether `topics show` reads one forum topic; no when unset. */
   topicShow?: boolean
@@ -78,12 +78,18 @@ export interface Messenger extends ServiceMessenger {
   stickers?: boolean
   /** Whether shared folders can be joined; yes when unset. */
   folderJoin?: boolean
+  /** Whether another invite link can be made — `chats link create`; yes when unset. */
+  inviteLinkCreate?: boolean
   /** Whether invite links can be listed; yes when unset. */
   inviteLinkList?: boolean
   /** Whether one invite link can be revoked; yes when unset. */
   inviteLinkRevoke?: boolean
   /** Whether one invite link can be changed — `chats link update`; no when unset. */
   inviteLinkUpdate?: boolean
+  /** Whether every pending join request is answered at once — `chats requests accept --all`; yes when unset. */
+  joinRequestsAll?: boolean
+  /** Whether a channel post can be commented on — `messages send --comment-to`; yes when unset. */
+  channelComments?: boolean
   /** Whether people added can be shown the messages from before they came — `members add --history`; yes when unset. */
   addsWithHistory?: boolean
   /** The admin rights this messenger has, as `admins add --can` offers them; every one when unset. */

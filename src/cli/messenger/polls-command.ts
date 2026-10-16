@@ -132,7 +132,8 @@ export const pollsCommand = (messenger: Messenger): Command => {
     .argument("<chat>", messenger.chatArgument)
     .argument("<question>", "the question")
     .argument("<answers...>", "two answers or more")
-    .option("--topic <id>", "send to this forum topic; unsupported by messengers without topics")
+  if (messenger.topics !== false) create.option("--topic <id>", "send to this forum topic")
+  create
     .option("--multiple", "people may pick several answers")
     .option("--anonymous", "nobody sees who voted for what")
     .option("--revote", "people may change their vote")
