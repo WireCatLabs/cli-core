@@ -58,6 +58,7 @@ const card = (task: TaskCard) =>
     ...(task.closeCertainty === null ? [] : [`closed by an agent at certainty ${task.closeCertainty}`]),
     ...(task.description ? ["", task.description, ""] : []),
     ...task.links.map((link) => `${link.kind.padEnd(12)} ${link.to ?? link.targetText ?? "?"}`),
+    ...task.linkedFrom.map((link) => `${link.from} ${link.kind} this task`),
   ].join("\n")
 
 const agendaText = (agenda: Agenda) => {

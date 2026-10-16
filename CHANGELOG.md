@@ -9,6 +9,9 @@ shape of this file.
 
 ### Added
 
+- **A task's card shows the tasks that point at it** (`tasks show`, the MCP task card): `linked_from` lists other
+  tasks' relations to this one, and the text card prints `task:<id> follow-up-of this task`. Before, only the new
+  task's card named the closed task it follows up; the closed task's card did not show that work went on.
 - Add `NativeRecordingPublication` to `./persistence/native`: host-coded bounded journals, verified no-overwrite publication and scoped interruption recovery, with durable host manifest callbacks.
 
 ### Fixed
