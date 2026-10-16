@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.298.0 — 16.10.2026
+
 ### Added
 
 - **The task category list is edited in one shared config file, `~/.config/WireCat/config.json`.** Its
