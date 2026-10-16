@@ -25,7 +25,7 @@ export const commandLookup = (group: Command) => (words: readonly string[]) => {
 /** `bot mcp`, mounted only for a messenger that hands in its `run` on `BotMessenger.mcp`. */
 export const botMcpCommand = (bot: BotMessenger): Command => {
   const { app } = bot
-  const command = annotate(new Command("mcp"), { effects: REMOTE_WRITE })
+  const command = annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent" })
     .description(
       `serve this bot to an agent over MCP, on stdin and stdout — \`claude mcp add sales-bot -- ${app.command} sales bot mcp\``,
     )

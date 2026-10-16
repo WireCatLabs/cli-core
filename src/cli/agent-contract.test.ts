@@ -55,11 +55,13 @@ const invoke = async (
         new Command("session").addCommand(
           new Command("start").argument("[method]").option("--qr-file <path>").action(performed),
         ),
-        new Command("watch").option("--term").action(async function (this: Command) {
-          const stopped = environmentOf(this).signal
-          setImmediate(() => process.emit(this.opts<{ term?: boolean }>().term ? "SIGTERM" : "SIGINT"))
-          await new Promise((resolve) => stopped?.addEventListener("abort", resolve, { once: true }))
-        }),
+        annotate(new Command("watch"), { lifetime: "persistent" })
+          .option("--term")
+          .action(async function (this: Command) {
+            const stopped = environmentOf(this).signal
+            setImmediate(() => process.emit(this.opts<{ term?: boolean }>().term ? "SIGTERM" : "SIGINT"))
+            await new Promise((resolve) => stopped?.addEventListener("abort", resolve, { once: true }))
+          }),
         new Command("post").action(async function (this: Command) {
           const stopped = environmentOf(this).signal
           await new Promise((_, reject) =>

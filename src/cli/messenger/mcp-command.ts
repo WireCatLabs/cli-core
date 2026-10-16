@@ -70,7 +70,7 @@ const withFlags = (command: Command): Command =>
 export const mcpCommand = (messenger: Messenger): Command => {
   const { app } = messenger
   const command = withFlags(
-    annotate(new Command("mcp"), { effects: REMOTE_WRITE }).description(
+    annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent" }).description(
       `serve this profile to an agent over MCP, on stdin and stdout — \`claude mcp add ${app.command} -- ${app.command} mcp\``,
     ),
   )

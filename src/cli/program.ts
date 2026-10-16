@@ -205,12 +205,10 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
         `this process is read-only (${lock}) — \`${command} ${path.join(" ")}\` changes what a later run may do; ` +
           `run it without ${lock}`,
       )
-    const persistent =
-      ["watch", "serve", "mcp"].includes(path[0] ?? "") ||
-      path.includes("mcp") ||
-      (path[0] === "bot" && path[1] === "watch")
+    const { lifetime, cooperative: stopsAtItsPace } = metaOf(action)
+    const persistent = lifetime === "persistent"
     listens = persistent
-    const interactiveLogin = !headless && (path[0] === "setup" || (path[0] === "session" && path[1] === "start"))
+    const interactiveLogin = !headless && lifetime === "interactive"
     const timeout = flags.timeout ?? (commandEnv[envName(definition.app, "TIMEOUT")]?.trim() || undefined)
     // A background fetch was asked to outlive the shell; only an explicit --timeout bounds it.
     const job = commandEnv[envName(definition.app, "BACKFILL_JOB")] !== undefined
@@ -228,7 +226,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       process.stdout.on("error", pipeError)
       process.stderr.on("error", pipeError)
     }
-    const cooperative = persistent || (path[0] === "messages" && path[1] === "sync")
+    const cooperative = persistent || stopsAtItsPace === true
     if (!cooperative) options.signal?.addEventListener("abort", externalAbort, { once: true })
     if (!cooperative && options.signal?.aborted) {
       externalAbort()

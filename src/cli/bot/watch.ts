@@ -102,7 +102,7 @@ const keep = async (
  * comes again after being handled; one without an id may print twice. A read: it changes nothing anyone sees.
  */
 export const botWatchCommand = (bot: BotMessenger): Command =>
-  annotate(new Command("watch"), { effects: REMOTE_WRITE })
+  annotate(new Command("watch"), { effects: REMOTE_WRITE, lifetime: "persistent" })
     .description("print new messages as they arrive and keep them, until Ctrl-C or --timeout (either ends it normally)")
     .option(
       "--events",

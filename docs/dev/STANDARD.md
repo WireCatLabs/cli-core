@@ -202,6 +202,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `status` | how a thing stands right now | `readiness` |
 | `check` | verify, and change nothing; the answer says what is wrong and how to fix it | `audit`, `preflight` |
 | `test` | run rules over what is already stored and say what they would have done, doing none of it |  |
+| `apply` | run the owner's saved rules over what is already stored and change what they match; dry run unless --yes |  |
 | `pause` | stop what a running process does for a profile, without stopping the process |  |
 | `resume` | restart what pause stopped |  |
 | `create` | make a thing | `mkdir` |
@@ -235,7 +236,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `link` | record that two identities are one person |  |
 | `unlink` | undo a link |  |
 | `lookup` | ask the messenger who is behind a phone number |  |
-| `inspect` | look at a link without joining it |  |
+| `inspect` | look at a source before taking anything from it: a chat link without joining, a mailbox without importing |  |
 | `send` | send a message |  |
 | `edit` | change a sent message |  |
 | `forward` | send an existing message on to another chat |  |
