@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.307.0 — 17.10.2026
+
 ### Fixed
 
 - **`mail.emails` and `mail.emailRefs` with a `mailbox` filter answer in seconds on a large mailbox.** The filter was
