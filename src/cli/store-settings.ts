@@ -5,6 +5,7 @@ import {
   DEFAULT_TASK_CATEGORIES,
   type TaskCategory,
   taskCategoryValue,
+  unlistedNote,
   withTaskCategory,
 } from "../domain/task-categories.js"
 import type { AppIdentity } from "../ports/app.js"
@@ -63,7 +64,8 @@ export const changeStoreSetting = async (
 ) => {
   if (setting.startsWith(GROUP_PREFIX)) return changeGroup(app, env, setting, value)
   if (setting === PHONE_COUNTRIES) return changePhoneCountries(app, env, value)
-  if (setting === TASK_CATEGORIES || setting.startsWith(CATEGORY_PREFIX)) return changeCategory(env, setting, value)
+  if (setting === TASK_CATEGORIES || setting.startsWith(CATEGORY_PREFIX))
+    return changeCategory(app, env, setting, value)
   if (setting === AGENT_CLOSE || setting === AGENT_CLOSE_MIN) return changeAgentClose(env, setting, value)
   const script = SCRIPTS[setting] as keyof Stemmers
   const store = await openStore({ env })
@@ -105,7 +107,7 @@ const changePhoneCountries = async (app: AppIdentity, env: NodeJS.ProcessEnv, va
   }
 }
 
-const changeCategory = async (env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
+const changeCategory = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
   const store = await openStore({ env })
   try {
     if (setting === TASK_CATEGORIES) {
@@ -116,6 +118,7 @@ const changeCategory = async (env: NodeJS.ProcessEnv, setting: string, value: st
             `config unset ${TASK_CATEGORIES} goes back to the default list`,
         )
       await store.tasks.saveCategories(undefined)
+      const unlisted = unlistedNote(await store.tasks.unlistedCategories(), app.command)
       return {
         result: {
           store: storePath(env),
@@ -123,18 +126,23 @@ const changeCategory = async (env: NodeJS.ProcessEnv, setting: string, value: st
           setting,
           value: DEFAULT_TASK_CATEGORIES.map(({ name }) => name),
         },
-        note: "store-wide — the default task categories again; tasks keep the category they have",
+        note: ["store-wide — the default task categories again; tasks keep the category they have", ...unlisted].join(
+          "\n",
+        ),
       }
     }
     const name = setting.slice(CATEGORY_PREFIX.length)
     const next = withTaskCategory(await store.tasks.categories(), name, value)
     await store.tasks.saveCategories(next)
     const set = next.find((one) => one.name === name.trim().toLowerCase())
+    const unlisted = unlistedNote(await store.tasks.unlistedCategories(), app.command)
     return {
       result: { store: storePath(env), scope: "store", setting, value: set ? taskCategoryValue(set) : null },
-      note:
+      note: [
         "store-wide — rules, tasks add and tasks plan in tg, MAX and memo take categories from this list; " +
-        "tasks keep the category they have",
+          "tasks keep the category they have",
+        ...unlisted,
+      ].join("\n"),
     }
   } finally {
     await store.close()

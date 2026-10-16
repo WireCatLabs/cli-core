@@ -219,7 +219,7 @@ describe("tasks", () => {
     )
     expect(
       (await call("tasks", "add", PROMISE, "--type", "promise", "--category", "finance", "--json")).stderr,
-    ).toContain("--category takes taxes, bills, insurance, bank, government, legal, hiring, sales,")
+    ).toContain("--category takes taxes, investments, subscriptions, bills, donations, insurance, bank,")
     expect((await call("tasks", "close", "nope", "--as", "done", "--json")).code).toBe(6)
 
     const readOnly = await setup({ profiles: { default: { permissions: { tasks: "readonly" } } } })
@@ -406,6 +406,21 @@ it("**takes a category from the list the owner edited in the store**, and refuse
   ).toMatchObject({ category: "garden" })
   const removed = await call("tasks", "plan", "PR-1", "--category", "personal", "--json")
   expect([removed.code, removed.stderr]).toEqual([2, expect.stringContaining("--category takes taxes")])
+})
+
+it("**names a category its tasks still carry after the owner removed it**, with how to find them", async () => {
+  const call = await setup()
+  const store = await openStore({ path: join(call.root, "m.db") })
+  await store.tasks.saveCategories(withTaskCategory(DEFAULT_TASK_CATEGORIES, "garden", "plants | seedling"))
+  await store.close()
+  await call("tasks", "add", PROMISE, "--type", "promise", "--category", "garden", "--json")
+  const again = await openStore({ path: join(call.root, "m.db") })
+  await again.tasks.saveCategories(DEFAULT_TASK_CATEGORIES)
+  await again.close()
+
+  expect(item(await call("tasks", "categories", "--json")).unlisted).toEqual([{ name: "garden", open: 1, total: 1 }])
+  expect((await call.pretty("tasks", "categories")).stdout.join("")).toContain("tasks list category:garden")
+  expect(item(await call("tasks", "agenda", "--json")).unlisted_categories).toEqual([{ name: "garden", open_tasks: 1 }])
 })
 
 describe("tasks that may be one job", () => {

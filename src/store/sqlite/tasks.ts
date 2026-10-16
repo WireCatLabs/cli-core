@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { TaskCategory } from "../../domain/task-categories.js"
+import type { TaskCategory, UnlistedCategory } from "../../domain/task-categories.js"
 import {
   matches,
   TASK_KINDS,
@@ -17,7 +17,7 @@ import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { type TaskSimilarity, taskSimilarityOver } from "./task-candidates.js"
-import { saveTaskCategories, storeTaskCategories } from "./task-category-settings.js"
+import { saveTaskCategories, storeTaskCategories, unlistedTaskCategories } from "./task-category-settings.js"
 import { CLEAR_SUGGESTION, type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
 import { type TaskCloseStore, taskCloseOver } from "./task-close-store.js"
 import { inboxKey, typedKey } from "./task-keys.js"
@@ -40,6 +40,8 @@ export interface StoreTaskStore
   categories(): Promise<readonly TaskCategory[]>
   /** `undefined` goes back to the default list. */
   saveCategories(categories: readonly TaskCategory[] | undefined): Promise<void>
+  /** Categories tasks carry that the list no longer holds, across the store. */
+  unlistedCategories(): Promise<UnlistedCategory[]>
   /** What the task package calls a task — its id, or a key like `IN1A2B3C4D-3` — as the row's `tasks.id`. */
   rowOf(id: string): number | undefined
   /** One account's tasks a list query keeps, oldest first, each with its title and last change. */
@@ -126,6 +128,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     rowOf: (id) => taskRowOf(database, id),
     categories: async () => storeTaskCategories(database),
     saveCategories: async (categories) => write(database, () => saveTaskCategories(database, categories, now())),
+    unlistedCategories: async () => unlistedTaskCategories(database),
     query: async (account, where, { limit, offset }) => {
       const project = inbox(account, false)
       if (project === undefined) return []
