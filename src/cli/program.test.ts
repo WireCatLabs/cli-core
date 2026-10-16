@@ -2,6 +2,7 @@ import { mkdtempSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
+import { annotate, type CommandMeta } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { startRecording } from "../runs/recording.js"
@@ -17,11 +18,11 @@ const { resolveSettings } = settingsFor(app)
 const foreignFailure = (code: string, message: string) =>
   Object.assign(new Error(message), { name: "CliError", code, details: { candidates: [{ id: "1" }] } })
 
-const definition = (action: (command: Command) => Promise<void>) => ({
+const definition = (action: (command: Command) => Promise<void>, meta: CommandMeta = {}) => ({
   app,
   commands: () => [
     new Command("chats").addCommand(
-      new Command("list").action(async function (this: Command) {
+      annotate(new Command("list"), meta).action(async function (this: Command) {
         await action(this)
       }),
     ),
@@ -140,7 +141,7 @@ describe("running a messenger CLI", () => {
 })
 
 describe("the default whole-command deadline", () => {
-  const hanging = async (env: NodeJS.ProcessEnv) => {
+  const hanging = async (env: NodeJS.ProcessEnv, meta: CommandMeta = {}) => {
     let started: () => void = () => {}
     const reached = new Promise<void>((resolve) => {
       started = resolve
@@ -152,7 +153,7 @@ describe("the default whole-command deadline", () => {
       })
     }
     const streams = captureStreams()
-    const done = run(["chats", "list"], definition(action), { streams, tty: false, env })
+    const done = run(["chats", "list"], definition(action, meta), { streams, tty: false, env })
     await reached
     return { done }
   }
@@ -173,6 +174,39 @@ describe("the default whole-command deadline", () => {
     // A command the deadline ended settles within milliseconds of real time; give it far longer.
     const outcome = await Promise.race([
       job.done.then(() => "ended"),
+      new Promise((resolve) => setTimeout(() => resolve("running"), 1_000)),
+    ])
+    expect(outcome).toBe("running")
+  })
+})
+
+describe("a command's declared lifetime", () => {
+  afterEach(() => vi.useRealTimers())
+
+  it.each(["persistent", "interactive"] as const)("gives a %s command no default deadline", async (lifetime) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    let started: () => void = () => {}
+    const reached = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    const done = run(
+      ["chats", "list"],
+      definition(
+        async (command) => {
+          await baseContext(command, resolveSettings).run(async () => {
+            started()
+            await new Promise(() => {})
+          })
+        },
+        { lifetime },
+      ),
+      { streams: captureStreams(), tty: true, env: { ...process.env } },
+    )
+    await reached
+    await vi.advanceTimersByTimeAsync(31_000)
+    vi.useRealTimers()
+    const outcome = await Promise.race([
+      done.then(() => "ended"),
       new Promise((resolve) => setTimeout(() => resolve("running"), 1_000)),
     ])
     expect(outcome).toBe("running")

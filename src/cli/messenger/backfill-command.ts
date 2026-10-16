@@ -52,7 +52,7 @@ const ALL_CHATS = "--all"
 
 export const syncCommand = (messenger: Messenger): Command => {
   const fetching = messenger.fetching ?? FETCHING
-  return annotate(new Command("sync"), { effects: FETCH })
+  return annotate(new Command("sync"), { effects: FETCH, cooperative: true })
     .description(
       "bring a chat's history in the local store up to date, newest first; run it again to continue; --all syncs every chat",
     )

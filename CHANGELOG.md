@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`run()` reads how long a command runs from its metadata, not its name**: a command annotated
+  `lifetime: "persistent"` (cli-core's `watch`, `serve`, `mcp`, `bot watch`, `bot mcp`) has no default deadline and ends
+  on Ctrl-C with 0; `lifetime: "interactive"` waits for a person; `cooperative: true` (`messages sync`) stops at its
+  own pace when aborted from outside. An app's own long-running command must declare it — before, `setup`,
+  `session start` and any command named `watch`, `serve` or `mcp` were matched by name. `mcp config`, `mcp setup` and
+  `mcp doctor` are no longer treated as long-running. Needs cli-base 0.38.0.
+
 ### Fixed
 
 - **Release scripts report observed lock holders separately from stale release labels.** Shared
