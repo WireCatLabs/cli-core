@@ -32,9 +32,26 @@ export const amountOf = (text: string): TaskAmount | null => {
 
 const RU_WEEKDAYS = ["воскресен", "понедельник", "вторник", "сред", "четверг", "пятниц", "суббот"]
 const EN_WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+const ES_WEEKDAYS = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"]
+/** `los viernes` is every Friday, as `по пятницам` and `fridays` are, which are not read either. */
 const WEEKDAY_WORDS =
   "понедельник[аеу]?|вторник[аеу]?|сред[аеуы]|четверг[аеу]?|пятниц[аеуы]|суббот[аеуы]|воскресень[еяю]|" +
-  EN_WEEKDAYS.join("|")
+  `${EN_WEEKDAYS.join("|")}|(?<!los )(?:${ES_WEEKDAYS.join("|")})`
+/** Spanish month names only after `<day> de`: on their own, `mayo 2` in an English message would read as May 2. */
+const ES_MONTHS = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "sep?tiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+]
 const MONTHS = [
   /^(январ[ьяею]|jan(uary)?)$/u,
   /^(феврал[ьяею]|feb(ruary)?)$/u,
@@ -51,6 +68,7 @@ const MONTHS = [
 ]
 
 const monthIndex = (word: string): number => MONTHS.findIndex((month) => month.test(word))
+const esMonth = (word = ""): number => ES_MONTHS.findIndex((month) => new RegExp(`^${month}$`, "u").test(word))
 
 /** The creator's calendar date in the machine's time zone, as a day count: "tomorrow" late at night is local. */
 export const dayOf = (ms: number): number => {
@@ -76,6 +94,7 @@ const nextWeekday = (word: string, now: number): number => {
   const target = Math.max(
     RU_WEEKDAYS.findIndex((stem) => word.startsWith(stem)),
     EN_WEEKDAYS.indexOf(word),
+    ES_WEEKDAYS.indexOf(word),
   )
   let day = now + 1
   while (new Date(day * DAY).getUTCDay() !== target) day++
@@ -87,10 +106,13 @@ const words = (source: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${source})(?
 
 type Resolve = (match: RegExpMatchArray, now: number, year: number) => number | undefined
 
+const ES_DAY = "(3[01]|[12]\\d|0?[1-9])"
+
 const DUE_PATTERNS: [RegExp, Resolve][] = [
-  [words("послезавтра"), (_, now) => now + 2],
-  [words("завтра|tomorrow"), (_, now) => now + 1],
-  [words("сегодня|today"), (_, now) => now],
+  [words("послезавтра|pasado manana"), (_, now) => now + 2],
+  // `por la mañana` and `esta mañana` are a morning, not tomorrow.
+  [words("завтра|tomorrow|(?<!(?:la|esta|cada|una) )manana"), (_, now) => now + 1],
+  [words("сегодня|today|hoy"), (_, now) => now],
   [words("(\\d{1,2})\\.(\\d{2})"), (m, _, year) => dateDay(year, Number(m[2]) - 1, Number(m[1]))],
   [words("(\\d{1,2})(?:st|nd|rd|th)?\\s+(\\p{L}+)"), (m, _, year) => monthDate(year, m[2], m[1])],
   [words("(\\p{L}+)\\.?\\s+(\\d{1,2})"), (m, _, year) => monthDate(year, m[1], m[2])],
@@ -98,7 +120,15 @@ const DUE_PATTERNS: [RegExp, Resolve][] = [
     words("(?:до|к|by|until|before|on|deadline)\\s+(?:the\\s+)?(\\d{1,2})(?:-?(?:го|е|числа)|\\s+числа|st|nd|rd|th)"),
     (m, now) => nthDay(Number(m[1]), now),
   ],
-  [words("конца месяца|end of (?:the )?month"), (_, now) => monthEnd(now)],
+  [words(`${ES_DAY}\\s+de\\s+(${ES_MONTHS.join("|")})`), (m, _, year) => dateDay(year, esMonth(m[2]), Number(m[1]))],
+  // Spanish has no ordinal suffix, so a bare day counts only when no month follows: `antes del 5 de mayo` is May 5.
+  [
+    words(
+      `(?:(?:antes del|hasta el|para el|el)\\s+dia|antes del|hasta el|para el)\\s+${ES_DAY}(?![.,/]\\d|\\s*%|\\s+del?\\s)`,
+    ),
+    (m, now) => nthDay(Number(m[1]), now),
+  ],
+  [words("конца месяца|end of (?:the )?month|fin(?:al)? del? mes"), (_, now) => monthEnd(now)],
   [words(`(${WEEKDAY_WORDS})`), (m, now) => nextWeekday(m[1] ?? "", now)],
 ]
 

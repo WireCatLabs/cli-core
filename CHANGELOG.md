@@ -15,6 +15,11 @@ shape of this file.
   `para`. An English message without those is not read as Spanish, so `page` does not hit `pagar`. On the
   cli-testing set (English and Russian) no category changes. The duplicate check already compared Spanish stems; tasks already stored keep
   their category.
+- **The duplicate check reads due dates written in Spanish.** It read English and Russian only, so `mañana` or
+  `el viernes` gave a task no due date. Now it reads the same forms in Spanish: `hoy`, `mañana`, `pasado mañana`, a
+  weekday (`el próximo lunes`), `fin de mes`, `15 de noviembre`, and a day of the month (`antes del 5`,
+  `el día 20`). `por la mañana` and `esta mañana` are a morning, not tomorrow, and `los viernes` (every Friday) is
+  not a date. A month name counts only after `<day> de`, and `3/11` is not read, as in English.
 
 ## 0.295.0 — 16.10.2026
 

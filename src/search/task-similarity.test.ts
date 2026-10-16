@@ -170,6 +170,15 @@ describe("a task read with one of its messages", () => {
     expect(withMessage.stems).toEqual(new Set(["pay", "bill", "15000", "rub", "tomorrow"]))
   })
 
+  it("reads a Spanish message's due date from when it was sent", () => {
+    const spanish = prepareTask({
+      title: "Pagar la factura",
+      createdAt: at(0),
+      message: { text: "¿Me la pagas mañana?", sentAt: sent },
+    })
+    expect(spanish.dueDay).toBe(dayOf(sent.getTime()) + 1)
+  })
+
   it("counts the best view whole, so a message can raise a score and never lower it", () => {
     const other = prepareTask({ title: "Pay the bill", amount: { value: 9000, currency: "RUB" }, createdAt: at(0) })
     expect(compareViews([own, withMessage], [other])).toEqual(compareTasks(own, other))
