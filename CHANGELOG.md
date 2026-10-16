@@ -9,6 +9,7 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **cli-core needs `@wirecat/cli-base` 0.40** (peer `>=0.40.0 <0.41.0`). Raise it together with cli-core.
 - **The duplicate check reads the messages a task stands on**: its source message and its 5 newest linked messages,
   one at a time beside the title and description; the best pair counts, so a message only raises a pair's score. A
   rule's task, whose title says nothing, now compares by its message's words: on the cli-testing duplicate set it
@@ -29,6 +30,8 @@ shape of this file.
   each email's account, so SQLite re-read every mailbox link for every candidate: `London NOT mailbox:bulk` took
   67 s and failed with `query.too-large` on a 257k-email store with 880k mailbox links. The mailbox ids are now
   looked up once; the same count takes 0.13 s. Which emails match is unchanged.
+- **An email address works unquoted in a mail search**: `from:alice@example.com`, and `to:` or `cc:` with a bare
+  address, failed with `query.unsupported-operator`. cli-base 0.40.0 reads `user@host.tld` as one word.
 
 ## 0.295.0 — 16.10.2026
 

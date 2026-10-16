@@ -184,6 +184,7 @@ describe("search mail over the mail tables", () => {
     const sorted = async (text: string) => (await found(store, text)).sort()
 
     expect(await sorted('to:"carol@example.com"')).toEqual(["<four@example.com>"])
+    expect(await sorted("to:carol@example.com")).toEqual(["<four@example.com>"])
     expect(await sorted('to:"Carol Example"')).toEqual(["<four@example.com>"])
     expect(await sorted('bcc:"bob@example.com"')).toEqual(["<four@example.com>"])
     expect(await sorted('to:"owner@example.com" AND from:"bob@example.com"')).toEqual(["<two@example.com>"])
