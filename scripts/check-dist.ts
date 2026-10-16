@@ -8,11 +8,13 @@ import { join } from "node:path"
 import { checkCliEntry } from "./check-cli-entry.ts"
 import { checkFileLeases } from "./check-file-leases.ts"
 import { checkRecordingPartials } from "./check-recording-partials.ts"
+import { checkRecordingPublication } from "./check-recording-publication.ts"
 
 const root = join(import.meta.dirname, "../dist")
 checkCliEntry(root)
 await checkFileLeases(root)
 await checkRecordingPartials(root)
+await checkRecordingPublication(root)
 const dist = join(root, "store/sqlite")
 const leaks = readdirSync(root, { recursive: true, encoding: "utf8" })
   .filter((name) => name.endsWith(".js"))

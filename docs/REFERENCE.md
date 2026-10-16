@@ -10,6 +10,10 @@ storage port with bounded metadata, exact-prefix verification and owned native h
 supplies its dotfile prefix, persistence choice and byte limit. See the
 [native adapter guide](dev/NATIVE-RECORDING-PARTIALS.md) for ownership, compatibility and cleanup.
 
+`NativeRecordingPublication` shares bounded journal I/O, no-overwrite final linking and verified
+interruption recovery. Hosts keep their own manifest codec and durable commitment callback; see
+the [publication guide](dev/NATIVE-RECORDING-PUBLICATION.md).
+
 ## Retained meeting references
 
 `parseMeetingReference`, `formatMeetingReference` and `canonicalMeetingReference` name local meeting
