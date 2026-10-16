@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- A config file from an older version now reports the renamed key first (`clientId is an unknown setting; rename it to client_id`) instead of the missing new key, which said nothing about how to fix the file.
+
 ## 0.306.0 — 17.10.2026
 
 ### Added
