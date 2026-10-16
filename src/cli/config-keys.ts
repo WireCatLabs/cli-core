@@ -41,7 +41,8 @@ const renameHint = (issue: v.BaseIssue<unknown>, schema: v.GenericSchema): strin
  * config value can be a secret pasted into the wrong place.
  */
 const problemOf = (issues: [v.BaseIssue<unknown>, ...v.BaseIssue<unknown>[]], schema: v.GenericSchema): string => {
-  const [issue] = issues
+  // A file from an older version is missing every new key; the rename is what tells the reader how to fix it.
+  const issue = issues.find((candidate) => renameHint(candidate, schema)) ?? issues[0]
   const more = issues.length - 1
   const count = more === 0 ? "" : ` (and ${more} more problem${more === 1 ? "" : "s"})`
   return `${v.getDotPath(issue) ?? "the whole file"} ${reasonOf(issue)}${renameHint(issue, schema)}${count}`
