@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import * as v from "valibot"
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, expectTypeOf, it } from "vitest"
 import { levelFor } from "../sends/permissions.js"
 import { settingsFor } from "./settings.js"
 
@@ -601,4 +601,26 @@ describe("settings extensions", () => {
     ).toBe(true)
     expect(adapter.resolveSettings({}, { env: NAMED, configDir }).shared.autoStart).toBe(true)
   })
+})
+
+it("preserves public schema entry types when a provider composes permission settings", () => {
+  const { schema } = settingsFor({
+    command: "app",
+    appName: "app-cli",
+    envPrefix: "APP",
+    description: "",
+    version: "0.0.0",
+  })
+  expectTypeOf<keyof typeof schema.entries>().toEqualTypeOf<
+    "default_profile" | "defaults" | "profiles" | "personal" | "bot"
+  >()
+  const provider = v.strictObject({
+    permissions: schema.entries.defaults.wrapped.entries.permissions,
+    custom: v.optional(v.boolean()),
+  })
+  type Keys = keyof v.InferOutput<typeof provider>
+  expectTypeOf<Keys>().toEqualTypeOf<"permissions" | "custom">()
+  const keys: Keys[] = ["permissions", "custom"]
+  const names: string[] = keys
+  expect(names).toEqual(["permissions", "custom"])
 })
