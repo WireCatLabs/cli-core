@@ -13,6 +13,8 @@ shape of this file.
 
 - **`mail.emails` and `mail.emailRefs` with a `mailbox` filter answer in seconds on a large mailbox.** The filter was
   run again for every email: over 4.5 minutes on 257,000 emails (memo mail status never finished), 7.5 seconds now.
+- A config file from an older version now reports the renamed key first (`clientId is an unknown setting; rename it to
+  client_id`) instead of the missing new key, which said nothing about how to fix the file.
 
 ### Added
 
@@ -36,10 +38,6 @@ shape of this file.
   method is in `src/store/store.ts`; the narrow ports `PersonMeetingReadStore` (`people: { personByUid,
   personSeenInAccounts }`), `MeetingTaskStore` and `MeetingContextServiceStore` (`accounts: { storedAccount }`)
   follow. The store's schema and version do not change.
-
-### Fixed
-
-- A config file from an older version now reports the renamed key first (`clientId is an unknown setting; rename it to client_id`) instead of the missing new key, which said nothing about how to fix the file.
 
 ## 0.306.0 — 17.10.2026
 
