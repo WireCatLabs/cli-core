@@ -15,6 +15,11 @@ shape of this file.
   arguments; a second change during that run stops it with `run it again`. The restart also works when
   `bin/release` was started from another folder by a relative path. Only the repository's own release is affected;
   the published package does not change.
+- **`pull` keeps a meeting when one of its parts fails.** Participants, transcript, chat, summary and files are
+  read one by one; a part that throws adds a warning naming it (`transcript: …`) and leaves what the store holds
+  for that part, and the meeting is saved with the rest. The cursor still stays put, so the next pull retries the
+  missing part. A transcript first saved while participants failed gets its speaker links on that retry; one
+  already stored with links is kept, not replaced by an unlinked copy.
 
 ## 0.303.0 — 16.10.2026
 
