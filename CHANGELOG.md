@@ -5,6 +5,17 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **Spanish trigger words now match the other forms of a word.** A rule's category stemmed every Latin word with
+  the English stemmer, so `pagues` or `viajamos` hit no trigger (`pagar`, `viaje`). Now an `es:` trigger also matches
+  by its Spanish stem when the message reads as Spanish: an accent, `ñ`, `¿` or `¡`, or a word such as `la`, `que`,
+  `para`. An English message without those is not read as Spanish, so `page` does not hit `pagar`. On the
+  cli-testing set (English and Russian) no category changes. The duplicate check already compared Spanish stems; tasks already stored keep
+  their category.
+
 ## 0.295.0 — 16.10.2026
 
 ### Changed — may break callers
