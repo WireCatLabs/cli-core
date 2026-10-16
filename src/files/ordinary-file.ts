@@ -8,15 +8,14 @@ const sameIdentity = (left: BigIntStats, right: BigIntStats) =>
   left.ino === right.ino && deviceOf(left.dev) === deviceOf(right.dev)
 
 /** Check the opened object before reading: Windows has no O_NOFOLLOW support. */
-export const openOrdinaryFile = async (path: string): Promise<FileHandle> => {
+export const openOrdinaryFile = async (path: string, options: { writable?: boolean } = {}): Promise<FileHandle> => {
   const before = await lstat(path, { bigint: true })
   if (before.isSymbolicLink())
     throw new CliError("validation_error", "archive path must be an ordinary file without a symlink")
   if (!before.isFile()) throw new CliError("validation_error", "archive path must be an ordinary file")
+  const access = options.writable ? constants.O_RDWR : constants.O_RDONLY
   const flags =
-    process.platform === "win32"
-      ? constants.O_RDONLY
-      : constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+    process.platform === "win32" ? access : access | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
   const file = await open(path, flags)
   try {
     const opened = await file.stat({ bigint: true })

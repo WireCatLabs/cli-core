@@ -108,6 +108,10 @@
       "types": "./dist/files/index.d.ts",
       "default": "./dist/files/index.js"
     },
+    "./persistence/native": {
+      "types": "./dist/persistence/native/index.d.ts",
+      "default": "./dist/persistence/native/index.js"
+    },
     "./speech/wav": {
       "types": "./dist/speech/wav.d.ts",
       "default": "./dist/speech/wav.js"
