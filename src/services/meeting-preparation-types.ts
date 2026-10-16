@@ -6,6 +6,7 @@ import type {
   MeetingPreparationFact,
   MeetingPreparationKnowledgeStore,
   MeetingPreparationNote,
+  MeetingPreparationNotesSelection,
   MeetingPreparationNotesStore,
   MeetingReadCapabilities,
   MeetingRelatedHistoryEntry,
@@ -71,7 +72,7 @@ export interface MeetingPreparation {
   notes?: {
     anchors: string[]
     items: MeetingPreparationNote[]
-    selection: "owner-written-global-person/project-notes"
+    selection: MeetingPreparationNotesSelection
     coverage: {
       hasMore: boolean
       outputLimited: boolean

@@ -83,9 +83,13 @@ export const meetingPreparation = v.strictObject({
           updated_at: isoTime,
           person: v.nullable(reference),
           project: v.nullable(reference),
+          meeting: v.optional(v.nullable(reference)),
         }),
       ),
-      selection: v.literal("owner-written-global-person/project-notes"),
+      selection: v.picklist([
+        "owner-written-global-person/project-notes",
+        "owner-written-meeting/person/project-notes",
+      ]),
       coverage: v.strictObject({
         has_more: v.boolean(),
         output_limited: v.boolean(),

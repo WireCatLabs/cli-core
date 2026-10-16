@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- Meeting preparation includes owner notes and annotations directly about selected stored meetings, with canonical meeting references and existing byte/row limits. It reuses the notes store and excludes foreign or unselected meeting subjects even through shared project links.
+
+### Changed — may break callers
+
+- Native preparation pages report `notes.selection: owner-written-meeting/person/project-notes` and nullable `notes.items[].meeting`. Consumers matching the old selection string must accept the extended selection. Custom legacy person/project-only hosts may omit the new page selection and meeting field and retain their existing public answer shape.
+
 ## 0.304.0 — 16.10.2026
 
 ### Added

@@ -66,14 +66,9 @@ describe("bounded notes for meeting preparation", () => {
     ).toMatchObject({ items: [{ ref: f.second.ref }], hasMore: true })
   })
 
-  it("excludes deleted, future, bot-authored, account-scoped and unrelated records", async () => {
+  it("excludes deleted, future, bot-authored and unrelated records", async () => {
     const f = await fixture()
-    for (const patch of [
-      "deleted_at=5000",
-      "updated_at=10001",
-      "author_type='bot',author_id=1",
-      `notable_type='meeting',notable_id=${f.context.meetingId}`,
-    ]) {
+    for (const patch of ["deleted_at=5000", "updated_at=10001", "author_type='bot',author_id=1"]) {
       f.db.prepare(`UPDATE notes SET ${patch} WHERE id=?`).run(Number(f.second.id))
       expect((await f.store.meetings.preparationNotes(f.request)).items.map((n) => n.ref)).toEqual([f.first.ref])
       f.db
@@ -83,10 +78,11 @@ describe("bounded notes for meeting preparation", () => {
         .run(Number(f.project.id), Number(f.second.id))
     }
     await f.store.notes.addNote({ text: "Unrelated owner note" })
-    await f.store.notes.addNote({ text: "Meeting-specific", about: [f.reference, f.project.ref] })
+    const meetingNote = await f.store.notes.addNote({ text: "Meeting-specific", about: [f.reference, f.project.ref] })
     f.db.prepare("UPDATE notes SET updated_at=10000 WHERE id=?").run(Number(f.first.id))
     expect((await f.store.meetings.preparationNotes(f.request)).items.map((n) => n.ref)).toEqual([
       f.first.ref,
+      meetingNote.ref,
       f.second.ref,
     ])
   })
@@ -143,4 +139,73 @@ describe("bounded notes for meeting preparation", () => {
     await expect(reader.preparationNotes({ ...f.request, signal: controller.signal })).rejects.toThrow("Stopped")
     expect(database.prepare).not.toHaveBeenCalled()
   })
+})
+
+it("includes explicit anchor meeting notes and annotations once, retaining bounded associations", async () => {
+  const f = await fixture()
+  const direct = await f.store.notes.addNote({ text: "Check the revised figures", about: [f.reference] })
+  const annotation = await f.store.knowledge.addAnnotation(
+    f.key,
+    { type: "meeting", id: String(f.context.meetingId) },
+    "Bring the revised figures",
+  )
+  const multiple = await f.store.notes.addNote({
+    text: "Discuss launch",
+    about: [f.reference, f.project.ref, f.person],
+  })
+  const page = await f.store.meetings.preparationNotes(f.request)
+  expect(page.selection).toBe("owner-written-meeting/person/project-notes")
+  expect(page.items.slice(0, 3)).toMatchObject([
+    { ref: multiple.ref, meeting: f.reference, person: f.person, project: f.project.ref },
+    { ref: `note:${annotation.id}`, meeting: f.reference, person: null, project: null },
+    { ref: direct.ref, meeting: f.reference, person: null, project: null },
+  ])
+  expect(page.items.filter((n) => n.ref === multiple.ref)).toHaveLength(1)
+  const before = f.db.prepare("SELECT * FROM notes ORDER BY id").all()
+  for (const patch of [{ accountId: f.otherId }, { seriesId: 99999 }, { after: 9999 }, { anchorIds: [] }])
+    expect((await f.store.meetings.preparationNotes({ ...f.request, ...patch })).items).toEqual([])
+  expect(f.db.prepare("SELECT * FROM notes ORDER BY id").all()).toEqual(before)
+})
+
+it("never includes a foreign meeting note through its additional global project link", async () => {
+  const f = await fixture()
+  const foreignInput = structuredClone(f.input)
+  foreignInput.meeting.accountId = f.otherId
+  const foreign = await f.store.meetings.saveMeeting(foreignInput)
+  const note = await f.store.notes.addNote({
+    text: "Foreign meeting note",
+    about: [`meeting:${f.otherId}/${foreign.meeting.id}`, f.project.ref],
+  })
+  expect((await f.store.meetings.preparationNotes(f.request)).items.map((n) => n.ref)).not.toContain(note.ref)
+  const direct = await f.store.notes.addNote({ text: "Selected meeting note", about: [f.reference] })
+  f.db.prepare("UPDATE meetings SET deleted_at=5000 WHERE id=?").run(f.context.meetingId)
+  expect((await f.store.meetings.preparationNotes(f.request)).items.map((n) => n.ref)).not.toContain(direct.ref)
+})
+
+it("requires confirmed explicit meeting associations for otherwise unrelated global notes", async () => {
+  const f = await fixture()
+  const unrelated = await f.store.knowledge.addProject({ name: "Unrelated Example", key: "UNR" })
+  const note = await f.store.notes.addNote({ text: "Review this item", about: [unrelated.ref, f.reference] })
+  expect((await f.store.meetings.preparationNotes(f.request)).items.find((n) => n.ref === note.ref)).toMatchObject({
+    meeting: f.reference,
+    person: null,
+    project: null,
+  })
+  f.db
+    .prepare("UPDATE links SET confirmed=0 WHERE from_type='note' AND from_id=? AND to_type='meeting'")
+    .run(Number(note.id))
+  expect((await f.store.meetings.preparationNotes(f.request)).items.map((n) => n.ref)).not.toContain(note.ref)
+})
+
+it("allows a confirmed selected anchor after another primary meeting in the same account", async () => {
+  const f = await fixture()
+  const otherInput = structuredClone(f.input)
+  otherInput.meeting.externalId = "another-invented-occurrence"
+  const other = await f.store.meetings.saveMeeting(otherInput)
+  const otherRef = `meeting:${f.accountId}/${other.meeting.id}`
+  const note = await f.store.notes.addNote({ text: "Carry this issue forward", about: [otherRef, f.reference] })
+  const projectOnly = await f.store.notes.addNote({ text: "Unselected meeting", about: [otherRef, f.project.ref] })
+  const page = await f.store.meetings.preparationNotes(f.request)
+  expect(page.items.find((n) => n.ref === note.ref)).toMatchObject({ meeting: f.reference })
+  expect(page.items.map((n) => n.ref)).not.toContain(projectOnly.ref)
 })

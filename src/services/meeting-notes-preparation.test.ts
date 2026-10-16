@@ -29,7 +29,7 @@ describe("owner note context in meeting preparation", () => {
       expect(result.notes).toMatchObject({
         anchors: [f.reference],
         items: [{ ref: f.note.ref, revision: 1, project: f.project.ref }],
-        selection: "owner-written-global-person/project-notes",
+        selection: "owner-written-meeting/person/project-notes",
         coverage: {
           hasMore: false,
           outputLimited: false,
@@ -97,6 +97,8 @@ describe("owner note context in meeting preparation", () => {
       { updatedAt: 10001 },
       { person: "meeting:1/1" },
       { project: null },
+      { meeting: "meeting:9999/9999" },
+      { meeting: f.reference },
     ]) {
       await expect(
         f
@@ -129,4 +131,40 @@ describe("owner note context in meeting preparation", () => {
         .prepare("example-series", { ...f.request, signal: controller.signal }),
     ).rejects.toMatchObject({ code: "timeout" })
   })
+})
+
+it("includes notes directly about selected meetings without requiring a person or project association", async () => {
+  const f = await fixture("another-calendar")
+  const direct = await f.store.notes.addNote({ text: "Ask for the corrected totals", about: [f.reference] })
+  const result = await f.service.prepare("example-series", f.request)
+  expect(result.notes?.items[0]).toMatchObject({ ref: direct.ref, meeting: f.reference, person: null, project: null })
+  expect(meetingPreparationAnswer(result).item.notes?.items[0]).toMatchObject({ ref: direct.ref, meeting: f.reference })
+})
+
+it("retains the legacy host page and public answer shape when no meeting selection is supplied", async () => {
+  const f = await fixture()
+  const legacy: MeetingPreparationNote = {
+    ref: f.note.ref,
+    title: null,
+    text: "Checklist",
+    revision: 1,
+    updatedAt: 5000,
+    person: null,
+    project: f.project.ref,
+  }
+  const result = await f.host(async () => ({ items: [legacy], hasMore: false })).prepare("example-series", f.request)
+  expect(result.notes?.selection).toBe("owner-written-global-person/project-notes")
+  expect(meetingPreparationAnswer(result).item.notes?.items[0]).not.toHaveProperty("meeting")
+  await expect(
+    f
+      .host(async () => ({ items: [], hasMore: false, selection: "unknown" as never }))
+      .prepare("example-series", f.request),
+  ).rejects.toMatchObject({ code: "invalid_response" })
+})
+
+it("refuses an explicitly null notes selection", async () => {
+  const f = await fixture()
+  await expect(
+    f.host(async () => ({ items: [], hasMore: false, selection: null as never })).prepare("example-series", f.request),
+  ).rejects.toMatchObject({ code: "invalid_response" })
 })
