@@ -230,7 +230,8 @@ apart. If real answers show "likely" pairs are almost always accepted, merging t
   (`links` to a message of kind `related-to`, `evidence` or `created-from`; not `answered-by`, the owner's own
   answer). Each is a view: the task's title and description plus that one message. Two tasks score as their best
   pair of views, taken whole — text, person, amount and due date come from the same message, never mixed. The
-  title-and-description view stays, so a message can raise a score and never lower it. A message's amount and due
+  title-and-description view stays, so a message can raise a pair's score and never lower it; the text lookup now
+  matches the stems of every view, so its top 20 can change. A message's amount and due
   date count only when the task's own text has none; its "tomorrow" is read from when it was sent. The time field
   stays the tasks' creation dates.
 - Messages are read from the store at compare time (`src/store/sqlite/task-candidates.ts`); a task stores no
@@ -244,11 +245,13 @@ apart. If real answers show "likely" pairs are almost always accepted, merging t
   rule links a message to an existing task (a rule only skips a message already attached), so rules add no trigger.
 - The source message's text was not read before, so a rule's task — whose title is a placeholder — compared on no
   words at all. Reading it brings the store in line with the test set, whose tasks always carry their message.
-- Measured ([cli-testing](https://github.com/WireCatLabs/cli-testing/tree/main/performance/tasks/duplicates),
-  `linked.mjs`): the set replayed with an agent that answers every refusal right, before and after — the same
-  numbers (maybe or likely 65 / 45, 59% precision, 92% recall; likely 30 / 6, 83%, 42%), and the check after a link
-  sent no new pair. In the set each task already carries its whole message, so a linked one adds nothing the first
-  did not; the gain is for tasks whose own text lacks what a later message says (store tests).
+- Measured ([cli-testing#95](https://github.com/WireCatLabs/cli-testing/pull/95), `linked.mjs`): the set replayed
+  with an agent that answers every refusal right, before and after — the same numbers (maybe or likely 65 / 45, 59%
+  precision, 92% recall; likely 30 / 6, 83%, 42%), and the check after a link sent no new pair. In the set each task
+  already carries its whole message, so a linked one adds nothing the first did not; the gain is for tasks whose
+  own text lacks what a later message says (store tests). Rule tasks, with an empty title: maybe or likely found 8%
+  of duplicates before (6 / 3) and 74% at 69% precision after (59 / 27; likely 27 / 3, 90%, 34%); 18 of 180 new
+  tasks now go to review, 3 before.
 
 ## Rules on `sync`
 
