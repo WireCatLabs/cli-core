@@ -272,7 +272,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const profileEntries = { ...SHARED_PROFILE_ENTRIES, ...extension.profile }
   const defaultsOnly = { ...SHARED_DEFAULTS_ONLY, ...extension.defaults }
   const defaultsEntries = { ...profileEntries, ...defaultsOnly }
-  const strictOf = (entries: v.ObjectEntries) => v.strictObject(entries, objectMessage)
+  const strictOf = <E extends v.ObjectEntries>(entries: E) => v.strictObject(entries, objectMessage)
   const kindSection = (entries: v.ObjectEntries) =>
     v.strictObject(
       {
