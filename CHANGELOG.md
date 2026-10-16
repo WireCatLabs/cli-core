@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.304.0 — 16.10.2026
+
 ### Fixed
 
 - **`bin/release` restarts itself once when the release brings a newer `bin/release`**: folding the changelog and
