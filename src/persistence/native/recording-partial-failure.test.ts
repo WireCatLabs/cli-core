@@ -1,4 +1,5 @@
-import { mkdtemp, readdir, readFile } from "node:fs/promises"
+import { constants } from "node:fs"
+import { mkdir, mkdtemp, readdir, readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it, vi } from "vitest"
