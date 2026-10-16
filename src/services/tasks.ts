@@ -5,10 +5,13 @@ import { isLocator, parseLocator } from "../domain/locator.js"
 import { formatReference } from "../domain/references.js"
 import { task as taskEntity } from "../entities/task.js"
 import {
+  type CloseSuggestion,
+  certaintyOf,
   type SimilarTask,
   TASK_RELATION_KINDS,
   type TaskDraft,
   type TaskPair,
+  type TaskPairSide,
   type TaskRelation,
   type TaskRelationKind,
 } from "../store/index.js"
@@ -41,8 +44,24 @@ export const TASK_QUERY = {
   entity: "task",
   backend: "sql",
   fields: queryFieldsOf(taskEntity, {
-    exclude: ["ref", "description", "project", "account", "priority", "parent", "claimed_by", "claimed_until"],
+    exclude: [
+      "ref",
+      "description",
+      "project",
+      "account",
+      "priority",
+      "parent",
+      "claimed_by",
+      "claimed_until",
+      "close_suggestion",
+    ],
     relations: {
+      close: {
+        type: "enum",
+        values: ["suggested"],
+        example: "close:suggested",
+        relation: "an agent's close waits on the owner: tasks close confirms it, tasks reject refuses it",
+      },
       tag: { type: "kw", example: "tag:urgent", relation: "a tag put on the task with tags add --task" },
     },
     examples: {
@@ -103,6 +122,7 @@ const taskColumns = (groups: ReadonlyMap<string, string>): ColumnMap => ({
   },
   source_message: { type: "ref", sql: "t.source_locator" },
   reason: { type: "kw", sql: "t.close_reason_folded", folded: true },
+  close: { where: () => ({ sql: "t.close_suggested_as IS NOT NULL", params: [] }) },
   due_at: TIME("t.due_at"),
   closed_at: TIME("t.closed_at"),
   created_at: TIME("t.created_at"),
@@ -167,6 +187,21 @@ export type DuplicateCandidate = Pick<SimilarTask, "ref" | "key" | "title" | "st
 /** An owner-project task's id, `task:<id>` written without its prefix, or a project key such as `HRB-12`. */
 const BARE_TASK = /^(\d+|[A-Z][A-Z0-9]*-\d+)$/
 
+export interface CloseRequest {
+  as?: ClosedState
+  reason?: string
+  by: TaskOrigin
+  /** The agent's name, recorded with its suggestion. */
+  agent?: string
+  /** 0–1: how sure the agent is that the task needs nothing more. */
+  certainty?: number
+}
+
+export interface ClosedTask extends TaskView {
+  closeCertainty: number | null
+  closeSuggestion: CloseSuggestion | null
+}
+
 export interface TaskCard extends TaskDetails {
   links: ThingLink[]
 }
@@ -180,8 +215,9 @@ export interface TasksService {
    */
   similar(subject: string | TaskDraft, options?: { limit?: number }): Promise<SimilarTask[]>
   /**
-   * Refused (`task.duplicate-candidates`, with the candidates) while an open or recent task is likely or maybe the
-   * same job, unless `choice` says to attach the message to one of them or to open the task anyway.
+   * Refused (`task.duplicate-candidates`, with the candidates) while an open task is likely or maybe the same job,
+   * unless `choice` says to attach the message to one of them or to open the task anyway. A task opened while one
+   * closed in the last 14 days is likely or maybe the same job follows it up (`followUpOf`); that one stays closed.
    */
   add(
     message: string,
@@ -189,7 +225,15 @@ export interface TasksService {
     origin: TaskOrigin,
     plan?: TaskPlan,
     choice?: DuplicateChoice,
-  ): Promise<{ task: TaskView; created: boolean; attached?: boolean; review?: number; card?: TaskCard }>
+  ): Promise<{
+    task: TaskView
+    created: boolean
+    attached?: boolean
+    review?: number
+    /** The task closed in the last 14 days this one follows up; it stays closed. */
+    followUpOf?: TaskPairSide
+    card?: TaskCard
+  }>
   /** Pairs a rule left for review — or, with `unsure`, the ones the reviewing agent passed to the owner — newest first. */
   duplicates(options: { decision: PairDecision; limit: number; offset: number }): Promise<TaskPair[]>
   /** `rejected`: not the same job, never offered again. `unsure`: the owner decides. */
@@ -201,7 +245,13 @@ export interface TasksService {
     by: TaskOrigin,
   ): Promise<{ pair: TaskPair; linked: number; review: number; task: TaskCard }>
   unmerge(dup: string, by: TaskOrigin): Promise<{ pair: TaskPair; task: TaskCard }>
-  close(id: string, options: { as: ClosedState; reason?: string; by: TaskOrigin }): Promise<TaskView>
+  /**
+   * An agent states its `certainty`; below the store's threshold, or while agent closes are off, the task stays open
+   * with the close waiting on the owner. The owner always closes; `as` left out takes the agent's suggestion.
+   */
+  close(id: string, options: CloseRequest): Promise<ClosedTask>
+  /** The owner refuses an agent's close: the task stays open and the suggestion goes. */
+  reject(id: string, by: TaskOrigin): Promise<TaskCard>
   stats(filter?: { chat?: string; type?: TaskKind }): Promise<GroupStats[]>
   /** Title, description, due date and next check; `null` clears one. */
   plan(id: string, plan: TaskPlan, by: TaskOrigin): Promise<TaskCard>
@@ -293,7 +343,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
    * the review list, never to a merge, and the link stands whatever they score. A closed task is not checked.
    */
   const reviewAfterLink = async (store: MessageStore, id: string): Promise<number> =>
-    (await store.tasks.get(id))?.state === "open" ? store.tasks.reviewDuplicates(id) : 0
+    (await store.tasks.get(id))?.state === "open" ? store.tasks.reviewDuplicates(id, { linked: true }) : 0
 
   return {
     list: ({ query, limit, offset, previews }) =>
@@ -374,7 +424,9 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
           return { task: await taskView(store, account, target), created: false, attached: true, review }
         }
         const candidates = (await store.tasks.similar(subject, { limit: 40 })).filter((one) => one.band !== "different")
-        if (candidates.length > 0 && !choice.new) {
+        // Only an open task can be the same job still waiting; a closed one makes the new task its follow-up.
+        const closedOnes = candidates.some((one) => one.status !== "open")
+        if (candidates.some((one) => one.status === "open") && !choice.new) {
           const shown: DuplicateCandidate[] = candidates
             .slice(0, REFUSAL_CANDIDATES)
             .map(({ ref, key, title, status, score, band, reasons }) => ({
@@ -390,7 +442,8 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
             "validation_error",
             `${candidates.length === 1 ? "a task" : `${candidates.length} tasks`} may be the same job: ` +
               `${shown.map((one) => `${one.key} (${one.band}, ${one.score}: ${one.reasons.join(", ")})`).join("; ")}` +
-              " — link the message to one with --into <id>, or open it anyway with --new",
+              " — link the message to one with --into <id>, or open it anyway with --new" +
+              (closedOnes ? ", which links it follow-up-of the closed one" : ""),
             { reason: "task.duplicate-candidates", candidates: shown },
           )
         }
@@ -412,13 +465,16 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
           category: chosen ?? categorize(await sourceText(), await listOf(store)),
         })
         const task = (await store.tasks.get(added.id)) ?? added
-        if (created)
+        if (created && choice.new)
           for (const one of candidates)
             await store.tasks.recordPair({ task: task.id, other: one.ref, decision: "new", similarity: one, by })
+        const followUpOf = created ? await store.tasks.followUp(task.id, candidates, by) : undefined
+        const followed = followUpOf ? { followUpOf } : {}
         // A source that already has a task keeps its plan: adding again is not editing.
-        if (!created || Object.keys(plan).length === 0) return { task: await taskView(store, account, task), created }
+        if (!created || Object.keys(plan).length === 0)
+          return { task: await taskView(store, account, task), created, ...followed }
         const card = await planOf(store, task.id, plan, origin)
-        return { task: await taskView(store, account, task), created, card }
+        return { task: await taskView(store, account, task), created, ...followed, card }
       }),
 
     categories: () => inStore(async (store) => listOf(store)),
@@ -463,14 +519,41 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         return cardOf(store, id)
       }),
 
-    close: (id, { as, reason, by }) =>
+    close: (id, { as, reason, by, agent, certainty }) =>
       inStore(async (store, account) => {
-        const existing = await store.tasks.get(id)
-        if (!existing || existing.account !== taskAccount(account))
-          throw new CliError("not_found", `no task ${singleLine(id)} for this account — tasks list shows the ids`)
+        const existing = await owned(store, account, id)
+        const suggested = existing.state === "open" ? await store.tasks.closeSuggestion(id) : null
+        const state = as ?? (by === "owner" ? suggested?.as : undefined)
+        if (state === undefined)
+          throw new CliError("validation_error", "say how the task is closed: --as done, or --as dismissed")
+        if (certainty !== undefined) certaintyOf(certainty)
+        const closedView = async (task: Task): Promise<ClosedTask> => {
+          const { closeCertainty, closeSuggestion } = await store.tasks.details(task.id)
+          return { ...(await taskView(store, account, task)), closeCertainty, closeSuggestion }
+        }
+        if (by === "agent" && existing.state === "open") {
+          if (certainty === undefined)
+            throw new CliError(
+              "validation_error",
+              "an agent closes a task with its certainty, 0 to 1: how sure it is the task needs nothing more",
+              { reason: "task.certainty-required" },
+            )
+          const { allowed, min } = await store.tasks.agentClose()
+          if (!allowed || certainty < min) {
+            const suggestion = { as: state, certainty, ...(reason === undefined ? {} : { reason }) }
+            await store.tasks.suggestClose(id, suggestion, { bot: agent ?? "agent" })
+            return closedView((await store.tasks.get(id)) ?? existing)
+          }
+        }
+        const why = reason ?? (suggested?.as === state ? (suggested.reason ?? undefined) : undefined)
         try {
-          const closed = await service(store).close(id, { as, by, ...(reason === undefined ? {} : { reason }) })
-          return taskView(store, account, closed)
+          const closed = await service(store).close(id, {
+            as: state,
+            by,
+            ...(why === undefined ? {} : { reason: why }),
+          })
+          if (by === "agent" && certainty !== undefined) await store.tasks.recordCloseCertainty(id, certainty)
+          return closedView(closed)
         } catch (error) {
           if (isCliError(error) && error.details.reason === "task.closed")
             throw new CliError("validation_error", `${error.message}; a closed task stays closed`, {
@@ -478,6 +561,15 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
             })
           throw error
         }
+      }),
+
+    reject: (id, by) =>
+      inStore(async (store, account) => {
+        if (by !== "owner")
+          throw new CliError("permission_error", "only the owner rejects an agent's close; the agent may close again")
+        await owned(store, account, id)
+        await store.tasks.suggestClose(id, null, "owner")
+        return cardOf(store, id)
       }),
 
     plan: (id, plan, by) =>
@@ -584,7 +676,12 @@ const iso = (at: Date | undefined) => (at === undefined ? null : at.toISOString(
 /** A stored task as the `task` entity: its chat as a `chat:` reference, its times in ISO 8601. */
 export const taskItem = (
   account: AccountKey,
-  { task, title, updatedAt }: { task: Task; title: string; updatedAt: Date },
+  {
+    task,
+    title,
+    updatedAt,
+    closeSuggestion = null,
+  }: { task: Task; title: string; updatedAt: Date; closeSuggestion?: CloseSuggestion | null },
 ): TaskItem => ({
   ref: `task:${task.id}`,
   id: task.id,
@@ -604,6 +701,7 @@ export const taskItem = (
   ...(task.reason === undefined ? {} : { reason: task.reason }),
   category: task.category ?? null,
   ...claimItem(task),
+  close_suggestion: closeSuggestion,
   created_at: task.createdAt.toISOString(),
   updated_at: updatedAt.toISOString(),
 })

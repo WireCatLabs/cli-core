@@ -2,6 +2,10 @@ import type { CacheDatabase } from "../store/driver.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  17: `DROP INDEX tasks_by_close_suggested_by_type_close_suggested_by_id; ALTER TABLE tasks DROP COLUMN close_certainty;
+    ALTER TABLE tasks DROP COLUMN close_suggested_as; ALTER TABLE tasks DROP COLUMN close_suggested_by_type;
+    ALTER TABLE tasks DROP COLUMN close_suggested_by_id; ALTER TABLE tasks DROP COLUMN close_suggested_certainty;
+    ALTER TABLE tasks DROP COLUMN close_suggested_reason; ALTER TABLE tasks DROP COLUMN close_suggested_at;`,
   16: `DROP TRIGGER mention_pending_document_ai; DROP TRIGGER mention_pending_document_au; DROP TRIGGER mentions_document_ad;
     DROP TRIGGER mention_pending_note_ai; DROP TRIGGER mention_pending_note_au; DROP TRIGGER mentions_note_ad;
     DROP TRIGGER mention_pending_email_ai; DROP TRIGGER mention_pending_email_au; DROP TRIGGER mentions_email_ad;`,

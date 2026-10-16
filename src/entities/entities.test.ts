@@ -344,6 +344,7 @@ const samples: Record<EntityName, unknown> = {
         next_check_at: null,
         claimed_by: null,
         claimed_until: null,
+        close_suggestion: null,
         created_at: at,
         reasons: ["unplanned"],
       },

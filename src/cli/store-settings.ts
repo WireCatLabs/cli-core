@@ -14,7 +14,9 @@ import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
 import {
   accountGroupsOf,
+  DEFAULT_AGENT_CLOSE,
   openStore,
+  savedAgentClose,
   savedPhoneCountries,
   savedStemmers,
   savedTaskCategories,
@@ -30,9 +32,17 @@ const SCRIPTS: Record<string, keyof Stemmers> = {
 const PHONE_COUNTRIES = "phone_countries"
 const TASK_CATEGORIES = "task_categories"
 const CATEGORY_PREFIX = `${TASK_CATEGORIES}.`
+const AGENT_CLOSE = "task_agent_close"
+const AGENT_CLOSE_MIN = "task_agent_close_min"
 
 /** Settings of the store file, not of a profile: the store is one file for every profile, tg and MAX. */
-export const STORE_SETTINGS = [...Object.keys(SCRIPTS), PHONE_COUNTRIES, `${CATEGORY_PREFIX}<name>`]
+export const STORE_SETTINGS = [
+  ...Object.keys(SCRIPTS),
+  PHONE_COUNTRIES,
+  `${CATEGORY_PREFIX}<name>`,
+  AGENT_CLOSE,
+  AGENT_CLOSE_MIN,
+]
 
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
 
@@ -41,6 +51,8 @@ export const isStoreSetting = (setting: string): boolean =>
   setting === PHONE_COUNTRIES ||
   setting === TASK_CATEGORIES ||
   setting.startsWith(CATEGORY_PREFIX) ||
+  setting === AGENT_CLOSE ||
+  setting === AGENT_CLOSE_MIN ||
   setting.startsWith(GROUP_PREFIX)
 
 export const changeStoreSetting = async (
@@ -52,6 +64,7 @@ export const changeStoreSetting = async (
   if (setting.startsWith(GROUP_PREFIX)) return changeGroup(app, env, setting, value)
   if (setting === PHONE_COUNTRIES) return changePhoneCountries(app, env, value)
   if (setting === TASK_CATEGORIES || setting.startsWith(CATEGORY_PREFIX)) return changeCategory(env, setting, value)
+  if (setting === AGENT_CLOSE || setting === AGENT_CLOSE_MIN) return changeAgentClose(env, setting, value)
   const script = SCRIPTS[setting] as keyof Stemmers
   const store = await openStore({ env })
   try {
@@ -128,6 +141,39 @@ const changeCategory = async (env: NodeJS.ProcessEnv, setting: string, value: st
   }
 }
 
+const changeAgentClose = async (env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
+  const typed = value?.trim().toLowerCase()
+  let change: { allowed?: boolean | null; min?: number | null }
+  if (setting === AGENT_CLOSE) {
+    if (typed !== undefined && typed !== "on" && typed !== "off")
+      throw new CliError("validation_error", `${AGENT_CLOSE} takes on or off — not "${value}"`)
+    change = { allowed: typed === undefined ? null : typed === "on" }
+  } else {
+    const min = typed === undefined ? null : Number(typed)
+    if (min !== null && (typed === "" || !Number.isFinite(min) || min < 0 || min > 1))
+      throw new CliError("validation_error", `${AGENT_CLOSE_MIN} takes a number from 0 to 1 — not "${value}"`)
+    change = { min }
+  }
+  const store = await openStore({ env })
+  try {
+    await store.tasks.saveAgentClose(change)
+    const now = await store.tasks.agentClose()
+    return {
+      result: {
+        store: storePath(env),
+        scope: "store",
+        setting,
+        value: setting === AGENT_CLOSE ? (now.allowed ? "on" : "off") : now.min,
+      },
+      note:
+        "store-wide — an agent's tasks close in tg, MAX and memo closes the task when agent closes are on and its " +
+        `certainty is at least ${now.min}; otherwise the close waits on the owner. Agent closes are ${now.allowed ? "on" : "off"}`,
+    }
+  } finally {
+    await store.close()
+  }
+}
+
 const changeGroup = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
   const name = groupName(setting.slice(GROUP_PREFIX.length))
   const members = value === undefined ? undefined : groupMembers(value)
@@ -154,6 +200,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   let groups: AccountGroups = {}
   let phoneCountries: string[] | undefined
   let categories: TaskCategory[] | undefined
+  let agentClose: ReturnType<typeof savedAgentClose> = {}
   if (existsSync(path)) {
     try {
       const database = await openCache(path)
@@ -164,6 +211,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
         groups = table ? accountGroupsOf(database) : {}
         phoneCountries = table ? savedPhoneCountries(database) : undefined
         categories = table ? savedTaskCategories(database) : undefined
+        agentClose = table ? savedAgentClose(database) : {}
       } finally {
         database.close()
       }
@@ -198,6 +246,22 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
       from: categories ? "store" : "default",
       scope: "store",
     })),
+    ...(unreadable
+      ? []
+      : [
+          {
+            setting: AGENT_CLOSE,
+            value: (agentClose.allowed ?? DEFAULT_AGENT_CLOSE.allowed) ? "on" : "off",
+            from: agentClose.allowed === undefined ? "default" : "store",
+            scope: "store",
+          },
+          {
+            setting: AGENT_CLOSE_MIN,
+            value: agentClose.min ?? DEFAULT_AGENT_CLOSE.min,
+            from: agentClose.min === undefined ? "default" : "store",
+            scope: "store",
+          },
+        ]),
     ...Object.entries(groups).map(([name, members]) => ({
       setting: `${GROUP_PREFIX}${name}`,
       value: members.join(","),

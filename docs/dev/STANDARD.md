@@ -93,7 +93,8 @@ guessable from the others.
    `tasks` are what waits on the owner — a question nobody answered, a mention, a request, a promise —
    kept in the local store by `src/tasks/` and never sent: `tasks list|add|close|stats`, the
    type of a task is `--type` (`question`, `request`, `mention`, `promise`), and closing is
-   `tasks close <task> --as done|dismissed [--reason <text>]`. The owner chose these on 2026-10-06.
+   `tasks close <task> --as done|dismissed [--reason <text>]`. The owner chose these on 2026-10-06; an agent adds
+   `--certainty <0..1>` and the owner refuses an agent's unsure close with `tasks reject <task>` (2026-10-16).
    `attachments` are the files of stored messages: their text, read or written back, is kept in the
    local store for `content:` in a search and never sent; `attachments.extract` is a local write.
    `chats tracking` is the one collection named by what it does rather than a plural: the chats whose
@@ -913,7 +914,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--approval` |  | who joins by it asks first, and an admin lets them in |  | `chats link create` (tg-only), `chats link update` (tg-only) |
 | `--as` | `<state>` | how a task is closed: done, or dismissed — it needs no answer |  | `tasks close` |
 | `--as-file` |  | send every --file as a plain file to download, a video included |  | `bot messages send`, `messages send` |
-| `--as-owner` |  | record a decision as the owner's although an agent's terminal runs the tool |  | `mentions confirm` (planned), `mentions reject` (planned) |
+| `--as-owner` |  | record a decision as the owner's although an agent's terminal runs the tool |  | `mentions confirm` (planned), `mentions reject` (planned), `tasks close` (planned), `tasks reject` (planned) |
 | `--as-reply` |  | send as a reply to the matched message |  | `replies edit` |
 | `--at` | `<HH:MM>` | every day at this local time |  | `schedule agent`, `schedule command` |
 | `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m. **schedule agent and schedule command take it for their one run: a duration from now or an ISO 8601 time** |  | `messages send`, `schedule agent`, `schedule command` |
@@ -936,6 +937,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--catch-up-messages` | `<n>` | skip a graph rebuild above this message budget |  | `messages sync`, `store gaps repair` |
 | `--catch-up-time` | `<duration>` | time budget for local preparation |  | `messages sync`, `store gaps repair` |
 | `--category` | `<name>` | what a task is about, from the list tasks categories prints |  | `tasks add`, `tasks plan` |
+| `--certainty` | `<n>` | how sure an agent is, 0 to 1, that a task needs nothing more; below the owner's threshold its close waits on the owner |  | `tasks close` (planned) |
 | `--channel` |  | a private channel instead of a group; people join it by its link |  | `chats create` |
 | `--chart-kind` | `<messages\|active\|membership>` | what to draw: messages, active authors, or joins and leaves | `messages` | `stats charts` |
 | `--chat` | `<chat>` | a chat, by id or name; repeat it for more. **chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4)** |  | `attachments extract`, `chats folders create`, `contacts context`, `conversations batches next`, `conversations batches status`, `conversations build`, `conversations consents revoke`, `conversations embed`, `conversations embed clear`, `conversations embed status`, `conversations links clear`, `conversations status`, `images embed`, `metadata get`, `metadata refresh`, `search conversations`, `searches create`, `stats contacts responses`, `stats contacts top`, `stats messages counters refresh`, `stats messages counters show`, `stats messages discussion`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `stats tasks show`, `tags add`, `tags auto`, `tags remove`, `tasks link` |

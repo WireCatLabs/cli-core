@@ -61,8 +61,11 @@ const anyLiveTask = (database: CacheDatabase, rowId: number) => {
   if (!row) throw new CliError("not_found", "the task is unavailable")
   return row
 }
+/** A duplicate and a follow-up join message tasks too: a job seen twice, a job that came back. */
 const liveFor = (database: CacheDatabase, rowId: number, kind?: TaskRelationKind) =>
-  kind === "duplicate-of" || kind === undefined ? anyLiveTask(database, rowId) : liveTask(database, rowId)
+  kind === "duplicate-of" || kind === "follow-up-of" || kind === undefined
+    ? anyLiveTask(database, rowId)
+    : liveTask(database, rowId)
 
 /** Validation and the edge insert must see the same write-locked snapshot. */
 export const validateTaskRelation = (database: CacheDatabase, from: number, to: number, kind: TaskRelationKind) => {

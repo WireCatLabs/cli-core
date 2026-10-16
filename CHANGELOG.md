@@ -5,6 +5,33 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **An agent's `tasks close` states its certainty, and an unsure one no longer closes the task.** `tasks close` now
+  tells the owner from an agent as `mentions confirm` does (`AI_AGENT` or `CLAUDECODE` set; `--as-owner` overrides);
+  before, the CLI always closed as the owner. An agent must pass `--certainty <0..1>` (MCP `tasks_close`: the new
+  required `certainty`), or the close is refused (`task.certainty-required`). Below the store's threshold, or with
+  agent closes off, the answer comes back with `state: open` and `close_suggestion` set instead of closed.
+- **`tasks add` no longer refuses when every likely or maybe candidate is a closed task**: it opens the task and
+  links it `follow-up-of` the closed one (`follow_up_of` in the answer). It still refuses while an open task may be
+  the same job, and records `new` pairs only after `--new`.
+
+### Added
+
+- **A new task about a task closed in the last 14 days follows it up** (owner's ruling, 2026-10-16): rules on
+  `review`, `serve` and `messages sync`, `tasks add` and MCP `tasks_add` link it `follow-up-of` the best-scoring
+  closed candidate, which stays closed and stays off `tasks duplicates`. `tasks show` and the MCP card list the
+  link; `follow-up-of` now joins message tasks.
+- **Agent closes by certainty**: with `config set task_agent_close on` (the default) and a certainty at least
+  `config set task_agent_close_min` (default 0.8), an agent's close closes the task and keeps `close_certainty`.
+  Otherwise the task stays open with a close suggestion (as, by, certainty, reason, at) that `tasks agenda` lists
+  with the reason `close-suggested` and `tasks list close:suggested` finds; the owner confirms it with
+  `tasks close <task>` (`--as` may be left out) or refuses it with the new `tasks reject <task>`. Both settings are
+  store-wide and shown in `config show`. A rule closing a question the owner answered is not an agent close and is
+  unchanged. Store version 17 adds the columns.
+
 ## 0.295.0 — 16.10.2026
 
 ### Changed — may break callers

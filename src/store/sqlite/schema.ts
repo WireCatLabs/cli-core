@@ -1240,6 +1240,13 @@ export const tasks = sqliteTable(
     category: text("category"),
     claimedBy: text("claimed_by"),
     claimedUntil: integer("claimed_until"),
+    closeCertainty: real("close_certainty"),
+    closeSuggestedAs: text("close_suggested_as"),
+    closeSuggestedByType: text("close_suggested_by_type"),
+    closeSuggestedById: integer("close_suggested_by_id"),
+    closeSuggestedCertainty: real("close_suggested_certainty"),
+    closeSuggestedReason: text("close_suggested_reason"),
+    closeSuggestedAt: integer("close_suggested_at"),
   },
   (table) => [
     unique().on(table.projectId, table.number),
@@ -1256,6 +1263,10 @@ export const tasks = sqliteTable(
     index("tasks_by_parent_id").on(table.parentId),
     index("tasks_by_closed_by_type_closed_by_id").on(table.closedByType, table.closedById),
     index("tasks_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("tasks_by_close_suggested_by_type_close_suggested_by_id").on(
+      table.closeSuggestedByType,
+      table.closeSuggestedById,
+    ),
   ],
 )
 

@@ -163,6 +163,10 @@
       "value": "<name>",
       "meaning": "what a task is about, from the list tasks categories prints"
     },
+    "--certainty": {
+      "value": "<n>",
+      "meaning": "how sure an agent is, 0 to 1, that a task needs nothing more; below the owner's threshold its close waits on the owner"
+    },
     "--channel": {
       "meaning": "a private channel instead of a group; people join it by its link"
     },
@@ -3925,6 +3929,20 @@
         "--as": {
           "in": "all"
         },
+        "--as-owner": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
+          }
+        },
+        "--certainty": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
+          }
+        },
         "--reason": {
           "in": "all"
         }
@@ -3971,6 +3989,22 @@
         "--due": "all",
         "--remind-time": "all",
         "--title": "all"
+      }
+    },
+    "tasks reject": {
+      "in": [],
+      "planned": {
+        "max": "each CLI’s next cli-core bump",
+        "tg": "each CLI’s next cli-core bump"
+      },
+      "options": {
+        "--as-owner": {
+          "in": [],
+          "planned": {
+            "max": "each CLI’s next cli-core bump",
+            "tg": "each CLI’s next cli-core bump"
+          }
+        }
       }
     },
     "tasks related": {

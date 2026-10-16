@@ -1,6 +1,7 @@
 import * as v from "valibot"
 import { TASK_TYPES } from "../domain/knowledge.js"
 import { id, reference, text, time } from "./fields.js"
+import { closeSuggestion } from "./task.js"
 
 const agendaChat = v.strictObject({
   chat: reference,
@@ -36,8 +37,10 @@ export const agenda = v.strictObject({
       /** Who works on it now; only the asker's own claims are listed unless the query names claimed:. */
       claimed_by: v.nullable(text),
       claimed_until: v.nullable(time),
+      /** An agent's close waiting on the owner: `tasks close` confirms it, `tasks reject` refuses it. */
+      close_suggestion: v.nullable(closeSuggestion),
       created_at: time,
-      reasons: v.array(v.picklist(["overdue", "due", "check", "unplanned"])),
+      reasons: v.array(v.picklist(["overdue", "due", "check", "unplanned", "close-suggested"])),
     }),
   ),
   /** Someone else wrote last, and the owner has not answered. */

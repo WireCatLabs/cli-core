@@ -172,3 +172,111 @@ it("**a message linked to a task sends the tasks it now looks like to review**; 
     await store.close()
   }
 })
+
+const boilerStore = async (texts: string[]) => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-close-")), "m.db") })
+  await store.saveMessages(
+    account,
+    "7",
+    texts.map((text, index) => ({
+      id: String(index + 1),
+      chatId: "7",
+      senderId: "9",
+      senderName: "Alice Example",
+      timestamp: `2026-10-06T10:0${index + 1}:00.000Z`,
+      editedAt: null,
+      text,
+      outgoing: false,
+      attachments: [],
+      replyTo: null,
+      forwardedFrom: null,
+      reactions: null,
+    })),
+    { via: "test" },
+  )
+  const tasks = tasksService(storeOnlyDeps(store, account, { app }))
+  const add = (message: string, choice = {}) =>
+    tasks.add(
+      `msg:chat/500/7/${message}`,
+      "request",
+      "agent",
+      { title: "Pay 15000 rub for the boiler repair", category: "money" },
+      choice,
+    )
+  return { store, tasks, add }
+}
+
+it("**tasks add follows up a task closed in the last 14 days instead of refusing**; an open look-alike still refuses", async () => {
+  const { store, tasks, add } = await boilerStore([
+    "The boiler repair is 15 000 rub",
+    "Boiler again: 15 000 rub",
+    "And?",
+  ])
+  try {
+    const first = (await add("1")).task
+    await tasks.close(first.id, { as: "done", by: "owner" })
+
+    const second = await add("2")
+    expect(second).toMatchObject({ created: true, followUpOf: { key: first.key, status: "done" } })
+    expect((await tasks.show(second.task.id)).links).toMatchObject([{ kind: "follow-up-of", to: `task:${first.id}` }])
+    expect(await tasks.show(first.id)).toMatchObject({ status: "done" })
+
+    await expect(add("3")).rejects.toMatchObject({
+      details: { reason: "task.duplicate-candidates" },
+      message: expect.stringContaining("follow-up-of the closed one"),
+    })
+    expect(await add("3", { new: true })).toMatchObject({ created: true, followUpOf: { key: first.key } })
+  } finally {
+    await store.close()
+  }
+})
+
+it("**an agent's close closes at the owner's threshold and waits on the owner below it**; the owner confirms or rejects", async () => {
+  const { store, tasks, add } = await boilerStore(["Pay the boiler", "Call the plumber", "Buy a lamp"])
+  try {
+    const [boiler, plumber, lamp] = [
+      (await add("1")).task,
+      (await tasks.add("msg:chat/500/7/2", "request", "agent", { title: "Call the plumber", category: "other" })).task,
+      (await tasks.add("msg:chat/500/7/3", "request", "agent", { title: "Buy a lamp", category: "other" })).task,
+    ]
+    await expect(tasks.close(boiler.id, { as: "done", by: "agent" })).rejects.toMatchObject({
+      details: { reason: "task.certainty-required" },
+    })
+
+    const unsure = await tasks.close(boiler.id, {
+      as: "done",
+      by: "agent",
+      agent: "claude-code",
+      certainty: 0.6,
+      reason: "paid, I think",
+    })
+    expect(unsure).toMatchObject({
+      state: "open",
+      closeSuggestion: { as: "done", by: "claude-code", certainty: 0.6, reason: "paid, I think" },
+    })
+    expect((await viewed(tasks, "close:suggested")).map((one) => one.id)).toEqual([boiler.id])
+
+    const confirmed = await tasks.close(boiler.id, { by: "owner" })
+    expect(confirmed).toMatchObject({ state: "done", reason: "paid, I think", closeSuggestion: null })
+    expect(await viewed(tasks, "close:suggested")).toEqual([])
+
+    expect(await tasks.close(plumber.id, { as: "done", by: "agent", certainty: 0.8 })).toMatchObject({
+      state: "done",
+      closeCertainty: 0.8,
+      closeSuggestion: null,
+    })
+
+    await store.tasks.saveAgentClose({ allowed: false })
+    expect(await tasks.close(lamp.id, { as: "dismissed", by: "agent", certainty: 1 })).toMatchObject({
+      state: "open",
+      closeSuggestion: { as: "dismissed", by: "agent" },
+    })
+    await expect(tasks.reject(lamp.id, "agent")).rejects.toMatchObject({ code: "permission_error" })
+    expect(await tasks.reject(lamp.id, "owner")).toMatchObject({ status: "open", closeSuggestion: null })
+    await expect(tasks.reject(lamp.id, "owner")).rejects.toMatchObject({
+      details: { reason: "task.no-close-suggestion" },
+    })
+  } finally {
+    await store.close()
+  }
+})

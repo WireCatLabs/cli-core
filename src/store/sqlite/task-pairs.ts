@@ -5,7 +5,8 @@ import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor } from "./memories.js"
 import { insertLink } from "./notes.js"
 import type { StoreContext } from "./open.js"
-import type { TaskSimilarity } from "./task-candidates.js"
+import type { SimilarTask, TaskSimilarity } from "./task-candidates.js"
+import { CLEAR_SUGGESTION } from "./task-close.js"
 import { inboxKey } from "./task-keys.js"
 import { validateTaskRelation } from "./task-relations.js"
 import { taskIdOf, taskRowOf, thingOf } from "./things.js"
@@ -44,11 +45,18 @@ export interface TaskPair {
 
 export interface TaskPairs {
   /**
-   * After a rule opened `task`, or a message was linked to it: every open or recent task in the likely or maybe band
-   * goes to the review list, unless that pair was recorded before. A score cannot judge meaning, so it never merges.
-   * Returns how many.
+   * After a rule opened `task`, or a message was linked to it (`linked`): every open or recent task in the likely or
+   * maybe band goes to the review list, unless that pair was recorded before. A score cannot judge meaning, so it
+   * never merges. A task just opened is instead a follow-up of the best recently closed one (`followUp`), which stays
+   * off the list: a merge there would fold new work into a closed task. Returns how many went to the list.
    */
-  reviewDuplicates(task: string): Promise<number>
+  reviewDuplicates(task: string, options?: { linked?: boolean }): Promise<number>
+  /**
+   * A new task about the same job as a task closed in the last 14 days is new work, never a reopening: links it
+   * `follow-up-of` the best-scoring closed candidate and returns that task. A merged duplicate is skipped; the task it
+   * was merged into is a candidate of its own.
+   */
+  followUp(task: string, candidates: readonly SimilarTask[], by: Author): Promise<TaskPairSide | undefined>
   /** The pairs of one account waiting at `decision`, newest first. */
   pairs(account: string, options: { decision: "review" | "unsure"; limit: number; offset: number }): Promise<TaskPair[]>
   /** A decision taken outside a merge — `attached`, `new` — with the comparison it was taken on. */
@@ -216,12 +224,49 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
     return true
   }
 
+  const followUp = async (row: Row, candidates: readonly SimilarTask[], by: Author) =>
+    write(database, () => {
+      for (const one of candidates) {
+        if (one.status === "open" || one.band === "different") continue
+        const closed = required(one.key)
+        if (mergedInto(closed)) continue
+        validateTaskRelation(database, Number(row.id), Number(closed.id), "follow-up-of")
+        const { actor } = authorActor(context, by)
+        const at = now()
+        database
+          .prepare(
+            "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, confirmed, author, created_at, updated_at) " +
+              `VALUES ('task', ?, 'task', ?, ${linkKind("follow-up-of")}, ?, 1, ?, ?, ?)`,
+          )
+          .run(
+            Number(row.id),
+            Number(closed.id),
+            by === "owner" ? "owner" : "suggested",
+            by === "owner" ? "owner" : null,
+            at,
+            at,
+          )
+        recordTaskEvent(
+          database,
+          Number(row.id),
+          actor,
+          "linked",
+          { relation: [null, { kind: "follow-up-of", to: ref(closed) }] },
+          at,
+        )
+        return sideOf(closed.id) ?? undefined
+      }
+      return undefined
+    })
+
   return {
-    reviewDuplicates: async (task) => {
+    reviewDuplicates: async (task, { linked = false } = {}) => {
       const row = required(task)
-      const found = (await similarity.similar({ task: String(row.key) }, { limit: 40 })).filter(
+      const alike = (await similarity.similar({ task: String(row.key) }, { limit: 40 })).filter(
         (one) => one.band !== "different",
       )
+      if (!linked) await followUp(row, alike, { bot: "rule" })
+      const found = linked ? alike : alike.filter((one) => one.status === "open")
       if (found.length === 0) return 0
       return write(database, () => {
         let added = 0
@@ -236,6 +281,8 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
         return added
       })
     },
+
+    followUp: async (task, candidates, by) => followUp(required(task), candidates, by),
 
     pairs: async (account, { decision, limit, offset }) =>
       read(database, () => {
@@ -312,7 +359,7 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
         database
           .prepare(
             "UPDATE tasks SET status = 'dismissed', closed_at = ?, closed_by_type = ?, closed_by_id = ?, close_reason = ?, " +
-              "close_reason_folded = ?, claimed_by = NULL, claimed_until = NULL, updated_at = ? WHERE id = ?",
+              `close_reason_folded = ?, claimed_by = NULL, claimed_until = NULL, ${CLEAR_SUGGESTION}, updated_at = ? WHERE id = ?`,
           )
           .run(at, actor.type, actor.id, reason, folded(reason), at, Number(a.id))
         recordTaskEvent(database, Number(a.id), actor, "status", { status: ["open", "dismissed"] }, at)
@@ -380,7 +427,7 @@ export const taskPairsOver = (context: StoreContext, similarity: TaskSimilarity)
           database
             .prepare(
               "UPDATE tasks SET status = 'open', closed_at = NULL, closed_by_type = NULL, closed_by_id = NULL, " +
-                "close_reason = NULL, close_reason_folded = NULL, updated_at = ? WHERE id = ?",
+                "close_reason = NULL, close_reason_folded = NULL, close_certainty = NULL, updated_at = ? WHERE id = ?",
             )
             .run(at, Number(a.id))
           recordTaskEvent(database, Number(a.id), actor, "status", { status: [status, "open"] }, at)
