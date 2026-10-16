@@ -17,6 +17,20 @@ shape of this file.
 - **`tasks add` no longer refuses when every likely or maybe candidate is a closed task**: it opens the task and
   links it `follow-up-of` the closed one (`follow_up_of` in the answer). It still refuses while an open task may be
   the same job, and records `new` pairs only after `--new`.
+- **A new default task category list: 36 names instead of 7.** `taxes`, `bills`, `insurance`, `bank`, `government`,
+  `legal`, `hiring`, `sales`, `partners`, `support`, `access`, `tech`, `content`, `car`, `travel`, `health`,
+  `education`, `family`, `home`, `delivery`, `shopping`, `entertainment`, `events`, `community`, `intro`, `money`,
+  `documents`, `meeting`, `clients`, `projects`, `team`, `follow-up`, `reply`, `work`, `personal`, `other`;
+  `tasks categories` (MCP `tasks_categories`) prints each with its meaning and English, Russian and Spanish trigger
+  words. The old seven keep their names and meaning, so stored tasks stay valid, but a rule now picks the narrower
+  name: a utility bill is `bills`, not `money`; a doctor is `health` and a child's school `family`, not `personal`.
+  A filter such as `agenda --category personal` therefore catches fewer new tasks. A tie between categories still
+  goes to the earlier one, and the list is ordered narrow first, `work` and `personal` last. On the cli-testing
+  duplicate set the rule's category matches a label 58% of the time (the old list: 26%). For a rule's tasks the
+  duplicate check's precision at maybe ≥ 5 rises from 67% to 75% with recall unchanged (70%), and fewer new tasks go
+  to review (19 of 180 → 13). A store that saved its own list with `config set task_categories.*` keeps it;
+  `config unset task_categories` takes the new default. A list now holds up to 60 categories (was 30), and the MCP
+  `category` argument lists names only and points to `tasks_categories` for meanings.
 
 ### Added
 

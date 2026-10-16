@@ -92,12 +92,22 @@ Read in `gastownhall/beads` 9c4b3d8 (2026-10-14; the same code as `steveyegge/be
   language, `es:vuelo`; otherwise its script picks Russian or English), removed with `config unset
   task_categories.<name>`, back to the default with `config unset task_categories`. It is a `store_settings` row,
   not a profile setting: the rules run in tg, max, memo and `sync` and must agree, and a profile's config schema
-  refuses unknown sections. `other` cannot be removed. Default list: `money`, `documents`, `meeting`, `delivery`,
-  `access`, `personal`, `other`.
+  refuses unknown sections. `other` cannot be removed. A store that saved its own list keeps it; `config unset
+  task_categories` takes the default again. Up to 60 categories.
+- **Default list** (ruled 2026-10-16, `DEFAULT_TASK_CATEGORIES`), in the order a tie is resolved: `taxes`, `bills`,
+  `insurance`, `bank`, `government`, `legal`, `hiring`, `sales`, `partners`, `support`, `access`, `tech`,
+  `content`, `car`, `travel`, `health`, `education`, `family`, `home`, `delivery`, `shopping`, `entertainment`,
+  `events`, `community`, `intro`, `money`, `documents`, `meeting`, `clients`, `projects`, `team`, `follow-up`,
+  `reply`, `work`, `personal`, `other`. Narrow first, the generic actions (`money`, `documents`, `meeting`) after
+  them, `work` and `personal` last, so a tie never falls to a broad category. The seven names before it keep their
+  meaning, so stored tasks stay valid. Rule accuracy on the cli-testing duplicate set: 58% against labels in this
+  list (the old seven: 26%); for a rule's tasks the duplicate check's precision at maybe ≥ 5 rises from 67% to 75%
+  with recall unchanged (cli-testing `performance/tasks/categories`).
 - **An agent must name a category** (`tasks add --category money`); an unknown one is refused with the list, so
   "finance", "payments" and "деньги" never coexist. `tasks categories` prints the list with meanings.
 - **A rule picks the category** by matching the source message's stems against each category's trigger stems;
-  most hits wins, no hit is `other`. An agent reviewing after `sync` corrects it.
+  most hits wins, a tie goes to the earlier category, no hit is `other`. A trigger of several words counts each word
+  alone, so default triggers are single words that stem to nothing common. An agent reviewing after `sync` corrects it.
 - **Every correction is an event** (`task_events`, kind `category`), so a learned classifier can replace the
   trigger words later — naive Bayes over stems, local, no model download — only if the words prove weak.
 - **Labels are tags.** `taggings` is polymorphic (`taggable_type`, `schema.ts:1489`); a task becomes one more
@@ -348,7 +358,8 @@ found two gaps step 3 needs: `normalize()` does not join digit groups (`15 000`)
 
 ## Open
 
-- The default category list — the owner adds or renames.
+- ~~The default category list — the owner adds or renames.~~ Ruled 2026-10-16, the owner's words: "ok lets use
+  the full list you provided + travel, entertainment, education, home" — see "Categories and labels".
 - ~~Whether a message that matches a task closed in the last 14 days reopens it or opens a new one linked
   `follow-up-of`.~~ Ruled 2026-10-16, A: a new task linked `follow-up-of`; agents also close tasks by certainty
   (§ Follow-ups and agent closes).
