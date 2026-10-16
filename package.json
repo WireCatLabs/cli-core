@@ -119,6 +119,10 @@
     "./speech/wav": {
       "types": "./dist/speech/wav.d.ts",
       "default": "./dist/speech/wav.js"
+    },
+    "./update": {
+      "types": "./dist/update/index.d.ts",
+      "default": "./dist/update/index.js"
     }
   },
   "scripts": {
