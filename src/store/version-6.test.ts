@@ -47,14 +47,14 @@ it("rewrites the query trees of saved searches, rankings and runs stored before 
 
   const upgraded = await openStore({ path })
   try {
-    const saved = await upgraded.storedSearch("invoices")
+    const saved = await upgraded.searches.storedSearch("invoices")
     expect(saved && JSON.stringify(saved.params)).toBe(after.params)
     expect(validateAst(saved?.params.ast)).toEqual(tree)
-    expect(JSON.stringify((await upgraded.storedSearch("top"))?.params)).toBe(ranked.params)
-    expect(JSON.stringify((await upgraded.storedSearch("words"))?.params)).toBe(text.params)
+    expect(JSON.stringify((await upgraded.searches.storedSearch("top"))?.params)).toBe(ranked.params)
+    expect(JSON.stringify((await upgraded.searches.storedSearch("words"))?.params)).toBe(text.params)
 
-    await upgraded.recordSearch(after)
-    const runs = (await upgraded.searchHistory(10)).filter((one) => one.name === null)
+    await upgraded.searches.recordSearch(after)
+    const runs = (await upgraded.searches.searchHistory(10)).filter((one) => one.name === null)
     expect(runs.map((one) => one.runs)).toEqual([2])
   } finally {
     await upgraded.close()

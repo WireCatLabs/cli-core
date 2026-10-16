@@ -91,7 +91,7 @@ if (!existsSync(join(root, "seed.json"))) {
     role: "member",
     ...(joinedAt ? { joinedAt: iso(joinedAt) } : {}),
   })
-  await store.saveChats(
+  await store.chats.saveChats(
     account,
     ["7", "8", "9"].map((id) => ({
       id,
@@ -102,7 +102,7 @@ if (!existsSync(join(root, "seed.json"))) {
       participantsCount: 3,
     })),
   )
-  await store.saveChats(
+  await store.chats.saveChats(
     account,
     ["9", "10"].map((id) => ({
       id: `dm${id}`,
@@ -115,7 +115,7 @@ if (!existsSync(join(root, "seed.json"))) {
     })),
   )
   for (const id of ["9", "10"])
-    await store.saveRoster(account, `dm${id}`, {
+    await store.roster.saveRoster(account, `dm${id}`, {
       members: [
         {
           id,
@@ -129,7 +129,7 @@ if (!existsSync(join(root, "seed.json"))) {
     })
   const roster = async (day, members, complete) => {
     now = start + day * DAY
-    await store.saveRoster(account, "7", {
+    await store.roster.saveRoster(account, "7", {
       members,
       complete,
       participants: 3,
@@ -141,13 +141,13 @@ if (!existsSync(join(root, "seed.json"))) {
   await roster(7.5, [member("2", start)], true)
   await roster(30.25, [], false)
   now = cutoff
-  await store.saveRoster(account, "7", {
+  await store.roster.saveRoster(account, "7", {
     members: [member("5", cutoff - DAY / 2)],
     complete: false,
     participants: 3,
     observation: { observedAt: iso(now), source: "remote_fetch" },
   })
-  await store.saveRoster(account, "8", {
+  await store.roster.saveRoster(account, "8", {
     members: [
       { id: "9", name: "Alex Rivera", username: "alex_rivera", role: "member" },
       { id: "10", name: "Alex Kim", username: "alex_kim", role: "member" },
@@ -155,7 +155,7 @@ if (!existsSync(join(root, "seed.json"))) {
     complete: false,
     participants: 2,
   })
-  await store.setContactAlias(account, "9", "Project lead")
+  await store.people.setContactAlias(account, "9", "Project lead")
   const message = (id, chatId, text, at, senderId = "2", reply) => ({
     id,
     chatId,
@@ -172,10 +172,15 @@ if (!existsSync(join(root, "seed.json"))) {
     ...(reply ? { replyToId: reply } : {}),
     providerMetadata: { graph: { version: 1, reply: reply ? { chatId, messageId: reply } : null } },
   })
-  await store.saveMessages(account, "7", [message("activity", "7", "Synthetic observed activity", start + DAY)], {
-    via: "history",
-  })
-  await store.saveMessages(
+  await store.messages.saveMessages(
+    account,
+    "7",
+    [message("activity", "7", "Synthetic observed activity", start + DAY)],
+    {
+      via: "history",
+    },
+  )
+  await store.messages.saveMessages(
     account,
     "8",
     [
@@ -196,7 +201,7 @@ if (!existsSync(join(root, "seed.json"))) {
     ],
     { via: "history" },
   )
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "9",
     [
@@ -217,7 +222,7 @@ if (!existsSync(join(root, "seed.json"))) {
     { via: "history" },
   )
   if (["adversarial", "discovery"].includes(process.env.STATS_EVAL_VARIANT)) {
-    await store.saveRoster(account, "8", {
+    await store.roster.saveRoster(account, "8", {
       members: [
         { id: "99", name: "Synthetic bot", username: null, role: "member", isBot: true },
         { id: "9", name: "Alex Rivera", username: "alex_rivera", role: "member" },
@@ -226,7 +231,7 @@ if (!existsSync(join(root, "seed.json"))) {
       complete: false,
       participants: 1,
     })
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "8",
       [
@@ -285,26 +290,26 @@ const adapter = {
   viewerId: "500",
   self: () => "500",
   close: async () => {},
-  chats: (window) => readStore((store) => store.chats(account, window)),
+  chats: (window) => readStore((store) => store.chats.chats(account, window)),
   chat: (reference) =>
     readStore(async (store) => {
-      const chats = (await store.chats(account, {})).items
+      const chats = (await store.chats.chats(account, {})).items
       const chat = chats.find((one) => one.id === reference) ?? pickChat(reference, chats)
       return { ...chat, members: null }
     }),
   contact: (reference) =>
     readStore(async (store) => {
-      const person = pickPerson(reference, await store.people(provider, { account: account.account }))
+      const person = pickPerson(reference, await store.people.people(provider, { account: account.account }))
       return { ...person, chats: [] }
     }),
   people: (references) =>
     readStore(async (store) => {
-      const people = await store.people(provider, { account: account.account })
+      const people = await store.people.people(provider, { account: account.account })
       return references.map((reference) => pickPerson(reference, people).id)
     }),
   contacts: (options = {}) =>
     readStore(async (store) => {
-      const people = (await store.people(provider, { account: account.account }))
+      const people = (await store.people.people(provider, { account: account.account }))
         .all()
         .filter((person) => !options.search || (person.name ?? "").toLowerCase().includes(options.search.toLowerCase()))
       const offset = options.offset ?? 0,
@@ -341,7 +346,7 @@ const args = process.argv.slice(2)
 if (args[0] === "__advance") {
   const store = await openStore({ path: env.MESSAGING_STORE })
   const seed = JSON.parse(readFileSync(join(root, "seed.json"), "utf8"))
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     [

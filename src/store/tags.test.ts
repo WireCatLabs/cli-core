@@ -44,8 +44,8 @@ afterEach(async () => {
 const seeded = async (path = fresh()) => {
   const store = await openStore({ path })
   live.push(store)
-  await store.saveChats(OWNER, [chat("1"), chat("2")])
-  await store.saveMessages(
+  await store.chats.saveChats(OWNER, [chat("1"), chat("2")])
+  await store.messages.saveMessages(
     OWNER,
     "1",
     [
@@ -55,7 +55,7 @@ const seeded = async (path = fresh()) => {
     ],
     { via: "history" },
   )
-  await store.saveMessages(OWNER, "2", [message("4", "2", "8", "invoice four")], { via: "history" })
+  await store.messages.saveMessages(OWNER, "2", [message("4", "2", "8", "invoice four")], { via: "history" })
   return { store, path }
 }
 
@@ -75,33 +75,39 @@ describe("tags in the store (version 16)", () => {
   it("finds a label stored with capitals or a slash again instead of reviewing it as a new one", async () => {
     const { store } = await seeded()
     const email = { type: "message" as const, chatId: "2", messageId: "4" }
-    expect(await store.addTags(OWNER, { type: "chat", chatId: "1" }, ["Clients/Acme"])).toEqual(["Clients/Acme"])
-    expect(await store.addTags(OWNER, email, ["Clients/Acme"])).toEqual(["Clients/Acme"])
-    expect(await store.addTags(OWNER, email, ["clients/acme"])).toEqual([])
+    expect(await store.tags.addTags(OWNER, { type: "chat", chatId: "1" }, ["Clients/Acme"])).toEqual(["Clients/Acme"])
+    expect(await store.tags.addTags(OWNER, email, ["Clients/Acme"])).toEqual(["Clients/Acme"])
+    expect(await store.tags.addTags(OWNER, email, ["clients/acme"])).toEqual([])
   })
   it("**adds only what is new and removes only what was there**, answering each", async () => {
     const { store } = await seeded()
-    expect(await store.addTags(OWNER, { type: "chat", chatId: "1" }, ["work", "family"])).toEqual(["work", "family"])
-    expect(await store.addTags(OWNER, { type: "chat", chatId: "1" }, ["work", "home"])).toEqual(["home"])
-    expect(await store.removeTags(OWNER, { type: "chat", chatId: "1" }, ["home", "absent"])).toEqual(["home"])
-    expect((await store.tags(OWNER)).map(({ tag }) => tag)).toEqual(["family", "work"])
+    expect(await store.tags.addTags(OWNER, { type: "chat", chatId: "1" }, ["work", "family"])).toEqual([
+      "work",
+      "family",
+    ])
+    expect(await store.tags.addTags(OWNER, { type: "chat", chatId: "1" }, ["work", "home"])).toEqual(["home"])
+    expect(await store.tags.removeTags(OWNER, { type: "chat", chatId: "1" }, ["home", "absent"])).toEqual(["home"])
+    expect((await store.tags.tags(OWNER)).map(({ tag }) => tag)).toEqual(["family", "work"])
   })
 
   it("lists this account's chats and messages and its messenger's people, filtered by tag or type", async () => {
     const { store } = await seeded()
-    await store.saveChats(OTHER, [chat("9")])
-    await store.addTags(OTHER, { type: "chat", chatId: "9" }, ["work"])
-    await store.addTags(OWNER, { type: "chat", chatId: "1" }, ["work"])
-    await store.addTags(OWNER, { type: "contact", personId: "7" }, ["work"])
-    await store.addTags(OWNER, { type: "message", chatId: "2", messageId: "4" }, ["work", "paid"])
+    await store.chats.saveChats(OTHER, [chat("9")])
+    await store.tags.addTags(OTHER, { type: "chat", chatId: "9" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "chat", chatId: "1" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "contact", personId: "7" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "message", chatId: "2", messageId: "4" }, ["work", "paid"])
 
-    expect(await store.tags(OWNER, { tag: "work" })).toMatchObject([
+    expect(await store.tags.tags(OWNER, { tag: "work" })).toMatchObject([
       { tag: "work", type: "chat", chatId: "1", chatTitle: "Chat 1" },
       { tag: "work", type: "contact", personId: "7", name: "Person 7" },
       { tag: "work", type: "message", chatId: "2", messageId: "4", locator: "msg:tg/1/2/4" },
     ])
-    expect((await store.tags(OWNER, { type: "message" })).map(({ tag }) => tag)).toEqual(["paid", "work"])
-    expect((await store.tags(OTHER)).map(({ type, tag }) => `${type}:${tag}`)).toEqual(["chat:work", "contact:work"])
+    expect((await store.tags.tags(OWNER, { type: "message" })).map(({ tag }) => tag)).toEqual(["paid", "work"])
+    expect((await store.tags.tags(OTHER)).map(({ type, tag }) => `${type}:${tag}`)).toEqual([
+      "chat:work",
+      "contact:work",
+    ])
   })
 
   it("refuses a chat, person or message the store does not hold", async () => {
@@ -111,31 +117,31 @@ describe("tags in the store (version 16)", () => {
       { type: "contact", personId: "404" },
       { type: "message", chatId: "1", messageId: "404" },
     ] as const)
-      await expect(store.addTags(OWNER, target, ["work"])).rejects.toMatchObject({ code: "not_found" })
+      await expect(store.tags.addTags(OWNER, target, ["work"])).rejects.toMatchObject({ code: "not_found" })
   })
 
   it("**a deleted message loses its tags**, whether marked deleted or purged with its chat", async () => {
     const { store, path } = await seeded()
-    await store.addTags(OWNER, { type: "message", chatId: "1", messageId: "1" }, ["work"])
-    await store.addTags(OWNER, { type: "message", chatId: "1", messageId: "2" }, ["work"])
-    await store.addTags(OWNER, { type: "chat", chatId: "1" }, ["work"])
-    await store.addTags(OWNER, { type: "contact", personId: "8" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "message", chatId: "1", messageId: "1" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "message", chatId: "1", messageId: "2" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "chat", chatId: "1" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "contact", personId: "8" }, ["work"])
 
-    await store.markDeleted(OWNER, ["1"], { chatId: "1" })
-    expect((await store.tags(OWNER, { type: "message" })).map(({ messageId }) => messageId)).toEqual(["2"])
+    await store.messages.markDeleted(OWNER, ["1"], { chatId: "1" })
+    expect((await store.tags.tags(OWNER, { type: "message" })).map(({ messageId }) => messageId)).toEqual(["2"])
 
-    await store.purge(OWNER)
+    await store.accounts.purge(OWNER)
     expect(await count(path)).toBe(1)
-    expect((await store.tags(OWNER)).map(({ type }) => type)).toEqual(["contact"])
+    expect((await store.tags.tags(OWNER)).map(({ type }) => type)).toEqual(["contact"])
   })
 })
 
 describe("tag: in a strict search", () => {
   it("**matches a message tagged, in a tagged chat, or from a tagged person**; NOT is exact", async () => {
     const { store } = await seeded()
-    await store.addTags(OWNER, { type: "message", chatId: "1", messageId: "1" }, ["work"])
-    await store.addTags(OWNER, { type: "contact", personId: "8" }, ["work"])
-    await store.addTags(OWNER, { type: "chat", chatId: "2" }, ["home", "work"])
+    await store.tags.addTags(OWNER, { type: "message", chatId: "1", messageId: "1" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "contact", personId: "8" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "chat", chatId: "2" }, ["home", "work"])
 
     expect(await found(store, "tag:work")).toEqual(["1", "2", "4"])
     expect(await found(store, "tag:WORK invoice")).toEqual(["1", "2", "4"])
@@ -147,7 +153,7 @@ describe("tag: in a strict search", () => {
 
   it("counts by tag the same messages it finds", async () => {
     const { store } = await seeded()
-    await store.addTags(OWNER, { type: "contact", personId: "8" }, ["work"])
+    await store.tags.addTags(OWNER, { type: "contact", personId: "8" }, ["work"])
     const stats = await statsStore(store, OWNER, { text: "tag:work", limit: 10, by: "chat" })
     expect(stats.items.map(({ key, count }) => [key, count])).toEqual([
       ["1", 1],
@@ -226,7 +232,7 @@ describe("tags and knowledge on mail", () => {
   it("label the email and its thread in the mail tables, and read back as the same locator", async () => {
     const store = await openStore({ path: fresh() })
     live.push(store)
-    const accountId = await store.saveAccount(MAIL, { name: null })
+    const accountId = await store.accounts.saveAccount(MAIL, { name: null })
     await store.mail.saveThread({
       accountId,
       externalId: "thread-1",
@@ -242,10 +248,12 @@ describe("tags and knowledge on mail", () => {
       ],
     })
 
-    await store.addTags(MAIL, { type: "chat", chatId: "thread-1" }, ["finance"])
-    await store.addTags(MAIL, { type: "message", chatId: "thread-1", messageId: "<first@example.com>" }, ["urgent"])
+    await store.tags.addTags(MAIL, { type: "chat", chatId: "thread-1" }, ["finance"])
+    await store.tags.addTags(MAIL, { type: "message", chatId: "thread-1", messageId: "<first@example.com>" }, [
+      "urgent",
+    ])
     expect(
-      (await store.tags(MAIL)).map(({ tag, type, chatId, chatTitle, locator }) => ({
+      (await store.tags.tags(MAIL)).map(({ tag, type, chatId, chatTitle, locator }) => ({
         tag,
         type,
         chatId,
@@ -262,7 +270,7 @@ describe("tags and knowledge on mail", () => {
         locator: LOCATOR,
       },
     ])
-    await expect(store.addTags(MAIL, { type: "chat", chatId: "thread-2" }, ["finance"])).rejects.toThrow(
+    await expect(store.tags.addTags(MAIL, { type: "chat", chatId: "thread-2" }, ["finance"])).rejects.toThrow(
       "no chat thread-2",
     )
 
@@ -278,7 +286,7 @@ describe("tags and knowledge on mail", () => {
     })
 
     await store.mail.markDeleted(accountId, ["<first@example.com>"], 2000)
-    expect((await store.tags(MAIL)).map(({ tag }) => tag)).toEqual(["finance"])
+    expect((await store.tags.tags(MAIL)).map(({ tag }) => tag)).toEqual(["finance"])
     expect((await store.knowledge.annotation(MAIL, annotation?.id as string)).targetState).toBe("deleted")
   })
 })

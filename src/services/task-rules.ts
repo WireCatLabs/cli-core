@@ -81,7 +81,7 @@ export const applyTaskRulesOnArrival = async (
   account: AccountKey,
   message: Message,
 ): Promise<RuleResult> => {
-  const page = await store.messages(account, message.chatId, { limit: ARRIVAL_WINDOW })
+  const page = await store.messages.messages(account, message.chatId, { limit: ARRIVAL_WINDOW })
   const messages = [...page.items.filter((one) => one.id !== message.id), message].sort(
     (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp),
   )
@@ -108,15 +108,15 @@ export const applyTaskRulesToStored = async (
 ): Promise<RuleResult & { until: string | null }> => {
   const result: RuleResult & { until: string | null } = { added: 0, closed: 0, review: 0, until: since ?? null }
   const categories = await store.tasks.categories()
-  for (const chat of await store.chatStats(account)) {
+  for (const chat of await store.chats.chatStats(account)) {
     if (chat.lastStoredAt === null || (since !== undefined && chat.lastStoredAt <= since)) continue
     // A skipped chat still moves the stop point, or the next pass would read all of it as new.
     if (newerThan !== undefined && (chat.newestAt === null || chat.newestAt < newerThan)) {
       if (result.until === null || chat.lastStoredAt > result.until) result.until = chat.lastStoredAt
       continue
     }
-    const fresh = since === undefined ? 0 : await store.countMessages(account, chat.chatId, { since })
-    const page = await store.messages(account, chat.chatId, {
+    const fresh = since === undefined ? 0 : await store.messages.countMessages(account, chat.chatId, { since })
+    const page = await store.messages.messages(account, chat.chatId, {
       limit: Math.min(ARRIVAL_WINDOW + fresh, STORED_PASS_LIMIT),
     })
     const pass = await applyTaskRules(
@@ -144,10 +144,10 @@ export const applyTaskRulesSinceLastPass = async (
   account: AccountKey,
   now = new Date(),
 ): Promise<RuleResult> => {
-  const since = await store.taskRulesStop(account)
+  const since = await store.sync.taskRulesStop(account)
   const newerThan = since === null ? new Date(now.getTime() - FIRST_PASS_DAYS * 86_400_000).toISOString() : undefined
   const { added, closed, review, until } = await applyTaskRulesToStored(store, account, since ?? undefined, newerThan)
-  if (until !== null && until !== since) await store.setTaskRulesStop(account, until)
+  if (until !== null && until !== since) await store.sync.setTaskRulesStop(account, until)
   return { added, closed, review }
 }
 

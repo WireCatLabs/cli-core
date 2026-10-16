@@ -163,7 +163,7 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
       }))
 
     const where = parts.chats ? queryFilter(parts.chats, AGENDA_COLUMNS, { command: "tasks agenda" }) : undefined
-    const activity = await store.chatActivity(account, at - within, where)
+    const activity = await store.chats.chatActivity(account, at - within, where)
     const chats = activity.chats.map(({ lastMessageId, ...chat }) => ({
       ...chat,
       lastMessage:

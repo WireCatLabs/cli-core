@@ -46,10 +46,10 @@ const opened: MessageStore[] = []
 const heldStore = async (messages: Message[]) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "audit-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 40 },
   ])
-  if (messages.length > 0) await store.saveMessages(account, "7", messages, { via: "test" })
+  if (messages.length > 0) await store.messages.saveMessages(account, "7", messages, { via: "test" })
   return store
 }
 
@@ -129,8 +129,8 @@ describe("chats members audit", () => {
     const bare = [{ id: "21", name: "Olga", username: null }]
     const adapter = { ...listing(bare as GroupMember[]) } as MessengerAdapter
     const store = await heldStore([said("1", "21", "hi")])
-    await store.markRange(account, "7", 1, 1)
-    await store.setSyncState(account, historyStartKey("7"), "1")
+    await store.sync.markRange(account, "7", 1, 1)
+    await store.sync.setSyncState(account, historyStartKey("7"), "1")
 
     const audit = await chatsService(online(store, adapter)).audit("7", { pauseMs: 0 })
 

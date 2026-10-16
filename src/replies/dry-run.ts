@@ -69,7 +69,9 @@ export const dryRun = async (
   if (only !== undefined && tried.length === 0) {
     throw new CliError("not_found", `no reply rule "${only}" — the rules are: ${rules.map((one) => one.id).join(", ")}`)
   }
-  const chats = (await store.chats(account, {})).items.filter((chat) => chat.kind === "dialog" || chat.kind === "group")
+  const chats = (await store.chats.chats(account, {})).items.filter(
+    (chat) => chat.kind === "dialog" || chat.kind === "group",
+  )
   const arrived: { message: Message; chat: Chat }[] = []
   for (const chat of chats) {
     for (const message of await storedSince(store, account, chat.id, since)) {
@@ -78,7 +80,7 @@ export const dryRun = async (
   }
   arrived.sort((a, b) => Date.parse(a.message.timestamp) - Date.parse(b.message.timestamp))
 
-  const people = await store.people(account.provider, { account: account.account })
+  const people = await store.people.people(account.provider, { account: account.account })
   const { isContact, botOf, botFlags } = await senderFacts(store, account)
   const results = tried.map((rule) => ({
     id: rule.id,
@@ -162,12 +164,14 @@ export const dryRun = async (
  */
 export const senderFacts = async (store: MessageStore, account: AccountKey) => {
   const contacts = new Set(
-    (await store.contacts(account, { order: "recent", limit: Number.MAX_SAFE_INTEGER })).items.map((one) => one.id),
+    (await store.people.contacts(account, { order: "recent", limit: Number.MAX_SAFE_INTEGER })).items.map(
+      (one) => one.id,
+    ),
   )
   const botFlags = new Map<Id, boolean | null>()
   const botOf = async (id: Id): Promise<boolean | null> => {
     if (!botFlags.has(id)) {
-      const person = await store.personOf({ provider: account.provider, id })
+      const person = await store.people.personOf({ provider: account.provider, id })
       const own = person?.identities.find((one) => one.provider === account.provider && one.id === id)
       botFlags.set(id, own?.isBot ?? null)
     }
@@ -180,7 +184,7 @@ const storedSince = async (store: MessageStore, account: AccountKey, chat: Id, s
   const found: Message[] = []
   let before: Id | undefined
   while (true) {
-    const page = await store.messages(account, chat, {
+    const page = await store.messages.messages(account, chat, {
       limit: PAGE,
       since: new Date(since).toISOString(),
       ...(before === undefined ? {} : { before }),

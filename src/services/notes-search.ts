@@ -70,7 +70,7 @@ export const searchNotesQuery = async (
       },
     }
   }
-  const stemmers = hasStems(ast.root) ? await store.stemmers() : undefined
+  const stemmers = hasStems(ast.root) ? await store.searchIndex.stemmers() : undefined
   if (stemmers === null)
     throw new CliError(
       "validation_error",
@@ -168,7 +168,7 @@ const embedChunks = async (
         batch.map(({ text }) => text),
         "passage",
       )
-      await store.saveVectors(
+      await store.vectors.saveVectors(
         key,
         model.dims,
         batch.map(({ hash }, index) => ({ hash, vector: vectors[index] as Float32Array })),
@@ -497,7 +497,7 @@ export const searchNotes = async (
   const hits: FoundNote[] = []
   const counts = new Map<string, LinkedRecord>()
   const folders = await store.notes.folders()
-  const profiles = await store.profiles()
+  const profiles = await store.accounts.profiles()
   for (const [ref, { note, foundBy }] of page) {
     const links = (await store.notes.links({ from: ref })).map(({ to, targetText, kind, anchor }) => ({
       to,
@@ -532,7 +532,7 @@ export const searchNotes = async (
   for (const record of counts.values()) {
     if (record.ref && names.has(record.ref)) record.name = names.get(record.ref) ?? record.name
     if (record.ref?.startsWith("person:"))
-      record.name = (await store.personByUid(record.ref.slice("person:".length)))?.name ?? record.name
+      record.name = (await store.people.personByUid(record.ref.slice("person:".length)))?.name ?? record.name
     if (record.ref?.startsWith("note:") || record.ref?.startsWith("document:"))
       record.name = (await store.notes.note(record.ref).catch(() => undefined))?.title ?? record.name
   }

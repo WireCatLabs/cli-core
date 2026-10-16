@@ -12,10 +12,10 @@ const account: AccountKey = { provider: "telegram", account: "100" }
 it("finds by name a file stored before version 5", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "version-5-")), "wirecat.db")
   const store = await openStore({ path })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "1", title: "Chat", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "1",
     [

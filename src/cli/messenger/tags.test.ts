@@ -45,7 +45,7 @@ const setup = async (config?: object) => {
   rememberAccount(app, "default", "500", env)
   const store = await openStore({ path: env.MESSAGING_STORE })
   await seedSearchRecipes(store, { provider: "chat", account: "500" })
-  for (const one of await store.tags({ provider: "chat", account: "500" })) {
+  for (const one of await store.tags.tags({ provider: "chat", account: "500" })) {
     const target: TagTarget | TaskTagTarget =
       one.type === "chat"
         ? { type: one.type, chatId: one.chatId as string }
@@ -54,7 +54,7 @@ const setup = async (config?: object) => {
           : one.type === "task"
             ? { type: one.type, taskId: one.taskId as string }
             : { type: one.type, chatId: one.chatId as string, messageId: one.messageId as string }
-    await store.removeTags({ provider: "chat", account: "500" }, target, [one.tag])
+    await store.tags.removeTags({ provider: "chat", account: "500" }, target, [one.tag])
   }
   await store.close()
   const runs =

@@ -1,4 +1,4 @@
-import type { Range } from "../store.js"
+import type { Range } from "../types.js"
 import { and, eq, gte, lte } from "./drizzle/core.js"
 import type { StoreContext } from "./open.js"
 import { syncRanges } from "./schema.js"

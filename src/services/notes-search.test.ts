@@ -61,11 +61,11 @@ describe("a note and a message with the same text", () => {
     ["budget AND NOT body:/.*Valencia.*/", false],
   ])("**%s** finds both or neither (%s)", async (query, found) => {
     const store = await open()
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "7", title: "Chat 7", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(account, "7", [message(TEXT)], { via: "history" })
-    await store.addTags(account, { type: "message", chatId: "7", messageId: "1" }, ["work"])
+    await store.messages.saveMessages(account, "7", [message(TEXT)], { via: "history" })
+    await store.tags.addTags(account, { type: "message", chatId: "7", messageId: "1" }, ["work"])
     const note = await store.notes.addNote({ text: TEXT })
     await store.knowledge.addTags(account, { type: "note", id: note.id }, ["work"])
 
@@ -105,7 +105,7 @@ describe("the notes' indexes", () => {
     const store = await open()
     const note = await store.notes.addNote({ text: "running" })
     expect(await noteIds(store, "run")).toEqual([note.id])
-    await store.saveStemmers({ cyrillic: "russian", latin: "spanish" })
+    await store.searchIndex.saveStemmers({ cyrillic: "russian", latin: "spanish" })
     expect(await noteIds(store, "run")).toEqual([])
     expect(await store.notes.indexState()).toMatchObject({
       built: "snowball-3.1.1 cyrillic=russian latin=spanish",
@@ -178,7 +178,7 @@ describe("the notes' indexes", () => {
     expect(chunks.map(({ text }) => text).sort()).toEqual(["a harbour with a lighthouse", "a recipe for soup"])
     const unit = (x: number, y: number) => new Float32Array([x, y])
     expect(await store.notes.embedded("test:model:2", {})).toBe(false)
-    await store.saveVectors(
+    await store.vectors.saveVectors(
       "test:model:2",
       2,
       chunks.map(({ hash, text }) => ({ hash, vector: text.includes("harbour") ? unit(1, 0) : unit(0, 1) })),

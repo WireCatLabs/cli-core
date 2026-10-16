@@ -1,5 +1,5 @@
 import type { QueryExecution } from "../../search/lucene/resolved.js"
-import type { AccountKey } from "../store.js"
+import type { AccountKey } from "../types.js"
 import { queryMessagePks } from "./lucene.js"
 import type { StoreContext } from "./open.js"
 

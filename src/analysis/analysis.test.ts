@@ -17,10 +17,10 @@ import { analysisAnswer, analysisPrompt, runAnalysis } from "./runner.js"
 const account = { provider: "chat", account: "1" }
 const setup = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "analysis-")), "m.db") })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "9", title: "Group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "9",
     [1, 2].map(
@@ -250,7 +250,7 @@ describe("remembered analysis consent", () => {
     expect(await consents.has("10", identity)).toBe(true)
     await consents.revoke()
     expect(await consents.list()).toEqual([])
-    await store.setSyncState(account, "analysis-consents-v1", "malformed")
+    await store.sync.setSyncState(account, "analysis-consents-v1", "malformed")
     await expect(consents.has("9", identity)).rejects.toThrow("invalid")
     await consents.revoke()
     await store.close()

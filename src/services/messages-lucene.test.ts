@@ -54,10 +54,10 @@ const open = async (now?: () => number) => {
 }
 const ids = (answer: { items: { id: string }[] }) => answer.items.map(({ id }) => Number(id)).sort((a, b) => a - b)
 const seed = async (store: MessageStore, account: AccountKey) => {
-  await store.saveChats(account, [chat("1", "dialog"), chat("2")])
+  await store.chats.saveChats(account, [chat("1", "dialog"), chat("2")])
   const tokens = ["alpha", "beta", "gamma", "delta"]
   for (const chatId of ["1", "2"])
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       chatId,
       Array.from({ length: 16 }, (_, mask) => mask)
@@ -93,10 +93,14 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     expect(ids(await run(store, account, "alph gamma"))).toEqual([])
     expect(ids(await run(store, account, "alpha nonexisting"))).toEqual([])
     expect(ids(await run(store, account, "alpha OR beta gamma"))).toEqual([5, 6, 7, 13, 14, 15])
-    const partial: MessageStore = Object.assign(Object.create(store) as MessageStore, {
-      fillSearchIndex: async () => ({ normalized: 0, indexed: 0, terms: 0 }),
-      searchIndexState: async () => undefined,
-    })
+    const partial: MessageStore = {
+      ...store,
+      searchIndex: {
+        ...store.searchIndex,
+        fillSearchIndex: async () => ({ normalized: 0, indexed: 0, terms: 0 }),
+        searchIndexState: async () => undefined,
+      },
+    }
     await expect(run(partial, account, "alpha")).rejects.toThrow("index is not ready")
     const metadataOnly = await run(partial, account, "kind:group")
     expect(ids(metadataOnly)).toEqual([0, 2, 4, 6, 8, 10, 12, 14])
@@ -106,14 +110,14 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   it("finds media-only, unknown peers and same-thread ids without merging chats", async () => {
     const store = await open()
     await seed(store, account)
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       chat("3", "unknown"),
       chat("4", "saved"),
       chat("5", "dialog", { providerMetadata: { isBot: true } }),
       chat("6", "dialog", { providerMetadata: { peerKind: "service" } }),
     ])
     for (const id of ["3", "4", "5", "6"])
-      await store.saveMessages(
+      await store.messages.saveMessages(
         account,
         id,
         [message(`10${id}`, id, "", { attachments: [{ kind: "file", name: "invoice.pdf" }], threadId: "42" })],
@@ -135,8 +139,8 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   })
   it("**has:file matches a Telegram document**, which Telegram stores as kind document", async () => {
     const store = await open()
-    await store.saveChats(account, [chat("1")])
-    await store.saveMessages(
+    await store.chats.saveChats(account, [chat("1")])
+    await store.messages.saveMessages(
       account,
       "1",
       [
@@ -149,8 +153,8 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   })
   it("matches any attachment by file name, type and size without needing text", async () => {
     const store = await open()
-    await store.saveChats(account, [chat("1")])
-    await store.saveMessages(
+    await store.chats.saveChats(account, [chat("1")])
+    await store.messages.saveMessages(
       account,
       "1",
       [
@@ -182,8 +186,8 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   })
   it("folds a file-name regex like the names it is compared with", async () => {
     const store = await open()
-    await store.saveChats(account, [chat("1")])
-    await store.saveMessages(
+    await store.chats.saveChats(account, [chat("1")])
+    await store.messages.saveMessages(
       account,
       "1",
       [
@@ -201,8 +205,8 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   })
   it("counts a link preview without a typed URL as a link", async () => {
     const store = await open()
-    await store.saveChats(account, [chat("1")])
-    await store.saveMessages(
+    await store.chats.saveChats(account, [chat("1")])
+    await store.messages.saveMessages(
       account,
       "1",
       [
@@ -218,9 +222,9 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   })
   it("reads relative dates against the current time", async () => {
     const store = await open()
-    await store.saveChats(account, [chat("1")])
+    await store.chats.saveChats(account, [chat("1")])
     const at = (ago: number) => new Date(Date.now() - ago).toISOString()
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "1",
       [
@@ -237,9 +241,9 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   })
   it("counts distinct matches by chat, sender, day and hour", async () => {
     const store = await open()
-    await store.saveChats(account, [chat("1"), chat("2")])
+    await store.chats.saveChats(account, [chat("1"), chat("2")])
     const at = (iso: string) => ({ timestamp: iso })
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "1",
       [
@@ -249,7 +253,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
       ],
       { via: "history" },
     )
-    await store.saveMessages(account, "2", [message("4", "2", "invoice", at("2026-03-02T10:00:00.000Z"))], {
+    await store.messages.saveMessages(account, "2", [message("4", "2", "invoice", at("2026-03-02T10:00:00.000Z"))], {
       via: "history",
     })
     const stats = (text: string, by: "chat" | "sender" | "day" | "hour", extra = {}) =>
@@ -315,8 +319,8 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
   })
   it("orders equal timestamps by qualified message ids before applying the page limit", async () => {
     const store = await open()
-    await store.saveChats(account, [chat("1")])
-    await store.saveMessages(
+    await store.chats.saveChats(account, [chat("1")])
+    await store.messages.saveMessages(
       account,
       "1",
       ["71", "72", "73"].map((id) => message(id, "1", "alpha", { timestamp: "2026-01-01T10:00:00Z" })),
@@ -330,15 +334,15 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     let clock = Date.parse("2026-10-01T09:00:00Z")
     const store = await open(() => clock)
     await seed(store, account)
-    await store.setSyncState(account, fetchedKey("1"), "1")
+    await store.sync.setSyncState(account, fetchedKey("1"), "1")
     expect((await run(store, account, "alpha")).coverage).toMatchObject({
       lastSyncedAt: null,
       inventoryComplete: false,
     })
 
     clock = Date.parse("2026-10-02T09:00:00Z")
-    await store.setSyncState(account, fetchedKey("2"), "1")
-    await store.markChatsLeft(account, ["1", "2"])
+    await store.sync.setSyncState(account, fetchedKey("2"), "1")
+    await store.chats.markChatsLeft(account, ["1", "2"])
     const all = await run(store, account, "alpha")
     expect(all.coverage).toMatchObject({ lastSyncedAt: "2026-10-01T09:00:00.000Z", inventoryComplete: true })
     const counted = await statsStore(store, account, { text: "alpha", by: "chat", limit: 10 })
@@ -352,7 +356,7 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
       inventoryComplete: true,
     })
     const other = { provider: account.provider, account: "other" }
-    await store.saveChats(other, [chat("9")])
+    await store.chats.saveChats(other, [chat("9")])
     expect(
       (await searchStore(store, account, { text: "alpha", limit: 10, accounts: [account, other] })).coverage,
     ).toMatchObject({ lastSyncedAt: null, inventoryComplete: false })
@@ -430,8 +434,8 @@ describe("preset predicates are candidates, not verified credentials", () => {
   it("runs presets through Boolean search without persisting bodies separately", async () => {
     const store = await open()
     const account = { provider: "max", account: "100" }
-    await store.saveChats(account, [chat("1", "saved")])
-    await store.saveMessages(
+    await store.chats.saveChats(account, [chat("1", "saved")])
+    await store.messages.saveMessages(
       account,
       "1",
       [

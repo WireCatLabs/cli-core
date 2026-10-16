@@ -39,7 +39,7 @@ export const memberFetches = ({
   const fetchAll = () =>
     withStore(async (store, account) => {
       const today = new Date().toISOString().slice(0, 10)
-      for (const { chatId, lastCount } of await store.trackedChats(account)) {
+      for (const { chatId, lastCount } of await store.roster.trackedChats(account)) {
         if (stopped) return
         if (lastCount?.day === today) continue
         try {

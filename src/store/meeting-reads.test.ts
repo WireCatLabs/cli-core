@@ -15,8 +15,11 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "zm-test-meeting-read-caps-")), "fixture.db")
   const store = await openStore({ path })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "invented" }, { name: "Invented" })
-  const otherId = await store.saveAccount({ provider: "example", account: "other" }, { name: "Other invented" })
+  const accountId = await store.accounts.saveAccount({ provider: "example", account: "invented" }, { name: "Invented" })
+  const otherId = await store.accounts.saveAccount(
+    { provider: "example", account: "other" },
+    { name: "Other invented" },
+  )
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   input.transcripts[0].rows[0].text = "Invented cue 0"

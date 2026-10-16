@@ -13,13 +13,15 @@ let finishWrite: () => void = () => {}
 vi.mock("../../store/store.js", () => ({
   openStore: async () =>
     ({
-      saveMessages: () =>
-        new Promise<void>((resolve) => {
-          finishWrite = () => {
-            order.push("written")
-            resolve()
-          }
-        }),
+      messages: {
+        saveMessages: () =>
+          new Promise<void>((resolve) => {
+            finishWrite = () => {
+              order.push("written")
+              resolve()
+            }
+          }),
+      },
       close: async () => {
         order.push("store closed")
       },

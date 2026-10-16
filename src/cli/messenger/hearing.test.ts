@@ -153,7 +153,7 @@ describe("read hearing lifecycle", () => {
     const test = fixture()
     const store = await openStore({ env: test.env })
     try {
-      await store.keepTranscript({ provider: "chat", account: "500" }, "9", "1", question, "chat")
+      await store.messages.keepTranscript({ provider: "chat", account: "500" }, "9", "1", question, "chat")
     } finally {
       await store.close()
     }
@@ -205,7 +205,7 @@ describe("read hearing lifecycle", () => {
     const test = fixture()
     const store = await openStore({ env: test.env })
     try {
-      await store.keepTranscript({ provider: "chat", account: "500" }, "9", "1", question, "chat")
+      await store.messages.keepTranscript({ provider: "chat", account: "500" }, "9", "1", question, "chat")
       rememberAccount(app, "default", "500", test.env)
       const connection = test.adapter()
       const guard = { check: () => {}, record: () => {} }

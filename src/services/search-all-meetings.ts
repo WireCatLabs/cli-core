@@ -114,7 +114,7 @@ const collectMeetings = async (
   query: string,
 ): Promise<CollectedMeetings> => {
   cancelled(request.signal)
-  const selected = await store.storedAccount(account)
+  const selected = await store.accounts.storedAccount(account)
   cancelled(request.signal)
   whole(selected.id, 1, Number.MAX_SAFE_INTEGER, "meeting account id")
   if (account.scope !== undefined && selected.scope !== account.scope)
@@ -319,7 +319,7 @@ const holdingMeetings = async (store: MessageStore, named: AccountKey[]): Promis
   if (named.length < 2) return named
   const holding: AccountKey[] = []
   for (const key of named) {
-    const { id } = await store.storedAccount(key)
+    const { id } = await store.accounts.storedAccount(key)
     if ((await store.meetings.meetings({ accountId: id, limit: 1 })).length) holding.push(key)
   }
   return holding.length ? holding : named

@@ -72,7 +72,7 @@ const piecesOf = (variant: Variant): Piece[] =>
 const sameAsStore = async (pieces: Piece[]) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "mail-quality-")), "store.db") })
   try {
-    const accountId = await store.saveAccount({ provider: "email", account: "owner@example.com" }, { name: null })
+    const accountId = await store.accounts.saveAccount({ provider: "email", account: "owner@example.com" }, { name: null })
     for (const thread of corpus.threads)
       await store.mail.saveThread({
         accountId,

@@ -27,7 +27,7 @@ const said = (id: string, text: string, replyToId?: string): Message => ({
 
 const setup = async (messages: Message[]) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-pairs-")), "wirecat.db") })
-  await store.saveMessages(account, "7", messages, { via: "test" })
+  await store.messages.saveMessages(account, "7", messages, { via: "test" })
   const service = createTaskService({ store: store.tasks })
   const input = (message: string, origin: NewTask["origin"]): NewTask => ({
     source: `msg:chat/500/7/${message}`,

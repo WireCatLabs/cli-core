@@ -45,7 +45,7 @@ const kinds = (text: string) => listQuery(text, AGENDA_QUERY, "tasks agenda")
 
 const seeded = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "agenda-")), "m.db") })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     chat("1", "dialog"),
     chat("2", "dialog"),
     chat("3", "dialog"),
@@ -62,7 +62,7 @@ const seeded = async () => {
     ["5", [said("5", "50", 60, false)]],
     ["7", [said("7", "70", 6, false), said("7", "71", 5, true)]],
   ]
-  for (const [id, list] of messages) await store.saveMessages(account, id, list, { via: "test" })
+  for (const [id, list] of messages) await store.messages.saveMessages(account, id, list, { via: "test" })
   const deps = storeOnlyDeps(store, account, { app })
   return { store, tasks: tasksService(deps), agenda: agendaService(deps, () => now) }
 }

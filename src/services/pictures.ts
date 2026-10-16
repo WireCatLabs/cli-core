@@ -135,16 +135,16 @@ export const picturesService = (deps: ServiceDeps) => {
       const chatId = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
       const use = await embedder()
       const result: PicturesEmbedded = { model: model.key, embedded: 0, skipped: 0, failed: 0, more: false }
-      const pending: Parameters<typeof store.savePictures>[3] = []
+      const pending: Parameters<typeof store.vectors.savePictures>[3] = []
       const flush = async () => {
         if (pending.length === 0) return
-        await store.savePictures(account, model.key, model.dims, pending.splice(0))
+        await store.vectors.savePictures(account, model.key, model.dims, pending.splice(0))
       }
       let after = 0
       let seen = 0
       try {
         while (seen < limit) {
-          const page = await store.picturesToEmbed(account, {
+          const page = await store.vectors.picturesToEmbed(account, {
             ...(chatId === undefined ? {} : { chatId }),
             after,
             limit: Math.min(PAGE, limit - seen),
@@ -192,8 +192,13 @@ export const picturesService = (deps: ServiceDeps) => {
         }
         result.more =
           seen >= limit &&
-          (await store.picturesToEmbed(account, { after, limit: 1, ...(chatId === undefined ? {} : { chatId }) }))
-            .length > 0
+          (
+            await store.vectors.picturesToEmbed(account, {
+              after,
+              limit: 1,
+              ...(chatId === undefined ? {} : { chatId }),
+            })
+          ).length > 0
       } finally {
         await flush()
         await use.close()
@@ -226,7 +231,7 @@ export const picturesService = (deps: ServiceDeps) => {
         opened = undefined
         await held?.then((use) => use.close()).catch(() => {})
       }
-      const near = await store.nearestPictures(account, {
+      const near = await store.vectors.nearestPictures(account, {
         ...(chatId === undefined ? {} : { chatId }),
         ...(since === undefined ? {} : { since }),
         model: model.key,
@@ -237,7 +242,7 @@ export const picturesService = (deps: ServiceDeps) => {
         near
           .filter(({ score }) => score >= PICTURE_FLOOR)
           .map(async ({ chatId: chatKey, messageId, score }) => {
-            const message = await store.message(account, messageId, { chatId: chatKey })
+            const message = await store.messages.message(account, messageId, { chatId: chatKey })
             if (!message) return []
             return [
               {

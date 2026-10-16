@@ -1,5 +1,5 @@
 import { normalize } from "../normalize.js"
-import type { StoredHit } from "../store.js"
+import type { StoredHit } from "../types.js"
 import type { StoreContext } from "./open.js"
 
 /** A hit with its relevance — bm25 turned round so higher is better; `null` from steps that do not rank. */

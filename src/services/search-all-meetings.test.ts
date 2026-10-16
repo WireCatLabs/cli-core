@@ -19,8 +19,8 @@ const fixture = async () => {
   const path = join(folder, "wirecat.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path } })
   stores.push(store)
-  await store.saveAccount({ provider: "example", account: "other-invented" }, { name: "Other invented" })
-  const accountId = await store.saveAccount(account, { name: "Invented" })
+  await store.accounts.saveAccount({ provider: "example", account: "other-invented" }, { name: "Other invented" })
+  const accountId = await store.accounts.saveAccount(account, { name: "Invented" })
   const save = async (
     externalId: string,
     text: string | string[],
@@ -83,7 +83,7 @@ const messageResult = (): SearchFound => ({
 describe("opt-in meeting-inclusive search", () => {
   it("keeps legacy results, exports and default resource behavior unchanged", async () => {
     const { store } = await fixture()
-    const lookup = vi.spyOn(store, "storedAccount")
+    const lookup = vi.spyOn(store.accounts, "storedAccount")
     const meetingSearch = vi.spyOn(store.meetings, "search")
     const legacy = await searchAll(store, account, { text: "needle", limit: 20, only: ["messages"] }, {}, async () =>
       messageResult(),
@@ -262,7 +262,7 @@ describe("opt-in meeting-inclusive search", () => {
 
   it("validates limits and cursor bounds before invoking any legacy or meeting read", async () => {
     const { store } = await fixture()
-    const lookup = vi.spyOn(store, "storedAccount")
+    const lookup = vi.spyOn(store.accounts, "storedAccount")
     const legacy = vi.fn(async () => messageResult())
     for (const extra of [
       { limit: 0 },
@@ -282,7 +282,7 @@ describe("opt-in meeting-inclusive search", () => {
 
   it("skips absent or mismatched-scope accounts without registration and propagates failures", async () => {
     const { store } = await fixture()
-    const register = vi.spyOn(store, "saveAccount")
+    const register = vi.spyOn(store.accounts, "saveAccount")
     for (const meetingAccount of [
       { provider: "zoom", account: "zm-profile:absent" },
       { ...account, scope: "work" as const },
@@ -293,7 +293,7 @@ describe("opt-in meeting-inclusive search", () => {
     }
     expect(register).not.toHaveBeenCalled()
     const error = new Error("invented store failure")
-    vi.spyOn(store, "storedAccount").mockRejectedValue(error)
+    vi.spyOn(store.accounts, "storedAccount").mockRejectedValue(error)
     await expect(searchAllIncludingMeetings(store, account, request())).rejects.toBe(error)
   })
 
@@ -301,7 +301,7 @@ describe("opt-in meeting-inclusive search", () => {
     const { store, save } = await fixture()
     await save("cancel", "needle")
     const controller = new AbortController()
-    const lookup = vi.spyOn(store, "storedAccount")
+    const lookup = vi.spyOn(store.accounts, "storedAccount")
     controller.abort()
     await expect(
       searchAllIncludingMeetings(store, account, request({ signal: controller.signal })),

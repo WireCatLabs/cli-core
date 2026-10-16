@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference } from "../meetings/index.js"
-import type { MessageStore } from "../store/store.js"
+import type { MessageStore, PeopleStore } from "../store/store.js"
 import { checkMeetingCancelled, type MeetingEvidenceCue, readMeetingEvidence } from "./meeting-evidence.js"
 import type { MeetingReadStore } from "./meeting-reference.js"
 
@@ -35,7 +35,8 @@ export interface PersonMeetingContext {
     input: "bounded-meeting-pages"
   }
 }
-export type PersonMeetingReadStore = Pick<MessageStore, "personByUid" | "personSeenInAccounts" | "involvements"> & {
+export type PersonMeetingReadStore = Pick<MessageStore, "involvements"> & {
+  people: Pick<PeopleStore, "personByUid" | "personSeenInAccounts">
   meetings: MeetingReadStore
 }
 
@@ -72,12 +73,12 @@ export const personMeetingContext = async (
     throw new CliError("validation_error", "expected person:<positive safe store ID>")
   checkMeetingCancelled(signal)
   const uid = personReference.slice(7)
-  if (typeof store.personSeenInAccounts !== "function")
+  if (typeof store.people.personSeenInAccounts !== "function")
     throw new CliError("configuration_error", "person meeting context requires account-presence authorization")
-  const visible = await store.personSeenInAccounts(uid, accountIds)
+  const visible = await store.people.personSeenInAccounts(uid, accountIds)
   checkMeetingCancelled(signal)
   if (!visible) throw new CliError("not_found", "the person is unavailable for these accounts")
-  const person = await store.personByUid(uid)
+  const person = await store.people.personByUid(uid)
   checkMeetingCancelled(signal)
   if (!person) throw new CliError("not_found", "the person is unavailable")
   if (person.uid !== uid) throw new CliError("invalid_response", "the person lookup returned another identity")

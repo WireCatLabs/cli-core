@@ -55,7 +55,7 @@ const email = (externalId: string, overrides: Partial<EmailInput>): EmailInput =
 const seeded = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "mail-search-")), "store.db") })
   live.push(store)
-  const accountId = await store.saveAccount(MAIL, { name: null })
+  const accountId = await store.accounts.saveAccount(MAIL, { name: null })
   await store.mail.saveThread({
     accountId,
     externalId: "thread-1",
@@ -85,7 +85,7 @@ const seeded = async () => {
       }),
     ],
   })
-  await store.saveChats(MAIL, [
+  await store.chats.saveChats(MAIL, [
     {
       id: "thread-0",
       title: "Old notes",
@@ -109,7 +109,7 @@ const seeded = async () => {
     forwardedFrom: null,
     reactions: null,
   })
-  await store.saveMessages(MAIL, "thread-0", [old("<zero@example.com>", "Old notes\n\nThe roadmap draft.")], {
+  await store.messages.saveMessages(MAIL, "thread-0", [old("<zero@example.com>", "Old notes\n\nThe roadmap draft.")], {
     via: "himalaya",
   })
   return { store, accountId }
@@ -158,7 +158,7 @@ describe("search mail over the mail tables", () => {
     expect(await found(store, "filename:budget.pdf")).toEqual(["<two@example.com>"])
     expect(await found(store, "content:invoice")).toEqual(["<two@example.com>"])
 
-    await store.addTags(MAIL, { type: "chat", chatId: "thread-2" }, ["food"])
+    await store.tags.addTags(MAIL, { type: "chat", chatId: "thread-2" }, ["food"])
     expect(await found(store, "tag:food")).toEqual(["<three@example.com>"])
   })
 
@@ -190,7 +190,10 @@ describe("search mail over the mail tables", () => {
     expect(await sorted('to:"owner@example.com" AND from:"bob@example.com"')).toEqual(["<two@example.com>"])
     expect(await sorted("mailbox:Projects")).toEqual(["<four@example.com>"])
     expect(await sorted("mailbox:label_1")).toEqual(["<four@example.com>"])
-    const otherId = await store.saveAccount({ provider: "email", account: "other@example.com" }, { name: null })
+    const otherId = await store.accounts.saveAccount(
+      { provider: "email", account: "other@example.com" },
+      { name: null },
+    )
     await store.mail.saveThread({
       accountId: otherId,
       externalId: "thread-other",
@@ -257,7 +260,7 @@ describe("search mail over the mail tables", () => {
       now: at(10),
       emails: [email("<news@example.com>", { bodyText: "Read https://news.example.com/click?id=1&utm_source=mail" })],
     })
-    await store.rebuildMentions({ kinds: ["url"] })
+    await store.mentions.rebuildMentions({ kinds: ["url"] })
 
     expect(await found(store, 'url:"https://news.example.com/click?id=1"')).toEqual(["<news@example.com>"])
     expect(await found(store, 'link:"/click?id=1"')).toEqual(["<news@example.com>"])
@@ -286,13 +289,13 @@ describe("search mail over the mail tables", () => {
 
   it("purges a mail account with its mail, attachments, pieces and thread tags", async () => {
     const { store } = await seeded()
-    await store.addTags(MAIL, { type: "chat", chatId: "thread-2" }, ["food"])
+    await store.tags.addTags(MAIL, { type: "chat", chatId: "thread-2" }, ["food"])
     await store.mail.chunksToEmbed("test:model:2", { limit: 10 })
-    await store.purge(MAIL)
+    await store.accounts.purge(MAIL)
     expect(await store.mail.threads({ includeDeleted: true })).toEqual([])
     expect(await store.mail.emails({ includeDeleted: true })).toEqual([])
     expect(await store.mail.chunksToEmbed("test:model:2", { limit: 10 })).toEqual([])
-    expect(await store.accounts()).not.toContainEqual(MAIL)
+    expect(await store.accounts.accounts()).not.toContainEqual(MAIL)
   })
 
   it("leaves a deleted email out", async () => {
@@ -304,10 +307,10 @@ describe("search mail over the mail tables", () => {
   it("finds mail in a search that names a messenger account too, and skips mail for a messenger field", async () => {
     const { store, accountId } = await seeded()
     const TG: AccountKey = { provider: "tg", account: "1" }
-    await store.saveChats(TG, [
+    await store.chats.saveChats(TG, [
       { id: "5", title: "Team", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(
+    await store.messages.saveMessages(
       TG,
       "5",
       [
@@ -364,7 +367,7 @@ describe("mail by meaning", () => {
     const { store, accountId } = await seeded()
     const chunks = await store.mail.chunksToEmbed(MODEL, { limit: 10 })
     expect(chunks.length).toBe(4)
-    await store.saveVectors(
+    await store.vectors.saveVectors(
       MODEL,
       2,
       chunks.map(({ hash, text }) => ({
@@ -380,16 +383,16 @@ describe("mail by meaning", () => {
     )
     expect(await store.mail.chunksToEmbed(MODEL, { limit: 10 })).toEqual([])
 
-    const [best] = await store.nearestConversations(MAIL, { model: MODEL, query: unit(0, 1), limit: 2 })
+    const [best] = await store.vectors.nearestConversations(MAIL, { model: MODEL, query: unit(0, 1), limit: 2 })
     expect(best).toMatchObject({
       summary: { chatId: "thread-2", firstMessageId: "<three@example.com>", messageCount: 1 },
       chunk: { firstMessageId: "<three@example.com>", lastMessageId: "<three@example.com>" },
       score: 1,
     })
-    const [byFile] = await store.nearestConversations(MAIL, { model: MODEL, query: unit(-1, 0), limit: 1 })
+    const [byFile] = await store.vectors.nearestConversations(MAIL, { model: MODEL, query: unit(-1, 0), limit: 1 })
     expect(byFile).toMatchObject({ chunk: { firstMessageId: "<two@example.com>" }, score: 1 })
 
-    const inThread = await store.nearestConversations(MAIL, {
+    const inThread = await store.vectors.nearestConversations(MAIL, {
       model: MODEL,
       query: unit(0, 1),
       limit: 5,
@@ -398,7 +401,7 @@ describe("mail by meaning", () => {
     expect(inThread.map(({ chunk }) => chunk.firstMessageId)).toEqual(["<two@example.com>", "<one@example.com>"])
 
     await store.mail.markDeleted(accountId, ["<three@example.com>"], at(30))
-    const after = await store.nearestConversations(MAIL, { model: MODEL, query: unit(0, 1), limit: 5 })
+    const after = await store.vectors.nearestConversations(MAIL, { model: MODEL, query: unit(0, 1), limit: 5 })
     expect(after.map(({ chunk }) => chunk.firstMessageId)).not.toContain("<three@example.com>")
   })
 
@@ -418,7 +421,7 @@ describe("mail by meaning", () => {
     })
     const before = await store.mail.chunksToEmbed(MODEL, { limit: 20 })
     expect(before.length).toBeGreaterThan(4)
-    await store.saveVectors(
+    await store.vectors.saveVectors(
       MODEL,
       2,
       before.map(({ hash }) => ({ hash, vector: unit(1, 0) })),

@@ -60,8 +60,8 @@ const setUp = async () => {
     forwardedFrom: null,
     reactions: null,
   })
-  await store.saveChats(account, [{ ...dialog, id: "11", title: "Ana" }])
-  await store.saveMessages(account, "11", [said("1", 30), said("2", 20)], { via: "test" })
+  await store.chats.saveChats(account, [{ ...dialog, id: "11", title: "Ana" }])
+  await store.messages.saveMessages(account, "11", [said("1", 30), said("2", 20)], { via: "test" })
   await store.close()
   mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
   const rule = {

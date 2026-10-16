@@ -30,7 +30,7 @@ let store: MessageStore
 
 beforeEach(async () => {
   store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "store-only-")), "m.db") })
-  await store.saveMessages(
+  await store.messages.saveMessages(
     notes,
     "Projects",
     [note("Projects/a.md", "harbour plan", 0), note("Projects/b.md", "lighthouse budget", 1)],

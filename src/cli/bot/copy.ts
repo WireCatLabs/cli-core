@@ -64,21 +64,21 @@ export const botCopy = (provider: Provider) => {
       if (byChat.size === 0 && senders.length === 0) return true
       return quietly(async (store) => {
         for (const [chatId, chatMessages] of byChat) {
-          await store.saveMessages(accountOf(botId), chatId, chatMessages, { via })
+          await store.messages.saveMessages(accountOf(botId), chatId, chatMessages, { via })
         }
-        if (senders.length > 0) await store.savePeople(accountOf(botId), [...senders])
+        if (senders.length > 0) await store.people.savePeople(accountOf(botId), [...senders])
       }, warn)
     },
 
     /** Only a chat the messenger has just described in full: the store replaces a title it is not given. */
     keepChat: async (botId: string, chat: Chat, warn: (message: string) => void) => {
-      if (CHAT_ID.test(chat.id)) await quietly((store) => store.saveChats(accountOf(botId), [chat]), warn)
+      if (CHAT_ID.test(chat.id)) await quietly((store) => store.chats.saveChats(accountOf(botId), [chat]), warn)
     },
 
     /** Messages the bot deleted, kept as tombstones: reads and search stop returning them. */
     forget: async (botId: string, chatId: string, messageIds: string[], warn: (message: string) => void) => {
       if (!CHAT_ID.test(chatId) || messageIds.length === 0) return true
-      return quietly((store) => store.markDeleted(accountOf(botId), messageIds, { chatId }), warn)
+      return quietly((store) => store.messages.markDeleted(accountOf(botId), messageIds, { chatId }), warn)
     },
 
     /**

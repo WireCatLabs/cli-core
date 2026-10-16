@@ -29,7 +29,7 @@ const unfolded = async (path: string) => {
 /** What a build from before version 8 writes into a store a newer one migrated: the names, no folded copies. */
 const writtenByAnOlderBuild = async (path: string) => {
   const store = await openStore({ path })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "1", title: "Chat", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
   const project = await store.knowledge.addProject({ name: "Research Example", key: "RES", scope: "work" })

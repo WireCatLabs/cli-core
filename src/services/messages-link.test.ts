@@ -70,8 +70,8 @@ const setup = (permalink?: MessagePermalink) => {
 const stored = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "link-service-")), "m.db") })
   stores.push(store)
-  await store.saveChats(account, [chat])
-  await store.saveMessages(account, chat.id, [message], { via: "history" })
+  await store.chats.saveChats(account, [chat])
+  await store.messages.saveMessages(account, chat.id, [message], { via: "history" })
   return store
 }
 

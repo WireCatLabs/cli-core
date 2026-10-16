@@ -40,7 +40,7 @@ const opened: MessageStore[] = []
 const keptStore = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "services-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, chats)
+  await store.chats.saveChats(account, chats)
   return store
 }
 
@@ -85,7 +85,7 @@ describe("the chats service", () => {
 
   it("shows a stored chat offline with its saved members, leaving out the account itself", async () => {
     const store = await keptStore()
-    await store.applyDelta(account, { people, members: new Map([["7", ["500", "21", "22"]]]) })
+    await store.sync.applyDelta(account, { people, members: new Map([["7", ["500", "21", "22"]]]) })
     const service = chatsService(storedDeps(messenger, store, account, guard))
 
     const card = await service.show("Book")
@@ -102,7 +102,7 @@ describe("the chats service", () => {
 
   it("adds the saved members to a card the messenger gave without them", async () => {
     const store = await keptStore()
-    await store.applyDelta(account, { people, members: new Map([["7", ["21"]]]) })
+    await store.sync.applyDelta(account, { people, members: new Map([["7", ["21"]]]) })
     const adapter = { self: () => "500", chat: async () => ({ ...chats[0], members: null }) }
     const service = chatsService({
       ...onlineDeps(messenger, adapter as unknown as MessengerAdapter, guard),
@@ -124,7 +124,7 @@ describe("the people service", () => {
 
   it("lists the people the saved one-to-one member lists name, newest conversation first", async () => {
     const store = await keptStore()
-    await store.applyDelta(account, {
+    await store.sync.applyDelta(account, {
       people,
       members: new Map([
         ["8", ["500", "21"]],
@@ -142,7 +142,7 @@ describe("the people service", () => {
   it("asks the store after the messenger's chats, so a login that brings the people counts", async () => {
     const store = await keptStore()
     const login = async () => {
-      await store.applyDelta(account, { people, members: new Map([["8", ["500", "21"]]]) })
+      await store.sync.applyDelta(account, { people, members: new Map([["8", ["500", "21"]]]) })
       return { items: chats, hasMore: false }
     }
     const adapter = { self: () => "500", chats: login }
@@ -170,7 +170,7 @@ describe("the people service", () => {
 
   it("shows a person offline with the chats the saved member lists share", async () => {
     const store = await keptStore()
-    await store.applyDelta(account, { people, members: new Map([["7", ["500", "23"]]]) })
+    await store.sync.applyDelta(account, { people, members: new Map([["7", ["500", "23"]]]) })
     const service = peopleService(storedDeps(messenger, store, account, guard))
 
     const card = await service.show("Boris")

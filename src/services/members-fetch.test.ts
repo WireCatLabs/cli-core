@@ -19,7 +19,7 @@ const opened: MessageStore[] = []
 const heldStore = async (participantsCount: number | null) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "members-fetch-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount },
   ])
   return store
@@ -51,7 +51,7 @@ describe("chats members fetch", () => {
     const store = await heldStore(2)
     const service = (everyone: GroupMember[]) => chatsService(online(store, listing(everyone)))
     await service([member("21"), member("22")]).fetchMembers("7", { pauseMs: 0 })
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "7", title: "Club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 1 },
     ])
 
@@ -65,7 +65,7 @@ describe("chats members fetch", () => {
       gone: ["22"],
       tracked: true,
     })
-    expect((await store.trackedChats(account)).map(({ chatId }) => chatId)).toEqual(["7"])
+    expect((await store.roster.trackedChats(account)).map(({ chatId }) => chatId)).toEqual(["7"])
   })
 
   it("records nobody as gone when the chat's count is unknown or the budget cut the list", async () => {
@@ -130,7 +130,7 @@ describe("chats members history", () => {
   it("lists joins, leaves and profile changes from the store alone, oldest first", async () => {
     const store = await heldStore(2)
     await chatsService(online(store, listing([member("21"), member("22")]))).fetchMembers("7", { pauseMs: 0 })
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "7", title: "Club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 1 },
     ])
     const renamed = { ...member("21"), name: "New name", username: "newname" }

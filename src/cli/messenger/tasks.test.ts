@@ -62,7 +62,7 @@ const setup = async (config?: object) => {
   }
   rememberAccount(app, "default", "500", env)
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     [said("1", "I'll send the invoice tomorrow"), said("2", "who has the keys?")],
@@ -560,7 +560,7 @@ it("**takes the account from the command** where the program has no messenger pr
     NO_COLOR: "1",
   }
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveMessages(account, "7", [said("1", "I'll send the invoice tomorrow")], { via: "test" })
+  await store.messages.saveMessages(account, "7", [said("1", "I'll send the invoice tomorrow")], { via: "test" })
   await store.close()
   const flagged: Messenger = {
     ...messenger,

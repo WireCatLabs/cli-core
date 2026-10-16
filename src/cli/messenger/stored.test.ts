@@ -32,11 +32,11 @@ afterEach(async () => {
 const setUp = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "stored-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Book club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 },
     { id: "8", title: "Olga", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
   ])
-  await store.saveMessages(account, "7", [message("1", "the meeting is on tuesday")], { via: "history" })
+  await store.messages.saveMessages(account, "7", [message("1", "the meeting is on tuesday")], { via: "history" })
   const adapter = {
     self: () => "500",
     edit: async (chatId: string, messageId: string, text: string) => message(messageId, text, chatId),
@@ -50,7 +50,8 @@ const setUp = async () => {
     events: () => {},
     profile: { app: "chat", name: "work" },
   })
-  const found = async (text: string) => (await store.search(text, { limit: 10, account })).items.map((hit) => hit.id)
+  const found = async (text: string) =>
+    (await store.messages.search(text, { limit: 10, account })).items.map((hit) => hit.id)
   return { wrapped, found, store }
 }
 
@@ -66,11 +67,11 @@ describe("what the writes leave in the store", () => {
 
   it("the first save records which account the profile is, for other apps to name it", async () => {
     const { wrapped, store } = await setUp()
-    expect(await store.profiles()).toEqual({})
+    expect(await store.accounts.profiles()).toEqual({})
 
     await wrapped.edit?.("7", "1", "the meeting moved to friday", {})
 
-    expect(await store.profiles()).toEqual({ chat: { work: account } })
+    expect(await store.accounts.profiles()).toEqual({ chat: { work: account } })
   })
 
   it("a deletion leaves nothing for search to find", async () => {
@@ -102,7 +103,7 @@ describe("what a chat list leaves in the store", () => {
       lastMessageAt: null,
       participantsCount: 2,
     })
-    await store.saveChats(account, [chat("7"), chat("8")])
+    await store.chats.saveChats(account, [chat("7"), chat("8")])
     const adapter = { self: () => "500", chats: async () => ({ items: pages.items.map(chat), hasMore: pages.hasMore }) }
     const wrapped = stored(adapter as unknown as MessengerAdapter, {
       account,
@@ -111,7 +112,7 @@ describe("what a chat list leaves in the store", () => {
       events: () => {},
     })
     await wrapped.chats?.(window)
-    return (await store.chats(account, {})).items.map((one) => one.id).sort()
+    return (await store.chats.chats(account, {})).items.map((one) => one.id).sort()
   }
 
   it("a page that names every chat marks the others as left", async () => {
@@ -128,7 +129,7 @@ describe("what a chat list leaves in the store", () => {
 describe("a deletion `watch` hears without its chat", () => {
   const deleting = async (deletedWithoutChat?: DeletionScope) => {
     const { store } = await setUp()
-    await store.saveMessages(account, "8", [message("1", "see you tuesday", "8")], { via: "history" })
+    await store.messages.saveMessages(account, "8", [message("1", "see you tuesday", "8")], { via: "history" })
     const pending = new Set<Promise<void>>()
     const adapter = {
       self: () => "500",
@@ -147,8 +148,8 @@ describe("a deletion `watch` hears without its chat", () => {
     await wrapped.watch?.(() => {}, new AbortController().signal)
     await Promise.all(pending)
     return {
-      inGroup: await store.message(account, "1", { chatId: "7" }),
-      inDialog: await store.message(account, "1", { chatId: "8" }),
+      inGroup: await store.messages.message(account, "1", { chatId: "7" }),
+      inDialog: await store.messages.message(account, "1", { chatId: "8" }),
     }
   }
 

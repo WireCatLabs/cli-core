@@ -43,10 +43,10 @@ const folded = async (path: string, table: string, column: string) => {
 
 /** Writes every folded name through the store's own paths. */
 const written = async (store: MessageStore) => {
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "1", title: "Chat", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "1",
     [
@@ -67,7 +67,9 @@ const written = async (store: MessageStore) => {
     ],
     { via: "history" },
   )
-  await store.keepDownloads(account, "1", "1", [{ kind: "file", name: "Мой ОТЧЁТ.pdf", path: "/Saved/ОТЧЁТ.pdf" }])
+  await store.attachments.keepDownloads(account, "1", "1", [
+    { kind: "file", name: "Мой ОТЧЁТ.pdf", path: "/Saved/ОТЧЁТ.pdf" },
+  ])
   const project = await store.knowledge.addProject({ name: "Research Example", key: "RES", scope: "work" })
   const work = await store.tasks.create({ project: project.ref, title: "Кофе Café", type: "chore" }, "owner")
   await store.tasks.edit(work.ref, { title: "Новый КОФЕ", status: "done", reason: "Сделано" }, "owner")
@@ -84,7 +86,10 @@ const written = async (store: MessageStore) => {
   }
   await store.tasks.insert(task)
   await store.tasks.update({ ...task, state: "dismissed", reason: "НЕ НУЖНО", closedAt: new Date(), closedBy: "owner" })
-  const accountId = await store.saveAccount({ provider: "example", account: "AliceExample" }, { name: "Alice" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice" },
+  )
   const meeting = sampleMeeting()
   meeting.meeting.accountId = accountId
   meeting.meeting.title = "Планёрка ÉQUIPE"

@@ -77,7 +77,7 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
     domains: async (query, window) => {
       const asked = `kind:url NOT status:dismissed${query.trim() ? ` AND (${query})` : ""}`
       const ast = validateQuery(parseLucene(asked, { ...MENTION_QUERY, defaultField: "value" }), MENTION_QUERY)
-      const links = (await (await accountStore(deps)).mentions(ast, { offset: 0 })).items
+      const links = (await (await accountStore(deps)).mentions.mentions(ast, { offset: 0 })).items
       const sites = new Map<string, MentionSite & { chatIds: Set<string> }>()
       for (const { domain, chatId, sentAt } of links) {
         if (!domain) continue
@@ -106,19 +106,19 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
         ? validateQuery(parseLucene(query, { ...MENTION_QUERY, defaultField: "value" }), MENTION_QUERY)
         : undefined
       const { store, mention } = await located()
-      const page = await store.mentions(ast, window)
-      const state = await (await deps.store()).mentionsState()
+      const page = await store.mentions.mentions(ast, window)
+      const state = await (await deps.store()).mentions.mentionsState()
       return { items: page.items.map(mention), hasMore: page.hasMore, state }
     },
     newCount: async (foundAfter) => {
       const found = parseLucene("status:found", { ...MENTION_QUERY, defaultField: "value" })
       const window = { offset: 0, limit: REVIEW_COUNT, ...(foundAfter === undefined ? {} : { foundAfter }) }
-      const page = await (await accountStore(deps)).mentions(found, window)
+      const page = await (await accountStore(deps)).mentions.mentions(found, window)
       return { count: page.items.length, more: page.hasMore }
     },
     show: async (id) => {
       const { store, mention } = await located()
-      const found = await store.mention(id)
+      const found = await store.mentions.mention(id)
       if (!found) throw new CliError("not_found", `no mention ${id} in this account`)
       const { before, after, sameValue, candidates, ...rest } = found
       return { ...mention(rest), before, after, sameValue, candidates }
@@ -134,10 +134,12 @@ export const mentionsService = (deps: ServiceDeps): MentionsService => {
           )
         owner = `${reference.type}:${reference.id}`
       }
-      return (await accountStore(deps)).confirmMention(id, owner, { by, inChat })
+      return (await accountStore(deps)).mentions.confirmMention(id, owner, { by, inChat })
     },
-    reject: async (id, by, inChat = false) => (await accountStore(deps)).rejectMention(id, { by, inChat }),
+    reject: async (id, by, inChat = false) => (await accountStore(deps)).mentions.rejectMention(id, { by, inChat }),
     rebuild: async (options = {}) =>
-      (await crossAccount(deps, "mentions are derived from every account's stored text")).rebuildMentions(options),
+      (await crossAccount(deps, "mentions are derived from every account's stored text")).mentions.rebuildMentions(
+        options,
+      ),
   }
 }

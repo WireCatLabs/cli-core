@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../driver.js"
-import type { AccountKey, StoredAccount } from "../store.js"
+import type { AccountKey, StoredAccount } from "../types.js"
 import { and, asc, eq, inArray, sql } from "./drizzle/core.js"
 import { pointerPairs } from "./entity-types.js"
 import type { StoreContext } from "./open.js"

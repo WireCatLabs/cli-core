@@ -12,11 +12,11 @@ const opened: MessageStore[] = []
 const tracking = async (ids: string[]) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "serve-members-")), "m.db") })
   opened.push(store)
-  await store.saveChats(
+  await store.chats.saveChats(
     account,
     ids.map((id) => ({ id, title: null, kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 1 })),
   )
-  for (const id of ids) await store.trackMembers(account, id, true)
+  for (const id of ids) await store.roster.trackMembers(account, id, true)
   return store
 }
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -68,7 +68,7 @@ describe("serve's daily member fetch", () => {
   })
   it("fetches every tracked chat in turn, skips one fetched today, and goes on past a failure", async () => {
     const store = await tracking(["7", "8", "9"])
-    await store.saveRoster(account, "8", { members: [], complete: true, participants: 0 })
+    await store.roster.saveRoster(account, "8", { members: [], complete: true, participants: 0 })
     const fetched: string[] = []
     const warned: string[] = []
     const fetches = memberFetches({

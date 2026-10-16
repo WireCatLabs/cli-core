@@ -15,7 +15,10 @@ it("reports creation, correction and historical replay from the same atomic appe
   const path = join(mkdtempSync(join(tmpdir(), "meeting-test-append-receipt-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path } })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "AliceExample" }, { name: "Alice Example" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice Example" },
+  )
   const original = sampleMeeting().transcripts[0]
   const transcript = {
     ...original,
@@ -62,7 +65,10 @@ it("returns standard typed receipt errors without changing legacy append error i
   const path = join(mkdtempSync(join(tmpdir(), "meeting-test-append-errors-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path } })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "AliceExample" }, { name: "Alice Example" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice Example" },
+  )
   const original = sampleMeeting().transcripts[0]
   const transcripts = [
     {

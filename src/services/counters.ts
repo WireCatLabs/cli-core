@@ -74,7 +74,7 @@ export const countersService = (deps: ServiceDeps) => {
         const target = parseLocator(locator)
         if (target.provider !== account.provider || target.account !== account.account)
           throw new CliError("validation_error", "counter selection is outside the active account")
-        const counters = await store.counterStates(account, target.chat, target.message, { now, maxAge })
+        const counters = await store.counters.counterStates(account, target.chat, target.message, { now, maxAge })
         if (!counters?.length)
           throw new CliError("validation_error", "counter selection changed — obtain a new selection")
         items.push({
@@ -87,7 +87,7 @@ export const countersService = (deps: ServiceDeps) => {
       }
     } else {
       const prepared = await prepareLucene(store, account, { ...query, limit }, deps.messenger)
-      const found = await store.counterTargets(prepared.execution, { now, maxAge })
+      const found = await store.counters.counterTargets(prepared.execution, { now, maxAge })
       items = found.items
       hasMore = found.hasMore
     }
@@ -204,8 +204,13 @@ export const countersService = (deps: ServiceDeps) => {
                   counterObservationTime(response[field], Date.now())
                   observations[field] = response[field]
                 }
-              await found.store.updateCounterObservations(found.account, target.chatId, target.messageId, observations)
-              const states = await found.store.counterStates(found.account, target.chatId, target.messageId, {
+              await found.store.counters.updateCounterObservations(
+                found.account,
+                target.chatId,
+                target.messageId,
+                observations,
+              )
+              const states = await found.store.counters.counterStates(found.account, target.chatId, target.messageId, {
                 now: Date.now(),
                 maxAge: found.maxAge,
               })

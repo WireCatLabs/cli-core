@@ -14,7 +14,7 @@ afterEach(async () => {
 const fixture = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "zm-test-semantic-")), "store.db") })
   stores.push(store)
-  const accountId = await store.saveAccount(
+  const accountId = await store.accounts.saveAccount(
     { provider: "example", account: "alice-example" },
     { name: "Alice Example" },
   )

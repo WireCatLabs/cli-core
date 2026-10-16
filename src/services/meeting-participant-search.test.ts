@@ -18,8 +18,11 @@ const fixture = async (provider = "example") => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-test-people-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path }, now: () => 3000 })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider, account: "example" }, { name: "Alice Example" })
-  const foreign = await store.saveAccount({ provider: "second-example", account: "foreign" }, { name: "Bob Sample" })
+  const accountId = await store.accounts.saveAccount({ provider, account: "example" }, { name: "Alice Example" })
+  const foreign = await store.accounts.saveAccount(
+    { provider: "second-example", account: "foreign" },
+    { name: "Bob Sample" },
+  )
   let sequence = 0
   const add = async (name: string | null, identity = `participant-${sequence}`, account = accountId) => {
     const input = sampleMeeting()

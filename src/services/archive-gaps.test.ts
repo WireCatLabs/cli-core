@@ -27,9 +27,9 @@ const message = (id: number): Message => ({
 const fixture = async (byTime = false, ties = false) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "gap-repair-")), "fixture.db") })
   const key = (id: number) => (byTime ? Date.parse(message(id).timestamp) : id)
-  await store.saveMessages(account, "7", [message(1), message(3), message(7), message(9)], { via: "history" })
-  await store.markRange(account, "7", key(1), key(3))
-  await store.markRange(account, "7", key(7), key(9))
+  await store.messages.saveMessages(account, "7", [message(1), message(3), message(7), message(9)], { via: "history" })
+  await store.sync.markRange(account, "7", key(1), key(3))
+  await store.sync.markRange(account, "7", key(7), key(9))
   const messenger = {
     provider: "test",
     app: { command: "chat" },
@@ -54,7 +54,7 @@ const fixture = async (byTime = false, ties = false) => {
           )
           const older = all.filter((one) => (byTime ? Date.parse(one.timestamp) <= bound : Number(one.id) < bound))
           const items = older.slice(-limit)
-          await store.saveMessages(account, "7", items, { via: "history" })
+          await store.messages.saveMessages(account, "7", items, { via: "history" })
           return { items, hasMore: older.length > items.length }
         },
       }) as unknown as MessengerAdapter,
@@ -76,9 +76,9 @@ describe("coverage gap repair", () => {
       expect(planned.unknown).toEqual({ older: true, newer: true })
       expect(planned).toHaveProperty("fingerprint", expect.any(String))
       expect(connect).not.toHaveBeenCalled()
-      await store.markRange(account, "7", 1, 9)
+      await store.sync.markRange(account, "7", 1, 9)
       expect((await gapsService(deps).plan("7")).gaps).toEqual([])
-      expect(await store.countMessages(account, "7")).toBe(4)
+      expect(await store.messages.countMessages(account, "7")).toBe(4)
     } finally {
       await store.close()
     }
@@ -95,7 +95,7 @@ describe("coverage gap repair", () => {
         requests: 1,
         after: { gaps: [], unknown: { older: true, newer: true } },
       })
-      expect(await store.countMessages(account, "7")).toBe(7)
+      expect(await store.messages.countMessages(account, "7")).toBe(7)
     } finally {
       await store.close()
     }
@@ -121,7 +121,7 @@ describe("coverage gap repair", () => {
         complete: false,
         stopped: "partial_or_inaccessible",
       })
-      expect(await store.countMessages(account, "7")).toBe(5)
+      expect(await store.messages.countMessages(account, "7")).toBe(5)
     } finally {
       await store.close()
     }
@@ -228,7 +228,7 @@ describe("coverage gap repair", () => {
         catchUp: { maxMessages: 1, maxChunks: 1, timeMs: 1000 },
       })
       expect(result).toMatchObject({ complete: true, prepared: { complete: false, reason: "message_bound" } })
-      expect(await store.countMessages(account, "7")).toBe(7)
+      expect(await store.messages.countMessages(account, "7")).toBe(7)
       const checked = vi.fn(() => {
         throw new Error("preparation denied")
       })
@@ -243,9 +243,9 @@ describe("coverage gap repair", () => {
   it("keeps account leases isolated and refuses invalid budgets", async () => {
     const { store, deps, connect } = await fixture()
     try {
-      await store.claim(account, "7", "gaps", "other", 60_000)
+      await store.sync.claim(account, "7", "gaps", "other", 60_000)
       await expect(gapsService(deps).repair("7")).rejects.toThrow("another gap repair")
-      await store.release(account, "7", "gaps", "other")
+      await store.sync.release(account, "7", "gaps", "other")
       await expect(gapsService(deps).repair("7", { maxGaps: 0 })).rejects.toMatchObject({ code: "validation_error" })
       expect(connect).not.toHaveBeenCalled()
     } finally {

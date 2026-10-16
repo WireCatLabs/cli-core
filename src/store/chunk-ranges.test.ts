@@ -43,7 +43,7 @@ let path: string
 beforeEach(async () => {
   path = join(mkdtempSync(join(tmpdir(), "chunk-ranges-")), "m.db")
   store = await openStore({ path })
-  await store.saveMessages(notes, "Projects", [note("long.md", longText), note("short.md", "A short note.")], {
+  await store.messages.saveMessages(notes, "Projects", [note("long.md", longText), note("short.md", "A short note.")], {
     via: "test",
   })
   await conversationsService(storeOnlyDeps(store, notes, { app })).build("Projects")
@@ -55,7 +55,7 @@ afterEach(async () => {
 
 describe("a message longer than a chunk", () => {
   it("is stored as overlapping pieces whose text the store reads back exactly", async () => {
-    const toEmbed = await store.chunksToEmbed(notes, "Projects", MODEL, { limit: 100 })
+    const toEmbed = await store.vectors.chunksToEmbed(notes, "Projects", MODEL, { limit: 100 })
     const pieces = toEmbed.filter(({ lines }) => lines[0]?.id === "long.md")
 
     expect(pieces.length).toBeGreaterThanOrEqual(Math.ceil(longText.length / CHUNK_CHARS))
@@ -68,33 +68,33 @@ describe("a message longer than a chunk", () => {
   })
 
   it("is found by any of its pieces, and stays current", async () => {
-    const toEmbed = await store.chunksToEmbed(notes, "Projects", MODEL, { limit: 100 })
-    await store.saveVectors(
+    const toEmbed = await store.vectors.chunksToEmbed(notes, "Projects", MODEL, { limit: 100 })
+    await store.vectors.saveVectors(
       MODEL,
       4,
       toEmbed.map(({ hash }, index) => ({ hash, vector: unit(index) })),
     )
 
-    const hits = await store.nearestConversations(notes, { model: MODEL, limit: 5, query: unit(3) })
+    const hits = await store.vectors.nearestConversations(notes, { model: MODEL, limit: 5, query: unit(3) })
 
     expect(hits[0]).toMatchObject({ stale: false, chunk: { firstMessageId: "long.md", lastMessageId: "long.md" } })
-    expect(await store.vectorStatus(notes, "Projects", MODEL)).toEqual({
+    expect(await store.vectors.vectorStatus(notes, "Projects", MODEL)).toEqual({
       chunks: toEmbed.length,
       embedded: toEmbed.length,
     })
   })
 
   it("loses every piece's vector when the message is deleted", async () => {
-    const toEmbed = await store.chunksToEmbed(notes, "Projects", MODEL, { limit: 100 })
-    await store.saveVectors(
+    const toEmbed = await store.vectors.chunksToEmbed(notes, "Projects", MODEL, { limit: 100 })
+    await store.vectors.saveVectors(
       MODEL,
       4,
       toEmbed.map(({ hash }, index) => ({ hash, vector: unit(index) })),
     )
 
-    await store.markDeleted(notes, ["long.md"], { chatId: "Projects" })
+    await store.messages.markDeleted(notes, ["long.md"], { chatId: "Projects" })
 
-    const hits = await store.nearestConversations(notes, { model: MODEL, limit: 5, query: unit(3) })
+    const hits = await store.vectors.nearestConversations(notes, { model: MODEL, limit: 5, query: unit(3) })
     expect(hits.every(({ chunk }) => chunk.firstMessageId !== "long.md")).toBe(true)
     const left = new DatabaseSync(path, { readOnly: true })
     const pieces = toEmbed.filter(({ lines }) => lines[0]?.id === "long.md").map(({ hash }) => hash)

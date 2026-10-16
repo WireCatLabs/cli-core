@@ -42,7 +42,7 @@ const setup = async ({
   const account = { provider: "chat", account: "500" }
   rememberAccount(app, "default", account.account, env)
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     {
       id: "7",
       title: "Synthetic club",
@@ -52,7 +52,7 @@ const setup = async ({
       lastMessageAt: "2026-09-03T00:00:00.000Z",
     },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     ["01", "03"].map((day, index) => ({
@@ -72,8 +72,8 @@ const setup = async ({
     { via: "test" },
   )
   if (complete) {
-    await store.markRange(account, "7", 1, 2)
-    await store.setSyncState(account, "history_start:7", "1")
+    await store.sync.markRange(account, "7", 1, 2)
+    await store.sync.setSyncState(account, "history_start:7", "1")
   }
   await store.close()
   const connect = vi.fn(async () => {

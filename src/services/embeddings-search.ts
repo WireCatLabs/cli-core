@@ -57,7 +57,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       },
       deps.messenger,
     )
-    const { items } = await store.matchQuery({
+    const { items } = await store.queries.matchQuery({
       ...lexical.execution,
       ...(prepared.selectedChat ? { chat: prepared.selectedChat } : {}),
       ...(conversations === undefined ? {} : { conversationIds: conversations }),
@@ -70,7 +70,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         const at = parseLocator(hit.locator)
         return at.provider === account.provider && at.account === account.account ? [{ hit, index }] : []
       })
-      const found = await store.conversationsOfMessages(
+      const found = await store.conversations.conversationsOfMessages(
         account,
         refs.map(({ hit }) => ({ chatId: hit.chatId, messageId: hit.id })),
       )
@@ -91,7 +91,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     // Mail in its own tables has no conversations: each email answers as its thread, ranked with the messages.
     const mailAccounts = prepared.scopeAccounts.filter(({ provider }) => provider === MAIL)
     if (mailAccounts.length && conversations === undefined) {
-      const mail = await store
+      const mail = await store.queries
         .matchQuery({
           ...lexical.execution,
           accounts: mailAccounts,
@@ -108,7 +108,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           return at.account === account.account && (since === undefined || hit.timestamp >= since)
         })
         if (!found.length) continue
-        const { id } = await store.storedAccount(account)
+        const { id } = await store.accounts.storedAccount(account)
         const places = new Map(
           (
             await store.mail.inThreads(
@@ -159,8 +159,8 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       const account = await deps.account()
       const target = embeddingTarget(deps, choice)
       const stop = Date.now() + 200
-      await store.fillSearchIndex({ until: () => Date.now() >= stop })
-      await store.fillStems({ until: () => Date.now() >= stop })
+      await store.searchIndex.fillSearchIndex({ until: () => Date.now() >= stop })
+      await store.searchIndex.fillStems({ until: () => Date.now() >= stop })
       const prepared = await prepareLucene(
         store,
         account,
@@ -173,7 +173,8 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         },
         deps.messenger,
       )
-      const eligibility = filter === undefined ? undefined : await store.conversationEligibility(prepared.execution)
+      const eligibility =
+        filter === undefined ? undefined : await store.queries.conversationEligibility(prepared.execution)
       const selected = prepared.selectedChat
       const scopeOf = (one: AccountKey) =>
         selected
@@ -190,7 +191,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           for (const one of prepared.scopeAccounts) {
             const scope = scopeOf(one)
             if (scope === null) continue
-            const hits = await store.nearestConversations(one, {
+            const hits = await store.vectors.nearestConversations(one, {
               ...scope,
               ...(since === undefined ? {} : { since }),
               model: target.key,
@@ -200,7 +201,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
             })
             for (const hit of hits) sources.set(hit.summary.id, one)
             meaning.push(...hits)
-            const images = await store.nearestImages(one, {
+            const images = await store.vectors.nearestImages(one, {
               ...scope,
               ...(since === undefined ? {} : { since }),
               model: target.key,
@@ -226,9 +227,11 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           .map(({ chat }) => chat)
         const rows =
           eligibleChats === undefined
-            ? await store.readiness(one, { ...scope, model: target.key })
+            ? await store.vectors.readiness(one, { ...scope, model: target.key })
             : (
-                await Promise.all(eligibleChats.map((chatId) => store.readiness(one, { chatId, model: target.key })))
+                await Promise.all(
+                  eligibleChats.map((chatId) => store.vectors.readiness(one, { chatId, model: target.key })),
+                )
               ).flat()
         const readiness = searchReadiness(
           rows.map(shaped),
@@ -236,7 +239,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           words.outside.get(JSON.stringify(one))?.chats ?? new Set(),
         )
         scoped.push({ source: one, readiness })
-        const other = await store.embeddedOnlyElsewhere(one, { ...scope, model: target.key })
+        const other = await store.vectors.embeddedOnlyElsewhere(one, { ...scope, model: target.key })
         elsewhere.push(
           ...other
             .filter((id) => eligibleChats === undefined || eligibleChats.includes(id))
@@ -287,12 +290,12 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       const account = await deps.account()
       const target = embeddingTarget(deps, choice)
       const chatId = await storedChatId(deps.messenger, chat, store, account)
-      const [source] = await store.conversationsOfMessages(account, [{ chatId, messageId: message }])
+      const [source] = await store.conversations.conversationsOfMessages(account, [{ chatId, messageId: message }])
       if (!source) {
-        if (!(await store.conversationState(account, chatId))?.builtAt) throw notBuiltError(deps, chatId)
+        if (!(await store.conversations.conversationState(account, chatId))?.builtAt) throw notBuiltError(deps, chatId)
         throw new CliError("not_found", `message ${message} is in no conversation of chat ${chatId}`)
       }
-      const { vectors } = await store.conversationVectors(account, source.id, target.key)
+      const { vectors } = await store.vectors.conversationVectors(account, source.id, target.key)
       if (vectors.length === 0) {
         const [own] = await readinessOf(deps, chatId, target.key)
         const step = own && isStale(own) ? "build" : "embed"
@@ -302,7 +305,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
             `\`${command} conversations ${step} --chat ${chatId}\``,
         )
       }
-      const hits = await store.nearestConversations(account, {
+      const hits = await store.vectors.nearestConversations(account, {
         model: target.key,
         limit: Math.max(limit, CANDIDATES),
         query: meanOf(vectors),

@@ -143,8 +143,8 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
         execution,
         timezone: selection.timezone,
         scopeAccounts: execution.accounts,
-        wordsReady: (await store.searchIndexState())?.ready === true,
-        stemsReady: (await store.stemsState())?.ready === true,
+        wordsReady: (await store.searchIndex.searchIndexState())?.ready === true,
+        stemsReady: (await store.searchIndex.stemsState())?.ready === true,
         ...(selection.contextChat ? { selectedChat: selection.contextChat } : {}),
       }
     } else prepared = await prepareLucene(store, account, request, deps.messenger)
@@ -168,7 +168,7 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
     const contextChat = prepared.selectedChat
     let expandedDiscussionChats: string[] = []
     if (options.messageKind === "comments" && contextChat) {
-      expandedDiscussionChats = await store.rankingDiscussionChats(contextChat.account, contextChat.chatId)
+      expandedDiscussionChats = await store.chats.rankingDiscussionChats(contextChat.account, contextChat.chatId)
       if (expandedDiscussionChats.length) {
         const expand = (node: ResolvedNode): ResolvedNode => {
           if (node.kind === "boolean")
@@ -222,7 +222,7 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
       }
     }
     const found = prepared.scopeAccounts.length
-      ? await store.rankQuery(prepared.execution, {
+      ? await store.queries.rankQuery(prepared.execution, {
           options,
           timezone: prepared.timezone,
           ...(contextChat ? { contextChat } : {}),
@@ -231,7 +231,7 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
     const coverage = await coverageOf(store, prepared)
     if (expandedDiscussionChats.length && contextChat) {
       coverage.completeness = (
-        await store.chatCompleteness(contextChat.account, [contextChat.chatId, ...expandedDiscussionChats])
+        await store.chats.chatCompleteness(contextChat.account, [contextChat.chatId, ...expandedDiscussionChats])
       ).map((chat) => ({ ...chat, ...contextChat.account }))
       coverage.coverage = {
         ...coverage.coverage,
@@ -305,7 +305,7 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
         target,
         ...selectionOptions,
       }
-      await store
+      await store.searches
         .recordSearch(searchRecordOf(target === "messages" ? "message-top" : "author-top", params), {
           ...(request.saved ? { saved: request.saved } : {}),
         })
@@ -365,7 +365,7 @@ export const rankingsService = (deps: ServiceDeps): RankingsService => ({
       ...(options.signal ? { signal: options.signal } : {}),
     }
     await stemExecution(execution, store)
-    return store.rankingEvidence(execution, {
+    return store.queries.rankingEvidence(execution, {
       options: rankingOptions(target, selection.options),
       timezone: selection.timezone,
       ...(selection.contextChat ? { contextChat: selection.contextChat } : {}),

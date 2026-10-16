@@ -209,8 +209,14 @@ rows past the newest 1,000 are dropped. A named row is a saved search, which `--
 run. `--no-record` (`ServiceDeps.history: false`) records nothing; a bot's search calls `searchStore` and is
 not recorded.
 
-**Where the queries live.** `src/store/store.ts` holds the `MessageStore` interface and `storeOver`, a
-facade that opens the transaction and delegates. The SQL is in `src/store/sqlite/`, one module per kind
+**Where the queries live.** `src/store/store.ts` holds the `MessageStore` interface and `storeOver`. The
+store is a set of areas, each a getter built on first use by its own file under `src/store/` —
+`accounts`, `chats`, `sync`, `messages`, `attachments`, `roster`, `people`, `conversations`, `vectors`,
+`counters`, `tags`, `mentions`, `searches`, `queries`, `searchIndex`, beside `mail`, `notes`, `tasks`,
+`meetings` and the rest: `store.chats.saveChats(key, …)`, `store.messages.find(…)`. An area that takes the
+account first keeps that part apart where it also has store-wide methods (`AccountMessages`, `AccountPeople` …), and `forAccount` binds it whole, so
+the bound store has the same areas without the account argument. The row-id helpers they share are
+`src/store/keys.ts`, the shared types `src/store/types.ts`. An area opens the transaction and delegates. The SQL is in `src/store/sqlite/`, one module per kind
 of record — `accounts`, `identities`, `chats`, `messages` (writes), `reads`, `search`, `ranges`,
 `sync` (state and fetch leases), `transcripts`, `conversations`, `tags`, `searches` — as plain functions taking a `StoreContext`: the
 connection as the `CacheDatabase` seam and as Drizzle (`orm`), and the clock. Queries are Drizzle's
@@ -461,7 +467,7 @@ through `src/store/store.ts`, which re-exports what they need.
 A service is a plain object made by a factory over `ServiceDeps` (`src/services/deps.ts`): the
 messenger, `offline`, and a connection, a store and an account that are each opened on first use —
 so a read from the store never connects. A service reads and writes through `accountStore(deps)`: the store
-with the running account bound (`store.forAccount(key)`), where no call takes an account and a row id of
+with the running account bound (`store.forAccount(key)`, then `.messages.messages(chatId, …)`), where no call takes an account and a row id of
 another account — an attachment, a mail thread, a meeting — is not found. A read across accounts on
 purpose takes the whole store from `crossAccount(deps, reason)`. `chats`, `conversations` and
 `attachments` work this way; the other services still pair `deps.store()` with `deps.account()`. `servicesFor(deps)` hands out `messages`, `chats`, `people`,

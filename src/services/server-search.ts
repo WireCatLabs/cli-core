@@ -219,7 +219,7 @@ export const searchServer = async (deps: ServiceDeps, request: SearchQuery): Pro
     const key = sourceKey(hit.chatId, hit.id)
     if (sources.has(key)) continue
     report.returned += 1
-    const held = await store.message(account, hit.id, { chatId: hit.chatId })
+    const held = await store.messages.message(account, hit.id, { chatId: hit.chatId })
     sources.set(key, held ? "both" : "server")
     if (!held) report.new += 1
     byChat.set(hit.chatId, [...(byChat.get(hit.chatId) ?? []), hit])
@@ -227,10 +227,10 @@ export const searchServer = async (deps: ServiceDeps, request: SearchQuery): Pro
   // A hit's chat carries no unread count or last activity, so it only fills in a chat the store lacks.
   const unknown: Chat[] = []
   for (const [chatId, chat] of chats)
-    if (!(await store.messages(account, chatId, { limit: 1 })).items.length) unknown.push(chat)
-  if (unknown.length) await store.saveChats(account, unknown)
+    if (!(await store.messages.messages(account, chatId, { limit: 1 })).items.length) unknown.push(chat)
+  if (unknown.length) await store.chats.saveChats(account, unknown)
   for (const [chatId, hits] of byChat)
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       chatId,
       hits.map(({ chatTitle, ...message }) => message),

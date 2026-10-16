@@ -69,7 +69,7 @@ const opened: MessageStore[] = []
 const heldStore = async ({ whole }: { whole: boolean }) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "stats-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     {
       id: "7",
       title: "Book club",
@@ -79,10 +79,10 @@ const heldStore = async ({ whole }: { whole: boolean }) => {
       participantsCount: 5,
     },
   ])
-  await store.saveMessages(account, "7", history, { via: "test" })
+  await store.messages.saveMessages(account, "7", history, { via: "test" })
   if (whole) {
-    await store.markRange(account, "7", 1, 6)
-    await store.setSyncState(account, historyStartKey("7"), "1")
+    await store.sync.markRange(account, "7", 1, 6)
+    await store.sync.setSyncState(account, historyStartKey("7"), "1")
   }
   return store
 }

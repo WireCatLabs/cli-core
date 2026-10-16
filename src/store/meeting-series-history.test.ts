@@ -17,8 +17,8 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-series-history-")), "fixture.db")
   const store = await openStore({ path })
   handles.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "invented" }, { name: "Invented" })
-  const otherId = await store.saveAccount({ provider: "sample", account: "invented" }, { name: "Invented" })
+  const accountId = await store.accounts.saveAccount({ provider: "example", account: "invented" }, { name: "Invented" })
+  const otherId = await store.accounts.saveAccount({ provider: "sample", account: "invented" }, { name: "Invented" })
   const save = async (externalId: string, startedAt: number | null, overrides = {}) => {
     const input = sampleMeeting()
     return store.meetings.saveMeeting({

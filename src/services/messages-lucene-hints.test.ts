@@ -32,7 +32,7 @@ const open = async (texts: Record<string, string[]>) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "lucene-hints-")), "messages.db") })
   live.push(store)
   const chats = Object.keys(texts)
-  await store.saveChats(
+  await store.chats.saveChats(
     account,
     chats.map((id) => ({
       id,
@@ -45,7 +45,7 @@ const open = async (texts: Record<string, string[]>) => {
   )
   let id = 0
   for (const chat of chats)
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       chat,
       (texts[chat] ?? []).map((text) => message(++id, chat, text)),
@@ -117,11 +117,14 @@ describe("strict search hints", () => {
   it("says how far the word index is and which command finishes it", async () => {
     const store = await open({ "1": ["alpha"] })
     const app = { command: "tg" } as AppIdentity
-    const stuck = (state: Awaited<ReturnType<MessageStore["searchIndexState"]>>): MessageStore =>
-      Object.assign(Object.create(store) as MessageStore, {
+    const stuck = (state: Awaited<ReturnType<MessageStore["searchIndex"]["searchIndexState"]>>): MessageStore => ({
+      ...store,
+      searchIndex: {
+        ...store.searchIndex,
         fillSearchIndex: async () => ({ normalized: 0, indexed: 0, terms: 0 }),
         searchIndexState: async () => state,
-      })
+      },
+    })
     const partial = {
       watermark: 200,
       filledThrough: 50,

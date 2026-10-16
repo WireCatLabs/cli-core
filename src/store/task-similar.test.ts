@@ -31,7 +31,7 @@ const setup = async (messages: Message[]) => {
     path: join(mkdtempSync(join(tmpdir(), "task-similar-")), "wirecat.db"),
     now: () => clock.at,
   })
-  await store.saveMessages(account, "7", messages, { via: "test" })
+  await store.messages.saveMessages(account, "7", messages, { via: "test" })
   const service = createTaskService({ store: store.tasks })
   const add = async (message: string, plan: { title?: string; description?: string; category?: string } = {}) => {
     const input: NewTask = {

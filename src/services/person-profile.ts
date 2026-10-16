@@ -19,7 +19,7 @@ export const personProfile = async (deps: ServiceDeps, person: string): Promise<
   return {
     ...facts,
     chats: await activityIn(held.store, held.account, facts),
-    aliases: pastOf(facts, await held.store.personNames(held.account, facts.id), held.account.provider),
+    aliases: pastOf(facts, await held.store.people.personNames(held.account, facts.id), held.account.provider),
   }
 }
 
@@ -39,8 +39,8 @@ const storedFacts = async (
   { store, account }: { store: MessageStore; account: AccountKey },
   person: string,
 ): Promise<ProfileFacts> => {
-  const found = pickPerson(person, await store.people(account.provider, { account: account.account }))
-  const chats = await store.chatsWith(account, found.id)
+  const found = pickPerson(person, await store.people.people(account.provider, { account: account.account }))
+  const chats = await store.chats.chatsWith(account, found.id)
   return {
     id: found.id,
     name: found.name,
@@ -57,7 +57,7 @@ const activityIn = async (
   account: AccountKey,
   facts: ProfileFacts,
 ): Promise<SharedChatActivity[]> => {
-  const stats = new Map((await store.senderStats(account, facts.id)).map((one) => [one.chatId, one]))
+  const stats = new Map((await store.messages.senderStats(account, facts.id)).map((one) => [one.chatId, one]))
   const listed = new Set(facts.chats.map(({ id }) => id))
   const chats = [
     ...facts.chats,
@@ -67,7 +67,7 @@ const activityIn = async (
   ]
   const whole = new Set(
     (
-      await store.chatCompleteness(
+      await store.chats.chatCompleteness(
         account,
         chats.map(({ id }) => id),
       )

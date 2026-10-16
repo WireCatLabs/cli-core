@@ -69,9 +69,9 @@ export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMess
             fetchInto({
               history: async (window) => {
                 const read = await page(ref, window)
-                await store.saveMessages(account, ref, read.items, { via: "history" })
+                await store.messages.saveMessages(account, ref, read.items, { via: "history" })
                 const senders = adapter.senders?.() ?? []
-                if (senders.length > 0) await store.savePeople(account, senders)
+                if (senders.length > 0) await store.people.savePeople(account, senders)
                 return read
               },
               store,

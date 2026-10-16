@@ -42,29 +42,31 @@ const opened = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "words-")), "messages.db")
   const store = await openStore({ path })
   stores.push(store)
-  await store.saveChats(ME, [chat("1"), chat("2", "Hidden")])
+  await store.chats.saveChats(ME, [chat("1"), chat("2", "Hidden")])
   return { store, path }
 }
 
 describe("the typo vocabulary", () => {
   it("**knows a whole word or the beginning of one**", async () => {
     const { store } = await opened()
-    await store.saveMessages(ME, "1", [message("1", "1", "квартиру в Валенсии")], { via: "history" })
+    await store.messages.saveMessages(ME, "1", [message("1", "1", "квартиру в Валенсии")], { via: "history" })
 
-    expect(await store.knownTerms(["квартир", "квартиру", "Валенсии", "valenca"])).toEqual(
+    expect(await store.searchIndex.knownTerms(["квартир", "квартиру", "Валенсии", "valenca"])).toEqual(
       new Set(["квартир", "квартиру", "Валенсии"]),
     )
   })
 
   it("**offers words sharing trigrams that the index still has** — not one whose message was deleted", async () => {
     const { store } = await opened()
-    await store.saveMessages(ME, "1", [message("1", "1", "valencia"), message("1", "2", "valence")], {
+    await store.messages.saveMessages(ME, "1", [message("1", "1", "valencia"), message("1", "2", "valence")], {
       via: "history",
     })
-    await store.fillSearchIndex()
-    await store.markDeleted(ME, ["2"], { chatId: "1" })
+    await store.searchIndex.fillSearchIndex()
+    await store.messages.markDeleted(ME, ["2"], { chatId: "1" })
     const pieces = ["  v", " va", "val", "ale", "len", "enc", "nca", "ca "]
 
-    expect(await store.termCandidates(pieces, { shortest: 5, longest: 9 })).toEqual([{ term: "valencia", docs: 1 }])
+    expect(await store.searchIndex.termCandidates(pieces, { shortest: 5, longest: 9 })).toEqual([
+      { term: "valencia", docs: 1 },
+    ])
   })
 })

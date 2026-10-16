@@ -102,7 +102,7 @@ export const foldersService = (deps: ServiceDeps): FoldersService => {
       const { chatIds, excludedChatIds = [], pinnedChatIds = [], ...folder } = await folderOf(connection, typed)
       const held = await storeIfOpen(deps)
       const known = new Map<Id, FolderChat>()
-      for (const one of held ? (await held.store.chats(held.account, {})).items : [])
+      for (const one of held ? (await held.store.chats.chats(held.account, {})).items : [])
         known.set(one.id, { id: one.id, title: one.title, kind: one.kind })
       const named = async (ids: Id[]) => {
         const chats: FolderChat[] = []

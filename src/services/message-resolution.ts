@@ -25,7 +25,7 @@ export const readChatId = async (
     if (codeOf(error) === "not_found") throw new CliError("not_found", nothingStored(deps.messenger))
     throw error
   })
-  if ((await store.countMessages(account, chatId)) === 0) {
+  if ((await store.messages.countMessages(account, chatId)) === 0) {
     throw new CliError("not_found", nothingStored(deps.messenger), { chat: chatId })
   }
   return chatId
@@ -37,11 +37,11 @@ export const storedChatId = async (
   reference: string,
   store: MessageStore,
   account: AccountKey,
-): Promise<string> => chatIdAmong(messenger, reference, account, () => store.chats(account, {}))
+): Promise<string> => chatIdAmong(messenger, reference, account, () => store.chats.chats(account, {}))
 
 /** `storedChatId`, among the chats of the account the store is bound to. */
 export const chatIdIn = (messenger: Saved, reference: string, store: AccountStore): Promise<string> =>
-  chatIdAmong(messenger, reference, store.account, () => store.chats({}))
+  chatIdAmong(messenger, reference, store.account, () => store.chats.chats({}))
 
 const chatIdAmong = async (
   messenger: Saved,
@@ -100,7 +100,7 @@ export const chatAmong = async (
   const found = (
     await Promise.all(
       accounts.map(async (account) => {
-        const held: Chat[] = (await store.chats(account, {})).items
+        const held: Chat[] = (await store.chats.chats(account, {})).items
         const chatId = await storedChatId(messenger, reference, store, account).catch(missing)
         const chat = held.find((one) => one.id === chatId)
         return chat ? [{ account, chat }] : []
@@ -127,14 +127,14 @@ export const senderAmong = async (store: MessageStore, accounts: AccountKey[], r
   const [only] = accounts
   try {
     if (accounts.length === 1 && only) {
-      const person = pickPerson(reference, await store.people(only.provider, { account: only.account }))
+      const person = pickPerson(reference, await store.people.people(only.provider, { account: only.account }))
       return { provider: only.provider, id: person.id }
     }
     const found = (
       await Promise.all(
         providers.map(async (provider) => {
           const ids = accounts.filter((one) => one.provider === provider).map(({ account }) => account)
-          const person = await store
+          const person = await store.people
             .people(provider, { accounts: ids })
             .then((people) => pickPerson(reference, people))
             .catch(missing)

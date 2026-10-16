@@ -16,13 +16,13 @@ const fixture = async () => {
   opened.push(store)
   const own = { provider: "example", account: "alice-profile" }
   const foreign = { provider: "example", account: "bob-profile" }
-  const ownId = await store.saveAccount(own, { name: "Alice Example" })
-  const foreignId = await store.saveAccount(foreign, { name: "Bob Sample" })
-  await store.savePeople(own, [{ id: "alice-example", name: "Alice Example" }])
+  const ownId = await store.accounts.saveAccount(own, { name: "Alice Example" })
+  const foreignId = await store.accounts.saveAccount(foreign, { name: "Bob Sample" })
+  await store.people.savePeople(own, [{ id: "alice-example", name: "Alice Example" }])
   // Matching display names deliberately do not authorize the foreign identity.
-  await store.savePeople(foreign, [{ id: "foreign-alice-example", name: "Alice Example" }])
-  const ownPerson = await store.personOf({ provider: "example", id: "alice-example" })
-  const foreignPerson = await store.personOf({ provider: "example", id: "foreign-alice-example" })
+  await store.people.savePeople(foreign, [{ id: "foreign-alice-example", name: "Alice Example" }])
+  const ownPerson = await store.people.personOf({ provider: "example", id: "alice-example" })
+  const foreignPerson = await store.people.personOf({ provider: "example", id: "foreign-alice-example" })
   return {
     store,
     ownId,
@@ -35,10 +35,12 @@ const fixture = async () => {
 describe("person meeting account authorization", () => {
   it("denies a foreign-only person before global metadata lookup despite a matching name", async () => {
     const { store, ownId, foreignPerson } = await fixture()
-    const personByUid = vi.fn((uid) => store.personByUid(uid))
+    const personByUid = vi.fn((uid) => store.people.personByUid(uid))
     const port: PersonMeetingReadStore = {
-      personByUid,
-      personSeenInAccounts: (uid, accounts) => store.personSeenInAccounts(uid, accounts),
+      people: {
+        personByUid,
+        personSeenInAccounts: (uid, accounts) => store.people.personSeenInAccounts(uid, accounts),
+      },
       meetings: store.meetings,
       involvements: store.involvements,
     }
@@ -62,7 +64,7 @@ describe("person meeting account authorization", () => {
     const accounts = [ownId]
     const personSeenInAccounts = vi.fn(async (uid: string, selected: readonly number[]) => {
       accounts[0] = foreignId
-      return store.personSeenInAccounts(uid, selected)
+      return store.people.personSeenInAccounts(uid, selected)
     })
     const forPerson = vi.fn(() => [
       {
@@ -86,8 +88,7 @@ describe("person meeting account authorization", () => {
       store.meetings.meetingMetadata(input),
     )
     const port: PersonMeetingReadStore = {
-      personByUid: (uid) => store.personByUid(uid),
-      personSeenInAccounts,
+      people: { personByUid: (uid) => store.people.personByUid(uid), personSeenInAccounts },
       meetings: { ...store.meetings, meetingMetadata: meeting },
       involvements: { ...store.involvements, forPerson },
     }
@@ -99,9 +100,9 @@ describe("person meeting account authorization", () => {
 
   it("fails closed on missing scope capability and stops after authorization cancellation", async () => {
     const { store, ownId, ownPerson } = await fixture()
-    const personByUid = vi.fn((uid) => store.personByUid(uid))
+    const personByUid = vi.fn((uid) => store.people.personByUid(uid))
     const unavailable = {
-      personByUid,
+      people: { personByUid },
       meetings: store.meetings,
       involvements: store.involvements,
     } as unknown as PersonMeetingReadStore
@@ -111,9 +112,12 @@ describe("person meeting account authorization", () => {
     const controller = new AbortController()
     const port: PersonMeetingReadStore = {
       ...unavailable,
-      personSeenInAccounts: async () => {
-        controller.abort()
-        return true
+      people: {
+        personByUid,
+        personSeenInAccounts: async () => {
+          controller.abort()
+          return true
+        },
       },
     }
     await expect(
@@ -125,8 +129,10 @@ describe("person meeting account authorization", () => {
   it("rejects a mismatched metadata identity after valid presence authorization", async () => {
     const { store, ownId, ownPerson, foreignPerson } = await fixture()
     const port: PersonMeetingReadStore = {
-      personByUid: async () => foreignPerson,
-      personSeenInAccounts: (uid, accounts) => store.personSeenInAccounts(uid, accounts),
+      people: {
+        personByUid: async () => foreignPerson,
+        personSeenInAccounts: (uid, accounts) => store.people.personSeenInAccounts(uid, accounts),
+      },
       meetings: store.meetings,
       involvements: store.involvements,
     }

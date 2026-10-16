@@ -35,13 +35,13 @@ const opened = async (
 ) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "combined-test-")), "quality.db") })
   stores.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "101", title: "Decisions", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 20 },
     { id: "102", title: "Other", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 20 },
   ])
-  await store.saveMessages(account, "101", messages, { via: "synthetic" })
-  await store.fillSearchIndex({})
-  await store.fillStems({})
+  await store.messages.saveMessages(account, "101", messages, { via: "synthetic" })
+  await store.searchIndex.fillSearchIndex({})
+  await store.searchIndex.fillStems({})
   return store
 }
 const request = (text: string) => ({ text, limit: 10, timezone: "UTC" })
@@ -102,14 +102,14 @@ describe("internal combined search", () => {
       message("3", "Aurora rollout green light", { senderId: "701" }),
       message("4", "Aurora rollout green light", { timestamp: "2026-10-03T12:00:00.000Z" }),
     ])
-    await store.saveMessages(account, "102", [message("5", "Aurora rollout green light", { chatId: "102" })], {
+    await store.messages.saveMessages(account, "102", [message("5", "Aurora rollout green light", { chatId: "102" })], {
       via: "synthetic",
     })
     const other = { provider: "synthetic", account: "600" }
-    await store.saveChats(other, [
+    await store.chats.saveChats(other, [
       { id: "101", title: "Other account", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 10 },
     ])
-    await store.saveMessages(other, "101", [message("6", "Aurora rollout green light")], { via: "synthetic" })
+    await store.messages.saveMessages(other, "101", [message("6", "Aurora rollout green light")], { via: "synthetic" })
     const found = await searchCombined(
       store,
       account,
@@ -200,7 +200,7 @@ describe("internal combined search", () => {
       message("3", "Aurora rollout"),
       message("4", "Aurora rollout"),
     ])
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "102",
       [message("5", "Aurora rollout context long enough to rank behind", { chatId: "102" })],
@@ -247,20 +247,18 @@ describe("internal combined search", () => {
       { details: { reason: "query.aborted" } },
     )
     const during = new AbortController()
-    const match = store.matchQuery
+    const match = store.queries.matchQuery
     if (!match) throw new Error("test store must support Lucene")
-    const interrupted = {
-      ...store,
-      matchQuery: vi.fn(async (...args: Parameters<typeof match>) => {
-        const found = await match(...args)
-        during.abort()
-        return found
-      }),
-    }
+    const matchQuery = vi.fn(async (...args: Parameters<typeof match>) => {
+      const found = await match(...args)
+      during.abort()
+      return found
+    })
+    const interrupted = { ...store, queries: { ...store.queries, matchQuery } }
     await expect(
       searchCombined(interrupted, account, { ...request("aurora"), signal: during.signal }),
     ).rejects.toMatchObject({ details: { reason: "query.aborted" } })
-    expect(interrupted.matchQuery).toHaveBeenCalledTimes(1)
+    expect(matchQuery).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -296,17 +294,23 @@ it("bounds hydrated candidate bytes, reranking work and elapsed time", async () 
   if (!first) throw new Error("fixture needs a hit")
   const oversized = {
     ...store,
-    matchQuery: async () => ({
-      items: [{ ...first, score: 1, text: "a".repeat(QUERY_LIMITS.bodyBytes + 1) }],
-      hasMore: false,
-    }),
+    queries: {
+      ...store.queries,
+      matchQuery: async () => ({
+        items: [{ ...first, score: 1, text: "a".repeat(QUERY_LIMITS.bodyBytes + 1) }],
+        hasMore: false,
+      }),
+    },
   }
   await expect(searchCombined(oversized, account, request("aurora"))).rejects.toMatchObject({
     details: { reason: "query.too-large", budget: "body bytes" },
   })
   const expensive = {
     ...store,
-    matchQuery: async () => ({ items: [{ ...first, score: 1, text: "aurora ".repeat(100000) }], hasMore: false }),
+    queries: {
+      ...store.queries,
+      matchQuery: async () => ({ items: [{ ...first, score: 1, text: "aurora ".repeat(100000) }], hasMore: false }),
+    },
   }
   await expect(
     searchCombined(expensive, account, request(Array.from({ length: 110 }, () => "aurora").join(" "))),

@@ -80,9 +80,12 @@ type ContactAction = "contact-add" | "contact-remove" | "contact-block" | "conta
 export const peopleService = (deps: ServiceDeps): PeopleService => {
   const localCard = async (card: PersonCard, includeNotes = false): Promise<PersonCard> => {
     const held = await storeIfOpen(deps)
-    if (!held || !(await held.store.people(held.account.provider, { account: held.account.account })).get(card.id))
+    if (
+      !held ||
+      !(await held.store.people.people(held.account.provider, { account: held.account.account })).get(card.id)
+    )
       return card
-    const local = await held.store.privateContact(held.account, card.id)
+    const local = await held.store.people.privateContact(held.account, card.id)
     return {
       ...card,
       ...(local.alias === null ? {} : { alias: local.alias, displayName: local.alias }),
@@ -92,7 +95,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
   const referenceOf = async (reference: string) => {
     const held = await storeIfOpen(deps)
     if (!held) return reference
-    const lookup = await held.store.people(held.account.provider, { account: held.account.account })
+    const lookup = await held.store.people.people(held.account.provider, { account: held.account.account })
     const wanted = reference.trim().toLowerCase()
     return lookup.all().some((person) => person.alias?.toLowerCase().includes(wanted))
       ? pickPerson(reference, lookup).id
@@ -125,7 +128,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
         ? undefined
         : (await capability(await deps.connection(), "chats", "list chats")({ offset: 0 })).items
       const held = stored ? { store: await deps.store(), account: await deps.account() } : await storeIfOpen(deps)
-      if (held && (await held.store.countContacts(held.account)) > 0)
+      if (held && (await held.store.people.countContacts(held.account)) > 0)
         return storedContacts(held.store, held.account, options)
       for (const term of [options.name, options.notes])
         if (term)
@@ -137,7 +140,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
             { supported: [] },
           )
       return contactsIn(
-        chats ?? (await (await deps.store()).chats(await deps.account(), {})).items,
+        chats ?? (await (await deps.store()).chats.chats(await deps.account(), {})).items,
         options,
         deps.messenger.partnerOf,
       )
@@ -147,7 +150,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       if (fromStore(deps)) {
         const store = await deps.store()
         const account = await deps.account()
-        const found = pickPerson(person, await store.people(account.provider, { account: account.account }))
+        const found = pickPerson(person, await store.people.people(account.provider, { account: account.account }))
         return localCard({ ...found, chats: await sharedChats(store, account, found.id) }, notes)
       }
       const card = await capability(await deps.connection(), "contact", "show a person")(await referenceOf(person))
@@ -175,7 +178,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       }
       if (deps.offline) throw new CliError("validation_error", "--fetch asks the messenger; not with --offline")
       const connection = await deps.connection()
-      const sender = pickPerson(person, await store.people(account.provider, { account: account.account })).id
+      const sender = pickPerson(person, await store.people.people(account.provider, { account: account.account })).id
       const ids: Id[] = []
       for (const chat of chats) {
         const { id } = await connection.resolve(chat)
@@ -183,7 +186,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
         const page = connection.historyFrom
           ? await connection.historyFrom(id, sender, { limit: limit ?? CHAT_MESSAGES })
           : await capability(connection, "history", "read a chat's history")(id, { limit: 100 })
-        if (page.items.length > 0) await store.saveMessages(account, id, page.items, { via: "history" })
+        if (page.items.length > 0) await store.messages.saveMessages(account, id, page.items, { via: "history" })
       }
       return personMessages(store, account, person, {
         chats: ids,
@@ -199,12 +202,12 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       const two = await identityIn(store, account, other)
       if (one.provider === two.provider && one.id === two.id)
         throw new CliError("validation_error", "that is the same person twice")
-      return store.linkIdentities(one, two, { method, by: "owner" })
+      return store.people.linkIdentities(one, two, { method, by: "owner" })
     },
 
     unlink: async (person) => {
       const store = await deps.store()
-      return store.unlinkIdentity(await identityIn(store, await deps.account(), person), {
+      return store.people.unlinkIdentity(await identityIn(store, await deps.account(), person), {
         method: "manual",
         by: "owner",
       })
@@ -219,7 +222,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       const people = await capability(await deps.connection(), "addressBook", "list its contacts")()
       const store = await deps.store()
       const account = await deps.account()
-      const before = await store.people(account.provider, { account: account.account })
+      const before = await store.people.people(account.provider, { account: account.account })
       let added = 0
       let changed = 0
       for (const person of people) {
@@ -227,11 +230,11 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
         if (!known) added += 1
         else if (known.name !== person.name || known.username !== person.username) changed += 1
       }
-      await store.savePeople(account, people)
+      await store.people.savePeople(account, people)
       return {
         added,
         changed,
-        known: (await store.people(account.provider, { account: account.account })).all().length,
+        known: (await store.people.people(account.provider, { account: account.account })).all().length,
       }
     },
 
@@ -319,22 +322,22 @@ const storedContacts = async (
   { order, name, notes, limit, offset }: { order: "recent" | "name"; name?: Predicate; notes?: Predicate } & PageWindow,
 ): Promise<Page<Contact>> => {
   // Chats saved since the last refresh may have moved someone up; the order is worked out again here.
-  if (order === "recent") await store.refreshRecency(account)
+  if (order === "recent") await store.people.refreshRecency(account)
   const query = name?.value.replace(/^\*+|\*+$/g, "").trim() || undefined
   const filter = {
     ...(query === undefined ? {} : { query }),
     ...(notes ? { notes: notes.value.replace(/^\*+|\*+$/g, "") } : {}),
   }
-  return store.contacts(account, {
+  return store.people.contacts(account, {
     order,
     ...filter,
-    limit: limit ?? (await store.countContacts(account, filter)),
+    limit: limit ?? (await store.people.countContacts(account, filter)),
     offset,
   })
 }
 
 const sharedChats = async (store: MessageStore, account: AccountKey, personId: string) =>
-  (await store.chatsWith(account, personId)).map(({ id, title, kind, lastMessageAt }) => ({
+  (await store.chats.chatsWith(account, personId)).map(({ id, title, kind, lastMessageAt }) => ({
     id,
     title,
     kind,

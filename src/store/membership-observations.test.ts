@@ -20,7 +20,7 @@ const setup = async () => {
   let now = START
   const path = join(mkdtempSync(join(tmpdir(), "membership-observations-")), "store.db")
   const store = await openStore({ path, now: () => now })
-  await store.saveChats(OWNER, [
+  await store.chats.saveChats(OWNER, [
     { id: "7", title: "Synthetic group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 1 },
   ])
   return {
@@ -37,20 +37,30 @@ describe("membership observation history", () => {
   it("records every explicit batch, including partial absence, in daily counts", async () => {
     const { store, path, advance, observation } = await setup()
     try {
-      await store.saveRoster(OWNER, "7", { members: [member()], complete: true, participants: 1 })
+      await store.roster.saveRoster(OWNER, "7", { members: [member()], complete: true, participants: 1 })
       advance()
-      await store.saveRoster(OWNER, "7", {
+      await store.roster.saveRoster(OWNER, "7", {
         members: [member()],
         complete: false,
         participants: 1,
         observation: observation(),
       })
       advance()
-      await store.saveRoster(OWNER, "7", { members: [], complete: false, participants: 1, observation: observation() })
-      expect((await store.memberStays(OWNER, "7"))[0]).toMatchObject({ goneAt: null, joinedAt: null })
+      await store.roster.saveRoster(OWNER, "7", {
+        members: [],
+        complete: false,
+        participants: 1,
+        observation: observation(),
+      })
+      expect((await store.roster.memberStays(OWNER, "7"))[0]).toMatchObject({ goneAt: null, joinedAt: null })
       advance()
-      await store.saveRoster(OWNER, "7", { members: [], complete: true, participants: 0, observation: observation() })
-      expect((await store.memberStays(OWNER, "7"))[0]?.goneAt).toBe(new Date(START + 3 * DAY).toISOString())
+      await store.roster.saveRoster(OWNER, "7", {
+        members: [],
+        complete: true,
+        participants: 0,
+        observation: observation(),
+      })
+      expect((await store.roster.memberStays(OWNER, "7"))[0]?.goneAt).toBe(new Date(START + 3 * DAY).toISOString())
       const db = await openCache(path)
       try {
         expect(
@@ -71,7 +81,7 @@ describe("membership observation history", () => {
   it("splits a definite rejoin into separate stays and retains both stays", async () => {
     const { store, path, advance, observation } = await setup()
     try {
-      await store.saveRoster(OWNER, "7", {
+      await store.roster.saveRoster(OWNER, "7", {
         members: [member(new Date(START - DAY).toISOString())],
         complete: true,
         participants: 1,
@@ -79,13 +89,13 @@ describe("membership observation history", () => {
       })
       advance()
       const changedJoin = new Date(START + 1000).toISOString()
-      await store.saveRoster(OWNER, "7", {
+      await store.roster.saveRoster(OWNER, "7", {
         members: [member(changedJoin)],
         complete: true,
         participants: 1,
         observation: observation(),
       })
-      expect(await store.memberStays(OWNER, "7")).toMatchObject([
+      expect(await store.roster.memberStays(OWNER, "7")).toMatchObject([
         { goneAt: changedJoin },
         { joinedAt: changedJoin, goneAt: null },
       ])
@@ -103,7 +113,7 @@ describe("membership observation history", () => {
     const { store, path, advance, observation } = await setup()
     try {
       await expect(
-        store.saveRoster(OWNER, "7", {
+        store.roster.saveRoster(OWNER, "7", {
           members: [member(), member()],
           complete: true,
           participants: 1,
@@ -111,21 +121,21 @@ describe("membership observation history", () => {
         }),
       ).rejects.toThrow("duplicate")
       advance()
-      await store.saveRoster(OWNER, "7", {
+      await store.roster.saveRoster(OWNER, "7", {
         members: [member()],
         complete: true,
         participants: 1,
         observation: observation(),
       })
       await expect(
-        store.saveRoster(OWNER, "7", {
+        store.roster.saveRoster(OWNER, "7", {
           members: [],
           complete: true,
           participants: 0,
           observation: { observedAt: new Date(START).toISOString(), source: "remote_fetch" },
         }),
       ).rejects.toThrow("predates")
-      expect((await store.memberStays(OWNER, "7"))[0]?.goneAt).toBeNull()
+      expect((await store.roster.memberStays(OWNER, "7"))[0]?.goneAt).toBeNull()
       const db = await openCache(path)
       try {
         expect(db.prepare("SELECT count(*) AS n FROM member_counts").get()?.n).toBe(1)

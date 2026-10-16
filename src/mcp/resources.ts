@@ -50,7 +50,7 @@ export const registerResources = (
       list: async () => {
         assertRead?.("chats")
         const chats = recorded()
-          ? await withStore(async (store, account) => (await store.chats(account, { limit: LISTED })).items, {
+          ? await withStore(async (store, account) => (await store.chats.chats(account, { limit: LISTED })).items, {
               name: "mcp resources list",
             })
           : []

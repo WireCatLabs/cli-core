@@ -59,7 +59,7 @@ const orphanVectors = (db: CacheDatabase) =>
   )
 
 const mailOf = async (store: MessageStore, key: AccountKey, text: string) => {
-  const accountId = await store.saveAccount(key, { name: null })
+  const accountId = await store.accounts.saveAccount(key, { name: null })
   await store.mail.saveThread({
     accountId,
     externalId: "thread-1",
@@ -100,8 +100,8 @@ const mailOf = async (store: MessageStore, key: AccountKey, text: string) => {
       },
     ],
   })
-  await store.addTags(key, { type: "chat", chatId: "thread-1" }, ["planning"])
-  await store.addTags(key, { type: "message", chatId: "thread-1", messageId: `<${key.account}>` }, ["urgent"])
+  await store.tags.addTags(key, { type: "chat", chatId: "thread-1" }, ["planning"])
+  await store.tags.addTags(key, { type: "message", chatId: "thread-1", messageId: `<${key.account}>` }, ["urgent"])
   return accountId
 }
 
@@ -114,15 +114,15 @@ const seeded = async () => {
   const mailA = await mailOf(store, MAIL_A, "Roadmap for Alice")
   await mailOf(store, MAIL_B, "Roadmap for Bob")
   const pieces = await store.mail.chunksToEmbed(MODEL, { limit: 50 })
-  await store.saveVectors(
+  await store.vectors.saveVectors(
     MODEL,
     2,
     pieces.map(({ hash }, index) => ({ hash, vector: new Float32Array([index, 1]) })),
   )
-  await store.saveChats(TG, [
+  await store.chats.saveChats(TG, [
     { id: "5", title: "Team", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     TG,
     "5",
     [
@@ -145,7 +145,7 @@ const seeded = async () => {
   )
   const meetings: number[] = []
   for (const key of [MEET_A, MEET_B]) {
-    const accountId = await store.saveAccount(key, { name: null })
+    const accountId = await store.accounts.saveAccount(key, { name: null })
     const input = sampleMeeting()
     input.meeting.accountId = accountId
     await store.meetings.saveMeeting(input)
@@ -158,21 +158,21 @@ describe("purging one account", () => {
   it("removes a mail account whole and leaves every other account as it was", async () => {
     const { store, db, mailA } = await seeded()
     const before = others(db, mailA)
-    await store.purge(MAIL_A)
+    await store.accounts.purge(MAIL_A)
     expect(leftovers(db, mailA)).toEqual([])
     expect(others(db, mailA)).toEqual(before)
     expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
     expect(orphanVectors(db)).toBe(0)
     expect((await store.mail.emails({})).map(({ externalId }) => externalId)).toEqual(["<bob@example.com>"])
-    expect((await store.tags(MAIL_B)).map(({ tag }) => tag).sort()).toEqual(["planning", "urgent"])
-    expect(await store.people("email", {})).toEqual(expect.objectContaining({ get: expect.any(Function) }))
-    expect((await store.people("email", {})).get("carol@example.com")).toBeDefined()
+    expect((await store.tags.tags(MAIL_B)).map(({ tag }) => tag).sort()).toEqual(["planning", "urgent"])
+    expect(await store.people.people("email", {})).toEqual(expect.objectContaining({ get: expect.any(Function) }))
+    expect((await store.people.people("email", {})).get("carol@example.com")).toBeDefined()
   })
 
   it("removes a meeting account whole and leaves the other meeting account as it was", async () => {
     const { store, db, meetA } = await seeded()
     const before = others(db, meetA)
-    await store.purge(MEET_A)
+    await store.accounts.purge(MEET_A)
     expect(leftovers(db, meetA)).toEqual([])
     expect(others(db, meetA)).toEqual(before)
     expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
@@ -183,7 +183,7 @@ describe("purging one account", () => {
     const { store, db } = await seeded()
     const tg = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'tg'").get()?.id)
     const before = others(db, tg)
-    await store.purge(TG)
+    await store.accounts.purge(TG)
     expect(leftovers(db, tg)).toEqual([])
     expect(others(db, tg)).toEqual(before)
     expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
@@ -192,34 +192,34 @@ describe("purging one account", () => {
 
   it("removes the people only that account had seen, and keeps the tagged and the shared ones", async () => {
     const { store, db } = await seeded()
-    await store.saveAccount(TG_2, { name: null })
-    await store.savePeople(TG, [
+    await store.accounts.saveAccount(TG_2, { name: null })
+    await store.people.savePeople(TG, [
       { id: "21", name: "Dave Example" },
       { id: "22", name: "Erin Example" },
       { id: "23", name: "Carol Example" },
     ])
-    await store.savePeople(TG_2, [{ id: "22", name: "Erin Example" }])
-    const dave = await store.personOf({ provider: "tg", id: "21" })
+    await store.people.savePeople(TG_2, [{ id: "22", name: "Erin Example" }])
+    const dave = await store.people.personOf({ provider: "tg", id: "21" })
     await store.knowledge.addTags(null, { type: "person", id: dave?.uid as string }, ["client"])
-    await store.linkIdentities(
+    await store.people.linkIdentities(
       { provider: "tg", id: "23" },
       { provider: "email", id: "carol@example.com" },
       { method: "manual", by: "owner" },
     )
-    const carol = await store.personOf({ provider: "tg", id: "9" })
+    const carol = await store.people.personOf({ provider: "tg", id: "9" })
     expect(carol).toBeDefined()
     const persons = Number(db.prepare("SELECT count(*) AS n FROM persons").get()?.n)
 
-    await store.purge(TG)
+    await store.accounts.purge(TG)
 
     const tgIds = db
       .prepare("SELECT external_id AS id FROM identities WHERE provider = 'tg' ORDER BY external_id")
       .all()
       .map(({ id }) => String(id))
     expect(tgIds).toEqual(["21", "22", "23"])
-    expect(await store.personOf({ provider: "tg", id: "9" })).toBeUndefined()
+    expect(await store.people.personOf({ provider: "tg", id: "9" })).toBeUndefined()
     expect(Number(db.prepare("SELECT count(*) AS n FROM persons").get()?.n)).toBe(persons - 1)
-    expect((await store.people("email", {})).get("carol@example.com")).toBeDefined()
+    expect((await store.people.people("email", {})).get("carol@example.com")).toBeDefined()
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([])
     expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
   })

@@ -52,9 +52,9 @@ export type InboxReader = Pick<ServerReads, "chats" | "history"> & Pick<Messenge
  */
 export const storeReader = (deps: ServiceDeps, store: MessageStore, account: AccountKey): InboxReader => ({
   chats: async ({ limit, offset }) => {
-    const newest = new Map((await store.chatStats(account)).map((one) => [one.chatId, one.newestAt]))
+    const newest = new Map((await store.chats.chatStats(account)).map((one) => [one.chatId, one.newestAt]))
     const all = byRecency(
-      (await store.chats(account, {})).items.map((chat) => {
+      (await store.chats.chats(account, {})).items.map((chat) => {
         const at = newest.get(chat.id) ?? null
         const later = at !== null && (chat.lastMessageAt === null || Date.parse(at) > Date.parse(chat.lastMessageAt))
         return later ? { ...chat, lastMessageAt: at } : chat
@@ -63,10 +63,10 @@ export const storeReader = (deps: ServiceDeps, store: MessageStore, account: Acc
     const end = limit === undefined ? all.length : offset + limit
     return { items: all.slice(offset, end), hasMore: all.length > end }
   },
-  history: (chat, window) => store.messages(account, chat, window),
+  history: (chat, window) => store.messages.messages(account, chat, window),
   resolve: async (reference) => {
     const id = await readChatId(deps, reference, store, account)
-    const found = (await store.chats(account, {})).items.find((one) => one.id === id)
+    const found = (await store.chats.chats(account, {})).items.find((one) => one.id === id)
     if (!found) throw new CliError("not_found", `no stored chat ${id}`)
     return found
   },

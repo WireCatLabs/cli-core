@@ -87,7 +87,9 @@ export const embeddingTarget = (deps: ServiceDeps, choice: ModelChoice = DEFAULT
 export const readinessOf = async (deps: ServiceDeps, chatId: Id | undefined, key: string): Promise<ChatReadiness[]> => {
   const store = await deps.store()
   const account = await deps.account()
-  return (await store.readiness(account, { ...(chatId === undefined ? {} : { chatId }), model: key })).map(shaped)
+  return (await store.vectors.readiness(account, { ...(chatId === undefined ? {} : { chatId }), model: key })).map(
+    shaped,
+  )
 }
 
 type EmbeddingTarget = ReturnType<typeof embeddingTarget>
@@ -118,7 +120,7 @@ export const embeddingsMaintenance = (
     const store = await deps.store()
     const account = await deps.account()
     const chatId = await storedChatId(deps.messenger, chat, store, account)
-    if (!(await store.conversationState(account, chatId))?.builtAt) throw notBuiltError(deps, chatId)
+    if (!(await store.conversations.conversationState(account, chatId))?.builtAt) throw notBuiltError(deps, chatId)
     return { store, account, chatId }
   }
 
@@ -140,11 +142,11 @@ export const embeddingsMaintenance = (
     const account = await deps.account()
     let embedded = 0
     let skipped = 0
-    let left = (await store.vectorStatus(account, chatId, target.key)).chunks
+    let left = (await store.vectors.vectorStatus(account, chatId, target.key)).chunks
     let after: string | undefined
     while (embedded + skipped < maxChunks) {
       check?.()
-      const batch = await store.chunksToEmbed(account, chatId, target.key, {
+      const batch = await store.vectors.chunksToEmbed(account, chatId, target.key, {
         limit: Math.min(target.perBatch, maxChunks - embedded - skipped),
         ...(after ? { after } : {}),
       })
@@ -160,7 +162,7 @@ export const embeddingsMaintenance = (
         "passage",
       )
       check?.()
-      await store.saveVectors(
+      await store.vectors.saveVectors(
         target.key,
         target.dims,
         ready.map(({ hash }, index) => ({ hash, vector: vectors[index] as Float32Array })),
@@ -187,7 +189,7 @@ export const embeddingsMaintenance = (
     if (providers.length === 0) return 0
     const store = await deps.store()
     const account = await deps.account()
-    const images = await store.imagesToDescribe(account, chatId, {
+    const images = await store.vectors.imagesToDescribe(account, chatId, {
       messages: CONTEXT_MESSAGES,
       withinMs: CONTEXT_MINUTES * 60_000,
     })
@@ -217,7 +219,7 @@ export const embeddingsMaintenance = (
         }
       }
     }
-    const have = await store.embeddedHashes(
+    const have = await store.vectors.embeddedHashes(
       target.key,
       described.map(({ hash }) => hash),
     )
@@ -229,13 +231,13 @@ export const embeddingsMaintenance = (
         "passage",
       )
       check?.()
-      await store.saveVectors(
+      await store.vectors.saveVectors(
         target.key,
         target.dims,
         batch.map(({ hash }, index) => ({ hash, vector: vectors[index] as Float32Array })),
       )
     }
-    await store.saveImageChunks(
+    await store.vectors.saveImageChunks(
       account,
       chatId,
       described.map(({ attachmentPk, hash, text, occurredAt }) => ({
@@ -253,7 +255,7 @@ export const embeddingsMaintenance = (
     status: async (chat, choice) => {
       const { store, account, chatId } = await found(chat)
       const target = embeddingTarget(deps, choice)
-      const { chunks, embedded } = await store.vectorStatus(account, chatId, target.key)
+      const { chunks, embedded } = await store.vectors.vectorStatus(account, chatId, target.key)
       const left = chunks - embedded
       const tokensAtMost = Math.ceil((left * CHUNK_CHARS) / CHARS_PER_TOKEN_AT_LEAST)
       return {
@@ -285,7 +287,7 @@ export const embeddingsMaintenance = (
       const chatId = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
       const chats = await readinessOf(deps, chatId, target.key)
       if (chatId !== undefined) return { model: target.id, chats }
-      return { model: target.id, chats, unbuiltGroups: (await store.unbuiltGroups(account)).length }
+      return { model: target.id, chats, unbuiltGroups: (await store.vectors.unbuiltGroups(account)).length }
     },
 
     refresh: async ({
@@ -308,7 +310,7 @@ export const embeddingsMaintenance = (
       const chatId = chat === undefined ? undefined : await storedChatId(deps.messenger, chat, store, account)
       const scan = async () => ({
         chats: (await readinessOf(deps, chatId, target.key)).sort(byOldestBuild),
-        unbuilt: chatId === undefined ? await store.unbuiltGroups(account) : [],
+        unbuilt: chatId === undefined ? await store.vectors.unbuiltGroups(account) : [],
       })
 
       const built: Built[] = []
@@ -374,7 +376,7 @@ export const embeddingsMaintenance = (
       const store = await deps.store()
       const account = await deps.account()
       const chatId = await storedChatId(deps.messenger, chat, store, account)
-      const cleared = await store.clearVectors(
+      const cleared = await store.vectors.clearVectors(
         account,
         chatId,
         choice === undefined ? undefined : embeddingTarget(deps, choice).key,

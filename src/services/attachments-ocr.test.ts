@@ -42,15 +42,15 @@ const setup = async (count = 3) => {
     reactions: null,
   }))
   for (const account of [owner, other]) {
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "7", title: "Fixture group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(account, "7", messages, { via: "history" })
+    await store.messages.saveMessages(account, "7", messages, { via: "history" })
   }
   for (const message of messages) {
     const path = join(files, `${message.id}.png`)
     writeFileSync(path, png)
-    await store.keepDownloads(owner, "7", message.id, [{ kind: "photo", name: `${message.id}.png`, path }])
+    await store.attachments.keepDownloads(owner, "7", message.id, [{ kind: "photo", name: `${message.id}.png`, path }])
   }
   const guard = { check: vi.fn(), record: () => {} }
   const service = attachmentsService(storedDeps(messenger, store, owner, guard))

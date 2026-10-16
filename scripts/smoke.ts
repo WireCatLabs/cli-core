@@ -82,12 +82,15 @@ const stored = {
   forwardedFrom: null,
   reactions: null,
 }
-await store.saveMessages(account, "-1002", [stored], { via: "smoke" })
+await store.messages.saveMessages(account, "-1002", [stored], { via: "smoke" })
 check(
   "the store gives a message back",
-  (await store.messages(account, "-1002", { limit: 5 })).items[0]?.text === stored.text,
+  (await store.messages.messages(account, "-1002", { limit: 5 })).items[0]?.text === stored.text,
 )
-check("the store finds a Cyrillic word by its beginning", (await store.search("Петр", { limit: 5 })).items.length === 1)
+check(
+  "the store finds a Cyrillic word by its beginning",
+  (await store.messages.search("Петр", { limit: 5 })).items.length === 1,
+)
 await store.close()
 const sqlite = await openSqlite(join(mkdtempSync(join(tmpdir(), "cli-messaging-smoke-")), "messages.db"))
 migrate(sqlite.database)

@@ -228,7 +228,7 @@ describe("store repair", () => {
     const read = async () => {
       const store = await openStore({ env })
       try {
-        return await store.message({ provider: "telegram", account: "100" }, "1", { chatId: "-1001" })
+        return await store.messages.message({ provider: "telegram", account: "100" }, "1", { chatId: "-1001" })
       } finally {
         await store.close()
       }

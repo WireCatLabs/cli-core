@@ -50,7 +50,7 @@ const setup = async (extra: Record<string, string> = {}) => {
   }
   rememberAccount(app, "default", "500", env)
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveMessages(
+  await store.messages.saveMessages(
     { provider: "chat", account: "500" },
     "7",
     [

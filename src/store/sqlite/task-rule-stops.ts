@@ -1,5 +1,5 @@
 import type { CacheDatabase } from "../driver.js"
-import type { AccountKey } from "../store.js"
+import type { AccountKey } from "../types.js"
 
 // One row per account in store_settings: the task rules are a store-wide pass, not a messenger's state.
 const keyOf = ({ provider, account }: AccountKey) => `task_rules_until:${provider}:${account}`

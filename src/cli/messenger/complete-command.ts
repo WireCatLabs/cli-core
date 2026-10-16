@@ -68,9 +68,9 @@ export const completeCommand = (
       const store = account && existsSync(storePath(env)) ? await openStore({ env }).catch(() => undefined) : undefined
       try {
         // Read up front: `suggest` asks its sources synchronously, and the store answers asynchronously.
-        const chats = store && account ? (await store.chats(account, { limit: 500 })).items : []
+        const chats = store && account ? (await store.chats.chats(account, { limit: 500 })).items : []
         const people =
-          store && account ? (await store.people(account.provider, { account: account.account })).all() : []
+          store && account ? (await store.people.people(account.provider, { account: account.account })).all() : []
         const known = new Map(
           people.map((person) => [person.id, { value: person.id, description: singleLine(person.name ?? "") }]),
         )

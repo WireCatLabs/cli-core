@@ -60,11 +60,11 @@ export interface TwinStore {
 
 const seed = async (store: MessageStore, twin: Twin, folderId: string): Promise<TwinIds> => {
   const account = twinAccount(twin)
-  await store.saveAccount(account, { name: `${twin} account` })
-  await store.saveChats(account, [
+  await store.accounts.saveAccount(account, { name: `${twin} account` })
+  await store.chats.saveChats(account, [
     { id: CHAT, title: `${twin} chat`, kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     CHAT,
     [
@@ -74,13 +74,19 @@ const seed = async (store: MessageStore, twin: Twin, folderId: string): Promise<
     ],
     { via: "history" },
   )
-  await store.keepTranscript(account, CHAT, "1", `${twin}-only transcript`, "synthetic")
-  await store.keepDownloads(account, CHAT, "3", [{ kind: "file", position: 0, path: `/downloads/${twin}/same.txt` }])
-  const [file] = await store.fileAttachments(account, { chatId: CHAT, messageId: "3", limit: 1 })
+  await store.messages.keepTranscript(account, CHAT, "1", `${twin}-only transcript`, "synthetic")
+  await store.attachments.keepDownloads(account, CHAT, "3", [
+    { kind: "file", position: 0, path: `/downloads/${twin}/same.txt` },
+  ])
+  const [file] = await store.attachments.fileAttachments(account, { chatId: CHAT, messageId: "3", limit: 1 })
   if (!file) throw new Error("the twin attachment was not stored")
-  await store.keepAttachmentText(file.pk, { text: `${twin}-only attachment text`, origin: "agent", extractor: "agent" })
+  await store.attachments.keepAttachmentText(file.pk, {
+    text: `${twin}-only attachment text`,
+    origin: "agent",
+    extractor: "agent",
+  })
 
-  const mailAccountId = await store.saveAccount(twinMail(twin), { name: `${twin} mail` })
+  const mailAccountId = await store.accounts.saveAccount(twinMail(twin), { name: `${twin} mail` })
   const thread = await store.mail.saveThread({
     accountId: mailAccountId,
     externalId: THREAD,
@@ -104,7 +110,7 @@ const seed = async (store: MessageStore, twin: Twin, folderId: string): Promise<
     text: `${SHARED_WORD} document ${twin}-only`,
   })
 
-  const meetingAccountId = await store.saveAccount(twinMeetings(twin), { name: `${twin} meetings` })
+  const meetingAccountId = await store.accounts.saveAccount(twinMeetings(twin), { name: `${twin} meetings` })
   const meeting = sampleMeeting()
   meeting.meeting.accountId = meetingAccountId
   meeting.meeting.title = `${twin} meeting`
@@ -132,8 +138,8 @@ export const openTwinStore = async (): Promise<TwinStore> => {
     alpha: await seed(store, "alpha", alphaFolder.id),
     bravo: await seed(store, "bravo", bravoFolder.id),
   }
-  await store.fillSearchIndex({})
-  await store.fillStems({})
+  await store.searchIndex.fillSearchIndex({})
+  await store.searchIndex.fillStems({})
   return { store, twins }
 }
 

@@ -114,14 +114,20 @@ const BOUND: [string, Read][] = [
         query: listQuery(`chat:${CHAT}`, ATTACHMENT_QUERY, "attachments list"),
       }),
   ],
-  ["store messages", ({ store }) => store.messages(alpha, CHAT, { limit: 10 })],
-  ["store message by id", ({ store }) => store.message(alpha, "1", { chatId: CHAT })],
-  ["store transcript", ({ store }) => store.transcript(alpha, CHAT, "1")],
-  ["store attachments", ({ store }) => store.attachments(alpha, { chatId: CHAT, limit: 10 })],
-  ["store find", ({ store }) => store.find({ account: alpha, text: SHARED_WORD, limit: 50 })],
-  ["store find in chat 7", ({ store }) => store.find({ account: alpha, chatId: CHAT, text: SHARED_WORD, limit: 50 })],
-  ["store search", ({ store }) => store.search(SHARED_WORD, { limit: 50, account: alpha })],
-  ["direct replies", async ({ store }) => store.directReplies?.([{ account: alpha, chatId: CHAT, id: "1" }], 10)],
+  ["store messages", ({ store }) => store.messages.messages(alpha, CHAT, { limit: 10 })],
+  ["store message by id", ({ store }) => store.messages.message(alpha, "1", { chatId: CHAT })],
+  ["store transcript", ({ store }) => store.messages.transcript(alpha, CHAT, "1")],
+  ["store attachments", ({ store }) => store.attachments.attachments(alpha, { chatId: CHAT, limit: 10 })],
+  ["store find", ({ store }) => store.messages.find({ account: alpha, text: SHARED_WORD, limit: 50 })],
+  [
+    "store find in chat 7",
+    ({ store }) => store.messages.find({ account: alpha, chatId: CHAT, text: SHARED_WORD, limit: 50 }),
+  ],
+  ["store search", ({ store }) => store.messages.search(SHARED_WORD, { limit: 50, account: alpha })],
+  [
+    "direct replies",
+    async ({ store }) => store.messages.directReplies?.([{ account: alpha, chatId: CHAT, id: "1" }], 10),
+  ],
   ["mail threads", ({ store, twins }) => store.mail.threads({ accountId: twins.alpha.mailAccountId })],
   ["mail emails", ({ store, twins }) => store.mail.emails({ accountId: twins.alpha.mailAccountId })],
   ["mail email by id", ({ store, twins }) => store.mail.email(twins.alpha.mailAccountId, EMAIL)],
@@ -140,13 +146,13 @@ const BOUND: [string, Read][] = [
     ({ store, twins }) => store.meetings.search(SHARED_WORD, { accountId: twins.alpha.meetingAccountId }),
   ],
   ["person timeline", ({ store }) => personTimeline(store, alpha, SENDER)],
-  ["bound: messages", ({ store }) => store.forAccount(alpha).messages(CHAT, { limit: 10 })],
-  ["bound: find", ({ store }) => store.forAccount(alpha).find({ text: SHARED_WORD, limit: 50 })],
+  ["bound: messages", ({ store }) => store.forAccount(alpha).messages.messages(CHAT, { limit: 10 })],
+  ["bound: find", ({ store }) => store.forAccount(alpha).messages.find({ text: SHARED_WORD, limit: 50 })],
   [
     "bound: find in chat 7",
-    ({ store }) => store.forAccount(alpha).find({ chatId: CHAT, text: SHARED_WORD, limit: 50 }),
+    ({ store }) => store.forAccount(alpha).messages.find({ chatId: CHAT, text: SHARED_WORD, limit: 50 }),
   ],
-  ["bound: search", ({ store }) => store.forAccount(alpha).search(SHARED_WORD, { limit: 50 })],
+  ["bound: search", ({ store }) => store.forAccount(alpha).messages.search(SHARED_WORD, { limit: 50 })],
   ["bound: mail threads", ({ store }) => store.forAccount(twinMail("alpha")).mail.threads()],
   ["bound: mail emails", ({ store }) => store.forAccount(twinMail("alpha")).mail.emails()],
   ["bound: mail email by id", ({ store }) => store.forAccount(twinMail("alpha")).mail.email(EMAIL)],
@@ -180,7 +186,7 @@ const ACROSS: [string, Read][] = [
   [
     "direct replies, both parents named",
     async ({ store }) =>
-      store.directReplies?.(
+      store.messages.directReplies?.(
         [
           { account: alpha, chatId: CHAT, id: "1" },
           { account: twinAccount("bravo"), chatId: CHAT, id: "1" },
@@ -244,12 +250,18 @@ describe("one account's reads never answer with another's", () => {
   it("a chat id without its account is refused, since every account may hold that id", async () => {
     const { store } = await twinStore()
     // @ts-expect-error a chat id comes only with its account
-    await expect(store.find({ chatId: CHAT, text: SHARED_WORD, limit: 50 })).rejects.toMatchObject({
+    await expect(store.messages.find({ chatId: CHAT, text: SHARED_WORD, limit: 50 })).rejects.toMatchObject({
       code: "validation_error",
     })
     await expect(
       // @ts-expect-error nor with several accounts
-      store.find({ provider: "synthetic", accounts: ["500", "600"], chatId: CHAT, text: SHARED_WORD, limit: 50 }),
+      store.messages.find({
+        provider: "synthetic",
+        accounts: ["500", "600"],
+        chatId: CHAT,
+        text: SHARED_WORD,
+        limit: 50,
+      }),
     ).rejects.toMatchObject({ code: "validation_error" })
   })
 })
@@ -258,12 +270,16 @@ describe("the account-bound store", () => {
   it("refuses the other account's attachment by its row id, and leaves its text as it was", async () => {
     const { store, twins } = await twinStore()
     const bound = store.forAccount(alpha)
-    expect(await bound.localPathOf(twins.alpha.attachmentPk)).toBe("/downloads/alpha/same.txt")
-    await expect(bound.localPathOf(twins.bravo.attachmentPk)).rejects.toMatchObject({ code: "not_found" })
+    expect(await bound.attachments.localPathOf(twins.alpha.attachmentPk)).toBe("/downloads/alpha/same.txt")
+    await expect(bound.attachments.localPathOf(twins.bravo.attachmentPk)).rejects.toMatchObject({ code: "not_found" })
     await expect(
-      bound.keepAttachmentText(twins.bravo.attachmentPk, { text: "overwritten", origin: "agent", extractor: "agent" }),
+      bound.attachments.keepAttachmentText(twins.bravo.attachmentPk, {
+        text: "overwritten",
+        origin: "agent",
+        extractor: "agent",
+      }),
     ).rejects.toMatchObject({ code: "not_found" })
-    const [held] = await store.forAccount(twinAccount("bravo")).attachments({ chatId: CHAT, limit: 1 })
+    const [held] = await store.forAccount(twinAccount("bravo")).attachments.attachments({ chatId: CHAT, limit: 1 })
     expect(held?.text?.chars).toBe("bravo-only attachment text".length)
   })
 
@@ -282,6 +298,6 @@ describe("the account-bound store", () => {
     const stranger = store.forAccount({ provider: "email", account: "999" })
     expect(await stranger.mail.threads()).toEqual([])
     expect(await stranger.meetings.meetings()).toEqual([])
-    await expect(stranger.localPathOf(1)).rejects.toMatchObject({ code: "not_found" })
+    await expect(stranger.attachments.localPathOf(1)).rejects.toMatchObject({ code: "not_found" })
   })
 })

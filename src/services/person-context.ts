@@ -78,7 +78,7 @@ const mailWith = async (
   limit: number,
   since: number | undefined,
 ): Promise<{ items: ContextMessage[]; hasMore: boolean }> => {
-  const account = await store.storedAccount(key).catch(() => undefined)
+  const account = await store.accounts.storedAccount(key).catch(() => undefined)
   if (!account) return { items: [], hasMore: false }
   const emails = await store.mail.emails({
     accountId: account.id,
@@ -125,8 +125,8 @@ export const personContext = async (
   reference: string,
   { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since }: ContextOptions = {},
 ): Promise<PersonContext> => {
-  const found = pickPerson(reference, await store.people(asked.provider, { account: asked.account }))
-  const record = await store.personOf({ provider: asked.provider, id: found.id })
+  const found = pickPerson(reference, await store.people.people(asked.provider, { account: asked.account }))
+  const record = await store.people.personOf({ provider: asked.provider, id: found.id })
   if (!record) throw new CliError("not_found", `no person ${found.id} in the store`)
   const recent = (message: ContextMessage) => since === undefined || Date.parse(message.timestamp) >= since
 
@@ -139,11 +139,11 @@ export const personContext = async (
   const mentions: ContextMessage[] = []
   let cut = false
   for (const { key, identity } of readsOf(record, asked)) {
-    const chats = await store.chatsWith(key, identity.id)
+    const chats = await store.chats.chatsWith(key, identity.id)
     for (const chat of chats) {
       shared.push({ ...key, chatId: chat.id, title: chat.title, kind: chat.kind, lastMessageAt: chat.lastMessageAt })
     }
-    for (const held of await store.chatCompleteness(
+    for (const held of await store.chats.chatCompleteness(
       key,
       chats.map((chat) => chat.id),
     )) {
@@ -158,7 +158,7 @@ export const personContext = async (
     }
     const dialog = chats.find((chat) => chat.kind === "dialog")
     if (dialog) {
-      const page = await store.messages(key, dialog.id, {
+      const page = await store.messages.messages(key, dialog.id, {
         limit: messages,
         ...(since === undefined ? {} : { since: new Date(since).toISOString() }),
       })
@@ -167,7 +167,7 @@ export const personContext = async (
       if (page.hasMore)
         for (const outgoing of [true, false]) {
           const [newest] = (
-            await store.messages(key, dialog.id, {
+            await store.messages.messages(key, dialog.id, {
               limit: 1,
               outgoing,
               ...(since === undefined ? {} : { since: new Date(since).toISOString() }),
@@ -182,10 +182,10 @@ export const personContext = async (
       theirs.push(...mail.items.filter((message) => message.senderId === identity.id))
       cut ||= mail.hasMore
     }
-    const written = await store.find({ account: key, senders: [identity.id], limit: messages })
+    const written = await store.messages.find({ account: key, senders: [identity.id], limit: messages })
     theirs.push(...written.items.map((hit) => toContext(key, hit, hit.chatTitle ?? null)).filter(recent))
     cut ||= written.hasMore
-    const named = await store.mentioning(key, { id: identity.id, username: identity.username }, messages)
+    const named = await store.messages.mentioning(key, { id: identity.id, username: identity.username }, messages)
     mentions.push(
       ...named.items
         .filter((hit) => hit.senderId !== identity.id)
@@ -254,7 +254,7 @@ export const identityIn = async (store: MessageStore, asked: AccountKey, referen
   if (prefixed?.[1] === "person") return identityOfPerson(store, asked, prefixed[2] as string)
   const provider = prefixed?.[1] ?? asked.provider
   const typed = prefixed?.[2] ?? reference
-  const people = await store.people(provider, provider === asked.provider ? { account: asked.account } : {})
+  const people = await store.people.people(provider, provider === asked.provider ? { account: asked.account } : {})
   return { provider, id: pickPerson(typed, people).id }
 }
 
@@ -263,7 +263,7 @@ export const identityIn = async (store: MessageStore, asked: AccountKey, referen
  * the asked account has seen when they have several there. None, or several the account has seen, is said, not guessed.
  */
 const identityOfPerson = async (store: MessageStore, asked: AccountKey, uid: string): Promise<IdentityRef> => {
-  const person = await store.personByUid(uid)
+  const person = await store.people.personByUid(uid)
   if (!person) throw new CliError("not_found", `no person:${uid} in the store`)
   const here = person.identities.filter(({ provider }) => provider === asked.provider)
   const seen = here.length > 1 ? here.filter(({ accounts }) => accounts.includes(asked.account)) : here
@@ -333,15 +333,15 @@ export const personMessages = async (
   reference: string,
   { chats, limit = CHAT_MESSAGES, detail = 0 }: { chats: Id[]; limit?: number; detail?: Detail },
 ): Promise<PersonMessages> => {
-  const found = pickPerson(reference, await store.people(asked.provider, { account: asked.account }))
-  const record = await store.personOf({ provider: asked.provider, id: found.id })
+  const found = pickPerson(reference, await store.people.people(asked.provider, { account: asked.account }))
+  const record = await store.people.personOf({ provider: asked.provider, id: found.id })
   if (!record) throw new CliError("not_found", `no person ${found.id} in the store`)
-  const stored = (await store.chats(asked, {})).items
-  const held = new Map((await store.chatCompleteness(asked, chats)).map((one) => [one.chatId, one.state]))
+  const stored = (await store.chats.chats(asked, {})).items
+  const held = new Map((await store.chats.chatCompleteness(asked, chats)).map((one) => [one.chatId, one.state]))
   const answer: PersonChatMessages[] = []
   for (const chatId of chats) {
     const chat = stored.find((one) => one.id === chatId)
-    const page = await store.find({ account: asked, senders: [found.id], chatId, limit })
+    const page = await store.messages.find({ account: asked, senders: [found.id], chatId, limit })
     answer.push({
       chat: { id: chatId, title: chat?.title ?? null, kind: kindOf(chat, chatId, found.id) },
       messages: page.items

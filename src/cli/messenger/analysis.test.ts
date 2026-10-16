@@ -88,10 +88,10 @@ const setup = async () => {
   const add = async (chat = "9", id = "1") => {
     const store = await openStore({ path: env.MESSAGING_STORE })
     const account = { provider: "chat", account: "500" }
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: chat, title: `Group ${chat}`, kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       chat,
       [

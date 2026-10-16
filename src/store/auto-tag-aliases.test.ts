@@ -10,7 +10,7 @@ it("combines canonical and alias automatic claims and retains manual labels acro
   const store = await openStore({ path, now: () => 3000 })
   try {
     const key = { provider: "example", account: "AliceExample" }
-    await store.saveChats(key, [
+    await store.chats.saveChats(key, [
       {
         id: "1",
         title: "Alice Example channel",
@@ -27,8 +27,8 @@ it("combines canonical and alias automatic claims and retains manual labels acro
       { tag: "onboarding", score: 0.3, fields: ["title"] },
       { tag: "arrival", score: 0.6, fields: ["description", "title"] },
     ]
-    await store.replaceAutoTags(key, "1", "invented", matches)
-    await store.replaceAutoTags(key, "1", "invented", matches)
+    await store.chats.replaceAutoTags(key, "1", "invented", matches)
+    await store.chats.replaceAutoTags(key, "1", "invented", matches)
     const database = await openCache(path)
     try {
       const claims = database.prepare("SELECT tag_id,score,fields FROM auto_tag_claims").all()
@@ -40,7 +40,7 @@ it("combines canonical and alias automatic claims and retains manual labels acro
       database.close()
     }
     expect(await store.knowledge.tags(key, { type: "chat", id: "1" })).toEqual(["onboarding"])
-    await store.replaceAutoTags(key, "1", "invented", [])
+    await store.chats.replaceAutoTags(key, "1", "invented", [])
     expect(await store.knowledge.tags(key, { type: "chat", id: "1" })).toEqual(["onboarding"])
   } finally {
     await store.close()

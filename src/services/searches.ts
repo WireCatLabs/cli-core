@@ -96,7 +96,7 @@ const both = (stored: QueryAst, words: string): QueryAst => ({
 export const searchesService = (deps: ServiceDeps): SearchesService => {
   const inStore = async <T>(work: (store: MessageStore) => Promise<T>): Promise<T> => work(await deps.store())
   const found = async (store: MessageStore, reference: string): Promise<StoredSearch> => {
-    const search = await store.storedSearch(reference.trim().toLowerCase())
+    const search = await store.searches.storedSearch(reference.trim().toLowerCase())
     if (!search) throw new CliError("not_found", `no saved search or run "${singleLine(reference)}"`)
     return search
   }
@@ -107,7 +107,7 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
         if (isAdminSelection(params.selection)) {
           const selected = await readAdminSelection(store, params.selection)
           const normalized = typeof params.selection === "string" ? JSON.parse(params.selection) : params.selection
-          return store.saveSearch(
+          return store.searches.saveSearch(
             nameOf(name),
             searchRecordOf("admin-statistics", {
               adminReport: selected.options.report,
@@ -117,7 +117,7 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
             { replace },
           )
         }
-        return store.saveSearch(
+        return store.searches.saveSearch(
           nameOf(name),
           searchRecordOf(
             params.target
@@ -137,17 +137,17 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
 
     show: (reference) => inStore((store) => found(store, reference)),
 
-    list: () => inStore((store) => store.savedSearches()),
+    list: () => inStore((store) => store.searches.savedSearches()),
 
     history: (limit, offset = 0) =>
       inStore(async (store) => {
-        const rows = await store.searchHistory(limit, offset)
+        const rows = await store.searches.searchHistory(limit, offset)
         return { items: rows.slice(0, limit), has_more: rows.length > limit }
       }),
 
-    delete: (reference) => inStore(async (store) => store.deleteSearch((await found(store, reference)).id)),
+    delete: (reference) => inStore(async (store) => store.searches.deleteSearch((await found(store, reference)).id)),
 
-    clear: () => inStore(async (store) => ({ cleared: await store.clearSearchHistory() })),
+    clear: () => inStore(async (store) => ({ cleared: await store.searches.clearSearchHistory() })),
 
     resolve: (reference, { text: words, ...typed }) =>
       inStore(async (store) => {

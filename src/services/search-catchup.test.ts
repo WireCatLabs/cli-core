@@ -39,7 +39,7 @@ const fixture = async () => {
         self: () => account.account,
         history: async (_chat: string, window: { before?: string }) => {
           const items = window.before ? [] : [message("1"), message("2")]
-          await store.saveMessages(account, "7", items, { via: "history" })
+          await store.messages.saveMessages(account, "7", items, { via: "history" })
           return { items, hasMore: false }
         },
       }) as unknown as MessengerAdapter,
@@ -62,14 +62,14 @@ describe("bounded local post-fetch preparation", () => {
     try {
       const normal = await archiveService(deps).fetch("7", options)
       expect(normal).not.toHaveProperty("prepared")
-      expect(await store.conversationState(account, "7")).toBeUndefined()
+      expect(await store.conversations.conversationState(account, "7")).toBeUndefined()
       const done = await archiveService(deps).fetch("7", { ...options, catchUp: {} })
       expect(done.prepared).toMatchObject({
         complete: false,
         reason: "pending",
         prepared: { model: "e5-small", modelAvailable: false, built: [{ chat: "7" }], embedded: [] },
       })
-      expect(await store.conversationState(account, "7")).toHaveProperty("builtAt")
+      expect(await store.conversations.conversationState(account, "7")).toHaveProperty("builtAt")
     } finally {
       await store.close()
     }
@@ -82,8 +82,8 @@ describe("bounded local post-fetch preparation", () => {
       expect(off).not.toHaveProperty("prepared")
       const capped = await archiveService(deps).fetch("7", { ...options, catchUp: { maxMessages: 1 } })
       expect(capped).toMatchObject({ fetched: 2, prepared: { complete: false, reason: "message_bound" } })
-      expect(await store.countMessages(account, "7")).toBe(2)
-      expect(await store.conversationState(account, "7")).toBeUndefined()
+      expect(await store.messages.countMessages(account, "7")).toBe(2)
+      expect(await store.conversations.conversationState(account, "7")).toBeUndefined()
       expect(
         (await archiveService({ ...deps, searchCatchUp: true }).fetch("7", options)).prepared?.prepared?.built,
       ).toHaveLength(1)
@@ -118,7 +118,7 @@ describe("bounded local post-fetch preparation", () => {
   it("reports time and cancellation with a synthetic clock, without publishing a partial graph", async () => {
     const { store, deps } = await fixture()
     try {
-      await store.saveMessages(account, "7", [message("1"), message("2")], { via: "history" })
+      await store.messages.saveMessages(account, "7", [message("1"), message("2")], { via: "history" })
       let now = 0
       expect(await catchUpSearch(deps, "7", { timeMs: 1 }, new AbortController().signal, () => now++)).toMatchObject({
         complete: false,
@@ -129,7 +129,7 @@ describe("bounded local post-fetch preparation", () => {
       expect(await catchUpSearch(deps, "7", {}, abort.signal)).toMatchObject({ reason: "time_or_abort_bound" })
       const service = conversationsService(deps)
       await service.build("7")
-      const before = await store.conversationState(account, "7")
+      const before = await store.conversations.conversationState(account, "7")
       let turns = 0
       await expect(
         service.build("7", {
@@ -138,7 +138,7 @@ describe("bounded local post-fetch preparation", () => {
           },
         }),
       ).rejects.toThrow("stop")
-      expect(await store.conversationState(account, "7")).toEqual(before)
+      expect(await store.conversations.conversationState(account, "7")).toEqual(before)
     } finally {
       await store.close()
     }

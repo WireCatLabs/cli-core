@@ -18,10 +18,10 @@ afterEach(async () => {
 const setup = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "counter-service-")), "store.db") })
   opened.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Synthetic", kind: "group", unreadCount: null, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     [1, 2, 3].map((id) => ({
@@ -119,7 +119,7 @@ describe("counter services", () => {
   it("reports a target deleted during its read as skipped instead of updated", async () => {
     const f = await setup()
     f.fetchCounters.mockImplementationOnce(async () => {
-      await f.store.markDeleted(account, ["3"], { chatId: "7" })
+      await f.store.messages.markDeleted(account, ["3"], { chatId: "7" })
       return { views: { value: 20, observedAt: new Date().toISOString(), source: "remote_fetch" } }
     })
     expect(await f.service.refresh({ chat: "7", counters: "views", limit: 1 })).toMatchObject({

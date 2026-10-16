@@ -27,7 +27,7 @@ const opened: MessageStore[] = []
 const seeded = async (items = [message("a"), message("b"), message("c")]) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "evidence-read-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     {
       id: "room",
       title: "Example room",
@@ -38,7 +38,7 @@ const seeded = async (items = [message("a"), message("b"), message("c")]) => {
       providerMetadata: { username: "ExampleRoom" },
     },
   ])
-  await store.saveMessages(account, "room", items, { via: "test" })
+  await store.messages.saveMessages(account, "room", items, { via: "test" })
   return store
 }
 afterEach(async () => {
@@ -51,7 +51,7 @@ const ids = (packet: Awaited<ReturnType<typeof readEvidencePacket>>) =>
 describe("stored evidence", () => {
   it("pages newest first with exclusive cursors, including equal timestamps and opaque ids", async () => {
     const store = await seeded()
-    await store.saveMessages({ ...account, account: "another" }, "room", [message("private")], { via: "test" })
+    await store.messages.saveMessages({ ...account, account: "another" }, "room", [message("private")], { via: "test" })
     const first = await readEvidencePacket(store, account, { chat: "Example", limit: 2 })
     expect(ids(first)).toEqual(["c", "b"])
     expect(first).toMatchObject({

@@ -54,10 +54,10 @@ const setUp = async (chats: Record<string, Message[]>) => {
     embedders: { get: async () => fakeEmbedder, close: async () => {} },
   }
   for (const [id, messages] of Object.entries(chats)) {
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id, title: `Chat ${id}`, kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       id,
       messages.map((one) => ({ ...one, chatId: id })),

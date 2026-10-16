@@ -29,9 +29,9 @@ const tagged = async (store: MessageStore, tag: string) =>
 describe("labels that belong to no account", () => {
   it("labels a person, an entity and a task without naming an account, and relates them", async () => {
     const { store } = await open()
-    await store.saveAccount(telegram, { name: null })
-    await store.savePeople(telegram, [{ id: "101", name: "Rin Synthetic" }])
-    const person = await store.personOf({ provider: "telegram", id: "101" })
+    await store.accounts.saveAccount(telegram, { name: null })
+    await store.people.savePeople(telegram, [{ id: "101", name: "Rin Synthetic" }])
+    const person = await store.people.personOf({ provider: "telegram", id: "101" })
     const organization = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
     const task = (
       await createTaskService({ store: store.tasks }).add({
@@ -74,11 +74,11 @@ describe("labels that belong to no account", () => {
 
   it("looks a person up by the uid a person: reference holds", async () => {
     const { store } = await open()
-    await store.saveAccount(telegram, { name: null })
-    await store.savePeople(telegram, [{ id: "101", name: "Rin Synthetic" }])
-    const person = await store.personOf({ provider: "telegram", id: "101" })
-    expect(await store.personByUid(person?.uid as string)).toEqual(person)
-    expect(await store.personByUid("nobody")).toBeUndefined()
+    await store.accounts.saveAccount(telegram, { name: null })
+    await store.people.savePeople(telegram, [{ id: "101", name: "Rin Synthetic" }])
+    const person = await store.people.personOf({ provider: "telegram", id: "101" })
+    expect(await store.people.personByUid(person?.uid as string)).toEqual(person)
+    expect(await store.people.personByUid("nobody")).toBeUndefined()
   })
 })
 

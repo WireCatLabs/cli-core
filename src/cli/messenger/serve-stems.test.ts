@@ -13,10 +13,10 @@ const withMessages = async (texts: string[]) => {
   const path = join(mkdtempSync(join(tmpdir(), "serve-stems-")), "m.db")
   const store = await openStore({ path })
   opened.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: null, kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 1 },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     texts.map((text, index) => ({
@@ -60,23 +60,23 @@ describe("serve's stem fill", () => {
   it("**fills stems still building until they are ready**, then stops", async () => {
     const { store, path } = await withMessages(["houses", "casas", "квартиры"])
     await unfill(path, 3)
-    expect(await store.stemsState()).toMatchObject({ ready: false, cause: "building" })
+    expect(await store.searchIndex.stemsState()).toMatchObject({ ready: false, cause: "building" })
     const fills = stemFills({ withStore: (work) => work(store), warn: () => {}, everyMs: 1, sliceMs: 50 })
     fills.start()
-    await until(async () => (await store.stemsState())?.ready === true)
+    await until(async () => (await store.searchIndex.stemsState())?.ready === true)
     await fills.stop()
-    expect(await store.stemsState()).toMatchObject({ ready: true })
+    expect(await store.searchIndex.stemsState()).toMatchObject({ ready: true })
     expect(fills.summary().stemmed).toBe(3)
   })
 
   it("**leaves stems the owner's choice made stale** for store reindex", async () => {
     const { store } = await withMessages(["houses"])
-    await store.saveStemmers({ cyrillic: "none", latin: "english" })
+    await store.searchIndex.saveStemmers({ cyrillic: "none", latin: "english" })
     const fills = stemFills({ withStore: (work) => work(store), warn: () => {}, everyMs: 1 })
     fills.start()
     await new Promise((resolve) => setTimeout(resolve, 20))
     await fills.stop()
     expect(fills.summary().stemmed).toBe(0)
-    expect(await store.stemsState()).toMatchObject({ ready: false, cause: "stemmer_changed" })
+    expect(await store.searchIndex.stemsState()).toMatchObject({ ready: false, cause: "stemmer_changed" })
   })
 })

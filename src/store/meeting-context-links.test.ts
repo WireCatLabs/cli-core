@@ -17,16 +17,19 @@ const fixture = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "meeting-test-context-links-")), "fixture.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path }, now: () => 1000 })
   opened.push(store)
-  const accountId = await store.saveAccount({ provider: "example", account: "AliceExample" }, { name: "Alice Example" })
-  const otherId = await store.saveAccount({ provider: "other", account: "BobSample" }, { name: "Bob Sample" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "example", account: "AliceExample" },
+    { name: "Alice Example" },
+  )
+  const otherId = await store.accounts.saveAccount({ provider: "other", account: "BobSample" }, { name: "Bob Sample" })
   const input = sampleMeeting()
   input.meeting.accountId = accountId
   for (const item of input.participants) item.identity.associatePerson = false
   const saved = await store.meetings.saveMeeting(input)
   const participantId = saved.participants[0]?.id
   if (!participantId) throw new Error("missing synthetic participant")
-  await store.savePeople({ provider: "other", account: "BobSample" }, [{ id: "BobSample", name: "Bob Sample" }])
-  const target = await store.personOf({ provider: "other", id: "BobSample" })
+  await store.people.savePeople({ provider: "other", account: "BobSample" }, [{ id: "BobSample", name: "Bob Sample" }])
+  const target = await store.people.personOf({ provider: "other", id: "BobSample" })
   if (!target) throw new Error("missing synthetic target")
   const db = await openCache(path)
   opened.push(db)
@@ -86,7 +89,7 @@ it("manually associates a guest with an explicitly selected cross-account person
   const audit = db
     .prepare("SELECT method,author,from_person_id,to_person_id FROM identity_link_events WHERE identity_id=?")
     .all(Number(saved.participants[0]?.identityId))
-  expect(await store.personSeenInAccounts(target.uid, [accountId])).toBe(true)
+  expect(await store.people.personSeenInAccounts(target.uid, [accountId])).toBe(true)
   expect(store.involvements.forPerson(Number(target.uid))).toEqual(
     expect.arrayContaining([expect.objectContaining({ subjectType: "meeting", subjectId: saved.meeting.id })]),
   )
@@ -119,15 +122,15 @@ it("moves only the reviewed identity, preserves other identity links, and reject
   const stable = await store.meetings.saveMeeting(input)
   const selected = stable.participants[0]
   if (!selected) throw new Error("missing synthetic participant")
-  const prior = await store.personOf({
+  const prior = await store.people.personOf({
     provider: selected.identityId ? input.participants[0].identity.provider : "example",
     id: input.participants[0].identity.externalId,
   })
   if (!prior) throw new Error("missing synthetic person")
-  await store.savePeople({ provider: "example", account: "AliceExample" }, [
+  await store.people.savePeople({ provider: "example", account: "AliceExample" }, [
     { id: "AliceExample-additional", name: "Alice Example" },
   ])
-  await store.linkIdentities(
+  await store.people.linkIdentities(
     { provider: input.participants[0].identity.provider, id: input.participants[0].identity.externalId },
     { provider: "example", id: "AliceExample-additional" },
     { method: "manual", by: "owner" },
@@ -146,7 +149,7 @@ it("moves only the reviewed identity, preserves other identity links, and reject
     previousPersonUid: prior.uid,
     changed: true,
   })
-  expect((await store.personOf({ provider: "example", id: "AliceExample-additional" }))?.uid).toBe(prior.uid)
+  expect((await store.people.personOf({ provider: "example", id: "AliceExample-additional" }))?.uid).toBe(prior.uid)
   await expect(store.meetings.linkParticipantPerson(request)).rejects.toMatchObject({ code: "configuration_error" })
   await expect(
     store.meetings.linkParticipantPerson({

@@ -4,7 +4,7 @@ import { formatReference, parseReference, type Reference } from "../../domain/re
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
-import type { AccountKey } from "../store.js"
+import type { AccountKey } from "../types.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"

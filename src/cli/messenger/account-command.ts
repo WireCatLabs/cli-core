@@ -38,7 +38,7 @@ export const accountCommand = (messenger: Messenger): Command => {
                 profile,
                 current: profile === current,
                 account: key?.account ?? null,
-                name: key && store ? await store.accountName(key) : null,
+                name: key && store ? await store.accounts.accountName(key) : null,
               })
             }
             renderAnswer(this, context, wholeList("account list", items))

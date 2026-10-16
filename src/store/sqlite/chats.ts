@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../../domain/channel-tags.js"
 import type { Chat, Id, Member, Page } from "../../domain/models.js"
-import type { AccountKey, StoredChatFilter } from "../store.js"
+import type { AccountKey, StoredChatFilter } from "../types.js"
 import { and, eq, inArray, or, sql } from "./drizzle/core.js"
 import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"

@@ -8,13 +8,15 @@ import {
   snapshotMeetingScope,
   validateMeetingContextChange,
 } from "../meetings/index.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+import type { AccountKey, AccountsStore, MessageStore } from "../store/store.js"
 import { resolveMeetingReference } from "./meeting-reference.js"
 
 export type MeetingContextServiceStore = Pick<
   MessageStore,
-  "storedAccount" | "meetings" | "notes" | "knowledge" | "memories" | "facts"
->
+  "meetings" | "notes" | "knowledge" | "memories" | "facts"
+> & {
+  accounts: Pick<AccountsStore, "storedAccount">
+}
 
 const meetingReferences = (values: readonly string[]): string[] =>
   values.map((value) => formatMeetingReference(parseMeetingReference(value)))
@@ -35,7 +37,7 @@ export const createMeetingContextService = async (
   const now = options.now ?? Date.now
   const scope = snapshotMeetingScope(input)
   const key: AccountKey = Object.freeze({ ...scope, ...(input.scope === undefined ? {} : { scope: input.scope }) })
-  const account = await store.storedAccount(key)
+  const account = await store.accounts.storedAccount(key)
   if (
     account.provider !== key.provider ||
     account.account !== key.account ||

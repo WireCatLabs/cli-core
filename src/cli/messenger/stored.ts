@@ -40,7 +40,7 @@ export const stored = (
       if (opened && !recorded && profile) {
         recorded = true
         await Promise.resolve()
-          .then(() => opened.saveProfile(profile.app, profile.name, account))
+          .then(() => opened.accounts.saveProfile(profile.app, profile.name, account))
           .catch(() => {})
       }
     } catch (error) {
@@ -62,7 +62,7 @@ export const stored = (
       ? {
           forumState: async (chatId: string) => {
             const state = await capability(messenger, "forumState", "read forum settings")(chatId)
-            await save("forum.read", (opened) => opened.saveChats(account, [state.chat]))
+            await save("forum.read", (opened) => opened.chats.saveChats(account, [state.chat]))
             return state
           },
         }
@@ -71,7 +71,7 @@ export const stored = (
       ? {
           upgradeForum: async (chatId: string) => {
             const state = await capability(messenger, "upgradeForum", "upgrade a group")(chatId)
-            await save("forum.upgrade", (opened) => opened.saveChats(account, [state.chat]))
+            await save("forum.upgrade", (opened) => opened.chats.saveChats(account, [state.chat]))
             return state
           },
         }
@@ -80,7 +80,7 @@ export const stored = (
       ? {
           enableForum: async (chatId: string) => {
             const state = await capability(messenger, "enableForum", "enable forum topics")(chatId)
-            await save("forum.enable", (opened) => opened.saveChats(account, [state.chat]))
+            await save("forum.enable", (opened) => opened.chats.saveChats(account, [state.chat]))
             return state
           },
         }
@@ -97,11 +97,11 @@ export const stored = (
       const scoped = { provider: account.provider, account: accountId }
       const opened = await store().catch(() => undefined)
       if (opened) {
-        const people = await opened.people(scoped.provider, { account: scoped.account })
+        const people = await opened.people.people(scoped.provider, { account: scoped.account })
         const wanted = reference.trim().toLowerCase()
         if (people.all().some((person) => person.alias?.toLowerCase().includes(wanted))) {
           const person = pickPerson(reference, people)
-          const chats = (await opened.chatsWith(scoped, person.id)).filter((chat) => chat.kind === "dialog")
+          const chats = (await opened.chats.chatsWith(scoped, person.id)).filter((chat) => chat.kind === "dialog")
           if (chats.length !== 1 || !chats[0])
             throw new CliError("validation_error", "the alias has no unique stored direct chat; use a chat id")
           let remote: Awaited<ReturnType<MessengerAdapter["resolve"]>> | undefined
@@ -124,7 +124,7 @@ export const stored = (
     close: () => messenger.close(),
     me: async () => {
       const me = await messenger.me()
-      await save("account.me", (opened) => opened.saveAccount(account, { name: me.name }))
+      await save("account.me", (opened) => opened.accounts.saveAccount(account, { name: me.name }))
       return me
     },
     ...(chats
@@ -134,9 +134,9 @@ export const stored = (
             // Only a page that names every chat says the others were left; an empty one is a hiccup.
             const complete = window.offset === 0 && !page.hasMore && page.items.length > 0
             await save("chats.list", async (opened) => {
-              await opened.saveChats(account, page.items)
+              await opened.chats.saveChats(account, page.items)
               if (complete)
-                await opened.markChatsLeft(
+                await opened.chats.markChatsLeft(
                   account,
                   page.items.map((chat) => chat.id),
                 )
@@ -153,7 +153,7 @@ export const stored = (
             const chatId = page.items[0]?.chatId
             if (chatId !== undefined) {
               await save("messages.list", (opened) =>
-                opened.saveMessages(account, chatId, page.items, { via: "history", seenAt }),
+                opened.messages.saveMessages(account, chatId, page.items, { via: "history", seenAt }),
               )
             }
             return page
@@ -169,7 +169,7 @@ export const stored = (
             if (chatId !== undefined) {
               const plain = items.map(({ anchor, ...message }) => message)
               await save("messages.around", (opened) =>
-                opened.saveMessages(account, chatId, plain, { via: "context", seenAt }),
+                opened.messages.saveMessages(account, chatId, plain, { via: "context", seenAt }),
               )
             }
             return items
@@ -213,7 +213,7 @@ export const stored = (
             const seenAt = Date.now()
             const edited = await capability(messenger, "edit", "edit")(chatId, messageId, text, options)
             await save("messages.edit", (opened) =>
-              opened.saveMessages(account, chatId, [edited], { via: "update", seenAt }),
+              opened.messages.saveMessages(account, chatId, [edited], { via: "update", seenAt }),
             )
             return edited
           },
@@ -223,7 +223,9 @@ export const stored = (
       ? {
           forward: async (fromChatId, messageId, toChatId, options) => {
             const copy = await capability(messenger, "forward", "forward")(fromChatId, messageId, toChatId, options)
-            await save("messages.forward", (opened) => opened.saveMessages(account, toChatId, [copy], { via: "send" }))
+            await save("messages.forward", (opened) =>
+              opened.messages.saveMessages(account, toChatId, [copy], { via: "send" }),
+            )
             return copy
           },
         }
@@ -233,7 +235,7 @@ export const stored = (
       ? {
           delete: async (chatId, messageIds, options) => {
             await capability(messenger, "delete", "delete")(chatId, messageIds, options)
-            await save("messages.delete", (opened) => opened.markDeleted(account, messageIds, { chatId }))
+            await save("messages.delete", (opened) => opened.messages.markDeleted(account, messageIds, { chatId }))
           },
         }
       : {}),
@@ -241,7 +243,9 @@ export const stored = (
       const sent = await messenger.send(chatId, text, options)
       // A scheduled message is not in the chat yet, and it will arrive under another id.
       if (options.at === undefined) {
-        await save("messages.send", (opened) => opened.saveMessages(account, chatId, [sent.message], { via: "send" }))
+        await save("messages.send", (opened) =>
+          opened.messages.saveMessages(account, chatId, [sent.message], { via: "send" }),
+        )
       }
       return sent
     },
@@ -253,12 +257,13 @@ export const stored = (
  * No `seenAt`: a pushed snapshot may be older than a deletion this store already holds.
  */
 const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatch): Promise<void> => {
-  if (batch.chats?.length) await store.saveChats(account, batch.chats)
-  if (batch.people?.length) await store.savePeople(account, batch.people)
+  if (batch.chats?.length) await store.chats.saveChats(account, batch.chats)
+  if (batch.people?.length) await store.people.savePeople(account, batch.people)
   const byChat = new Map<string, Message[]>()
   for (const message of batch.messages ?? [])
     byChat.set(message.chatId, [...(byChat.get(message.chatId) ?? []), message])
-  for (const [chatId, messages] of byChat) await store.saveMessages(account, chatId, messages, { via: "history" })
+  for (const [chatId, messages] of byChat)
+    await store.messages.saveMessages(account, chatId, messages, { via: "history" })
 }
 
 /** Each change as the store keeps it: a message or an edit upserted, a deletion a tombstone, reactions replaced. */
@@ -273,18 +278,18 @@ const keep = async (
     case "message":
     case "edit": {
       const { chatTitle, ...message } = event.message
-      await store.saveMessages(account, message.chatId, [message], { via: "update", seenAt })
+      await store.messages.saveMessages(account, message.chatId, [message], { via: "update", seenAt })
       return
     }
     case "delete":
-      await store.markDeleted(
+      await store.messages.markDeleted(
         account,
         [event.messageId],
         event.chatId === null ? (among ? { among } : {}) : { chatId: event.chatId },
       )
       return
     case "reaction":
-      await store.saveReactions(
+      await store.messages.saveReactions(
         account,
         event.chatId,
         event.messageId,

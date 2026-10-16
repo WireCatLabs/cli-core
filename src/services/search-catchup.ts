@@ -47,7 +47,7 @@ export const catchUpSearch = async (
   }
   try {
     check()
-    if ((await (await deps.store()).countMessages(await deps.account(), chat)) > maxMessages)
+    if ((await (await deps.store()).messages.countMessages(await deps.account(), chat)) > maxMessages)
       return { complete: false, reason: "message_bound" }
     const prepared = await embeddingsMaintenance(deps).refresh({
       chat,

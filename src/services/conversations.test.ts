@@ -36,10 +36,10 @@ afterEach(async () => {
 const service = async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "conversations-")), "m.db") })
   opened.push(store)
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "7", title: "Book club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 },
   ])
-  await store.saveMessages(
+  await store.messages.saveMessages(
     account,
     "7",
     [

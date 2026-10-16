@@ -16,15 +16,15 @@ export const listContextOf = async (
   app: AppIdentity | undefined,
   stored?: StoredAccount[],
 ): Promise<ListContext> => {
-  const all = stored ?? (await store.storedAccounts())
+  const all = stored ?? (await store.accounts.storedAccounts())
   // A fresh store has no row yet for the account it runs as.
   const held = all.some((one) => one.provider === account.provider && one.account === account.account)
     ? all
     : [...all, { id: 0, ...account, name: null, scope: "personal" as const }]
   return {
     held,
-    groups: await store.accountGroups(),
-    profiles: await store.profiles(),
+    groups: await store.accounts.accountGroups(),
+    profiles: await store.accounts.profiles(),
     running: { provider: account.provider, ...(app ? { command: app.command } : {}) },
   }
 }
@@ -41,7 +41,7 @@ export const listedAccounts = async (
   kind?: SearchKind,
 ): Promise<{ accounts: AccountKey[]; skipped: SkippedSource[] } | undefined> => {
   if (source === undefined) return undefined
-  const stored = await store.storedAccounts()
+  const stored = await store.accounts.storedAccounts()
   // A provider the store holds by that very name, and all, personal and bots, keep their old path.
   const registered =
     isKind(source) || (providerNamed(source) !== undefined && !stored.some(({ provider }) => provider === source))

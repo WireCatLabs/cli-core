@@ -14,7 +14,7 @@ const twinStore = async (): Promise<TwinStore & { noteId: string }> => {
   const twin = await openTwinStore()
   opened.push(twin.store)
   const note = await twin.store.notes.addNote({ text: `${SHARED_WORD} written in memo` })
-  await twin.store.fillSearchIndex({})
+  await twin.store.searchIndex.fillSearchIndex({})
   return { ...twin, noteId: String(note.id) }
 }
 
@@ -58,7 +58,7 @@ describe("search all --source", () => {
 
   it("takes a group of mixed kinds and names what --only leaves out", async () => {
     const { store, twins } = await twinStore()
-    await store.saveAccountGroup("work", ["synthetic:500", "email:500", `notes:${twins.alpha.folderId}`])
+    await store.accounts.saveAccountGroup("work", ["synthetic:500", "email:500", `notes:${twins.alpha.folderId}`])
     expect(keys((await search(store, { source: "group:work" })).accounts)).toEqual([
       "messages synthetic:500",
       "mail email:500",
@@ -78,7 +78,7 @@ describe("search all --source", () => {
     const { store } = await twinStore()
     const zoom = { provider: "zoom", account: "z1" }
     const meeting = sampleMeeting()
-    meeting.meeting.accountId = await store.saveAccount(zoom, { name: null })
+    meeting.meeting.accountId = await store.accounts.saveAccount(zoom, { name: null })
     const [row] = meeting.transcripts?.[0]?.rows ?? []
     if (row) row.text = `${SHARED_WORD} on the call`
     await store.meetings.saveMeeting(meeting)
@@ -87,7 +87,7 @@ describe("search all --source", () => {
     expect(keys(found.accounts)).toEqual(["messages synthetic:500", "meetings zoom:z1"])
     expect(found.items.some(({ kind }) => kind === "meeting")).toBe(true)
     const other = sampleMeeting()
-    other.meeting.accountId = await store.saveAccount({ provider: "zoom", account: "z2" }, { name: null })
+    other.meeting.accountId = await store.accounts.saveAccount({ provider: "zoom", account: "z2" }, { name: null })
     const narrowed = await search(store, { only: undefined, source: "zoom" })
     expect(keys(narrowed.accounts)).toEqual(["meetings zoom:z1"])
     expect(narrowed.skipped).toContainEqual({

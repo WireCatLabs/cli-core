@@ -63,10 +63,10 @@ const setUp = async ({
 } = {}) => {
   const path = join(mkdtempSync(join(tmpdir(), "embed-")), "m.db")
   const store = await openStore({ path })
-  await store.saveChats(account, [
+  await store.chats.saveChats(account, [
     { id: "9", title: "Group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
   ])
-  await store.saveMessages(account, "9", messages, { via: "history" })
+  await store.messages.saveMessages(account, "9", messages, { via: "history" })
   const deps = storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard)
   const conversations = conversationsService(deps)
   if (build) await conversations.build("9")
@@ -159,7 +159,7 @@ describe("embeddings", () => {
     const { store, embeddings } = await setUp({ messages: [message("1", "kitchen")] })
     expect((await embeddings.search("kitten", { model: "tiny", limit: 4 })).hits).toEqual([])
 
-    await store.saveMessages(account, "9", [message("40", "kittens")], { via: "history" })
+    await store.messages.saveMessages(account, "9", [message("40", "kittens")], { via: "history" })
     await conversationsService(
       storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, account, {} as SendGuard),
     ).build("9")
@@ -227,7 +227,7 @@ describe("strict conversation search scope", () => {
     const { execution } = await prepareLucene(store, account, { text: "from:100", limit: 1 }, {
       app: { command: "chat" },
     } as Messenger)
-    expect((await store.conversationEligibility?.(execution))?.conversations).toHaveLength(1002)
+    expect((await store.queries.conversationEligibility?.(execution))?.conversations).toHaveLength(1002)
     await store.close()
   })
 
@@ -235,17 +235,17 @@ describe("strict conversation search scope", () => {
     const { store, embeddings } = await setUp({
       messages: [message("1", "fish"), { ...message("40", "fish"), attachments: [{ kind: "file", name: "plan.txt" }] }],
     })
-    await store.addTags(account, { type: "message", chatId: "9", messageId: "40" }, ["release"])
+    await store.tags.addTags(account, { type: "message", chatId: "9", messageId: "40" }, ["release"])
     expect(
       (await embeddings.search("fish", { model: "e5-small", limit: 10, filter: "tag:release has:file" })).hits,
     ).toMatchObject([{ summary: { firstMessageId: "40" } }])
     expect(
       (await embeddings.search("fish", { model: "e5-small", limit: 10, filter: "tag:release NOT has:file" })).hits,
     ).toEqual([])
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "10", title: "Unbuilt", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(account, "10", [{ ...message("1", "dog"), chatId: "10" }], { via: "history" })
+    await store.messages.saveMessages(account, "10", [{ ...message("1", "dog"), chatId: "10" }], { via: "history" })
     const found = await embeddings.search("fish", { model: "e5-small", limit: 10, filter: "chat:10" })
     expect(found.hits).toEqual([])
     expect(found.readiness.notBuilt).toEqual(["10"])
@@ -255,10 +255,10 @@ describe("strict conversation search scope", () => {
   it("widens only explicitly and qualifies colliding native IDs in results and readiness", async () => {
     const { store, embeddings } = await setUp()
     const bot = { provider: "test-bot", account: "1" }
-    await store.saveChats(bot, [
+    await store.chats.saveChats(bot, [
       { id: "9", title: "Bot group", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(bot, "9", [message("40", "fish")], { via: "history" })
+    await store.messages.saveMessages(bot, "9", [message("40", "fish")], { via: "history" })
     const botDeps = storedDeps(
       { provider: "test-bot", app: { command: "chat" } } as Messenger,
       store,
@@ -302,7 +302,7 @@ describe("derived index freshness", () => {
   it("purges edited-away meaning hits and still counts the edit as pending", async () => {
     const { store, embeddings, conversations, path } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
-    await store.saveMessages(account, "9", [edited("40", "zebra")], { via: "live" })
+    await store.messages.saveMessages(account, "9", [edited("40", "zebra")], { via: "live" })
 
     const found = await embeddings.search("fish", { model: "tiny", limit: 3 })
     expect(found.hits).toEqual([])
@@ -327,13 +327,13 @@ describe("derived index freshness", () => {
     const { store, embeddings, path } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
     const other = { provider: "test", account: "other" }
-    await store.saveMessages(other, "9", [message("40", "fish")], { via: "history" })
+    await store.messages.saveMessages(other, "9", [message("40", "fish")], { via: "history" })
     await conversationsService(
       storedDeps({ provider: "test", app: { command: "chat" } } as Messenger, store, other, {} as SendGuard),
     ).build("9")
-    await store.saveMessages(account, "9", [edited("40", "zebra")], { via: "live" })
+    await store.messages.saveMessages(account, "9", [edited("40", "zebra")], { via: "live" })
     expect(await vectorRows(path, chunkHash("fish"))).toBe(1)
-    await store.saveMessages(other, "9", [edited("40", "dog")], { via: "live" })
+    await store.messages.saveMessages(other, "9", [edited("40", "dog")], { via: "live" })
     expect(await vectorRows(path, chunkHash("fish"))).toBe(0)
     await store.close()
   })
@@ -341,7 +341,7 @@ describe("derived index freshness", () => {
   it("purges the vector of a deleted message's text and never returns the hit", async () => {
     const { store, embeddings, path } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
-    await store.markDeleted(account, ["40"], { chatId: "9" })
+    await store.messages.markDeleted(account, ["40"], { chatId: "9" })
 
     expect(await vectorRows(path, chunkHash("fish"))).toBe(0)
     const found = await embeddings.search("fish", { model: "tiny", limit: 3 })
@@ -356,8 +356,8 @@ describe("derived index freshness", () => {
     const { store, embeddings, path } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
     const kept = await vectorOf(path, chunkHash("fish"))
-    await store.markDeleted(account, ["40"], { chatId: "9" })
-    await store.saveVectors("local:tiny:4", 4, [{ hash: chunkHash("fish"), vector: kept }])
+    await store.messages.markDeleted(account, ["40"], { chatId: "9" })
+    await store.vectors.saveVectors("local:tiny:4", 4, [{ hash: chunkHash("fish"), vector: kept }])
 
     const found = await embeddings.search("fish", { model: "tiny", limit: 3 })
     expect(found.hits.map(({ summary }) => summary.firstMessageId)).not.toContain("40")
@@ -366,14 +366,14 @@ describe("derived index freshness", () => {
 
   it("keeps the vector another chat's current chunk shares when a message is deleted", async () => {
     const { store, embeddings, conversations, path } = await setUp()
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       { id: "10", title: "Other", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await store.saveMessages(account, "10", [{ ...message("500", "fish"), chatId: "10" }], { via: "history" })
+    await store.messages.saveMessages(account, "10", [{ ...message("500", "fish"), chatId: "10" }], { via: "history" })
     await conversations.build("10")
     await embeddings.embed("9", { model: "tiny", threads: 1 })
     await embeddings.embed("10", { model: "tiny", threads: 1 })
-    await store.markDeleted(account, ["40"], { chatId: "9" })
+    await store.messages.markDeleted(account, ["40"], { chatId: "9" })
 
     expect(await vectorRows(path, chunkHash("fish"))).toBe(1)
     const [top] = (await embeddings.search("fish", { model: "tiny", limit: 5 })).hits
@@ -386,7 +386,7 @@ describe("derived index freshness", () => {
   it("counts a message saved after the build as pending, though its word match stays hidden until a rebuild", async () => {
     const { store, embeddings } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
-    await store.saveMessages(account, "9", [message("120", "zebra")], { via: "live" })
+    await store.messages.saveMessages(account, "9", [message("120", "zebra")], { via: "live" })
 
     const found = await embeddings.search("zebra", { model: "tiny", limit: 5 })
     expect(found.hits.filter(({ by }) => by.includes("words"))).toEqual([])
@@ -401,7 +401,7 @@ describe("derived index freshness", () => {
     const { store, embeddings, conversations } = await setUp()
     await embeddings.embed("9", { model: "tiny", threads: 1 })
     await embeddings.embed("9", { model: "tiny-2", threads: 1 })
-    await store.saveMessages(account, "9", [message("120", "zebra")], { via: "live" })
+    await store.messages.saveMessages(account, "9", [message("120", "zebra")], { via: "live" })
     await conversations.build("9")
     await embeddings.embed("9", { model: "tiny", threads: 1 })
 
@@ -425,7 +425,7 @@ describe("derived index freshness", () => {
       messages: [message("1", "cat dog"), message("40", "fish")],
     })
     await embeddings.embed("9", { model: "tiny", threads: 1 })
-    await store.saveMessages(account, "9", [message("80", "zebra")], { via: "live" })
+    await store.messages.saveMessages(account, "9", [message("80", "zebra")], { via: "live" })
     await conversations.build("9")
 
     const { hits } = await embeddings.search("zebra", { model: "tiny", limit: 5 })
@@ -438,8 +438,8 @@ describe("derived index freshness", () => {
       messages: [message("1", "cat dog"), message("40", "fish"), message("80", "zebra")],
     })
     const installed = vi.spyOn(embeddingRuntime, "isTextModelInstalled").mockReturnValue(true)
-    const nearest = vi.spyOn(store, "nearestConversations").mockImplementation(async () =>
-      (await store.conversations(account, "9", { limit: 10 })).items
+    const nearest = vi.spyOn(store.vectors, "nearestConversations").mockImplementation(async () =>
+      (await store.conversations.conversations(account, "9", { limit: 10 })).items
         .map((summary) => ({
           summary,
           chunk: { firstMessageId: summary.firstMessageId, lastMessageId: summary.firstMessageId },
@@ -474,7 +474,7 @@ describe("derived index freshness", () => {
 
   it("rejects blank and oversized topic queries before refreshing or reading indexes", async () => {
     const { store, embeddings } = await setUp()
-    const index = vi.spyOn(store, "fillSearchIndex")
+    const index = vi.spyOn(store.searchIndex, "fillSearchIndex")
     for (const query of ["", "  ", "é".repeat(4097)])
       await expect(embeddings.search(query, { model: "tiny", limit: 10 })).rejects.toMatchObject({
         code: "validation_error",
@@ -517,9 +517,14 @@ describe("derived index freshness", () => {
       { state: "words-only", graph: { outdatedRules: false }, vectors: { chunks: 3, missing: 3 } },
     ])
 
-    await store.saveMessages(account, "9", [{ ...message("40", "zebra"), editedAt: "2026-10-05T00:00:00.000Z" }], {
-      via: "live",
-    })
+    await store.messages.saveMessages(
+      account,
+      "9",
+      [{ ...message("40", "zebra"), editedAt: "2026-10-05T00:00:00.000Z" }],
+      {
+        via: "live",
+      },
+    )
     const edited = await embeddings.search("kitten", { model: "tiny", chat: "9", limit: 5 })
     expect(edited.readiness).toMatchObject({ searchedByMeaning: [], wordsOnly: ["9"], stale: ["9"] })
     await conversations.build("9")
@@ -537,18 +542,18 @@ describe("catching up without --chat", () => {
   const inChat = (chatId: string, one: Message): Message => ({ ...one, chatId })
   const withChats = async () => {
     const set = await setUp()
-    await set.store.saveChats(account, [
+    await set.store.chats.saveChats(account, [
       { id: "10", title: "Other", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
       { id: "11", title: "Zoe", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
     ])
-    await set.store.saveMessages(account, "10", [inChat("10", message("200", "fish dog"))], { via: "history" })
-    await set.store.saveMessages(account, "11", [inChat("11", message("300", "cat"))], { via: "history" })
+    await set.store.messages.saveMessages(account, "10", [inChat("10", message("200", "fish dog"))], { via: "history" })
+    await set.store.messages.saveMessages(account, "11", [inChat("11", message("300", "cat"))], { via: "history" })
     return set
   }
 
   it("**rebuilds a changed chat before building a group never built**, within --max-chats, and names the rest", async () => {
     const { store, embeddings } = await withChats()
-    await store.saveMessages(account, "9", [message("120", "zebra")], { via: "live" })
+    await store.messages.saveMessages(account, "9", [message("120", "zebra")], { via: "live" })
     expect(await embeddings.readiness({ model: "tiny" })).toMatchObject({ unbuiltGroups: 1 })
     expect(await embeddings.readiness({ chat: "9", model: "tiny" })).not.toHaveProperty("unbuiltGroups")
 
@@ -648,9 +653,14 @@ describe("related conversations", () => {
       "message 999 is in no conversation",
     )
     await embeddings.embed("9", { model: "tiny", threads: 1 })
-    await store.saveMessages(account, "9", [{ ...message("80", "zebra"), editedAt: "2026-10-05T00:00:00.000Z" }], {
-      via: "live",
-    })
+    await store.messages.saveMessages(
+      account,
+      "9",
+      [{ ...message("80", "zebra"), editedAt: "2026-10-05T00:00:00.000Z" }],
+      {
+        via: "live",
+      },
+    )
     await expect(embeddings.related("9", "80", { model: "tiny", limit: 5 })).rejects.toThrow(
       "conversations build --chat 9",
     )

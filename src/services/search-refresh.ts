@@ -79,7 +79,8 @@ export const refreshSearch = async (deps: ServiceDeps, request: SearchQuery): Pr
       continue
     }
     if (scoped === undefined)
-      for (const { id } of (await store.chats(selected, {})).items) candidates.push({ account: selected, chatId: id })
+      for (const { id } of (await store.chats.chats(selected, {})).items)
+        candidates.push({ account: selected, chatId: id })
     else for (const chat of scoped) if (sameAccount(chat.account, selected)) candidates.push(chat)
   }
   const eligible = candidates.filter((chat) => matchesChat(execution.root, chat) !== false)
@@ -102,7 +103,7 @@ export const refreshSearch = async (deps: ServiceDeps, request: SearchQuery): Pr
         continue
       }
       try {
-        const newest = (await store.messages(account, chatId, { limit: 1 })).items[0]
+        const newest = (await store.messages.messages(account, chatId, { limit: 1 })).items[0]
         let counted = 0
         const fetched = await archiveService(deps).fetch(chatId, {
           limit: options.maxMessages - result.messages,

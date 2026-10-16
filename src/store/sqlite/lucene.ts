@@ -18,14 +18,13 @@ import { exhausted, QUERY_LIMITS, searchError } from "../../search/lucene/types.
 import { inSource } from "../../search/query.js"
 import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
-import type { ScoredHit } from "../store.js"
 import { emailHitsByPk } from "./emails.js"
 import { linkMatch } from "./mention-links.js"
 import type { StoreContext } from "./open.js"
 import { valueMatch } from "./phone-countries.js"
 import { hitsByPk } from "./search.js"
 import { read } from "./transaction.js"
-import type { MatchPlace } from "./words.js"
+import type { MatchPlace, ScoredHit } from "./words.js"
 
 interface Fragment {
   sql: string

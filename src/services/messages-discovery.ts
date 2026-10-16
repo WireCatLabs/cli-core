@@ -72,7 +72,7 @@ export const searchDiscovery = async (
   let replyCount = 0
   if (candidates.length) {
     check()
-    const proposed = await store.directReplies(
+    const proposed = await store.messages.directReplies(
       candidates.map((m) => {
         const locator = parseLocator(m.locator)
         return { account: { provider: locator.provider, account: locator.account }, chatId: m.chatId, id: m.id }
@@ -171,7 +171,7 @@ export const searchDiscovery = async (
       const owner = parseLocator(m.locator)
       return {
         ...m,
-        context: await store.around({ provider: owner.provider, account: owner.account }, m.chatId, m.id, {
+        context: await store.messages.around({ provider: owner.provider, account: owner.account }, m.chatId, m.id, {
           before: request.context,
           after: request.context,
         }),

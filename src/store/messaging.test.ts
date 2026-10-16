@@ -30,7 +30,7 @@ it("stores scoped nested chats and connects a reply thread when its root arrives
     store = await openStore({ path, now: () => 1000 }),
     db = await openCache(path)
   try {
-    await store.saveChats(account, [
+    await store.chats.saveChats(account, [
       {
         id: "room",
         parentChatId: "parent",
@@ -42,10 +42,10 @@ it("stores scoped nested chats and connects a reply thread when its root arrives
         participantsCount: null,
       },
     ])
-    await store.saveMessages(account, "room", [message("reply", { threadId: "root" })], { via: "history" })
+    await store.messages.saveMessages(account, "room", [message("reply", { threadId: "root" })], { via: "history" })
     expect(db.prepare("SELECT thread_root_id FROM messages").get()?.thread_root_id).toBeNull()
-    await store.keepTranscript(account, "room", "root", "Synthetic transcript", "synthetic")
-    await store.saveMessages(account, "room", [message("root")], { via: "history" })
+    await store.messages.keepTranscript(account, "room", "root", "Synthetic transcript", "synthetic")
+    await store.messages.saveMessages(account, "room", [message("root")], { via: "history" })
     expect(db.prepare("SELECT message_id FROM message_transcripts").get()?.message_id).not.toBeNull()
     expect(
       db
@@ -61,14 +61,14 @@ it("stores scoped nested chats and connects a reply thread when its root arrives
         )
         .get(),
     ).toEqual({ scope: "work", chat_scope: "personal", parent: "parent" })
-    expect((await store.chats(account, {})).items.find((chat) => chat.id === "room")).toMatchObject({
+    expect((await store.chats.chats(account, {})).items.find((chat) => chat.id === "room")).toMatchObject({
       scope: "personal",
       parentChatId: "parent",
     })
     expect(db.prepare("SELECT message_count FROM chats WHERE external_id='room'").get()?.message_count).toBe(2)
-    await store.markDeleted(account, ["root"], { chatId: "room" })
-    await store.keepTranscript(account, "room", "root", "Late transcript", "synthetic")
-    expect(await store.transcript(account, "room", "root")).toBeUndefined()
+    await store.messages.markDeleted(account, ["root"], { chatId: "room" })
+    await store.messages.keepTranscript(account, "room", "root", "Late transcript", "synthetic")
+    expect(await store.messages.transcript(account, "room", "root")).toBeUndefined()
   } finally {
     db.close()
     await store.close()
@@ -79,21 +79,23 @@ it("keeps contact aliases per account and revisioned notes on the identity", asy
   const path = fresh(),
     store = await openStore({ path, now: () => 1000 })
   try {
-    await store.savePeople(account, [{ id: "alice", name: "Alice Example", username: "alice" }])
+    await store.people.savePeople(account, [{ id: "alice", name: "Alice Example", username: "alice" }])
     const other = { ...account, account: "other" }
-    await store.savePeople(other, [{ id: "alice", name: "Alice Example" }])
-    await store.setContactAlias(account, "alice", "Local Alice")
-    expect((await store.privateContact(account, "alice")).alias).toBe("Local Alice")
-    expect((await store.privateContact(other, "alice")).alias).toBeNull()
-    const note = await store.addContactNote(account, "alice", "Synthetic note")
-    const edited = await store.editContactNote(other, "alice", note.id, "Revised note", note.revision)
+    await store.people.savePeople(other, [{ id: "alice", name: "Alice Example" }])
+    await store.people.setContactAlias(account, "alice", "Local Alice")
+    expect((await store.people.privateContact(account, "alice")).alias).toBe("Local Alice")
+    expect((await store.people.privateContact(other, "alice")).alias).toBeNull()
+    const note = await store.people.addContactNote(account, "alice", "Synthetic note")
+    const edited = await store.people.editContactNote(other, "alice", note.id, "Revised note", note.revision)
     expect(edited).toMatchObject({ text: "Revised note", revision: 2 })
-    await expect(store.editContactNote(account, "alice", note.id, "Stale", 1)).rejects.toThrow("current revision")
-    expect((await store.personOf({ provider: account.provider, id: "alice" }))?.uid).toMatch(/^\d+$/)
-    await store.setContactAlias(account, "alice", null)
-    expect((await store.privateContact(account, "alice")).alias).toBeNull()
-    await store.removeContactNote(account, "alice", note.id)
-    expect((await store.privateContact(other, "alice")).notes).toEqual([])
+    await expect(store.people.editContactNote(account, "alice", note.id, "Stale", 1)).rejects.toThrow(
+      "current revision",
+    )
+    expect((await store.people.personOf({ provider: account.provider, id: "alice" }))?.uid).toMatch(/^\d+$/)
+    await store.people.setContactAlias(account, "alice", null)
+    expect((await store.people.privateContact(account, "alice")).alias).toBeNull()
+    await store.people.removeContactNote(account, "alice", note.id)
+    expect((await store.people.privateContact(other, "alice")).notes).toEqual([])
   } finally {
     await store.close()
   }
@@ -104,7 +106,7 @@ it("stores chunk filter columns and narrows by scope, project, person and time b
     store = await openStore({ path, now: () => 1000 }),
     db = await openCache(path)
   try {
-    await store.saveMessages(account, "room", [message("1")], { via: "history" })
+    await store.messages.saveMessages(account, "room", [message("1")], { via: "history" })
     db.prepare(
       "INSERT INTO projects (key,name,type,scope,created_at,updated_at) VALUES ('SYN','Synthetic project','work','work',0,0)",
     ).run()
@@ -113,7 +115,7 @@ it("stores chunk filter columns and narrows by scope, project, person and time b
       "INSERT INTO links (from_type,from_id,to_type,to_id,kind,source,created_at,updated_at) VALUES ('chat',?,'project',1,'member-of','owner',0,0)",
     ).run(chat)
     const hash = chunkHash("Alice Example: Synthetic text")
-    await store.replaceConversations(account, "room", {
+    await store.conversations.replaceConversations(account, "room", {
       startedAt: 1000,
       algorithmVersion: 1,
       links: [],
@@ -126,11 +128,11 @@ it("stores chunk filter columns and narrows by scope, project, person and time b
       occurred_at: 200,
       account_id: 1,
     })
-    await store.saveVectors("synthetic", 2, [{ hash, vector: new Float32Array([1, 0]) }])
+    await store.vectors.saveVectors("synthetic", 2, [{ hash, vector: new Float32Array([1, 0]) }])
     const person = String(db.prepare("SELECT person_id FROM identity_links").get()?.person_id)
     const query = { model: "synthetic", query: new Float32Array([1, 0]), limit: 10 }
     expect(
-      await store.nearestConversations(account, {
+      await store.vectors.nearestConversations(account, {
         ...query,
         scope: "work",
         projectId: "1",
@@ -139,13 +141,15 @@ it("stores chunk filter columns and narrows by scope, project, person and time b
         before: new Date(201).toISOString(),
       }),
     ).toHaveLength(1)
-    expect(await store.nearestConversations(account, { ...query, scope: "personal" })).toEqual([])
-    expect(await store.nearestConversations(account, { ...query, projectId: "2" })).toEqual([])
-    expect(await store.nearestConversations(account, { ...query, personId: "999" })).toEqual([])
-    expect(await store.nearestConversations(account, { ...query, before: new Date(200).toISOString() })).toEqual([])
+    expect(await store.vectors.nearestConversations(account, { ...query, scope: "personal" })).toEqual([])
+    expect(await store.vectors.nearestConversations(account, { ...query, projectId: "2" })).toEqual([])
+    expect(await store.vectors.nearestConversations(account, { ...query, personId: "999" })).toEqual([])
+    expect(
+      await store.vectors.nearestConversations(account, { ...query, before: new Date(200).toISOString() }),
+    ).toEqual([])
 
     db.prepare("UPDATE chats SET scope='personal' WHERE id=?").run(chat)
-    expect(await store.nearestConversations(account, { ...query, scope: "personal" })).toHaveLength(1)
+    expect(await store.vectors.nearestConversations(account, { ...query, scope: "personal" })).toHaveLength(1)
     db.prepare("DELETE FROM links WHERE from_type='chat'").run()
     expect(db.prepare("SELECT project_id FROM chunks").get()).toEqual({ project_id: null })
 
@@ -154,7 +158,7 @@ it("stores chunk filter columns and narrows by scope, project, person and time b
       db.prepare("SELECT count(*) AS n FROM chunks").get()?.n,
       db.prepare("SELECT count(*) AS n FROM chunk_messages").get()?.n,
     ]).toEqual([0, 0])
-    await store.purge(account)
+    await store.accounts.purge(account)
   } finally {
     db.close()
     await store.close()
@@ -166,7 +170,7 @@ it("keeps attachments with overlapping IDs isolated by their owning type during 
     store = await openStore({ path }),
     db = await openCache(path)
   try {
-    await store.saveMessages(
+    await store.messages.saveMessages(
       account,
       "room",
       [message("1", { attachments: [{ kind: "file", name: "message.txt" }] })],
@@ -181,11 +185,13 @@ it("keeps attachments with overlapping IDs isolated by their owning type during 
     db.prepare(
       "INSERT INTO attachments (attachable_type,attachable_id,position,kind,name,created_at,updated_at) VALUES ('document',1,0,'file','document.txt',0,0)",
     ).run()
-    expect((await store.messages(account, "room", { limit: 10 })).items[0]?.attachments).toEqual([
+    expect((await store.messages.messages(account, "room", { limit: 10 })).items[0]?.attachments).toEqual([
       { kind: "file", name: "message.txt" },
     ])
-    expect((await store.fileAttachments(account, { limit: 10 })).map((file) => file.name)).toEqual(["message.txt"])
-    await store.purge(account)
+    expect((await store.attachments.fileAttachments(account, { limit: 10 })).map((file) => file.name)).toEqual([
+      "message.txt",
+    ])
+    await store.accounts.purge(account)
     expect(db.prepare("SELECT attachable_type,name FROM attachments").all()).toEqual([
       { attachable_type: "document", name: "document.txt" },
     ])

@@ -54,10 +54,15 @@ const setup = async (
 ) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "server-search-")), "m.db") })
   stores.push(store)
-  await store.saveChats(account, [chat("7")])
-  await store.saveMessages(account, "7", [message("7", "1", "invoice paid"), message("7", "4", "invoice due")], {
-    via: "history",
-  })
+  await store.chats.saveChats(account, [chat("7")])
+  await store.messages.saveMessages(
+    account,
+    "7",
+    [message("7", "1", "invoice paid"), message("7", "4", "invoice due")],
+    {
+      via: "history",
+    },
+  )
   const asked: ServerQuery[] = []
   const searchMessages = vi.fn(async (query: ServerQuery) => {
     asked.push(query)
@@ -89,7 +94,7 @@ describe("server search beside the archive", () => {
       failed: [],
       complete: true,
     })
-    expect(await one.store.message(account, "3", { chatId: "8" })).toMatchObject({ text: "nothing here" })
+    expect(await one.store.messages.message(account, "3", { chatId: "8" })).toMatchObject({ text: "nothing here" })
   })
 
   it("**search all** asks the server as search messages does, so it finds a message only the server holds", async () => {
@@ -98,7 +103,7 @@ describe("server search beside the archive", () => {
       hasMore: false,
       chats: [chat("8")],
     }))
-    await one.store.saveChats({ provider: "test", account: "501" }, [chat("9")])
+    await one.store.chats.saveChats({ provider: "test", account: "501" }, [chat("9")])
     const found = await servicesFor(one.deps).messages.searchAll({ text: "invoice", limit: 20, only: ["messages"] })
     expect(found.items.map(({ ref }) => ref).sort()).toEqual([
       "msg:test/500/7/1",
@@ -152,9 +157,9 @@ describe("server search beside the archive", () => {
   ])("**keeps --backend server to the account it runs as** under $name", async ({ query }) => {
     const one = await setup()
     const twin = { provider: "test", account: "501" }
-    await one.store.saveChats(twin, [chat("7"), chat("8")])
-    await one.store.saveMessages(twin, "7", [message("7", "1", "invoice paid")], { via: "history" })
-    await one.store.saveMessages(twin, "8", [message("8", "2", "invoices sent")], { via: "history" })
+    await one.store.chats.saveChats(twin, [chat("7"), chat("8")])
+    await one.store.messages.saveMessages(twin, "7", [message("7", "1", "invoice paid")], { via: "history" })
+    await one.store.messages.saveMessages(twin, "8", [message("8", "2", "invoices sent")], { via: "history" })
     const found = await one.search({ ...query, backend: "server" })
     expect(found.items.map(({ locator, source }) => [locator, source]).sort()).toEqual([
       ["msg:test/500/7/1", "both"],
@@ -165,8 +170,8 @@ describe("server search beside the archive", () => {
   it("labels another account's twin of a server hit as the archive's under --backend both", async () => {
     const one = await setup()
     const twin = { provider: "test", account: "501" }
-    await one.store.saveChats(twin, [chat("7")])
-    await one.store.saveMessages(twin, "7", [message("7", "1", "invoice paid")], { via: "history" })
+    await one.store.chats.saveChats(twin, [chat("7")])
+    await one.store.messages.saveMessages(twin, "7", [message("7", "1", "invoice paid")], { via: "history" })
     const found = await one.search({ text: "invoice", source: "all", backend: "both" })
     expect(found.items.filter(({ locator }) => locator.startsWith("msg:test/501/"))).toEqual([
       expect.objectContaining({ locator: "msg:test/501/7/1", source: "archive" }),
@@ -252,7 +257,7 @@ describe("server search beside the archive", () => {
     expect(found.items.map(({ id }) => id).sort()).toEqual(["1", "4"])
     late?.()
     await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(await one.store.message(account, "2", { chatId: "8" })).toBeUndefined()
+    expect(await one.store.messages.message(account, "2", { chatId: "8" })).toBeUndefined()
   })
 
   it("names a flood wait without the provider's words", async () => {

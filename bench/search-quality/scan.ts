@@ -11,7 +11,7 @@ const root = mkdtempSync(join(tmpdir(), "search-vector-scan-"))
 const path = join(root, "scan.db")
 const account = { provider: "synthetic", account: "500" }
 const store = await openStore({ path })
-await store.saveChats(account, [
+await store.chats.saveChats(account, [
   {
     id: "7",
     title: "Synthetic scan",
@@ -21,7 +21,7 @@ await store.saveChats(account, [
     participantsCount: 1,
   },
 ])
-await store.saveMessages(
+await store.messages.saveMessages(
   account,
   "7",
   [

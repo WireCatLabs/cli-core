@@ -88,7 +88,7 @@ const any = { mode: "any", beginnings: false, limit: LIMIT }
 const pickOf = (sets: string[][]) => (i: number) => sets[i % sets.length] as string[]
 if (phase === "search") {
   const store = await openStore({ path: file })
-  await store.fillSearchIndex()
+  await store.searchIndex.fillSearchIndex()
   const all = { accounts }
 
   out()

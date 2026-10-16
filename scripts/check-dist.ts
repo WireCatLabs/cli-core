@@ -50,8 +50,8 @@ const message = {
   forwardedFrom: null,
   reactions: null,
 }
-await messages.saveMessages(key, "-1002", [message], { via: "check" })
-const read = await messages.messages(key, "-1002", { limit: 5 })
+await messages.messages.saveMessages(key, "-1002", [message], { via: "check" })
+const read = await messages.messages.messages(key, "-1002", { limit: 5 })
 const { readEvidencePacket } = await import(join(root, "services/index.js"))
 const storedEvidence = await readEvidencePacket(messages, key, { chat: "-1002", limit: 5 })
 if (storedEvidence.items[0]?.locator !== "msg:telegram/1/-1002/3" || storedEvidence.nextBeforeId !== null)

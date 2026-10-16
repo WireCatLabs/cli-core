@@ -51,8 +51,8 @@ describe("public personal MCP mounting", () => {
     const env = { MESSAGING_STORE: join(root, "messages.db") }
     const account = { provider: "fixture", account: "500" }
     const opened = await openStore({ env })
-    await opened.saveChats(account, [chat])
-    await opened.saveMessages(account, "7", [message], { via: "fixture" })
+    await opened.chats.saveChats(account, [chat])
+    await opened.messages.saveMessages(account, "7", [message], { via: "fixture" })
     await opened.close()
     const backend = scripted({ sessions: async () => [] })
     const messenger: Messenger = {
@@ -1143,7 +1143,10 @@ describe("the MCP server", () => {
     await call("messages list", { chat: "7" })
     const store = await openStore({ path: env.MESSAGING_STORE })
     try {
-      const accountId = await store.saveAccount({ provider: "zoom", account: "zm-profile:alice" }, { name: null })
+      const accountId = await store.accounts.saveAccount(
+        { provider: "zoom", account: "zm-profile:alice" },
+        { name: null },
+      )
       const sample = sampleMeeting()
       await store.meetings.saveMeeting({
         ...sample,
@@ -1184,7 +1187,9 @@ describe("the MCP server", () => {
     const { call, client, env } = await connect(telegram, { root, config: levels({ messages: "readonly" }) })
     const store = await openStore({ path: env.MESSAGING_STORE })
     try {
-      await store.saveMessages({ provider: "chat", account: "500" }, "7", [{ ...message, id: "2" }], { via: "test" })
+      await store.messages.saveMessages({ provider: "chat", account: "500" }, "7", [{ ...message, id: "2" }], {
+        via: "test",
+      })
     } finally {
       await store.close()
     }
@@ -1461,7 +1466,7 @@ describe("the MCP server", () => {
     await call("messages list", { chat: "7" })
     const batch = (await call("conversations batches next", { chat: "7" })).body.item.batch
     const store = await openStore({ path: env.MESSAGING_STORE })
-    await store.markDeleted({ provider: "chat", account: "500" }, ["1"], { chatId: "7" })
+    await store.messages.markDeleted({ provider: "chat", account: "500" }, ["1"], { chatId: "7" })
     await store.close()
     const result = await call("conversations links add", {
       batch,
@@ -1708,7 +1713,7 @@ describe("the MCP server", () => {
     await call("chats list")
     const store = await openStore({ path: env.MESSAGING_STORE })
     await seedSearchRecipes(store, { provider: "chat", account: "500" })
-    await store.saveChatMetadata(
+    await store.chats.saveChatMetadata(
       { provider: "chat", account: "500" },
       { chatId: "7", title: "AI news", username: null, description: null },
     )
@@ -1784,7 +1789,7 @@ describe("the MCP server", () => {
     await call("chats list")
     const store = await openStore({ path: env.MESSAGING_STORE })
     await seedSearchRecipes(store, { provider: "chat", account: "500" })
-    await store.keepDownloads({ provider: "chat", account: "500" }, "9", "108", [
+    await store.attachments.keepDownloads({ provider: "chat", account: "500" }, "9", "108", [
       { kind: "file", name: "Отчёт.PDF", path: "/saved/report.pdf" },
     ])
     await store.close()
@@ -1829,13 +1834,15 @@ describe("the MCP server", () => {
     const path = join(root, "remote.pdf")
     const bytes = Buffer.from("%PDF-1.7\nsynthetic remote file")
     writeFileSync(path, bytes)
-    await store.saveMessages(
+    await store.messages.saveMessages(
       { provider: "chat", account: "500" },
       "7",
       [{ ...message, id: "902", attachments: [{ kind: "file", name: "remote.pdf" }] }],
       { via: "test" },
     )
-    await store.keepDownloads({ provider: "chat", account: "500" }, "7", "902", [{ kind: "file", position: 0, path }])
+    await store.attachments.keepDownloads({ provider: "chat", account: "500" }, "7", "902", [
+      { kind: "file", position: 0, path },
+    ])
     await store.close()
     const answer = await client.run({
       command: "attachments show",
@@ -1902,7 +1909,7 @@ describe("the MCP server", () => {
       env.CHAT_CACHE_DIR,
     ]
     try {
-      await store.saveMessages(
+      await store.messages.saveMessages(
         owner,
         "7",
         [{ ...message, id: "903", attachments: [{ kind: "file", name: "synthetic.txt" }] }],
@@ -1925,7 +1932,7 @@ describe("the MCP server", () => {
           const extract = await call("attachments extract", { chat: "7", from_dir: folder })
           expect(extract.isError).toBe(true)
           expect(extract.body).toMatchObject({ error: { code: "validation_error" } })
-          await store.keepDownloads(owner, "7", "903", [
+          await store.attachments.keepDownloads(owner, "7", "903", [
             { kind: "file", position: 0, path: join(folder, "synthetic.txt") },
           ])
           const transfer = await call("attachments show", { chat: "7", message: "903", format: "base64" })
@@ -1936,8 +1943,8 @@ describe("the MCP server", () => {
       }
       expect(backend.opened()).toBe(0)
       expect(
-        await store.localPathOf(
-          (await store.attachments(owner, { chatId: "7", messageId: "903", limit: 1 }))[0]?.pk as number,
+        await store.attachments.localPathOf(
+          (await store.attachments.attachments(owner, { chatId: "7", messageId: "903", limit: 1 }))[0]?.pk as number,
         ),
       ).not.toBeNull()
     } finally {
@@ -1952,13 +1959,15 @@ describe("the MCP server", () => {
     const store = await openStore({ path: env.MESSAGING_STORE })
     const path = join(root, "extract-fixture.txt")
     writeFileSync(path, "synthetic extractionneedle")
-    await store.saveMessages(
+    await store.messages.saveMessages(
       { provider: "chat", account: "500" },
       "7",
       [{ ...message, id: "900", attachments: [{ kind: "file", name: "extract-fixture.txt" }] }],
       { via: "history" },
     )
-    await store.keepDownloads({ provider: "chat", account: "500" }, "7", "900", [{ kind: "file", position: 0, path }])
+    await store.attachments.keepDownloads({ provider: "chat", account: "500" }, "7", "900", [
+      { kind: "file", position: 0, path },
+    ])
     await store.close()
     const answer = await call("attachments extract", { chat: "7", limit: 1 })
     expect(answer.isError).toBe(false)
@@ -1990,13 +1999,15 @@ describe("the MCP server", () => {
     const store = await openStore({ path: env.MESSAGING_STORE })
     const path = join(root, "mcp-ocr.png")
     writeFileSync(path, PNG.sync.write(new PNG({ width: 2, height: 2 })))
-    await store.saveMessages(
+    await store.messages.saveMessages(
       { provider: "chat", account: "500" },
       "7",
       [{ ...message, id: "901", attachments: [{ kind: "photo", name: "mcp-ocr.png" }] }],
       { via: "history" },
     )
-    await store.keepDownloads({ provider: "chat", account: "500" }, "7", "901", [{ kind: "photo", position: 0, path }])
+    await store.attachments.keepDownloads({ provider: "chat", account: "500" }, "7", "901", [
+      { kind: "photo", position: 0, path },
+    ])
     await store.close()
     const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       Response.json({
@@ -2025,8 +2036,8 @@ describe("the MCP server", () => {
     const backend = scripted()
     const { call, env } = await connect(backend, { root })
     const store = await openStore({ path: env.MESSAGING_STORE })
-    await store.markRange({ provider: "chat", account: "500" }, "7", 100, 101)
-    await store.markRange({ provider: "chat", account: "500" }, "7", 103, 104)
+    await store.sync.markRange({ provider: "chat", account: "500" }, "7", 100, 101)
+    await store.sync.markRange({ provider: "chat", account: "500" }, "7", 103, 104)
     await store.close()
     const plan = await call("store gaps plan", { chat: "7" })
     expect(plan.body.item.gaps).toEqual([{ from: 102, to: 102 }])

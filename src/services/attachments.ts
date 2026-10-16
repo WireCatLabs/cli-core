@@ -232,9 +232,13 @@ const keep = async (
 ) => {
   const base = { origin: "extracted" as const, contentSha256: sha, bytes }
   if (extraction.status === "extracted") {
-    return store.keepAttachmentText(file.pk, { ...base, text: extraction.text, extractor: extraction.extractor })
+    return store.attachments.keepAttachmentText(file.pk, {
+      ...base,
+      text: extraction.text,
+      extractor: extraction.extractor,
+    })
   } else if (extraction.status === "unreadable") {
-    return store.keepAttachmentText(file.pk, {
+    return store.attachments.keepAttachmentText(file.pk, {
       ...base,
       text: "",
       extractor: extraction.extractor,
@@ -242,7 +246,12 @@ const keep = async (
     })
   } else if (extraction.status === "needs-agent" && extraction.extractor) {
     // Kept, so the next run does not parse the same scan again; an agent's text replaces it.
-    return store.keepAttachmentText(file.pk, { ...base, text: "", extractor: extraction.extractor, error: "no_text" })
+    return store.attachments.keepAttachmentText(file.pk, {
+      ...base,
+      text: "",
+      extractor: extraction.extractor,
+      error: "no_text",
+    })
   }
 }
 
@@ -442,7 +451,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
     }
     try {
       walk: for (;;) {
-        const page = await store.fileAttachments({
+        const page = await store.attachments.fileAttachments({
           ...(chatId === undefined ? {} : { chatId }),
           ...(onlyMessage === undefined ? {} : { messageId: onlyMessage }),
           ...(beforePk === undefined ? {} : { beforePk }),
@@ -468,7 +477,9 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
           scanned += 1
           let path = directory === undefined ? file.localPath : (directory.get(file.pk) ?? null)
           if (directory && path)
-            await store.keepDownloads(file.chatId, file.messageId, [{ kind: file.kind, position: file.position, path }])
+            await store.attachments.keepDownloads(file.chatId, file.messageId, [
+              { kind: file.kind, position: file.position, path },
+            ])
           if (selected && (path === null || !selected.has(path))) continue
           const message = `${file.chatId}/${file.messageId}`
           if (path === null && download && !fetched.has(message)) {
@@ -478,7 +489,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
             } catch (error) {
               failedItem(file, "download", error)
             }
-            path = await store.localPathOf(file.pk)
+            path = await store.attachments.localPathOf(file.pk)
           }
           if (path === null) {
             run.notDownloaded += 1
@@ -513,7 +524,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
         if (node.field === "chat" && node.operator !== "wildcard" && !chats.has(node.value))
           chats.set(node.value, await chatIdIn(deps.messenger, node.value, store))
     const where = query ? queryFilter(query, attachmentColumns(chats), { command: "attachments list" }) : undefined
-    const views = await store.attachments({ ...(where ? { where } : {}), offset, limit: limit + 1 })
+    const views = await store.attachments.attachments({ ...(where ? { where } : {}), offset, limit: limit + 1 })
     return { items: views.slice(0, limit).map((view) => itemOf(account, view)), has_more: views.length > limit }
   },
 
@@ -528,7 +539,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
     const store = await accountStore(deps)
     const { account } = store
     const { chatId, messageId } = await messageOf(deps, store, chat, message)
-    const files = (await store.attachments({ chatId, messageId, limit: 1000 })).filter(
+    const files = (await store.attachments.attachments({ chatId, messageId, limit: 1000 })).filter(
       ({ kind }) => !NOT_FILES.has(kind),
     )
     const chosen =
@@ -592,7 +603,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
     const store = await accountStore(deps)
     const { account } = store
     const { chatId, messageId } = await messageOf(deps, store, chat, message)
-    const files = (await store.attachments({ chatId, messageId, limit: 1000 })).filter(
+    const files = (await store.attachments.attachments({ chatId, messageId, limit: 1000 })).filter(
       ({ kind }) => !NOT_FILES.has(kind),
     )
     if (files.length === 0)
@@ -611,7 +622,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
           : `message ${messageId} has no file number ${attachment} — it has ${files.map(({ position }) => position + 1).join(", ")}`,
       )
     }
-    await store.keepAttachmentText(chosen.pk, { text, origin: "agent", extractor: "agent" })
+    await store.attachments.keepAttachmentText(chosen.pk, { text, origin: "agent", extractor: "agent" })
     return {
       ref: formatLocator({ ...account, chat: chatId, message: messageId }),
       attachment: chosen.position + 1,

@@ -74,9 +74,12 @@ const setup = async () => {
   const pretty = (...argv: string[]) => runAs(true, argv)
   await call("messages", "list", "7", "--json")
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveChats(account, [{ ...chat, id: "8", title: "Garden" }])
-  await store.saveMessages(account, "8", [message("4", "8")], { via: "history" })
-  const accountId = await store.saveAccount({ provider: "email", account: "owner@example.test" }, { name: null })
+  await store.chats.saveChats(account, [{ ...chat, id: "8", title: "Garden" }])
+  await store.messages.saveMessages(account, "8", [message("4", "8")], { via: "history" })
+  const accountId = await store.accounts.saveAccount(
+    { provider: "email", account: "owner@example.test" },
+    { name: null },
+  )
   await store.mail.saveThread({
     accountId,
     externalId: "thread-1",
@@ -94,7 +97,7 @@ const setup = async () => {
   const tagged = await store.notes.addNote({ title: "Reading list", text: "the chapter to read next" })
   await store.notes.addNote({ title: "Other list", text: "another chapter" })
   await store.knowledge.addTags(account, { type: "note", id: tagged.id }, ["work"])
-  await store.fillSearchIndex()
+  await store.searchIndex.fillSearchIndex()
   return { call, pretty, store }
 }
 

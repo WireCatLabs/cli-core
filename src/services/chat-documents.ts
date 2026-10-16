@@ -30,7 +30,7 @@ export const chatDocumentsService = (deps: ServiceDeps): ChatDocumentsService =>
   list: async (chat, { limit, offset }) => {
     const store = await accountStore(deps)
     const chatId = await chatIdIn(deps.messenger, chat, store)
-    const items = (await store.documentLinkMessages(chatId)).flatMap((message) =>
+    const items = (await store.messages.documentLinkMessages(chatId)).flatMap((message) =>
       googleDocumentLinks(message.text).map(({ url, documentId }): ChatDocument => {
         const stored = documentId === null ? undefined : message.documents.find((one) => one.fileId === documentId)
         return {
@@ -49,7 +49,7 @@ export const chatDocumentsService = (deps: ServiceDeps): ChatDocumentsService =>
       chatId,
       items: items.slice(offset, end),
       hasMore: items.length > end,
-      empty: items.length === 0 && (await store.countMessages(chatId)) === 0,
+      empty: items.length === 0 && (await store.messages.countMessages(chatId)) === 0,
     }
   },
 })

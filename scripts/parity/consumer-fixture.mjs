@@ -281,7 +281,7 @@ try {
   }
   assert.equal((await invoke(["conversations", "build", "--chat", "7"])).code, 0)
   const shadow = { provider, account: "501" }
-  await db.saveChats(shadow, [
+  await db.chats.saveChats(shadow, [
     {
       ...recipes.chats[0],
       id: "7",
@@ -291,7 +291,7 @@ try {
       participantsCount: 2,
     },
   ])
-  await db.saveMessages(
+  await db.messages.saveMessages(
     shadow,
     "7",
     [
@@ -412,7 +412,7 @@ try {
     JSON.parse(packetCli.stdout).items.map((hit) => hit.id),
   )
   checks.push({ name: "statistics and graph context interfaces", pass: true })
-  await db.saveMessages(
+  await db.messages.saveMessages(
     account,
     "20",
     [
@@ -433,7 +433,10 @@ try {
   )
   const plain = join(temp, "audit.txt")
   writeFileSync(plain, "syntheticfiletoken original text")
-  assert.equal(await db.keepDownloads(account, "20", "9900", [{ kind: "file", name: "audit.txt", path: plain }]), 1)
+  assert.equal(
+    await db.attachments.keepDownloads(account, "20", "9900", [{ kind: "file", name: "audit.txt", path: plain }]),
+    1,
+  )
   const extraction = await invoke(["attachments", "extract", "--chat", "20", "--limit", "1"])
   assert.equal(extraction.code, 0, extraction.stderr)
   assert.equal(JSON.parse(extraction.stdout).extracted, 1)

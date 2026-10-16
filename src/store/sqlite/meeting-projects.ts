@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference } from "../../meetings/index.js"
-import type { AccountKey } from "../store.js"
+import type { AccountKey } from "../types.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
 

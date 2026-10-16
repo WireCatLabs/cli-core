@@ -57,8 +57,8 @@ const setup = async (config?: object) => {
   }
   rememberAccount(app, "default", "500", env)
   const store = await openStore({ path: env.MESSAGING_STORE })
-  await store.saveChats(OWNER, [chat("7"), chat("8")])
-  await store.saveMessages(
+  await store.chats.saveChats(OWNER, [chat("7"), chat("8")])
+  await store.messages.saveMessages(
     OWNER,
     "7",
     [
@@ -208,7 +208,7 @@ describe("notes.linkMessages", () => {
     const store = await openStore({ path: env.MESSAGING_STORE })
     try {
       expect(await store.notes.linkMessages({ documents: [{ reference: plan.ref, fileId: PLAN }] })).toBe(0)
-      await store.saveMessages(OWNER, "7", [message("6", 6, `again ${doc(PLAN)}`)], { via: "history" })
+      await store.messages.saveMessages(OWNER, "7", [message("6", 6, `again ${doc(PLAN)}`)], { via: "history" })
       const future = new Date(Date.now() + 60_000).toISOString()
       expect(
         await store.notes.linkMessages({ documents: [{ reference: plan.ref, fileId: PLAN }], since: future }),

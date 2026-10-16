@@ -66,7 +66,7 @@ const classes: [string, string[][]][] = [
 for (const [label, sets] of classes) {
   const words = (i: number) => (sets[i % sets.length] ?? []).join(" ")
   const [viaStore, viaRaw] = await time(
-    (i) => store.search(words(i), { limit: LIMIT }),
+    (i) => store.messages.search(words(i), { limit: LIMIT }),
     rawSearch && ((i: number) => rawSearch(words(i))),
   )
   out(
