@@ -16,21 +16,21 @@ const fixture = async (provider = "example-calendar") => {
   const f = await preparationFixture(provider)
   handles.push(f)
   await f.store.knowledge.addVocabularyAlias({ kind: "project", id: f.project.id }, "Bureau Example")
-  await f.store.knowledge.addVocabularyAlias({ kind: "project", id: f.project.id }, "НББ")
-  await f.store.knowledge.addVocabularyAlias({ kind: "project", id: f.project.id }, "Национальное бюро")
+  await f.store.knowledge.addVocabularyAlias({ kind: "project", id: f.project.id }, "ПРИ")
+  await f.store.knowledge.addVocabularyAlias({ kind: "project", id: f.project.id }, "Гавань Пример")
   if (!f.input.meeting.series) throw Error("missing invented series")
   const input = {
     ...f.input,
     meeting: {
       ...f.input.meeting,
       externalId: "unlinked-call",
-      title: "НББ",
+      title: "ПРИ",
       startedAt: 9000,
       series: { ...f.input.meeting.series, externalId: "unlinked-series" },
     },
     transcripts: f.input.transcripts.map((t) => ({
       ...t,
-      rows: t.rows.map((row) => ({ ...row, text: "HAR Bureau Example НББ" })),
+      rows: t.rows.map((row) => ({ ...row, text: "HAR Bureau Example ПРИ" })),
     })),
   }
   const candidate = await f.store.meetings.saveMeeting(input)
@@ -59,7 +59,7 @@ it.each(["example-calendar", "another-calendar"])(
       "Harbour Example",
       "HAR",
       "Bureau Example",
-      "Национальное бюро",
+      "Гавань Пример",
     ])
     expect(section?.pages[0]?.hits).toEqual([])
     expect(section?.pages[1]?.hits[0]?.ref).toBe(section?.pages[2]?.hits[0]?.ref)
@@ -89,8 +89,8 @@ it.each(["example-calendar", "another-calendar"])(
       until: 9999,
       cursor: continuation.cursor,
     })
-    expect(page.term).toMatchObject({ name: "НББ", kind: "alias" })
-    expect(page.hits.some((hit) => hit.source?.title === "НББ" && hit.scope === "transcript")).toBe(true)
+    expect(page.term).toMatchObject({ name: "ПРИ", kind: "alias" })
+    expect(page.hits.some((hit) => hit.source?.title === "ПРИ" && hit.scope === "transcript")).toBe(true)
     expect(await f.store.knowledge.vocabulary({ kind: "project" })).toEqual(vocabulary)
     expect(
       (await f.store.knowledge.meetingProjects(f.key, { meetingId: String(f.candidate.meeting.id) })).items,
