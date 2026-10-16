@@ -15,11 +15,6 @@ Open work only. A finished item is deleted; its record is the merged pull reques
 - **Mail embedding: what is not measured yet** — a model-based line classifier for cleaning, and a run of
   [bench/mail-quality](../../bench/mail-quality/README.md) on the owner's own mailbox, which would stay in
   cli-private.
-- **Google Drive documents in the one store** — drive-cli writes into the shared store so `search all`
-  finds Drive documents; approved, not built: [drive-in-store-plan.md](drive-in-store-plan.md).
-- **Documents linked in a chat** — `chats documents list <chat>` and `store.notes.linkMessages` are built
-  here; tg and max still pin a release with them, and drive's `sync` still adds the two link passes:
-  [chat-documents-plan.md](chat-documents-plan.md).
 - **A reranker for note and document search, opt-in** — memo and drive only fuse a word list and a meaning
   list, and miss paraphrases (2 of 5 in the top 3 against qmd's 4 of 5:
   [local-documents](https://github.com/WireCatLabs/cli-testing/blob/docs/search-everywhere-and-qmd/performance/search/local-documents/README.md)).

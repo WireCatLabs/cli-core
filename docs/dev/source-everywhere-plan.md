@@ -2,7 +2,7 @@
 
 Status: **model approved by the owner, 2026-10-13** (NEED-10 A, NEED-11 A). Built: work items 2–4 (the
 registry, `notes:<id>` and `notes:internal`, BUG-2, `--source` in every search with `accounts`, `in:` taking kinds and
-aliases, the three removals). Next: work item 5 (cli-memo).
+aliases, the three removals). Drive profile registration and folder-backed profile resolution are built, as are document kind, URL and remote edit time in hits. Document-only resource selection and provider/kind coverage reporting remain unfinished, alongside work item 5 (cli-memo).
 
 ## Goal
 
@@ -190,13 +190,10 @@ after the title.
 
 Releases of this package, in order; each is one PR.
 
-1. **Document hit fields**: `kind: "document"`, `provider`, `account`, `timestamp`, `url`, in
-   `searchAll` and `searchNotes`; `documents` in `searched`. Ships with cm#1017, before the drive
-   switch (drive plan item 1).
+1. **Document hit fields, partly built**: `kind: "document"`, `provider`, `account`, source edit time and `url` are retained in `searchAll` and `searchNotes`. Adding `documents` as a separate `searched` resource and `--only` selection remains open.
 2. **Registry and grammar**: `src/domain/providers.ts`; the parser resolves the four shapes through
    it; `notes:<row id>`, `notes:internal`; `drive:<profile>` through `profiles.drive`; groups may hold
-   any entry. Each search filters by kind from the registry (BUG-2). Built, except `drive:<profile>`, which
-   waits for the drive switch (item 6).
+   any entry. Each search filters by kind from the registry (BUG-2). Built, including folder-backed `drive:<profile>` resolution; a separate Drive provider/kind registry entry remains open.
 3. **`search all --source`**, `skipped` for unused entries and unnamed kinds, `accounts`, meetings by
    `--source`, `--only meetings` (built; MCP `search_all` takes `source`). `--only documents` waits for item 1.
 4. **`search notes --source`, `search mail --source`**, `accounts` (`search notes` pages with `--offset`, so memo's
@@ -206,7 +203,7 @@ Releases of this package, in order; each is one PR.
    the generated `docs/commands.md`, the MCP descriptions. Built.
 5. **cli-memo**: `memo search all` takes `--source` and passes it through, and prints a `skipped` entry by its
    `source` when it has no `resource`.
-6. **drive-cli**, in the drive switch PR: record the profile (above).
+6. **drive-cli**, built: shared-store sync records the profile (above).
 7. **Each CLI**: the login and profile-create offer to join a group.
 
 tg and max take items 2–4 with their next cli-core bump.
