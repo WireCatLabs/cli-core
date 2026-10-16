@@ -24,6 +24,7 @@ write. A messenger plugs in as one adapter and gets all of it.
 | Document | What it answers |
 |---|---|
 | [Architecture](docs/dev/ARCHITECTURE.md) | The layers, the module map, the store internals and migrations, who consumes what |
+| [Document workflows](docs/dev/DOCUMENTS.md) | Shared file ingestion, sync, scoped knowledge and extraction; the ports a file provider supplies |
 | [Write an adapter](docs/dev/ADAPTERS.md) | How to add a messenger: the port, the `Messenger` description, the contract cases |
 | [CLI standard](docs/dev/STANDARD.md) | The rules every WireCat CLI follows: command shape, output, exit codes, permissions, MCP |
 | [Glossary](docs/dev/GLOSSARY.md) | One word, one meaning across the tools |

@@ -57,6 +57,7 @@ conformance or imply that planned command paths are already implemented.
 | Export | Directory | What it holds |
 |---|---|---|
 | `.` | `src/domain/`, `src/render/`, `src/resolve.ts`, `src/terminal/` | the domain model (`models.ts`, types only), message locators, message rendering, name resolution that refuses rather than guesses, the secret prompt, the terminal QR code |
+| `./documents` | `src/documents/`, `src/services/documents/` | Provider-neutral file contracts, scoped ingestion/sync, document knowledge and evidence-backed extraction; existing readers remain available — see [Document workflows](DOCUMENTS.md) |
 | `./store` | `src/store/` | the SQLite seam and the shared message store |
 | `./sends` | `src/sends/` | the send guard: the permission levels, the read-only lock, the recipient list, the hourly limit, the journal (never the text), the send id |
 | `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer and installed-only bounded PCM recognizer; import alone loads no engine |

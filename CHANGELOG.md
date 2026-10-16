@@ -66,6 +66,10 @@ shape of this file.
 
 ### Added
 
+- `documents` exports provider-neutral source/state ports and shared tree planning, resumable sync,
+  ingestion, scoped document knowledge and evidence-backed memory extraction. Providers supply
+  authentication, conversion, metadata and account-bound I/O; no Google SDK or database migration
+  is introduced. Existing document reader exports remain compatible.
 - **Linking a message to a task runs the duplicate check again**: after `tasks link <task> msg:…` (MCP
   `tasks_link`), `tasks add --into` and `tasks merge`, tasks the linked one now looks like go to `tasks duplicates`,
   and the answer's `review` counts them. The link always stands, nothing merges on a score, and a closed task is not
