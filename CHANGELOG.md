@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.295.0 — 16.10.2026
+
 ### Changed — may break callers
 
 - **`run()` reads how long a command runs from its metadata, not its name**: a command annotated
