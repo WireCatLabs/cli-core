@@ -14,6 +14,11 @@ shape of this file.
   and byte limits. Metadata stays bounded to 16 KiB; cancelled or failed writers close their handles
   without acknowledging completion. Existing archive names and checkpoint bytes can be retained.
 
+### Fixed
+
+- Native recording writers recheck cancellation after the last durable sync, so cancellation during
+  finalization cannot return a completion receipt. Handle cleanup still runs after cancellation.
+
 ## 0.298.0 — 16.10.2026
 
 ### Added
