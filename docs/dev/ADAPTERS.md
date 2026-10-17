@@ -12,7 +12,7 @@ contract. This page is the order to read them in, and the rules that are not in 
 | Entry point | What a connector takes from it |
 |---|---|
 | `@wirecat/cli-core/cli` | `Messenger`, `MessengerAdapter`, `MessengerCore` and the optional groups |
-| `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter` |
+| `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter`; `mcpOverStdio` for MCP tests |
 | `@wirecat/cli-core/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
 | `@wirecat/cli-core/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
 | `@wirecat/cli-core/files` | native ordinary-file identity checks, directory syncing, `writeFileAtomic` and `acquireLock` |
@@ -221,3 +221,20 @@ describe("the adapter keeps the port's promises", () => {
 
 `close` is the one promise the cases cannot check. Test it yourself: after `close`, nothing keeps
 the process alive.
+
+### Testing `mcp` over stdin and stdout
+
+`mcpOverStdio(start)` drives your CLI's `mcp` the way an agent's client does, through your own
+`run()`, with no child process. `start` gets two streams to pass to `run`; the helper answers
+`initialize` first, and `close()` ends stdin and resolves with the exit code:
+
+```ts
+import { mcpOverStdio } from "@wirecat/cli-core/testing"
+
+const mcp = await mcpOverStdio((streams) => run(["agent", "mcp"], { streams: captureStreams(), tty: false, ...streams }))
+const { isError, body } = await mcp.call("wa_write", { command: "messages delete", arguments: { chat, messages } })
+expect(await mcp.close()).toBe(0)
+```
+
+`mcp.request(method, params)` sends any other request; `mcp.tools()` lists the tool names. When
+`run()` ends before an answer, the waiting call fails at once.

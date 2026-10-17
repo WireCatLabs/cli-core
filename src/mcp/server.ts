@@ -182,11 +182,11 @@ export const serveOverStdio = async (
   options: ServerOptions,
 ): Promise<void> => {
   const { session, embedders, build, log } = createServer(command, context, messenger, options)
-  // Relayed by serve, the session's bytes are the client's, not this process's stdio.
-  const { relayed, stdin, stdout, signal } = environmentOf(command)
-  const input = relayed && stdin && stdout ? stdin : process.stdin
-  const transport =
-    relayed && stdin && stdout ? new StdioServerTransport(stdin as Readable, stdout as Writable) : undefined
+  // Relayed by serve, or given by a test's `run()`, the session's bytes are not this process's stdio.
+  const { stdin, stdout, signal } = environmentOf(command)
+  const own = stdin && stdout && stdin !== process.stdin
+  const input = own ? stdin : process.stdin
+  const transport = own ? new StdioServerTransport(stdin as Readable, stdout as Writable) : undefined
   const handle = serveStdio(build, {
     ...(transport ? { transport } : {}),
     onerror: (error) => context.renderer.note(`mcp: ${error.message}`),
