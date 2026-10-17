@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.313.0 — 17.10.2026
+
 ### Added
 
 - **Commands run through `serve` for a messenger with one connection.** `Messenger.connection: "exclusive"` makes
