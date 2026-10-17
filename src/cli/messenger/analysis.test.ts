@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { type LinkBatch, openStore } from "../../store/store.js"
@@ -115,12 +116,13 @@ const setup = async () => {
     await store.close()
   }
   await add()
+  const keyring = memoryKeyring()
   const call = async (...argv: string[]) => {
     const streams = captureStreams()
     const code = await run(
       argv,
       { app, commands: () => [conversationsCommand(messenger), configCommand(app, config)] },
-      { streams, tty: false, env },
+      { streams, tty: false, env, keyring },
     )
     return { code, stdout: streams.stdout, stderr: streams.stderr.join("\n") }
   }

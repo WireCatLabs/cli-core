@@ -467,6 +467,10 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--workers` | `<n>` | count | sessions in parallel on this machine, each with its own copy of the model | sessions |
 | `--input` | `<mode>` | choice | how supplied cell values are parsed: literal values or provider-interpreted formulas and locale formats |  |
 | `--render` | `<mode>` | choice | how returned cell values are represented: formatted display values, unformatted values or formulas |  |
+| `--context-source` | `<id=cursor>` | string | explicitly selected communications source, optionally with its scoped continuation cursor; repeat for more sources |  |
+| `--context-query` | `<words>` | string | literal words to find within the communications selected for preparation |  |
+| `--context-since-time` | `<time>` | time | inclusive start of the selected communications window used for preparation |  |
+| `--context-before-time` | `<time>` | time | exclusive end of the selected communications window used for preparation |  |
 | `--account` | `<account>` | string | the account to use; never assumed |  |
 | `--provider` | `<provider>` | choice | read every account of this provider |  |
 | `--source` | `<accounts>` | list | what to read: provider:account, a provider, a kind or group:<name>; comma-separated |  |

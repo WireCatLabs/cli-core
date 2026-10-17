@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Message } from "../domain/models.js"
 import type { ModelSettings } from "../models/index.js"
@@ -32,7 +33,10 @@ describe("profile reply rendering", () => {
     const path = replyConsentPathFor(app, "default", env)
     let models: ModelSettings = {}
     const warn = vi.fn()
-    const rendering = replyRenderer(app, "default", () => ({ models }), env, warn)
+    const rendering = replyRenderer(app, "default", () => ({ models }), env, warn, {
+      ai: true,
+      keyring: memoryKeyring(),
+    })
     const fetcher = vi.fn(
       async () =>
         new Response(
@@ -78,7 +82,10 @@ describe("profile reply rendering", () => {
       )
     })
     vi.stubGlobal("fetch", fetcher)
-    const rendering = replyRenderer(app, "default", () => ({ models }), env, vi.fn())
+    const rendering = replyRenderer(app, "default", () => ({ models }), env, vi.fn(), {
+      ai: true,
+      keyring: memoryKeyring(),
+    })
     expect((await rendering(rule, message, { id: "11", kind: "dialog" }, Date.now())).text).toBe("Later")
     writeReplyConsent(path, { provider: identity, deniedChats: [] })
     fetcher.mockImplementation(async () => {
@@ -92,7 +99,10 @@ describe("profile reply rendering", () => {
     })
     expect((await rendering(rule, message, { id: "11", kind: "dialog" }, Date.now())).text).toBe("Later")
     const warn = vi.fn()
-    const preview = replyRenderer(app, "default", () => ({ models }), env, warn, { preview: true })
+    const preview = replyRenderer(app, "default", () => ({ models }), env, warn, {
+      preview: true,
+      keyring: memoryKeyring(),
+    })
     const legacy = { ...rule, reply: { ...rule.reply, template: "Hi {firstName}", model: "may-reword" as const } }
     expect((await preview(legacy, message, { id: "11", kind: "dialog" }, Date.now())).text).toBe("Hi Ana")
     expect(warn).toHaveBeenCalledTimes(2)

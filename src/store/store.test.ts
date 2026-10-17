@@ -337,7 +337,7 @@ describe("the message store", () => {
   })
 
   it("defaults to the test sandbox, never the owner's file", () => {
-    expect(storePath()).toBe(process.env.MESSAGING_STORE)
+    expect(storePath().startsWith(String(process.env.HOME))).toBe(true)
     expect(storePath({})).toContain("WireCat")
   })
 

@@ -1,4 +1,3 @@
-import "@wirecat/cli-base/testing/setup"
 import { existsSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"

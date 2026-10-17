@@ -5,7 +5,7 @@ export default defineConfig({
   tsconfig: "./node_modules/@wirecat/cli-base/config/tsconfig.base.json",
   test: {
     include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
-    setupFiles: ["src/testing/sandbox.ts"],
+    setupFiles: ["@wirecat/cli-base/testing/setup", "src/testing/sandbox.ts"],
     globals: false,
     // Agents run suites side by side on 24 cores; one worker per core ran the machine out of memory (2026-10-11).
     maxWorkers: 4,
