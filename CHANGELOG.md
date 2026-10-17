@@ -9,6 +9,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **In a group tagged `watch-tasks`, any member's reply closes a question** (owner, 2026-10-17): a direct reply
+  from someone other than the asker settles it, with the resolution "answered in the group". Before, only the
+  owner's answer closed it, so questions others answered stayed open. A later message that does not reply to the
+  question closes nothing; one-to-one chats and untagged groups keep "only the owner's answer".
 - **`MeetingFindingsBatch` and `MeetingFindingsStore` are exported from `@wirecat/cli-core/store`**, no longer from
   `@wirecat/cli-core/meetings`: they describe the store's side of meeting findings. Import them from the store entry.
   The import boundary rules in `biome.json` apply again (a later override had replaced the earlier ones), and the
