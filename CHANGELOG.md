@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.329.0 — 17.10.2026
+
 ### Fixed
 
 - **A run's `keyring` reaches every key cli-core reads or stores**: `models text key set` and `remove`, the key
