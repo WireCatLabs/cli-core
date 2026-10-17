@@ -77,6 +77,10 @@ const sample = (command: Command, name: string): unknown =>
     ? "7"
     : true
 
+const ONLY_AFTER: Record<string, readonly [command: string, option: string]> = {
+  "messages.scheduled": ["messages send", "--at-time"],
+}
+
 describe("the next-step registry", () => {
   const named = STEPS.filter(
     (step): step is Extract<StepDefinition, { kind: "command" }> => step.kind === "command" && step.command !== "*",
@@ -85,9 +89,15 @@ describe("the next-step registry", () => {
   it.each(named.map((step) => [step.id, step]))("%s names a command every CLI has or plans", (_, step) => {
     const row = parity.commands[step.command]
     const root = parity.commands[step.command.split(" ")[0] as string]
-    // A step inside a tree a CLI does not have (wa has no `bot`) is never shown there.
+    // A step inside a tree a CLI does not have (wa has no `bot`) is never shown there, nor one that follows an option
+    // the CLI does not have (wa schedules no messages, so it never names `messages scheduled`).
+    const [after, option] = ONLY_AFTER[step.id] ?? []
+    const follows = (cli: string) => {
+      const entry = after && option ? parity.commands[after]?.options?.[option] : undefined
+      return entry !== undefined && expected(entry, cli) === false
+    }
     const reaches = (cli: string) =>
-      !row || expected(row, cli) !== false || (root !== undefined && expected(root, cli) === false)
+      !row || expected(row, cli) !== false || (root !== undefined && expected(root, cli) === false) || follows(cli)
     expect(row).toBeDefined()
     expect(parity.clis.filter((cli) => !reaches(cli))).toEqual([])
     expect(commandAt(program, step.command)).toBeDefined()
