@@ -5,6 +5,45 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Poll votes in the store (store version 20).** A new `MessageChange` `{ event: "vote", chatId, chatTitle,
+  messageId, vote: PollVote }` — one person's vote, `answers: []` when taken back — for a messenger that sends votes
+  one by one instead of counting them (WhatsApp). `watch` keeps each voter's newest vote in the new `poll_votes`
+  table (an older vote never replaces a newer one; a deleted poll keeps none) and `--events` prints it. The owner's
+  own `polls vote` is kept the same way, since no messenger echoes it back. `store.messages.saveVote` and
+  `pollVotes` read and write them; `countedPoll(poll, votes, self)` (root export) turns them into each answer's
+  `voters`, the poll's `voters` and the owner's `chosen`.
+- **More of the store for adapters: `StoredMessages.anchor(chatId, at?)`, `wroteTo(personId)` and
+  `pollVotes(chatId, messageId)`** beside `message` and `newestIncoming` in `ConnectOptions.stored`. `anchor` is the
+  newest live message sent at `at` or earlier, or without `at` the oldest one held (to ask for older history);
+  `wroteTo` is whether the account sent the person anything in a one-to-one chat — the dialog named by their id, or
+  a stored dialog they are a member of; `pollVotes` is each voter's newest vote. All three answer nothing before the
+  connection knows its account.
+- **`Messenger.pollClose: false`** hides `polls close` and the MCP `polls_close` tool, for polls that stay open
+  (WhatsApp). **`Messenger.pollRevote: false`** hides `polls create --revote` and says the MCP `revote` is ignored,
+  where the messenger alone decides whether a vote can change. Both are yes when unset.
+
+### Changed — may break callers
+
+- **`MessageChange` and `MessageEvent` have a fifth member, `vote`.** A caller that narrows by elimination breaks
+  at compile time: max-cli's `describeChange` (`src/commands/watch.ts`) reads `change.reactions` after ruling out
+  the others, and needs a `vote` branch. tg-cli only builds events and cli-memo does not read them.
+- **`StoredMessages` has three more members** (`anchor`, `wroteTo`, `pollVotes`), so a hand-made lookup no longer
+  type-checks; `storedMessages` builds the whole one.
+
+### Fixed
+
+- **An edit no longer erases what the edit event did not carry.** The store saved an edit as a whole message, so a
+  live edit stamped with the edit's time moved the message's send time, and an edit that counted no reactions
+  replaced the stored ones. On an edit (`editedAt` set) the store now keeps the earlier send time of the two (0
+  counts as unknown), keeps stored reactions when the edit's are empty, and keeps stored provider metadata keys the
+  edit lacks. Quotes, reply ids and attachments were already kept when absent.
+- **`polls create` saves the poll it made**, as `send` and `forward` save theirs. A messenger that never echoes a
+  device's own message back (WhatsApp) could not show or vote on a poll the CLI created.
+
 ## 0.316.0 — 17.10.2026
 
 ### Fixed

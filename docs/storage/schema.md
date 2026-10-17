@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-87 tables, 19 full-text indexes.
+88 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -522,6 +522,23 @@ Messages whose stems are stale. Triggers fill it, because SQL cannot stem; JS em
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
+
+### `poll_votes`
+
+Each voter's newest vote in a poll, where the messenger sends votes one by one (WhatsApp) instead of counting them. Keyed by chat and external id: a vote can arrive before the poll is stored.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `chat_id` | integer | not null | → `chats.id` | the `chat` it belongs to |
+| `message_external_id` | text | not null |  | the message that carries the poll |
+| `identity_id` | integer | not null | → `identities.id` | who voted |
+| `answers` | text | not null |  | JSON array of answer ids; empty when the vote was taken back |
+| `voted_at` | integer | not null |  | an older vote never replaces a newer one |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (chat_id, message_external_id, identity_id)`, `INDEX (identity_id)`
 
 ### `member_observations`
 

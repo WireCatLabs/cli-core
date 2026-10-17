@@ -1,5 +1,5 @@
 import { validCounter } from "../../domain/counters.js"
-import type { Attachment, ChatKind, Id, Message, Reactions } from "../../domain/models.js"
+import type { Attachment, ChatKind, Id, Message, PollVote, Provider, Reactions } from "../../domain/models.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import type { AccountKey, DeletionScope } from "../types.js"
 import { findChatPk } from "./chats.js"
@@ -55,6 +55,7 @@ const prepare = (orm: Orm) => ({
     .select({
       pk: messages.id,
       text: messages.text,
+      sentAt: messages.sentAt,
       editedAt: messages.editedAt,
       deletedAt: messages.deletedAt,
       providerMetadata: messages.metadata,
@@ -173,6 +174,15 @@ export const upsertMessage = (
     )
   } else {
     pk = found.pk
+    const edit = message.editedAt !== null
+    // An edit event may carry only the new text, stamped with the edit's time: a send time never moves later,
+    // and an edit that counts no reactions has not seen them.
+    if (edit) {
+      const incoming = Number(fields.sentAt)
+      if (found.sentAt > 0 && (incoming <= 0 || found.sentAt < incoming)) fields.sentAt = found.sentAt
+      if (message.reactions && message.reactions.total === 0 && message.reactions.counts.length === 0)
+        fields.reactions = null
+    }
     if (found.providerMetadata) {
       try {
         const previous = JSON.parse(found.providerMetadata) as Record<string, unknown>
@@ -180,7 +190,7 @@ export const upsertMessage = (
         if (previous && incoming && !Array.isArray(previous) && !Array.isArray(incoming)) {
           for (const field of ["views", "comments"])
             if (!validCounter(incoming[field]) && validCounter(previous[field])) incoming[field] = previous[field]
-          fields.metadata = JSON.stringify(incoming)
+          fields.metadata = JSON.stringify(edit ? { ...previous, ...incoming } : incoming)
         }
       } catch {
         /* Malformed old metadata remains untrusted. */
@@ -258,6 +268,9 @@ export const tombstone = (context: StoreContext, pk: number): number => {
     )
     .run(now(), pk)
   orm.delete(messageRevisions).where(eq(messageRevisions.messageId, pk)).run()
+  context.database
+    .prepare("DELETE FROM poll_votes WHERE chat_id=? AND message_external_id=?")
+    .run(row.chatId, row.externalId)
   purgeVectorsOf(context, pk)
   orm
     .delete(messageTranscripts)
@@ -314,3 +327,58 @@ export const markDeleted = (
   }
   return changed
 }
+
+/** A vote older than the one held for that voter is dropped, and so is any vote in a deleted poll. */
+export const saveVote = (
+  context: StoreContext,
+  accountKey: number,
+  provider: Provider,
+  chatKey: number,
+  messageId: Id,
+  { person, answers, votedAt }: PollVote,
+): void => {
+  const { database, now } = context
+  const gone = database
+    .prepare("SELECT 1 FROM messages WHERE chat_id=? AND external_id=? AND deleted_at IS NOT NULL")
+    .get(chatKey, messageId)
+  if (gone) return
+  const voter = identityPk(
+    context,
+    accountKey,
+    provider,
+    person.id,
+    person.name,
+    person.username ? { username: person.username } : {},
+  )
+  database
+    .prepare(
+      `INSERT INTO poll_votes (chat_id, message_external_id, identity_id, answers, voted_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (chat_id, message_external_id, identity_id) DO UPDATE SET
+         answers = excluded.answers, voted_at = excluded.voted_at, updated_at = excluded.updated_at
+       WHERE excluded.voted_at >= poll_votes.voted_at`,
+    )
+    .run(chatKey, messageId, voter, JSON.stringify(answers), toMs(votedAt) ?? now(), now(), now())
+}
+
+export const pollVotes = ({ database }: StoreContext, chatKey: number, messageId: Id): PollVote[] =>
+  (
+    database
+      .prepare(
+        `SELECT i.external_id AS id, i.name, i.username, v.answers, v.voted_at AS votedAt
+         FROM poll_votes v JOIN identities i ON i.id = v.identity_id
+         WHERE v.chat_id = ? AND v.message_external_id = ?
+         ORDER BY v.voted_at DESC, v.id DESC`,
+      )
+      .all(chatKey, messageId) as {
+      id: string
+      name: string | null
+      username: string | null
+      answers: string
+      votedAt: number
+    }[]
+  ).map(({ id, name, username, answers, votedAt }) => ({
+    person: { id, name, username },
+    answers: JSON.parse(answers) as Id[],
+    votedAt: new Date(votedAt).toISOString(),
+  }))

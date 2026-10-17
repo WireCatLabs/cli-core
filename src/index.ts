@@ -11,6 +11,7 @@ export { formatLocator, isLocator, type MessageLocator, parseLocator } from "./d
 export { type Markup, parseMarkdown } from "./domain/markdown.js"
 export type { MessageLink, MessagePermalink } from "./domain/message-link.js"
 export type * from "./domain/models.js"
+export { countedPoll } from "./domain/polls.js"
 export type { RankingGraphEvidence, RankingGraphLink } from "./domain/rankings-graph.js"
 export type {
   RankingComponent,

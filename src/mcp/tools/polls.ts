@@ -78,15 +78,19 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
           ),
         ),
     }),
-    polls_close: tool({
-      title: "Close a poll",
-      description: "Close the owner's own poll; it cannot be reopened. Only when the owner asked for it.",
-      input: v.object({ chat, message }),
-      annotations: WRITE,
-      permission: "edit",
-      online: async (adapter, args, { guard }) =>
-        itemOf(snakeKeys(await guardedClose(guard, adapter, { chat: args.chat, message: args.message }))),
-    }),
+    ...(messenger.pollClose === false
+      ? {}
+      : {
+          polls_close: tool({
+            title: "Close a poll",
+            description: "Close the owner's own poll; it cannot be reopened. Only when the owner asked for it.",
+            input: v.object({ chat, message }),
+            annotations: WRITE,
+            permission: "edit",
+            online: async (adapter, args, { guard }) =>
+              itemOf(snakeKeys(await guardedClose(guard, adapter, { chat: args.chat, message: args.message }))),
+          }),
+        }),
     polls_create: tool({
       title: "Create a poll",
       description:
@@ -98,7 +102,16 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
         answers: v.pipe(v.array(v.pipe(v.string(), v.minLength(1))), v.minLength(2)),
         multiple: v.optional(v.boolean()),
         anonymous: v.optional(v.boolean()),
-        revote: v.optional(v.pipe(v.boolean(), v.description("people may change their vote; without it they cannot"))),
+        revote: v.optional(
+          v.pipe(
+            v.boolean(),
+            v.description(
+              messenger.pollRevote === false
+                ? "ignored: this messenger decides alone whether a vote can be changed"
+                : "people may change their vote; without it they cannot",
+            ),
+          ),
+        ),
         topic: v.optional(
           v.pipe(v.string(), v.minLength(1), v.description("the forum topic id; unsupported without topics")),
         ),

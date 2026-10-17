@@ -3,8 +3,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Message, MessageEvent } from "../../domain/models.js"
+import { countedPoll } from "../../domain/polls.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
+import { storedMessages } from "./context.js"
 import { stored } from "./stored.js"
 
 const account = { provider: "test", account: "500" }
@@ -163,5 +165,243 @@ describe("a deletion `watch` hears without its chat", () => {
     const { inGroup, inDialog } = await deleting()
     expect(inGroup).toBeDefined()
     expect(inDialog).toBeDefined()
+  })
+})
+
+const listening = async (store: MessageStore, events: MessageEvent[], extra: Record<string, unknown> = {}) => {
+  const pending = new Set<Promise<void>>()
+  const adapter = {
+    self: () => "500",
+    watch: async (onEvent: (event: MessageEvent) => void) => {
+      for (const event of events) onEvent(event)
+    },
+    ...extra,
+  }
+  const wrapped = stored(adapter as unknown as MessengerAdapter, {
+    account,
+    store: async () => store,
+    warn: () => {},
+    events: () => {},
+    pending,
+  })
+  await wrapped.watch?.(() => {}, new AbortController().signal)
+  await Promise.all(pending)
+  return wrapped
+}
+
+describe("an edit `watch` hears", () => {
+  it("keeps the send time, the quote and the reactions an edit event does not carry", async () => {
+    const { store } = await setUp()
+    const reactions = { counts: [{ reaction: "👍", count: 2 }], mine: null, total: 2 }
+    const quote = {
+      id: "0",
+      senderId: "9",
+      senderName: "Olga",
+      timestamp: null,
+      text: "when?",
+      attachments: [],
+      outgoing: false,
+    }
+    await store.messages.saveMessages(account, "7", [{ ...message("1", "on tuesday"), replyTo: quote, reactions }], {
+      via: "history",
+    })
+
+    const editedAt = "2026-09-26T10:05:00.000Z"
+    const edit = { ...message("1", "on friday"), timestamp: editedAt, editedAt, chatTitle: "Book club" }
+    await listening(store, [{ event: "edit", message: { ...edit, reactions: { counts: [], mine: null, total: 0 } } }])
+
+    expect(await store.messages.message(account, "1", { chatId: "7" })).toMatchObject({
+      text: "on friday",
+      timestamp: "2026-09-26T10:00:00.000Z",
+      editedAt,
+      replyTo: { id: "0", text: "when?" },
+      reactions,
+    })
+  })
+
+  it("takes the earlier send time when the edit was stored before the message it changed", async () => {
+    const { store } = await setUp()
+    const editedAt = "2026-09-26T10:05:00.000Z"
+    const edit = { ...message("2", "on friday"), timestamp: editedAt, editedAt, chatTitle: "Book club" }
+    await listening(store, [{ event: "edit", message: edit }])
+
+    await store.messages.saveMessages(account, "7", [{ ...message("2", "on friday"), editedAt }], { via: "history" })
+
+    expect((await store.messages.message(account, "2", { chatId: "7" }))?.timestamp).toBe("2026-09-26T10:00:00.000Z")
+  })
+})
+
+describe("polls in the store", () => {
+  const poll = { question: "When?", answers: ["Tue", "Fri"], multiple: false, anonymous: false }
+
+  it("a poll the owner creates is stored, as a send is", async () => {
+    const { store } = await setUp()
+    const wrapped = await listening(store, [], {
+      createPoll: async () => ({ message: message("40", "When?"), sendId: "s" }),
+    })
+
+    await wrapped.createPoll?.("7", poll, { sendId: "s" })
+
+    expect((await store.messages.message(account, "40", { chatId: "7" }))?.text).toBe("When?")
+  })
+
+  it("keeps each voter's newest vote, a take-back included, and the owner's own", async () => {
+    const { store } = await setUp()
+    const olga = { id: "9", name: "Olga", username: null }
+    const vote = (answers: string[], votedAt: string) => ({
+      event: "vote" as const,
+      chatId: "7",
+      chatTitle: "Book club",
+      messageId: "40",
+      vote: { person: olga, answers, votedAt },
+    })
+    const wrapped = await listening(
+      store,
+      [
+        vote(["fri"], "2026-09-26T10:02:00.000Z"),
+        vote(["tue"], "2026-09-26T10:01:00.000Z"),
+        {
+          ...vote(["tue"], "2026-09-26T10:03:00.000Z"),
+          vote: { person: { ...olga, id: "10", name: "Ivan" }, answers: ["tue"], votedAt: "2026-09-26T10:03:00.000Z" },
+        },
+        {
+          ...vote([], "2026-09-26T10:04:00.000Z"),
+          vote: { person: { ...olga, id: "10", name: "Ivan" }, answers: [], votedAt: "2026-09-26T10:04:00.000Z" },
+        },
+      ],
+      { vote: async () => ({}) },
+    )
+    await wrapped.vote?.("7", "40", ["tue"])
+
+    const votes = await store.messages.pollVotes(account, "7", "40")
+    expect(votes.map(({ person, answers }) => [person.id, person.name, answers])).toEqual([
+      ["500", "Me", ["tue"]],
+      ["10", "Ivan", []],
+      ["9", "Olga", ["fri"]],
+    ])
+  })
+
+  it("a deleted poll keeps no votes, and takes none after", async () => {
+    const { store } = await setUp()
+    await store.messages.saveMessages(account, "7", [message("40", "When?")], { via: "history" })
+    const vote = {
+      person: { id: "9", name: "Olga", username: null },
+      answers: ["fri"],
+      votedAt: "2026-09-26T10:02:00.000Z",
+    }
+    await store.messages.saveVote(account, "7", "40", vote)
+
+    await store.messages.markDeleted(account, ["40"], { chatId: "7" })
+    await store.messages.saveVote(account, "7", "40", vote)
+
+    expect(await store.messages.pollVotes(account, "7", "40")).toEqual([])
+  })
+})
+
+describe("the stored-messages lookup an adapter gets", () => {
+  const at = (id: string, chatId: string, timestamp: string, outgoing = true): Message => ({
+    ...message(id, `message ${id}`, chatId),
+    timestamp,
+    outgoing,
+  })
+
+  it("anchors on the oldest message, or the newest at or before a moment, past deleted ones", async () => {
+    const { store } = await setUp()
+    await store.messages.saveMessages(
+      account,
+      "9",
+      [
+        at("a", "9", "2026-09-01T10:00:00.000Z"),
+        at("b", "9", "2026-09-02T10:00:00.000Z"),
+        at("c", "9", "2026-09-03T10:00:00.000Z"),
+      ],
+      { via: "history" },
+    )
+    await store.messages.markDeleted(account, ["a"], { chatId: "9" })
+    const lookup = storedMessages(
+      "test",
+      async () => store,
+      () => "500",
+    )
+
+    expect((await lookup.anchor("9"))?.id).toBe("b")
+    expect((await lookup.anchor("9", "2026-09-03T10:00:00.000Z"))?.id).toBe("c")
+    expect((await lookup.anchor("9", "2026-09-02T12:00:00.000Z"))?.id).toBe("b")
+    expect(await lookup.anchor("9", "2026-08-01T00:00:00.000Z")).toBeUndefined()
+  })
+
+  it("knows whom the account wrote to: a dialog named by the person, or one they are a member of", async () => {
+    const { store } = await setUp()
+    await store.messages.saveMessages(account, "8", [at("d", "8", "2026-09-01T10:00:00.000Z")], { via: "history" })
+    await store.chats.saveChats(account, [
+      { id: "d-33", title: "Ivan", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+    ])
+    await store.roster.saveMembers(account, "d-33", ["33"])
+    await store.messages.saveMessages(account, "d-33", [at("e", "d-33", "2026-09-01T10:00:00.000Z")], {
+      via: "history",
+    })
+    await store.messages.saveMessages(account, "44", [at("f", "44", "2026-09-01T10:00:00.000Z", false)], {
+      via: "history",
+    })
+    const lookup = storedMessages(
+      "test",
+      async () => store,
+      () => "500",
+    )
+
+    expect(await lookup.wroteTo("8")).toBe(true)
+    expect(await lookup.wroteTo("33")).toBe(true)
+    expect(await lookup.wroteTo("44")).toBe(false)
+    expect(await lookup.wroteTo("9")).toBe(false)
+  })
+
+  it("answers nothing before the connection knows its account", async () => {
+    const { store } = await setUp()
+    const lookup = storedMessages(
+      "test",
+      async () => store,
+      () => null,
+    )
+
+    expect(await lookup.anchor("7")).toBeUndefined()
+    expect(await lookup.wroteTo("8")).toBe(false)
+    expect(await lookup.pollVotes("7", "40")).toEqual([])
+  })
+
+  it("hands over the poll's votes, which countedPoll turns into counts and the owner's choice", async () => {
+    const { store } = await setUp()
+    const voted = (id: string, answers: string[]) => ({
+      person: { id, name: null, username: null },
+      answers,
+      votedAt: "2026-09-26T10:02:00.000Z",
+    })
+    await store.messages.saveVote(account, "7", "40", voted("9", ["fri"]))
+    await store.messages.saveVote(account, "7", "40", voted("10", ["fri", "tue"]))
+    await store.messages.saveVote(account, "7", "40", voted("500", ["tue"]))
+    await store.messages.saveVote(account, "7", "40", voted("11", []))
+    const lookup = storedMessages(
+      "test",
+      async () => store,
+      () => "500",
+    )
+    const answer = (id: string) => ({ id, text: id, voters: null, chosen: false })
+    const poll = {
+      chatId: "7",
+      messageId: "40",
+      question: "When?",
+      answers: [answer("tue"), answer("fri")],
+      closed: false,
+      multiple: true,
+      anonymous: false,
+      voters: null,
+    }
+
+    const counted = countedPoll(poll, await lookup.pollVotes("7", "40"), "500")
+
+    expect(counted.voters).toBe(3)
+    expect(counted.answers.map(({ id, voters, chosen }) => [id, voters, chosen])).toEqual([
+      ["tue", 2, true],
+      ["fri", 2, false],
+    ])
   })
 })

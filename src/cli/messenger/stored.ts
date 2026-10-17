@@ -219,6 +219,34 @@ export const stored = (
           },
         }
       : {}),
+    ...(messenger.createPoll
+      ? {
+          // A messenger that never echoes a device's own message back would otherwise never hold the poll.
+          createPoll: async (chatId, poll, options) => {
+            const sent = await capability(messenger, "createPoll", "create a poll")(chatId, poll, options)
+            await save("polls.create", (opened) =>
+              opened.messages.saveMessages(account, chatId, [sent.message], { via: "send" }),
+            )
+            return sent
+          },
+        }
+      : {}),
+    ...(messenger.vote
+      ? {
+          vote: async (chatId, messageId, answerIds) => {
+            const poll = await capability(messenger, "vote", "vote in a poll")(chatId, messageId, answerIds)
+            const votedAt = new Date().toISOString()
+            await save("polls.vote", (opened) =>
+              opened.messages.saveVote(account, chatId, messageId, {
+                person: { id: account.account, name: null, username: null },
+                answers: answerIds,
+                votedAt,
+              }),
+            )
+            return poll
+          },
+        }
+      : {}),
     ...(messenger.forward
       ? {
           forward: async (fromChatId, messageId, toChatId, options) => {
@@ -266,7 +294,10 @@ const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatc
     await store.messages.saveMessages(account, chatId, messages, { via: "history" })
 }
 
-/** Each change as the store keeps it: a message or an edit upserted, a deletion a tombstone, reactions replaced. */
+/**
+ * Each change as the store keeps it: a message or an edit upserted, a deletion a tombstone, reactions replaced, a
+ * voter's vote replacing their older one.
+ */
 const keep = async (
   store: MessageStore,
   account: AccountKey,
@@ -287,6 +318,9 @@ const keep = async (
         [event.messageId],
         event.chatId === null ? (among ? { among } : {}) : { chatId: event.chatId },
       )
+      return
+    case "vote":
+      await store.messages.saveVote(account, event.chatId, event.messageId, event.vote)
       return
     case "reaction":
       await store.messages.saveReactions(

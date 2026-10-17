@@ -572,6 +572,32 @@ export const messageStemsPending = sqliteTable("message_stems_pending", {
   id: integer("id").primaryKey(),
 })
 
+/**
+ * Each voter's newest vote in a poll, for a messenger that sends votes one by one instead of counting them. Keyed by
+ * chat and external id: a vote can arrive before the poll's message is stored.
+ */
+export const pollVotes = sqliteTable(
+  "poll_votes",
+  {
+    id: integer("id").primaryKey(),
+    chatId: integer("chat_id")
+      .notNull()
+      .references(() => chats.id),
+    messageExternalId: text("message_external_id").notNull(),
+    identityId: integer("identity_id")
+      .notNull()
+      .references(() => identities.id),
+    answers: text("answers").notNull(),
+    votedAt: integer("voted_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.chatId, table.messageExternalId, table.identityId),
+    index("poll_votes_by_identity_id").on(table.identityId),
+  ],
+)
+
 /** One read of a chat's member list. Retention reads presence at a checkpoint from these, not from stays. */
 export const memberObservations = sqliteTable(
   "member_observations",
