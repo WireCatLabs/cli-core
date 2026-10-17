@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.329.0 — 17.10.2026
+
 ### Fixed
 
 - **A run's `keyring` reaches every key cli-core reads or stores**: `models text key set` and `remove`, the key
@@ -31,14 +33,17 @@ shape of this file.
   only with the flag, and `callMeetingPreparationTool` takes `{ communications }` last and refuses the argument
   without it.
 
-## 0.328.0 — 17.10.2026
-
 ### Added
 
 - **Store version 22: a mail sender can be marked to rank lower.** `account_identities.mail_demoted`;
   `mail.setSenderScores` takes `demoted` per sender, and an email hit's `senderScore` (`sender_score` in JSON)
   carries `demoted: true` for such a sender. memo decides who and reorders its search answers; the store's
   search order does not change.
+
+## 0.328.0 — 17.10.2026
+
+### Added
+
 - **`tasks agenda` lists what others owe you**: `assigned` (JSON, MCP `tasks_agenda`) and an "assigned — others owe
   you" section hold the open tasks someone else does, oldest first, each with its `assignees`. Before, only
   `tasks list "assignee:any state:open"` showed them. `tag:`, `category:` and `claimed:` narrow it as they narrow
