@@ -3,6 +3,7 @@ import { keysOver } from "./keys.js"
 import { accountGroupsOf, profilesOf, saveProfile } from "./sqlite/account-groups.js"
 import * as accounts from "./sqlite/accounts.js"
 import type { StoreContext } from "./sqlite/open.js"
+import { linkOwnIdentities } from "./sqlite/own-identities.js"
 import { linkInbox } from "./sqlite/tasks.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey, StoredAccount } from "./types.js"
@@ -43,6 +44,7 @@ export const accountAccountsOver = (context: StoreContext): AccountAccounts => {
     saveAccount: async (key, { name }) => {
       const pk = accountPk(key, name)
       linkInbox(database, `${key.provider}:${key.account}`, pk)
+      linkOwnIdentities(context)
       return pk
     },
     storedAccount: async (key) => accounts.storedAccount(context, key),

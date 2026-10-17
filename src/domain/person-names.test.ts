@@ -35,6 +35,24 @@ describe("known names in a text", () => {
     expect(names("олег и аркадий; Или Ира? Петрову")).toEqual([])
     expect(findNames("Аркадий", nameIndex([], createStemmer()))).toEqual([])
   })
+
+  it("takes a word of a contact's name alone only as a first name or a surname", () => {
+    const contacts = nameIndex(
+      [
+        { id: 4, names: ["Smart Agents"] },
+        { id: 5, names: ["Account Manager Spain"] },
+        { id: 6, names: ["Valery Ptsarev", "Ваша Компания"] },
+        { id: 7, names: ["Владимир"] },
+      ],
+      createStemmer(),
+    )
+    const found = (text: string) => findNames(text, contacts).map(({ start, end }) => text.slice(start, end))
+    expect(found("Smart move. Account details for Spain")).toEqual([])
+    expect(found("Smart Agents wrote")).toEqual(["Smart Agents"])
+    expect(found("Передай Валерию, что Ptsarev согласен")).toEqual(["Валерию", "Ptsarev"])
+    expect(found("Добавить в Ваше расписание. Вашей компании")).toEqual([])
+    expect(found("штаб во Владимире; Владимиру привет; мост Святого Владимира")).toEqual(["Владимиру"])
+  })
 })
 
 describe("unknown names in a text", () => {

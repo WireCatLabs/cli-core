@@ -20,7 +20,7 @@ export const MENTION_VERSIONS: Record<MentionKind, number> = {
   email: 1,
   url: 2,
   document: 1,
-  "person-name": 3,
+  "person-name": 4,
   place: 2,
 }
 

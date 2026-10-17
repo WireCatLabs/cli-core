@@ -149,14 +149,7 @@ export const linkIdentities = (
 ): PersonRecord => {
   const target = required(context, person)
   const moving = required(context, other)
-  if (moving.personPk !== target.personPk) {
-    const together = context.orm
-      .select({ identityPk: identityLinks.identityId })
-      .from(identityLinks)
-      .where(eq(identityLinks.personId, moving.personPk))
-      .all()
-    for (const { identityPk } of together) move(context, identityPk, moving.personPk, target.personPk, options)
-  }
+  mergePerson(context, moving.personPk, target.personPk, options)
   const record = recordOf(context, target.personPk)
   // Two identities that were two people named alike are one now, so a name that was ambiguous may not be.
   resolvePersonLinks(
@@ -164,6 +157,17 @@ export const linkIdentities = (
     record.identities.flatMap(({ name, username }) => [name, username]),
   )
   return record
+}
+
+/** Moves every identity of `from` to `to`, as `linkIdentities` does once it has found both people. */
+export const mergePerson = (context: StoreContext, from: number, to: number, options: LinkOptions): void => {
+  if (from === to) return
+  const together = context.orm
+    .select({ identityPk: identityLinks.identityId })
+    .from(identityLinks)
+    .where(eq(identityLinks.personId, from))
+    .all()
+  for (const { identityPk } of together) move(context, identityPk, from, to, options)
 }
 
 /** Gives the identity a person of its own again; the ones left keep theirs. */

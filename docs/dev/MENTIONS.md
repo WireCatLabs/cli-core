@@ -100,7 +100,10 @@ them.
 
 - **Who is looked for:** persons other than the owner who have a non-e-mail, non-bot identity (met in a
   messenger, a meeting, or a confirmed phone): the person's name, its identities' names, its aliases. E-mail-only
-  persons are left out: in a mailbox they are mostly companies and mailing lists.
+  persons are left out: in a mailbox they are mostly companies and mailing lists. An account's own identity (the
+  account's provider and id) is the owner's: `saveAccount` links it, and whoever was linked with it, to the owner
+  person (`linkOwnIdentities`); `contacts link <person> me` does it for an identity the account id does not name,
+  a Zoom user.
 - **Index:** every name word of three or more letters, by its Snowball stem (if the stem has two letters or more)
   and by its lower-case written form. A Latin word is also indexed in a rough Cyrillic spelling
   (`cyrillicOf`: Valery → валерий).
@@ -108,6 +111,10 @@ them.
   three end letters cut. The second path exists because Snowball reads a surname's `-ов` as an ending:
   «Иванов» stems to `иван`, «Иванову» to `иванов`.
 - **Full names:** two matching words, one space apart, that share a person are one mention of that person.
+- **One word alone** counts only as a listed first name, a surname by its ending (Russian, or Latin `-ov`,
+  `-sky`…), or a word of an alias the owner gave. A contact named «Smart Agents» is found as «Smart Agents», never
+  as «Smart». Polite pronouns (Вы, Ваш, Вашей…) never count, and neither does a name after a saint's word or a
+  Russian name in the prepositional case after «в»/«во», as for unknown names.
 - **Rule link:** a name is linked to a person by the rules only when exactly one of its people wrote in that chat
   (`messages.sender_identity_id` → `identity_links`). One human can be a separate person per messenger until the
   rows are merged, so a name often fits several.
