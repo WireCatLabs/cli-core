@@ -19,6 +19,38 @@ shape of this file.
   `1. Name  7  👍 4 · 😂 3` (five emoji, then `+N`), and each JSON row carries `reactions: [{reaction, count}]`, most
   first. Only when messages are ranked by reactions, read for the rows returned; a message whose stored split is
   not valid has no field.
+- **Messenger switches for what a messenger cannot do**, each yes when unset: `pollAnonymous` (`polls create
+  --anonymous`), `silentSends` (`--silent` on `messages send`, `messages forward` and `polls create`), `sendAs`
+  (`--send-as` on the same three, and `chats send-as`), `scheduledSends` (`messages send --at-time` and
+  `messages scheduled`). Off, the flag or command is not offered, and the MCP tools drop the matching argument or
+  tool (`anonymous`, `silent`, `send_as`, `at_time`, `chats_send_as`, `messages_scheduled`); `polls_create` also
+  offers `topic` only where the messenger has forum topics. parity.json marks them absent for wa, with reasons.
+- **`autoReplies: false`** keeps `serve` from answering by the reply rules, even with `replies.send` at `allow`, and
+  makes every `replies` subcommand refuse with exit 2 ("<Messenger> cannot send automatic replies"). parity.json
+  marks the `replies` group absent for wa.
+- **`Messenger.lacks`** names adapter methods a messenger never has. The sixteen commands that need one of them
+  alone (`account update`, `account sessions list|end`, `chats events`, `chats inspect`, `chats folders
+  list|show|create|update|delete`, `contacts add|remove|rename|import`, `messages pin|unpin`) then refuse on the
+  command line and over MCP before connecting, in the adapter's words.
+- **`./testing` exports `mcpOverStdio(start)`**: a CLI's `mcp` driven over stdin and stdout through its own `run()`,
+  with `request`, `call`, `tools` and `close`, no child process and no SDK.
+
+### Fixed
+
+- **The "no `serve` keeps profile … up to date" warning shows only when a command reads its answer from the
+  store.** Since the connect-time lookup of stored messages, writes such as `reactions add`, `chats members add` and
+  `messages send` printed it too.
+- **`mcp` over stdio uses the stdin and stdout `run()` was given** whenever they are not the process's own, not
+  only under `serve`'s relay; a test no longer has to fake the relay.
+- **`mcp --permission` help and the reference say it only makes a permission stricter**; loosening has been
+  refused since the override check, and the reference still said `messages.send=allow` enables sending.
+- **`config set` no longer lists `default_profile`**, which it refuses; `config unset` still takes it.
+- **`contacts check` names the messenger** where the public ban lists do not reach: "not WhatsApp ones", not the
+  provider id.
+- **The `--transcribe` help says the messenger hears voice messages only where it can.**
+- **Admin statistics no longer reads attachment `providerRef`** (file keys) into its per-message context; nothing
+  stored or printed it. A test pins that `store export` never writes it, in any format or to a file.
+- The poll vote statements are prepared once per store, not once per vote.
 
 ## 0.323.0 — 17.10.2026
 
