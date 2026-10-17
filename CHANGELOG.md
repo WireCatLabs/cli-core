@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.331.0 — 18.10.2026
+
 ### Fixed
 
 - Incremental document linking includes URLs added to previously stored messages. The local text-revision
