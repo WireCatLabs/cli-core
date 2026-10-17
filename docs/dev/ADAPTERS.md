@@ -150,6 +150,11 @@ Some messengers push history to the client instead of answering a request for it
 - With `"store"`, the shared services answer `chats`, `history`, `around` and `contact` from the
   local store. They do not call the adapter, so leave the `ServerReads` group out. Writes still
   connect.
+- `messages sync` asks for older history, so it is refused — unless the messenger sets `historyOnDemand: true`:
+  then `messages sync <chat>` (with `--last`, `--limit`, `--background`) reads that chat back through the adapter's
+  `history(chat, { limit, before })`, a page at a time, at most `fetching.maxPageSize` a request. `--all` stays
+  refused: there is no chat list to walk. An adapter whose phone or server does not answer throws `timeout`, not an
+  empty page — an empty page means the chat's start.
 - A group's member list is still a server read. When the adapter has `members`, `chats members list`, `fetch`
   and `audit` connect and ask it; only `--offline` refuses `fetch` and `audit`, and `list` then reads the stored
   members. Without `members`, `list` reads the stored members and `fetch` and `audit` say the messenger cannot.

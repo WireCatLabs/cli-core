@@ -61,6 +61,11 @@ export interface MessengerTraits {
    */
   history?: "server" | "store"
   /**
+   * With `history: "store"`: whether one chat's older history can still be asked for, page by page, through the
+   * adapter's `history` — `messages sync <chat>`. `--all` stays refused: there is no chat list to walk. No when unset.
+   */
+  historyOnDemand?: boolean
+  /**
    * Whether `search messages --backend` is offered: the adapter has `searchMessages`. `chat` when its server
    * searches one chat at a time, so only a query that names one chat asks it. No when unset.
    */

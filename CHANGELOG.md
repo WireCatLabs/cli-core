@@ -20,6 +20,10 @@ shape of this file.
   own so that a table keyed on `keyof GroupSettings`, like max-cli's, still compiles.
 - **`Messenger.pickAdminRights: false`** for a messenger whose admins have every right (WhatsApp): `admins add`
   takes no `--can` and gives every right in `adminRights`; MCP `chats_admins_add` takes no `rights`.
+- **`Messenger.historyOnDemand: true`**: a messenger with `history: "store"` whose adapter can still read one chat
+  back page by page (WhatsApp asks the phone). `messages sync <chat>` then reaches the adapter's `history`, capped
+  at `fetching.maxPageSize`; without the trait it is refused as before. `messages sync --all` is refused for every
+  store-history messenger before anything starts, `--background` included: it has no chat list to walk.
 - **`./cli` exports the rest of the adapter's capability types**: `GroupAdmin`, `ContactBook`, `ChatFolders`,
   `ChatDeletion`, `AccountSettings`, `AccountEditing`, `AccountRecords`, `ProfileChange`, `ProfilePhotos`,
   `MessagePermalinks` and `TopicHistory`.

@@ -228,11 +228,12 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
     fetch: async (chat, options) => {
       const requested = options.catchUp ?? (deps.searchCatchUp ? {} : undefined)
       if (requested) validateCatchUp(deps, requested)
-      if (deps.withConnection && !deps.offline && deps.reads !== "store")
+      const asks = deps.reads !== "store" || deps.messenger.historyOnDemand === true
+      if (deps.withConnection && !deps.offline && asks)
         return deps.withConnection((adapter) =>
           archiveService({ ...deps, withConnection: undefined, connection: async () => adapter }).fetch(chat, options),
         )
-      pushed(deps, "`messages sync`")
+      if (!asks) pushed(deps, "`messages sync`")
       options.stop.throwIfAborted()
       const connection = await deps.connection()
       const history = capability(connection, "history", "read a chat's history")
