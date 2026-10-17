@@ -196,7 +196,7 @@
     "@types/node": "^22.20.4",
     "@types/pngjs": "6.0.5",
     "@vitest/coverage-v8": "^5.0.2",
-    "@wirecat/cli-base": "0.40.0",
+    "@wirecat/cli-base": "0.40.1",
     "commander": "15.0.0",
     "cspell": "10.3.6",
     "drizzle-kit": "1.0.0-rc.4",

@@ -59,6 +59,13 @@ cli-tasks, retired 2026-10-11.
 
 [Detailed parity audit](PARITY-AUDIT.md) runs fresh isolated consumer checks and records every schema/source/coverage difference. `scripts/parity/evidence.test.ts` checks MCP framing, timeout/exit/errors and mixed mounting evidence; `src/parity/deep.test.ts` checks direct structural differences and exemptions.
 
+## Command lint
+
+`src/cli/command-lint.test.ts` runs `cli-dev lint` over a synthetic CLI that mounts every shared command
+(`src/testing/shared-program.ts`), in every pull request through `ci:quick`. What is not fixed yet is listed in
+`lint/baseline/`, which only shrinks: fix a violation, delete its line. A new shared command goes into the synthetic
+CLI.
+
 ## Agent guidance and task evaluations
 
 The `skill-validation` export reads YAML frontmatter, checks portable names/description/metadata,

@@ -288,6 +288,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `agenda` | what needs a look today |
 | `categories` | the categories a thing takes, with what each means |
 | `domains` | the internet domains links point to, most linked first |
+| `places` | the street addresses confirmed as places, most mentioned first |
 
 <!-- views: end -->
 
@@ -324,6 +325,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
 | `relationships` | collection | confirmed or suggested links between people, organizations and projects |  |
+| `sheets` | collection | remote spreadsheets and their cell ranges, read or changed through a provider |  |
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
 | `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
 | `meetings` | collection | stored meetings, from Zoom or another provider |  |
@@ -552,6 +554,8 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--sync-time` | `<duration>` | duration | stop fetching from the source after this long |  |
 | `--threads` | `<n>` | count | threads on this machine, in all | threads |
 | `--workers` | `<n>` | count | sessions in parallel on this machine, each with its own copy of the model | sessions |
+| `--input` | `<mode>` | choice | how supplied cell values are parsed: literal values or provider-interpreted formulas and locale formats |  |
+| `--render` | `<mode>` | choice | how returned cell values are represented: formatted display values, unformatted values or formulas |  |
 | `--account` | `<account>` | string | the account to use; never assumed |  |
 | `--provider` | `<provider>` | choice | read every account of this provider |  |
 | `--source` | `<accounts>` | list | what to read: provider:account, a provider, a kind or group:<name>; comma-separated |  |
@@ -623,6 +627,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--approval` |  | switch | who joins by the link asks first, and an admin lets them in |  |
 | `--can` | `<rights>` | list | what an admin may do, comma-separated |  |
 | `--channel` |  | switch | a channel instead of a group |  |
+| `--certainty` | `<n>` | number | how sure the agent is, from 0 to 1; kept with what it wrote |  |
 | `--closed` | `<on\|off>` | choice | close it to new messages, or reopen it |  |
 | `--comment-to` | `<post>` | id | comment on this channel post |  |
 | `--description` | `<text>` | string | the new description |  |
@@ -703,6 +708,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `--holder` | `<name>` | string | who takes or holds a claim: a session or chat id; the command says its default |  |
 | `--lease` | `<duration>` | duration | how long a claim lasts before it lapses by itself; claiming again extends it |  |
 | `--filter` | `<query>` | string | a query every result must also match, beside the search's own words |  |
+| `--values` | `<json>` | string | cell values as JSON rows for an explicit range update or row append; not a list filter |  |
 
 <!-- flags: end -->
 
