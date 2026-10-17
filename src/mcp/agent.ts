@@ -170,7 +170,8 @@ const refusal = (
 }
 
 /**
- * One tool per command an agent may run under `root` (NEED-1411): every leaf command, except one marked
+ * One tool per command an agent may run under `root` (NEED-1411): every leaf command and every group that runs on
+ * its own, except one marked
  * `mcp: false` (on itself or a group above it), one with a `lifetime` — an agent call must return — and one the
  * profile's levels refuse. Its input is the command's arguments and options in snake_case, typed as far as the
  * command tree and the shared flag vocabulary say; an option marked `mcp: false` is left out.
@@ -180,7 +181,8 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
   return flatten(commands)
     .filter(
       (info) =>
-        info.commands.length === 0 &&
+        // A group that also runs on its own declares effects: `tasks duplicates` lists, its subcommands decide.
+        (info.commands.length === 0 || info.effects !== undefined) &&
         info.path.length > root.length &&
         startsWith(info.path, root) &&
         !exclude.some((skipped) => startsWith(info.path.slice(root.length), skipped)) &&

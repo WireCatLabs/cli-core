@@ -29,6 +29,10 @@ shape of this file.
   adapter method the messenger lacks, or which `mcp: false` keeps off MCP, is no longer offered. Before, wa's agents
   were offered `chats link create`, `metadata get` and `metadata refresh`, which then failed. A tool with no CLI
   command (`messages photo`, `conversations refresh`) is marked `agentOnly` and stays.
+  The personal server now reads the same catalogue `toolsFromCommands` builds, so the `store` and `runs` commands
+  the shared tree keeps off MCP are no longer offered there either (`store gaps plan`, `store gaps repair`,
+  `store jobs list`, `store jobs show`, `runs search`). `toolsFromCommands` lists a group that runs on its own, such
+  as `tasks duplicates`, beside its subcommands.
 
 ## 0.325.0 — 17.10.2026
 

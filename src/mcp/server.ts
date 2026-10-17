@@ -2,6 +2,7 @@ import type { Readable, Writable } from "node:stream"
 import { McpServer } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError } from "@wirecat/cli-base"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { skillResource } from "@wirecat/cli-base/skill"
 import * as v from "valibot"
 import { environmentOf } from "../cli/context.js"
@@ -51,7 +52,7 @@ export const createServer = (
   const levelOf = (key: string | null | undefined) => (key ? levelFor(settings.permissions, key).level : "allow")
   // A tool the level would refuse is not offered: an agent is not handed a tool that cannot work.
   const offered = Object.fromEntries(
-    Object.entries(mountedMcpTools(rootOf(command), messenger)).filter(([key, one]) => {
+    Object.entries(mountedMcpTools(describeProgram(rootOf(command)), messenger)).filter(([key, one]) => {
       const level = levelOf(toolKey(key, one))
       const writes = one.permission !== undefined || one.annotations.readOnlyHint !== true
       return (
