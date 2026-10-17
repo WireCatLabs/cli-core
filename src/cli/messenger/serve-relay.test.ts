@@ -5,7 +5,7 @@ import { join, relative } from "node:path"
 import { PassThrough, Writable } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
-import { lockPath, readLock } from "../../background/lock.js"
+import { holdLock, lockPath, readLock } from "../../background/lock.js"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import type { MessengerAdapter, SendOptions } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
@@ -141,6 +141,23 @@ describe("commands through serve's relay", () => {
     expect(serve.sent.map((one) => one.text)).toEqual(["hello"])
     expect(new SendJournal(sendsPathFor(app, "default", env)).entries()).toMatchObject([{ outcome: "sent" }])
     expect(serve.lock()?.relay?.path).toMatch(/default\.sock$/)
+    serve.stop()
+    expect(await serve.done).toBe(0)
+  })
+
+  it("**warns once on stderr, naming both versions, when serve runs another version of the CLI**", async () => {
+    const { env } = setup()
+    const serve = await startServe(env)
+    const same = await client(["messages", "send", "Book", "one", "--json"], env)
+    expect(same.stderr.join("\n")).not.toContain("serve runs")
+
+    const path = lockPath(app, "default", env)
+    holdLock(path, { ...(readLock(path) as NonNullable<ReturnType<typeof readLock>>), version: "0.9.0" })
+    const skewed = await client(["messages", "send", "Book", "two", "--json"], env)
+
+    expect(skewed.code).toBe(0)
+    expect(skewed.stderr.filter((line) => line.includes("serve runs 0.9.0, this is 1.0.0"))).toHaveLength(1)
+    expect(serve.sent.map((one) => one.text)).toEqual(["one", "two"])
     serve.stop()
     expect(await serve.done).toBe(0)
   })
