@@ -15,6 +15,20 @@ shape of this file.
   durable reference receipts protect retries. External references without a verified destination
   block the copy. The original remains available; embeddings and entire messenger/contact archives
   are not copied.
+- **`refuseUnderReadOnly(command, what)`** (`@wirecat/cli-core/cli`) refuses, under `<PREFIX>_READ_ONLY`, a write
+  the send guard never sees, such as linking or unlinking the device: call it first in `session start`, `session end`
+  and `setup`. It fails with `permission_error` and "this process is read-only (TG_READ_ONLY) — it cannot <what>",
+  the guard's own wording, which `readOnlyRefusal(lock, what)` builds for a CLI that holds the lock name already.
+  Before, `session end` under the lock logged out and deleted the device's keys.
+- **`untilStopped()` in a run's environment** ends the default deadline for the rest of the command and turns
+  Ctrl-C, SIGTERM, a cancel and an explicit `--timeout` into an abort of the signal it returns; the command then
+  prints what it got and exits 0. A second signal ends the command as before (130, 143). For the
+  history a phone pushes after linking, which keeps each batch as it comes: wa and tg end that wait through it
+  instead of their own SIGINT handler, so a successful link no longer ends with exit 9 or 130.
+- **`secretInputOf(command)`** (`@wirecat/cli-core/cli`) gives `readSecret` the run's own input and output:
+  `readSecret(prompt, { ...secretInputOf(this), echo: true })`. A run's environment takes `stderr` beside `stdout`,
+  where a prompt and what is typed at it go; a test that hands one in now sees the prompt, which before went to the
+  process's real stderr. `contacts lookup` and the bot's token prompt use it.
 
 - **`logsInOrOut(command)`** (`@wirecat/cli-core/cli`) marks a command that links or unlinks the account. It never
   runs through `serve`'s relay — `session end` used to be relayed and would have logged out `serve`'s own
@@ -43,6 +57,15 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`chats list` and `chats show` declare a local read where the messenger's history is pushed** (`history:
+  "store"`, wa): they answer from the store and never connect, and `commands --json` now says so; with `serve`
+  running they run here instead of through its relay. tg and max are unchanged.
+- **`recipients add` declares that it reads the messenger** (`{ remote: "read", local: "write" }`): it resolves the
+  chat on a connection, so it failed while `serve` held the profile. It now runs through `serve`'s relay.
+- **An interactive command without a terminal gets 5 minutes by default, not 30 seconds**: an agent's
+  `session start --qr-file` waits on a person scanning the code elsewhere, and the 30 s default could end it before
+  the device linked. `--timeout` and `<PREFIX>_TIMEOUT` still decide when given; at a terminal there is still no
+  default deadline.
 - **A command path given as one argument fails** with `validation_error` and the line to run:
   `wa 'chats list' --help`, what a shell loop over a quoted `$c` passes, used to print the root help and exit 0, so
   the loop read every command as present. Applies to every CLI's `run()`, after a leading profile too.
