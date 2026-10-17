@@ -73,6 +73,7 @@ it("checks UTF-8 body, title, locator and lookahead bytes before hydrating any r
   })
   expect(spy.mock.calls.some(([sql]) => sql.startsWith("SELECT n.id,n.external_id"))).toBe(false)
   spy.mockRestore()
+  expect((await port.read({ ...f.request, maxReadBytes: 262144 })).items).toHaveLength(1)
   const exact = await port.read({ ...f.request, maxReadBytes: first.readBytes })
   expect(exact.items).toHaveLength(1)
   f.db.prepare("UPDATE messages SET text=? WHERE account_id=? AND external_id='2'").run("Ж".repeat(300), f.accountId)
@@ -153,6 +154,7 @@ it("validates capability, bounds and cancellation before a source read", async (
     { query: "x".repeat(2049) },
     { source: { ...req.source, provider: "x".repeat(129) } },
     { maxReadBytes: 0 },
+    { maxReadBytes: 262145 },
     { before: -1 },
     { query: "?" },
     { query: "w ".repeat(17) },

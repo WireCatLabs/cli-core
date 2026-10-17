@@ -57,7 +57,7 @@ existing word index; there are no stems, wildcard expansion, semantic search or 
 Words such as `OR` are literal words. Query text cannot change account or half-open `[after,before)` timestamp bounds. An explicit window spans at most 90 days.
 Each page returns at most 20 records (default 10), newest first by time and internal row ID.
 
-The read-text budget defaults to 64 KiB and is capped at 1 MiB. Before any record is hydrated,
+The read-text budget defaults to 64 KiB and is capped at 256 KiB. Before any record is hydrated,
 SQLite probes the UTF-8 sizes of its body, title, URL and locator metadata, including the one-row
 lookahead. An oversized page fails with `validation_error`, reason `context.read-budget`; it does
 not hydrate the records then truncate them. `readBytes` reports those bytes, including discarded

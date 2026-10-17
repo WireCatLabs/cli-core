@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- Bound each stored-context reader call to 256 KiB, preserving the 64 KiB default and refusing
+  higher requested limits before adapter dispatch.
+
 ### Added
 
 - SDK hosts can bind explicitly authorized local message, mail and document sources through
