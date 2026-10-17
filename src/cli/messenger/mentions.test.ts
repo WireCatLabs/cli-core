@@ -37,7 +37,7 @@ const message = (id: string, text: string, sent: string): Message => ({
   reactions: null,
 })
 
-const setup = async (extra: Record<string, string> = {}) => {
+const setup = async (extra: Record<string, string> = {}, seeded: Message[] = []) => {
   const root = mkdtempSync(join(tmpdir(), "mentions-cli-"))
   const env = {
     ...process.env,
@@ -60,6 +60,7 @@ const setup = async (extra: Record<string, string> = {}) => {
         "смета: https://docs.google.com/spreadsheets/d/1SyntheticFileId_abc/edit",
         "2026-10-02T10:00:00.000Z",
       ),
+      ...seeded,
     ],
     { via: "history" },
   )
@@ -110,6 +111,33 @@ describe("mentions", () => {
     const names = await chat("mentions", "rebuild", "person-name", "--json")
     expect(names.code, names.stderr).toBe(0)
     expect((await chat("mentions", "rebuild", "vehicle")).code).not.toBe(0)
+  })
+
+  it("pages confirmed places through the shared CLI and stops at the end", async () => {
+    const chat = await setup({}, [
+      message("3", "12 Fictional Example Street", "2026-10-03T10:00:00.000Z"),
+      message("4", "34 Synthetic Sample Road", "2026-10-04T10:00:00.000Z"),
+    ])
+    const mentions = await chat("mentions", "list", "kind:place", "--json")
+    expect(mentions.code, mentions.stderr).toBe(0)
+    const candidates = JSON.parse(mentions.stdout).items as { id: number }[]
+    expect(candidates).toHaveLength(2)
+    for (const candidate of candidates) {
+      const confirmed = await chat("mentions", "confirm", String(candidate.id), "--as-owner", "--json")
+      expect(confirmed.code, confirmed.stderr).toBe(0)
+    }
+    const pages = []
+    for (const page of [1, 2, 3]) {
+      const result = await chat("mentions", "places", "--limit", "1", "--page", String(page), "--json")
+      expect(result.code, result.stderr).toBe(0)
+      pages.push(JSON.parse(result.stdout))
+    }
+    expect(pages[0].items).toHaveLength(1)
+    expect(pages[1].items).toHaveLength(1)
+    expect(pages[0].items[0].id).not.toBe(pages[1].items[0].id)
+    expect(pages[2].items).toEqual([])
+    expect(pages[0].page.has_more).toBe(true)
+    expect(pages[1].page.has_more).toBe(false)
   })
 
   it("refuses a kind it does not know and a mention of nothing, and lists its fields in help", async () => {
