@@ -137,11 +137,13 @@ export const sendGuard = ({
   let reservation: string | undefined
   const answered = new WeakSet<GuardRequest>()
 
+  const refuseReadOnly = () => {
+    if (readOnlyLock) throw readOnlyRefusal(readOnlyLock, "send, react, change chats or change the account")
+  }
+
   const permitted = (request: GuardRequest) => {
     const { chatId, kind = "message", action, personIds } = request
-    if (readOnlyLock) {
-      throw readOnlyRefusal(readOnlyLock, "send, react, change chats or change the account")
-    }
+    refuseReadOnly()
     const levels = currentPermissions()
     if (levels !== undefined) {
       const key = request.key ?? keyForWrite(kind, action)
@@ -244,6 +246,7 @@ export const sendGuard = ({
 
   return {
     ask: async (request) => {
+      refuseReadOnly()
       const levels = currentPermissions()
       if (levels === undefined) return
       const key = request.key ?? keyForWrite(request.kind ?? "message", request.action)

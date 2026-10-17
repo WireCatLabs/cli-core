@@ -1032,6 +1032,27 @@ describe("the shared read commands", () => {
     expect(traced.stderr.join("\n")).toContain('"operation":"wire.frame","opcode":178')
   })
 
+  it("refuses a delete under the read-only lock before it would ask, with exit 5", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_READ_ONLY: "1" }
+    const deletions: unknown[] = []
+    const deleting: MessengerAdapter = {
+      ...fake,
+      delete: async (chatId, ids) => {
+        deletions.push([chatId, ids])
+      },
+    }
+
+    const locked = await call(["messages", "delete", "Book", "3", "--json"], async () => deleting, env)
+
+    expect(locked.code).toBe(5)
+    expect(JSON.parse(locked.stderr.join("")).error).toMatchObject({
+      code: "permission_error",
+      message: expect.stringContaining("this process is read-only (CHAT_READ_ONLY)"),
+    })
+    expect(deletions).toEqual([])
+  })
+
   it("**delete only with --allow-dangerous**, each message counted toward the hourly limit", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }

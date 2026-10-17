@@ -56,6 +56,10 @@ shape of this file.
   `serve` kept the client streaming into the closed pipe, and an EPIPE after `run()` returned printed a stack trace.
   The relay client now ends with 0 when its output closes, which ends the command in serve, and `run()` keeps
   EPIPE quiet on stdout and stderr for the rest of the process. A CLI can drop its own `process.exit(0)` on EPIPE.
+- **`<PREFIX>_READ_ONLY` refuses a write that asks first before it asks**: `messages delete`, `topics delete`,
+  `account sessions end`, `chats delete` and `chats clear` under the lock stopped with exit 7, "asks before it acts",
+  as if `--allow-dangerous` would let them through. They now stop with exit 5 and "this process is read-only", as
+  every other write does. Without the lock they ask as before.
 
 ### Changed — may break callers
 
