@@ -198,9 +198,9 @@ describe("the public ban lists", () => {
   })
 
   it("says a non-Telegram account is not in them", () => {
-    expect(notCovered("max").map(({ answer, detail }) => [answer, detail])).toEqual([
-      ["unknown", "lists Telegram accounts only, not max"],
-      ["unknown", "lists Telegram accounts only, not max"],
+    expect(notCovered("WhatsApp").map(({ answer, detail }) => [answer, detail])).toEqual([
+      ["unknown", "lists Telegram accounts only, not WhatsApp ones"],
+      ["unknown", "lists Telegram accounts only, not WhatsApp ones"],
     ])
   })
 })
