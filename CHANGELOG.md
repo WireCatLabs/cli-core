@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A schedule that runs every few minutes no longer stops after a run longer than its interval.** Its systemd timer
+  counted from when a run started (`OnUnitActiveSec`), so a run that outlasted the interval left no next run; it
+  now counts from when a run ends (`OnUnitInactiveSec`). A schedule written before keeps its timer until saved again.
+
 ## 0.321.0 — 17.10.2026
 
 ### Changed — may break callers
