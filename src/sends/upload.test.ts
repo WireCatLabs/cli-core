@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { resolvePaths } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { readAttachments, readUpload, refusedPlace, uploadBlob, uploadBytes } from "./upload.js"
 
@@ -19,6 +20,40 @@ const setUp = () => {
 }
 
 describe("readUpload", () => {
+  it("protects the default WhatsApp folders from another CLI", () => {
+    const platform = process.platform
+    const { root, env } = setUp()
+    const isolated = {
+      ...env,
+      HOME: root,
+      USERPROFILE: root,
+      XDG_CONFIG_HOME: join(root, "config"),
+      XDG_STATE_HOME: join(root, "state-home"),
+      XDG_CACHE_HOME: join(root, "cache-home"),
+      XDG_DATA_HOME: join(root, "data-home"),
+      APPDATA: join(root, "roaming"),
+      LOCALAPPDATA: join(root, "local"),
+    }
+    const paths = resolvePaths({ appName: "whatsapp-cli", prefix: "WA", env: isolated, platform })
+    for (const directory of Object.values(paths))
+      expect(refusedPlace(join(directory, "profiles", "synthetic", "private.db"), app, isolated, platform)).toBe(true)
+    expect(refusedPlace(join(root, ".worktrees", "whatsapp-notes.txt"), app, isolated, platform)).toBe(false)
+  })
+
+  it("refuses overridden WhatsApp device state and links before making an upload, with the explicit override retained", async () => {
+    const { root, env, put } = setUp()
+    const state = join(root, "wa-state")
+    const context = { app, env: { ...env, WA_STATE_DIR: state } }
+    const device = put("wa-state/profiles/synthetic/private.db")
+    const link = join(root, "ordinary.txt")
+    symlinkSync(device, link)
+    expect(refusedPlace(join(state, "profiles", "synthetic", "PRIVATE.DB"), app, context.env, "win32")).toBe(true)
+    for (const path of [device, link])
+      await expect(readUpload("file", path, context)).rejects.toThrow(/--allow-any-file/)
+    expect(await readUpload("file", device, { ...context, anyFile: true })).toMatchObject({ name: "private.db" })
+    expect(await readUpload("file", put("wa-state-notes/report.txt"), context)).toMatchObject({ name: "report.txt" })
+  })
+
   it("reads a file with its name, and a photo only with a photo's extension", async () => {
     const { env, put } = setUp()
 

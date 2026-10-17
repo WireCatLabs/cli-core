@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Security
+
+- Attachment guards recognize the WhatsApp application folders alongside the other WireCat
+  tools, including configured state paths and links. Ordinary working folders and the explicit
+  file override keep their existing behavior.
+
 ## 0.313.0 — 17.10.2026
 
 ### Added
