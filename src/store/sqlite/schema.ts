@@ -824,6 +824,8 @@ export const attachments = sqliteTable(
   ],
 )
 
+export { documentAnnotationTransfers } from "./schema/document-transfers.js"
+
 export const documents = sqliteTable(
   "documents",
   {
@@ -875,14 +877,7 @@ export const documentRevisions = sqliteTable(
   (table) => [index("document_revisions_by_document_id").on(table.documentId)],
 )
 
-export const documentIndexPending = sqliteTable(
-  "document_index_pending",
-  {
-    id: integer("id").notNull(),
-    indexableType: text("indexable_type").notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.indexableType, table.id] })],
-)
+export { documentIndexPending } from "./schema/document-index-pending.js"
 
 export const notes = sqliteTable(
   "notes",

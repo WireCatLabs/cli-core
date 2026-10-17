@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-88 tables, 19 full-text indexes.
+89 tables, 19 full-text indexes.
 
 ## Conventions
 
@@ -780,6 +780,21 @@ CREATE VIRTUAL TABLE attachment_name_words USING fts5( name, content = '', conte
 ## Documents, notes and memories
 
 Documents are files and pages that stand on their own; notes are what a person wrote about something; memories are what an agent concluded.
+
+### `document_annotation_transfers`
+
+Completed document annotation copies, scoped to one source file and collection. Reference mappings make a retry safe after the destination committed but the provider checkpoint did not.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `source_key` | text | not null |  | SHA256 of the source file identity; no path or credential |
+| `collection` | text | not null |  | source folder integration's external identity |
+| `snapshot_hash` | text | not null |  | SHA256 of the exact source graph |
+| `bindings_hash` | text | not null |  | SHA256 of explicit external reference decisions |
+| `reference_map` | text | not null |  | JSON mapping source typed row keys to destination typed row keys |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `PRIMARY KEY (source_key, collection)`
 
 ### `documents`
 

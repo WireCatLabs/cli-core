@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- `previewDocumentTransfer` and `applyDocumentTransfer` in `./store` copy one explicitly selected
+  document collection and its tags, aliases, notes, memories, facts, revisions and relationships
+  between databases. Source handles are read-only; fingerprints, identity checks, atomic writes and
+  durable reference receipts protect retries. External references without a verified destination
+  block the copy. The original remains available; embeddings and entire messenger/contact archives
+  are not copied.
+
 ### Fixed
 
 - **The preparation source flag advertises a vocabulary-compatible value name.** `--context-source <id=cursor>` still accepts either a selected ID or ID with its continuation cursor; the optional cursor syntax and runtime behavior are unchanged.

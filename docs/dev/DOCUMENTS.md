@@ -56,3 +56,53 @@ mismatch, folder scope exit, metadata-only files, optional pictures, annotations
 history. Extraction tests cover preview, evidence, proposed saves and source changes at both
 write boundaries. Drive's integration tests exercise its actual adapters against the packed Core
 candidate. Tests do not contact a real provider or measure model accuracy.
+
+## Copy a document collection to another database
+
+Use `previewDocumentTransfer` and `applyDocumentTransfer` from `@wirecat/cli-core/store` to retain
+annotations when a provider changes databases. This persistence workflow lives in
+`src/store/document-transfer/` and `src/store/sqlite/document-transfer/`; provider adapters bind the
+explicit account, namespace, cached-content checks, profile lock and final checkpoint update.
+It contains no provider client, CLI parser or model call.
+
+```ts
+const options = {
+  source: "/var/tmp/example-original.db",
+  destination: "/var/tmp/example-selected.db",
+  collection: "example-documents:synthetic-owner",
+}
+const preview = await previewDocumentTransfer(options)
+// Present counts, source_documents, missing_bindings and conflicts before applying.
+const receipt = await applyDocumentTransfer({
+  ...options,
+  expected_fingerprint: preview.fingerprint,
+})
+```
+
+The collection is its exact integration name, such as a provider/account namespace; duplicate names
+are refused. Preview neither creates nor migrates either file. Source schema 2 through this build's
+schema is supported without maintenance; upgrade a separate copy of an older source first. Applying
+initializes or upgrades the explicitly selected destination. File aliases cannot make it the source.
+
+The copy retains document and note revisions, tag/topic assignments and aliases, memory scope/status/
+supersession, fact status/confirmation, authors and structured relationships in both directions.
+Documents match by collection and external key, never title or row number. Different existing content,
+conflicting topics/aliases and contradictory identity decisions refuse the transfer. Source provider
+identities can reuse a verified destination person or create a separate person; equal display names
+never merge people. Only minimal identity/current-association data and author handles are copied,
+without bot credentials, private provider metadata or complete contact/account history.
+
+Unmatched projects, tasks and other external endpoints appear in `missing_bindings`. The caller may
+supply an explicit `bindings` object mapping source references to same-kind destination references.
+Changes to these decisions or either relevant graph invalidate the fingerprint. Applying rechecks the
+plan under the destination write lock and commits the complete bounded copy with its receipt in one
+transaction. An interruption rolls back; repeating a completed unchanged copy returns its existing
+mapping. The host publishes its checkpoint only after that receipt. Source changes detected during
+the copy refuse checkpoint publication, retaining both databases. Stop other writers to the old store
+while switching; this is a reviewed snapshot copy, not ongoing bidirectional synchronization.
+
+Limits are 1,000 documents/annotation records, 10,000 relationships or tag assignments, 10,000 revisions
+per record and a 16 MiB snapshot. Larger graphs refuse without truncation. Original files remain in
+place. Structured references are remapped; literal references inside free text stay as written.
+Embeddings and cached pictures are derived and must be indexed again explicitly. The host retains
+its original refusal guard for store changes that have not completed this operation.

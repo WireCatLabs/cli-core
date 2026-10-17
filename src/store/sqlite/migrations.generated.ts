@@ -504,5 +504,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TABLE `poll_votes` (\n\t`id` integer PRIMARY KEY,\n\t`chat_id` integer NOT NULL,\n\t`message_external_id` text NOT NULL,\n\t`identity_id` integer NOT NULL,\n\t`answers` text NOT NULL,\n\t`voted_at` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_poll_votes_chat_id_chats_id_fk` FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`),\n\tCONSTRAINT `fk_poll_votes_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `poll_votes_chat_id_message_external_id_identity_id_unique` UNIQUE(`chat_id`,`message_external_id`,`identity_id`)\n);",
       "CREATE INDEX `poll_votes_by_identity_id` ON `poll_votes` (`identity_id`);"
     ]
+  },
+  {
+    "name": "20261017141028_version-21-document-annotation-transfers",
+    "statements": [
+      "CREATE TABLE `document_annotation_transfers` (\n\t`source_key` text NOT NULL,\n\t`collection` text NOT NULL,\n\t`snapshot_hash` text NOT NULL,\n\t`bindings_hash` text NOT NULL,\n\t`reference_map` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `document_annotation_transfers_pk` PRIMARY KEY(`source_key`, `collection`)\n);"
+    ]
   }
 ]

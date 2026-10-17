@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
+import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
 const info = JSON.parse(readFileSync(`${scratch}/info.json`, "utf8"))
@@ -589,6 +590,7 @@ const NEW = {
     queue("email_index_pending", "emails"),
   ],
   documents: [
+    annotationTransferTable,
     {
       name: "documents",
       doc: "A file or page that stands on its own: a file in a notes folder (md, pdf, docx, xlsx…), a Notion page, a Drive file, a memo wiki page.",
@@ -627,17 +629,7 @@ const NEW = {
       ],
       keys: ["UNIQUE (account_id, external_id)"],
     },
-    {
-      name: "document_revisions",
-      doc: "Earlier bodies of a document.",
-      cols: [
-        id(),
-        fk("document_id", "documents", { notnull: true }),
-        c("body", "text", { notnull: true }),
-        c("revision", "integer", { notnull: true }),
-        c("created_at", "integer", { notnull: true }),
-      ],
-    },
+    documentRevisionsTable,
     fts("document_words", "Word index over documents.", "normalized_text, scope"),
     fts("document_stems", "Stem index, the pair of document_words.", "stems, scope"),
     queue("document_index_pending", "documents"),
