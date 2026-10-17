@@ -12,12 +12,13 @@ export const forwardCommand = (messenger: Messenger): Command => {
     .argument("<chat>", `the chat the message is in: ${messenger.chatArgument}`)
     .argument("<message>", "the message id")
     .requiredOption("--to <chat>", `where it goes: ${messenger.chatArgument}`)
-    .option("--silent", "deliver it without a notification")
-    .option(
+  if (messenger.silentSends !== false) forward.option("--silent", "deliver it without a notification")
+  if (messenger.sendAs !== false)
+    forward.option(
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists for the --to chat; required where the chat posts as someone else by default",
     )
-    .option("--operation-id <id>", "repeat a forward whose outcome was unknown, without risking a second copy")
+  forward.option("--operation-id <id>", "repeat a forward whose outcome was unknown, without risking a second copy")
   if (messenger.forwardTopic) forward.option("--topic <id>", "forward into this forum topic of the --to chat")
   return forward.action(async function (this: Command, chat: string, message: string) {
     const context = messengerContext(this, messenger)

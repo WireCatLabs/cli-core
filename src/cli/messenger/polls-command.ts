@@ -145,8 +145,8 @@ export const pollsCommand = (messenger: Messenger): Command => {
   create.option("--multiple", "people may pick several answers")
   if (messenger.pollAnonymous !== false) create.option("--anonymous", "nobody sees who voted for what")
   if (messenger.pollRevote !== false) create.option("--revote", "people may change their vote")
-  if (messenger.pollSilent !== false) create.option("--silent", "send without a notification")
-  if (messenger.pollSendAs !== false)
+  if (messenger.silentSends !== false) create.option("--silent", "send without a notification")
+  if (messenger.sendAs !== false)
     create.option(
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists; required where the chat posts as someone else by default",

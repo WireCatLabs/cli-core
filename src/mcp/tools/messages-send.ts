@@ -16,6 +16,55 @@ export const HTML_TOOL_HELP = "the text is HTML: <b>, <i>, <u>, <s>, <a href>, <
 export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
   const name = nameOf(messenger)
+  const sendInput = {
+    chat,
+    text: v.optional(v.pipe(v.string(), v.description("the message, or the caption of a file or photo"))),
+    file: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.description("a path on the owner's machine to attach as a file")),
+    ),
+    photo: v.optional(v.pipe(v.string(), v.minLength(1), v.description("a .jpg, .png or .webp to attach as a photo"))),
+    as_file: v.optional(v.pipe(v.boolean(), v.description("send the file as a file to download, a video included"))),
+    filename: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.description("the name others see for the file, instead of its own")),
+    ),
+    spoiler: v.optional(v.pipe(v.boolean(), v.description("hide the photo or video behind a spoiler"))),
+    caption_above: v.optional(v.pipe(v.boolean(), v.description("show the text above the photo or file"))),
+    voice: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.description("an Ogg Opus file to send as a voice message, alone")),
+    ),
+    reply_to: v.optional(v.pipe(message, v.description("the message this answers, in the same chat"))),
+    comment_to: v.optional(
+      v.pipe(message, v.description("a post of this channel to comment on; the comment goes to its discussion")),
+    ),
+    topic: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.description("the forum topic id; unsupported without topics")),
+    ),
+    send_as: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "an id from `chats send-as` to post as; required where the chat posts as someone else by default",
+        ),
+      ),
+    ),
+    operation_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
+    silent: v.optional(v.pipe(v.boolean(), v.description("deliver without a notification"))),
+    no_preview: v.optional(v.pipe(v.boolean(), v.description("no preview card for a link in the text"))),
+    md: v.optional(
+      v.pipe(v.boolean(), v.description("read **bold**, _italic_, ~~struck~~ and `code`; \\ keeps a mark literal")),
+    ),
+    html: v.optional(v.pipe(v.boolean(), v.description(HTML_TOOL_HELP))),
+    at_time: v.optional(
+      v.pipe(
+        v.string(),
+        v.description("send it later: 2026-09-25T09:00 (the owner's local time), or 30m, 2h, 1d from now"),
+      ),
+    ),
+  }
+  if (messenger.sendAs === false) delete (sendInput as Partial<typeof sendInput>).send_as
+  if (messenger.silentSends === false) delete (sendInput as Partial<typeof sendInput>).silent
+  if (messenger.scheduledSends === false) delete (sendInput as Partial<typeof sendInput>).at_time
   return {
     messages_send: tool({
       title: "Send a message",
@@ -26,58 +75,11 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
         "the message store are refused, with no way around it here; other files, hidden ones included, are sent. " +
         "A name that matches several chats is refused with the candidates — pick an id, never guess. " +
         `On outcome_unknown, retry with the operation_id it returns and ${name} drops the duplicate; never with a new one. ` +
-        `With \`at\`, ${name} sends it later and the answer carries scheduled_for; never retry a scheduled send — ` +
-        "read `messages scheduled` instead.",
-      input: v.object({
-        chat,
-        text: v.optional(v.pipe(v.string(), v.description("the message, or the caption of a file or photo"))),
-        file: v.optional(
-          v.pipe(v.string(), v.minLength(1), v.description("a path on the owner's machine to attach as a file")),
-        ),
-        photo: v.optional(
-          v.pipe(v.string(), v.minLength(1), v.description("a .jpg, .png or .webp to attach as a photo")),
-        ),
-        as_file: v.optional(
-          v.pipe(v.boolean(), v.description("send the file as a file to download, a video included")),
-        ),
-        filename: v.optional(
-          v.pipe(v.string(), v.minLength(1), v.description("the name others see for the file, instead of its own")),
-        ),
-        spoiler: v.optional(v.pipe(v.boolean(), v.description("hide the photo or video behind a spoiler"))),
-        caption_above: v.optional(v.pipe(v.boolean(), v.description("show the text above the photo or file"))),
-        voice: v.optional(
-          v.pipe(v.string(), v.minLength(1), v.description("an Ogg Opus file to send as a voice message, alone")),
-        ),
-        reply_to: v.optional(v.pipe(message, v.description("the message this answers, in the same chat"))),
-        comment_to: v.optional(
-          v.pipe(message, v.description("a post of this channel to comment on; the comment goes to its discussion")),
-        ),
-        topic: v.optional(
-          v.pipe(v.string(), v.minLength(1), v.description("the forum topic id; unsupported without topics")),
-        ),
-        send_as: v.optional(
-          v.pipe(
-            v.string(),
-            v.minLength(1),
-            v.description(
-              "an id from `chats send-as` to post as; required where the chat posts as someone else by default",
-            ),
-          ),
-        ),
-        operation_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
-        silent: v.optional(v.pipe(v.boolean(), v.description("deliver without a notification"))),
-        no_preview: v.optional(v.pipe(v.boolean(), v.description("no preview card for a link in the text"))),
-        md: v.optional(
-          v.pipe(v.boolean(), v.description("read **bold**, _italic_, ~~struck~~ and `code`; \\ keeps a mark literal")),
-        ),
-        html: v.optional(v.pipe(v.boolean(), v.description(HTML_TOOL_HELP))),
-        at_time: v.optional(
-          v.pipe(
-            v.string(),
-            v.description("send it later: 2026-09-25T09:00 (the owner's local time), or 30m, 2h, 1d from now"),
-          ),
-        ),
-      }),
+        (messenger.scheduledSends === false
+          ? ""
+          : `With \`at_time\`, ${name} sends it later and the answer carries scheduled_for; never retry a scheduled ` +
+            "send — read `messages scheduled` instead."),
+      input: v.object(sendInput),
       annotations: WRITE,
       permission: "send",
       online: async (adapter, args, { guard, env }) => {

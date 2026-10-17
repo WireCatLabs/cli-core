@@ -27,13 +27,14 @@ export const sendCommand = (messenger: Messenger): Command => {
   send.option("--reply-to <message>", "answer this message, by its id in the same chat")
   if (messenger.channelComments !== false)
     send.option("--comment-to <post>", "comment on this post of the channel; it goes to the post's discussion group")
-  send
-    .option(
+  if (messenger.sendAs !== false)
+    send.option(
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists; required where the chat posts as someone else by default",
     )
-    .option("--operation-id <id>", "repeat a send whose outcome was unknown, without risking a second copy")
-    .option("--silent", "deliver without a notification")
+  send.option("--operation-id <id>", "repeat a send whose outcome was unknown, without risking a second copy")
+  if (messenger.silentSends !== false) send.option("--silent", "deliver without a notification")
+  send
     .option("--no-preview", "no preview card for a link in the text")
     .option("--md", "read this messenger's Markdown; see its formatting guide for supported syntax")
     .option("--file <file>", "attach a file; the text becomes its caption")
@@ -41,13 +42,14 @@ export const sendCommand = (messenger: Messenger): Command => {
     .option("--as-file", "send the --file as a file to download, a video included")
     .option("--voice <file>", "send an Ogg Opus file as a voice message, alone, with no text")
     .option("--allow-any-file", "send a file even from credential folders or this CLI's own folders")
-    .option(
+  if (messenger.scheduledSends !== false)
+    send.option(
       "--at-time <time>",
       "let the messenger send it later, even with this machine off: 2026-09-25T09:00 (local time), or 30m, 2h, 1d from now",
     )
-    .action(async function (this: Command, chat: string, text: string | undefined) {
-      await sendText(this, messenger, chat, text)
-    })
+  send.action(async function (this: Command, chat: string, text: string | undefined) {
+    await sendText(this, messenger, chat, text)
+  })
   if (messenger.mediaOptions?.includes("spoiler"))
     send.option("--spoiler", "hide the --photo or video behind a spoiler until tapped")
   if (messenger.mediaOptions?.includes("captionAbove"))
