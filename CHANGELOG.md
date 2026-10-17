@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.314.0 — 17.10.2026
+
 ### Security
 
 - Commands run through a read-only `serve` retain its write lock when a client's environment
