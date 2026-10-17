@@ -101,3 +101,12 @@ and use the same isolated synthetic provider without owner accounts or external 
 
 The independent agent pass records the source skill,
 task outcomes, calls, bytes and limitations of the first measured synthetic run.
+
+## Minimum supported Node mail writes
+
+The old-node job retains its Node 22.15 refusal check, then runs
+[`scripts/node22-mail.mjs`](../../scripts/node22-mail.mjs) on supported Node 22.16. The public-store
+fixture checks saving/deleting/restoring thread counts, read/star changes and no-ops, timestamps and
+account isolation. It refuses an existing database path. This protects the Node22 SQLite binding
+boundary that a Node 24-only mail suite cannot establish. Use a new temporary path when running it
+locally; no owner store or credentials are needed.
