@@ -238,7 +238,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     // serve's relay ends its runs by their signal; a handler each would also end serve's own work.
     if (!options.relayed) process.on("SIGINT", sigint).on("SIGTERM", sigterm)
     const target =
-      options.relayed || flags.dryRun
+      options.relayed || options.agent || flags.dryRun
         ? undefined
         : relayTarget(
             definition.app,

@@ -36,6 +36,7 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
           settings: context.settings,
           levels: () => bot.resolveSettings(this.optsWithGlobals(), { env: context.env, kind: "bot" }).permissions,
           env: context.env,
+          ...(mcp.keyOf ? { keyOf: mcp.keyOf } : {}),
           ...(mcp.skill ? { skill: mcp.skill } : {}),
         },
         context.streams.diagnostic,

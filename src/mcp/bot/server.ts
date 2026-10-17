@@ -25,6 +25,8 @@ export interface BotServerOptions {
   settings: Pick<Settings, "profile" | "permissions" | "readOtherBots">
   /** The levels in force now, read before every call; `settings.permissions` when unset. */
   levels?: () => Readonly<Record<PermissionKey, Level>>
+  /** The key a CLI's own bot command is guarded by, from its full path, when `keyForCommand` does not know it. */
+  keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
   env: NodeJS.ProcessEnv
   skill?: URL
 }
@@ -44,6 +46,7 @@ export const createBotServer = (options: BotServerOptions) => {
   const tools = toolsFromCommands(program.commands, {
     root: ["bot"],
     levels: settings.permissions,
+    ...(options.keyOf ? { keyOf: options.keyOf } : {}),
     offline: true,
     // Another bot's copy is this bot's to read only where `read_other_bots` says so.
     ...(settings.readOtherBots ? {} : { omit: ["all_bots", "bots"] }),
@@ -54,7 +57,14 @@ export const createBotServer = (options: BotServerOptions) => {
   // One at a time: the commands share the journal, the registry and the local copy.
   let queue: Promise<unknown> = Promise.resolve()
   const invoke = (path: readonly string[], input: Record<string, unknown>): Promise<AgentAnswer> => {
-    const next = queue.then(() => runCommandForAgent(program, path, input, { profile: settings.profile, env, levels }))
+    const next = queue.then(() =>
+      runCommandForAgent(program, path, input, {
+        profile: settings.profile,
+        env,
+        levels,
+        ...(options.keyOf ? { keyOf: options.keyOf } : {}),
+      }),
+    )
     queue = next.catch(() => undefined)
     return next
   }

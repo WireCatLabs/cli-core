@@ -204,6 +204,17 @@ describe("bot mcp tools by permission level", () => {
     expect(calls).toEqual([])
   })
 
+  it("**a CLI's own key decides**: a command guarded by another key is hidden and refused with it", async () => {
+    configure({ bot: { profiles: { sales: { permissions: { "bot.messages.send": "deny" } } } } })
+    const keyOf = (path: readonly string[]) => (path.join(" ") === "bot chats action" ? "bot.messages.send" : undefined)
+    const { offered, client } = await connect({ keyOf })
+
+    expect(offered).not.toContain("chats action")
+    expect((await call(client, "chats action", { chat: "-100", action: "typing" })).error?.code).toBe(
+      "validation_error",
+    )
+  })
+
   it("**offers another bot's copy only where read_other_bots allows**", async () => {
     const { client } = await connect()
     expect(Object.keys((await client.describe("search messages"))?.arguments.properties ?? {})).not.toContain(

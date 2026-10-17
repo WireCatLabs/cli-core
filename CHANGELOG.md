@@ -39,7 +39,8 @@ shape of this file.
     message-id and callback-id patterns, the ISO form of `since_time`, at least two `people`, and `text` on
     `messages send`.
   `createBotServer` takes `program: { run, commands }` (the CLI's `run` and `describeProgram` of its tree) and an
-  optional `levels` read before every call, in place of `commandAt`, `run` and `tools`; `offered` lists command
+  optional `levels` read before every call and `keyOf` for a CLI's own command guarded by another key (also
+  `BotMcp.keyOf`), in place of `commandAt`, `run` and `tools`; `offered` lists command
   paths, and `tools` the catalogue. **The CLI's `run` must pass on the whole environment it is given** (max's
   `botMcpRun` keeps only `streams`, `tty` and `answer`; the runner then refuses with "the CLI's run must pass its
   whole environment on"). `BotMcp.tools` is gone: a CLI's own bot commands are offered by being commands, and it
