@@ -1,9 +1,11 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { expect, it } from "vitest"
+import { CliError } from "@wirecat/cli-base"
+import { expect, it, vi } from "vitest"
 import { listQuery } from "../cli/list-query.js"
 import type { Message } from "../domain/models.js"
+import { openCache } from "../store/open.js"
 import { openStore } from "../store/store.js"
 import { storeOnlyDeps } from "./deps.js"
 import { TASK_QUERY, type TasksService, tasksService } from "./tasks.js"
@@ -352,6 +354,47 @@ it("**an agent's close closes at the owner's threshold and waits on the owner be
     await expect(tasks.reject(lamp.id, "owner")).rejects.toMatchObject({
       details: { reason: "task.no-close-suggestion" },
     })
+  } finally {
+    await store.close()
+  }
+})
+
+it("shows an owner project's task with its evidence and no account, and refuses another account's task", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "project-task-show-")), "m.db")
+  const store = await openStore({ path })
+  try {
+    const project = await store.knowledge.addProject({ name: "Harbour Example", key: "HRB", scope: "work" })
+    const made = await store.tasks.create({ project: project.ref, title: "Send the survey", type: "chore" }, "owner")
+    const note = await store.notes.addNote({ text: "Synthetic finding", title: "Call notes" })
+    await store.notes.addLink({ from: made.ref, to: note.ref, kind: "evidence" })
+    const noAccount = vi.fn(async () => {
+      throw new CliError("validation_error", "no account")
+    })
+    const global = tasksService({ ...storeOnlyDeps(store, account, { app }), account: noAccount })
+    const shown = await global.show(made.key)
+    expect(shown).toMatchObject({ key: "HRB-1", project: project.ref, links: [{ kind: "evidence", to: note.ref }] })
+    expect(await global.show(`task:${made.key}`)).toEqual(shown)
+    expect(noAccount).not.toHaveBeenCalled()
+    await expect(global.show("HRB-2")).rejects.toMatchObject({ message: "no account" })
+
+    const own = tasksService(storeOnlyDeps(store, account, { app }))
+    const inbox = (await own.add(note.ref, "request", "owner")).task
+    expect(await own.show(inbox.key as string)).toMatchObject({ key: inbox.key })
+    const other = tasksService(storeOnlyDeps(store, { ...account, account: "501" }, { app }))
+    for (const id of [inbox.id, inbox.key as string, `task:${inbox.key}`])
+      await expect(other.show(id)).rejects.toMatchObject({ code: "not_found" })
+    await expect(global.show(inbox.key as string)).rejects.toMatchObject({ message: "no account" })
+
+    const db = await openCache(path)
+    try {
+      db.prepare("UPDATE tasks SET deleted_at=1 WHERE key=?").run(made.key)
+      await expect(other.show(made.key)).rejects.toMatchObject({ code: "not_found" })
+      db.prepare("UPDATE tasks SET deleted_at=NULL WHERE key=?").run(made.key)
+      db.prepare("UPDATE projects SET deleted_at=1 WHERE key=?").run("HRB")
+      await expect(other.show(made.key)).rejects.toMatchObject({ code: "not_found" })
+    } finally {
+      db.close()
+    }
   } finally {
     await store.close()
   }
