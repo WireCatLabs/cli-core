@@ -97,7 +97,9 @@ interface Tool<S extends Input> {
   _meta?: Record<string, unknown>
   /** A write, and what the profile's `allow` must name for it to be offered. */
   permission?: Permission
-  /** The command path its level is read from, where the tool's name does not spell it: `chats.mark-read`. */
+  /** The CLI command it answers as, where its name does not spell it: `chats send-as`. Its level is read from it. */
+  command?: string
+  /** A permission key other than its command's. */
   key?: PermissionKey | null
   /** A host-owned entry with its own connection and confirmation lifecycle. */
   custom?: (args: v.InferOutput<S>, defaults: Defaults, ctx: ServerContext) => Promise<object>
@@ -216,9 +218,16 @@ const outcomeOf = (result: CallToolResult): Pick<ToolCall, "status" | "error"> =
   return { status: error === "permission_error" ? "refused" : "failed", error }
 }
 
-/** The key a tool's level is read from: its own, or its name read as a command path. */
-export const toolKey = (name: string, definition: Pick<AnyTool, "key">): PermissionKey | null | undefined =>
-  definition.key !== undefined ? definition.key : keyForCommand(name.split("_"))
+/** The CLI command a tool answers as: declared, or its name read as a command path. */
+export const commandOf = (name: string, definition: Pick<AnyTool, "command">): string =>
+  definition.command ?? name.replaceAll("_", " ")
+
+/** The key a tool's level is read from: its own, or its command's. */
+export const toolKey = (
+  name: string,
+  definition: Pick<AnyTool, "key" | "command">,
+): PermissionKey | null | undefined =>
+  definition.key !== undefined ? definition.key : keyForCommand(commandOf(name, definition).split(" "))
 
 /**
  * The arguments an entry takes, refusing any other: a loose object drops an argument it does not know, so a
@@ -258,7 +267,7 @@ export const entryRunner = (registration: Registration): RunEntry => {
   const { log } = registration
   return async (key, definition, args, ctx) => {
     const startedAt = Date.now()
-    const command = `mcp ${key.replaceAll("_", " ")}`
+    const command = `mcp ${commandOf(key, definition)}`
     const traceId = traceIdOf(ctx?.mcpReq?._meta?.traceparent)
     const app = registration.messenger?.app
     const recording =
@@ -287,7 +296,7 @@ export const entryRunner = (registration: Registration): RunEntry => {
       return parsed.success
         ? run(key, definition, parsed.output, ctx)
         : failed(
-            new CliError("validation_error", `${key.replaceAll("_", " ")}: ${v.summarize(parsed.issues)}`, {
+            new CliError("validation_error", `${commandOf(key, definition)}: ${v.summarize(parsed.issues)}`, {
               arguments: toJsonSchema(input),
             }),
             app?.errors,
@@ -332,7 +341,8 @@ const callRunner = ({
     pictures: defaults.settings.pictureSearch,
   }
   return async (key, definition, args, ctx) => {
-    const run = `mcp ${key.replaceAll("_", " ")}`
+    const path = commandOf(key, definition).split(" ")
+    const run = `mcp ${path.join(" ")}`
     try {
       const execute = async () => {
         const syncAllowed = syncAllowedFor(key, defaults)
@@ -342,8 +352,8 @@ const callRunner = ({
             max_bytes: MAX_BUFFERED_INPUT,
             retryable: false,
           })
-        assertStatsPermissionsCurrent(key.split("_"), defaults.settings.permissions ?? {})
-        for (const permission of readKeysForCommand(key.split("_"))) {
+        assertStatsPermissionsCurrent(path, defaults.settings.permissions ?? {})
+        for (const permission of readKeysForCommand(path)) {
           if (levelFor(defaults.settings.permissions ?? {}, permission).level === "deny")
             throw new CliError("permission_error", `profile denies ${permission}`, { permission })
         }

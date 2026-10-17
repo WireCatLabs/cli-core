@@ -52,7 +52,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         `Counts over a chat's stored messages since \`since_time\` (${EVENTS_DAYS} days back if not given): messages, ` +
         "senders, replies, threads, reactions, views, forwards and comments where the messenger gave them, top_posts, and " +
         "questions { asked, answered, median_minutes_to_answer }. `by` adds a series row per day or week. Reads the local " +
-        "store only, so joins and leaves are not in it — chats_events has them. complete is false when the store does " +
+        "store only, so joins and leaves are not in it — `chats events` has them. complete is false when the store does " +
         "not hold the chat whole: then every number is a lower bound, and next names the sync that fills it.",
       input: v.object({
         chat,
@@ -80,6 +80,7 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         "member; last_seen_at is null when their privacy hides it.",
       input: v.object({ chat, limit, page }),
       annotations: READ,
+      command: "chats members list",
       output: { entity: "member", list: true },
       online: (adapter, args, defaults) =>
         membersList(servicesFor(onlineDeps(messenger, adapter, defaults.guard)), args.chat, pagingOf(args, defaults)),
@@ -92,12 +93,12 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
         "Reasons: bot, scam, fake, deleted, no_photo, no_username, odd_name, never_wrote, link_first, burst_join, " +
         "mass_invited. A score is a hint, never a verdict; the owner and admins are left out. query sets the lowest " +
         "score shown (score>=3; score>=2 unless named). Reads the member list a page at a time, at most max_pages; " +
-        "meta.truncated says some members were not read. With deep, the top members also get the full contacts_check, " +
+        "meta.truncated says some members were not read. With deep, the top members also get the full `contacts check`, " +
         "one person a second" +
         (registriesCover(messenger.provider)
           ? " — and their ids are sent to the public ban lists"
           : "; the public ban lists cover Telegram only, so nothing is sent") +
-        ". Removes nobody — that is chats_moderate, with the owner's confirmation.",
+        ". Removes nobody — that is `chats moderate`, with the owner's confirmation.",
       input: v.object({
         chat,
         query: queryArgument(AUDIT_QUERY),
@@ -205,9 +206,10 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
       description:
         "The identities the owner may post as in a chat: { id, title, kind, premium_required, default }. kind is " +
         "self, channel or group; self is always there; default is the chat's saved choice. Reading changes nothing. " +
-        "Pass an id as messages_send send_as.",
+        "Pass an id as `send_as` to `messages send`.",
       input: v.object({ chat }),
       annotations: READ,
+      command: "chats send-as",
       served: async (services, args) =>
         wholeList("chats send-as", (await services.chats.sendAs(args.chat)).map(snakeKeys)),
     }),

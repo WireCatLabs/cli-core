@@ -21,7 +21,7 @@ export const chatsReadTools = (messenger: Messenger): Record<string, AnyTool> =>
     }),
     annotations: WRITE,
     permission: "read",
-    key: "chats.mark-read",
+    command: "chats mark-read",
     online: async (adapter, args, { guard }) =>
       itemOf(
         snakeKeys(

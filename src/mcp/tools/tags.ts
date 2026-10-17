@@ -24,7 +24,7 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
     message: v.optional(
       v.pipe(v.string(), v.minLength(1), v.description("a message id in `chat`, or a msg: locator alone")),
     ),
-    task: v.optional(v.pipe(v.string(), v.minLength(1), v.description("a task's id or key, from tasks_list"))),
+    task: v.optional(v.pipe(v.string(), v.minLength(1), v.description("a task's id or key, from `tasks list`"))),
   })
   const targetOf = (args: v.InferOutput<typeof input>) => ({
     ...(args.chat === undefined ? {} : { chat: args.chat }),
@@ -37,7 +37,7 @@ export const tagsTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "List tags",
       description:
         "The owner's own tags in the local store: this account's tagged chats, messages and tasks, and the people of its " +
-        "messenger. `tag:<tag>` in search_messages finds the messages they label.",
+        "messenger. `tag:<tag>` in `search messages` finds the messages they label.",
       input: v.object({ query: queryArgument(TAGGING_QUERY), limit, page }),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "tagging", list: true },

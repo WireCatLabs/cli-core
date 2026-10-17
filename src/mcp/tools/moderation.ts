@@ -12,7 +12,7 @@ import { type AnyTool, chatOf, READ, tool, WRITE } from "../tool.js"
 export const moderationTools = (messenger: Messenger): Record<string, AnyTool> => ({
   chats_rules_show: tool({
     title: "A group's moderation rules",
-    description: "The rules `chats_moderate` judges a group by; the defaults, marked not saved, if it has none.",
+    description: "The rules `chats moderate` judges a group by; the defaults, marked not saved, if it has none.",
     input: v.object({ chat: chatOf(messenger) }),
     annotations: READ,
     online: async (adapter, args, { guard, settings, env }) =>

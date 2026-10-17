@@ -19,7 +19,7 @@ const exact = v.optional(
 )
 const timezone = v.optional(v.pipe(v.string(), v.description("the IANA timezone for calendar date boundaries")))
 
-/** One tool per `search` leaf; `search_all` is the one an agent reaches for first. */
+/** One tool per `search` leaf; `search all` is the one an agent reaches for first. */
 export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
   search_all: tool({
     title: "Search messages and notes",
@@ -27,10 +27,10 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "Messenger messages and notes held in the local store, merged best first — only these two kinds, and one " +
       "meeting account when `source` names it; mail is memo's (its search_mail), and tasks, people, memories, " +
       "projects, organizations and decisions are not searched here. Use it when you do not know where something was " +
-      "written. When you know the kind, call its own tool: search_messages, search_notes, or search_conversations to " +
+      "written. When you know the kind, call its own tool: `search messages`, `search notes`, or `search conversations` to " +
       "find by meaning. An empty answer means neither holds it: try the kind's own tool, looser words or search by " +
       "meaning before you conclude it was never written. Where the messenger's server can search, it is asked for " +
-      "messages too, as search_messages asks it (backend=both by default; archive for the local store only; server " +
+      "messages too, as `search messages` asks it (backend=both by default; archive for the local store only; server " +
       "for the server's hits only) — notes are local only. Each item says its kind (message, note), ref (msg:… or " +
       "note:…), provider and account. A query field one kind lacks skips that kind and meta.issues names it; `only` " +
       "narrows the kinds. `source` names the accounts: provider:account as an item shows it, a provider, a kind or " +

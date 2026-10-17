@@ -1,5 +1,4 @@
-import type { CommandInfo } from "@wirecat/cli-base/commands"
-import { type CommandsJson, longName, type Manifest, parityProblems } from "./manifest.js"
+import { type CommandsJson, type Manifest, parityProblems } from "./manifest.js"
 import { pageProblems } from "./pages.js"
 import { wordingProblems } from "./wording.js"
 
@@ -9,7 +8,7 @@ export interface CliSide {
   /** The `@wirecat/*` packages it pins, by name. */
   pins: Record<string, string>
   program: CommandsJson
-  /** `tools/list` of its MCP server with every `--allow-*`, prefix kept. */
+  /** What its MCP server offers under the default profile, prefix kept. */
   tools: string[]
   /** `README.md` and `docs/*.md`, by path from the checkout, with their text. */
   pages: Record<string, string>
@@ -83,12 +82,6 @@ export const pageSplit = (input: AuditInput) => {
 export const readmeSections = (readme = "") => [...readme.matchAll(/^## (.+)$/gm)].map((match) => match[1] ?? "")
 
 export const toolNames = (side: CliSide, cli: string) => side.tools.map((name) => name.replace(`${cli}_`, ""))
-
-/** The `--allow-*` options of `mcp`; opt-in configuration may expose additional tools. */
-export const allowFlags = (program: CommandsJson): string[] => {
-  const mcp = program.commands.find((command: CommandInfo) => command.path.join(" ") === "mcp")
-  return (mcp?.options ?? []).map((option) => longName(option.flags)).filter((name) => name.startsWith("--allow-"))
-}
 
 export const ciRuns = (side: CliSide) => ({
   parity: /cli-(?:core|messaging)-parity/.test(side.ci),

@@ -14,7 +14,7 @@ const LOCAL = { readOnlyHint: false, openWorldHint: false }
 const reference = v.pipe(
   v.string(),
   v.minLength(1),
-  v.description("a saved search's name, or the id of any row of searches_history"),
+  v.description("a saved search's name, or the id of any row of `searches history`"),
 )
 
 export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => {
@@ -23,7 +23,7 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
   return {
     searches_list: tool({
       title: "List saved searches",
-      description: "The saved searches, by name; search_messages and stats_messages_show run one with `saved`.",
+      description: "The saved searches, by name; `search messages` and `stats messages show` run one with `saved`.",
       input: v.object({}),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "saved_search", list: true },
@@ -57,7 +57,7 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
       title: "Save a search",
       description:
         "Saves a search under a name without running it; the query is checked against today's fields. Takes " +
-        "search_messages's arguments, plus `by` for stats_messages_show. A taken name is refused unless `replace`. " +
+        "`search messages`'s arguments, plus `by` for `stats messages show`. A taken name is refused unless `replace`. " +
         "Writes only to the local store.",
       input: v.object({
         name: v.pipe(v.string(), v.minLength(1), v.description("up to 64 letters a–z, digits and hyphens")),

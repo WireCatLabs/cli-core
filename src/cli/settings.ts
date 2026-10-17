@@ -5,6 +5,7 @@ import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/sett
 import { parseDuration } from "../domain/duration.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import {
+  assertOverridesTighten,
   LEVELS,
   type Level,
   layerPermissions,
@@ -429,13 +430,13 @@ export const settingsFor = <T extends object = Record<never, never>>(
       kind === "bot"
         ? fromLayers<boolean | readonly string[]>("read_other_bots", false, kindLayers)
         : { value: false, from: "default" }
-    const permissions = layerPermissions([
-      ["flag", permissionOverrides(flags.permission)],
-      ...layers.map(([from, scope]): [Source, Record<PermissionKey, Level> | undefined] => [
-        from,
-        scope?.permissions as Record<PermissionKey, Level> | undefined,
-      ]),
+    const fileLayers = layers.map(([from, scope]): [Source, Record<PermissionKey, Level> | undefined] => [
+      from,
+      scope?.permissions as Record<PermissionKey, Level> | undefined,
     ])
+    const overrides = permissionOverrides(flags.permission)
+    assertOverridesTighten(overrides, layerPermissions(fileLayers).levels)
+    const permissions = layerPermissions([["flag", overrides], ...fileLayers])
     const updateCheck = first(
       [
         [

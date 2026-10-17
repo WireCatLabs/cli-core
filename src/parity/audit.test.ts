@@ -1,6 +1,6 @@
 import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { describe, expect, it } from "vitest"
-import { type AuditInput, allowFlags, type CliSide, ciRuns, pageSplit, renderAudit, split } from "./audit.js"
+import { type AuditInput, type CliSide, ciRuns, pageSplit, renderAudit, split } from "./audit.js"
 import type { CommandsJson, Manifest } from "./manifest.js"
 
 const mcp = (flags: string[]): CommandInfo => ({
@@ -55,14 +55,6 @@ describe("the parity audit", () => {
         ["c", ["tg", "wa"]],
       ],
     })
-  })
-
-  it("passes every --allow- option of mcp without treating it as configured exposure", () => {
-    const flags = ["--allow-send", "--confirm-send", "--allow-delete"]
-    expect(allowFlags({ cli: "max", global_options: [], commands: [mcp(flags)] })).toEqual([
-      "--allow-send",
-      "--allow-delete",
-    ])
   })
 
   it("knows a page one tool has alone only when STANDARD's Documents rule names it", () => {

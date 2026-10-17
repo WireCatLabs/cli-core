@@ -30,6 +30,31 @@ export const sandboxEnvironment = (home: string): NodeJS.ProcessEnv => ({
   NO_COLOR: "1",
 })
 
+export interface CaptureMode {
+  mode: string
+  argv: string[]
+  config?: unknown
+}
+
+const AUDIT_PROFILE = "audit"
+const profile = (permissions: Record<string, string> = {}) => ({ profiles: { [AUDIT_PROFILE]: { permissions } } })
+
+/**
+ * The profiles an MCP server is captured under: its permissions, not its flags, decide what an agent is offered.
+ * Each names a configured profile, since a server started without one stops.
+ */
+export const captureModes = (resources: readonly string[]): CaptureMode[] => [
+  { mode: "default", argv: [AUDIT_PROFILE, "mcp"], config: profile() },
+  {
+    mode: "read-only",
+    argv: [AUDIT_PROFILE, "mcp"],
+    config: profile(Object.fromEntries(resources.filter((one) => one !== "bot").map((one) => [one, "readonly"]))),
+  },
+  { mode: "deny-send", argv: [AUDIT_PROFILE, "mcp"], config: profile({ "messages.send": "deny" }) },
+]
+
+export const CAPTURE_MODES = captureModes([]).map(({ mode }) => mode)
+
 // Nested caller TMPDIR values can exceed the consumer's Unix socket path limit.
 export const temporaryHome = () => mkdtempSync(join(process.platform === "win32" ? tmpdir() : "/tmp", "pa-"))
 export const git = (root: string, ...args: string[]) =>

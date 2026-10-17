@@ -23,12 +23,14 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       v.pipe(
         v.string(),
         v.minLength(1),
-        v.description("an id from chats_send_as to post as; required where the chat posts as someone else by default"),
+        v.description(
+          "an id from `chats send-as` to post as; required where the chat posts as someone else by default",
+        ),
       ),
     ),
     operation_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
     topic: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.description("a forum topic id of the to chat, from topics_list")),
+      v.pipe(v.string(), v.minLength(1), v.description("a forum topic id of the to chat, from `topics list`")),
     ),
   }
   if (!messenger.forwardTopic) delete (forwardInput as Partial<typeof forwardInput>).topic

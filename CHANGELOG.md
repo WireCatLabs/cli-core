@@ -5,6 +5,33 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **An agent can no longer delete for everyone**, as the standard says. The MCP `messages delete` has no
+  `for_everyone` argument, so passing it is refused as unknown; the owner still has `messages delete --for-everyone`.
+  A messenger whose every delete is for everyone sets the new `Messenger.deleteForMe: false`, and there the MCP
+  delete refuses with `permission_error` saying why, without connecting.
+- **`mcp --permission <key=level>` only tightens**, as the standard says: no `mcp` flag grants access. An
+  override that would loosen the profile's level — `readonly` to `allow`, a deny to anything, a built-in question to
+  `allow`, or a parent key that would hide a stricter key under it — is refused at startup with a
+  `validation_error` naming the key. Narrowing works as before.
+
+### Fixed
+
+- **An agent's commands carry the CLI's names and permission keys.** The catalogue listed `chats send as`,
+  `chats members` and `account sessions`, which are not commands, and read their levels from `chats.send.as` and
+  `chats.members`, so a deny on `chats.send-as` or `chats.members.list` did not reach them. They are now
+  `chats send-as`, `chats members list` and `account sessions list`, with those commands' keys. A tool whose name
+  does not spell its command declares the command (`command`); the old `mark-read` special case is gone, and a test
+  checks that every catalogue entry is a command the CLI has.
+- **Descriptions name other commands by path** (`` `chats send-as` ``, `` `tasks merge` ``), not by the retired
+  per-tool names an agent no longer sees.
+- **The parity audit captures MCP under permission profiles** — default, read-only and one that denies
+  `messages.send` — instead of `--allow-*` flags tg and max no longer have, so its modes differ again. The capture
+  names a configured profile: a server started without one stops, so every capture had failed.
+
 ## 0.320.0 — 17.10.2026
 
 ### Changed — may break callers

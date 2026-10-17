@@ -455,6 +455,24 @@ export const permissionOverrides = (entries: readonly string[] = []): Record<Per
   return levels
 }
 
+/** No startup flag grants access: an override may narrow the profile's level, never lift it or a key under it. */
+export const assertOverridesTighten = (
+  overrides: Readonly<Record<PermissionKey, Level>>,
+  profile: Readonly<Record<PermissionKey, Level>>,
+): void => {
+  for (const [key, level] of Object.entries(overrides)) {
+    const under = Object.keys(profile).filter((named) => named.startsWith(`${key}.`))
+    const lifted = [key, ...under].find((named) => ORDER[level] > ORDER[levelFor(profile, named).level])
+    if (lifted !== undefined)
+      throw new CliError(
+        "validation_error",
+        `--permission ${key}=${level} would loosen ${lifted} from ${levelFor(profile, lifted).level}; ` +
+          "it only tightens — change the profile's permissions to loosen it",
+        { key, lifted },
+      )
+  }
+}
+
 export const assertRetentionEvidenceRead = (permissions: Readonly<Record<string, Level>>): void => {
   for (const permission of ["stats.chats.retention", "chats"]) {
     if (levelFor(permissions, permission).level === "deny")
