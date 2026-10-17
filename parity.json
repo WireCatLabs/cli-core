@@ -1,5 +1,5 @@
 {
-  "clis": ["max", "tg"],
+  "clis": ["max", "tg", "wa"],
   "options": {
     "--accept-terms": {
       "meaning": "accept the model's licence terms, for a model that has its own"
@@ -270,6 +270,10 @@
     "--dims": {
       "value": "<n>",
       "meaning": "remote: the vector size — needed with --base-url; shortens an OpenAI model's"
+    },
+    "--disappear-time": {
+      "value": "<duration|off>",
+      "meaning": "new messages disappear this long after sending: 24h, 7d, 90d; off keeps them"
     },
     "--discover": {
       "meaning": "find partial lexical matches and eligible replies in the local archive; results are evidence, not confirmed answers"
@@ -678,6 +682,14 @@
       "value": "<on|off>",
       "meaning": "only admins may start a call"
     },
+    "--only-admins-edit-info": {
+      "value": "<on|off>",
+      "meaning": "only admins may change the name, photo and description"
+    },
+    "--only-admins-send": {
+      "value": "<on|off>",
+      "meaning": "only admins may send messages"
+    },
     "--only-missing": {
       "meaning": "only chats with no metadata yet; without --chat, every stored group/channel"
     },
@@ -1082,7 +1094,7 @@
   },
   "globalOptions": {
     "--brief": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "each CLI’s next cli-core bump",
         "tg": "each CLI’s next cli-core bump"
@@ -1091,7 +1103,7 @@
     "--debug": "all",
     "--dry-run": "all",
     "--full": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "each CLI’s next cli-core bump",
         "tg": "each CLI’s next cli-core bump"
@@ -1107,7 +1119,8 @@
       "in": [],
       "planned": {
         "max": "P6",
-        "tg": "P6"
+        "tg": "P6",
+        "wa": "P6"
       }
     },
     "--offline": "all",
@@ -1117,7 +1130,8 @@
       "in": [],
       "planned": {
         "max": "P6",
-        "tg": "P6"
+        "tg": "P6",
+        "wa": "P6"
       }
     },
     "--timeout": "all",
@@ -1136,43 +1150,50 @@
     "account privacy": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "wa": "wa backlog: account privacy"
       }
     },
     "account privacy set": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: settings writes (mute, privacy)"
+        "tg": "tg-cli backlog: settings writes (mute, privacy)",
+        "wa": "wa backlog: account privacy"
       },
       "options": {
         "--calls": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)"
+            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "wa": "wa backlog: account privacy"
           }
         },
         "--chat-invites": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)"
+            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "wa": "wa backlog: account privacy"
           }
         },
         "--find-by-phone": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)"
+            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "wa": "wa backlog: account privacy"
           }
         },
         "--hide-online": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)"
+            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "wa": "wa backlog: account privacy"
           }
         },
         "--phone-number": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)"
+            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "wa": "wa backlog: account privacy"
           }
         }
       }
@@ -1180,7 +1201,8 @@
     "account privacy show": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "wa": "wa backlog: account privacy"
       }
     },
     "account sessions": {
@@ -1194,7 +1216,8 @@
           "in": [],
           "planned": {
             "max": "P2",
-            "tg": "P2"
+            "tg": "P2",
+            "wa": "P2"
           }
         }
       }
@@ -1292,325 +1315,529 @@
       }
     },
     "bot": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot api": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--allow-any-file": {
           "in": [],
           "planned": {
             "tg": "tg's next cli-core bump: one flag on bot api for every @path field, not one per file-carrying operation"
           },
-          "reason": "max's bot api reads no @path files; max uploads bot files through bot uploads put, which has the flag"
+          "reason": "max's bot api reads no @path files; max uploads bot files through bot uploads put, which has the flag; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
         },
         "--store-token": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
         }
       }
     },
     "bot auth": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot auth remove": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot auth set": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot auth show": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot callbacks": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot callbacks answer": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--notification": "all",
-        "--text": "all"
+        "--notification": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--text": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot chats": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats action": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats admins": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats admins add": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--can": "all",
-        "--title": "all"
+        "--can": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--title": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot chats admins list": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats admins remove": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats leave": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats list": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats members": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats members add": {
       "in": ["max"],
-      "reason": "a Telegram bot cannot add people to a chat"
+      "reason": "a Telegram bot cannot add people to a chat; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats members list": {
       "in": ["max"],
+      "reason": "Telegram's Bot API cannot list a chat's members, only its admins and a count; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--limit": {
           "in": ["max"],
-          "reason": "Telegram's Bot API cannot list a chat's members, only its admins and a count"
+          "reason": "Telegram's Bot API cannot list a chat's members, only its admins and a count; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
         },
         "--marker": {
           "in": ["max"],
-          "reason": "Telegram's Bot API cannot list a chat's members, only its admins and a count"
+          "reason": "Telegram's Bot API cannot list a chat's members, only its admins and a count; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
         }
-      },
-      "reason": "Telegram's Bot API cannot list a chat's members, only its admins and a count"
+      }
     },
     "bot chats members remove": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--block": "all"
+        "--block": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot chats moderate": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--allow-dangerous": "all",
-        "--dry-run": "all",
-        "--max-actions": "all",
-        "--no-block": "all",
-        "--since-time": "all"
+        "--allow-dangerous": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--dry-run": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--max-actions": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--no-block": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--since-time": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot chats rules": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats rules set": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats rules show": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats rules unset": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot chats show": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot commands": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot commands clear": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot commands list": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot commands set": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot comments": {
       "in": ["max"],
-      "reason": "a Telegram channel's comments are messages in a separate discussion group, reached by ids only an update gives"
+      "reason": "a Telegram channel's comments are messages in a separate discussion group, reached by ids only an update gives; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot contacts": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot contacts show": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--all-bots": "all",
-        "--bots": "all",
-        "--limit": "all",
-        "--sync-first": "all"
+        "--all-bots": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--bots": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--limit": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--sync-first": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot list": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--check": "all"
+        "--check": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot mcp": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {}
     },
     "bot mcp config": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {}
     },
     "bot me": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot messages": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot messages between": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--all-bots": "all",
-        "--bots": "all",
-        "--limit": "all"
+        "--all-bots": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--bots": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--limit": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot messages delete": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--allow-dangerous": "all"
+        "--allow-dangerous": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot messages edit": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--html": "all",
-        "--md": "all"
+        "--html": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--md": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot messages list": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--limit": "all"
+        "--limit": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot messages pin": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--notify": "all"
+        "--notify": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot messages send": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--allow-any-file": "all",
-        "--as-file": "all",
-        "--file": "all",
-        "--html": "all",
-        "--md": "all",
-        "--photo": "all",
-        "--reply-to": "all",
-        "--silent": "all",
-        "--voice": "all"
+        "--allow-any-file": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--as-file": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--file": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--html": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--md": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--photo": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--reply-to": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--silent": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--voice": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot messages show": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot messages unpin": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot recipients": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot recipients add": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot recipients clear": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot recipients list": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot recipients remove": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot search": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot search messages": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--all-bots": "all",
-        "--bots": "all",
-        "--from": "all",
-        "--limit": "all",
-        "--newest": "all",
-        "--page": "all"
+        "--all-bots": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--bots": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--from": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--limit": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--newest": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--page": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot sends": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot sends list": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot store": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot store fetch": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--last": "all",
-        "--limit": "all",
-        "--page-size": "all",
-        "--pause": "all",
-        "--since-time": "all",
+        "--last": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--limit": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--page-size": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--pause": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--since-time": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
         "--until-id": {
           "in": ["tg"],
-          "reason": "Telegram bots read message numbers and need a starting link when none is known; MAX pages chat history directly"
+          "reason": "Telegram bots read message numbers and need a starting link when none is known; MAX pages chat history directly; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
         }
       }
     },
     "bot uploads": {
       "in": ["max"],
-      "reason": "Telegram has no upload-only step: a file goes up with the message that carries it"
+      "reason": "Telegram has no upload-only step: a file goes up with the message that carries it; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot watch": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
-        "--events": "all",
-        "--types": "all"
+        "--events": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--types": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "bot webhooks": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot webhooks delete": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot webhooks list": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
     },
     "bot webhooks set": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account",
       "options": {
         "--add": {
           "in": ["max"],
-          "reason": "a Telegram bot holds one webhook address"
+          "reason": "a Telegram bot holds one webhook address; WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
         },
-        "--secret-stdin": "all",
-        "--types": "all"
+        "--secret-stdin": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        },
+        "--types": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp's bots are the Business Platform's, on a business number; wa links a personal account"
+        }
       }
     },
     "calls": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "wa": "wa backlog: calls"
       }
     },
     "calls list": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "wa": "wa backlog: calls"
       },
       "options": {
         "--limit": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+            "wa": "wa backlog: calls"
           }
         }
       }
@@ -1624,7 +1851,12 @@
     "chats admins add": {
       "in": "all",
       "options": {
-        "--can": "all"
+        "--can": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa's next cli-core bump (pickAdminRights: false drops --can)"
+          }
+        }
       }
     },
     "chats admins remove": {
@@ -1633,13 +1865,15 @@
     "chats app": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: start a bot, open its mini app"
+        "tg": "tg-cli backlog: start a bot, open its mini app",
+        "wa": "wa backlog: not assessed yet"
       },
       "options": {
         "--start": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: start a bot, open its mini app"
+            "tg": "tg-cli backlog: start a bot, open its mini app",
+            "wa": "wa backlog: not assessed yet"
           }
         }
       }
@@ -1647,13 +1881,15 @@
     "chats clear": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: chats delete and clear"
+        "tg": "tg-cli backlog: chats delete and clear",
+        "wa": "wa backlog: chats delete and clear"
       },
       "options": {
         "--allow-dangerous": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: chats delete and clear"
+            "tg": "tg-cli backlog: chats delete and clear",
+            "wa": "wa backlog: chats delete and clear"
           }
         }
       }
@@ -1667,13 +1903,15 @@
     "chats delete": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: chats delete and clear"
+        "tg": "tg-cli backlog: chats delete and clear",
+        "wa": "wa backlog: chats delete and clear"
       },
       "options": {
         "--allow-dangerous": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: chats delete and clear"
+            "tg": "tg-cli backlog: chats delete and clear",
+            "wa": "wa backlog: chats delete and clear"
           }
         }
       }
@@ -1684,8 +1922,12 @@
     "chats documents list": {
       "in": "all",
       "options": {
-        "--limit": { "in": "all" },
-        "--page": { "in": "all" }
+        "--limit": {
+          "in": "all"
+        },
+        "--page": {
+          "in": "all"
+        }
       }
     },
     "chats events": {
@@ -1700,23 +1942,38 @@
         "--chat": "all",
         "--emoji": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--exclude-chat": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--include": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--pin": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--skip": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         }
       }
     },
@@ -1725,13 +1982,17 @@
     },
     "chats folders join": {
       "in": ["tg"],
-      "reason": "max-cli does not map folders shared by a link yet"
+      "reason": "max-cli does not map folders shared by a link yet",
+      "planned": {
+        "wa": "wa backlog: not assessed yet"
+      }
     },
     "chats folders list": {
       "in": "all"
     },
     "chats folders order": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "wa declares folderOrder: false — WhatsApp's chat lists have no order a linked device sets"
     },
     "chats folders show": {
       "in": "all"
@@ -1742,24 +2003,39 @@
         "--add": "all",
         "--emoji": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--exclude-chat": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--include": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--pin": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--remove": "all",
         "--skip": {
           "in": ["tg"],
-          "reason": "max-cli folders hold only the chats named in them"
+          "reason": "max-cli folders hold only the chats named in them",
+          "planned": {
+            "wa": "wa backlog: not assessed yet"
+          }
         },
         "--title": "all"
       }
@@ -1778,61 +2054,61 @@
     },
     "chats link create": {
       "in": ["tg"],
+      "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces",
       "options": {
         "--approval": {
           "in": ["tg"],
-          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
+          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces"
         },
         "--expire-time": {
           "in": ["tg"],
-          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
+          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces"
         },
         "--max-uses": {
           "in": ["tg"],
-          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
+          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces"
         }
-      },
-      "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
+      }
     },
     "chats link list": {
       "in": ["tg"],
+      "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces",
       "options": {
         "--limit": {
           "in": ["tg"],
-          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
+          "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces"
         }
-      },
-      "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
+      }
     },
     "chats link reset": {
       "in": "all"
     },
     "chats link revoke": {
       "in": ["tg"],
-      "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke"
+      "reason": "MAX's protocol only resets a group's link: PyMax 53103f0 has rework_invite_link (CHAT_UPDATE, revokePrivateLink) and no create, list or revoke; WhatsApp has one invite link per group, which chats link reset replaces"
     },
     "chats link show": {
       "in": "all"
     },
     "chats link update": {
       "in": ["tg"],
-      "reason": "max-cli has no way to change an invite link",
+      "reason": "max-cli has no way to change an invite link; WhatsApp has one invite link per group, which chats link reset replaces",
       "options": {
         "--approval": {
           "in": ["tg"],
-          "reason": "max-cli has no way to change an invite link"
+          "reason": "max-cli has no way to change an invite link; WhatsApp has one invite link per group, which chats link reset replaces"
         },
         "--expire-time": {
           "in": ["tg"],
-          "reason": "max-cli has no way to change an invite link"
+          "reason": "max-cli has no way to change an invite link; WhatsApp has one invite link per group, which chats link reset replaces"
         },
         "--max-uses": {
           "in": ["tg"],
-          "reason": "max-cli has no way to change an invite link"
+          "reason": "max-cli has no way to change an invite link; WhatsApp has one invite link per group, which chats link reset replaces"
         },
         "--no-approval": {
           "in": ["tg"],
-          "reason": "max-cli has no way to change an invite link"
+          "reason": "max-cli has no way to change an invite link; WhatsApp has one invite link per group, which chats link reset replaces"
         }
       }
     },
@@ -1849,7 +2125,7 @@
       "options": {
         "--topic": {
           "in": ["tg"],
-          "reason": "MAX has no forum topics"
+          "reason": "MAX has no forum topics; WhatsApp has no forum topics"
         },
         "--until-id": "all"
       }
@@ -1857,25 +2133,29 @@
     "chats media": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+        "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+        "wa": "wa backlog: not assessed yet"
       },
       "options": {
         "--cursor": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+            "wa": "wa backlog: not assessed yet"
           }
         },
         "--limit": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+            "wa": "wa backlog: not assessed yet"
           }
         },
         "--type": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)"
+            "tg": "tg-cli backlog: server reads (calls, chat media, privacy)",
+            "wa": "wa backlog: not assessed yet"
           }
         }
       }
@@ -1888,7 +2168,7 @@
       "options": {
         "--history": {
           "in": ["max"],
-          "reason": "Telegram shows history to new members only in legacy groups, and P2 makes supergroups"
+          "reason": "Telegram shows history to new members only in legacy groups, and P2 makes supergroups; WhatsApp does not show earlier messages to people added"
         }
       }
     },
@@ -1932,13 +2212,15 @@
     "chats mute": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: settings writes (mute, privacy)"
+        "tg": "tg-cli backlog: settings writes (mute, privacy)",
+        "wa": "wa backlog: chats mute"
       },
       "options": {
         "--until": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: settings writes (mute, privacy)"
+            "tg": "tg-cli backlog: settings writes (mute, privacy)",
+            "wa": "wa backlog: chats mute"
           }
         }
       }
@@ -1951,11 +2233,11 @@
       "options": {
         "--all": {
           "in": ["tg"],
-          "reason": "MAX answers one join request at a time"
+          "reason": "MAX answers one join request at a time; WhatsApp answers one join request at a time"
         },
         "--link": {
           "in": ["tg"],
-          "reason": "MAX answers one join request at a time"
+          "reason": "MAX answers one join request at a time; WhatsApp answers one join request at a time"
         }
       }
     },
@@ -1964,11 +2246,11 @@
       "options": {
         "--all": {
           "in": ["tg"],
-          "reason": "MAX answers one join request at a time"
+          "reason": "MAX answers one join request at a time; WhatsApp answers one join request at a time"
         },
         "--link": {
           "in": ["tg"],
-          "reason": "MAX answers one join request at a time"
+          "reason": "MAX answers one join request at a time; WhatsApp answers one join request at a time"
         }
       }
     },
@@ -1992,7 +2274,7 @@
       "in": "all"
     },
     "chats send-as": {
-      "in": ["tg"],
+      "in": ["tg", "wa"],
       "reason": "MAX has no identities to post as other than the account itself"
     },
     "chats show": {
@@ -2001,13 +2283,15 @@
     "chats start": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: start a bot, open its mini app"
+        "tg": "tg-cli backlog: start a bot, open its mini app",
+        "wa": "wa backlog: not assessed yet"
       },
       "options": {
         "--start": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: start a bot, open its mini app"
+            "tg": "tg-cli backlog: start a bot, open its mini app",
+            "wa": "wa backlog: not assessed yet"
           }
         }
       }
@@ -2030,35 +2314,64 @@
     "chats unmute": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: settings writes (mute, privacy)"
+        "tg": "tg-cli backlog: settings writes (mute, privacy)",
+        "wa": "wa backlog: chats mute"
       }
     },
     "chats update": {
       "in": "all",
       "options": {
-        "--all-can-pin": "all",
+        "--all-can-pin": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp has no pin switch of its own: who may pin follows who may edit the group's info"
+        },
         "--description": "all",
+        "--disappear-time": {
+          "in": [],
+          "planned": {
+            "tg": "tg-cli backlog: Telegram's default banned rights (send, change info) and auto-delete timer",
+            "wa": "wa's next cli-core bump"
+          },
+          "reason": "MAX has no such switch: PyMax's ChatOption has five, and cli-core names them all"
+        },
         "--join-approval": {
-          "in": ["tg"],
+          "in": ["tg", "wa"],
           "reason": "MAX groups have no join approval"
         },
         "--members-see-link": {
           "in": ["max"],
-          "reason": "Telegram shows a group's invite link to whoever may invite, not by a setting of its own"
+          "reason": "Telegram shows a group's invite link to whoever may invite, not by a setting of its own; WhatsApp has no such switch"
         },
         "--only-admins-add": "all",
         "--only-admins-call": {
           "in": ["max"],
-          "reason": "Telegram has no setting for who may start a call"
+          "reason": "Telegram has no setting for who may start a call; WhatsApp has no such switch"
+        },
+        "--only-admins-edit-info": {
+          "in": [],
+          "planned": {
+            "tg": "tg-cli backlog: Telegram's default banned rights (send, change info) and auto-delete timer",
+            "wa": "wa's next cli-core bump"
+          },
+          "reason": "MAX has no such switch: PyMax's ChatOption has five, and cli-core names them all"
+        },
+        "--only-admins-send": {
+          "in": [],
+          "planned": {
+            "tg": "tg-cli backlog: Telegram's default banned rights (send, change info) and auto-delete timer",
+            "wa": "wa's next cli-core bump"
+          },
+          "reason": "MAX has no such switch: PyMax's ChatOption has five, and cli-core names them all"
         },
         "--only-owner-edits-info": {
           "in": ["max"],
-          "reason": "Telegram lets admins with the right change the info, never only the owner; a different meaning gets a different name"
+          "reason": "Telegram lets admins with the right change the info, never only the owner; a different meaning gets a different name; WhatsApp's switch lets every admin edit the info: --only-admins-edit-info"
         },
         "--photo": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: chats update --photo"
+            "tg": "tg-cli backlog: chats update --photo",
+            "wa": "wa backlog: the group photo"
           }
         },
         "--title": "all"
@@ -2404,10 +2717,16 @@
       }
     },
     "flood": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared flood command"
+      }
     },
     "flood clear": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared flood command"
+      }
     },
     "images": {
       "in": "all"
@@ -2460,7 +2779,8 @@
           "in": [],
           "planned": {
             "max": "P7",
-            "tg": "P7"
+            "tg": "P7",
+            "wa": "P7"
           }
         }
       }
@@ -2473,7 +2793,8 @@
           "in": [],
           "planned": {
             "max": "P7",
-            "tg": "P7"
+            "tg": "P7",
+            "wa": "P7"
           }
         }
       }
@@ -2492,28 +2813,28 @@
       }
     },
     "mentions": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
       }
     },
     "mentions confirm": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
       },
       "options": {
         "--all-in-chat": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
           }
         },
         "--as-owner": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
@@ -2522,21 +2843,21 @@
       }
     },
     "mentions domains": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
       },
       "options": {
         "--limit": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
           }
         },
         "--page": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
@@ -2545,28 +2866,28 @@
       }
     },
     "mentions list": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
       },
       "options": {
         "--limit": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
           }
         },
         "--new": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
           }
         },
         "--page": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
@@ -2575,21 +2896,21 @@
       }
     },
     "mentions places": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
       },
       "options": {
         "--limit": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
           }
         },
         "--page": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
@@ -2598,28 +2919,28 @@
       }
     },
     "mentions rebuild": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
       }
     },
     "mentions reject": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
       },
       "options": {
         "--all-in-chat": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
           }
         },
         "--as-owner": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "mentions (docs/dev/mentions-plan.md)",
             "tg": "mentions (docs/dev/mentions-plan.md)"
@@ -2628,7 +2949,7 @@
       }
     },
     "mentions show": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "mentions (docs/dev/mentions-plan.md)",
         "tg": "mentions (docs/dev/mentions-plan.md)"
@@ -2638,15 +2959,15 @@
       "in": "all"
     },
     "messages comments": {
-      "in": ["tg"],
+      "in": ["tg", "wa"],
       "reason": "MAX personal accounts have no channel comments; MAX's comments are a Bot API path",
       "options": {
         "--cursor": {
-          "in": ["tg"],
+          "in": ["tg", "wa"],
           "reason": "MAX personal accounts have no channel comments"
         },
         "--limit": {
-          "in": ["tg"],
+          "in": ["tg", "wa"],
           "reason": "MAX personal accounts have no channel comments"
         }
       }
@@ -2700,7 +3021,7 @@
       "options": {
         "--html": {
           "in": ["tg"],
-          "reason": "MAX formats a personal message with Markdown only"
+          "reason": "MAX formats a personal message with Markdown only; WhatsApp formats with its own markup, not HTML"
         },
         "--md": "all"
       }
@@ -2721,7 +3042,7 @@
         "--to": "all",
         "--topic": {
           "in": ["tg"],
-          "reason": "MAX has no forum topics"
+          "reason": "MAX has no forum topics; WhatsApp has no forum topics"
         }
       }
     },
@@ -2750,7 +3071,8 @@
     "messages press": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: press inline buttons"
+        "tg": "tg-cli backlog: press inline buttons",
+        "wa": "wa backlog: not assessed yet"
       }
     },
     "messages scheduled": {
@@ -2764,20 +3086,20 @@
         "--at-time": "all",
         "--caption-above": {
           "in": ["tg"],
-          "reason": "MAX has no spoilers or caption placement"
+          "reason": "MAX has no spoilers or caption placement; WhatsApp has no spoilers or caption placement"
         },
         "--comment-to": {
           "in": ["tg"],
-          "reason": "MAX personal accounts have no channel comments"
+          "reason": "MAX personal accounts have no channel comments; WhatsApp has no channel comments"
         },
         "--file": "all",
         "--filename": {
-          "in": ["tg"],
+          "in": ["tg", "wa"],
           "reason": "MAX names an upload by its path"
         },
         "--html": {
           "in": ["tg"],
-          "reason": "MAX formats a personal message with Markdown only"
+          "reason": "MAX formats a personal message with Markdown only; WhatsApp formats with its own markup, not HTML"
         },
         "--md": "all",
         "--no-preview": "all",
@@ -2788,17 +3110,18 @@
         "--silent": "all",
         "--spoiler": {
           "in": ["tg"],
-          "reason": "MAX has no spoilers or caption placement"
+          "reason": "MAX has no spoilers or caption placement; WhatsApp has no spoilers or caption placement"
         },
         "--sticker": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: stickers"
+            "tg": "tg-cli backlog: stickers",
+            "wa": "wa backlog: stickers"
           }
         },
         "--topic": {
           "in": ["tg"],
-          "reason": "MAX has no forum topics"
+          "reason": "MAX has no forum topics; WhatsApp has no forum topics"
         },
         "--voice": "all"
       }
@@ -2830,7 +3153,7 @@
       "in": "all",
       "options": {
         "--local": {
-          "in": ["tg"],
+          "in": ["tg", "wa"],
           "reason": "Telegram can transcribe on its side; MAX cannot, so max always uses the local model"
         },
         "--model": "all"
@@ -2840,20 +3163,49 @@
       "in": "all"
     },
     "metadata": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: metadata (needs the group read)"
+      }
     },
     "metadata get": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: metadata (needs the group read)"
+      },
       "options": {
-        "--chat": "all"
+        "--chat": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: metadata (needs the group read)"
+          }
+        }
       }
     },
     "metadata refresh": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: metadata (needs the group read)"
+      },
       "options": {
-        "--chat": "all",
-        "--limit": "all",
-        "--only-missing": "all"
+        "--chat": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: metadata (needs the group read)"
+          }
+        },
+        "--limit": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: metadata (needs the group read)"
+          }
+        },
+        "--only-missing": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: metadata (needs the group read)"
+          }
+        }
       }
     },
     "models": {
@@ -2890,58 +3242,129 @@
       "in": "all"
     },
     "polls": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: polls"
+      }
     },
     "polls close": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: polls"
+      }
     },
     "polls create": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: polls"
+      },
       "options": {
-        "--anonymous": "all",
+        "--anonymous": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
+        },
         "--close-time": {
           "in": ["tg"],
-          "reason": "max-cli does not close a poll by itself"
+          "reason": "max-cli does not close a poll by itself",
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
         },
         "--correct": {
           "in": ["tg"],
-          "reason": "max-cli creates no quizzes"
+          "reason": "max-cli creates no quizzes",
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
         },
-        "--multiple": "all",
-        "--operation-id": "all",
+        "--multiple": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
+        },
+        "--operation-id": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
+        },
         "--quiz": {
           "in": ["tg"],
-          "reason": "max-cli creates no quizzes"
+          "reason": "max-cli creates no quizzes",
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
         },
-        "--revote": "all",
-        "--send-as": "all",
-        "--silent": "all",
+        "--revote": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
+        },
+        "--send-as": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
+        },
+        "--silent": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
+        },
         "--solution": {
           "in": ["tg"],
-          "reason": "max-cli creates no quizzes"
+          "reason": "max-cli creates no quizzes",
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
         },
         "--topic": {
           "in": ["tg"],
-          "reason": "MAX has no forum topics"
+          "reason": "MAX has no forum topics",
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
         }
       }
     },
     "polls show": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: polls"
+      }
     },
     "polls vote": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: polls"
+      },
       "options": {
-        "--retract": "all"
+        "--retract": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
+        }
       }
     },
     "polls voters": {
       "in": ["tg"],
       "reason": "max-cli does not list who voted in a poll",
+      "planned": {
+        "wa": "wa backlog: polls"
+      },
       "options": {
         "--limit": {
           "in": ["tg"],
-          "reason": "max-cli does not list who voted in a poll"
+          "reason": "max-cli does not list who voted in a poll",
+          "planned": {
+            "wa": "wa backlog: polls"
+          }
         }
       }
     },
@@ -3087,7 +3510,11 @@
       "in": "all"
     },
     "runs search": {
-      "in": [],
+      "in": ["wa"],
+      "planned": {
+        "max": "max-cli: adopt the attachment-budget maintenance release",
+        "tg": "tg-cli: adopt the attachment-budget maintenance release"
+      },
       "options": {
         "--error-code": "all",
         "--limit": "all",
@@ -3096,10 +3523,6 @@
         "--profile": "all",
         "--since-time": "all",
         "--status": "all"
-      },
-      "planned": {
-        "max": "max-cli: adopt the attachment-budget maintenance release",
-        "tg": "tg-cli: adopt the attachment-budget maintenance release"
       }
     },
     "runs show": {
@@ -3109,36 +3532,92 @@
       }
     },
     "schedule": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
     },
     "schedule agent": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      },
       "options": {
-        "--at": "all",
-        "--at-time": "all",
-        "--every": "all",
-        "--max-cost": "all"
+        "--at": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
+        "--at-time": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
+        "--every": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
+        "--max-cost": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        }
       }
     },
     "schedule command": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      },
       "options": {
-        "--at": "all",
-        "--at-time": "all",
-        "--every": "all"
+        "--at": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
+        "--at-time": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
+        "--every": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        }
       }
     },
     "schedule exec": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
     },
     "schedule list": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
     },
     "schedule remove": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
     },
     "schedule run": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
     },
     "search": {
       "in": "all"
@@ -3151,12 +3630,13 @@
           "planned": {
             "max": "each CLI’s next cli-core bump",
             "tg": "each CLI’s next cli-core bump"
-          }
+          },
+          "reason": "WhatsApp has no server search; wa reads its history from the local store"
         },
         "--exact": "all",
         "--limit": "all",
         "--max-meetings": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "each CLI’s next cli-core bump",
             "tg": "each CLI’s next cli-core bump"
@@ -3169,10 +3649,11 @@
           "planned": {
             "max": "each CLI’s next cli-core bump",
             "tg": "each CLI’s next cli-core bump"
-          }
+          },
+          "reason": "WhatsApp has no server search; wa reads its history from the local store"
         },
         "--source": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "each CLI’s next cli-core bump",
             "tg": "each CLI’s next cli-core bump"
@@ -3224,7 +3705,8 @@
       "in": "all",
       "options": {
         "--backend": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "WhatsApp has no server search; wa reads its history from the local store"
         },
         "--context": "all",
         "--discover": "all",
@@ -3242,7 +3724,8 @@
           "in": "all"
         },
         "--server-time": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "WhatsApp has no server search; wa reads its history from the local store"
         },
         "--source": "all",
         "--sync-first": {
@@ -3277,7 +3760,7 @@
         "--limit": "all",
         "--page": "all",
         "--source": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "each CLI’s next cli-core bump",
             "tg": "each CLI’s next cli-core bump"
@@ -3288,7 +3771,7 @@
     },
     "search topics": {
       "in": ["tg"],
-      "reason": "MAX has no forum topics"
+      "reason": "MAX has no forum topics; WhatsApp has no forum topics"
     },
     "searches": {
       "in": "all"
@@ -3366,15 +3849,15 @@
       "options": {
         "--idle": {
           "in": ["max"],
-          "reason": "max's server stops when no command has used it for this long; tg's serve has no commands connected to it (NEED-495 A)"
+          "reason": "max's server stops when no command has used it for this long; tg's serve has no commands connected to it (NEED-495 A); wa's serve has no idle stop or subscriber buffers"
         },
         "--max-subscriber-buffer-bytes": {
           "in": ["max"],
-          "reason": "max's server holds what it streams to each watching command; tg's serve has no commands connected to it (NEED-495 A)"
+          "reason": "max's server holds what it streams to each watching command; tg's serve has no commands connected to it (NEED-495 A); wa's serve has no idle stop or subscriber buffers"
         },
         "--max-subscriber-total-buffer-bytes": {
           "in": ["max"],
-          "reason": "max's server holds what it streams to each watching command; tg's serve has no commands connected to it (NEED-495 A)"
+          "reason": "max's server holds what it streams to each watching command; tg's serve has no commands connected to it (NEED-495 A); wa's serve has no idle stop or subscriber buffers"
         }
       }
     },
@@ -3395,7 +3878,7 @@
       "options": {
         "--idle": {
           "in": ["max"],
-          "reason": "max's server stops when no command has used it for this long; tg's serve has no commands connected to it (NEED-495 A)"
+          "reason": "max's server stops when no command has used it for this long; tg's serve has no commands connected to it (NEED-495 A); wa's serve has no idle stop or subscriber buffers"
         }
       }
     },
@@ -3404,7 +3887,7 @@
       "options": {
         "--idle": {
           "in": ["max"],
-          "reason": "max's server stops when no command has used it for this long; tg's serve has no commands connected to it (NEED-495 A)"
+          "reason": "max's server stops when no command has used it for this long; tg's serve has no commands connected to it (NEED-495 A); wa's serve has no idle stop or subscriber buffers"
         }
       }
     },
@@ -3428,15 +3911,15 @@
       "options": {
         "--app": {
           "in": ["tg"],
-          "reason": "Telegram asks each client for its own app from my.telegram.org; MAX has no such step"
+          "reason": "Telegram asks each client for its own app from my.telegram.org; MAX has no such step; WhatsApp has no application registration"
         },
         "--qr-file": {
-          "in": ["tg"],
+          "in": ["tg", "wa"],
           "reason": "ruled tg-only with the app registration it belongs to"
         },
         "--sms": {
           "in": ["tg"],
-          "reason": "asks Telegram to resend its login code by SMS; MAX has no such choice"
+          "reason": "asks Telegram to resend its login code by SMS; MAX has no such choice; WhatsApp links a device by QR or pairing code, never by an SMS code"
         }
       }
     },
@@ -3446,11 +3929,11 @@
         "--agent": "all",
         "--app": {
           "in": ["tg"],
-          "reason": "Telegram requires an application from my.telegram.org; MAX has no application registration step"
+          "reason": "Telegram requires an application from my.telegram.org; MAX has no application registration step; WhatsApp has no application registration"
         },
         "--method": "all",
         "--qr-file": {
-          "in": ["tg"],
+          "in": ["tg", "wa"],
           "reason": "Telegram can expose its temporary QR login token as a PNG"
         }
       }
@@ -3507,7 +3990,7 @@
     },
     "stats chats official": {
       "in": ["tg"],
-      "reason": "MAX has no statistics request of its own for a chat"
+      "reason": "MAX has no statistics request of its own for a chat; WhatsApp has no statistics request for a chat"
     },
     "stats chats retention": {
       "in": "all",
@@ -3720,19 +4203,22 @@
     "stickers": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: stickers"
+        "tg": "tg-cli backlog: stickers",
+        "wa": "wa backlog: stickers"
       }
     },
     "stickers list": {
       "in": ["max"],
       "planned": {
-        "tg": "tg-cli backlog: stickers"
+        "tg": "tg-cli backlog: stickers",
+        "wa": "wa backlog: stickers"
       },
       "options": {
         "--set": {
           "in": ["max"],
           "planned": {
-            "tg": "tg-cli backlog: stickers"
+            "tg": "tg-cli backlog: stickers",
+            "wa": "wa backlog: stickers"
           }
         }
       }
@@ -3959,14 +4445,14 @@
           "in": "all"
         },
         "--as-owner": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "each CLI’s next cli-core bump",
             "tg": "each CLI’s next cli-core bump"
           }
         },
         "--certainty": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "each CLI’s next cli-core bump",
             "tg": "each CLI’s next cli-core bump"
@@ -4021,14 +4507,14 @@
       }
     },
     "tasks reject": {
-      "in": [],
+      "in": ["wa"],
       "planned": {
         "max": "each CLI’s next cli-core bump",
         "tg": "each CLI’s next cli-core bump"
       },
       "options": {
         "--as-owner": {
-          "in": [],
+          "in": ["wa"],
           "planned": {
             "max": "each CLI’s next cli-core bump",
             "tg": "each CLI’s next cli-core bump"
@@ -4056,7 +4542,7 @@
     },
     "topics": {
       "in": ["tg"],
-      "reason": "MAX has no forum topics"
+      "reason": "MAX has no forum topics; WhatsApp has no forum topics"
     },
     "topics create": {
       "in": ["tg"],

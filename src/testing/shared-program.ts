@@ -38,6 +38,7 @@ import type { ProgramDefinition } from "../cli/program.js"
 import { runsCommand } from "../cli/runs/command.js"
 import { settingsFor } from "../cli/settings.js"
 import { skillCommand } from "../cli/skill-command.js"
+import { GROUP_SETTINGS } from "../domain/models.js"
 
 export const app = {
   command: "chat",
@@ -56,6 +57,7 @@ export const messenger: Messenger = {
   chatArgument: "a chat",
   resolveSettings: config.resolveSettings,
   connect: refuse,
+  groupSettings: [...GROUP_SETTINGS, "joinApproval", "onlyAdminsSend", "onlyAdminsEditInfo", "disappearingSeconds"],
 }
 
 /** A messenger that mounts every shared command, as tg, max and wa do between them. */

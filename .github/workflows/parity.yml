@@ -1,7 +1,7 @@
 name: Parity
 
 # Each CLI checks only the manifest of the shared-package version it pins, so a row this repository
-# gets wrong shows up there weeks later. This checks both CLIs' main against this manifest now.
+# gets wrong shows up there weeks later. This checks every CLI's main against this manifest now.
 # Their main, not npm: a row lists a CLI in `in` once its main has it, and a release always trails that.
 # Built against this checkout, not their pin: the pin prints the last release's shape, which a change to
 # that shape can never match. The pinned pairing is each CLI's own `parity:check`.
@@ -30,20 +30,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cli: [max, tg]
+        include:
+          - { cli: max, repo: max-cli }
+          - { cli: tg, repo: tg-cli }
+          - { cli: wa, repo: whatsapp-cli }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: shared
           persist-credentials: false
       - id: app
-        run: shared/scripts/parity/app-ref.sh ${{ matrix.cli }} >> "$GITHUB_OUTPUT"
+        run: shared/scripts/parity/app-ref.sh ${{ matrix.cli }} ${{ matrix.repo }} >> "$GITHUB_OUTPUT"
         env:
           PR_BRANCH: ${{ github.head_ref }}
           APP_REF: ${{ inputs.app_ref }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: WireCatLabs/${{ matrix.cli }}-cli
+          repository: WireCatLabs/${{ matrix.repo }}
           ref: ${{ steps.app.outputs.ref }}
           path: cli
           persist-credentials: false
