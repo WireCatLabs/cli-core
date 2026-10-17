@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.325.0 — 17.10.2026
+
 ### Changed — may break callers
 
 - **parity.json marks wa absent, with reasons, for what its switches turn off**: `--silent`, `--send-as`,
