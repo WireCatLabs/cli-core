@@ -327,6 +327,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--all-versions` |  | switch | also the earlier versions a newer one replaced |  |
 | `--measure` | `<name>` | choice | the metric a ranking is ordered by |  |
 | `--newest` |  | switch | newest first instead of best first |  |
+| `--plain-order` |  | switch | best first by the words alone, without moving mail from suspicious senders down |  |
 | `--order` | `<recent\|name>` | choice | the order of a list: most recent first, or by name |  |
 | `--score` | `<preset>` | choice | the named ranking score preset |  |
 | `--weights` | `<json>` | string | the ranking component weights, all of them |  |
