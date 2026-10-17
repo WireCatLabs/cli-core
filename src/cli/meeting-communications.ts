@@ -2,17 +2,19 @@ import { CliError } from "@wirecat/cli-base"
 import type { MeetingPreparationItem } from "../entities/meeting-preparation.js"
 import type { MeetingCommunications } from "../services/meeting-communications-types.js"
 
-export const mapPreparationCommunications = (section: MeetingCommunications) => ({
-  ...section,
-  window: {
-    after: new Date(section.window.after).toISOString(),
-    before: new Date(section.window.before).toISOString(),
+export const mapPreparationCommunications = ({ items, ...section }: MeetingCommunications) => ({
+  coverage: {
+    ...section,
+    window: {
+      after: new Date(section.window.after).toISOString(),
+      before: new Date(section.window.before).toISOString(),
+    },
+    sources: section.sources.map((source) => ({
+      ...source,
+      source: { ...source.source, accountId: String(source.source.accountId) },
+    })),
   },
-  sources: section.sources.map((source) => ({
-    ...source,
-    source: { ...source.source, accountId: String(source.source.accountId) },
-  })),
-  items: section.items.map((item) => ({
+  items: items.map((item) => ({
     ...item,
     at: new Date(item.at).toISOString(),
     updatedAt: new Date(item.updatedAt).toISOString(),
@@ -22,7 +24,7 @@ export const mapPreparationCommunications = (section: MeetingCommunications) => 
 export const trimPreparationCommunication = (item: MeetingPreparationItem) => {
   const removed = item.communications?.items.pop()
   if (!removed || !item.communications) return
-  const source = item.communications.sources.find((s) => s.selection_id === removed.selection_id)
+  const source = item.communications.coverage.sources.find((s) => s.selection_id === removed.selection_id)
   if (!source) throw new CliError("invalid_response", "Communication excerpt has no selected source")
   source.output_limited = source.restart_required = item.coverage.output_limited = true
   source.next_cursor = null

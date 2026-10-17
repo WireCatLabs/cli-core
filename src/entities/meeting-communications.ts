@@ -2,7 +2,7 @@ import { isoTime, reference } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { preparationCount as count, preparationId as id } from "./meeting-preparation-parts.js"
 
-export const preparationCommunications = v.strictObject({
+const communicationCoverage = v.strictObject({
   read_usage: v.strictObject({ reads: count, charged_bytes: count, reserved_bytes: count, remaining_bytes: count }),
   query: v.string(),
   window: v.strictObject({ after: isoTime, before: isoTime }),
@@ -29,6 +29,10 @@ export const preparationCommunications = v.strictObject({
       issue: v.nullable(v.picklist(["not_found", "validation_error", "configuration_error"])),
     }),
   ),
+})
+
+export const preparationCommunications = v.strictObject({
+  coverage: communicationCoverage,
   items: v.array(
     v.strictObject({
       selection_id: id,

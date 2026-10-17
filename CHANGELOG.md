@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- Compact preparation projections retain selected communications source coverage, continuation,
+  query/window and read charges under `communications.coverage`, alongside standard envelope metadata.
+
 ### Added
 
 - `openStore({ readOnly: true })` opens an existing compatible store through native read-only

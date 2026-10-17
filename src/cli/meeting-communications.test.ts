@@ -1,3 +1,4 @@
+import { projectFields } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
 import { itemEnvelopeSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
@@ -47,10 +48,16 @@ it("publishes the same strict optional contract through CLI and MCP", async () =
   expect(v.safeParse(itemEnvelopeSchema(meetingPreparation), mcp.structuredContent).success).toBe(true)
   expect(JSON.stringify(describeProgram(f.program))).toContain("--context-source")
   expect(JSON.stringify(meetingPreparationTool.inputSchema)).toContain("communications")
-  expect(cli.item.communications.window).toEqual({
+  expect(cli.item.communications.coverage.window).toEqual({
     after: "1970-01-01T00:00:00.000Z",
     before: "1970-01-01T00:00:10.000Z",
   })
+  const compact = projectFields(cli, ["communications.items.ref"])
+  expect(compact).toMatchObject({
+    item: { communications: { coverage: cli.item.communications.coverage } },
+    meta: cli.meta,
+  })
+  expect(JSON.stringify(compact)).not.toContain('"text":')
 })
 
 it("resumes the selected source through CLI syntax with explicit replay windows", async () => {
@@ -112,8 +119,8 @@ it("preserves required coverage and existing evidence when MCP escaping fills th
   expect(mcp.isError).not.toBe(true)
   const body = mcp.structuredContent as typeof cli
   expect(Buffer.byteLength(JSON.stringify(body.item))).toBeLessThanOrEqual(4096)
-  expect(body.item.communications?.sources).toHaveLength(1)
-  expect(body.item.communications?.sources[0]).toMatchObject({
+  expect(body.item.communications?.coverage.sources).toHaveLength(1)
+  expect(body.item.communications?.coverage.sources[0]).toMatchObject({
     output_limited: true,
     restart_required: true,
     next_cursor: null,
