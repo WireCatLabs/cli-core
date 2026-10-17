@@ -4460,12 +4460,6 @@
         "--within": "all"
       }
     },
-    "tasks apply": {
-      "in": "all",
-      "options": {
-        "--last": "all"
-      }
-    },
     "tasks categories": {
       "in": "all"
     },
@@ -4570,6 +4564,12 @@
       "in": "all",
       "options": {
         "--holder": "all"
+      }
+    },
+    "tasks scan": {
+      "in": "all",
+      "options": {
+        "--last": "all"
       }
     },
     "tasks show": {

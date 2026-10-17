@@ -395,7 +395,7 @@ describe("messages sync", () => {
     await store.close()
     const first = await call(["messages", "sync", "7", "--json"], chat, env)
     expect(first.answer.tasks).toEqual({ added: 0, closed: 0, review: 0, held: 1, held_chats: 1 })
-    expect(first.stderr).toContain("tasks apply <chat>")
+    expect(first.stderr).toContain("tasks scan <chat>")
     const again = await call(["messages", "sync", "7", "--json"], chat, env)
     expect(again.code).toBe(0)
     expect(again.answer.tasks).toBeUndefined()

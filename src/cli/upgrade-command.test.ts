@@ -119,6 +119,6 @@ it("**says plainly when the package manager installed an older version than late
   expect(result.stdout.join("\n")).toContain("tg 1.0.0 → 1.5.0; 2.0.0 is held back")
   expect(result.stderr.join("\n")).toContain(
     "installed 1.5.0, not 2.0.0: pnpm installs a version only once it is older than its minimum release age " +
-      "(1 day by default, so after 2026-10-13T01:25:01.496Z) — `pnpm add -g @synthetic/tg@2.0.0` installs it now",
+      "(1 day by default, so after 2026-10-13T01:25:01.496Z) — `pnpm add -g @synthetic/tg@2.0.0 --config.minimumReleaseAgeExclude=@synthetic/*` installs it now",
   )
 })

@@ -101,9 +101,9 @@ const item = (result: { stdout: string[] }) => json(result).item
 const PROMISE = "msg:chat/500/7/1"
 
 describe("tasks", () => {
-  it("**tasks apply lists what a chat's history would open**, and opens it only with --yes", async () => {
+  it("**tasks scan lists what a chat's history would open**, and opens it only with --yes", async () => {
     const call = await setup()
-    const dry = json(await call("tasks", "apply", "7", "--last", "2", "--json"))
+    const dry = json(await call("tasks", "scan", "7", "--last", "2", "--json"))
     expect(dry.items).toEqual([
       expect.objectContaining({
         chat: "7",
@@ -114,9 +114,22 @@ describe("tasks", () => {
     ])
     expect(json(await call("tasks", "list", "--json")).items).toEqual([])
 
-    const opened = json(await call("tasks", "apply", "7", "--yes", "--json"))
+    const opened = json(await call("tasks", "scan", "7", "--yes", "--json"))
     expect(opened.items).toEqual([expect.objectContaining({ added: 1, tasks: [] })])
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
+  })
+
+  it("**lists what someone owes the owner with assignee:**, after tasks add --assignee sender", async () => {
+    const call = await setup()
+    const added = item(
+      await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--assignee", "sender", "--json"),
+    )
+    expect(added.card.assignments).toEqual([{ to: expect.stringMatching(/^person:\d+$/), role: "assignee" }])
+    const listed = async (query: string) => json(await call("tasks", "list", query, "--json")).items.length
+    expect([await listed("assignee:any"), await listed("assignee:none")]).toEqual([1, 0])
+
+    await call("tasks", "plan", added.id, "--assignee", "none", "--json")
+    expect([await listed("assignee:any"), await listed("assignee:none")]).toEqual([0, 1])
   })
 
   it("**adds a task by locator and lists it with the message it points at**, once however often it is added", async () => {

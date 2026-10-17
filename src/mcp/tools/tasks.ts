@@ -63,6 +63,18 @@ const PLAN = {
   ),
   due: ahead("when it must be done"),
   remind_time: ahead("when to look at it again"),
+  assignee: v.optional(
+    v.nullable(
+      v.pipe(
+        v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(40))),
+        v.maxLength(10),
+        v.description(
+          "who does it: sender (whoever sent the task's message) or person:<id>; null clears it. Leave it out when " +
+            "unsure: a task with no assignee is better than none",
+        ),
+      ),
+    ),
+  ),
 }
 const planOf = (args: {
   title?: string
@@ -70,7 +82,9 @@ const planOf = (args: {
   due?: string | null
   remind_time?: string | null
   category?: string
+  assignee?: string[] | null
 }): TaskPlan => ({
+  ...(args.assignee === undefined ? {} : { assignees: args.assignee }),
   ...(args.category === undefined ? {} : { category: args.category }),
   ...(args.title === undefined ? {} : { title: args.title }),
   ...(args.description === undefined ? {} : { description: args.description }),
@@ -362,7 +376,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       },
     }),
 
-    tasks_apply: tool({
+    tasks_scan: tool({
       title: "Build tasks from a chat's history",
       description:
         "The task rules over a chat's newest stored messages: a question nobody answered and a mention of the owner " +
@@ -392,7 +406,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           ...(args.last === undefined ? {} : { last: args.last }),
           yes: args.yes ?? false,
         })
-        return listOf("tasks apply", { items: passes.map(snakeKeys), limit: passes.length, has_more: false })
+        return listOf("tasks scan", { items: passes.map(snakeKeys), limit: passes.length, has_more: false })
       },
     }),
 

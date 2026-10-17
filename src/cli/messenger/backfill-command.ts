@@ -249,7 +249,7 @@ export const syncCommand = (messenger: Messenger): Command => {
         if (tasks?.held)
           context.renderer.note(
             `the first sync left ${tasks.held} possible task(s) in ${tasks.heldChats ?? 0} chat(s) unopened ` +
-              `(config task_first_pass_per_chat) — ask the owner, then \`${messenger.app.command} tasks apply <chat>\``,
+              `(config task_first_pass_per_chat) — ask the owner, then \`${messenger.app.command} tasks scan <chat>\``,
           )
         if (toReview > 0)
           context.renderer.note(

@@ -10,7 +10,7 @@ import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
-import { taskIdOf, taskRowOf } from "./things.js"
+import { taskIdOf, taskRowOf, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 
 export const TASK_ROLES = ["assignee", "reviewer", "watcher"] as const
@@ -106,6 +106,8 @@ export interface WorkTasks extends TaskRelationsStore {
   edit(id: string, fields: TaskFields, by: Author): Promise<TaskDetails>
   assign(id: string, assignment: TaskAssignment, by: Author): Promise<TaskDetails>
   unassign(id: string, assignment: TaskAssignment, by: Author): Promise<TaskDetails>
+  /** `person:<id>` of whoever sent the task's source message; `undefined` for the owner, a note or an unknown sender. */
+  sourceSender(id: string): Promise<string | undefined>
   details(id: string): Promise<TaskDetails>
   find(filter: {
     project?: string
@@ -367,6 +369,26 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         recordTaskEvent(database, task, authorActor(context, by).actor, "assigned", changes, at)
       })
       return details(task)
+    },
+    sourceSender: async (id) => {
+      const locator = database
+        .prepare("SELECT source_locator FROM tasks WHERE id = ?")
+        .get(required(id))?.source_locator
+      if (typeof locator !== "string" || !locator.startsWith("msg:")) return undefined
+      let thing: ReturnType<typeof thingOf>
+      try {
+        thing = thingOf(database, locator)
+      } catch {
+        return undefined
+      }
+      if (thing?.type !== "message") return undefined
+      const row = database
+        .prepare(
+          "SELECT p.id FROM messages m JOIN identity_links il ON il.identity_id = m.sender_identity_id " +
+            "JOIN persons p ON p.id = il.person_id WHERE m.id = ? AND m.outgoing = 0 AND p.owner = 0",
+        )
+        .get(thing.id)
+      return row ? `person:${String(row.id)}` : undefined
     },
     unassign: async (id, { to, role }, by) => {
       const task = required(id)

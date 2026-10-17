@@ -206,6 +206,31 @@ const boilerStore = async (texts: string[]) => {
   return { store, tasks, add }
 }
 
+it("**assigns a task to whoever sent its message, to a person, or to nobody**", async () => {
+  const { store, tasks } = await boilerStore(["I'll send you the boiler invoice tomorrow"])
+  try {
+    const { task } = await tasks.add("msg:chat/500/7/1", "promise", "agent", {
+      title: "Get the boiler invoice from Alice",
+      category: "money",
+      assignees: ["sender"],
+    })
+    const assignees = async () =>
+      (await tasks.show(task.id)).assignments.filter((one) => one.role === "assignee").map((one) => one.to)
+    const [alice] = await assignees()
+    expect(alice).toMatch(/^person:\d+$/)
+
+    await tasks.plan(task.id, { assignees: [String(alice)] }, "owner")
+    expect(await assignees()).toEqual([alice])
+    await tasks.plan(task.id, { assignees: null }, "owner")
+    expect(await assignees()).toEqual([])
+    await expect(tasks.plan(task.id, { assignees: ["Alice"] }, "owner")).rejects.toMatchObject({
+      message: expect.stringContaining("sender or person:<id>"),
+    })
+  } finally {
+    await store.close()
+  }
+})
+
 it("**two jobs taken from one message are not refused as duplicates**: the shared message says nothing", async () => {
   const { store, tasks } = await boilerStore([
     "Please send Alice the contract today and pay the 15000 rub invoice for the boiler repair today",

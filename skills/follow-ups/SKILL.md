@@ -38,8 +38,15 @@ Anything not on the agenda waits for its own date. Do not open it.
 
 **History is not work.** A first sync opens no tasks from old messages (`task_first_pass_per_chat`, 0 by
 default) and says how many it held. Do not read old chats looking for tasks. Ask the owner which chats to build,
-then for each: `{{command}} tasks apply "<chat>" --json` lists what would open, and `--yes` opens it. Dig deeper
+then for each: `{{command}} tasks scan "<chat>" --json` lists what would open, and `--yes` opens it. Dig deeper
 into one chat (`--last 300`) only when the owner asks.
+
+**Whose task it is.** A task is something the owner does, or something someone owes the owner. When another
+person promises the owner something ("I'll send it tomorrow"), add it with `--type promise --assignee sender`, so
+it is kept as theirs. In a group, record only what is asked of the owner or promised to them — unless the owner
+tagged the group `watch-tasks`; then record everyone's commitments, with `--assignee sender` when the promise is
+the sender's own and no assignee when it is unclear. A task without an assignee is better than a missed one.
+`{{command}} tasks list "assignee:any state:open" --json` is what others owe the owner: chase what is overdue.
 
 ## 2. Look only where the agenda points
 

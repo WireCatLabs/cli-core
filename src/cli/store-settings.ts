@@ -186,7 +186,7 @@ const changeFirstPass = async (app: AppIdentity, env: NodeJS.ProcessEnv, value: 
       result: { store: storePath(env), scope: "store", setting: FIRST_PASS, value: now },
       note:
         `store-wide — an account's first sync opens at most ${now} task(s) per chat from history; later syncs read ` +
-        `only new messages. \`${app.command} tasks apply <chat>\` builds tasks from a chat's history when asked`,
+        `only new messages. \`${app.command} tasks scan <chat>\` builds tasks from a chat's history when asked`,
     }
   } finally {
     await store.close()

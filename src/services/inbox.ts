@@ -6,7 +6,7 @@ import { CHAT_KINDS } from "./chats.js"
 import { type ServiceDeps, storeIfOpen } from "./deps.js"
 import { readChatId } from "./message-resolution.js"
 import { unanswered } from "./questions.js"
-import { applyTaskRules, type RuleResult } from "./task-rules.js"
+import { applyTaskRules, type RuleResult, withWatched } from "./task-rules.js"
 
 /**
  * **At most this many history reads per `inbox`**, as in max-cli: a person opening twenty chats in
@@ -357,7 +357,7 @@ export const inboxService = (deps: ServiceDeps): InboxService => {
         onReviewed: async (full) => {
           const held = await storeIfOpen(deps)
           if (held)
-            tasks = await applyTaskRules(full, {
+            tasks = await applyTaskRules(await withWatched(held.store, held.account, full), {
               store: held.store.tasks,
               account: held.account,
               categories: await held.store.tasks.categories(),

@@ -56,6 +56,7 @@ const card = (task: TaskCard) =>
     `${task.key}  ${task.status}  ${task.type}  ${task.category ?? "—"}  ${task.title}`,
     `due ${when(task.dueAt)}  next check ${when(task.nextCheckAt)}  source ${task.source ?? "—"}`,
     ...(task.claimedBy === null ? [] : [`claimed by ${task.claimedBy} until ${when(task.claimedUntil)}`]),
+    ...task.assignments.filter((one) => one.role === "assignee").map((one) => `assignee ${one.to}`),
     ...(task.closeSuggestion === null ? [] : [suggestionLine(task.closeSuggestion)]),
     ...(task.closeCertainty === null ? [] : [`closed by an agent at certainty ${task.closeCertainty}`]),
     ...(task.description ? ["", task.description, ""] : []),
@@ -70,7 +71,7 @@ const applyText = (pass: ChatRulePass, yes: boolean, tool: string) =>
     : [
         `${pass.chat}: ${pass.messages} messages read; would open ${pass.tasks.length}, close ${pass.closed}`,
         ...pass.tasks.map((task) => `  ${task.kind.padEnd(8)} ${(task.category ?? "—").padEnd(13)} ${task.source}`),
-        ...(pass.tasks.length > 0 ? [`  ${tool} tasks apply ${pass.chat} --yes opens them`] : []),
+        ...(pass.tasks.length > 0 ? [`  ${tool} tasks scan ${pass.chat} --yes opens them`] : []),
       ].join("\n")
 
 const agendaText = (agenda: Agenda) => {
@@ -138,6 +139,11 @@ const planOptions = (command: Command, verb: string) =>
       "when to look at it again: an ISO 8601 time or 2h, 3d from now; none clears it",
       dateOrNone("--remind-time"),
     )
+    .option(
+      "--assignee <person...>",
+      "who does it: sender (whoever sent the task's message) or person:<id>; none clears it. Leave it out when " +
+        "unsure: a task with no assignee is better than none",
+    )
 
 const certaintyArgument = (typed: string) => {
   const value = Number(typed.trim())
@@ -160,6 +166,7 @@ const planFrom = (options: {
   due?: Date | "none"
   remindTime?: Date | "none"
   category?: string
+  assignee?: string[]
 }) => {
   const plan: TaskPlan = {}
   if (options.category !== undefined) plan.category = options.category
@@ -167,6 +174,8 @@ const planFrom = (options: {
   if (options.description !== undefined) plan.description = options.description
   if (options.due !== undefined) plan.dueAt = options.due === "none" ? null : options.due
   if (options.remindTime !== undefined) plan.nextCheckAt = options.remindTime === "none" ? null : options.remindTime
+  if (options.assignee !== undefined)
+    plan.assignees = options.assignee.length === 1 && options.assignee[0] === "none" ? null : options.assignee
   return plan
 }
 
@@ -224,6 +233,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
       title?: string
       description?: string
       due?: Date | "none"
+      assignee?: string[]
       into?: string
       new?: boolean
     }>()
@@ -268,8 +278,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   planOptions(
     annotate(tasks.command("plan"), { effects: LOCAL_WRITE })
-      .summary("set a task's title, description, due date, next check and category")
-      .description("set a task's title, description, due date, next check and category; nothing reaches the messenger")
+      .summary("set a task's title, description, due date, next check, category and assignee")
+      .description(
+        "set a task's title, description, due date, next check, category and assignee; nothing reaches the messenger",
+      )
       .argument("<task>", "the task's id or key, as tasks list shows it")
       .option("--category <name>", `${categoryHelp}; a change is kept in the task's history`),
     "send Alex the API token",
@@ -538,9 +550,9 @@ export const tasksCommand = (messenger: Messenger): Command => {
       )
     })
 
-  annotate(tasks.command("apply"), {
+  annotate(tasks.command("scan"), {
     effects: LOCAL_WRITE,
-    examples: [`${tool} tasks apply <chat>`, `${tool} tasks apply <chat> --last 300 --yes`],
+    examples: [`${tool} tasks scan <chat>`, `${tool} tasks scan <chat> --last 300 --yes`],
   })
     .summary("build tasks from a chat's stored history: unanswered questions and mentions")
     .description(
@@ -559,19 +571,19 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, chats: string[]) {
       const context = messengerContext(this, messenger)
       const { last, yes = false } = this.optsWithGlobals<{ last?: number; yes?: boolean }>()
-      if (yes) refuseLocalWrite(context, messenger.app.command, "tasks.apply")
+      if (yes) refuseLocalWrite(context, messenger.app.command, "tasks.scan")
       const passes = await context.withStore(
         async (store, account) => {
           const ids = []
           for (const chat of chats) ids.push(await storedChatId(messenger, chat, store, account))
           return applyTaskRulesToChats(store, account, ids, { ...(last === undefined ? {} : { last }), yes })
         },
-        { name: "tasks apply" },
+        { name: "tasks scan" },
       )
       renderAnswer(
         this,
         context,
-        listOf("tasks apply", { items: passes.map(snakeKeys), limit: passes.length, has_more: false }),
+        listOf("tasks scan", { items: passes.map(snakeKeys), limit: passes.length, has_more: false }),
         () => `${passes.map((pass) => applyText(pass, yes, tool)).join("\n")}\n`,
       )
     })
