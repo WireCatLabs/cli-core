@@ -74,6 +74,15 @@
                       "!**/meetings/mcp/index.js"
                     ],
                     "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/documents/model.js",
+                      "**/documents/scope.js",
+                      "**/documents/catalog.js",
+                      "**/services/documents/*"
+                    ],
+                    "message": "use the public documents.ts entry point outside the document module"
                   }
                 ]
               }
@@ -133,6 +142,15 @@
                       "!**/meetings/mcp/index.js"
                     ],
                     "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/documents/model.js",
+                      "**/documents/scope.js",
+                      "**/documents/catalog.js",
+                      "**/services/documents/*"
+                    ],
+                    "message": "use the public documents.ts entry point outside the document module"
                   }
                 ]
               }
@@ -187,6 +205,15 @@
                       "!**/meetings/mcp/index.js"
                     ],
                     "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/documents/model.js",
+                      "**/documents/scope.js",
+                      "**/documents/catalog.js",
+                      "**/services/documents/*"
+                    ],
+                    "message": "use the public documents.ts entry point outside the document module"
                   }
                 ]
               }
@@ -232,6 +259,15 @@
                       "!**/meetings/mcp/index.js"
                     ],
                     "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/documents/model.js",
+                      "**/documents/scope.js",
+                      "**/documents/catalog.js",
+                      "**/services/documents/*"
+                    ],
+                    "message": "use the public documents.ts entry point outside the document module"
                   }
                 ]
               }
@@ -269,6 +305,15 @@
                       "!**/meetings/mcp/index.js"
                     ],
                     "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/documents/model.js",
+                      "**/documents/scope.js",
+                      "**/documents/catalog.js",
+                      "**/services/documents/*"
+                    ],
+                    "message": "use the public documents.ts entry point outside the document module"
                   }
                 ]
               }
@@ -466,6 +511,15 @@
                   {
                     "group": ["**/store/**", "**/services/**", "**/cli/**", "**/mcp/**", "**/attachments/extract.js"],
                     "message": "a reader sits below the store, the services and the commands: it imports readers/types, its own engine and the pure helpers in src/attachments/, nothing else; extract.ts calls the registry, so a reader never imports it"
+                  },
+                  {
+                    "group": [
+                      "**/documents/model.js",
+                      "**/documents/scope.js",
+                      "**/documents/catalog.js",
+                      "**/services/documents/*"
+                    ],
+                    "message": "use the public documents.ts entry point outside the document module"
                   }
                 ]
               }
@@ -518,6 +572,15 @@
                       "**/readers/**"
                     ],
                     "message": "an image provider sits below the store, the services and the commands: it imports images/types and pure helpers, nothing else; the service layer calls the registry, so a provider never imports it"
+                  },
+                  {
+                    "group": [
+                      "**/documents/model.js",
+                      "**/documents/scope.js",
+                      "**/documents/catalog.js",
+                      "**/services/documents/*"
+                    ],
+                    "message": "use the public documents.ts entry point outside the document module"
                   }
                 ]
               }
@@ -616,6 +679,31 @@
               "options": {
                 "patterns": [
                   {
+                    "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                  },
+                  {
+                    "group": ["drizzle-orm", "drizzle-orm/*"],
+                    "message": "drizzle-orm is a development dependency, bundled into dist at build time: import it through src/store/sqlite/drizzle/ (add what you need to core.ts), or tg and max crash at runtime"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
+                    ],
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
                     "group": ["**/store/**", "**/services/**", "**/cli/**", "**/mcp/**", "**/models/**"],
                     "message": "document domain types and scope helpers must not depend on persistence, workflows or transports"
                   }
@@ -635,6 +723,39 @@
               "level": "error",
               "options": {
                 "patterns": [
+                  {
+                    "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                  },
+                  {
+                    "group": ["drizzle-orm", "drizzle-orm/*"],
+                    "message": "drizzle-orm is a development dependency, bundled into dist at build time: import it through src/store/sqlite/drizzle/ (add what you need to core.ts), or tg and max crash at runtime"
+                  },
+                  {
+                    "group": ["commander", "**/cli/**"],
+                    "message": "services, sends, replies, attachments, moderation, models, analysis, domain and ports sit below the commands and never import src/cli/: move what they need down (src/ports/, src/errors/, src/runs/, src/domain/) and let the command import it from there"
+                  },
+                  {
+                    "group": ["**/store/sqlite/**"],
+                    "message": "a command, a service or an MCP tool reaches the store through src/store/store.ts, never a table module under src/store/sqlite/: import from store.ts, and re-export there what is new"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
+                    ],
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
                   {
                     "group": [
                       "**/store/sqlite/**",
@@ -656,7 +777,7 @@
       }
     },
     {
-      "includes": ["src/**", "!src/documents/**", "!src/services/documents/**"],
+      "includes": ["src/documents/index.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -665,13 +786,66 @@
               "options": {
                 "patterns": [
                   {
+                    "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                  },
+                  {
+                    "group": ["drizzle-orm", "drizzle-orm/*"],
+                    "message": "drizzle-orm is a development dependency, bundled into dist at build time: import it through src/store/sqlite/drizzle/ (add what you need to core.ts), or tg and max crash at runtime"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
                     "group": [
-                      "**/documents/model.js",
-                      "**/documents/scope.js",
-                      "**/documents/catalog.js",
-                      "**/services/documents/*"
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
                     ],
-                    "message": "use the public documents.ts entry point outside the document module"
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/documents/**/*.test.ts", "src/services/documents/**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@mtcute/*", "ws", "**/telegram/**", "**/max/**"],
+                    "message": "cli-core speaks no provider: an adapter translates into the domain model, and nothing here may import a messenger library or an adapter"
+                  },
+                  {
+                    "group": ["**/tasks/*", "!**/tasks/index.js", "**/tasks/testing/*", "!**/tasks/testing/index.js"],
+                    "message": "src/tasks/ is a module: import it through src/tasks/index.ts or src/tasks/testing/index.ts, and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/meetings/*",
+                      "!**/meetings/index.js",
+                      "**/meetings/testing/*",
+                      "!**/meetings/testing/index.js",
+                      "**/meetings/cli/*",
+                      "!**/meetings/cli/index.js",
+                      "**/meetings/mcp/*",
+                      "!**/meetings/mcp/index.js"
+                    ],
+                    "message": "src/meetings/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
                   }
                 ]
               }

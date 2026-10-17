@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { MEETING_FINDINGS_KIND } from "../../meetings/findings.js"
+import { MEETING_FINDINGS_KIND } from "../../meetings/index.js"
 import type { AccountKey } from "../types.js"
 import type { Actor } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"

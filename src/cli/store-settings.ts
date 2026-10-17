@@ -21,15 +21,13 @@ import {
   writeTaskCategoryEdits,
 } from "../store/shared-config.js"
 import {
-  DEFAULT_FIRST_PASS_PER_CHAT,
-  firstPassPerChatOf,
-  savedFirstPassPerChat,
-} from "../store/sqlite/task-first-pass.js"
-import {
   accountGroupsOf,
   DEFAULT_AGENT_CLOSE,
+  DEFAULT_FIRST_PASS_PER_CHAT,
+  firstPassPerChatOf,
   openStore,
   savedAgentClose,
+  savedFirstPassPerChat,
   savedPhoneCountries,
   savedStemmers,
   savedTaskCategories,

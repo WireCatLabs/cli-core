@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { type MeetingFindingsInput, validateMeetingFindings } from "../meetings/findings.js"
+import { type MeetingFindingsInput, validateMeetingFindings } from "../meetings/index.js"
 
 const keys: Record<string, string> = {
   schema_version: "schemaVersion",

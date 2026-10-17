@@ -1,5 +1,4 @@
-import { meetingProjectEvidenceAnswer } from "../meetings/project-evidence-answer.js"
-import { prepareMeetingProjectEvidence } from "../meetings/project-evidence-query.js"
+import { meetingProjectEvidenceAnswer, prepareMeetingProjectEvidence } from "../meetings/index.js"
 import type { MeetingPreparation } from "../services/meeting-preparation-types.js"
 
 export const mapPreparationProjectEvidence = (
