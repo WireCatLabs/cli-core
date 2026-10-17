@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`MeetingFindingsBatch` and `MeetingFindingsStore` are exported from `@wirecat/cli-core/store`**, no longer from
+  `@wirecat/cli-core/meetings`: they describe the store's side of meeting findings. Import them from the store entry.
+  The import boundary rules in `biome.json` apply again (a later override had replaced the earlier ones), and the
+  deep imports they now refuse go through each module's entry point.
+
 ## 0.324.0 — 17.10.2026
 
 ### Added
