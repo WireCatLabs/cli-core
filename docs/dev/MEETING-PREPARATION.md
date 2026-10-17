@@ -208,8 +208,9 @@ because a participant, project alias or meeting title looks similar.
 
 ## Shared CLI and MCP adapters
 
-`addMeetingPreparationCommand(program, { read, output, signal, now? })` mounts `meetings prepare
-<series-id>` under an existing meetings group. Options include `--project` for the optional selected-project evidence and `--since-time`, `--before-time`, `--history-since-time`,
+`addMeetingPreparationCommand(program, { read, output, signal, now?, communications? })` mounts `meetings prepare
+<series-id>` under an existing meetings group; `communications: true` adds the `--context-*` options of
+[MEETING-COMMUNICATIONS.md](MEETING-COMMUNICATIONS.md#shared-cli-and-mcp). Options include `--project` for the optional selected-project evidence and `--since-time`, `--before-time`, `--history-since-time`,
 `--meetings`, `--cues`, `--context-limit`, `--max-read-bytes` and `--bytes`. Time options take valid ISO
 instants with an explicit zone. The default window starts at the injected clock, ends seven days
 later and reads thirty days of history before its start. The answer retains absolute normalized

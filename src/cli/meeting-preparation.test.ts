@@ -211,6 +211,40 @@ describe("meeting preparation adapters", () => {
     ).toThrow("group is unavailable")
   })
 
+  it("offers the --context-* options only to a host that connects a messages source", async () => {
+    const read = vi.fn<MeetingPreparationReader>()
+    const flags = (communications: boolean) => {
+      const program = new Command("example").exitOverride().configureOutput({ writeErr: () => {} })
+      program.command("meetings")
+      const prepare = addMeetingPreparationCommand(program, {
+        read,
+        output: () => {},
+        signal: () => undefined,
+        communications,
+      })
+      return {
+        program,
+        longs: prepare.options.map((option) => option.long).filter((long) => long?.startsWith("--context-")),
+      }
+    }
+
+    expect(flags(true).longs).toEqual([
+      "--context-source",
+      "--context-query",
+      "--context-since-time",
+      "--context-before-time",
+      "--context-limit",
+    ])
+    const without = flags(false)
+    expect(without.longs).toEqual(["--context-limit"])
+    await expect(
+      without.program.parseAsync(["meetings", "prepare", "example-series", "--context-source", "chat"], {
+        from: "user",
+      }),
+    ).rejects.toMatchObject({ code: "commander.unknownOption" })
+    expect(read).not.toHaveBeenCalled()
+  })
+
   it("emits structured provider and internal errors, and refuses late cancellation", async () => {
     const failure = new CliError("not_found", "Invented schedule unavailable")
     const read = vi.fn<MeetingPreparationReader>(async () => {

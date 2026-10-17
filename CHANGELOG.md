@@ -90,6 +90,11 @@ shape of this file.
   the shared tree keeps off MCP are no longer offered there either (`store gaps plan`, `store gaps repair`,
   `store jobs list`, `store jobs show`, `runs search`). `toolsFromCommands` lists a group that runs on its own, such
   as `tasks duplicates`, beside its subcommands.
+- **`meetings prepare` offers `--context-source`, `--context-query`, `--context-since-time` and
+  `--context-before-time` only to a host that connects a messages source**: pass `communications: true` to
+  `addMeetingPreparationCommand`. Without it the four options are gone from the help and `commands --json`, and
+  giving one fails as an unknown option; before, a host with no source (zm) offered them and could only refuse
+  them. A host that searches communications adds the flag.
 
 ## 0.327.0 — 17.10.2026
 

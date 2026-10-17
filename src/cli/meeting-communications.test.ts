@@ -31,7 +31,13 @@ const setup = async () => {
   const program = new Command("example").exitOverride()
   program.command("meetings")
   const output = vi.fn()
-  addMeetingPreparationCommand(program, { read, output, signal: () => undefined, now: () => 10000 })
+  addMeetingPreparationCommand(program, {
+    read,
+    output,
+    signal: () => undefined,
+    now: () => 10000,
+    communications: true,
+  })
   return { ...f, read, program, output }
 }
 const input = { series_id: "example-series", communications: { sources: [{ id: "project-chat" }], query: "launch" } }
