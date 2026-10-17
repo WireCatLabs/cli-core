@@ -20,6 +20,14 @@ shape of this file.
 
 - **The preparation source flag advertises a vocabulary-compatible value name.** `--context-source <id=cursor>` still accepts either a selected ID or ID with its continuation cursor; the optional cursor syntax and runtime behavior are unchanged.
 
+### Changed — may break callers
+
+- **An agent's MCP catalogue lists only the commands the CLI itself has**: a tool whose command the CLI's switches
+  left unmounted (`chats link create` without invite links), whose root it never mounts (`metadata` in wa), whose one
+  adapter method the messenger lacks, or which `mcp: false` keeps off MCP, is no longer offered. Before, wa's agents
+  were offered `chats link create`, `metadata get` and `metadata refresh`, which then failed. A tool with no CLI
+  command (`messages photo`, `conversations refresh`) is marked `agentOnly` and stays.
+
 ## 0.325.0 — 17.10.2026
 
 ### Added

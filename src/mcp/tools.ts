@@ -1,6 +1,12 @@
+import { metaOf } from "@wirecat/cli-base/commands"
 import * as v from "valibot"
 import type { Messenger } from "../cli/messenger/context.js"
-import type { AnyTool } from "./tool.js"
+import { COMMAND_NEEDS } from "../cli/messenger/lacks.js"
+import { commandAt } from "../cli/steps.js"
+import { type AnyTool, commandOf } from "./tool.js"
+
+type Command = Parameters<typeof commandAt>[0]
+
 import { accountTools } from "./tools/account.js"
 import { adminTools } from "./tools/admin.js"
 import { adminStatisticsTools } from "./tools/admin-statistics.js"
@@ -96,3 +102,25 @@ export const personalMcpTools = (messenger: Messenger): Record<string, AnyTool> 
       ...deleteTools(messenger),
     }).map(([name, definition]) => [name, { ...definition, input: v.strictObject(definition.input.entries) }]),
   )
+
+/**
+ * The tools this CLI's own command tree answers: a tool whose command its switches left unmounted, whose one adapter
+ * method it lacks, or which is kept off MCP with `mcp: false`, is not offered — an agent is not handed what the CLI
+ * does not have.
+ */
+export const mountedMcpTools = (root: Command, messenger: Messenger): Record<string, AnyTool> =>
+  Object.fromEntries(
+    Object.entries(personalMcpTools(messenger)).filter(([name, definition]) => {
+      if (definition.agentOnly) return true
+      const path = commandOf(name, definition)
+      const command = commandAt(root, path)
+      const need = COMMAND_NEEDS[path]
+      return command !== undefined && !offMcp(command) && !(need && messenger.lacks?.includes(need[0]))
+    }),
+  )
+
+/** `mcp: false` on a command or any group above it. */
+const offMcp = (command: Command): boolean => {
+  for (let at: Command | null = command; at; at = at.parent) if (metaOf(at).mcp === false) return true
+  return false
+}

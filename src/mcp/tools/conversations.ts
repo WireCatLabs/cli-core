@@ -251,6 +251,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
 
     conversations_refresh: tool({
       title: "Bring conversations and vectors up to date",
+      agentOnly: true,
       description:
         "Builds, then embeds with the model on this machine, the chats that changed since their build and the " +
         "group chats never built — or only `chat` — at most `max_chats` chats " +

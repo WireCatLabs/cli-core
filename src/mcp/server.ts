@@ -23,7 +23,7 @@ import { registerResources } from "./resources.js"
 import { MessengerSession, type SessionOptions } from "./session.js"
 import { registerSurface } from "./surface.js"
 import { commandOf, READ, tool, toolKey } from "./tool.js"
-import { personalMcpTools } from "./tools.js"
+import { mountedMcpTools } from "./tools.js"
 
 export type ServerOptions = SessionOptions & { spawnJob?: import("../services/backfill-jobs.js").SpawnJob }
 
@@ -51,7 +51,7 @@ export const createServer = (
   const levelOf = (key: string | null | undefined) => (key ? levelFor(settings.permissions, key).level : "allow")
   // A tool the level would refuse is not offered: an agent is not handed a tool that cannot work.
   const offered = Object.fromEntries(
-    Object.entries(personalMcpTools(messenger)).filter(([key, one]) => {
+    Object.entries(mountedMcpTools(rootOf(command), messenger)).filter(([key, one]) => {
       const level = levelOf(toolKey(key, one))
       const writes = one.permission !== undefined || one.annotations.readOnlyHint !== true
       return (

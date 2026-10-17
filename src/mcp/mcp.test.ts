@@ -39,6 +39,7 @@ import { pdf } from "../testing/files.js"
 import { freePort, mcpHttpClient as httpClient } from "../testing/mcp-http-client.js"
 import { surfaceOf } from "../testing/mcp-surface.js"
 import { searchRecipes, seedSearchRecipes } from "../testing/search-recipes.js"
+import { sharedCommands } from "../testing/shared-program.js"
 import { serveOverHttp } from "./http/serve.js"
 import { instructions } from "./instructions.js"
 import { createServer, type ServerOptions } from "./server.js"
@@ -352,6 +353,8 @@ interface Harness {
   permission?: string[]
   /** The messenger's other switches. */
   own?: Partial<Messenger>
+  /** Shared root commands this CLI does not mount, as wa mounts no `metadata`. */
+  unmounted?: string[]
 }
 
 const connect = async (telegram: Scripted = scripted(), options: Partial<ServerOptions> & Harness = {}) => {
@@ -385,6 +388,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     http,
     permission = [],
     own = {},
+    unmounted = [],
     ...serverOptions
   } = options
   if (config) {
@@ -422,8 +426,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
         .action(function (this: Command) {
           made = createServer(this, messengerContext(this, messenger), messenger, serverOptions)
         }),
-      inboxCommand(messenger),
-      reviewCommand(messenger),
+      ...sharedCommands(messenger).filter((one) => !unmounted.includes(one.name())),
     ],
   })
   provide(program, { streams, tty: false, env, app })
@@ -2441,6 +2444,24 @@ describe("the transcribe tool", () => {
   })
 })
 
+describe("the catalogue follows each CLI's own command tree", () => {
+  it("offers what a CLI with every shared command mounts, agent-only tools included", async () => {
+    const commands = await (await connect(scripted())).client.commands()
+
+    expect(commands).toEqual(
+      expect.arrayContaining(["chats link create", "metadata get", "metadata refresh", "messages photo"]),
+    )
+  })
+
+  it("drops the commands a CLI's switches or its own mounts leave out, as wa's do", async () => {
+    const { client } = await connect(scripted(), { own: { inviteLinkCreate: false }, unmounted: ["metadata"] })
+    const commands = await client.commands()
+
+    expect(commands.filter((one) => one === "chats link create" || one.startsWith("metadata "))).toEqual([])
+    expect(commands).toEqual(expect.arrayContaining(["chats link show", "messages photo", "conversations refresh"]))
+  })
+})
+
 describe("three tools in place of one per command", () => {
   it.each([
     ["legacy", false],
@@ -2761,9 +2782,9 @@ describe("sending over MCP", () => {
     expect((await call("messages scheduled", { chat: "7" })).isError).toBe(true)
   })
 
-  it("refuses a tool whose one method the messenger lacks before connecting", async () => {
+  it("offers no tool whose one method the messenger lacks, and never connects for it", async () => {
     const connects: number[] = []
-    const { call } = await connect(scripted(), {
+    const { call, client } = await connect(scripted(), {
       own: { lacks: ["pin"] },
       connect: async () => {
         connects.push(1)
@@ -2773,10 +2794,10 @@ describe("sending over MCP", () => {
 
     const refused = await call("messages pin", { chat: "7", message: "1" })
 
-    expect(refused.body.error).toMatchObject({
-      code: "validation_error",
-      message: "this messenger cannot pin a message",
-    })
+    expect(await client.commands()).not.toContain("messages pin")
+    expect(await client.commands()).toContain("messages unpin")
+    expect(refused.isError).toBe(true)
+    expect(refused.body.error).toMatchObject({ code: "validation_error" })
     expect(connects).toEqual([])
   })
 
