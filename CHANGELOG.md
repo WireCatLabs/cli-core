@@ -14,6 +14,11 @@ shape of this file.
   `tasks list "assignee:any state:open"` showed them. `tag:`, `category:` and `claimed:` narrow it as they narrow
   `tasks`.
 
+### Fixed
+
+- **The personal MCP server's unreachable `store gaps` and `store jobs` tools are gone**: since the catalogue follows
+  each CLI's tree, where `store` is kept off MCP, nothing offered them, and their code only failed the coverage floor.
+
 ## 0.328.0 — 17.10.2026
 
 ### Added
