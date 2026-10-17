@@ -53,6 +53,7 @@ export const contextCursorScope = (request: Pick<ContextEvidenceRequest, "source
   createHash("sha256")
     .update(
       JSON.stringify([
+        "context-evidence-v1",
         request.source.kind,
         request.source.accountId,
         request.source.provider,

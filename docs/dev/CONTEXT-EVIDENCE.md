@@ -97,7 +97,7 @@ indexing workflow makes them current. Empty pages and exhausted pagination still
 archive completeness. Undated mail/messages are reported separately rather than assigned a date.
 
 Use `next` as the next request's `cursor`, keeping the same source, query and dates. Scope changes
-are refused before source access. A cursor binds scope, not a historical snapshot: every native
+are refused before source access; the scope hash also carries the reader protocol version. A cursor binds scope, not a historical snapshot: every native
 page has its own read transaction, so later pages may reflect intervening edits. Do not infer that
 finishing pages revalidated earlier evidence. Cancellation is checked around synchronous reads and
 releases the read transaction before returning.
