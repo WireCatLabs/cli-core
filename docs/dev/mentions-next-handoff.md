@@ -13,8 +13,8 @@ notes, documents, notes and mail (store version 16); phone numbers of 47 countri
 `t.me` links resolved to chats; names of people the store does not know and street addresses of Europe, the UK
 and the US, a confirmed address kept in `places` (store version 18, 0.308.0). What it is and how it works: [MENTIONS.md](MENTIONS.md); the design and the
 owner's decisions: [mentions-plan.md](mentions-plan.md); the user's page: [../mentions.md](../mentions.md).
-Released: cli-core ≥ 0.284.0, tg 0.60.0 and max 0.54.0 carry it; names and addresses need cli-core ≥ 0.308.0 (tg and
-max not on it yet, 2026-10-17).
+Released: names and addresses need cli-core ≥ 0.308.0; tg 0.66.0 and memo 0.59.0 (`memo mentions`) on cli-core 0.311.0 and max 0.58.0 on 0.315.0 carry them;
+the site pins tg v0.66.0 with the mentions page current (cli-docs#281, 2026-10-17).
 
 ## 2. Orient in one call
 
@@ -25,7 +25,7 @@ max not on it yet, 2026-10-17).
   echo "== writer: original, sources"; git show origin/main:src/store/sqlite/mention-drain.ts | sed -n '43,72p;108,151p'
   echo "== memo's store reads";      git show origin/main:src/store/sqlite/mention-sources.ts | sed -n '20,58p'
   echo "== service: domains, list";  git show origin/main:src/services/mentions.ts | sed -n '77,125p'
-  echo "== versions"; for p in cli-core tg-cli max-cli; do echo "$p $(npm view @wirecat/$p version 2>/dev/null)"; done
+  echo "== versions"; for p in cli-core tg-cli max-cli cli-memo; do echo "$p $(npm view @wirecat/$p version 2>/dev/null)"; done
   git -C /home/leemour/Projects/AI/cli-docs fetch -q origin
   git -C /home/leemour/Projects/AI/cli-docs show origin/main:tools.json | grep -E '"name"|"docsRef"'
 } > ~/.cache/mentions-next-orient.txt 2>&1
@@ -39,13 +39,9 @@ released versions and the versions the site pins.
 ## 3. Read in this order (only if the orient output is not enough)
 
 1. `src/store/sqlite/mention-sources.ts` — what memo gets: `list`, `show`, `confirm`, `reject` and how mail is
-   scoped to named accounts (task 1).
-2. `src/cli/messenger/mentions-command.ts` — the messenger command a memo group should read like (options,
-   `next` steps, `--all-in-chat`).
-3. `src/store/sqlite/mention-drain.ts:156-262` (`writer`) — what is kept, deleted and inserted when a text is read
+   scoped to named accounts; memo's command is `cli-memo` `src/mentions/command.ts`.
+2. `src/store/sqlite/mention-drain.ts:156-262` (`writer`) — what is kept, deleted and inserted when a text is read
    again; where mail links are cut to one per site.
-4. `/home/leemour/Projects/AI/cli-docs/docs/REVIEWING.md` (section "Review the whole corpus before a release
-   update") — only for the site pin in task 2.
 
 ## 4. Do
 
@@ -55,11 +51,10 @@ an address (offered, never linked), mail tracking links kept once per letter and
 totals in cli-testing `performance/search/mentions/`), and the messenger list no longer picking up those rows. The
 site page is current (cli-docs#252, MAX pin v0.54.0).
 
-1. **A `mentions` group in memo** (repository `WireCatLabs/cli-memo`, owned by the memo session — agree in
-   [#849](https://github.com/WireCatLabs/cli-core/issues/849) first): `memo mentions list --source
-   document|note|email [query]`, `show`, `confirm`, `reject` over `store.sourceMentions`. The mail profile names
-   the accounts (`memo mail <profile> …` style): never all mailboxes by default. Check: a memo command test per
-   source and `--json` of `show` with `candidates`.
+1. **The `mentions` group in memo is built** (cli-memo#262, memo 0.59.0): `memo mentions list
+   <document|note|email> [query]`, `show`, `confirm`, `reject`; mail only of the accounts a repeatable `--account`
+   names, none named is `mail.account-required`. Its query fields copy `MENTION_QUERY`, which `./store` does not
+   export — export it and drop the copy if the fields change.
 2. **Mail link search is built** (`src/store/sqlite/mention-links.ts`): `url:` finds a letter by a whole tracking
    link through its site's row and the body, `link:` by a part of a link
    ([timing](https://github.com/WireCatLabs/cli-testing/blob/main/performance/search/mentions/README.md), fifth run).
@@ -69,9 +64,8 @@ site page is current (cli-docs#252, MAX pin v0.54.0).
    `places`, `mentions places`. The owner's store is rebuilt with it (totals: cli-testing, eighth run), so tg and
    max need no rebuild after they adopt 0.308.0. Precision on the owner's labels: names 10/15 right in chats, 13/15
    in mail; addresses 30/30 real, about 22/30 whole after the tail fixes.
-4. **Site** — cli-docs#281 (en/ru/es mentions page: unknown names, a street-address section) is a draft until the
-   site pins a tg on cli-core ≥ 0.308.0: `pnpm docs:check` rejects `tg personal mentions places` against an older
-   pin. After the tg release: move the tg pin (translations, release-notes review), then mark #281 ready and merge.
+4. **Site is current** (cli-docs#281 merged, tg pin v0.66.0). The site's memo guides come from memo v0.58.0,
+   before `memo mentions`; its mail guide gains the section when the memo pin moves to ≥ 0.59.0.
 5. **Open, decide only with the owner:** the same street in two cities is one place (the key is street + house; a
    postcode in the key would split a full and a brief spelling); addresses outside Europe, the UK and the US are
    found only in part; recall is not measured; names in chats are the weakest (10/15) — ask the owner which kind
