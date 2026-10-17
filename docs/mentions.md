@@ -139,8 +139,9 @@ A street address is a street word next to a name and a house number: «ул. Л�
 Parkway». Addresses in Russia, the rest of Europe, the United Kingdom and the United States are read. A number
 alone, a price or a postcode never makes an address. The mention takes the rest of the address — the flat, the
 postcode, the city, the region and the country, also from the next lines of a signature — and a confirmed place keeps it all. Matching uses the
-street and the house: «C/ Colón 5» and «Calle Colón, 5, 46004 Valencia» are one address, `calle colón 5`. Two
-streets of the same name in two cities are one address too, for now.
+street, the house and the city when one is written: «Calle Colón 5, Valencia» and «C/ Colón, 5, 46004 Valencia» are
+one address, `calle colón 5, valencia`, and the same street in Madrid is another. An address written with no city
+links to a confirmed place on that street when there is only one.
 
 ## Read what is already stored
 

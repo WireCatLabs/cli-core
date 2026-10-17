@@ -21,7 +21,7 @@ export const MENTION_VERSIONS: Record<MentionKind, number> = {
   url: 2,
   document: 1,
   "person-name": 3,
-  place: 1,
+  place: 2,
 }
 
 // Paths of t.me that are not a chat or a person: invites, stickers, proxies, the instant view.

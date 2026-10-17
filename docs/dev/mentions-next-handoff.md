@@ -66,8 +66,7 @@ site page is current (cli-docs#252, MAX pin v0.54.0).
    in mail; addresses 30/30 real, about 22/30 whole after the tail fixes.
 4. **Site is current** (cli-docs#281 merged, tg pin v0.66.0). The site's memo guides come from memo v0.58.0,
    before `memo mentions`; its mail guide gains the section when the memo pin moves to ≥ 0.59.0.
-5. **Open, decide only with the owner:** the same street in two cities is one place (the key is street + house; a
-   postcode in the key would split a full and a brief spelling); addresses outside Europe, the UK and the US are
+5. **Open, decide only with the owner:** addresses outside Europe, the UK and the US are
    found only in part; recall is not measured; names in chats are the weakest (10/15) — ask the owner which kind
    of word was wrong before tightening the rule.
 

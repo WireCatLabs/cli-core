@@ -17,6 +17,7 @@ import {
 import type { StoreContext } from "./open.js"
 import { linkIdentityToPerson, personByUid } from "./person-links.js"
 import { valueMatch } from "./phone-countries.js"
+import { placeOf } from "./place-key.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 import { writeBatch } from "./transaction.js"
 
@@ -396,13 +397,16 @@ export const confirmMention = (
         "validation_error",
         "an address is confirmed as a place of its own, with no person or organization",
       )
-    database
-      .prepare(
-        "INSERT INTO places (address, folded, author, created_at, updated_at) VALUES (?, ?, ?, ?, ?) " +
-          "ON CONFLICT (folded) DO NOTHING",
+    const known = placeOf(database)(mention.value)
+    const place =
+      known ??
+      Number(
+        database
+          .prepare(
+            "INSERT INTO places (address, folded, author, created_at, updated_at) VALUES (?, ?, ?, ?, ?) RETURNING id",
+          )
+          .get(mention.written ?? mention.value, mention.value, by.by, now, now)?.id,
       )
-      .run(mention.written ?? mention.value, mention.value, by.by, now, now)
-    const place = Number(database.prepare("SELECT id FROM places WHERE folded = ?").get(mention.value)?.id)
     return decide(database, mention, "linked", { type: "place", id: place }, by, now)
   }
   if (mention.kind === "person-name") {

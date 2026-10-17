@@ -9,6 +9,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **A place's value carries its city when the address names one** (`place` rule version 2): `calle mayor 12, madrid`
+  and `calle mayor 12, valencia` are two places; an address with no city keeps the street and house alone and links
+  to the one confirmed place on that street. `mentions rebuild place` reads stored texts again; a place confirmed
+  before keeps its decision and takes the city its address names.
 - **An agent can no longer delete for everyone**, as the standard says. The MCP `messages delete` has no
   `for_everyone` argument, so passing it is refused as unknown; the owner still has `messages delete --for-everyone`.
   A messenger whose every delete is for everyone sets the new `Messenger.deleteForMe: false`, and there the MCP
