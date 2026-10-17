@@ -35,7 +35,7 @@ existing import restrictions and type checks enforce only the subset configured 
 
 ## CLI design references
 
-The command interface follows a shared [adoption profile](STANDARD.md#external-references-and-our-adoption-profile):
+The command interface follows a shared [adoption profile](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-28--use-the-external-command-line-references-as-a-baseline-and-keep-the-projects-choices-where-they-differ):
 [POSIX utility conventions](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap12.html)
 for utility syntax, [GNU CLI conventions](https://www.gnu.org/prep/standards/html_node/Command_002dLine-Interfaces)
 for common options, and [CLIG](https://clig.dev/) for modern CLI design. The standard records our

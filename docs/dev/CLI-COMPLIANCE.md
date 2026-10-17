@@ -8,7 +8,7 @@ regression suite or agent evaluations. Tests use isolated synthetic fixtures.
 
 ## Adoption profile and references
 
-[STANDARD.md](STANDARD.md#external-references-and-our-adoption-profile) owns the external
+The handbook's [WC-CMD-28](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-28--use-the-external-command-line-references-as-a-baseline-and-keep-the-projects-choices-where-they-differ) holds the external
 references and the project's chosen profile: POSIX utility conventions, GNU interfaces, CLIG,
 MCP tools, Agent Skills, JSON Schema and agent tool-design guidance. The independent
 [CLI Agent Spec](https://cli-agent-spec.github.io/requirements/) is a checklist, not an industry

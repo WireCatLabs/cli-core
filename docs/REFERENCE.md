@@ -222,7 +222,7 @@ A locator for another messenger or account is refused. Singular `link` differs f
 
 ## Command discovery
 
-The [CLI standard](dev/STANDARD.md#external-references-and-our-adoption-profile) explains
+The handbook's [WC-CMD-28](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-28--use-the-external-command-line-references-as-a-baseline-and-keep-the-projects-choices-where-they-differ) names
 which POSIX, GNU, CLIG and agent-facing conventions we adopt. The [architecture](dev/ARCHITECTURE.md#cli-design-references)
 shows where their contracts live; the [compliance audit](dev/CLI-COMPLIANCE.md) records
 remaining gaps and deliberate differences.
