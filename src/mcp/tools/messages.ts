@@ -27,6 +27,12 @@ const isMail = (chat: string, message: string | undefined) =>
   message === undefined && isLocator(chat) && parseLocator(chat).provider === "email"
 
 export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => {
+  const tools = messageTools(messenger)
+  if (messenger.scheduledSends === false) delete tools.messages_scheduled
+  return tools
+}
+
+const messageTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
   const name = nameOf(messenger)
   return {
