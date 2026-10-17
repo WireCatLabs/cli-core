@@ -118,8 +118,8 @@ const chatTools = (messenger: Messenger): Record<string, AnyTool> => {
       }),
       annotations: READ,
       output: { entity: "member", list: true },
-      online: async (adapter, args, { guard, env }) => {
-        const key = args.deep === undefined ? undefined : casKey(messenger.app, env)
+      online: async (adapter, args, { guard, env, keyring }) => {
+        const key = args.deep === undefined ? undefined : casKey(messenger.app, env, keyring)
         const { body } = await membersAudit(servicesFor(onlineDeps(messenger, adapter, guard)), args.chat, args.query, {
           ...(args.max_pages === undefined ? {} : { budget: args.max_pages }),
           ...(args.deep === undefined ? {} : { deep: args.deep }),

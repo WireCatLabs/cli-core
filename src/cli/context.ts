@@ -1,4 +1,4 @@
-import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
+import { CliError, type KeyringStore, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import type { MessageEvent } from "../domain/models.js"
@@ -20,6 +20,8 @@ export interface BaseEnvironment {
   /** Whether a person is looking. Defaults to whether stdout is a terminal. */
   tty?: boolean
   env?: NodeJS.ProcessEnv
+  /** The OS keyring in place of the real one; every test hands in `memoryKeyring()`. */
+  keyring?: KeyringStore
   /** Ends a long-running command — `watch` — in place of Ctrl-C; tests hand one in. */
   commandSignal?: AbortSignal
   signal?: AbortSignal
@@ -124,6 +126,7 @@ export interface BaseContext {
   color: boolean
   streams: Streams
   env: NodeJS.ProcessEnv
+  keyring?: KeyringStore
   /**
    * Runs the body inside `--timeout`, closing whatever was tracked when it expires, and records it
    * when `--record` asks or it fails. Whatever holds the process open — a connection — must be
@@ -174,6 +177,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
     color,
     streams,
     env,
+    ...(environment.keyring ? { keyring: environment.keyring } : {}),
     // The deadline inside the record, so a timeout finishes the run as failed rather than leaving it running.
     run: (body, { unbounded = false, name } = {}) =>
       environment.app

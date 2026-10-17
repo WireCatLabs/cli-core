@@ -1,6 +1,6 @@
 import type { CallToolResult, McpServer, ServerContext, ToolAnnotations } from "@modelcontextprotocol/server"
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
-import { CliError, errorCodes, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
+import { CliError, errorCodes, errorObjectOf, type KeyringStore, mcpErrorResult } from "@wirecat/cli-base"
 import {
   type Effects,
   type ErrorObject,
@@ -82,6 +82,7 @@ export interface Defaults {
     Partial<Pick<Settings, "permissions" | "searchCatchUp" | "pictureSearch" | "offline">> &
     AISettings
   env: NodeJS.ProcessEnv
+  keyring?: KeyringStore
   /** The server's open models, kept between `search_conversations` calls. */
   embedders?: WarmEmbedders
   /** False when recording was explicitly disabled; stored search tools keep no query history. */

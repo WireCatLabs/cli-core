@@ -130,6 +130,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
               app: messenger.app,
               settings: defaults.settings,
               env: defaults.env,
+              keyring: defaults.keyring,
               enabled: true,
               ...(defaults.signal === undefined ? {} : { signal: defaults.signal }),
             })

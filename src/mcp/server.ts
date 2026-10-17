@@ -138,6 +138,7 @@ export const createServer = (
           guard,
           settings,
           env: context.env,
+          ...(context.keyring ? { keyring: context.keyring } : {}),
           embedders,
           history: settings.keepFailedRuns,
         },

@@ -229,7 +229,8 @@ export const contactsTools = (messenger: Messenger): Record<string, AnyTool> => 
       annotations: READ,
       served: async (services, args, defaults) => {
         const registries = args.registries !== false
-        const key = registries ? casKey(messenger.app, defaults.env) : undefined
+        const asks = registries && defaults.settings.offline !== true && registriesCover(messenger.provider)
+        const key = asks ? casKey(messenger.app, defaults.env, defaults.keyring) : undefined
         const checked = await services.botcheck.person(args.person, {
           registries,
           ...(key ? { registry: { casKey: key } } : {}),

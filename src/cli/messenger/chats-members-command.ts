@@ -71,7 +71,7 @@ export const membersCommand = (messenger: Messenger): Command => {
     ).action(async function (this: Command, chat: string, words: string[]) {
       const context = messengerContext(this, messenger)
       const { maxPages, deep } = this.opts<{ maxPages?: number; deep?: number }>()
-      const key = deep === undefined ? undefined : casKey(messenger.app, context.env)
+      const key = deep === undefined ? undefined : casKey(messenger.app, context.env, context.keyring)
       const { audit, body } = await context.withServices((services) =>
         membersAudit(services, chat, words, {
           ...(maxPages === undefined ? {} : { budget: maxPages }),

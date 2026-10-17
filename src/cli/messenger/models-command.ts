@@ -219,7 +219,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
         const stdin = environmentOf(this).stdin
         const secret = (await readSecret(`API key for ${provider}: `, stdin ? { input: stdin } : {})).trim()
         if (!secret) throw new CliError("validation_error", "no key was given — nothing was stored")
-        const source = embeddingKeys(messenger.app, context.env).write(provider, secret)
+        const source = embeddingKeys(messenger.app, context.env, context.keyring).write(provider, secret)
         renderAnswer(this, context, itemOf({ provider, stored: source }))
       })
     })
@@ -233,7 +233,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
         renderAnswer(
           this,
           context,
-          itemOf({ provider, removed: embeddingKeys(messenger.app, context.env).remove(provider) }),
+          itemOf({ provider, removed: embeddingKeys(messenger.app, context.env, context.keyring).remove(provider) }),
         )
       })
     })

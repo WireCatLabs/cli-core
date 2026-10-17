@@ -219,6 +219,7 @@ const replying = (context: MessengerContext, messenger: Messenger, since: number
         render: replyRenderer(app, profile, () => messenger.resolveSettings({ profile }, { env }), env, renderer.warn, {
           ai: true,
           signal: controller.signal,
+          keyring: context.keyring,
         }),
         openTask: (arrived) =>
           context.withStore((store, account) => openRequestTask(store, account, arrived), { name: "serve replies" }),

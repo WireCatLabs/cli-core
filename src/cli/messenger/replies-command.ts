@@ -67,7 +67,7 @@ export const repliesCommand = (messenger: Messenger): Command => {
               () => messenger.resolveSettings({ profile: settings.profile }, { env }),
               env,
               renderer.warn,
-              { ai: ai === true, preview: ai !== true, signal: controller.signal },
+              { ai: ai === true, preview: ai !== true, signal: controller.signal, keyring: context.keyring },
             ),
             ...(rule === undefined ? {} : { only: rule }),
           }),

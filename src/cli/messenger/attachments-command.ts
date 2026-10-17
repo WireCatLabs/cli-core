@@ -91,7 +91,14 @@ const extractCommand = (messenger: Messenger): Command =>
       ])
       try {
         const pipeline = ocr
-          ? gatewayOcr({ app: messenger.app, settings: context.settings, env: context.env, enabled: true, signal })
+          ? gatewayOcr({
+              app: messenger.app,
+              settings: context.settings,
+              env: context.env,
+              keyring: context.keyring,
+              enabled: true,
+              signal,
+            })
           : undefined
         const run = await context.withServices((services) =>
           services.attachments.extract({

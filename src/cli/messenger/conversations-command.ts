@@ -79,7 +79,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       if (!chat) throw new CliError("validation_error", "--analyze requires --chat")
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
       refuseLocalWrite(context, messenger.app.command, "conversations.build")
-      const target = analysisChoice(options, messenger.app, context.settings, context.env)
+      const target = analysisChoice(options, messenger.app, context.settings, context.env, context.keyring)
       const controller = new AbortController()
       context.track({ close: async () => controller.abort() })
       const maxTokens = options.maxTokens ?? 100_000
@@ -610,7 +610,8 @@ const choiceOf = (
   messenger: Messenger,
   context: MessengerContext,
   extra?: { needKey?: boolean },
-): ModelChoice => embeddingChoice(options, messenger.app, context.settings, context.env, extra)
+): ModelChoice =>
+  embeddingChoice(options, messenger.app, context.settings, context.env, { ...extra, keyring: context.keyring })
 
 /**
  * The messages leave the machine: say where, how much and what it may cost, and wait for a yes — `--yes`

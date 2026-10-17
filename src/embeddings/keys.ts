@@ -1,4 +1,10 @@
-import { type CredentialSource, Credentials, pathsAreOverridden, resolvePaths } from "@wirecat/cli-base"
+import {
+  type CredentialSource,
+  Credentials,
+  type KeyringStore,
+  pathsAreOverridden,
+  resolvePaths,
+} from "@wirecat/cli-base"
 import { type AppIdentity, envName } from "../ports/app.js"
 
 export const endpointKeyName = (baseUrl: string): string => {
@@ -11,7 +17,7 @@ export const endpointKeyName = (baseUrl: string): string => {
  * `embeddings:<provider>` under the app's own service, then `<PREFIX>_OPENAI_API_KEY` or OpenAI's own
  * `OPENAI_API_KEY` for `openai`, or the corresponding Anthropic variable, then a 0600 file. Never printed, never in an error.
  */
-export const embeddingKeys = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env) => {
+export const embeddingKeys = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env, keyring?: KeyringStore) => {
   const where = { appName: app.appName, prefix: app.envPrefix, env }
   const credentials = (provider: string) =>
     new Credentials({
@@ -22,6 +28,7 @@ export const embeddingKeys = (app: AppIdentity, env: NodeJS.ProcessEnv = process
         : {}),
       isolated: pathsAreOverridden(where),
       env,
+      ...(keyring ? { keyring } : {}),
       warn: (message) => process.stderr.write(`${message}\n`),
     })
   const account = (provider: string) => `embeddings:${provider}`

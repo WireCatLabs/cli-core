@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { type AISettings, endpoint } from "../analysis/settings.js"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
@@ -20,7 +20,7 @@ export const embeddingChoice = (
   app: AppIdentity,
   settings: AISettings,
   env: NodeJS.ProcessEnv,
-  { needKey = true }: { needKey?: boolean } = {},
+  { needKey = true, keyring }: { needKey?: boolean; keyring?: KeyringStore | undefined } = {},
 ): ModelChoice => {
   const flagsChooseProvider =
     (provider !== undefined && provider !== (settings.embeddingProvider ?? "local")) ||
@@ -45,7 +45,7 @@ export const embeddingChoice = (
     ...(dims ? { dims } : {}),
   })
   const keyName = baseUrl === undefined ? "openai" : endpointKeyName(baseUrl)
-  const key = embeddingKeys(app, env).read(keyName)?.key
+  const key = embeddingKeys(app, env, keyring).read(keyName)?.key
   if (!key && needKey && baseUrl === undefined) {
     throw new CliError(
       "authentication_error",

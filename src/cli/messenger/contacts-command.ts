@@ -263,7 +263,8 @@ export const contactsCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, person: string) {
       const { registries } = this.opts<{ registries: boolean }>()
       const context = messengerContext(this, messenger)
-      const key = registries ? casKey(messenger.app, context.env) : undefined
+      const asks = registries && !context.settings.offline && registriesCover(messenger.provider)
+      const key = asks ? casKey(messenger.app, context.env, context.keyring) : undefined
       const checked = await context.withServices((services) =>
         services.botcheck.person(person, { registries, ...(key ? { registry: { casKey: key } } : {}) }),
       )

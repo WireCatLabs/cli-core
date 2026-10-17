@@ -189,7 +189,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
           ...syncArgs(args),
           signal: defaults.signal,
           limit: size,
-          model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env),
+          model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env, { keyring: defaults.keyring }),
           ...(args.filter === undefined ? {} : { filter: args.filter }),
           ...(args.source === undefined ? {} : { source: args.source }),
           ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
@@ -220,7 +220,10 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
           profile: defaults.settings.profile,
         }).embeddings.related(args.chat, args.message, {
           limit: size,
-          model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env, { needKey: false }),
+          model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env, {
+            needKey: false,
+            keyring: defaults.keyring,
+          }),
         })
         return foundConversations("conversations related", { ...found, meaning: "searched" }, size, messenger)
       },
@@ -243,7 +246,10 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
           profile: defaults.settings.profile,
         }).embeddings.readiness({
           ...(args.chat === undefined ? {} : { chat: args.chat }),
-          model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env, { needKey: false }),
+          model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env, {
+            needKey: false,
+            keyring: defaults.keyring,
+          }),
         })
         return readinessList(found)
       },

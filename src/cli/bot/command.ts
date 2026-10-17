@@ -112,7 +112,13 @@ const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
         const rows = []
         for (const name of names) {
           const tokens =
-            bot.tokenStore?.(this, name) ?? new BotTokenStore({ app: bot.app, profile: name, env: context.env })
+            bot.tokenStore?.(this, name) ??
+            new BotTokenStore({
+              app: bot.app,
+              profile: name,
+              env: context.env,
+              ...(context.keyring ? { keyring: context.keyring } : {}),
+            })
           const stored = tokens.read()
           if (!stored) continue
           const row: Record<string, unknown> = { name, token: stored.source }
