@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.323.0 — 17.10.2026
+
 ### Fixed
 
 - **A word of a contact's name is no longer a person on its own unless it is a first name or a surname.** One
