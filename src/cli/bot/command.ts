@@ -104,7 +104,7 @@ const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
       if (check) online(context, this)
       await context.run(async (events) => {
         const names = [
-          ...new Set(["default", ...context.settings.configuredProfiles, ...registryProfiles(bot.app, context.env)]),
+          ...new Set([...context.settings.configuredProfiles, ...registryProfiles(bot.app, context.env)]),
         ].sort()
         if (context.env[tokenVariable]) {
           context.streams.diagnostic(`${tokenVariable} is set, so every name uses that one token`)

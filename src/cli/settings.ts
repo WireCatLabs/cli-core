@@ -336,6 +336,14 @@ export const settingsFor = <T extends object = Record<never, never>>(
    */
   const unnamed = (config: Config, env: NodeJS.ProcessEnv, needed: boolean): { value: string; from: Source } => {
     if (!needed) return { value: DEFAULT_PROFILE, from: NONE_NAMED }
+    if (config.default_profile !== undefined) {
+      throw new CliError(
+        "validation_error",
+        `default_profile is no longer read — name the profile: \`${app.command} ${config.default_profile} …\`; ` +
+          `\`${app.command} config unset default_profile\` removes it from the config file`,
+        { profiles: profilesOf(config, env) },
+      )
+    }
     const here = profilesOf(config, env)
     throw new CliError(
       "validation_error",
@@ -365,7 +373,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
       [
         ["first word", flags.profile],
         [PROFILE, given(env[PROFILE])],
-        [extension.sourcePaths ? "config file: default_profile" : "config file", config.default_profile],
         [PROFILE_LOCK, lock],
       ],
       undefined,
@@ -565,10 +572,15 @@ export const settingsFor = <T extends object = Record<never, never>>(
       if (kind !== undefined) {
         throw new CliError("validation_error", "default_profile is one for the whole file — drop --personal and --bot")
       }
+      if (value !== undefined) {
+        throw new CliError(
+          "validation_error",
+          `default_profile is gone: a command names its profile every time — \`${app.command} <profile> …\` or ${PROFILE}`,
+        )
+      }
       const { default_profile: _, ...rest } = config
-      const changed: Config = value === undefined ? rest : { ...rest, default_profile: usableProfileName(value) }
-      saveConfigFile(path, changed)
-      return changed.default_profile ?? null
+      saveConfigFile(path, rest)
+      return null
     }
     const section = kind === undefined ? undefined : (config[kind] ?? {})
     const current =

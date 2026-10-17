@@ -64,7 +64,9 @@ describe("HTTP MCP startup", () => {
     const { code, streams } = await cli(["mcp", "--permission", "messages.send=allow", "config", "--json"])
     expect(code).toBe(0)
     const entry = JSON.parse(streams.stdout.join("")).item.config
-    expect(entry.mcpServers.chat.args).toEqual(expect.arrayContaining(["--permission", "messages.send=allow"]))
+    expect(entry.mcpServers["chat-default"].args).toEqual(
+      expect.arrayContaining(["--permission", "messages.send=allow"]),
+    )
   })
   it.each([["--http", "--permission", "messages.send=yes"]])(
     "rejects invalid options before starting: %j",

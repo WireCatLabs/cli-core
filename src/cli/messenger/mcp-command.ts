@@ -307,7 +307,7 @@ export const serverEntry = (
     ...(Object.keys(directories).length > 0 ? { env: directories } : {}),
   }
   return {
-    config: { mcpServers: { [profile === "default" ? app.command : `${app.command}-${profile}`]: server } },
+    config: { mcpServers: { [`${app.command}-${profile}`]: server } },
     /** The path belongs to one Node version of a version manager; switching Node breaks the entry. */
     nodeBound: VERSION_MANAGER.test(execPath),
   }
