@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.328.0 — 17.10.2026
 
 ### Added
 
@@ -13,16 +13,6 @@ shape of this file.
   you" section hold the open tasks someone else does, oldest first, each with its `assignees`. Before, only
   `tasks list "assignee:any state:open"` showed them. `tag:`, `category:` and `claimed:` narrow it as they narrow
   `tasks`.
-
-### Fixed
-
-- **The personal MCP server's unreachable `store gaps` and `store jobs` tools are gone**: since the catalogue follows
-  each CLI's tree, where `store` is kept off MCP, nothing offered them, and their code only failed the coverage floor.
-
-## 0.328.0 — 17.10.2026
-
-### Added
-
 - **`refuseUnderReadOnly(command, what)`** (`@wirecat/cli-core/cli`) refuses, under `<PREFIX>_READ_ONLY`, a write
   the send guard never sees, such as linking or unlinking the device: call it first in `session start`, `session end`
   and `setup`. It fails with `permission_error` and "this process is read-only (TG_READ_ONLY) — it cannot <what>",
@@ -54,6 +44,8 @@ shape of this file.
 
 ### Fixed
 
+- **The personal MCP server's unreachable `store gaps` and `store jobs` tools are gone**: since the catalogue follows
+  each CLI's tree, where `store` is kept off MCP, nothing offered them, and their code only failed the coverage floor.
 - **`polls vote` and `polls voters` say nothing of anonymous polls where a messenger has none**
   (`pollAnonymous: false`, wa), in their help and in the agent's tool descriptions.
 - **A reader that stops reading ends a run quietly, relayed or not**: `wa chats list --json | head` through a running
