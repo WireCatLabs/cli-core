@@ -262,7 +262,13 @@ export const compareViews = (
   return best
 }
 
-export type TaskCandidate<Id> = { id: Id; views: readonly PreparedTask[]; replyChain?: boolean }
+export type TaskCandidate<Id> = {
+  id: Id
+  views: readonly PreparedTask[]
+  replyChain?: boolean
+  /** The new task's views to use against this one, when not all of them. */
+  subjectViews?: readonly PreparedTask[]
+}
 
 /** Every candidate scored against the new task, best first; ties keep the order they came in. */
 export const rankCandidates = <Id>(
@@ -270,8 +276,8 @@ export const rankCandidates = <Id>(
   candidates: readonly TaskCandidate<Id>[],
 ): (Similarity & { id: Id })[] =>
   candidates
-    .map(({ id, views: candidate, replyChain }) => ({
+    .map(({ id, views: candidate, replyChain, subjectViews }) => ({
       id,
-      ...compareViews(views, candidate, replyChain === undefined ? {} : { replyChain }),
+      ...compareViews(subjectViews ?? views, candidate, replyChain === undefined ? {} : { replyChain }),
     }))
     .sort((a, b) => b.score - a.score)

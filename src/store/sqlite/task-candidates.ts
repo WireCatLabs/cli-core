@@ -149,6 +149,9 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
     }
   }
 
+  // Two tasks an agent took from one message are two jobs it chose to split: that message's words say nothing.
+  const sameSource = (a: Side, b: Side) => a.source !== undefined && a.source.message === b.source?.message
+
   const messagesOf = (side: Side): Message[] => [...(side.source ? [side.source] : []), ...(side.linked ?? [])]
 
   /** The task's own text, then that text with each message it stands on: its source and its newest linked ones. */
@@ -243,6 +246,8 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
       const one = linkedOf(side)
       const otherSide = linkedOf(sideOf(row))
       const chain = chainOf(one)
+      if (sameSource(one, otherSide))
+        return compareViews(viewsOf(one, stemmer).slice(0, 1), viewsOf(otherSide, stemmer).slice(0, 1))
       return compareViews(viewsOf(one, stemmer), viewsOf(otherSide, stemmer), {
         replyChain: messagesOf(otherSide).some(({ message }) => chain.has(message)),
       })
@@ -311,6 +316,8 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
         views,
         chosen.map(([id]) => {
           const other = rows.get(id)?.side as Side
+          if (sameSource(side, other))
+            return { id, views: viewsOf(other, stemmer).slice(0, 1), subjectViews: views.slice(0, 1) }
           return { id, views: viewsOf(other, stemmer), replyChain: inChain(other) }
         }),
       )

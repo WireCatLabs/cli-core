@@ -206,6 +206,21 @@ const boilerStore = async (texts: string[]) => {
   return { store, tasks, add }
 }
 
+it("**two jobs taken from one message are not refused as duplicates**: the shared message says nothing", async () => {
+  const { store, tasks } = await boilerStore([
+    "Please send Alice the contract today and pay the 15000 rub invoice for the boiler repair today",
+  ])
+  try {
+    const source = "msg:chat/500/7/1"
+    await tasks.add(source, "promise", "agent", { title: "Send Alice the contract", category: "documents" })
+    expect(
+      await tasks.add(source, "request", "agent", { title: "Pay the boiler repair invoice", category: "money" }),
+    ).toMatchObject({ created: true })
+  } finally {
+    await store.close()
+  }
+})
+
 it("**compares tasks by when their messages were sent**, not by when an agent wrote them", async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-sent-")), "m.db") })
   const sent = (id: string, timestamp: string, text: string) => ({

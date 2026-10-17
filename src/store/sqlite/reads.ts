@@ -246,6 +246,7 @@ export const chatStats = ({ orm }: StoreContext, accountKey: number, chatId: Id 
     .select({
       chatId: chats.externalId,
       title: chats.title,
+      kind: chats.kind,
       messages: sql<number>`count(${messages.id})`,
       oldest: sql<number | null>`min(${messages.sentAt})`,
       newest,
@@ -260,6 +261,7 @@ export const chatStats = ({ orm }: StoreContext, accountKey: number, chatId: Id 
     .map((row) => ({
       chatId: row.chatId,
       title: row.title,
+      kind: row.kind as ChatKind,
       messages: Number(row.messages),
       oldestAt: toIso(row.oldest),
       newestAt: toIso(row.newest),

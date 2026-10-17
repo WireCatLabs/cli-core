@@ -44,11 +44,16 @@ const reviewOf = (messages: Message[]): Review => ({
   since: at(0),
   until: at(59),
   complete: true,
-  chats: [{ id: "-1001", title: "Group", kind: "group", messages, more: false }],
+  chats: [{ id: "-1001", title: "Ana", kind: "dialog", messages, more: false }],
   skipped: [],
   partial: false,
   quiet: 0,
 })
+
+const dialog = (store: Awaited<ReturnType<typeof openStore>>, id: string) =>
+  store.chats.saveChats(account, [
+    { id, title: null, kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+  ])
 
 const states = async (store: ReturnType<typeof memoryTaskStore>) =>
   (await store.list({})).map((task) => `${task.source} ${task.kind} ${task.state}`)
@@ -134,13 +139,44 @@ describe("applyTaskRules", () => {
   })
 })
 
+describe("where the rules open tasks", () => {
+  const chatOf = (kind: "group" | "channel" | "saved" | "unknown", messages: Message[]) => ({
+    chats: [{ id: "-1001", kind, messages }],
+  })
+  const asked = [
+    said("1", 1, "I can send it tomorrow", { outgoing: true }),
+    said("2", 2, "can you send the file today?", { replyToId: "1" }),
+    said("3", 3, "who brings the cake?"),
+    said("4", 4, "ok", { replyToId: "1" }),
+    said("5", 5, "Slava will bring it", { mentions: ["500"] }),
+  ]
+
+  it("**opens in a group only a question that replies to the owner, and a mention**, never a stranger's question", async () => {
+    for (const kind of ["group", "unknown"] as const) {
+      const store = memoryTaskStore()
+      await applyTaskRules(chatOf(kind, asked), { store, account })
+      expect(await states(store)).toEqual([
+        "msg:telegram/500/-1001/2 question open",
+        "msg:telegram/500/-1001/5 mention open",
+      ])
+    }
+  })
+
+  it("**opens nothing in a channel or Saved Messages**", async () => {
+    for (const kind of ["channel", "saved"] as const) {
+      const store = memoryTaskStore()
+      expect(await applyTaskRules(chatOf(kind, asked), { store, account })).toEqual({ added: 0, closed: 0, review: 0 })
+    }
+  })
+})
+
 describe("review", () => {
   it("opens the task in the store once, however often it runs, and says so", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-rules-")), "messages.db") })
     const chat: Chat = {
       id: "-1001",
-      title: "Group",
-      kind: "group",
+      title: "Ana",
+      kind: "dialog",
       unreadCount: 0,
       lastMessageAt: at(5),
       participantsCount: null,
@@ -173,12 +209,14 @@ describe("serve's rule pass", () => {
   it("opens a task when a question arrives and closes it when the owner's answer arrives", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-arrival-")), "messages.db") })
     const question = said("1", 1, "who has the keys?")
+    await dialog(store, "-1001")
     await store.messages.saveMessages(account, "-1001", [said("0", 0, "morning"), question], { via: "test" })
 
     expect(await applyTaskRulesOnArrival(store, account, question)).toEqual({ added: 1, closed: 0, review: 0 })
     expect(await applyTaskRulesOnArrival(store, account, question)).toEqual({ added: 0, closed: 0, review: 0 })
 
     const answer = said("2", 2, "I do", { outgoing: true, replyToId: "1" })
+    await dialog(store, "-1001")
     await store.messages.saveMessages(account, "-1001", [answer], { via: "test" })
     expect(await applyTaskRulesOnArrival(store, account, answer)).toEqual({ added: 0, closed: 1, review: 0 })
     expect((await store.tasks.list({})).map((task) => task.state)).toEqual(["done"])
@@ -187,6 +225,7 @@ describe("serve's rule pass", () => {
 
   it("sees an arrival the store has not saved yet", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-arrival-")), "messages.db") })
+    await dialog(store, "-1001")
 
     expect(await applyTaskRulesOnArrival(store, account, said("1", 1, "anyone?"))).toEqual({
       added: 1,
@@ -246,6 +285,7 @@ describe("a reply rule's task", () => {
 describe("the rule pass over the store", () => {
   it("reads only chats stored into after the stop point, and opens and closes as review did", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-stored-")), "messages.db") })
+    await dialog(store, "-1001")
     await store.messages.saveMessages(account, "-1001", [said("0", 0, "morning"), said("1", 1, "who has the keys?")], {
       via: "test",
     })
@@ -260,6 +300,7 @@ describe("the rule pass over the store", () => {
     })
 
     await new Promise((resolve) => setTimeout(resolve, 5))
+    await dialog(store, "-1001")
     await store.messages.saveMessages(
       account,
       "-1001",
@@ -279,7 +320,9 @@ describe("the rule pass over the store", () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-since-")), "messages.db") })
     const now = new Date(Date.UTC(2026, 9, 10))
     await store.tasks.saveFirstPassPerChat(1)
+    await dialog(store, "-1001")
     await store.messages.saveMessages(account, "-1001", [said("1", 1, "who has the keys?")], { via: "test" })
+    await dialog(store, "-2002")
     await store.messages.saveMessages(
       account,
       "-2002",
@@ -292,6 +335,7 @@ describe("the rule pass over the store", () => {
     expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 0, review: 0 })
 
     await new Promise((resolve) => setTimeout(resolve, 5))
+    await dialog(store, "-1001")
     await store.messages.saveMessages(
       account,
       "-1001",
@@ -307,6 +351,7 @@ describe("the rule pass over the store", () => {
   it("**a first sync opens no task from history by default**, counts what it held, and still sets the stop point", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-first-")), "messages.db") })
     const now = new Date(Date.UTC(2026, 9, 10))
+    await dialog(store, "-1001")
     await store.messages.saveMessages(
       account,
       "-1001",
@@ -331,6 +376,7 @@ describe("the rule pass over the store", () => {
   it("**opens only the newest task_first_pass_per_chat of a chat's history** on the first sync", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-first-n-")), "messages.db") })
     await store.tasks.saveFirstPassPerChat(1)
+    await dialog(store, "-1001")
     await store.messages.saveMessages(
       account,
       "-1001",
@@ -351,10 +397,12 @@ describe("the rule pass over the store", () => {
   it("**after the first pass, history backfilled into a chat opens nothing**: only messages sent since are new", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-backfill-")), "messages.db") })
     const now = new Date(Date.UTC(2026, 9, 10))
+    await dialog(store, "-1001")
     await store.messages.saveMessages(account, "-1001", [said("1", 1, "morning")], { via: "test" })
     await applyTaskRulesSinceLastPass(store, account, now)
 
     await new Promise((resolve) => setTimeout(resolve, 5))
+    await dialog(store, "-3003")
     await store.messages.saveMessages(account, "-3003", [said("7", 7, "who pays the rent?", { chatId: "-3003" })], {
       via: "test",
     })
@@ -362,6 +410,7 @@ describe("the rule pass over the store", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 5))
     const today = new Date().toISOString()
+    await dialog(store, "-3003")
     await store.messages.saveMessages(
       account,
       "-3003",
@@ -376,6 +425,7 @@ describe("the rule pass over the store", () => {
 describe("tasks apply", () => {
   it("lists what a chat's history would open and changes nothing; with yes it opens them", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-apply-")), "messages.db") })
+    await dialog(store, "-1001")
     await store.messages.saveMessages(
       account,
       "-1001",

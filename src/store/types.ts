@@ -126,6 +126,7 @@ export interface ChatActivity {
 export interface ChatStats {
   chatId: Id
   title: string | null
+  kind: ChatKind
   messages: number
   oldestAt: string | null
   newestAt: string | null

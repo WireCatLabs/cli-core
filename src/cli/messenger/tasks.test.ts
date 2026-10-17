@@ -62,6 +62,9 @@ const setup = async (config?: object) => {
   }
   rememberAccount(app, "default", "500", env)
   const store = await openStore({ path: env.MESSAGING_STORE })
+  await store.chats.saveChats(account, [
+    { id: "7", title: "Ana", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+  ])
   await store.messages.saveMessages(
     account,
     "7",
