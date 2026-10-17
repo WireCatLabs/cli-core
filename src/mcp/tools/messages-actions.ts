@@ -34,6 +34,8 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
     ),
   }
   if (!messenger.forwardTopic) delete (forwardInput as Partial<typeof forwardInput>).topic
+  if (messenger.silentSends === false) delete (forwardInput as Partial<typeof forwardInput>).silent
+  if (messenger.sendAs === false) delete (forwardInput as Partial<typeof forwardInput>).send_as
   return {
     messages_edit: tool({
       title: "Edit a message",

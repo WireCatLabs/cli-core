@@ -162,10 +162,12 @@ export interface Messenger extends ServiceMessenger {
   pollRevote?: boolean
   /** Whether a new poll can hide who voted for what — `polls create --anonymous`; yes when unset. WhatsApp's never can. */
   pollAnonymous?: boolean
-  /** Whether a poll can go without a notification — `polls create --silent`; yes when unset. */
-  pollSilent?: boolean
-  /** Whether a poll can be posted as another identity — `polls create --send-as`; yes when unset. */
-  pollSendAs?: boolean
+  /** Whether a send, a forward or a poll can go without a notification — `--silent`; yes when unset. */
+  silentSends?: boolean
+  /** Whether a send, a forward or a poll can be posted as another identity — `--send-as`; yes when unset. */
+  sendAs?: boolean
+  /** Whether the messenger sends a message later by itself — `messages send --at-time`; yes when unset. */
+  scheduledSends?: boolean
   /**
    * Whether `serve` may answer messages by the reply rules, and `replies` manages them; yes when unset. No: nothing
    * sends unless a typed command asked (WhatsApp bans accounts that answer like a bot).

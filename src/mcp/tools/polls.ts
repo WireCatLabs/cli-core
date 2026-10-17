@@ -125,7 +125,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
           ),
         ),
         ...((messenger.topics === false ? {} : { topic: TOPIC }) as { topic: typeof TOPIC }),
-        ...((messenger.pollSendAs === false ? {} : { send_as: SEND_AS }) as { send_as: typeof SEND_AS }),
+        ...((messenger.sendAs === false ? {} : { send_as: SEND_AS }) as { send_as: typeof SEND_AS }),
         operation_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
         quiz: v.optional(
           v.pipe(

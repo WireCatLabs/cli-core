@@ -2716,7 +2716,7 @@ describe("sending over MCP", () => {
         return { message, sendId: options.sendId }
       },
     })
-    const { call } = await connect(telegram, { own: { pollAnonymous: false, pollSendAs: false, topics: false } })
+    const { call } = await connect(telegram, { own: { pollAnonymous: false, sendAs: false, topics: false } })
     const poll = { chat: "7", text: "Friday?", answers: ["yes", "no"] }
 
     const refused = [
@@ -2733,6 +2733,30 @@ describe("sending over MCP", () => {
     ])
     expect(made.isError).toBe(false)
     expect(polls).toEqual([expect.objectContaining({ anonymous: false })])
+  })
+
+  it("offers no silent, send_as or at_time on messages send and forward where the messenger has none", async () => {
+    const sends: unknown[] = []
+    const telegram = scripted({
+      send: async (chatId, text, options) => {
+        sends.push([chatId, text])
+        return { message, sendId: options.sendId }
+      },
+    })
+    const { call } = await connect(telegram, { own: { silentSends: false, sendAs: false, scheduledSends: false } })
+
+    const refused = [
+      await call("messages send", { chat: "7", text: "hi", silent: true }),
+      await call("messages send", { chat: "7", text: "hi", send_as: "500" }),
+      await call("messages send", { chat: "7", text: "hi", at_time: "1h" }),
+      await call("messages forward", { chat: "7", message: "1", to: "8", silent: true }),
+      await call("messages forward", { chat: "7", message: "1", to: "8", send_as: "500" }),
+    ]
+    const sent = await call("messages send", { chat: "7", text: "hi" })
+
+    expect(refused.map((one) => one.body.error?.code)).toEqual(Array(5).fill("validation_error"))
+    expect(sent.isError).toBe(false)
+    expect(sends).toEqual([["7", "hi"]])
   })
 
   it("preserves topic addressing through MCP send and poll tools", async () => {

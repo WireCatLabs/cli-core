@@ -1454,7 +1454,7 @@ describe("the shared read commands", () => {
         return { message: { ...message, id: "9" }, sendId }
       },
     }
-    const open = { pollClose: false, pollRevote: false, pollAnonymous: false, pollSilent: false, pollSendAs: false }
+    const open = { pollClose: false, pollRevote: false, pollAnonymous: false, silentSends: false, sendAs: false }
 
     const close = await call(["polls", "close", "Book", "9"], async () => polling, env, {}, open)
     const revote = await call(
@@ -1479,6 +1479,23 @@ describe("the shared read commands", () => {
     expect(createHelp).not.toMatch(/--anonymous|--silent|--send-as/)
     expect(createHelp).toContain("everyone sees who voted for what")
     expect(created).toEqual([expect.objectContaining({ revote: false })])
+  })
+
+  it("**messages send and forward offer no --silent, --send-as or --at-time** where the messenger refuses them", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const plain = { silentSends: false, sendAs: false, scheduledSends: false }
+    const help = async (argv: string[]) =>
+      (await call([...argv, "--help"], async () => fake, env, {}, plain)).stdout.join("\n")
+
+    const send = await help(["messages", "send"])
+    const forward = await help(["messages", "forward"])
+    const refused = await call(["messages", "send", "Book", "hi", "--silent"], async () => fake, env, {}, plain)
+
+    expect(send).not.toMatch(/--silent|--send-as|--at-time/)
+    expect(forward).not.toMatch(/--silent|--send-as/)
+    expect(send).toContain("--reply-to")
+    expect(refused.code).toBe(2)
   })
 
   it("**creates a quiz where the messenger makes them**, and refuses quiz options that do not go together", async () => {

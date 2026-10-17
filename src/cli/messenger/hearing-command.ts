@@ -5,7 +5,7 @@ import type { Messenger, MessengerContext, ReadConnection } from "./context.js"
 
 export const TRANSCRIBE_OPTION = [
   "--transcribe",
-  "turn voice messages not heard yet into text — by the messenger, or a model on this machine; can take minutes",
+  "turn voice messages not heard yet into text — by the messenger where it can, else by a model on this machine; can take minutes",
 ] as const
 
 export const MODEL_OPTION = [

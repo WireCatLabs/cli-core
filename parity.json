@@ -3044,8 +3044,14 @@
       "in": "all",
       "options": {
         "--operation-id": "all",
-        "--send-as": "all",
-        "--silent": "all",
+        "--send-as": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp posts as the account only"
+        },
+        "--silent": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp sends every message with a notification"
+        },
         "--to": "all",
         "--topic": {
           "in": ["tg"],
@@ -3090,7 +3096,10 @@
       "options": {
         "--allow-any-file": "all",
         "--as-file": "all",
-        "--at-time": "all",
+        "--at-time": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp has no scheduled messages"
+        },
         "--caption-above": {
           "in": ["tg"],
           "reason": "MAX has no spoilers or caption placement; WhatsApp has no spoilers or caption placement"
@@ -3113,8 +3122,14 @@
         "--operation-id": "all",
         "--photo": "all",
         "--reply-to": "all",
-        "--send-as": "all",
-        "--silent": "all",
+        "--send-as": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp posts as the account only"
+        },
+        "--silent": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp sends every message with a notification"
+        },
         "--spoiler": {
           "in": ["tg"],
           "reason": "MAX has no spoilers or caption placement; WhatsApp has no spoilers or caption placement"
@@ -3282,11 +3297,11 @@
         },
         "--send-as": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp posts a poll as the account only"
+          "reason": "WhatsApp posts as the account only"
         },
         "--silent": {
           "in": ["max", "tg"],
-          "reason": "WhatsApp sends every poll with a notification"
+          "reason": "WhatsApp sends every message with a notification"
         },
         "--solution": {
           "in": ["tg"],
