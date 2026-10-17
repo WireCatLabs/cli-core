@@ -300,3 +300,17 @@ it("refuses malformed or duplicated host grants before using them", async () => 
   expect(() => f.service({ ...f.binding, reader: null as unknown as ContextEvidenceReader })).toThrow()
   expect(f.reads()).toBe(0)
 })
+
+it("does not call a short multi-line message cut", async () => {
+  const f = await setup()
+  f.db.prepare("UPDATE emails SET body_text=? WHERE id=1").run("Launch agreement\n\n  signed on Monday\n")
+  f.db.exec("DELETE FROM email_index_pending")
+  const result = await f.service().prepare("example-series", {
+    ...f.request,
+    communications: { ...f.request.communications, sources: [{ id: "mail" }] },
+  })
+  expect(result.communications?.items).toMatchObject([
+    { selectionId: "mail", text: "Launch agreement signed on Monday", textTruncated: false },
+  ])
+  expect(result.coverage.outputLimited).toBe(false)
+})
