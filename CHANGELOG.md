@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- `writeFileAtomic` writes into a folder reached through a symlink. It used to put the file in place and then
+  report a failure while syncing the folder, so a retry with `overwrite: false` failed with "already exists". The
+  folder is now resolved and opened before anything is written: a folder that cannot be used refuses the write with
+  nothing on disk, and the archive's wording no longer reaches general writes.
+
 ## 0.311.0 — 17.10.2026
 
 ### Added
