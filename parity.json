@@ -81,6 +81,10 @@
     "--as-reply": {
       "meaning": "send as a reply to the matched message"
     },
+    "--assignee": {
+      "value": "<person...>",
+      "meaning": "who does it: sender (whoever sent the task's message) or person:<id>; none clears it. Leave it out when unsure: a task with no assignee is better than none"
+    },
     "--at": {
       "value": "<HH:MM>",
       "meaning": "every day at this local time"
@@ -4438,6 +4442,7 @@
     "tasks add": {
       "in": "all",
       "options": {
+        "--assignee": "all",
         "--category": "all",
         "--description": "all",
         "--due": "all",
@@ -4531,6 +4536,7 @@
     "tasks plan": {
       "in": "all",
       "options": {
+        "--assignee": "all",
         "--category": "all",
         "--description": "all",
         "--due": "all",

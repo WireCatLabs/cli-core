@@ -204,6 +204,7 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `check` | verify, and change nothing; the answer says what is wrong and how to fix it | `audit`, `preflight` |
 | `test` | run rules over what is already stored and say what they would have done, doing none of it |  |
 | `apply` | run the owner's saved rules over what is already stored and change what they match; dry run unless --yes |  |
+| `scan` | read stored messages for what a rule finds, such as tasks, and list it; records it only with --yes |  |
 | `pause` | stop what a running process does for a profile, without stopping the process |  |
 | `resume` | restart what pause stopped |  |
 | `create` | make a thing | `mkdir` |
@@ -214,6 +215,8 @@ that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent e
 | `update` | change a thing's fields | `plan` |
 | `set` | set one named key | `configure` |
 | `unset` | remove one named key |  |
+| `insert` | put bounded rows, columns or cells before an explicit position, shifting later entries |  |
+| `format` | change how selected cells are displayed without replacing their values |  |
 | `rename` | change a thing's name only |  |
 | `start` | start a running process, or a login session |  |
 | `stop` | stop a running process |  |
@@ -922,6 +925,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--as-file` |  | send every --file as a plain file to download, a video included |  | `bot messages send` (max, tg only), `messages send` |
 | `--as-owner` |  | record a decision as the owner's although an agent's terminal runs the tool |  | `mentions confirm` (planned), `mentions reject` (planned), `tasks close` (planned), `tasks reject` (planned) |
 | `--as-reply` |  | send as a reply to the matched message |  | `replies edit` |
+| `--assignee` | `<person...>` | who does it: sender (whoever sent the task's message) or person:<id>; none clears it. Leave it out when unsure: a task with no assignee is better than none |  | `tasks add`, `tasks plan` |
 | `--at` | `<HH:MM>` | every day at this local time |  | `schedule agent` (planned), `schedule command` (planned) |
 | `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m. **schedule agent and schedule command take it for their one run: a duration from now or an ISO 8601 time** |  | `messages send`, `schedule agent` (planned), `schedule command` (planned) |
 | `--attachment` | `<n>` | which file of the message, from 1; needed when it has more than one |  | `attachments show`, `attachments text set` |
