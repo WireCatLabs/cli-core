@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`tasks agenda` lists what others owe you**: `assigned` (JSON, MCP `tasks_agenda`) and an "assigned — others owe
+  you" section hold the open tasks someone else does, oldest first, each with its `assignees`. Before, only
+  `tasks list "assignee:any state:open"` showed them. `tag:`, `category:` and `claimed:` narrow it as they narrow
+  `tasks`.
+
 ## 0.328.0 — 17.10.2026
 
 ### Added

@@ -135,6 +135,33 @@ it("lists a task when it is due, overdue, due a check or never planned, and not 
   }
 })
 
+it("lists open tasks someone else does, oldest first, as what they owe the owner", async () => {
+  const { store, tasks, agenda } = await seeded()
+  try {
+    const add = (message: string, plan = {}) => tasks.add(message, "promise", "agent", plan)
+    const older = await add("msg:chat/500/1/11", { title: "Send the contract", assignees: ["sender"] })
+    await add("msg:chat/500/2/20")
+    const newer = await add("msg:chat/500/3/30", { title: "Pay the deposit", assignees: ["sender"] })
+    const closed = await add("msg:chat/500/4/40", { assignees: ["sender"] })
+    await tasks.close(closed.task.id, { as: "done", by: "owner" })
+
+    const shown = await agenda.show({ query: kinds("") })
+    expect(shown.assigned.map(({ id, title }) => [id, title])).toEqual([
+      [older.task.id, "Send the contract"],
+      [newer.task.id, "Pay the deposit"],
+    ])
+    expect(shown.assigned[0]?.assignees).toEqual([expect.stringMatching(/^person:\d+$/)])
+    const item = v.parse(agendaEntity, agendaItem(shown))
+    expect(item.assigned[0]).toMatchObject({
+      key: older.card?.key,
+      kind: "promise",
+      assignees: shown.assigned[0]?.assignees,
+    })
+  } finally {
+    await store.close()
+  }
+})
+
 it("plans and links a task, refusing a date on a closed one and a mistyped reference", async () => {
   const { store, tasks } = await seeded()
   try {
