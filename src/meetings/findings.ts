@@ -3,6 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import { FACT_TYPES, WORK_TASK_TYPES } from "../domain/knowledge.js"
 import type { AccountKey } from "../store/types.js"
 import { canonicalMeetingReference, parseMeetingReference } from "./reference.js"
+import { meetingTimestamp } from "./timestamp.js"
 
 export const MEETING_FINDINGS_KIND = "meeting_findings"
 export interface FindingEvidence {
@@ -168,11 +169,6 @@ export const validateMeetingFindings = (input: MeetingFindingsInput): MeetingFin
       (finding.assignee === undefined) !== (finding.assigneeEvidence === undefined)
     )
       return invalid("optional dates and assignees require their supporting evidence")
-    if (
-      finding.dueAt !== undefined &&
-      (!/^\d{4}-\d{2}-\d{2}T/.test(finding.dueAt) || !Number.isFinite(Date.parse(finding.dueAt)))
-    )
-      return invalid("a due date is an ISO timestamp")
     if (finding.assignee !== undefined && !/^person:[1-9]\d*$/.test(finding.assignee))
       return invalid("an assignee must be a person reference")
     return {
@@ -184,7 +180,7 @@ export const validateMeetingFindings = (input: MeetingFindingsInput): MeetingFin
       commitment: finding.commitment,
       ...(finding.dueAt === undefined
         ? {}
-        : { dueAt: new Date(finding.dueAt).toISOString(), dueEvidence: support(finding.dueEvidence) }),
+        : { dueAt: meetingTimestamp(finding.dueAt, "finding due date"), dueEvidence: support(finding.dueEvidence) }),
       ...(finding.assignee === undefined
         ? {}
         : { assignee: finding.assignee, assigneeEvidence: support(finding.assigneeEvidence) }),

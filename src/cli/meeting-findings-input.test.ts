@@ -33,3 +33,13 @@ it("rejects actor injection, unsupported names, malformed JSON and oversized inp
   expect(() => parseMeetingFindingsJson("{")).toThrow("valid JSON")
   expect(() => parseMeetingFindingsJson(" ".repeat(65537))).toThrow("65536")
 })
+it.each(["2026-02-30T10:00:00Z", "2026-11-01T10:00:00"])("rejects an ambiguous or invalid due date: %s", (due_at) => {
+  const findings = input.findings.map((finding) => ({ ...finding, due_at }))
+  expect(() => parseMeetingFindingsJson(JSON.stringify({ ...input, findings }))).toThrow()
+})
+it("normalizes an explicitly offset due date", () => {
+  const findings = input.findings.map((finding) => ({ ...finding, due_at: "2026-11-01T12:00:00+02:00" }))
+  expect(parseMeetingFindingsJson(JSON.stringify({ ...input, findings })).findings[0]).toMatchObject({
+    dueAt: "2026-11-01T10:00:00.000Z",
+  })
+})
