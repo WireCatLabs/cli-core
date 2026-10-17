@@ -757,7 +757,7 @@
     },
     "--permission": {
       "value": "<key=level>",
-      "meaning": "override a permission for this MCP server only; repeat for more keys"
+      "meaning": "make a permission stricter for this MCP server only, like messages.send=deny; it never loosens the profile; repeat for more keys"
     },
     "--personal": {
       "meaning": "the personal account's section of the profile's settings"

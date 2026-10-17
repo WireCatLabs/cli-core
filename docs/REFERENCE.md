@@ -411,10 +411,11 @@ Writes over MCP show no form, over stdio or HTTP: the profile's permissions deci
 separate and cannot be verified by the server; its “always allow” setting may permit later calls
 without another prompt.
 
-Repeat `--permission key=level` to override profile permissions only for the server process.
-For example, `--permission messages.send=allow` enables sending even in a read-only profile.
-A broader key overrides saved descendant keys; built-in defaults still tighten broader grants.
-Recipient restrictions and hourly limits remain in effect; no saved configuration is changed.
+Repeat `--permission key=level` to make the profile's permissions stricter for the server process
+only: `--permission messages.send=deny` stops sending, `--permission chats=readonly` keeps chats
+read-only. An override that would loosen the profile, such as `messages.send=allow` in a read-only
+profile, is refused at startup, naming the key. Recipient restrictions and hourly limits remain in
+effect; no saved configuration is changed.
 
 The browser connector uses the tunnel's HTTPS URL ending in `/mcp`, with the owner OAuth login.
 Both legacy session-based and modern HTTP MCP clients are supported. Web clients can use tools

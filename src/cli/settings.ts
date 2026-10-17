@@ -556,7 +556,8 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const level = name === "permissions" && rest.length > 0 ? rest.join(".") : undefined
     const modelField = /^models\.([a-z][a-z0-9-]*)\.(provider|model|base_url)$/.exec(setting)
     if (!allSettings.includes(setting) && level === undefined && !modelField) {
-      throw new CliError("validation_error", `no setting called "${setting}" — one of: ${allSettings.join(", ")}`)
+      const offered = value === undefined ? allSettings : allSettings.filter((one) => one !== "default_profile")
+      throw new CliError("validation_error", `no setting called "${setting}" — one of: ${offered.join(", ")}`)
     }
     if (profile !== undefined && defaultsOnlyKeys.includes(setting)) {
       throw new CliError(

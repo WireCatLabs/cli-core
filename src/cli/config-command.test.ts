@@ -102,6 +102,26 @@ describe("config", () => {
     expect(JSON.parse(readFileSync(file, "utf8")).default_profile).toBeUndefined()
   })
 
+  it("lists default_profile under `config unset` only", async () => {
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    const help = async (action: string) => {
+      const streams = captureStreams()
+      await run(
+        ["config", action, "--help"],
+        { app, commands: () => [configCommand(app, config)] },
+        { streams, tty: false, env },
+      )
+      return streams.stdout.join("")
+    }
+
+    expect(await help("set")).not.toContain("default_profile")
+    expect(await help("unset")).toContain("default_profile")
+    expect((await call(["home", "config", "set", "nonsense", "1"], env)).stderr.join("\n")).not.toContain(
+      "default_profile",
+    )
+  })
+
   it("refuses to unset default_profile from a process locked to one profile", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE_LOCK: "work" }
