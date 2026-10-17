@@ -93,7 +93,10 @@ describe("reading back what the package manager installed", () => {
       latest: "2.0.0",
       installed: "1.5.0",
       updated: true,
-      heldBack: { until: "2026-10-13T01:25:01.496Z", command: "pnpm add -g @synthetic/cli@2.0.0" },
+      heldBack: {
+        until: "2026-10-13T01:25:01.496Z",
+        command: "pnpm add -g @synthetic/cli@2.0.0 --config.minimumReleaseAgeExclude=@synthetic/*",
+      },
     })
   })
 

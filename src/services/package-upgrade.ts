@@ -71,7 +71,8 @@ export const upgradePackage = async (
   const heldBack = {
     // pnpm 11 resolves `@latest` to the newest version older than minimumReleaseAge, 1 day by default.
     until: installer === "pnpm" ? dayAfter(await ports.publishedAt?.(latest)) : null,
-    command: [...argv.slice(0, -1), `${packageName}@${latest}`].join(" "),
+    // Only the package word changes: cli-base puts pnpm's minimumReleaseAge exemption after it.
+    command: argv.map((word) => (word === `${packageName}@latest` ? `${packageName}@${latest}` : word)).join(" "),
   }
   if (installed === current) return { result: { ...read, heldBack }, reason: "held_back", left: [] }
   return { ...(await restart({ ...read, heldBack }, ports)), reason: "held_back" }

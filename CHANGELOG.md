@@ -7,8 +7,28 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`tasks apply` is now `tasks scan`** (owner, 2026-10-17): the MCP tool is `tasks_scan` and the permission key
+  `tasks.scan`. Same behaviour: lists what a chat's history would open, records it only with `--yes`.
+
+### Added
+
+- **Tasks have assignees** (owner, 2026-10-17: a task is also what someone owes the owner). `tasks add` and
+  `tasks plan` take `--assignee sender` (whoever sent the task's message) or `--assignee person:<id>`, several at
+  once; `--assignee none` clears them. MCP `tasks_add` and `tasks_plan` take `assignee`. The card prints each
+  assignee. A sender the store knows no person for leaves the task unassigned rather than refused.
+  `tasks list "assignee:any state:open"` lists what others owe the owner; `assignee:none` and `assignee:person:<id>`
+  narrow it.
+- **A group tagged `watch-tasks` gets every unanswered question as a task**, whoever it is for
+  (`tags add --chat <group> watch-tasks`); untagged groups keep only what is addressed to the owner.
+
 ### Fixed
 
+- **`upgrade`'s "held back" hint names the package again with cli-base 0.40.2 or newer.** cli-base now ends the pnpm
+  upgrade command with `--config.minimumReleaseAgeExclude=<scope>/*`; the hint replaced the last word, so it printed
+  `pnpm add -g <pkg>@latest <pkg>@<version>` without the exemption. It now replaces the package word and keeps the
+  flag.
 - **A saint's name and a city that is also a first name are no longer taken for an unknown person.** No name after
   Saint, St., Sant, San, Santa, São, Святого, Святой, Св. or Девы (Saint Michael's Bridge, Coves de Sant Josep, San
   Francisco, Девы Марии), and no single Russian name in the prepositional case right after «в»/«во» («во Владимире»,

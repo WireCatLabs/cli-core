@@ -15,6 +15,7 @@ import {
   type TaskRelation,
   type TaskRelationKind,
 } from "../store/index.js"
+import type { Author } from "../store/sqlite/memories.js"
 import type { AccountKey, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
 import { type ColumnMap, queryFilter } from "../store/store.js"
 import {
@@ -63,6 +64,11 @@ export const TASK_QUERY = {
         relation: "an agent's close waits on the owner: tasks close confirms it, tasks reject refuses it",
       },
       tag: { type: "kw", example: "tag:urgent", relation: "a tag put on the task with tags add --task" },
+      assignee: {
+        type: "kw",
+        example: "assignee:any",
+        relation: "who does it: any (someone owes it), none, or a person (person:12) — tasks add/plan --assignee",
+      },
     },
     examples: {
       key: "key:Q-15",
@@ -123,6 +129,18 @@ const taskColumns = (groups: ReadonlyMap<string, string>): ColumnMap => ({
   source_message: { type: "ref", sql: "t.source_locator" },
   reason: { type: "kw", sql: "t.close_reason_folded", folded: true },
   close: { where: () => ({ sql: "t.close_suggested_as IS NOT NULL", params: [] }) },
+  assignee: {
+    where: (node) => {
+      const assigned = "SELECT 1 FROM task_assignments a WHERE a.task_id = t.id AND a.role = 'assignee'"
+      const value = node.value.trim().toLowerCase()
+      if (value === "any") return { sql: `EXISTS (${assigned})`, params: [] }
+      if (value === "none") return { sql: `NOT EXISTS (${assigned})`, params: [] }
+      const id = /^(?:person:)?(\d+)$/.exec(value)?.[1]
+      if (id === undefined)
+        throw new CliError("validation_error", `assignee: takes any, none or person:<id>, not "${singleLine(value)}"`)
+      return { sql: `EXISTS (${assigned} AND a.assignee_type = 'person' AND a.assignee_id = ?)`, params: [Number(id)] }
+    },
+  },
   due_at: TIME("t.due_at"),
   closed_at: TIME("t.closed_at"),
   created_at: TIME("t.created_at"),
@@ -156,6 +174,11 @@ export interface TaskPlan {
   nextCheckAt?: Date | null
   /** A name from the category list; anything else is refused with the list. */
   category?: string
+  /**
+   * Who does it: `sender` (whoever sent the task's message) or `person:<id>`; replaces the task's assignees, and
+   * `null` clears them. A sender the store knows no person for leaves the task unassigned rather than refused.
+   */
+  assignees?: string[] | null
 }
 
 /** What a task may be linked to: what it is about, what shows it, what it came from. */
@@ -345,8 +368,26 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
     const open = (await store.tasks.get(id))?.state === "open"
     if (!open && (plan.dueAt != null || plan.nextCheckAt != null))
       throw new CliError("validation_error", "a closed task takes no due date or next check; it stays closed")
-    await store.tasks.edit(id, plan, by === "owner" ? "owner" : { bot: by })
+    const { assignees, ...fields } = plan
+    const author = by === "owner" ? "owner" : { bot: by }
+    await store.tasks.edit(id, fields, author)
+    if (assignees !== undefined) await assign(store, id, assignees, author)
     return cardOf(store, id)
+  }
+  const assign = async (store: MessageStore, id: string, given: string[] | null, by: Author) => {
+    const wanted = new Set<string>()
+    for (const one of given ?? []) {
+      const who = one.trim()
+      if (who === "sender") {
+        const sender = await store.tasks.sourceSender(id)
+        if (sender) wanted.add(sender)
+      } else if (/^person:\d+$/.test(who)) wanted.add(who)
+      else throw new CliError("validation_error", `an assignee is sender or person:<id>, not "${singleLine(who)}"`)
+    }
+    const current = (await store.tasks.details(id)).assignments.filter((one) => one.role === "assignee")
+    for (const one of current) if (!wanted.has(one.to)) await store.tasks.unassign(id, one, by)
+    for (const to of wanted)
+      if (!current.some((one) => one.to === to)) await store.tasks.assign(id, { to, role: "assignee" }, by)
   }
   /**
    * A message linked to a task is read by the comparison, so the task may now look like another one: the pairs go to

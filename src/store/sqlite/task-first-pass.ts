@@ -3,7 +3,7 @@ import type { CacheDatabase } from "../driver.js"
 
 /**
  * How many tasks the task rules may open per chat on an account's first pass after a sync. 0 by default (owner,
- * 2026-10-17): a first sync reads history, and history is the owner's to dig into with `tasks apply`, not ours.
+ * 2026-10-17): a first sync reads history, and history is the owner's to dig into with `tasks scan`, not ours.
  */
 export const DEFAULT_FIRST_PASS_PER_CHAT = 0
 

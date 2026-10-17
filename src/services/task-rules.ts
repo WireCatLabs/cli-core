@@ -45,6 +45,29 @@ export const RULES_IN: Record<ChatKind, "all" | "addressed" | "none"> = {
   saved: "none",
 }
 
+/** A group the owner tagged so: every unanswered question in it opens a task, whoever it is for (owner, 2026-10-17). */
+export const WATCH_TAG = "watch-tasks"
+
+const scopeOf = (kind: ChatKind, watched: boolean) =>
+  watched && RULES_IN[kind] === "addressed" ? "all" : RULES_IN[kind]
+
+const watchedChats = async (store: MessageStore, account: AccountKey): Promise<Set<Id>> =>
+  new Set(
+    (await store.tags.tags(account, { tag: WATCH_TAG, type: "chat" })).flatMap((one) =>
+      one.chatId ? [one.chatId] : [],
+    ),
+  )
+
+/** `review`'s chats, each marked when the owner tagged it watch-tasks. */
+export const withWatched = async <Chat extends { id: Id }>(
+  store: MessageStore,
+  account: AccountKey,
+  review: { chats: Chat[] },
+): Promise<{ chats: (Chat & { watched: boolean })[] }> => {
+  const watched = await watchedChats(store, account)
+  return { chats: review.chats.map((chat) => ({ ...chat, watched: watched.has(chat.id) })) }
+}
+
 const repliesToOwner = (message: Message, messages: readonly Message[]) => {
   const to = message.replyTo?.id ?? message.replyToId
   const quoted = to === undefined ? undefined : messages.find((one) => one.id === to)
@@ -52,7 +75,7 @@ const repliesToOwner = (message: Message, messages: readonly Message[]) => {
 }
 
 export const applyTaskRules = async (
-  review: { chats: Pick<ReviewChat, "id" | "messages" | "kind">[] },
+  review: { chats: (Pick<ReviewChat, "id" | "messages" | "kind"> & { watched?: boolean })[] },
   {
     store,
     account,
@@ -104,7 +127,7 @@ export const applyTaskRules = async (
   const hasTask = async (message: Message) => (await store.findBySource(owner, sourceOf(message))).length > 0
 
   for (const chat of review.chats) {
-    const scope = RULES_IN[chat.kind]
+    const scope = scopeOf(chat.kind, chat.watched === true)
     if (scope === "none") continue
     const opens: { message: Message; kind: TaskKind }[] = []
     for (const { question, answer } of questions(chat.messages, { answerers: new Set() })) {
@@ -153,7 +176,16 @@ export const applyTaskRulesOnArrival = async (
     (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp),
   )
   return applyTaskRules(
-    { chats: [{ id: message.chatId, messages, kind: await kindOf(store, account, message.chatId) }] },
+    {
+      chats: [
+        {
+          id: message.chatId,
+          messages,
+          kind: await kindOf(store, account, message.chatId),
+          watched: (await watchedChats(store, account)).has(message.chatId),
+        },
+      ],
+    },
     { store: store.tasks, account, categories: await store.tasks.categories() },
   )
 }
@@ -177,6 +209,7 @@ export const applyTaskRulesToStored = async (
 ): Promise<RuleResult & { until: string | null }> => {
   const result: RuleResult & { until: string | null } = { added: 0, closed: 0, review: 0, until: since ?? null }
   const categories = await store.tasks.categories()
+  const watched = await watchedChats(store, account)
   for (const chat of await store.chats.chatStats(account)) {
     if (chat.lastStoredAt === null || (since !== undefined && chat.lastStoredAt <= since)) continue
     // A skipped chat still moves the stop point, or the next pass would read all of it as new.
@@ -196,7 +229,7 @@ export const applyTaskRulesToStored = async (
       limit: Math.min(ARRIVAL_WINDOW + fresh, STORED_PASS_LIMIT),
     })
     const pass = await applyTaskRules(
-      { chats: [{ id: chat.chatId, messages: page.items, kind: chat.kind }] },
+      { chats: [{ id: chat.chatId, messages: page.items, kind: chat.kind, watched: watched.has(chat.chatId) }] },
       { store: store.tasks, account, categories, ...(openLimit === undefined ? {} : { openLimit }) },
     )
     result.added += pass.added
@@ -218,7 +251,7 @@ export const FIRST_PASS_DAYS = 14
  * The task rules over what a sync stored, from where the account's last pass stopped. The first pass reads only
  * chats with a message in the last FIRST_PASS_DAYS, so a store that already holds years of chats opens no task
  * for a question asked long ago, and opens at most `task_first_pass_per_chat` per chat (0 by default): what it
- * holds back is counted, for the owner to build with `tasks apply`.
+ * holds back is counted, for the owner to build with `tasks scan`.
  */
 export const applyTaskRulesSinceLastPass = async (
   store: MessageStore,
@@ -269,7 +302,7 @@ const ownerAnswered = (messages: Message[], index: number): boolean => {
   })
 }
 
-/** What `tasks apply` did, or would do without `--yes`, in one chat. */
+/** What `tasks scan` did, or would do without `--yes`, in one chat. */
 export interface ChatRulePass extends RuleResult {
   chat: string
   messages: number
@@ -277,7 +310,7 @@ export interface ChatRulePass extends RuleResult {
 }
 
 /**
- * `tasks apply`: the task rules over the newest `last` stored messages of chats the owner names — how a chat's
+ * `tasks scan`: the task rules over the newest `last` stored messages of chats the owner names — how a chat's
  * history becomes tasks when the first sync left it alone. Without `yes` it changes nothing and lists what would
  * open; with it, it opens them through the duplicate check, as a sync's pass would.
  */
@@ -288,12 +321,17 @@ export const applyTaskRulesToChats = async (
   { last = ARRIVAL_WINDOW, yes = false }: { last?: number; yes?: boolean } = {},
 ): Promise<ChatRulePass[]> => {
   const categories = await store.tasks.categories()
+  const watched = await watchedChats(store, account)
   const passes: ChatRulePass[] = []
   for (const chat of chatIds) {
     const page = await store.messages.messages(account, chat, { limit: Math.min(last, STORED_PASS_LIMIT) })
     const tasks: HeldTask[] = []
     const pass = await applyTaskRules(
-      { chats: [{ id: chat, messages: page.items, kind: await kindOf(store, account, chat) }] },
+      {
+        chats: [
+          { id: chat, messages: page.items, kind: await kindOf(store, account, chat), watched: watched.has(chat) },
+        ],
+      },
       { store: store.tasks, account, categories, dryRun: !yes, onHeld: (task) => tasks.push(task) },
     )
     passes.push({ chat, messages: page.items.length, ...pass, tasks })

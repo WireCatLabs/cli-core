@@ -162,6 +162,21 @@ describe("where the rules open tasks", () => {
     }
   })
 
+  it("**opens every unanswered question in a group the owner tagged watch-tasks**, whoever it is for", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-watch-")), "messages.db") })
+    await store.chats.saveChats(account, [
+      { id: "-1001", title: "Team", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(account, "-1001", asked, { via: "test" })
+    const opened = async () =>
+      (await applyTaskRulesToChats(store, account, ["-1001"]))[0]?.tasks.map((task) => task.source.split("/").pop())
+
+    expect(await opened()).toEqual(["2", "5"])
+    await store.tags.addTags(account, { type: "chat", chatId: "-1001" }, ["watch-tasks"])
+    expect(await opened()).toEqual(["2", "3", "4", "5"])
+    await store.close()
+  })
+
   it("**opens nothing in a channel or Saved Messages**", async () => {
     for (const kind of ["channel", "saved"] as const) {
       const store = memoryTaskStore()
@@ -422,7 +437,7 @@ describe("the rule pass over the store", () => {
   })
 })
 
-describe("tasks apply", () => {
+describe("tasks scan", () => {
   it("lists what a chat's history would open and changes nothing; with yes it opens them", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-apply-")), "messages.db") })
     await dialog(store, "-1001")
