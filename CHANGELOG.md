@@ -33,6 +33,13 @@ shape of this file.
 
 ### Fixed
 
+- **The preparation source flag advertises a vocabulary-compatible value name.** `--context-source <id=cursor>` still accepts either a selected ID or ID with its continuation cursor; the optional cursor syntax and runtime behavior are unchanged.
+- **`polls vote` and `polls voters` say nothing of anonymous polls where a messenger has none**
+  (`pollAnonymous: false`, wa), in their help and in the agent's tool descriptions.
+- **A reader that stops reading ends a run quietly, relayed or not**: `wa chats list --json | head` through a running
+  `serve` kept the client streaming into the closed pipe, and an EPIPE after `run()` returned printed a stack trace.
+  The relay client now ends with 0 when its output closes, which ends the command in serve, and `run()` keeps
+  EPIPE quiet on stdout and stderr for the rest of the process. A CLI can drop its own `process.exit(0)` on EPIPE.
 
 ### Changed — may break callers
 
