@@ -3015,7 +3015,7 @@ describe("sending over MCP", () => {
     expect(marks).toEqual([["7", "1"]])
   })
 
-  it("**deletes the owner's copy with no form at level ask**, and never deletes for everyone", async () => {
+  it("**deletes the owner's copy with no form at level ask**, and for everyone only with for_everyone (BUG-274)", async () => {
     const deletions: unknown[] = []
     const telegram = scripted({
       delete: async (chatId, ids, options) => {
@@ -3025,10 +3025,8 @@ describe("sending over MCP", () => {
     const { call } = await connect(telegram, {})
     const readonly = await (await connect(telegram, { config: levels({ messages: "readonly" }) })).client.commands()
 
-    const refused = await call("messages delete", { chat: "7", messages: ["1", "2"], for_everyone: true })
-    expect(refused.isError).toBe(true)
-    expect(deletions).toEqual([])
     const { body } = await call("messages delete", { chat: "7", messages: ["1", "2"] })
+    const everyone = await call("messages delete", { chat: "7", messages: ["3"], for_everyone: true })
 
     expect(readonly).not.toContain("messages delete")
     expect(body.item).toEqual({
@@ -3037,7 +3035,17 @@ describe("sending over MCP", () => {
       deleted: ["1", "2"],
       for_everyone: false,
     })
-    expect(deletions).toEqual([["7", ["1", "2"], { forEveryone: false }]])
+    expect(everyone.body.item).toMatchObject({ deleted: ["3"], for_everyone: true })
+    expect(deletions).toEqual([
+      ["7", ["1", "2"], { forEveryone: false }],
+      ["7", ["3"], { forEveryone: true }],
+    ])
+    const denied = await (await connect(telegram, { config: levels({ "messages.delete": "deny" }) })).call(
+      "messages delete",
+      { chat: "7", messages: ["4"], for_everyone: true },
+    )
+    expect(denied.isError).toBe(true)
+    expect(deletions).toHaveLength(2)
   })
 
   it("**sends with no form where the level is ask**", async () => {
