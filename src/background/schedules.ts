@@ -210,7 +210,8 @@ export const systemdTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS
           "",
           "[Timer]",
           ...("every" in when
-            ? [`OnActiveSec=${when.every}min`, `OnUnitActiveSec=${when.every}min`]
+            ? // From when a run ends: counted from its start, a run longer than the interval left no next run.
+              [`OnActiveSec=${when.every}min`, `OnUnitInactiveSec=${when.every}min`]
             : // Persistent: a run missed while the machine slept happens when it wakes.
               [`OnCalendar=${"daily" in when ? `*-*-* ${when.daily}:00` : localStamp(when.once)}`, "Persistent=true"]),
           "",

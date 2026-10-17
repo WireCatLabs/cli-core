@@ -102,7 +102,7 @@ describe.runIf(posix)("schedule on Linux", () => {
     expect(readFileSync(join(units, "chat-schedule-sync.service"), "utf8")).toContain(
       `ExecStart="/opt/node" "/opt/chat/bin/chat.js" "schedule" "exec" "${file}"`,
     )
-    expect(readFileSync(join(units, "chat-schedule-sync.timer"), "utf8")).toContain("OnUnitActiveSec=15min")
+    expect(readFileSync(join(units, "chat-schedule-sync.timer"), "utf8")).toContain("OnUnitInactiveSec=15min")
     expect(ran.map(({ argv }) => argv.join(" "))).toEqual([
       "systemctl --user daemon-reload",
       "systemctl --user enable --now chat-schedule-sync.timer",
