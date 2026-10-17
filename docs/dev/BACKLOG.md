@@ -71,6 +71,7 @@ Open work only. A finished item is deleted; its record is the merged pull reques
   `--model`, `--provider`, `--source`). `--provider` names an AI model provider on `conversations build/embed/
   related/status` and `search conversations` but a messenger elsewhere, and `tags remove --source` means
   manual/auto; renaming them (`--model-provider`, `--origin`) breaks tg's and max's scripts, so it waits for a
-  breaking release with a deprecation alias. `store` destructive commands (`reset`, `restore`, `clear`, `migrate`,
-  `repair`, `copies delete`, `decrypt`) are refused under `<PREFIX>_READ_ONLY` only by tg's and max's own hooks;
-  moving that refusal here would let them drop it.
+  breaking release, with the old names as aliases (decided 2026-10-17).
+- **`<PREFIX>_READ_ONLY` refuses the destructive `store` commands here** (`reset`, `restore`, `clear`, `migrate`,
+  `repair`, `copies delete`, `decrypt`): today only tg's and max's own hooks refuse them. Decided 2026-10-17 for the
+  next batch; then tg and max drop their hooks.
