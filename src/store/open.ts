@@ -14,7 +14,12 @@ import { type CacheDatabase, PRAGMAS } from "./driver.js"
  */
 export const openCache = async (path: string): Promise<CacheDatabase> => {
   const database = await openFile(path)
-  database.exec(PRAGMAS)
+  try {
+    database.exec(PRAGMAS)
+  } catch (error) {
+    database.close()
+    throw error
+  }
   return database
 }
 
