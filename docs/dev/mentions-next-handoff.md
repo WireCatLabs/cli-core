@@ -1,18 +1,20 @@
-# Handoff — mentions: next steps after 0.284–0.291 (2026-10-15)
+# Handoff — mentions: next steps after 0.308.0 (2026-10-17)
 
 The trail, optional, grep by id: the cli-private journal `docs_ai/journal/2026-10-13-field-test-followups.md`
-(NEED-1122, NEED-1123, NEED-1129, RISK-1229 — real-store totals live there, never here).
+(NEED-1122, NEED-1123, NEED-1129, RISK-1229, NEED-1383–1399, TASK-630 — real-store totals live there, never here).
 
 ## 1. What this is
 
-Mentions are phones, e-mail addresses, links, Google documents and known people's names that cli-core finds by
+Mentions are phones, e-mail addresses, links, Google documents, people's names and street addresses that cli-core finds by
 rule in every stored text and keeps in the `mentions` table, for search (`phone:`, `domain:`, `mentions:`) and
 for review (`mentions list|show|confirm|reject|rebuild|domains`). Built so far: message text, files and voice
 notes, documents, notes and mail (store version 16); phone numbers of 47 countries by the store-wide setting
 `phone_countries`; `mentions list --new` with a review step after `messages sync`; `--all-in-chat` for names;
-`t.me` links resolved to chats. What it is and how it works: [MENTIONS.md](MENTIONS.md); the design and the
+`t.me` links resolved to chats; names of people the store does not know and street addresses of Europe, the UK
+and the US, a confirmed address kept in `places` (store version 18, 0.308.0). What it is and how it works: [MENTIONS.md](MENTIONS.md); the design and the
 owner's decisions: [mentions-plan.md](mentions-plan.md); the user's page: [../mentions.md](../mentions.md).
-Released: cli-core ≥ 0.284.0, tg 0.60.0 and max 0.54.0 carry it.
+Released: cli-core ≥ 0.284.0, tg 0.60.0 and max 0.54.0 carry it; names and addresses need cli-core ≥ 0.308.0 (tg and
+max not on it yet, 2026-10-17).
 
 ## 2. Orient in one call
 
@@ -63,11 +65,17 @@ site page is current (cli-docs#252, MAX pin v0.54.0).
    ([timing](https://github.com/WireCatLabs/cli-testing/blob/main/performance/search/mentions/README.md), fifth run).
    Left open: `link:` reads a whole body, so it can match a part outside a link in a letter that holds a tracking
    link — narrow it only if the owner reports such noise.
-3. **After tg and max release on the cli-core with #1310**: on the owner's store, with the released tg only,
-   `mentions rebuild url` (shrinks the table; count rows before and after, totals only), then the site pin move
-   and on the mentions page: mail links kept per site, `link:` for a part of a link (needs the release with it).
-4. **Phase 3, unknown names and places** — only with the owner: it needs a labelled sample of the owner's chats
-   to measure precision. Ask before starting.
+3. **Phase 3 is built** (#1384, 0.308.0): unknown names (`findUnknownNames`), `place` (`src/domain/places.ts`),
+   `places`, `mentions places`. The owner's store is rebuilt with it (totals: cli-testing, eighth run), so tg and
+   max need no rebuild after they adopt 0.308.0. Precision on the owner's labels: names 10/15 right in chats, 13/15
+   in mail; addresses 30/30 real, about 22/30 whole after the tail fixes.
+4. **Site** — cli-docs#281 (en/ru/es mentions page: unknown names, a street-address section) is a draft until the
+   site pins a tg on cli-core ≥ 0.308.0: `pnpm docs:check` rejects `tg personal mentions places` against an older
+   pin. After the tg release: move the tg pin (translations, release-notes review), then mark #281 ready and merge.
+5. **Open, decide only with the owner:** the same street in two cities is one place (the key is street + house; a
+   postcode in the key would split a full and a brief spelling); addresses outside Europe, the UK and the US are
+   found only in part; recall is not measured; names in chats are the weakest (10/15) — ask the owner which kind
+   of word was wrong before tightening the rule.
 
 ## 5. What bites
 
