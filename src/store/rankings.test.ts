@@ -114,6 +114,40 @@ describe("stored rankings", () => {
       excludedMinimum: 1,
     })
   })
+  it("splits a message's reactions by emoji, most first, only when ranking messages by reactions", async () => {
+    const context = await open()
+    const stored = (pk: number, reactions: string) =>
+      context.database.prepare("UPDATE messages SET reactions=? WHERE id=?").run(reactions, pk)
+    put(context, 1, 1, { views: 3 })
+    stored(
+      1,
+      JSON.stringify({
+        total: 7,
+        mine: null,
+        counts: [
+          { reaction: "😂", count: 3 },
+          { reaction: "👍", count: 4 },
+        ],
+      }),
+    )
+    put(context, 2, 1, { views: 2 })
+    stored(2, JSON.stringify({ total: 5, mine: null, counts: [{ reaction: "👍", count: "5" }] }))
+    put(context, 3, 2, { reactions: 1 })
+    stored(3, "{not json")
+    const byReactions = run(context, "messages", { measure: "reactions" })
+    expect(byReactions.items.map(({ id, reactions }) => [id, reactions])).toEqual([
+      [
+        "1",
+        [
+          { reaction: "👍", count: 4 },
+          { reaction: "😂", count: 3 },
+        ],
+      ],
+      ["2", undefined],
+    ])
+    expect(run(context, "messages", { measure: "views" }).items.every((row) => !("reactions" in row))).toBe(true)
+    expect(run(context, "contacts", { measure: "reactions" }).items.every((row) => !("reactions" in row))).toBe(true)
+  })
   it("labels partial reaction sums and excludes them from scores", async () => {
     const context = await open()
     put(context, 1, 1, { reactions: 5 })

@@ -14,6 +14,7 @@ import type { Messenger } from "./context.js"
 import { searchesCommand } from "./searches-command.js"
 import { statsCommand } from "./stats-command.js"
 
+const SPLIT = ["😂", "👍", "🔥", "❤", "🎉", "👏"].map((reaction, index) => ({ reaction, count: index === 1 ? 9 : 1 }))
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const setup = async (permissions?: object) => {
   const root = mkdtempSync(join(tmpdir(), "ranking-cli-"))
@@ -48,7 +49,7 @@ const setup = async (permissions?: object) => {
       editedAt: null,
       replyTo: null,
       forwardedFrom: null,
-      reactions: { total: id, counts: [], mine: null },
+      reactions: { total: id, counts: id === 3 ? SPLIT : [], mine: null },
       outgoing: false,
       attachments: [],
       providerMetadata: { views: id, graph: { version: 1, reply: null } },
@@ -66,12 +67,12 @@ const setup = async (permissions?: object) => {
     connect,
     chatArgument: "a chat",
   }
-  const call = async (args: string[]) => {
+  const call = async (args: string[], tty = false) => {
     const streams = captureStreams()
     const code = await run(
       args,
       { app, commands: () => [statsCommand(messenger), searchesCommand(messenger)] },
-      { streams, tty: false, env },
+      { streams, tty, env },
     )
     return { code, stdout: streams.stdout.join("\n"), stderr: streams.stderr.join("\n") }
   }
@@ -79,6 +80,18 @@ const setup = async (permissions?: object) => {
 }
 
 describe("ranking command views", () => {
+  it("splits the top messages' reactions by emoji: five in the table, all in JSON", async () => {
+    const { call } = await setup()
+    const args = ["stats", "messages", "top", "--measure", "reactions", "--chat", "7", "--timezone", "UTC"]
+    const table = await call(args, true)
+    expect(table.code, table.stderr).toBe(0)
+    expect(table.stdout).toContain("1. Bob  3  👍 9 · ❤ 1 · 🎉 1 · 👏 1 · 🔥 1 · +1\n2. Alice  2\n")
+    const json = await call([...args, "--json"])
+    const ranked = v.parse(itemEnvelopeSchema(ENTITIES.ranking), JSON.parse(json.stdout))
+    expect(ranked.item.rows[0]).toMatchObject({ id: "3", reactions: expect.arrayContaining(SPLIT) })
+    expect(ranked.item.rows[0]?.reactions).toHaveLength(6)
+    expect(ranked.item.rows[1]).toMatchObject({ id: "2", reactions: [] })
+  })
   it("ranks messages, authors, weighted scores and JSONL without connecting", async () => {
     const { call, connect } = await setup()
     const messages = await call([
