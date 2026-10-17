@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.317.0 — 17.10.2026
+
 ### Added
 
 - **Poll votes in the store (store version 20).** A new `MessageEvent` member, `PollVoteEvent` `{ event: "vote",
