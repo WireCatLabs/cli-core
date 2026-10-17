@@ -9,13 +9,13 @@ shape of this file.
 
 ### Added
 
-- **Poll votes in the store (store version 20).** A new `MessageChange` `{ event: "vote", chatId, chatTitle,
-  messageId, vote: PollVote }` — one person's vote, `answers: []` when taken back — for a messenger that sends votes
-  one by one instead of counting them (WhatsApp). `watch` keeps each voter's newest vote in the new `poll_votes`
-  table (an older vote never replaces a newer one; a deleted poll keeps none) and `--events` prints it. The owner's
-  own `polls vote` is kept the same way, since no messenger echoes it back. `store.messages.saveVote` and
-  `pollVotes` read and write them; `countedPoll(poll, votes, self)` (root export) turns them into each answer's
-  `voters`, the poll's `voters` and the owner's `chosen`.
+- **Poll votes in the store (store version 20).** A new `MessageEvent` member, `PollVoteEvent` `{ event: "vote",
+  chatId, chatTitle, messageId, vote: PollVote }` — one person's vote, `answers: []` when taken back — for a
+  messenger that sends votes one by one instead of counting them (WhatsApp). `watch` keeps each voter's newest vote
+  in the new `poll_votes` table (an older vote never replaces a newer one; a deleted poll keeps none) and `--events`
+  prints it. The owner's own `polls vote` is kept the same way, since no messenger echoes it back.
+  `store.messages.saveVote` and `pollVotes` read and write them; `countedPoll(poll, votes, self)` (root export)
+  turns them into each answer's `voters`, the poll's `voters` and the owner's `chosen`.
 - **More of the store for adapters: `StoredMessages.anchor(chatId, at?)`, `wroteTo(personId)` and
   `pollVotes(chatId, messageId)`** beside `message` and `newestIncoming` in `ConnectOptions.stored`. `anchor` is the
   newest live message sent at `at` or earlier, or without `at` the oldest one held (to ask for older history);
@@ -28,11 +28,11 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **`MessageChange` and `MessageEvent` have a fifth member, `vote`.** A caller that narrows by elimination breaks
-  at compile time: max-cli's `describeChange` (`src/commands/watch.ts`) reads `change.reactions` after ruling out
-  the others, and needs a `vote` branch. tg-cli only builds events and cli-memo does not read them.
-- **`StoredMessages` has three more members** (`anchor`, `wroteTo`, `pollVotes`), so a hand-made lookup no longer
-  type-checks; `storedMessages` builds the whole one.
+- **`MessageEvent` has a new member, `PollVoteEvent` (`event: "vote"`).** `MessageChange` is unchanged, so max-cli's
+  `describeChange` still compiles; a caller that narrows a whole `MessageEvent` by elimination needs a `vote` branch.
+  tg-cli, max-cli and whatsapp-cli only build events, and cli-memo does not read them.
+- **`StoredMessages` has three more members** (`anchor`, `wroteTo`, `pollVotes`), and `AccountMessages` (so
+  `MessagesStore`) two (`saveVote`, `pollVotes`): a hand-made lookup or store fake no longer type-checks.
 
 ### Fixed
 

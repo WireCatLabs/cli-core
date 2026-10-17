@@ -392,11 +392,18 @@ export type MessageChange =
       reactions: Reactions
       counterObservation?: CounterObservation
     }
-  /** One person's vote in the poll `messageId` carries, replacing theirs before; no answers takes it back. */
-  | { event: "vote"; chatId: Id; chatTitle: string | null; messageId: Id; vote: PollVote }
 
-/** What a listening connection reports: a new message, or a change to one. */
-export type MessageEvent = { event: "message"; message: MessageHit } | MessageChange
+/** One person's vote in the poll `messageId` carries, replacing theirs before; no answers takes it back. */
+export interface PollVoteEvent {
+  event: "vote"
+  chatId: Id
+  chatTitle: string | null
+  messageId: Id
+  vote: PollVote
+}
+
+/** What a listening connection reports: a new message, a change to one, or a vote in a poll. */
+export type MessageEvent = { event: "message"; message: MessageHit } | MessageChange | PollVoteEvent
 
 /** One chat's share of `inbox`: other people's messages since the last check, oldest first. */
 export interface InboxChat extends Pick<Chat, "id" | "title" | "kind" | "unreadCount"> {
