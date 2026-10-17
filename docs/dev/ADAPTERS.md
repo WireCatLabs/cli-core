@@ -134,13 +134,18 @@ No type from your messenger's library goes above the adapter. Every answer is a 
 ## One socket per linked device
 
 Some messengers allow one connection per linked device. A second one pushes the first one off.
-WhatsApp over Baileys probably works like this; it has not been observed yet. For such a messenger:
+WhatsApp over Baileys probably works like this; it has not been observed yet. For such a messenger, set
+`Messenger.connection` to `"exclusive"`, and the shared package enforces the rest
+([WC-LIFE-11](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-11--run-commands-through-serve-when-the-messenger-allows-one-connection-per-account)):
 
-- A one-shot command must not open its own connection while `<cli> serve` holds one.
-- Reads come from the local store. Writes go through the process that holds the connection, as
-  max-cli's commands go through `max serve`.
-
-This is the adapter's work. The shared package does not enforce it.
+- While `<cli> serve` holds the connection, it offers a relay on a private Unix socket. A command that reaches the
+  messenger is sent there and runs on the held connection, with the client's environment, so the permissions and
+  the read-only lock still hold (`src/cli/relay-route.ts`, `src/cli/messenger/serve-relay.ts`).
+- Every command that connects does it through `connectFor` (`src/cli/messenger/context.ts`), your CLI's own
+  commands included: a relayed run gets serve's adapter, and a run for another profile is refused. Never call
+  `messenger.connect` from a command.
+- With no live `serve`, the command connects on its own. `serve`, `server`, `bot`, logins, `--offline` and
+  `mcp --http` are not relayed. There is no relay on Windows.
 
 ## History from the store
 

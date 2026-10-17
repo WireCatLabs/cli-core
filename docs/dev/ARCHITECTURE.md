@@ -90,7 +90,7 @@ anything can catch it. `pnpm smoke:bun` is what proves the Bun half.
 
 Before it opens the file, `openStore` checks once per process that the runtime's SQLite has the
 full-text search the migrations need (`assertStoreCapable`), and refuses with what to install. The
-version number does not tell: official Node 22.0–22.15 has SQLite 3.46–3.49 without FTS5. CI runs the
+version number does not tell: official Node 22.0–22.15 has SQLite 3.46–3.49 without FTS5. Full validation runs the
 built package on Node 22.15.0 to see the refusal (`scripts/check-old-node.mjs`).
 
 Where the runtime's SQLite can be swapped, ours from `@wirecat/cli-core-sqlite` (built in
@@ -102,7 +102,7 @@ Where the runtime's SQLite can be swapped, ours from `@wirecat/cli-core-sqlite` 
 - **A Linux distribution's Node** links the system's `libsqlite3`. `ensureSqlite`
   (`src/sqlite-runtime.ts`, exported as `@wirecat/cli-core/sqlite-runtime`) is the first thing
   `tg` and `max` run: when the system's SQLite fails the check above, it starts the command again
-  with ours first on `LD_LIBRARY_PATH`, before anything is read or sent. CI runs it on Ubuntu's Node
+  with ours first on `LD_LIBRARY_PATH`, before anything is read or sent. Full validation runs it on Ubuntu's Node
   with SQLite 3.42 (`scripts/check-sqlite-restart.mjs`).
 - Official Node and Bun on Linux and Windows build SQLite in; nothing is swapped.
 
@@ -152,11 +152,11 @@ answers, in `src/store/sqlite/batches.ts`:
   `src/sends/permissions.ts`), so a profile read-only on messages can still link — the answers write
   only to the local store. `batches next` shows message text and is checked as `messages`.
 
-**Chunks and vectors** (phase 5, store version 14, plan). Each build
+**Chunks and vectors** (phase 5, plan). Each build
 also writes `chunks` rows of type `conversation`, with their message range in `chunk_messages`: a conversation cut at message boundaries into pieces of at most
 `CHUNK_CHARS` (`src/conversations/chunks.ts`), each with its first and last message and the sha256 of
 its text. A message longer than a chunk is split into overlapping pieces (`splitText`), a chunk each, and
-since store version 21 such a chunk also keeps the stretch of the message it holds (`text_start`,
+such a chunk also keeps the stretch of the message it holds (`text_start`,
 `text_end`), so every reader below cuts the text the same way. The text is never stored. Chunks cascade with their conversation, so old builds' chunks go
 with them. `chunk_vectors` is keyed by model and that hash, with no chat: a rebuild writes new
 conversation rows, and a vector tied to them would be thrown away each time, while a chunk whose text
@@ -170,14 +170,14 @@ what `conversations build` and `embed` without `--chat`, `search conversations -
 one service method, `embeddings.refresh`, bounded by chats and chunks. How
 the search over them works, end to end and measured: [search-indexes.md](../storage/search-indexes.md#search-by-meaning).
 
-**The owner's tags** (version 16) are one table, `tags`, for a chat, a person (an `identities` row) or a
+**The owner's tags** are one table, `tags`, for a chat, a person (an `identities` row) or a
 message — `taggable_type` and `taggable_pk`, so no foreign key. Triggers in the file drop a message's tags
 when it is deleted or tombstoned and a chat's when it is deleted, so a build that knows nothing of tags —
 0.49.0 included — cannot leave one behind; identities are never deleted. `tag:` in a strict search
 compiles to one exact condition over the three (`src/store/sqlite/lucene.ts`), and `tags` commands and
 MCP tools write through `services.tags` with their own permission keys (`tags.add`, `tags.remove`).
 
-**The text of files** (version 19) is `attachment_texts`, one row per attachment: what `attachments extract`
+**The text of files** is `attachment_texts`, one row per attachment: what `attachments extract`
 read from the file `messages download` saved (`attachments.local_path`, written by the download since this
 version's package) — plain text, HTML, RTF, Word through `mammoth`, Word 97–2003 through `word-extractor`, a
 PDF's text layer through `unpdf` (dependencies of this package, loaded on first use: `src/readers/pdf/`, picked by `src/readers/registry.ts`),
@@ -208,7 +208,7 @@ good text. A provider rate limit stops later requests in the run, without retrie
 Needs-agent items include localPath; it is a filesystem reference, not remote
 artifact transport. OCR contract.
 
-**Searches** (version 17) are one table, `searches`: every successful `search messages` and `stats messages show`
+**Searches** are one table, `searches`: every successful `search messages` and `stats messages show`
 run records its parameters as canonical JSON (`searchRecordOf`, `src/services/search-record.ts`) — never a
 message or a result — from `MessagesService`, so the command and the MCP tool both record. An identical
 unnamed run counts on its row (a unique index over command and parameters where the name is null); unnamed
@@ -236,12 +236,12 @@ and the nesting depth is kept per connection. A statement that runs for every sa
 ([results](../../bench/search/results.md#the-real-store-after-the-message-writes-moved-to-drizzle)).
 `src/store/search-plan.test.ts` fails if search starts reading the text index once per message.
 
-Opening a store also fills `messages.normalized_text` for rows stored before version 6, when at most
+Opening a store also fills `messages.normalized_text` where it is missing, when at most
 5,000 of them wait (`BACKFILL_ON_OPEN`, about 40 ms); a larger file keeps working and waits for the
 maintenance command that fills it in batches.
 
 **Two text indexes.** `messages_fts` (trigram over `text`) answers substring search. `message_words`
-(version 12) holds the words of `normalized_text` for ranked search — contentless with delete support,
+holds the words of `normalized_text` for ranked search — contentless with delete support,
 kept by triggers that fire only when the normalized text, the sender or the chat really changed, with
 a `scope` column of `c<chat_pk>` and `s<sender_identity_pk>` tokens. Ask its vocabulary through
 `message_words_vocab` with `col = 'normalized_text'`, and restrict a word query to that column, or the
@@ -255,7 +255,7 @@ normalized text first, then the words, then the typo vocabulary (`search_terms`,
 ranks by it. `src/store/sqlite/words.ts` keeps `knownTerms` and `termCandidates`, which `--discover`
 uses for typo correction; `src/store/search-plan.test.ts` fails if a search reads an index once per message.
 
-**Stems (version 15).** `message_stems` holds the Snowball stems of `messages.text` — stemmed before
+**Stems.** `message_stems` holds the Snowball stems of `messages.text` — stemmed before
 folding, by `createStemmer` (`src/search/stem.ts`) — in the same shape as `message_words`: contentless
 with delete, the same tokenizer, the same `scope` tokens. A `text` term or phrase matches the word index
 OR the stems (`src/store/sqlite/lucene.ts`), so no exact hit is lost to a different fold; `exact:` reads
@@ -278,7 +278,7 @@ choices, so a tool with another default sees a setting and refuses as "unknown" 
 `latin` may name several stemmers: each Latin stemmer gives a stem sequence, and the distinct ones are
 stored apart by `STEM_SEPARATOR` so a phrase never spans two; a query is the OR of its phrases.
 
-**Notes and links (version 25, plan).** `MessageStore.notes`
+**Notes and links (plan).** `MessageStore.notes`
 (`src/store/sqlite/notes.ts`) holds the owner's records, which belong to no account: `note_folders` (an
 id; the path is each computer's config), `notes` (from a file or written here) with `note_revisions`,
 `entities`, and `links` — every connection, both ends a typed reference (`src/domain/references.ts`). A
@@ -288,7 +288,7 @@ resolves it in the same write (`resolvePersonLinks`, called from `identities.ts`
 may still write the old ones, so `openStore` copies what is missing on every open
 (`src/store/sqlite/notes-copy.ts`, behind `notesToCopy`).
 
-**Notes' search indexes (version 26).** The same words and stems as messages — `note_words`,
+**Notes' search indexes.** The same words and stems as messages — `note_words`,
 `note_stems`, same tokenizer and the store's stemmer choices — and `note_chunks`, whose hashes find their
 vectors in `chunk_vectors` beside the conversations'. Triggers on `notes` only queue the note in
 `note_index_pending`; `drainNoteIndex` (`src/store/sqlite/note-index.ts`) writes words, stems and chunks
@@ -344,7 +344,7 @@ process, bundled about 6 ms. So:
   imports its own runtime's SQLite at the top of its file, so loading one under the other runtime
   fails.
 - `scripts/check-dist.ts` refuses a `dist` that still imports `drizzle-orm` and reads a row through
-  the bundle. CI runs it under Node (`pnpm check:dist`) and under Bun (`bun scripts/check-dist.ts`).
+  the bundle. Full validation runs it under Node (`pnpm check:dist`) and under Bun (`bun scripts/check-dist.ts`).
 
 **Snowball is vendored, not installed.** `src/search/snowball/` holds the official Snowball 3.1.1
 JavaScript for Russian, Spanish and English, generated by `bin/snowball-update` (BSD-3-Clause, also in
@@ -356,11 +356,11 @@ with `normalize()`, and its `identity` names what built an index.
 
 ### Migrations
 
-One migration, store version 1, creates every table in [`docs/storage/schema.md`](../storage/schema.md),
-in the file `wirecat.db`. It is one folder under `drizzle/`: the SQL `pnpm db:generate` wrote from
+Store version 1 created the tables of [`docs/storage/schema.md`](../storage/schema.md) in the file `wirecat.db`, and
+each later version adds to them. Version 1 is one folder under `drizzle/`: the SQL `pnpm db:generate` wrote from
 `src/store/sqlite/schema.ts`, then the FTS5 indexes, their triggers, the `WITHOUT ROWID` search-term tables and
-the seed rows, which Drizzle cannot model. `pnpm db:bundle` copies it into
-`src/store/sqlite/migrations.generated.ts`, and `src/store/sqlite/manifest.ts` numbers it. Our runner (`migrate`)
+the seed rows, which Drizzle cannot model. `pnpm db:bundle` copies every folder into
+`src/store/sqlite/migrations.generated.ts`, and `src/store/sqlite/manifest.ts` numbers them. Our runner (`migrate`)
 applies migrations under `BEGIN IMMEDIATE`; Drizzle's own migrator is not used.
 
 The schema before this one lived in `messages.db` and is not converted: the new file has a new name so that a
@@ -378,26 +378,26 @@ it by editing that line in a PR of its own, merged before the migration.
 
 1. **Take the number** as the paragraph above says, and wait for that PR to merge.
 2. **Change the spec first**, `scripts/schema/spec.mjs`, and `pnpm schema:render` for the page. Then change
-   `src/store/sqlite/schema.ts` to match, until `pnpm schema:check` passes (CI runs it), and run
+   `src/store/sqlite/schema.ts` to match, until `pnpm schema:check` passes (full validation runs it after merge, not the pull request), and run
    `pnpm db:generate --name version-<n>-<what>`. It writes `drizzle/<timestamp>_version-<n>-<what>/migration.sql`.
 3. **Read the SQL before anything else.** For a constraint change (a new `NOT NULL`, a changed
    default, a foreign key), drizzle-kit rebuilds the table: `CREATE TABLE __new_…`, copy, `DROP TABLE`,
    `RENAME`. A build already installed breaks on that, and on `messages` the `DROP` also removes the
    full-text triggers. Choose a change drizzle-kit can express as `ALTER TABLE … ADD` — a new column is
    nullable or has a default — or a new table. The test "never rebuild a base table"
-   (`src/store/sqlite/manifest.test.ts:14-19`, `:47`) refuses the rest.
+   (`src/store/sqlite/manifest.test.ts:14-19`, `:46`) refuses the rest.
 4. **Triggers, FTS5 tables and data fills go in a custom migration**, since `schema.ts` holds neither
    triggers nor FTS: `pnpm db:generate --custom --name version-<n>-<what>`, then write the SQL into
    the empty file. Put `--> statement-breakpoint` between statements — the bundle splits on nothing
    else (`scripts/bundle-migrations.ts:20`), so a trigger body with `;` inside stays whole. Generate
    it right after step 2: folders apply in name order, which is their timestamp.
 5. **Add a row to `MANIFEST`** (`src/store/sqlite/manifest.ts`) for each new folder, with the same
-   `version`. Two folders with one version — the generated one and its custom one, as version 6 —
+   `version`. Two folders with one version — the generated one and its custom one, as version 7 —
    apply as one migration and write one `schema_migrations` row. Versions run on without a gap
-   (`manifest.test.ts:38-45`).
+   (`manifest.test.ts:38-44`).
 6. **`minCompatible` stays where it is** — 1 today — for an additive change. Raising it locks every
    older build out of the file: ask the owner first; it is a major version of this package, and
-   tg-cli and max-cli ship their upgrade the same day, as with version 6.
+   tg-cli and max-cli ship their upgrade the same day.
 7. **`pnpm db:bundle`** after every `db:generate` and every edit of a `migration.sql`. It rewrites
    `src/store/sqlite/migrations.generated.ts`; `pnpm build` does not, and the test "are bundled
    exactly as drizzle-kit wrote them" (`manifest.test.ts:22`) fails until you run it.
@@ -406,8 +406,8 @@ it by editing that line in a PR of its own, merged before the migration.
    version 1, with every migration and keeps its rows. `src/store/sqlite/schema.test.ts` opens a new store and compares
    every table and column with [`schema.md`](../storage/schema.md), and compiles every trigger:
    change the page with the schema.
-9. **CHANGELOG**: an entry under `## Unreleased` that names the store version, as "Chat members in
-   the store (store version 7)" does.
+9. **CHANGELOG**: an entry under `## Unreleased` that names the store version, as "Poll votes in the
+   store (store version 20)" does.
 
 A migration is frozen once released: fix a mistake with the next version, never by editing a folder.
 `upgrade.test.ts` pins version 1 by hash, and `bin/regen-initial-migration` refuses once a `v*` tag holds it.
@@ -416,8 +416,8 @@ A migration is frozen once released: fix a mistake with the next version, never 
 
 Tasks waiting on the owner belong to `src/tasks/` (exported as `./tasks`), which knows no messenger and
 no SQLite; `biome.json` holds it to that and lets the rest of the package import only its entry points.
-The store implements its `TaskStore` as `store.tasks`, in the `tasks` table (store version 20,
-`src/store/sqlite/tasks.ts`), so backup, restore and export carry tasks with the messages, and a task
+The store implements its `TaskStore` as `store.tasks`, in the `tasks` table
+(`src/store/sqlite/tasks.ts`), so backup, restore and export carry tasks with the messages, and a task
 joins its message in one query. A task holds a locator, never the message text; `kind`, `state` and
 `origin` are checked in code, as `chats.kind` is.
 

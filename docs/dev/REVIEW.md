@@ -21,7 +21,7 @@ design guidance or our policy; record justified deviations instead of claiming b
 2. **Options.** Each option is in the [catalogue](STANDARD.md#option-catalogue) with one meaning; a
    new one is added to `parity.json` with its value, meaning and default, and `pnpm parity:render`
    was run.
-3. **Output.** A list answers the envelope, a write its `operationId`, an error one JSON object on
+3. **Output.** A list answers the envelope, a write its `operation_id`, an error one JSON object on
    stderr with a code from the table ([Output](STANDARD.md#output)).
 4. **MCP.** The command is found through `tools_search`, its arguments are the options in snake_case,
    it says whether it writes, and its permission key decides who may run it — no flag of its own

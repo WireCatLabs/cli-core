@@ -52,8 +52,9 @@ agents read through `<cli> skill show`.
   `path:line`; mark CERTAIN or LIKELY".
 - **Confirm every finding with a grep or a read of the source before editing.** Drop a LIKELY
   finding you cannot confirm.
-- User pages get plain rewrites: no correction marks, no struck-out text, no ids. Developer pages
-  are corrected in place, with a dated correction.
+- Every page is rewritten in place to the current fact: no correction marks, no struck-out text, no dated trail
+  ([WC-DOC-3](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/docs.md#wc-doc-3--every-document-states-current-facts-rewrite-a-wrong-sentence-in-place)). User pages
+  carry no internal ids either.
 - `docs/commands.md` is generated: never edit it; `pnpm generate`.
 
 ## Live checks

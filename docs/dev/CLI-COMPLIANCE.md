@@ -12,8 +12,8 @@ regression suite or agent evaluations. Tests use isolated synthetic fixtures.
 references and the project's chosen profile: POSIX utility conventions, GNU interfaces, CLIG,
 MCP tools, Agent Skills, JSON Schema and agent tool-design guidance. The independent
 [CLI Agent Spec](https://cli-agent-spec.github.io/requirements/) is a checklist, not an industry
-standard; its conformance kit was researched, not executed. We preserve our existing response
-envelopes and error taxonomy and do not claim its Level 1/2/3 labels.
+standard; its conformance kit was researched, not executed. Our answer envelopes and error taxonomy are the
+handbook's ([output](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md)), and we do not claim its Level 1/2/3 labels.
 
 The current POSIX page returned HTTP 403 during research; official indexed conventions and
 rationale were consulted. Other references were read directly or through official indexed
@@ -36,7 +36,7 @@ Google product and was not installed or exercised in this audit.
 | Schema/effect discovery | `src/cli/command-contract.ts`, `commands schema` tests | Versioned JSON Schema 2020-12 describes argv, defaults, choices, constraints, permissions, effects and conservative retry guidance. Result coverage is explicit: representative domain schemas are precise, remaining results use open schemas. JSONL coverage is described separately. |
 | Output bounds/projection | execution and projection tests | Machine output defaults to 4 MiB, configurable or disabled with 0. `--json=<fields>` projects safe paths, including `items.id`, while retaining envelope metadata and operation ids. Oversize output fails before malformed JSON; JSONL reports earlier complete rows. |
 | Write previews | `src/cli/preview.ts`, consumer integration tests | General dry-run validates parsing and permissions before preparation/action/reservation, hides payloads and states that targets remain unresolved and business validation has not run. Specialized command previews retain their existing semantics. |
-| Retry and unknown writes | send guard/journal and execution tests | operationId correlates a write; it is not an idempotency guarantee. Unknown outcomes carry conservative retry metadata. Aborted work cannot reserve a new write; inspect the journal/provider before any retry. |
+| Retry and unknown writes | send guard/journal and execution tests | `operation_id` correlates a write; it is not an idempotency guarantee. Unknown outcomes carry conservative retry metadata. Aborted work cannot reserve a new write; inspect the journal/provider before any retry. |
 | MCP surface/results | `src/mcp/surface.ts`, personal/bot server tests | Three discovery/read/write tools replace per-command tools. Actual object results have structured content and advertised open-object output schemas; response and argument bytes are bounded. No server confirmation forms; deny/readonly still block writes. Separate moderation rule consent remains authoritative. |
 | Portable skills | `src/skills/validate.ts`, consumer `check:agent-docs` | YAML frontmatter, local references, installed version and literal command paths are checked against the consumer program. Full arbitrary shell examples and every operand are not statically proven. |
 | Synthetic agent evaluation | evaluation report | Two independent agent passes used synthetic discovery, ambiguity, paging, validation recovery, compact reads and unknown-write tasks. Final pass: 6/6 tasks, 14 calls, 14,846 output bytes, no write replay. Fixture differences prevent a causal before/after claim. |

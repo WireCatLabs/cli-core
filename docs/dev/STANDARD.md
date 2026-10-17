@@ -1,25 +1,22 @@
-# The standard for the WireCat CLIs
+# The messenger rules for the WireCat CLIs
 
-This page holds the rules for five CLIs: tg (tg-cli), max (max-cli), memo (cli-memo), drive (drive-cli)
-and zm (zoom-cli). It says how a command, an option, an answer, an error and an MCP tool are named and
-shaped, where code lives, and which documents each has. A CLI's `CONVENTIONS.md` links it instead of
-keeping a copy.
+The rules every WireCat CLI follows are in the [WireCat CLI standards handbook](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/README.md), which ships in
+`@wirecat/cli-base`. This page keeps what binds only the messenger CLIs — tg (tg-cli), max (max-cli) and wa
+(whatsapp-cli), which share cli-core's messenger commands — and the contracts of cli-core's own shared commands:
+the [parity manifest](#the-parity-manifest), the [option catalogue](#option-catalogue), `bot`, the messenger details
+of the write guard, and how a messenger answer is presented. A heading whose rules moved to the handbook keeps one
+paragraph naming the rules that hold them now, so a link to it still leads somewhere.
 
-- **Every rule binds all five**, unless it names tg and max. Each CLI starts from its own baseline:
-  its violations of the [lint rules](#vocabulary-and-lint-rules) are listed in its `lint/baseline/`,
-  and that list only shrinks.
-- **tg and max only:** tg-cli and max-cli are one tool with two messengers behind it. The
-  [parity manifest](#the-parity-manifest), the [option catalogue](#option-catalogue), `bot`, and every
-  rule that asks for the same sentence or shape "in both tools" bind those two.
+Two sections bind every WireCat CLI, not only the messengers, until the handbook takes them:
+[External references and our adoption profile](#external-references-and-our-adoption-profile) and
+[Resumable syncs](#resumable-syncs).
 
 How a pull request is checked against these rules is [REVIEW.md](REVIEW.md).
 
-A rule changes here first, in its own pull request, and the owner approves new wording — a new verb
-or option name especially. Then the code follows. A word — a verb, a resource, a view, a root word, a
-flag — or a lint rule is added to cli-base's registries (`@wirecat/cli-base/standards`) first; its table
-here is regenerated from them with `pnpm standard:docs`, and `pnpm docs:check` fails when the two differ.
-A difference between tg and max is allowed only where one messenger lacks the feature, and it is
-written down with its reason in the parity manifest.
+A rule here changes first, in its own pull request, and the owner approves new wording. A word or a lint rule goes
+into cli-base's registries first ([WC-CMD-2]); the tables below are regenerated from them with `pnpm standard:docs`,
+and `pnpm docs:check` fails when the two differ. A difference between the messenger CLIs is allowed only where one
+messenger lacks the feature, and it is written down with its reason in the parity manifest.
 
 ## External references and our adoption profile
 
@@ -52,9 +49,8 @@ MCP hints and agent instructions never substitute for enforcement.
 Explicit choices and gaps:
 
 - `stats` and its resource hierarchy are our policy; external references do not require that root.
-- Data goes to stdout; failures go to stderr as `{ error: { code, message, ... } }`. We retain
-  command-specific success shapes and our exit codes. Parser errors and explicit JSON with a TTY
-  currently have gaps documented in the audit; the desired contract does not prove implementation.
+- Data goes to stdout as one envelope ([WC-OUT-4]); a failure goes to stderr as one JSON object ([WC-OUT-14]),
+  with cli-base's exit codes ([WC-OUT-18]).
 - Explicit help/version requests retain conventional text on stdout. An agent discovering a
   command uses `commands <path> --json`; help is not a JSON data response. The independent agent
   spec's blanket non-TTY help-to-stderr rule is not adopted.
@@ -62,131 +58,88 @@ Explicit choices and gaps:
   non-interactive contract. `--yes` grants confirmation; it is not a substitute for disabling input.
 - A read can have documented local effects such as ingestion, a stable device identity or a failed-run
   record. Validation-before-remote-action does not promise zero local writes on every error.
-- General stdout-only envelopes, automatic retry of all writes, logging full tool payloads and
-  new output fields on every existing response are not adopted from agent examples.
-- [Command names](#command-names) currently require immediate removal of renamed paths and no
-  aliases. This differs from CLIG's deprecation guidance. The owner explicitly chose immediate
-  relocation without a compatibility window. Old paths stop working at adoption; the release
-  notes and user docs give the new paths.
+- Automatic retry of every write and logging full tool payloads are not adopted from agent examples.
+- A renamed path stops working in the release that renames it, with no alias ([WC-CMD-8]). This differs from
+  CLIG's deprecation guidance; the owner chose it.
 
 New commands are reviewed against this profile and the audit. Existing gaps require explicit
 implementation work with tests; citing a reference alone does not close them.
 
 ## Command names
 
-A name a person reads once should say what the command does; a name an agent reads should be
-guessable from the others.
+The general naming rules are on the handbook's [commands](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md) page: the path ([WC-CMD-1]), the
+vocabulary ([WC-CMD-2]), root words ([WC-CMD-4]), one leaf per action and no overlap ([WC-CMD-6], [WC-CMD-7]),
+no aliases ([WC-CMD-8]), and the names of options and arguments ([WC-CMD-10] to [WC-CMD-13]). The profile is on
+the [accounts](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/accounts.md) page ([WC-ACCT-1] to [WC-ACCT-3]). An MCP tool's command is its CLI path
+([WC-MCP-2]). What stays here is what cli-core's shared commands mean by their own resources and words, and `bot`.
 
-1. **`<tool> [profile] [namespace] <resource> [subresource ...] <verb-or-view> [arguments]`.**
-   A namespace groups one cross-resource purpose; `stats` groups statistics. Subresources are
-   allowed when they identify a part of the resource (`chats members list`), not an implementation
-   detail. A group without a leaf command shows help, never runs a hidden default action.
-   **The profile is chosen, never assumed.** A command that acts for one of several accounts or
-   profiles takes it explicitly (the first word or the tool's profile variable — no config file names
-   one for it); none given is an error that lists the profiles — never the first in the config,
-   never an implicit `default`, not even the only profile; with none the error says how to create one
-   by name (`tg personal setup`). A command that touches no account (`account list`, `config show`)
-   runs without one. A read across accounts covers all of them and says so.
-   The resource is a noun from the [resource table](#resources): **plural** for a collection,
-   **singular** for what a profile has exactly one of. A group is never named with a verb. `tags` and `searches` are the owner's own records in the local store, never
-   sent; their writes have their own keys (`tags.add`), so a read-only profile hides them.
-   `tasks` are what waits on the owner — a question nobody answered, a mention, a request, a promise —
-   kept in the local store by `src/tasks/` and never sent: `tasks list|add|close|stats`, the
-   type of a task is `--type` (`question`, `request`, `mention`, `promise`), and closing is
-   `tasks close <task> --as done|dismissed [--reason <text>]`. The owner chose these on 2026-10-06; an agent adds
-   `--certainty <0..1>` and the owner refuses an agent's unsure close with `tasks reject <task>` (2026-10-16).
-   `attachments` are the files of stored messages: their text, read or written back, is kept in the
-   local store for `content:` in a search and never sent; `attachments.extract` is a local write.
-   `chats tracking` is the one collection named by what it does rather than a plural: the chats whose
-   member lists `serve` fetches daily into the local store — owner's wording, 2026-10-05.
-   `chats documents` are the Google Docs and Drive documents people linked in a chat's stored
-   messages: a part of the chat, as its members are, so a subresource of `chats` and not a new root.
-   `chats documents list <chat>` reads the local store only, and says per link whether the document
-   is in the store. It does not overlap `chats media`, which reads every link from the messenger's
-   server and knows no document, or `attachments list`, which lists files, not links in text.
-   drive's `sync` writes the message → document link. Owner's name and design, 2026-10-13
-   ([shared document links](chat-documents-plan.md)).
-2. **Top-level words** only for what spans every chat or is the tool itself: the
-   [root words](#root-words). Prefer an
-   existing resource or namespace before adding another root word. A new root needs a reason in
-   its naming pull request: what existing group cannot express, which related commands it groups,
-   and why the same hierarchy works for both CLIs. One new report never justifies its own root.
-3. **Verbs come from the [verb table](#verbs), each with one meaning.** A verb not on it is added
-   to cli-base's vocabulary first. Where two verbs are close, the difference:
-   - `info` facts about a singular thing itself (`store info`) · `status` how a thing stands right
-     now — a running process (`server status`) or what the store holds per chat (`store status`)
-   - `check` verify and change nothing; the answer says what is wrong and how to fix it
-     (`store check`) · `test` run rules over what is already stored and say what they would have
-     done (`replies test`)
-   - `sync` bring the local store up to date from the source — only what changed since the last
-     run, or the whole list where the source cannot say what changed; `--all` for every chat or
-     source (owner, 2026-10-12). It is the regular, repeatable catch-up (`contacts sync`).
-     · `fetch` one bounded pull of one named thing into the store, not a catch-up
-     (`chats members fetch`)
-   - `repair` keeps a table of the wrong shape as a copy (`store repair`, its copies in `store copies`)
-   - `link` / `unlink` record a decision someone made, never one inferred from a name (`contacts link`)
-   - A **noun as the last word** names a view and shows it, from the [view table](#views):
-     `server logs`, `chats events`, `messages scheduled`, `mcp config`, `stats messages top`,
-     `stats chats official`.
-   - Every word for a command, a resource and a JSON key, with the words it replaces and where a CLI
-     still uses another, is in the [glossary](GLOSSARY.md).
-4. **One action or report, one leaf command.** A different action or independently useful report
-   belongs in a nested command. Options choose the scope, measure, order or format of that action;
-   they do not switch a search, send or list into another report. For example, ranking is
-   `stats messages top`, not a ranking mode added to `search messages`. Views, reactions and
-   replies are measures of the same ranking, so they stay options, not sibling commands.
-   No command both shows and changes, except an explicitly documented preparatory fetch such as
-   `--sync-first`, which retains its own permissions and reports its outcome.
-   **No two commands overlap** (owner, 2026-10-08). If one command's results are a subset of
-   another's, one of them goes: an agent that learns the narrow path never finds the wide one. A
-   narrower scope is an option or a resource of the same command, never a sibling elsewhere in the tree.
-5. **Options are plain words, never a wire field** (`--operation-id`, not `--cid`). One meaning, one
-   name, in every command of both tools. **A length of time is a `<duration>`** (`500ms`,
-   `30s`, `2m`, `4h`, `1d`) — a number and a unit, never a bare number — parsed as `--timeout`
-   is; `--since-time` takes a duration or a time.
-   - **The kind of value is in the name** of every option that takes a time, and of one that marks
-     a place in a history or a count around it: `-id` a message id, `-time` an ISO 8601 time or a
-     duration from now or ago, `-n` a count — `--before-id`, `--after-time`, `--since-time`,
-     `--at-time`, `--before-n`. Two kinds, two options, never one
-     option that guesses which it was given.
-   - **How much, in a list or a fetch:** `--limit <n>` how many items, `--page <n>` which page,
-     `--page-size <n>` how many one request to the messenger asks for. A count of pages is never an
-     option: it means a different amount in each messenger.
-   - The flags with one meaning in every CLI are in the [flag table](#flags); every option tg and
-     max have is in the [option catalogue](#option-catalogue).
-6. **Arguments have fixed names:** `<chat>`, `<message>`, `<person>`, `<text>`, `<link>`,
-   `<file>`, `<job>`, `<task>`.
-7. **One word per idea** in help, docs and errors. The **local store** is the message database
-   both tools share; max's per-profile **cache** is a different thing until it is replaced, and
-   keeps its name until then. `session` is this tool's login; `account sessions` are the other
-   devices. **`flood`** is what the messenger told this profile to hold off on — the waits it asked
-   for and a hold on writes — kept on this machine; `flood clear` is the owner's and has no MCP tool. The
-   **pace** is how fast one profile may ask its messenger, counted across every process (`requests_per_minute`).
-8. **An MCP tool is named after its command** — see [MCP](#mcp).
-9. **No aliases.** A renamed command's old name stops working, and the release notes say so under
-   "may break scripts".
+### cli-core's resources
 
-10. **`bot` is the profile's bot account**, through the messenger's official Bot API and a bot
-    token — never the personal login. Below it, a command the personal account also has takes the
-    same name, arguments and options: `bot messages send`, `bot messages show <chat> <message>`,
-    `bot chats members remove`, `bot chats moderate`, `bot contacts show`, `bot watch`. What only a
-    bot has: `bot auth`, `bot list`, `bot callbacks`, `bot commands` (the menu people see on `/`),
-    `bot webhooks`, `bot uploads`, `bot api`. A bot's send is never repeated — neither Bot API makes
-    a repeat safe — so `bot messages send` has no `--operation-id`. A bot command may add an option only a
-    bot has, as `bot watch --types` does.
+- **`tags` and `searches`** are the owner's own records in the local store, never sent; their writes have their own
+  keys (`tags.add`), so a read-only profile hides them.
+- **`tasks`** are what waits on the owner — a question nobody answered, a mention, a request, a promise — kept in the
+  local store by `src/tasks/` and never sent: `tasks list|add|close|stats`, the type of a task is `--type`
+  (`question`, `request`, `mention`, `promise`), and closing is `tasks close <task> --as done|dismissed
+  [--reason <text>]`. The owner chose these on 2026-10-06; an agent adds `--certainty <0..1>` and the owner refuses an
+  agent's unsure close with `tasks reject <task>` (2026-10-16).
+- **`attachments`** are the files of stored messages: their text, read or written back, is kept in the local store for
+  `content:` in a search and never sent; `attachments.extract` is a local write.
+- **`chats tracking`** is the one collection named by what it does rather than a plural: the chats whose member lists
+  `serve` fetches daily into the local store — owner's wording, 2026-10-05.
+- **`chats documents`** are the Google Docs and Drive documents people linked in a chat's stored messages: a part of
+  the chat, as its members are, so a subresource of `chats` and not a new root. `chats documents list <chat>` reads
+  the local store only, and says per link whether the document is in the store. It does not overlap `chats media`,
+  which reads every link from the messenger's server and knows no document, or `attachments list`, which lists files,
+  not links in text. drive's `sync` writes the message → document link. Owner's name and design, 2026-10-13
+  ([shared document links](chat-documents-plan.md)).
 
-`bot api` is exempt: its names mirror each messenger's official Bot API operations.
+Every word for a command, a resource and a JSON key, with the words it replaces and where a CLI still uses another,
+is in the [glossary](GLOSSARY.md).
+
+### Messenger words
+
+One word per idea in help, docs and errors. The **local store** is the message database the messenger CLIs share;
+max's per-profile **cache** is a different thing until it is replaced, and keeps its name until then. `session` is
+this tool's login; `account sessions` are the other devices. **`flood`** is what the messenger told this profile to
+hold off on — the waits it asked for and a hold on writes — kept on this machine; `flood clear` is the owner's and
+has no MCP tool. The **pace** is how fast one profile may ask its messenger, counted across every process
+(`requests_per_minute`).
+
+### Bot
+
+**`bot` is the profile's bot account**, through the messenger's official Bot API and a bot token — never the personal
+login. Below it, a command the personal account also has takes the same name, arguments and options:
+`bot messages send`, `bot messages show <chat> <message>`, `bot chats members remove`, `bot chats moderate`,
+`bot contacts show`, `bot watch`. What only a bot has: `bot auth`, `bot list`, `bot callbacks`, `bot commands` (the
+menu people see on `/`), `bot webhooks`, `bot uploads`, `bot api`. A bot's send is never repeated — neither Bot API
+makes a repeat safe — so `bot messages send` has no `--operation-id`. A bot command may add an option only a bot has,
+as `bot watch --types` does.
+
+`bot api` is exempt from the naming rules: its names mirror each messenger's official Bot API operations.
+
+Generated `bot api` commands use cli-base's generators and one command assembler in cli-core.
+Only the source-specification adapter, transport and provider capabilities stay in the consumer.
+Common inputs are `--body <json>` and `--body-file <path>`; `-` reads stdin. A native `timeout`
+parameter is `--poll-timeout`, so it cannot replace the command's `--timeout` deadline.
+Schema-declared file fields accept `@path`; ordinary strings never trigger a file read.
+
+This advanced interface returns the official operation's native result, preserving MAX's existing
+API contract. The normal bot commands use the shared domain output shapes. Both native interfaces
+still use the common machine error contract, the profile's guard and send journal; a write with an
+unknown outcome is never repeated automatically.
+
+`--store-token <profile>` names the destination for an operation returning an authentication token.
+It is required for those operations and rejected for other operations. The token is kept only in the
+OS keyring and never printed; the result names the destination profile, bot id and storage kind.
+A destination bound to a different bot is refused before a remote credential rotation. Secret
+request fields have no generated argument flags: supply their JSON on stdin or in an existing
+protected file. Tokens never enter diagnostics, traces or run records.
 
 ### Vocabulary and lint rules
 
-The tables below are generated from `@wirecat/cli-base/standards` by `pnpm standard:docs`; edit the
-registry, not the table. "Not" lists the words a term replaces.
-
-`cli-dev lint` checks a CLI's `commands --json` against these rules in each CLI's release check. Every
-severity fails the run; severity only orders the report. A violation that is not fixed yet is listed in
-that repository's `lint/baseline/<rule>.json`, which only shrinks. A permanent exception goes into
-`lint/overrides.json` with its rule, target and reason, at most 10 per repository. Generated commands
-(`bot api`) are exempt from the naming and length rules, not from the help rules.
+The tables below are generated from `@wirecat/cli-base/standards` by `pnpm standard:docs`; edit the registry, not the
+table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI, and its baseline, are
+[WC-TOOL-16].
 
 #### Verbs
 
@@ -756,7 +709,7 @@ there never reads mail (owner, 2026-10-14; [TOOL-BOUNDARIES.md](TOOL-BOUNDARIES.
 
 **Proposed 2026-10-13, awaiting the owner's approval.** A bare word in a search query (`search messages`,
 `search all`, `stats messages show`) is looked for everywhere a message holds words: its text, a voice
-note's transcript, a word of a file's name, and a file's text. Each hit names the place (`matchedIn`:
+note's transcript, a word of a file's name, and a file's text. Each hit names the place (`matched_in`:
 `text`, `transcript`, `filename`, `file`). One field narrows to one place, and only these:
 
 | Field | Place |
@@ -799,98 +752,23 @@ that does not make it a statistics command. Its main purpose remains describing 
 For bot-account statistics the account namespace comes first: `bot stats <resource> ...`, with
 the same meanings wherever the provider supports them; this rule does not add Bot API features.
 
-**Relocations are coordinated changes, not aliases.** Move CLI paths, command discovery/help,
-completion, generated docs, skills, MCP names, permission keys and saved-run command metadata
-together. Preserve existing output semantics during the move. If a permission or stored record
-contains an old path, give it an explicit migration; never broaden permissions or silently reuse
-an old key for a different action. The release notes name the old and new paths under “may break
-scripts”. Old paths stop working in the release that adopts the new tree. Consumers adopt the
-same shared implementation and manifest; a provider-specific difference needs a reason.
+A relocation moves every caller, page, key and record in the same change and keeps no alias: [WC-CMD-8].
 
 ### Before creating a command
 
-The naming pull request answers these questions before implementation:
-
-1. What does the user want to do or learn, and which existing resource or namespace owns it?
-   If the answer is a statistical report, its path starts with `stats`.
-2. Is this a new action/report or a scope/measure/format variant of an existing leaf? Put the
-   former in the command tree and the latter in options. Show the proposed parent help so the
-   new command can be found without knowing its flags.
-3. Are every resource word, leaf verb/view, argument and option consistent with both CLIs?
-   A nested path must explain each level. Do not abbreviate or invent another word for an
-   existing subject. Check the option catalogue before proposing a new option.
-4. What result, coverage and permission contract does the leaf have, and how does its full path
-   map to its MCP name? Record planned paths/options in the parity manifest before code.
-5. Does it move or replace an existing command? List callers, generated pages, saved records and
-   configuration that need migration; describe the breaking change before shipping it.
-
-The owner approves new wording in this naming pull request. The review checklist applies these
-questions to every subsequent command addition; they are not specific to rankings.
-
-Generated `bot api` commands use cli-base's generators and one command assembler in cli-core.
-Only the source-specification adapter, transport and provider capabilities stay in the consumer.
-Common inputs are `--body <json>` and `--body-file <path>`; `-` reads stdin. A native `timeout`
-parameter is `--poll-timeout`, so it cannot replace the command's `--timeout` deadline.
-Schema-declared file fields accept `@path`; ordinary strings never trigger a file read.
-
-This advanced interface returns the official operation's native result, preserving MAX's existing
-API contract. The normal bot commands use the shared domain output shapes. Both native interfaces
-still use the common machine error contract, the profile's guard and send journal; a write with an
-unknown outcome is never repeated automatically.
-
-`--store-token <profile>` names the destination for an operation returning an authentication token.
-It is required for those operations and rejected for other operations. The token is kept only in the
-OS keyring and never printed; the result names the destination profile, bot id and storage kind.
-A destination bound to a different bot is refused before a remote credential rotation. Secret
-request fields have no generated argument flags: supply their JSON on stdin or in an existing
-protected file. Tokens never enter diagnostics, traces or run records.
-
+The naming pull request answers the questions of [WC-CMD-9] before implementation. For a messenger command it also
+checks the [option catalogue](#option-catalogue) before proposing an option, and records the planned paths and
+options in the [parity manifest](#the-parity-manifest) before code.
 
 ## Agent execution contract
 
-The full audit remediation adds one scoped `commands schema <path...>` view, rather than a new
-root or a schema mode on message commands. It describes raw argv inputs, result schemas, effects,
-permissions, conditional arguments and safe-retry semantics in JSON Schema 2020-12. Open provider
-extensions must be labelled; a structural schema is not evidence of complete business validation.
-CLI and MCP use the same domain result definitions where available. MCP structured outputs are
-validated against any output schema advertised by the server.
+These moved to the handbook: the shared global flags ([WC-CMD-14]), no prompt without a person ([WC-CMD-15]),
+declared `effects` ([WC-CMD-17]), the one-shot deadline ([WC-LIFE-5]), when a retry is safe ([WC-OUT-20]),
+projection with `--json=a,b` ([WC-OUT-21]) and the output size cap ([WC-OUT-22]).
 
-The shared shell adds these conventions; the manifest tracks adoption:
-
-- `--no-input` prohibits prompts and browser login. JSON/JSONL with a TTY also suppresses prompts.
-  Non-TTY data piped for an explicit command remains usable. Confirmation flags never lift deny.
-- `--max-input-bytes` bounds buffered stdin (16 MiB by default); cancellation releases listeners
-  and does not leave an open read waiting for EOF. Secrets have a tighter 64 KiB bound.
-- One-shot actions have a 30-second default budget unless a flag/environment supplies another.
-  Help/version and intended watch/serve/MCP lifetimes are exempt. Signals cancel tracked resources;
-  SIGINT/SIGTERM follow shell exit conventions. Broken pipes end quietly without a stack trace.
-- `--json=id,text` keeps only those fields of each item; the envelope (`page`, `next`, `meta`) stays. A bare
-  `--json` at a terminal names the fields of a command that declares its answer, instead of printing them all.
-  Paths are relative to the payload: `source.title` selects a nested object field, and
-  `groups.cues.text` projects every element of nested arrays without changing their order or length.
-  `items.ref` is the list-item shorthand, including report lists inside `item`; numeric indexes and
-  wildcards are unsupported. Selecting a parent retains that entire subtree. Missing fields are omitted;
-  explicitly selected nulls remain null. Projection retains `page`, `next`, `missing`, `meta`, `coverage`
-  and `operation_id` at each selected object, so a compact result still describes its limits.
-  Typed JSONL item records select from `data`; their `type` marker and the completion record stay.
-  All CLIs use Base's projector; Core owns the `--json=<paths>` grammar and translates validation errors.
-  `--max-output-bytes` bounds serialized machine data (4 MiB; zero explicitly disables the bound).
-  Exceeding a bound fails visibly with `retry.safe: false`, never a malformed or silently cropped JSON
-  response. File exports retain their streaming contract.
-- A global `--dry-run` validates parsed arguments and permission policy, then reports a preview
-  without invoking the action, reading credentials or reserving a write. Local command-specific
-  previews keep their richer behaviour. A preview declares unresolved targets and preparatory
-  effects; it is never a guarantee that a subsequent write will succeed.
-- Every error has `retry: { safe, after_ms? }`, derived from its code, the command's `effects` and whether the
-  write left: a transient failure (`timeout`, `rate_limited`, `network_error`, `provider_unavailable`) is safe
-  for a command that writes nothing on the messenger, or for a write that never left (`sent: false`).
-  `outcome_unknown` never is — repeat that write only with its `--operation-id`. Every command declares
-  `effects: { remote, local }` (`none | read | write`) in `commands --json`; one without counts as a write.
-- Installed skills are checked against binary discovery. Synthetic task evaluations cover command
-  selection, bounded paging, validation recovery and refusing replay after an unknown write outcome.
-
-These defaults are technical execution limits, not profile data or new config-file keys.
-User pages explain the effective defaults and how to override them after consumer adoption.
+`commands schema <path...>` describes raw argv inputs, result schemas, effects, permissions, conditional arguments
+and safe-retry semantics in JSON Schema 2020-12. Open provider extensions are labelled; a structural schema is not
+evidence of complete business validation.
 
 ## Option catalogue
 
@@ -1219,71 +1097,16 @@ with coverage once per result. Budget defaults and partial status must remain th
 
 ## Output
 
-1. **Every list answers one envelope** in `--json`: `{ items, page, limit, hasMore }` —
-   `renderPage` in [`src/cli/paging.ts`](../../src/cli/paging.ts) prints it. `--jsonl` streams the
-   items one per line. A list never answers a bare array.
-   - A list with no pages (`store status`, `server logs`) answers `page: 1`, `limit` the count and
-     `hasMore: false` — `listed` in the same file.
-   - A list paged by a message rather than a page number (`messages list`, `chats events`) answers
-     `page: 1`; `hasMore` says whether there is more on the far side of the last item.
-   - Fields about the whole list go beside the four, never instead of them (`models audio list`'s
-     `directory`).
-   - Commands are moving to the answer envelope built by `listOf` in
-     [`src/cli/envelope.ts`](../../src/cli/envelope.ts) (so far `admin folders`):
-     `{ items, page, next?, missing?, meta }`, with `page.next` first in `next` when more rows exist. A
-     command that moves says so in the changelog.
-   - `page` says how the source pages: `{ mode: "page", limit, has_more, next_page? }`, or
-     `{ mode: "cursor", limit, has_more, next_cursor? }` for a source with its own position (`messages
-     list`) — never a page number there. `--jsonl` prints `{"type":"item","data":…}` per item, then
-     `{"type":"end","complete","issues"?,"page"}`, so a reader tells a whole stream from a cut one.
-   - `meta` is `{ run_id, duration_ms, accounts?, complete, issues?, truncated? }`. `complete: false` with
-     `issues: [{ code, source }]` (an error code each) says a source failed or was skipped; `truncated` says
-     a size cap cut it; `page.has_more` says another page exists. A command that may answer partially
-     declares `partial` (the searches) and exits 0; any other exits with the first issue's code, after
-     printing what it read.
-   - `next` holds at most two steps: the one to take, then one alternative. Each has `kind` (`command`,
-     or `user_action` with no command) and `safe_to_auto_execute`, true only when its command writes
-     nothing on the messenger (`effects.remote` is `none` or `read`; a local write such as a sync into the
-     store does not count, NEED-1073). Steps are built from ids, counts and cursors this CLI holds, never
-     from text a message, mail or document carried.
-   - `inbox` and `review` are not lists: they answer one view grouped by chat, `{ chats: [{ …,
-     messages }] }`, in both tools.
-2. **A write answers what it did**: `{ operationId, … }`, the ids it touched after it. The same
-   id is in the send journal.
-3. **A one-thing view answers the object itself** (`account show`, `store info`).
-4. **An error is one JSON object on stderr** in the machine modes —
-   `{ "error": { "code", "reason", "message", "param"?, "details"?, "next"?, "retry", "run_id"? } }`, the same
-   object MCP answers with `isError` — stdout stays empty, and the exit code says which kind of
-   failure it was. `reason` is a registered id (`query.too-large`, `src/errors/reasons.ts`, or the code's
-   own from cli-base); branch on `code` and `reason`, never on `message`. `details` holds only
-   registered keys and never a cause. A person sees `✗ message` and at most one `→ next step` line;
-   `--debug` adds the failure's whole record, cause and stack included. A failure that is not ours
-   is `internal_error` (exit 1) with a fixed message: its own text can carry anything. Commander's own parse errors (an unknown command or option, a missing argument,
-   a missing required option) are `validation_error` and exit 2, printed the same way; `--help` and
-   `--version` exit 0. The codes are cli-base's and the same in every CLI:
+Envelopes, keys, errors and exit codes are on the handbook's [output](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md) page: one envelope per answer
+([WC-OUT-4] to [WC-OUT-7]), at most two next steps ([WC-OUT-9]), a write's `operation_id` ([WC-OUT-10]), the
+same shape for a shared command, with what one messenger alone knows under `provider_metadata` ([WC-OUT-11]),
+snake_case keys ([WC-OUT-12]), and the error object and exit codes ([WC-OUT-14] to [WC-OUT-19]). The rules below
+are the messenger CLIs' own; they keep their numbers, so a citation of one still finds it.
 
-   | Code | Meaning |
-   |---|---|
-   | 0 | ok |
-   | 1 | internal error — a bug, not a refusal |
-   | 2 | validation error — the command line is wrong |
-   | 3 | configuration error |
-   | 4 | authentication error |
-   | 5 | permission error |
-   | 6 | not found |
-   | 7 | confirmation required |
-   | 8 | rate limited |
-   | 9 | timeout |
-   | 10 | network error |
-   | 11 | provider error — the messenger refused |
-   | 12 | provider unavailable |
-   | 13 | invalid response |
-   | 14 | outcome unknown — a write may or may not have happened |
-   | 130 | cancelled |
+- **`inbox` and `review` are not lists**: they answer one view grouped by chat, `{ chats: [{ …, messages }] }`, in
+   every messenger CLI.
 
-5. **A shared command answers the same shape in both tools.** What only one messenger knows goes
-   under `providerMetadata`, never as a top-level field one tool has and the other lacks.
-6. **`server status` answers one shape in both tools** (NEED-494 B). Not running is a result,
+6. **`server status` answers one shape in every messenger CLI** (NEED-494 B). Not running is a result,
    `running: false`, exit 0.
 
    | Field | Meaning |
@@ -1291,17 +1114,18 @@ with coverage once per result. Budget defaults and partial status must remain th
    | `profile` | the profile asked about |
    | `running` | a server answers for it |
    | `pid` | its process |
-   | `startedAt` | when it started |
+   | `started_at` | when it started |
    | `connected` | logged in, with updates arriving |
-   | `connectedAt` | since when, where the tool knows it |
+   | `connected_at` | since when, where the tool knows it |
    | `by` | who started it: `unit` (systemd or launchd), `server` (`server start`), `hand` (`serve` typed in a terminal), `command` (max: a command that needed it) |
-   | `version`, `cliVersion` | what the server runs, and what this tool is — they differ after an update, and a note on stderr says `server restart` |
+   | `version`, `cli_version` | what the server runs, and what this tool is — they differ after an update, and a note on stderr says `server restart` |
    | `log` | where its log is |
    | `unit` | `{ name, path, installed, loaded, active, detail }` |
-   | `stale` | `{ pid, startedAt }` — a lock or socket file was left by a server that is gone |
+   | `stale` | `{ pid, started_at }` — a lock or socket file was left by a server that is gone |
 
    Starting and stopping in the background is `server start` and `server stop` only; `serve` is
-   the foreground command a unit or a person runs (rules 4 and 9).
+   the foreground command a unit or a person runs.
+
 7. **A message search says which hits it forgave** (owner, 2026-10-13, option B of
    [the typo plan](typo-search-default-plan.md)). Strict search runs first and its hits come back
    unchanged. Only when it finds nothing does a plain word that is not a whole archive word get
@@ -1321,9 +1145,7 @@ with coverage once per result. Budget defaults and partial status must remain th
      existing `next_steps` string, and the CLI writes one line to stderr naming `--discover`. No new
      key; stdout stays data. `search all` names `search messages --discover`, the one command that
      has it.
-   - **`--language` is removed when the forgiving default lands**: from `search messages`,
-     `searches create` and MCP together, with its parity entry. `--exact` stays: it turns
-     forgiveness off.
+   - **`--exact` turns forgiveness off.**
 8. **A search says which accounts it read** ([source-everywhere-plan.md](source-everywhere-plan.md)).
    Every stored thing has a kind (`messages`, `mail`, `notes`, `documents`, `meetings`), a provider
    and an account; `--source` takes `provider:account`, a bare provider, a bare kind or
@@ -1366,61 +1188,18 @@ Whether the last *scheduled* run failed is a different question: `recordRun` and
 
 ## Permissions
 
-What a profile may do is one setting, `permissions`: a JSON object whose keys are command paths and
-whose values are levels. It holds for a command the owner types and for an agent over MCP alike.
+The setting, its levels, keys, defaults and hard limits are on the handbook's [permissions](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md) page:
+`permissions` as the only access setting ([WC-PERM-1]), the four levels ([WC-PERM-2]), keys and the most specific
+one ([WC-PERM-3]), the commands checked as `messages` ([WC-PERM-4]), housekeeping ([WC-PERM-5]), the built-in
+defaults ([WC-PERM-6], [WC-PERM-7]), the limits no level lifts ([WC-PERM-11]) and a bot's keys
+([WC-PERM-20]). The write guard every write passes is [WC-PERM-13] to [WC-PERM-18]: the recipient list (which
+chats), `sends_per_hour` (how many), the send journal and the flood hold. What stays here:
 
-```json
-{ "permissions": { "messages": "allow", "messages.delete": "ask", "contacts": "readonly" } }
-```
-
-1. **Four levels.**
-   - `deny` — nothing, not even reading: the command answers `permission_error` (5) before it
-     connects, and an agent is not offered its tool.
-   - `readonly` — reads work, writes answer `permission_error`. On a key that only writes
-     (`messages.delete`) it is `deny`.
-   - `ask` — in a terminal, a y/N question that shows what will change, default no. A flag skips
-     it: `--allow-dangerous` for a deletion, `--yes` for every other write. With no terminal and
-     no flag the command answers `confirmation_required` (7). Over MCP,
-     `ask` permits the requested write without a server form; separate moderation rule consent
-     remains authoritative.
-   - `allow` — goes ahead and never asks.
-2. **A key is a command path**: `messages`, `messages.delete`, `chats.members.remove`,
-   `account.sessions.end`. **The most specific key the owner set wins**; there is no wildcard, and a
-   key starts with a resource, so a misspelled one is refused rather than ignored. Every command
-   maps to exactly one key, checked by a test over `commands --json`:
-   - a command that shows messages from outside `messages` counts as `messages` — `inbox`,
-     `review`, `watch`, `serve`, `messages sync`, `store export|search`, the MCP resources and prompts, and
-     what tells who sent what — `attachments list`, `chats documents list` (planned);
-   - housekeeping is never gated — `config`, `session`, `doctor`, `commands`, `complete`,
-     `upgrade`, `skill`, `models`, `server`, `runs`, `sends`, `recipients`, `mcp`, and `store`'s
-     own maintenance.
-3. **The defaults allow almost everything**, so the tool works without questions. Only what cannot
-   be undone asks:
-
-   ```json
-   { "messages.delete": "ask", "account.sessions.end": "ask" }
-   ```
-
-   A default is never tightened without the owner's word. **A built-in default only ever tightens**:
-   against a broader key of the owner's, the stricter of the two holds — `messages: readonly` still
-   stops a deletion, and `messages: allow` keeps its question until `messages.delete` is named.
-4. **Limits no level lifts**: an agent never deletes for everyone and never ends other sessions. The MCP
-   delete has no for-everyone argument; where every delete is for everyone (WhatsApp) it refuses with
-   `permission_error`.
 5. **A group's moderation rules use the same four levels** for each kind of action (delete,
    remove, accept, decline), `readonly` meaning "report it, do nothing". A rule's level can only be
    as loose as the profile's level for `chats.moderate`.
-6. **`permissions` is the only access setting.** A file that still holds `read_only` or `allow` is
-   refused as an unknown setting, like any misspelled one.
 
-7. **A bot's keys are the personal ones under `bot`**: `bot.messages.send`,
-   `bot.chats.members.remove`, `bot.webhooks`. A profile can allow its bot what it does not allow
-   its personal account, and the other way round; `bot` alone covers every bot command. The default
-   is the personal one's: `bot.messages.delete: ask`. Housekeeping under `bot` is never gated —
-   `bot auth`, `bot list`, `bot recipients`, `bot sends`, `bot mcp`.
-
-What it does not decide stays separate: the recipient list (which chats), `sends_per_hour` (how
-many), `--allow-any-file` (which files).
+7. **Housekeeping under `bot` is never gated**: `bot auth`, `bot list`, `bot recipients`, `bot sends`, `bot mcp`.
 
 ## Retention and counter observation contract
 
@@ -1447,50 +1226,27 @@ labels all feature paths and options as planned until implementation.
 
 ## MCP
 
+The three tools, their arguments and what each permission shows are on the handbook's [MCP](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md) page
+([WC-MCP-1] to [WC-MCP-10]), the bot server's three included. What stays here is cli-core's own:
+
+- `status` answers what the server is. `conversations refresh` runs what `search conversations --refresh` runs before
+  it searches (NEED-551 A).
+
 `stats charts --output` selects SVG or PNG by the file extension; images never go to stdout.
 The stored-only `stats_charts` tool accepts optional `format: json|png` (default `json`).
 PNG adds `image/png` content and JSON text `{ chart, image: { format, width, height } }`;
 it writes no file and uses the same `messages` read permission.
 
-1. **Three tools, not one per command** (NEED-766): `<tool>_tools_search` finds commands by words
-   and gives each one's arguments and the shape of its answer (`output`: the envelope of its entity, or
-   any envelope); `<tool>_read` runs a command that only reads and `<tool>_write`
-   one that changes something, as `{ "command": "messages list", "arguments": { … } }`. Both declare
-   the envelope (a list `{items, page, …}` or one thing `{item, …}`) as their `outputSchema`. A command
-   is its CLI path. The bot server's three are `<tool>_bot_tools_search`, `<tool>_bot_read` and
-   `<tool>_bot_write`, and its commands are the path under `bot`. `status` answers what the server is.
-   `conversations refresh` runs what `search conversations --refresh` runs before it searches
-   (NEED-551 A). The list never changes during a connection.
-2. **Arguments are the command's options in snake_case**, with the option's name: `--operation-id` is
-   `operation_id`, `--since-time` is `since_time`, `--before-n` is `before_n`.
-3. **Every command says whether it writes**; `read` refuses a writing one and `write` a reading one.
-4. **A command is found and run by its [permission](#permissions)**, never by a flag of its own:
-   `deny` hides it, `readonly` hides the writing ones, `ask` and `allow` act — no form, since nobody
-   is at a terminal to answer (NEED-772, NEED-773). No `mcp` flag grants or confirms access:
-   `--permission <key=level>` only narrows a level for that server, and one that would loosen the profile
-   is refused at startup; `mcp setup --allow-writes` only acknowledges, when installing, that the profile
-   offers writes.
-5. **Unknown arguments are refused before execution.** A retired schedule field must never turn
-   a scheduled write into an immediate one.
-6. **A tool and its command run the same service method**, so they answer the same result and the
-   same error for the same input.
-
 ## Help text
 
-`<cli> commands search messages --json` describes one command; `<cli> commands messages --json`
-includes the group's descendants. Give one command path per call; inspect different groups in
-separate calls. Scoped discovery keeps `globalOptions` and `exitCodes`, adds
-the canonical `scope` path, and lists options from non-root ancestors in `inheritedOptions`
-as `{ path, options }` entries. Aliases resolve to canonical command names. Unknown or hidden
-paths return `validation_error` (exit 2), with the valid commands at that level. The full tree
-remains available through `<cli> commands --json`, with no scoped fields.
+How help and scoped discovery are written is on the handbook's [commands](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md) page ([WC-CMD-22] to
+[WC-CMD-26]). The messenger CLIs keep these numbers:
 
-1. **A description says what the command does, as the user sees it**, in one line, lower case, no
-   full stop, no internal term — no wire field, no port, no adapter.
-2. **A shared command has the same sentence in both tools.** It is one command; the shared factory
-   writes the description, and a CLI changes it only to name its messenger.
-3. **An option's description says what it changes and its unit**: `--pause <duration>` "wait this
-   long between pages".
+1. **A description says what the command does, as the user sees it**: [WC-CMD-23].
+2. **A shared command has the same sentence in every messenger CLI**: [WC-CMD-25]. The shared factory writes the
+   description, and a CLI changes it only to name its messenger.
+3. **An option's description says what it changes and its unit**: [WC-CMD-22].
+
 4. **A shared option has one sentence in both tools**, checked by the parity workflow
    (`cli-core-parity wording <max.json> <tg.json>`; each file is known by its `cli`, so it takes
    any number, in any order). A difference is allowed only where the sentence names something the messenger's own way — how to name a chat, which rights or events it
@@ -1499,27 +1255,12 @@ remains available through `<cli> commands --json`, with no scoped fields.
 
 ## Layers and sharing
 
-Code structure follows the shared
-[modularity standard](https://github.com/WireCatLabs/cli-base/blob/main/docs/dev/MODULARITY.md):
-provider-neutral capabilities in cli-core, general CLI infrastructure in cli-base, narrow ports,
-thin CLI/MCP handlers and explicit resource ownership. The local
-[architecture map](ARCHITECTURE.md#responsibility-and-dependency-boundaries) names their modules.
-The guidelines apply to changed responsibilities; they do not claim that all existing code has
-already been refactored or that file-size guidance is enforced by lint.
-
-1. **Shared by default.** Provider-neutral behavior goes here. Meeting discovery and preparation
-   belong here even when Zoom is the first consumer; provider bindings stay in their applications.
-   A feature one messenger has
-   and the other could have (topics, polls) is still a port group and a shared command; it is
-   CLI-local only when the other messenger cannot have it — MAX's socket server, Telegram's app
-   registration.
-2. **Layers:** command or MCP tool → service → port group → adapter. A command never calls an
-   adapter method directly for a use case a service owns ([ARCHITECTURE](ARCHITECTURE.md#services)).
-   A new adapter method goes into a named group in `port.ts`, never the core.
-3. **No messenger type above the adapter.** Here, `biome.json` refuses the import; in a CLI, the
-   adapter translates into the domain model and nothing above it imports the messenger library.
-4. **A CLI replaces a use case, not a command** — through `Messenger.services`, so its command and
-   its MCP tool both get the replacement.
+The layers, the direction of dependencies and what goes in which package are on the handbook's
+[architecture](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md) page: call only the layers below ([WC-ARCH-1]), no vendor type above the adapter
+([WC-ARCH-3]), the lowest shared package that can hold the code ([WC-ARCH-4]), a feature another messenger could
+have as a shared command behind a capability ([WC-ARCH-5]), and replacing a use case, not a command
+([WC-ARCH-6]). The local [architecture map](ARCHITECTURE.md#responsibility-and-dependency-boundaries) names
+cli-core's modules.
 
 ## Documents
 
@@ -1639,3 +1380,55 @@ extract/text/index commands. No remote model call for locally readable files, in
 an explicit --ocr run. Generic archives, legacy Office and RTF remain external conversion.
 Agent text and previous good text survive automated failures; no partial structured text
 is indexed as a complete result. Existing PDF/Word optional packages remain optional.
+
+[WC-ACCT-1]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/accounts.md#wc-acct-1--name-the-profile-on-every-command-that-acts-for-an-account
+[WC-ACCT-3]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/accounts.md#wc-acct-3--a-missing-profile-is-an-error-that-lists-the-choices
+[WC-ARCH-1]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-1--call-only-the-layers-below-you-interface-then-service-then-port-then-adapter
+[WC-ARCH-3]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-3--only-the-adapter-imports-a-vendor-library-nothing-above-it-sees-a-vendor-type
+[WC-ARCH-4]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-4--put-code-in-the-lowest-shared-package-that-can-hold-it
+[WC-ARCH-5]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-5--build-a-feature-that-another-provider-could-have-as-a-shared-command-behind-a-capability
+[WC-ARCH-6]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md#wc-arch-6--replace-a-use-case-not-a-command
+[WC-CMD-1]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-1--build-every-path-as-resource-first-then-a-verb-or-a-view
+[WC-CMD-2]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-2--take-every-verb-view-resource-and-root-word-from-the-cli-base-vocabulary
+[WC-CMD-4]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-4--add-a-root-word-only-when-no-resource-or-namespace-can-hold-the-command
+[WC-CMD-6]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-6--give-one-action-or-one-report-one-leaf-command
+[WC-CMD-7]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-7--never-let-two-commands-overlap
+[WC-CMD-8]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-8--keep-no-aliases-a-renamed-path-stops-working-in-the-release-that-renames-it
+[WC-CMD-9]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-9--answer-the-naming-questions-in-the-pull-request-before-you-build-a-new-command
+[WC-CMD-10]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-10--use-a-vocabulary-flag-for-its-meaning-and-give-one-flag-one-kind-of-value-everywhere
+[WC-CMD-13]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-13--name-arguments-with-a-singular-noun-of-the-thing-they-take
+[WC-CMD-14]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-14--keep-the-shared-global-flags-at-their-meaning
+[WC-CMD-15]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-15--never-prompt-when-no-person-can-answer
+[WC-CMD-17]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-17--declare-effects-on-every-command
+[WC-CMD-22]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-22--describe-every-command-argument-and-option-with-a-summary-of-at-most-80-characters
+[WC-CMD-23]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-23--write-help-as-the-user-sees-the-command-one-line-lower-case-no-full-stop-no-internal-term
+[WC-CMD-25]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-25--give-a-shared-command-and-a-shared-option-the-same-sentence-in-every-cli-of-its-group
+[WC-CMD-26]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-26--print-the-command-tree-with-cli-bases-commandsdocument-and-keep-every-key-snake_case
+[WC-LIFE-5]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-5--bound-every-one-shot-command-by-a-deadline
+[WC-MCP-1]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-1--a-server-offers-three-tools-not-one-per-command
+[WC-MCP-2]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-2--an-agent-calls-a-command-by-its-cli-path
+[WC-MCP-10]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-10--a-tool-and-its-command-give-the-same-answer-and-the-same-error
+[WC-OUT-4]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-4--answer-every-json-request-with-one-envelope-a-list-or-one-thing
+[WC-OUT-7]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-7--put-the-facts-about-the-run-in-meta
+[WC-OUT-9]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-9--offer-at-most-two-next-steps-and-mark-a-step-safe-only-when-it-changes-nothing-on-the-service
+[WC-OUT-10]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-10--answer-a-write-with-what-it-did-and-its-operation_id
+[WC-OUT-11]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-11--give-a-shared-command-the-same-answer-shape-in-every-cli-of-its-group
+[WC-OUT-12]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-12--use-snake_case-keys-one-meaning-per-key-and-the-registered-identifier-names
+[WC-OUT-14]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-14--print-a-failure-in-machine-mode-as-one-json-object-on-stderr-with-stdout-empty
+[WC-OUT-18]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-18--exit-with-cli-bases-code-for-each-kind-of-failure
+[WC-OUT-19]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-19--report-a-wrong-command-line-as-validation_error-exit-2
+[WC-OUT-20]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-20--mark-a-failure-safe-to-retry-only-when-repeating-it-cannot-do-harm
+[WC-OUT-21]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-21--keep-only-the-asked-fields-with---jsonab-and-keep-the-envelope
+[WC-OUT-22]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-22--fail-visibly-when-machine-output-passes-its-size-cap
+[WC-PERM-1]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-1--permissions-is-the-only-access-setting
+[WC-PERM-2]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-2--there-are-four-levels-deny-readonly-ask-allow
+[WC-PERM-3]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-3--a-key-is-a-command-path-and-the-most-specific-key-wins
+[WC-PERM-4]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-4--a-command-that-shows-messages-is-checked-as-messages
+[WC-PERM-5]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-5--housekeeping-is-never-gated
+[WC-PERM-6]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-6--the-built-in-defaults-ask-only-before-what-cannot-be-undone
+[WC-PERM-7]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-7--a-built-in-default-only-ever-tightens
+[WC-PERM-11]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-11--some-limits-no-level-lifts
+[WC-PERM-13]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-13--every-write-passes-the-write-guard-before-it-leaves
+[WC-PERM-18]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-18--a-flood-hold-stops-writes-until-it-ends
+[WC-PERM-20]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/permissions.md#wc-perm-20--a-bots-keys-are-the-personal-keys-under-bot
+[WC-TOOL-16]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/toolchain.md#wc-tool-16--run-the-command-lint-on-the-built-cli-and-let-its-baseline-only-shrink
