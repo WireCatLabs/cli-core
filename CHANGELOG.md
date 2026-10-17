@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.324.0 — 17.10.2026
+
 ### Added
 
 - `openStore({ readOnly: true })` opens an existing compatible store through native read-only
