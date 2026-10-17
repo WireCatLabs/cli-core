@@ -97,7 +97,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
         durationMs: endedAt === null ? null : endedAt - startedAt,
         timezone: m.timezone ?? null,
         hostIdentityId: null,
-        participantsCount: sourceParticipants?.length ?? null,
+        ...(sourceParticipants === undefined ? {} : { participantsCount: sourceParticipants?.length ?? null }),
         metadata: m.metadata ?? null,
         deletedAt: null,
       }

@@ -248,11 +248,13 @@ const save = (state: State, input: MeetingSave): MeetingDetails => {
   }
   if (series)
     for (const stored of state.meetings) if (stored.meeting.meetingSeriesId === series.id) stored.series = series
+  if (meeting.participantsCount === undefined) delete meeting.participantsCount
   if (details) Object.assign(details.meeting, meeting, { updatedAt: now, meetingSeriesId: series?.id ?? null })
   else {
     details = {
       meeting: {
         ...meeting,
+        participantsCount: meeting.participantsCount ?? null,
         id: state.nextId++,
         meetingSeriesId: series?.id ?? null,
         eventId: null,
