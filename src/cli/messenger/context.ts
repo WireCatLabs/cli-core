@@ -18,7 +18,9 @@ import type { OpenRecognizer } from "../../speech/transcribe.js"
 import { type AccountKey, type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
 import { type BaseContext, baseContext, environmentOf } from "../context.js"
 import { knownPermissionKeys, type PermissionKeyOf, unknownPermissionKeys } from "../permission-keys.js"
+import { asFirstWord } from "../profile.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../settings.js"
+import { rootOf } from "../steps.js"
 import { recalledAccount, rememberAccount } from "./accounts.js"
 import { terminalAsker } from "./ask.js"
 import { flooded } from "./flooded.js"
@@ -263,14 +265,20 @@ export const connected = (
   }
 }
 
-const unrecorded = (messenger: Messenger, profile: string): CliError =>
-  new CliError(
+const unrecorded = (command: Command, messenger: Messenger, profile: string): CliError => {
+  const tool = messenger.app.command
+  const setup = rootOf(command).commands.some((one) => one.name() === "setup")
+    ? `\`${tool} ${asFirstWord(profile)}setup\``
+    : undefined
+  return new CliError(
     "not_found",
     messenger.history === "store"
-      ? `nothing recorded for profile "${profile}" yet — run \`${messenger.app.command} serve\` or ` +
-          `\`${messenger.app.command} watch\` once to fill the local store`
-      : `nothing recorded for profile "${profile}" yet — run the command once without --offline`,
+      ? `nothing recorded for profile "${profile}" yet — ${setup ? `link it with ${setup}, then ` : ""}run ` +
+          `\`${tool} serve\` or \`${tool} watch\` once to fill the local store`
+      : `nothing recorded for profile "${profile}" yet — ${setup ? `log in with ${setup}, or ` : ""}run the ` +
+          "command once without --offline",
   )
+}
 
 /** NEED-506 A: without it, an agent cannot tell a quiet chat from a store nothing keeps up to date. */
 const warnUnserved = async (
@@ -350,7 +358,7 @@ export const messengerContext = (
   const warn = (text: string) => base.renderer.warn(text)
   const accountFor = (): AccountKey => {
     const account = messenger.accountOf?.(command) ?? recalledAccount(app, provider, profile, base.env)
-    if (!account) throw unrecorded(messenger, profile)
+    if (!account) throw unrecorded(command, messenger, profile)
     return account
   }
   const guard =
