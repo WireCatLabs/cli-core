@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`default_profile` no longer picks a profile.** The owner's rule is that a command names its profile every time:
+  the first word or `<PREFIX>_PROFILE`. A config file that still has `default_profile` makes a command that needs a
+  profile stop with the profile to type and ``<cli> config unset default_profile``; `config set default_profile` is
+  refused. A command that names its profile is not affected.
+- **A profile called `default` is an ordinary name.** `mcp config` names its server `<cli>-default`, not `<cli>`,
+  and `bot list` no longer looks for a `default` bot that nothing configured. An MCP entry made before keeps
+  working until `mcp setup` writes it again under the new name.
+
 ## 0.318.0 — 17.10.2026
 
 ## 0.317.0 — 17.10.2026

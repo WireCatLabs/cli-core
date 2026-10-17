@@ -4246,7 +4246,11 @@ describe("the guard, account and mcp config commands", () => {
     expect(json(stdout).next).toEqual([expect.objectContaining({ step: "mcp.config", command: "mcp config" })])
 
     const pretty = await call(["mcp", "config"], async () => fake, env, { mcp, tty: true })
-    expect(JSON.parse(pretty.stdout.join("\n")).mcpServers.chat.args).toEqual([mcp.scriptPath, "default", "mcp"])
+    expect(JSON.parse(pretty.stdout.join("\n")).mcpServers["chat-default"].args).toEqual([
+      mcp.scriptPath,
+      "default",
+      "mcp",
+    ])
   })
 
   it("refuse a script in npx's cache", async () => {

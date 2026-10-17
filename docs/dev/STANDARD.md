@@ -82,8 +82,8 @@ guessable from the others.
    allowed when they identify a part of the resource (`chats members list`), not an implementation
    detail. A group without a leaf command shows help, never runs a hidden default action.
    **The profile is chosen, never assumed.** A command that acts for one of several accounts or
-   profiles takes it explicitly (the first word, the tool's profile variable, or `default_profile` in
-   its config file); none given is an error that lists the profiles — never the first in the config,
+   profiles takes it explicitly (the first word or the tool's profile variable — no config file names
+   one for it); none given is an error that lists the profiles — never the first in the config,
    never an implicit `default`, not even the only profile; with none the error says how to create one
    by name (`tg personal setup`). A command that touches no account (`account list`, `config show`)
    runs without one. A read across accounts covers all of them and says so.

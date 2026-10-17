@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -14,7 +14,7 @@ const config = settingsFor(app, { profile: { region: v.optional(v.string()) } })
 const call = async (argv: string[], env: NodeJS.ProcessEnv) => {
   const streams = captureStreams()
   const code = await run(argv, { app, commands: () => [configCommand(app, config)] }, { streams, tty: false, env })
-  return { code, answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined }
+  return { code, answer: streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined, stderr: streams.stderr }
 }
 
 describe("config", () => {
@@ -85,34 +85,28 @@ describe("config", () => {
     expect((await call(["config", "set", "limit", "5", "--defaults"], env)).code).toBe(5)
   })
 
-  it("**sets, shows and unsets default_profile without naming a profile**", async () => {
+  it("**refuses to set default_profile**, and unsets one an older version wrote", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
-    await call(["work", "config", "set", "limit", "5"], env)
     await call(["home", "config", "set", "limit", "6"], env)
 
-    expect((await call(["config", "set", "default_profile", "home", "--json"], env)).answer).toMatchObject({
-      scope: "default_profile",
-      value: "home",
-    })
-    const shown = (await call(["config", "show", "--json"], env)).answer.settings
-    expect(shown.find((one: { setting: string }) => one.setting === "default_profile")).toEqual({
-      setting: "default_profile",
-      value: "home",
-      from: "config file",
-    })
-    expect((await call(["config", "set", "default_profile", "home", "--defaults"], env)).code).toBe(2)
+    const refused = await call(["config", "set", "default_profile", "home"], env)
+    expect(refused.code).toBe(2)
+    expect(refused.stderr.join("\n")).toContain("default_profile is gone")
 
-    expect((await call(["config", "unset", "default_profile", "--json"], env)).answer).toMatchObject({ value: null })
-    const after = (await call(["config", "show", "--json"], env)).answer.settings
-    expect(after.find((one: { setting: string }) => one.setting === "default_profile")).toMatchObject({ value: null })
+    const file = join(env.CHAT_CONFIG_DIR, "config.json")
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), default_profile: "home" }))
+    expect((await call(["config", "unset", "default_profile", "--json"], env)).answer).toMatchObject({
+      value: null,
+    })
+    expect(JSON.parse(readFileSync(file, "utf8")).default_profile).toBeUndefined()
   })
 
-  it("refuses to change default_profile from a process locked to one profile", async () => {
+  it("refuses to unset default_profile from a process locked to one profile", async () => {
     const root = mkdtempSync(join(tmpdir(), "config-"))
     const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_PROFILE_LOCK: "work" }
 
-    expect((await call(["config", "set", "default_profile", "home"], env)).code).toBe(5)
+    expect((await call(["config", "unset", "default_profile"], env)).code).toBe(5)
   })
 
   it("**refuses every change under the read-only lock**, and still shows the settings", async () => {

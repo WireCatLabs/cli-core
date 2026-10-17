@@ -36,10 +36,12 @@ describe("where a setting came from", () => {
     expect(settings({ profile: "work" }, { APP_PROFILE: "other" }).sources.profile).toBe("first word")
   })
 
-  it("credits the file when the file is what decided it", () => {
-    withConfig(JSON.stringify({ default_profile: "work" }))
-    expect(settings().profile).toBe("work")
-    expect(settings().sources.profile).toBe("config file")
+  it("**no longer takes a profile from `default_profile`**: it names the profile to type and the way to drop it", () => {
+    withConfig(JSON.stringify({ default_profile: "work", profiles: { work: {} } }))
+    expect(() => strict()).toThrow(
+      "default_profile is no longer read — name the profile: `app work …`; `app config unset default_profile` removes it",
+    )
+    expect(strict({ profile: "work" }).profile).toBe("work")
   })
 
   it("**names where the command budget came from**, which has no file row to fall back on", () => {
@@ -143,11 +145,6 @@ describe("the order a setting is decided in", () => {
     expect(settings({}, { APP_PROFILE: "fromEnv" }).profile).toBe("fromEnv")
   })
 
-  it("prefers the file to the built-in default", () => {
-    withConfig(JSON.stringify({ default_profile: "fromFile" }))
-    expect(settings().profile).toBe("fromFile")
-  })
-
   it("falls back to `default`, which is what an unconfigured machine has", () => {
     expect(settings().profile).toBe("default")
   })
@@ -174,15 +171,12 @@ describe("the order a setting is decided in", () => {
     expect(own.resolveSettings({}, { env, configDir, needsProfile: false }).profilesHere).toEqual(["sales"])
   })
 
-  it("takes a profile from the first word, APP_PROFILE or `defaultProfile`, and runs a no-account command without", () => {
+  it("takes a profile from the first word or APP_PROFILE, and runs a no-account command without", () => {
     const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
     withConfig(JSON.stringify({ profiles: { work: {}, personal: {} } }))
     expect(strict({ profile: "work" }, env).profile).toBe("work")
     expect(strict({}, { ...env, APP_PROFILE: "personal" }).profile).toBe("personal")
     expect(settings({}, env)).toMatchObject({ profile: "default", sources: { profile: "none named" } })
-
-    withConfig(JSON.stringify({ default_profile: "work", profiles: { work: {}, personal: {} } }))
-    expect(strict({}, env).profile).toBe("work")
   })
 
   it("reads `APP_PROFILE` as unset when the shell set it to nothing", () => {
@@ -259,7 +253,7 @@ describe("permissions across sections", () => {
 
 describe("a process locked to one profile", () => {
   it("uses the locked profile when nothing names one, and refuses any other a first word or APP_PROFILE names", () => {
-    withConfig(JSON.stringify({ default_profile: "personal", profiles: {} }))
+    withConfig(JSON.stringify({ profiles: {} }))
     const lock = { APP_PROFILE_LOCK: "agent" }
 
     expect(settings({}, lock)).toMatchObject({ profile: "agent", sources: { profile: "APP_PROFILE_LOCK" } })
@@ -360,12 +354,11 @@ describe("where each setting came from", () => {
     expect(settings().configFound).toBe(true)
   })
 
-  it("names what chose the profile: the first word, then APP_PROFILE, then the file", () => {
-    withConfig(JSON.stringify({ default_profile: "home", profiles: { home: {}, work: {} } }))
+  it("names what chose the profile: the first word, then APP_PROFILE", () => {
+    withConfig(JSON.stringify({ profiles: { home: {}, work: {} } }))
 
     expect(settings({ profile: "work" }, { APP_PROFILE: "home" }).sources.profile).toBe("first word")
     expect(settings({}, { APP_PROFILE: "work" }).sources.profile).toBe("APP_PROFILE")
-    expect(settings().sources.profile).toBe("config file")
     expect(settings().configuredProfiles).toEqual(["home", "work"])
   })
 })
@@ -508,23 +501,22 @@ describe("settings extensions", () => {
   it("resolves adapter fields from every kind/profile layer and keeps their provenance", () => {
     withConfig(
       JSON.stringify({
-        default_profile: "work",
         defaults: { autoStart: false, audioModel: "large" },
         profiles: { work: { autoStart: true } },
         personal: { defaults: { autoStart: false }, profiles: { work: { autoStart: false } } },
       }),
     )
-    const result = adapted.resolveSettings({}, { env: {}, configDir })
+    const result = adapted.resolveSettings({ profile: "work" }, { env: {}, configDir })
     expect(result).toMatchObject({
       autoStart: false,
       audioModel: "large",
       sources: {
         autoStart: "config file: personal.profiles.work",
-        profile: "config file: default_profile",
+        profile: "first word",
       },
     })
-    expect(adapted.resolveSettings({}, { env: {}, configDir, kind: "bot" }).autoStart).toBe(true)
-    expect(adapted.resolveSettings({}, { env: {}, configDir, kind: "bot" }).sources.autoStart).toBe(
+    expect(adapted.resolveSettings({ profile: "work" }, { env: {}, configDir, kind: "bot" }).autoStart).toBe(true)
+    expect(adapted.resolveSettings({ profile: "work" }, { env: {}, configDir, kind: "bot" }).sources.autoStart).toBe(
       "config file: profiles.work",
     )
     withConfig(JSON.stringify({ defaults: { autoStart: false } }))
