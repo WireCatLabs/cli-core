@@ -10,6 +10,7 @@ import {
   saveAgentClose,
   storeAgentClose,
 } from "./task-close.js"
+import { DEFAULT_FIRST_PASS_PER_CHAT, savedFirstPassPerChat, saveFirstPassPerChat } from "./task-first-pass.js"
 import { taskRowOf } from "./things.js"
 import { write } from "./transaction.js"
 import { recordTaskEvent } from "./work-tasks.js"
@@ -17,6 +18,9 @@ import { recordTaskEvent } from "./work-tasks.js"
 export interface TaskCloseStore {
   agentClose(): Promise<AgentCloseSettings>
   saveAgentClose(change: { allowed?: boolean | null; min?: number | null }): Promise<void>
+  /** How many tasks the first rule pass after a sync may open per chat. */
+  firstPassPerChat(): Promise<number>
+  saveFirstPassPerChat(value: number | null): Promise<void>
   closeSuggestion(id: string): Promise<CloseSuggestion | null>
   /**
    * Marks an open task with the close an agent would make, replacing an earlier one, and releases its claim so the
@@ -45,6 +49,8 @@ export const taskCloseOver = (context: StoreContext): TaskCloseStore => {
   return {
     agentClose: async () => storeAgentClose(database),
     saveAgentClose: async (change) => write(database, () => saveAgentClose(database, change, now())),
+    firstPassPerChat: async () => savedFirstPassPerChat(database) ?? DEFAULT_FIRST_PASS_PER_CHAT,
+    saveFirstPassPerChat: async (value) => write(database, () => saveFirstPassPerChat(database, value, now())),
     closeSuggestion: async (id) => closeSuggestionOf(database, liveRow(id)),
     suggestClose: async (id, suggestion, by) =>
       write(database, () => {

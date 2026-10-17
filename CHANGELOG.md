@@ -7,6 +7,26 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A first sync opens no task from history** (owner, 2026-10-17). The rule pass after an account's first sync
+  opens at most `task_first_pass_per_chat` tasks per chat, newest first, and the default is 0. What it held back
+  is counted in the sync's `tasks` (`held`, `held_chats`) and named in a note pointing at `tasks apply`. Later
+  syncs still open tasks from new messages. `config set task_first_pass_per_chat 50` brings back the old
+  behaviour.
+
+### Added
+
+- **`tasks apply <chat...>`, and the MCP tool `tasks_apply`**: the task rules over a chat's newest stored messages
+  (`--last`, 50 by default, at most 1000), for a chat whose history the owner wants as tasks. It lists what would
+  open and changes nothing unless `--yes`; with `--yes` the duplicate check runs as on a sync. Local store only.
+
+### Fixed
+
+- **History backfilled after the first pass opens no tasks.** A pass skips a chat with nothing sent since the last
+  pass, so a quiet chat whose old messages a later sync fetched no longer gets tasks for questions asked months
+  ago.
+
 ## 0.308.0 — 17.10.2026
 
 ### Added

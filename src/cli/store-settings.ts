@@ -21,6 +21,11 @@ import {
   writeTaskCategoryEdits,
 } from "../store/shared-config.js"
 import {
+  DEFAULT_FIRST_PASS_PER_CHAT,
+  firstPassPerChatOf,
+  savedFirstPassPerChat,
+} from "../store/sqlite/task-first-pass.js"
+import {
   accountGroupsOf,
   DEFAULT_AGENT_CLOSE,
   openStore,
@@ -42,6 +47,7 @@ const TASK_CATEGORIES = "task_categories"
 const CATEGORY_PREFIX = `${TASK_CATEGORIES}.`
 const AGENT_CLOSE = "task_agent_close"
 const AGENT_CLOSE_MIN = "task_agent_close_min"
+const FIRST_PASS = "task_first_pass_per_chat"
 
 /** Settings of the store file, not of a profile: the store is one file for every profile, tg and MAX. */
 export const STORE_SETTINGS = [
@@ -50,6 +56,7 @@ export const STORE_SETTINGS = [
   `${CATEGORY_PREFIX}<name>`,
   AGENT_CLOSE,
   AGENT_CLOSE_MIN,
+  FIRST_PASS,
 ]
 
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
@@ -61,6 +68,7 @@ export const isStoreSetting = (setting: string): boolean =>
   setting.startsWith(CATEGORY_PREFIX) ||
   setting === AGENT_CLOSE ||
   setting === AGENT_CLOSE_MIN ||
+  setting === FIRST_PASS ||
   setting.startsWith(GROUP_PREFIX)
 
 export const changeStoreSetting = async (
@@ -74,6 +82,7 @@ export const changeStoreSetting = async (
   if (setting === TASK_CATEGORIES || setting.startsWith(CATEGORY_PREFIX))
     return changeCategory(app, env, setting, value)
   if (setting === AGENT_CLOSE || setting === AGENT_CLOSE_MIN) return changeAgentClose(env, setting, value)
+  if (setting === FIRST_PASS) return changeFirstPass(app, env, value)
   const script = SCRIPTS[setting] as keyof Stemmers
   const store = await openStore({ env })
   try {
@@ -167,6 +176,23 @@ const changeCategory = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting:
   }
 }
 
+const changeFirstPass = async (app: AppIdentity, env: NodeJS.ProcessEnv, value: string | undefined) => {
+  const n = value === undefined ? null : firstPassPerChatOf(value, FIRST_PASS)
+  const store = await openStore({ env })
+  try {
+    await store.tasks.saveFirstPassPerChat(n)
+    const now = await store.tasks.firstPassPerChat()
+    return {
+      result: { store: storePath(env), scope: "store", setting: FIRST_PASS, value: now },
+      note:
+        `store-wide — an account's first sync opens at most ${now} task(s) per chat from history; later syncs read ` +
+        `only new messages. \`${app.command} tasks apply <chat>\` builds tasks from a chat's history when asked`,
+    }
+  } finally {
+    await store.close()
+  }
+}
+
 const changeAgentClose = async (env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
   const typed = value?.trim().toLowerCase()
   let change: { allowed?: boolean | null; min?: number | null }
@@ -252,6 +278,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   let phoneCountries: string[] | undefined
   let categories: TaskCategory[] | undefined
   let agentClose: ReturnType<typeof savedAgentClose> = {}
+  let firstPass: number | undefined
   if (existsSync(path)) {
     try {
       const database = await openCache(path)
@@ -263,6 +290,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
         phoneCountries = table ? savedPhoneCountries(database) : undefined
         categories = table ? savedTaskCategories(database) : undefined
         agentClose = table ? savedAgentClose(database) : {}
+        firstPass = table ? savedFirstPassPerChat(database) : undefined
       } finally {
         database.close()
       }
@@ -305,6 +333,12 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
             setting: AGENT_CLOSE_MIN,
             value: agentClose.min ?? DEFAULT_AGENT_CLOSE.min,
             from: agentClose.min === undefined ? "default" : "store",
+            scope: "store",
+          },
+          {
+            setting: FIRST_PASS,
+            value: firstPass ?? DEFAULT_FIRST_PASS_PER_CHAT,
+            from: firstPass === undefined ? "default" : "store",
             scope: "store",
           },
         ]),

@@ -374,7 +374,7 @@ describe("messages sync", () => {
     ).not.toBe(0)
   })
 
-  it("**opens a task for an unanswered question it stored**, once: the next sync starts where this one stopped", async () => {
+  it("**holds an unanswered question of the first sync for the owner**, once: the next sync starts where this one stopped", async () => {
     const env = setup()
     const asked = { newest: 2, asked: [] as (string | undefined)[] }
     const recent = (id: number, text: string): Message => ({
@@ -388,7 +388,8 @@ describe("messages sync", () => {
     } as unknown as MessengerAdapter
 
     const first = await call(["messages", "sync", "7", "--json"], chat, env)
-    expect(first.answer.tasks).toEqual({ added: 1, closed: 0, review: 0 })
+    expect(first.answer.tasks).toEqual({ added: 0, closed: 0, review: 0, held: 1, held_chats: 1 })
+    expect(first.stderr).toContain("tasks apply <chat>")
     const again = await call(["messages", "sync", "7", "--json"], chat, env)
     expect(again.code).toBe(0)
     expect(again.answer.tasks).toBeUndefined()

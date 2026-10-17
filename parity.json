@@ -3936,6 +3936,12 @@
         "--within": "all"
       }
     },
+    "tasks apply": {
+      "in": "all",
+      "options": {
+        "--last": "all"
+      }
+    },
     "tasks categories": {
       "in": "all"
     },

@@ -16,6 +16,7 @@ import {
   applyTaskRules,
   applyTaskRulesOnArrival,
   applyTaskRulesSinceLastPass,
+  applyTaskRulesToChats,
   applyTaskRulesToStored,
   openRequestTask,
 } from "./task-rules.js"
@@ -259,9 +260,14 @@ describe("the rule pass over the store", () => {
     })
 
     await new Promise((resolve) => setTimeout(resolve, 5))
-    await store.messages.saveMessages(account, "-1001", [said("2", 2, "I do", { outgoing: true, replyToId: "1" })], {
-      via: "test",
-    })
+    await store.messages.saveMessages(
+      account,
+      "-1001",
+      [said("2", 2, "I do", { outgoing: true, replyToId: "1", timestamp: new Date().toISOString() })],
+      {
+        via: "test",
+      },
+    )
     const second = await applyTaskRulesToStored(store, account, first.until ?? undefined)
     expect(second).toMatchObject({ added: 0, closed: 1, review: 0 })
     expect(second.until && first.until && second.until > first.until).toBe(true)
@@ -272,6 +278,7 @@ describe("the rule pass over the store", () => {
   it("**after a sync, starts where the last pass stopped**; the first reads only chats active in the last 14 days", async () => {
     const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-since-")), "messages.db") })
     const now = new Date(Date.UTC(2026, 9, 10))
+    await store.tasks.saveFirstPassPerChat(1)
     await store.messages.saveMessages(account, "-1001", [said("1", 1, "who has the keys?")], { via: "test" })
     await store.messages.saveMessages(
       account,
@@ -285,10 +292,112 @@ describe("the rule pass over the store", () => {
     expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 0, review: 0 })
 
     await new Promise((resolve) => setTimeout(resolve, 5))
-    await store.messages.saveMessages(account, "-1001", [said("2", 2, "I do", { outgoing: true, replyToId: "1" })], {
+    await store.messages.saveMessages(
+      account,
+      "-1001",
+      [said("2", 2, "I do", { outgoing: true, replyToId: "1", timestamp: new Date().toISOString() })],
+      {
+        via: "test",
+      },
+    )
+    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 1, review: 0 })
+    await store.close()
+  })
+
+  it("**a first sync opens no task from history by default**, counts what it held, and still sets the stop point", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-first-")), "messages.db") })
+    const now = new Date(Date.UTC(2026, 9, 10))
+    await store.messages.saveMessages(
+      account,
+      "-1001",
+      [said("1", 1, "who has the keys?"), said("2", 2, "and the car?")],
+      {
+        via: "test",
+      },
+    )
+
+    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({
+      added: 0,
+      closed: 0,
+      review: 0,
+      held: 2,
+      heldChats: 1,
+    })
+    expect(await store.sync.taskRulesStop(account)).toEqual(expect.any(String))
+    expect(await store.tasks.list({})).toEqual([])
+    await store.close()
+  })
+
+  it("**opens only the newest task_first_pass_per_chat of a chat's history** on the first sync", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-first-n-")), "messages.db") })
+    await store.tasks.saveFirstPassPerChat(1)
+    await store.messages.saveMessages(
+      account,
+      "-1001",
+      [said("1", 1, "who has the keys?"), said("2", 2, "and the car?")],
+      {
+        via: "test",
+      },
+    )
+
+    expect(await applyTaskRulesSinceLastPass(store, account, new Date(Date.UTC(2026, 9, 10)))).toMatchObject({
+      added: 1,
+      held: 1,
+    })
+    expect((await store.tasks.list({})).map((task) => task.source)).toEqual(["msg:telegram/500/-1001/2"])
+    await store.close()
+  })
+
+  it("**after the first pass, history backfilled into a chat opens nothing**: only messages sent since are new", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-backfill-")), "messages.db") })
+    const now = new Date(Date.UTC(2026, 9, 10))
+    await store.messages.saveMessages(account, "-1001", [said("1", 1, "morning")], { via: "test" })
+    await applyTaskRulesSinceLastPass(store, account, now)
+
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await store.messages.saveMessages(account, "-3003", [said("7", 7, "who pays the rent?", { chatId: "-3003" })], {
       via: "test",
     })
-    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 1, review: 0 })
+    expect(await applyTaskRulesSinceLastPass(store, account, now)).toEqual({ added: 0, closed: 0, review: 0 })
+
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    const today = new Date().toISOString()
+    await store.messages.saveMessages(
+      account,
+      "-3003",
+      [said("8", 8, "and the deposit?", { chatId: "-3003", timestamp: today })],
+      { via: "test" },
+    )
+    expect(await applyTaskRulesSinceLastPass(store, account, now)).toMatchObject({ added: 2 })
+    await store.close()
+  })
+})
+
+describe("tasks apply", () => {
+  it("lists what a chat's history would open and changes nothing; with yes it opens them", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-apply-")), "messages.db") })
+    await store.messages.saveMessages(
+      account,
+      "-1001",
+      [
+        said("1", 1, "when do you pay the invoice?"),
+        said("2", 2, "hi"),
+        said("3", 3, "Slava will bring it", { mentions: ["500"] }),
+      ],
+      { via: "test" },
+    )
+
+    const [dry] = await applyTaskRulesToChats(store, account, ["-1001"])
+    expect(dry).toMatchObject({ chat: "-1001", messages: 3, added: 0 })
+    expect(dry?.tasks).toEqual([
+      { source: "msg:telegram/500/-1001/1", kind: "question", category: "money" },
+      { source: "msg:telegram/500/-1001/3", kind: "mention", category: "other" },
+    ])
+    expect(await store.tasks.list({})).toEqual([])
+
+    const [done] = await applyTaskRulesToChats(store, account, ["-1001"], { yes: true, last: 2 })
+    expect(done).toMatchObject({ messages: 2, added: 1, tasks: [] })
+    expect((await store.tasks.list({})).map((task) => task.source)).toEqual(["msg:telegram/500/-1001/3"])
     await store.close()
   })
 })

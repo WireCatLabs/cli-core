@@ -36,6 +36,11 @@ no message text — read all of it:
 
 Anything not on the agenda waits for its own date. Do not open it.
 
+**History is not work.** A first sync opens no tasks from old messages (`task_first_pass_per_chat`, 0 by
+default) and says how many it held. Do not read old chats looking for tasks. Ask the owner which chats to build,
+then for each: `{{command}} tasks apply "<chat>" --json` lists what would open, and `--yes` opens it. Dig deeper
+into one chat (`--last 300`) only when the owner asks.
+
 ## 2. Look only where the agenda points
 
 For a task: `{{command}} tasks show <key> --json` gives its plan and its links. Read around each

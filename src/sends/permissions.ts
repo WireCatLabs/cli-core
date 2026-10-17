@@ -299,6 +299,7 @@ const NAMED_WRITE_KEYS = [
   "tags.add",
   "tags.remove",
   "tasks.add",
+  "tasks.apply",
   "tasks.claim",
   "tasks.close",
   "tasks.duplicates.defer",

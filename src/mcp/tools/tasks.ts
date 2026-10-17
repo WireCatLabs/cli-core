@@ -7,8 +7,10 @@ import { taskStatsAnswer } from "../../cli/messenger/stats-answers.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { AGENDA_QUERY, agendaItem } from "../../services/agenda.js"
 import { servicesFor, storedDeps } from "../../services/index.js"
+import { storedChatId } from "../../services/message-resolution.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
 import { DEFAULT_TASK_CATEGORIES } from "../../services/task-categories.js"
+import { ARRIVAL_WINDOW, applyTaskRulesToChats } from "../../services/task-rules.js"
 import {
   CLAIM_LEASE_MS,
   type PairDecision,
@@ -357,6 +359,40 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
           unlisted: await service.unlistedCategories(),
           file: (await service.categoriesFile()) ?? null,
         })
+      },
+    }),
+
+    tasks_apply: tool({
+      title: "Build tasks from a chat's history",
+      description:
+        "The task rules over a chat's newest stored messages: a question nobody answered and a mention of the owner " +
+        "open a task, the owner's answer closes one. A first sync opens none from history (config " +
+        "task_first_pass_per_chat, 0 by default): ask the owner before building a chat's tasks. Without yes it " +
+        "changes nothing and lists what would open; with yes it opens them through the duplicate check. Reads only " +
+        "the local store. Returns { items: [{ chat, messages, added, closed, review, tasks: [{ source, kind, " +
+        "category }] }] }.",
+      input: v.object({
+        chats: v.pipe(v.array(chatOf(messenger)), v.minLength(1), v.maxLength(20)),
+        last: v.optional(
+          v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(1),
+            v.maxValue(1000),
+            v.description(`read the newest n stored messages of each chat (default ${ARRIVAL_WINDOW})`),
+          ),
+        ),
+        yes: v.optional(v.pipe(v.boolean(), v.description("open the tasks instead of listing them"))),
+      }),
+      annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
+      stored: async (store, account, args) => {
+        const ids = []
+        for (const chat of args.chats) ids.push(await storedChatId(messenger, chat, store, account))
+        const passes = await applyTaskRulesToChats(store, account, ids, {
+          ...(args.last === undefined ? {} : { last: args.last }),
+          yes: args.yes ?? false,
+        })
+        return listOf("tasks apply", { items: passes.map(snakeKeys), limit: passes.length, has_more: false })
       },
     }),
 
