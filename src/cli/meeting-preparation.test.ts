@@ -139,8 +139,8 @@ describe("meeting preparation adapters", () => {
       },
     })
     expect(JSON.stringify(describeProgram(program))).toContain('"entity":"meeting_preparation"')
-    expect(meetingPreparationTool.inputSchema).toMatchObject({ additionalProperties: false })
-    expect(JSON.stringify(meetingPreparationTool.inputSchema)).not.toContain("account_id")
+    expect(meetingPreparationTool().inputSchema).toMatchObject({ additionalProperties: false })
+    expect(JSON.stringify(meetingPreparationTool().inputSchema)).not.toContain("account_id")
   })
 
   it("normalizes explicit offset windows and preserves limits and unknown coverage", async () => {
@@ -242,6 +242,29 @@ describe("meeting preparation adapters", () => {
         from: "user",
       }),
     ).rejects.toMatchObject({ code: "commander.unknownOption" })
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it("offers the MCP communications argument only to a host that connects a messages source", async () => {
+    const read = vi.fn<MeetingPreparationReader>()
+    const shown = (tool: ReturnType<typeof meetingPreparationTool>) =>
+      JSON.stringify(tool.inputSchema).includes("communications") || tool.description.includes("communications")
+
+    expect(shown(meetingPreparationTool({ communications: true }))).toBe(true)
+    expect(shown(meetingPreparationTool())).toBe(false)
+    const refused = await callMeetingPreparationTool(
+      read,
+      { ...args, communications: { sources: [{ id: "chat" }], query: "launch" } },
+      undefined,
+      {},
+      now,
+    )
+    expect(refused).toMatchObject({
+      isError: true,
+      structuredContent: {
+        error: { code: "validation_error", message: "unknown preparation argument: communications" },
+      },
+    })
     expect(read).not.toHaveBeenCalled()
   })
 
