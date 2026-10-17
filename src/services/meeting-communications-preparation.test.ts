@@ -280,7 +280,7 @@ it("centers bounded excerpts on literal short words and folded Unicode matches",
   for (const [query, word] of [
     ["OR", "OR"],
     ["cafe", "café"],
-    ["нбб", "НББ"],
+    ["вега", "ВЕГА"],
   ] as const) {
     const text = `${"padding ".repeat(200)}${word}${" after ".repeat(200)}`
     f.db
