@@ -55,6 +55,10 @@ conformance or imply that planned command paths are already implemented.
 
 ## Modules
 
+The optional [bounded context reader](CONTEXT-EVIDENCE.md) reads explicitly selected local
+messages, mail and imported documents without index/model work. It is a shared SDK foundation;
+meeting preparation has not yet opted into communications context.
+
 | Export | Directory | What it holds |
 |---|---|---|
 | `.` | `src/domain/`, `src/render/`, `src/resolve.ts`, `src/terminal/` | the domain model (`models.ts`, types only), message locators, message rendering, name resolution that refuses rather than guesses, the secret prompt, the terminal QR code |

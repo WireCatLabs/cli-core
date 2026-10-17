@@ -1,4 +1,14 @@
 import { type BotCheckService, botCheckService } from "../botcheck/service.js"
+
+export type {
+  ContextEvidenceItem,
+  ContextEvidencePage,
+  ContextEvidenceReader,
+  ContextEvidenceRequest,
+  ContextSource,
+} from "./context-evidence.js"
+export { createContextEvidenceReader } from "./context-evidence.js"
+
 import { type AccountService, accountService } from "./account.js"
 import { type AdminService, adminService } from "./admin.js"
 import { type AdminStatisticsService, adminStatisticsService } from "./admin-statistics.js"

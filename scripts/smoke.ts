@@ -22,6 +22,7 @@ import { openSqlite } from "../src/store/sqlite/open.js"
 import { rankQuery } from "../src/store/sqlite/rankings.js"
 import { accounts } from "../src/store/sqlite/schema.js"
 import { officeFixture } from "../src/testing/office-files.js"
+import { smokeContextEvidence } from "./smoke-context-evidence.js"
 import { smokeMeetingPreparation } from "./smoke-meeting-preparation.js"
 
 const runtime = typeof (globalThis as { Bun?: unknown }).Bun === "undefined" ? "node" : "bun"
@@ -213,6 +214,7 @@ for (const { name, run } of meetingStoreContract(async () => {
   )
 
 await smokeMeetingPreparation(check)
+await smokeContextEvidence(check)
 
 if (failures.length > 0) {
   console.error(`smoke failed under ${runtime}:\n${failures.map((one) => `  - ${one}`).join("\n")}`)

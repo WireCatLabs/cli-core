@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
+import type { ContextEvidenceReader } from "../context/evidence.js"
 import type { MeetingFindingsStore } from "../meetings/findings.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
 import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
@@ -29,6 +30,7 @@ import * as attachmentTexts from "./sqlite/attachment-texts.js"
 import { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
+import { contextEvidenceOver } from "./sqlite/context-evidence.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
 import { fillFolded } from "./sqlite/folded.js"
@@ -53,6 +55,7 @@ import type { AccountKey } from "./types.js"
 import { type AccountVectors, accountVectorsOver, type VectorsStore, vectorsStoreOver } from "./vectors.js"
 
 export interface MessageStore {
+  readonly contextEvidence?: ContextEvidenceReader
   /** Accounts, account groups and which account each app profile is. */
   readonly accounts: AccountsStore
   /** One account's chats: the list, what left, what is complete, their metadata. */
@@ -210,6 +213,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       (keyed: AccountMentions) => mentionsStoreOver(context, keyed),
     ),
   }
+  const contextEvidence = once(() => contextEvidenceOver(context))
   const searches = once(() => searchesStoreOver(context))
   const queries = once(() => queriesStoreOver(context, stemmerFor))
   const searchIndex = once(() => searchIndexStoreOver(context))
@@ -228,6 +232,9 @@ const storeOver = (context: StoreContext): MessageStore => {
   const meetings = once(() => meetingStoreOver(context))
 
   const store: MessageStore = {
+    get contextEvidence() {
+      return contextEvidence()
+    },
     meetingVectors: meetingVectorsOver(context),
     get accounts() {
       return areas.accounts().whole
