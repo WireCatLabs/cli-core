@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { type Audience, MEDIA_KINDS, type MediaKind, type PrivacySettings } from "../../domain/models.js"
 import { sendTime } from "../../domain/send-time.js"
 import { capability } from "../../ports/messenger.js"
-import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
+import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -107,10 +107,12 @@ export const callsCommand = (messenger: Messenger): Command => {
 
 /** `chats delete` and `chats clear` — for this account only; at the default level they ask first. */
 export const chatDeletionCommands = (messenger: Messenger): Command[] => [
-  annotate(new Command("delete"), { effects: REMOTE_WRITE })
+  annotate(new Command("delete"), { effects: REMOTE_WRITE, mcp: false })
     .description("delete a chat from this account; the others in it keep it and its messages")
     .argument("<chat>", messenger.chatArgument)
-    .option("--allow-dangerous", "go ahead without the question an ask level puts before a deletion")
+    .addOption(
+      ownerOnlyOption("--allow-dangerous", "go ahead without the question an ask level puts before a deletion"),
+    )
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
       renderAnswer(
@@ -119,10 +121,12 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
         itemOf(snakeKeys(await context.withServices((services) => services.admin.deleteChat(chat)))),
       )
     }),
-  annotate(new Command("clear"), { effects: REMOTE_WRITE })
+  annotate(new Command("clear"), { effects: REMOTE_WRITE, mcp: false })
     .description("delete every message in a chat for this account; the others in it keep theirs")
     .argument("<chat>", messenger.chatArgument)
-    .option("--allow-dangerous", "go ahead without the question an ask level puts before a deletion")
+    .addOption(
+      ownerOnlyOption("--allow-dangerous", "go ahead without the question an ask level puts before a deletion"),
+    )
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
       renderAnswer(

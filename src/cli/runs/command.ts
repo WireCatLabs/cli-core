@@ -11,7 +11,9 @@ import { type RunSearch, runsFound, searchRuns } from "./search.js"
 
 /** Reading the log is not itself worth recording, so **nothing here starts a run**. */
 export const runsCommand = (app: AppIdentity): Command => {
-  const command = new Command("runs").description("recorded runs — what this tool did, and when")
+  const command = annotate(new Command("runs"), { mcp: false }).description(
+    "recorded runs — what this tool did, and when",
+  )
   const dir = (from: Command) => runsDirFor(app, environmentOf(from).env ?? process.env)
   const runOrRefuse = (from: Command, id: string) => {
     const found = findRun(dir(from), id)

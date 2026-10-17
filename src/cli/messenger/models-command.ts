@@ -94,7 +94,7 @@ const modelLine = (item: ModelItem, width: number) =>
   (item.downloaded ? "downloaded" : "—".padEnd(10))
 
 export const modelsCommand = (messenger: Messenger): Command => {
-  const models = new Command("models").description("models that run on this machine")
+  const models = annotate(new Command("models"), { mcp: false }).description("models that run on this machine")
   const audio = models.command("audio").description("speech models for transcribing voice messages")
 
   withQuery(annotate(audio.command("list"), { effects: LOCAL_READ }), MODELS_QUERY)
@@ -244,7 +244,9 @@ export const modelsCommand = (messenger: Messenger): Command => {
 /** `images models`: registered with picture search, the only thing these models serve. */
 export const imageModelsCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
-  const image = new Command("models").description("models that read pictures, for `images embed` and picture search")
+  const image = annotate(new Command("models"), { mcp: false }).description(
+    "models that read pictures, for `images embed` and picture search",
+  )
 
   withQuery(
     annotate(image.command("list"), { effects: LOCAL_READ, examples: [`${tool} images models list`] }),

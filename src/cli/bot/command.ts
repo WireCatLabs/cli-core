@@ -21,7 +21,7 @@ import { BotTokenStore } from "./token.js"
 import { botWatchCommand } from "./watch.js"
 
 const authCommand = (bot: BotMessenger, tokenVariable: string): Command => {
-  const auth = new Command("auth").description("the bot token this profile uses")
+  const auth = annotate(new Command("auth"), { mcp: false }).description("the bot token this profile uses")
 
   grantsAuthority(annotate(auth.command("set"), { effects: LOCAL_WRITE }))
     .description(
@@ -93,7 +93,7 @@ const meCommand = (bot: BotMessenger): Command =>
     })
 
 const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
-  annotate(new Command("list"), { effects: LOCAL_READ })
+  annotate(new Command("list"), { effects: LOCAL_READ, mcp: false })
     .description(
       `every name on this machine that has a bot token; --check asks ${bot.name ?? "the messenger"} which bot each is`,
     )
@@ -216,7 +216,7 @@ const chatsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("leave"), { effects: REMOTE_WRITE })
+  annotate(command.command("leave"), { effects: REMOTE_WRITE, mcp: false })
     .description("take the bot out of a chat; only an admin of the chat can bring it back")
     .argument("<chat>", "a chat id, or the title of a chat this bot has seen")
     .action(async function (this: Command, chat: string) {

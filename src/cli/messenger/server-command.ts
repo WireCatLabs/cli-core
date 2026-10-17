@@ -113,7 +113,7 @@ const lockProcess =
  */
 export const serverCommand = (messenger: Messenger, options: ServerOptions = {}): Command => {
   const { app } = messenger
-  const command = new Command("server").description(
+  const command = annotate(new Command("server"), { mcp: false }).description(
     `\`${app.command} serve\` in the background: start, stop, restart, status, logs; install adds a systemd or launchd unit`,
   )
   const marker = (profile: string) => `${app.envPrefix}_SERVER=${profile}`

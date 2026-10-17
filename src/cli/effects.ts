@@ -1,6 +1,6 @@
-import { stepTargets } from "@wirecat/cli-base/commands"
+import { annotate, annotateOption, stepTargets } from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 
 /** Reads the messenger; a page it keeps on the way is incidental. */
 export const REMOTE_READ: Effects = { remote: "read", local: "read" }
@@ -17,14 +17,18 @@ const AUTHORITY = new WeakSet<Command>()
 /**
  * Marks a local write that changes what a later run may do: a schedule, a setting, the recipient list, an
  * auto-reply, an agent's setup. `<PREFIX>_READ_ONLY` refuses it, or an agent under the lock could hand an
- * unlocked run the send it may not make itself (SEC-47).
+ * unlocked run the send it may not make itself (SEC-47). For the same reason no MCP server offers it (`mcp: false`).
  */
 export const grantsAuthority = <T extends Command>(command: T): T => {
   AUTHORITY.add(command)
-  return command
+  return annotate(command, { mcp: false })
 }
 
 export const changesAuthority = (command: Command): boolean => AUTHORITY.has(command)
+
+/** An option only the owner passes: MCP tools leave it out of their input (`mcp: false`). */
+export const ownerOnlyOption = (flags: string, description: string): Option =>
+  annotateOption(new Option(flags, description), { mcp: false })
 
 /**
  * The effects a retry or an unasked step is judged on (NEED-1073): only what the service sees. Running a sync or a

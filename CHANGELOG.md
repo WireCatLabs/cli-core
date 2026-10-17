@@ -7,10 +7,63 @@ shape of this file.
 
 ## 0.325.0 — 17.10.2026
 
-### Fixed
+### Added
 
-- **cli-core accepts cli-base 0.41 to 0.43** (peer range `>=0.40.0 <0.44.0`): before, the range stopped at 0.41, so an
-  app on cli-base 0.43 (the shared test setup) got no warning but ran outside the supported range.
+- **Agent tools come from the commands themselves**, from `@wirecat/cli-core/mcp`:
+  - `toolsFromCommands(commands, { root, exclude, levels, keyOf, omit, offline })` turns the command tree that
+    `commands --json` describes into one tool per leaf command under `root`. It leaves out a command marked
+    `mcp: false` (on itself or a group above it), a command with a `lifetime` (an agent call must return), a command
+    the profile's levels refuse, and an option marked `mcp: false`. Arguments are the command's arguments and options
+    in snake_case: a switch is a boolean, `choices` an enum, a variadic argument and a `list` flag an array, a `count`
+    flag (`--limit`) a whole number from 1, and anything else a non-empty string that is not `-` alone.
+  - `runCommandForAgent(program, path, input, ctx)` runs one command through the CLI's own `run`, in this process,
+    and answers `{ result }` with the envelope the command rendered, or `{ error }` with the error object the CLI
+    would print — no stdout or stderr text is parsed. A write at level `ask` goes ahead: nobody is at a terminal to answer. `ctx.levels`
+    refuses what the profile denies before the run, and `ctx.overrides` (`key=level`, stricter only) reach the
+    command's own guard too. With `ctx.connection`, the command borrows the server's open connection through the
+    relay seam serve uses: it never opens one of its own and cannot close the server's.
+- **`ownerOnlyOption(flags, description)`** from `@wirecat/cli-core/cli`: an option MCP tools leave out of their
+  input. `BaseEnvironment.agent` (type `AgentRun`) is how the runner receives a command's answer and error.
+
+### Changed — may break callers
+
+- **The bot MCP server's tools are generated from the `bot` commands** and run through them, in place of the
+  hand-written table. Same three tools and the same command names; what an agent sees changes:
+  - arguments carry the command's own names: `messages send` and `messages edit` take `md` / `html` in place of
+    `format`, `messages delete` takes `messages` (a list) in place of `message`, `search messages` takes `query`
+    (a list of words) in place of `text`, `chats members remove` takes `person` in place of `user`;
+  - new arguments: `offline` on every command that reads the messenger, `contacts show --sync-first`,
+    `search messages --page --newest`, `messages pin --notify`, `chats moderate --no-block`; new command:
+    `chats rules show`;
+  - bounds the hand-written schemas had and the commands check themselves now, at run time: `limit` up to 100, the
+    message-id and callback-id patterns, the ISO form of `since_time`, at least two `people`, and `text` on
+    `messages send`.
+  `createBotServer` takes `program: { run, commands }` (the CLI's `run` and `describeProgram` of its tree) and an
+  optional `levels` read before every call and `keyOf` for a CLI's own command guarded by another key (also
+  `BotMcp.keyOf`), in place of `commandAt`, `run` and `tools`; `offered` lists command
+  paths, and `tools` the catalogue. **The CLI's `run` must pass on the whole environment it is given** (max's
+  `botMcpRun` keeps only `streams`, `tty` and `answer`; the runner then refuses with "the CLI's run must pass its
+  whole environment on"). `BotMcp.tools` is gone: a CLI's own bot commands are offered by being commands, and it
+  marks with `mcp: false` what agents must not get.
+- **Commands and options MCP servers no longer offer** (`mcp: false`; `commands --json` shows it): `store`,
+  `server`, `schedule`, `config`, `mcp`, `models` (and `images models`), `skill`, `flood`, `runs`, `replies`,
+  `doctor report`, `upgrade`, `complete`, `commands schema`, `chats delete`, `chats clear`,
+  `account sessions end`; on the bot side `bot auth`, `bot list`, `bot webhooks`, `bot api`, `bot store`,
+  `bot mcp`, `bot commands set|clear`, `bot chats leave`, `bot chats admins add|remove`; every command marked
+  `grantsAuthority` (recipient lists, rules, consents, schedules — what changes a later run's authority); and the
+  options `messages delete --for-everyone`, every `--allow-dangerous`, `bot chats moderate --max-actions`, and
+  `bot messages send --file --photo --voice --as-file --allow-any-file`. The personal server still serves its
+  hand-written tools; its generated catalogue is pinned in `src/mcp/__snapshots__/personal-catalogue.snap`.
+- **An agent never deletes for everyone**: `messages delete` run for an agent refuses `--for-everyone`,
+  and on a messenger whose every delete is for everyone (`deleteForMe: false`) it refuses outright.
+- **cli-core needs cli-base 0.42 or 0.43** (peer range `>=0.42.0 <0.44.0`, was `>=0.40.0 <0.41.0`): it marks options
+  off MCP with `annotateOption`, which 0.42 added, and an app on 0.43 (the shared test setup) is now inside the range.
+
+### Removed
+
+- From `@wirecat/cli-core/cli`: `BOT_TOOLS`, `BotTool`, `BotToolKit`, `BotInvocation`, `withAcross`,
+  `botChatArgument`, `botFlag`, `botFormat`, `botLimit`, `botMarks`, `botOption`, `botText` and `commandLookup`;
+  from `@wirecat/cli-core/mcp`: `botToolName`. A bot tool is now a command under `bot`.
 
 ### Changed — may break callers
 

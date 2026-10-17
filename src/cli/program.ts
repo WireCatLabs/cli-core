@@ -238,7 +238,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     // serve's relay ends its runs by their signal; a handler each would also end serve's own work.
     if (!options.relayed) process.on("SIGINT", sigint).on("SIGTERM", sigterm)
     const target =
-      options.relayed || flags.dryRun
+      options.relayed || options.agent || flags.dryRun
         ? undefined
         : relayTarget(
             definition.app,
@@ -556,6 +556,10 @@ const failed = (
  * an exit code says which kind of thing went wrong and nothing about which chat or how long to wait.
  */
 const report = (streams: Streams, options: BaseEnvironment, { object, record, cli }: Failure): number => {
+  if (options.agent) {
+    options.agent.failure(object)
+    return exitCodeOfError(object)
+  }
   const interactive = options.tty ?? process.stdout.isTTY === true
   streams.diagnostic(renderError(object, { cli, interactive, ...(record ? { record } : {}) }))
   return exitCodeOfError(object)

@@ -1,14 +1,13 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Client, type ElicitResult } from "@modelcontextprotocol/client"
+import { Client } from "@modelcontextprotocol/client"
 import { InMemoryTransport } from "@modelcontextprotocol/server"
+import { toJsonSchema } from "@valibot/to-json-schema"
 import { captureStreams, memoryKeyring } from "@wirecat/cli-base"
-import type { Command } from "commander"
-import * as v from "valibot"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { botCommand } from "../../cli/bot/command.js"
-import { commandLookup } from "../../cli/bot/mcp.js"
 import type { BotAdapter, BotMessenger } from "../../cli/bot/port.js"
 import { ChatRegistry } from "../../cli/bot/registry.js"
 import { BotTokenStore } from "../../cli/bot/token.js"
@@ -18,7 +17,6 @@ import type { Message } from "../../domain/models.js"
 import { ModerationRules, moderationPathFor } from "../../moderation/rules.js"
 import { surfaceOf } from "../../testing/mcp-surface.js"
 import { type BotServerOptions, createBotServer, type RunBotCommand } from "./server.js"
-import type { BotTool } from "./tools.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const config = settingsFor(app)
@@ -60,33 +58,6 @@ const adapter: BotAdapter = {
   admins: async () => [],
 }
 
-const ECHO: BotTool = {
-  words: ["sends", "list"],
-  title: "The CLI's own",
-  description: "Replaces the shared one.",
-  input: v.object({}),
-}
-const LEAVE: BotTool = {
-  words: ["chats", "leave"],
-  writes: "bot.chats.leave",
-  title: "Leave, as more than one command",
-  description: "A tool that is more than one command.",
-  input: v.object({ chat: v.string() }),
-  handle: async (args, kit) => ({
-    left: args.chat,
-    seen: await kit.invoke(["chats", "list"], { options: ["--offline"] }),
-  }),
-}
-const PROMOTE: BotTool = {
-  words: ["chats", "admins", "add"],
-  writes: "bot.chats.admins.add",
-  title: "Says which flags answer the command's question",
-  description: "A tool that is more than one command.",
-  input: v.object({}),
-  handle: async (_args, kit) => ({ answerFlags: kit.answerFlags }),
-}
-const ABSENT: BotTool = { words: ["comments", "list"], title: "None", description: "Not mounted.", input: v.object({}) }
-
 const bot: BotMessenger = {
   app,
   provider: "chat-bot",
@@ -96,7 +67,7 @@ const bot: BotMessenger = {
   connect: async () => adapter,
   tokenStore: (_command, profile) =>
     new BotTokenStore({ app, profile, env: {}, configDir: join(root, "config"), keyring }),
-  mcp: { program: async () => runBot, tools: [ECHO, LEAVE, PROMOTE, ABSENT] },
+  mcp: { program: async () => runBot },
 }
 
 const definition = { app, commands: () => [botCommand(bot)] }
@@ -121,38 +92,28 @@ afterEach(async () => {
   for (const close of closers.splice(0)) await close()
 })
 
-const connect = async (
-  options: Partial<BotServerOptions> = {},
-  { form }: { form?: (message: string) => ElicitResult } = {},
-) => {
-  const group = createProgram(definition).commands.find((one) => one.name() === "bot") as Command
+const commands = () => describeProgram(createProgram(definition))
+
+const connect = async (options: Partial<BotServerOptions> = {}) => {
   const settings = config.resolveSettings({ profile: "sales" }, { env, kind: "bot" })
-  const { build, offered } = createBotServer({
+  const { build, offered, tools } = createBotServer({
     bot,
-    commandAt: commandLookup(group),
+    program: { run: runBot, commands: commands() },
     settings,
+    levels: () => config.resolveSettings({ profile: "sales" }, { env, kind: "bot" }).permissions,
     env,
-    run: runBot,
-    tools: bot.mcp?.tools ?? [],
     ...options,
   })
   const [serverSide, clientSide] = InMemoryTransport.createLinkedPair()
   const server = build()
   await server.connect(serverSide)
-  const client = new Client({ name: "test", version: "0" }, form ? { capabilities: { elicitation: {} } } : {})
-  const forms: string[] = []
-  if (form) {
-    client.setRequestHandler("elicitation/create", async (request) => {
-      forms.push(request.params.message)
-      return form(request.params.message)
-    })
-  }
+  const client = new Client({ name: "test", version: "0" })
   await client.connect(clientSide)
   closers.push(async () => {
     await client.close()
     await server.close()
   })
-  return { client: surfaceOf(client, "chat_bot"), raw: client, offered, forms }
+  return { client: surfaceOf(client, "chat_bot"), raw: client, offered, tools }
 }
 
 const call = async (client: ReturnType<typeof surfaceOf>, command: string, args: Record<string, unknown> = {}) => {
@@ -162,45 +123,46 @@ const call = async (client: ReturnType<typeof surfaceOf>, command: string, args:
 }
 
 const READS = [
-  "chat_bot_me",
-  "chat_bot_chats_list",
-  "chat_bot_chats_show",
-  "chat_bot_messages_list",
-  "chat_bot_messages_show",
-  "chat_bot_chats_admins_list",
-  "chat_bot_commands_list",
-  "chat_bot_sends_list",
-  "chat_bot_recipients_list",
-  "chat_bot_search_messages",
-  "chat_bot_messages_between",
-  "chat_bot_contacts_show",
+  "me",
+  "chats list",
+  "chats show",
+  "chats rules show",
+  "messages list",
+  "messages show",
+  "chats admins list",
+  "commands list",
+  "sends list",
+  "recipients list",
+  "search messages",
+  "messages between",
+  "contacts show",
 ]
 const WRITES = [
-  "chat_bot_messages_send",
-  "chat_bot_messages_edit",
-  "chat_bot_messages_pin",
-  "chat_bot_messages_unpin",
-  "chat_bot_chats_action",
-  "chat_bot_callbacks_answer",
-  "chat_bot_messages_delete",
-  "chat_bot_chats_members_remove",
-  "chat_bot_chats_moderate",
+  "messages send",
+  "messages edit",
+  "messages pin",
+  "messages unpin",
+  "chats action",
+  "callbacks answer",
+  "messages delete",
+  "chats members remove",
+  "chats moderate",
 ]
 
 describe("bot mcp tools by permission level", () => {
-  it("**offers every read and write the default levels allow**, and no tool whose command is not mounted", async () => {
+  it("**offers every read and write the default levels allow**, and nothing marked mcp: false or long-running", async () => {
     const { offered } = await connect()
 
-    expect(offered.sort()).toEqual([...READS, ...WRITES, "chat_bot_chats_leave", "chat_bot_chats_admins_add"].sort())
+    expect(offered.sort()).toEqual([...READS, ...WRITES].sort())
   })
 
   it.each([
     ["bot: readonly hides the writes", { bot: "readonly" }, READS],
-    ["bot: deny leaves what no level stops", { bot: "deny" }, ["chat_bot_sends_list", "chat_bot_recipients_list"]],
+    ["bot: deny leaves what no level stops", { bot: "deny" }, ["sends list", "recipients list"]],
     [
       "a key opened under a read-only bot offers that write alone",
       { bot: "readonly", "bot.messages.send": "allow" },
-      [...READS, "chat_bot_messages_send"],
+      [...READS, "messages send"],
     ],
     ["deny on one key hides that tool", { "bot.messages": "deny" }, null],
   ])("%s", async (_name, permissions, expected) => {
@@ -208,7 +170,7 @@ describe("bot mcp tools by permission level", () => {
     const { offered } = await connect()
 
     if (expected) expect(offered.sort()).toEqual([...expected].sort())
-    else expect(offered.some((name) => name.startsWith("chat_bot_messages_"))).toBe(false)
+    else expect(offered.some((name) => name.startsWith("messages "))).toBe(false)
   })
 
   it("**lists three tools**: search, read and write, and no write tool on a read-only profile", async () => {
@@ -232,10 +194,46 @@ describe("bot mcp tools by permission level", () => {
     expect(items[0]).toMatchObject({ command: "me" })
   })
 
-  it("**the CLI's own tool replaces the shared one with the same words**", async () => {
+  it("**a level made stricter after start-up refuses the next call**", async () => {
     const { client } = await connect()
-    expect((await client.describe("sends list"))?.title).toBe("The CLI's own")
-    expect(await client.commands()).toContain("status")
+    configure({ bot: { profiles: { sales: { permissions: { "bot.messages.send": "deny" } } } } })
+
+    const refused = await call(client, "messages send", { chat: "-100", text: "Hi" })
+
+    expect(refused.error?.code).toBe("permission_error")
+    expect(calls).toEqual([])
+  })
+
+  it("**a CLI's own key decides**: a command guarded by another key is hidden and refused with it", async () => {
+    configure({ bot: { profiles: { sales: { permissions: { "bot.messages.send": "deny" } } } } })
+    const keyOf = (path: readonly string[]) => (path.join(" ") === "bot chats action" ? "bot.messages.send" : undefined)
+    const { offered, client } = await connect({ keyOf })
+
+    expect(offered).not.toContain("chats action")
+    expect((await call(client, "chats action", { chat: "-100", action: "typing" })).error?.code).toBe(
+      "validation_error",
+    )
+  })
+
+  it("**offers another bot's copy only where read_other_bots allows**", async () => {
+    const { client } = await connect()
+    expect(Object.keys((await client.describe("search messages"))?.arguments.properties ?? {})).not.toContain(
+      "all_bots",
+    )
+    configure({ bot: { profiles: { sales: { read_other_bots: true } } } })
+    const opened = await connect({ settings: config.resolveSettings({ profile: "sales" }, { env, kind: "bot" }) })
+    expect(Object.keys((await opened.client.describe("search messages"))?.arguments.properties ?? {})).toContain(
+      "all_bots",
+    )
+  })
+
+  it("**status** says which bot and which writes, through `auth show`", async () => {
+    const { client } = await connect()
+
+    const status = await call(client, "status")
+
+    expect(status.body.item).toMatchObject({ profile: "sales", auth: { bot: "Sales", id: "42" } })
+    expect((status.body.item as { writes: string[] }).writes).toContain("messages send")
   })
 })
 
@@ -253,20 +251,29 @@ describe("bot mcp writes", () => {
   it("**deletes with no form**, where the level asks", async () => {
     const { client } = await connect()
 
-    expect((await call(client, "messages delete", { chat: "-100", message: "7" })).isError).toBe(false)
+    expect((await call(client, "messages delete", { chat: "-100", messages: ["7"] })).isError).toBe(false)
     expect(calls).toEqual(["delete -100 7"])
   })
 
-  it("refuses a message id that would read as a flag, before running anything", async () => {
+  it("a value that looks like a flag stays a value, and an argument the command has not is refused", async () => {
     const { client } = await connect()
 
-    const refused = await call(client, "messages send", { chat: "-100", text: "x", reply_to: "--silent" })
+    const flagLike = await call(client, "messages send", { chat: "-100", text: "--silent" })
+    const unknown = await call(client, "messages send", { chat: "-100", text: "x", file: "/etc/passwd" })
 
-    expect(refused.isError).toBe(true)
+    expect(flagLike.isError).toBe(false)
+    expect(unknown.error?.code).toBe("validation_error")
+    expect(calls).toEqual(["send -100 --silent"])
+  })
+
+  it("refuses text that is only -, which would read the MCP transport as stdin", async () => {
+    const { client } = await connect()
+
+    expect((await call(client, "messages send", { chat: "-100", text: "-" })).error?.code).toBe("validation_error")
     expect(calls).toEqual([])
   })
 
-  it("**a write at level ask answers the command's own question**, with no form", async () => {
+  it("**a write at level ask goes ahead**, with no form", async () => {
     configure({ bot: { profiles: { sales: { permissions: { "bot.messages.send": "ask" } } } } })
     const { client } = await connect()
 
@@ -274,26 +281,6 @@ describe("bot mcp writes", () => {
 
     expect(sent.isError).toBe(false)
     expect(calls).toEqual(["send -100 Hi"])
-  })
-})
-
-describe("a tool of the CLI's own that is more than one command", () => {
-  it("**answers with what it did**", async () => {
-    const { client } = await connect()
-
-    const done = await call(client, "chats leave", { chat: "Team" })
-
-    expect(done.body).toMatchObject({ item: { left: "Team", seen: { items: [{ id: "-100", title: "Team" }] } } })
-  })
-
-  it("**is handed the flag that answers its command's question at level ask**, and none otherwise", async () => {
-    const flags = async () =>
-      ((await call((await connect()).client, "chats admins add")).body as { item: { answerFlags: string[] } }).item
-        .answerFlags
-
-    expect(await flags()).toEqual([])
-    configure({ bot: { profiles: { sales: { permissions: { "bot.chats.admins": "ask" } } } } })
-    expect((await flags()).length).toBeGreaterThan(0)
   })
 })
 
@@ -367,4 +354,94 @@ it("reads bot identity through MCP under read-only permissions without a write",
   expect(result.isError).toBe(false)
   expect(result.body.item).toEqual({ id: "42", name: "Sales", username: "sales_bot" })
   expect(calls).toEqual([])
+})
+
+/** What the hand-written bot tools took before they were generated from the commands (cli-core 0.324.0). */
+const BEFORE: Record<string, Record<string, string>> = {
+  me: {},
+  "chats list": {},
+  "chats show": { chat: "string" },
+  "messages list": { chat: "string", limit: "integer", offline: "boolean" },
+  "messages show": { chat: "string", message: "string", offline: "boolean" },
+  "search messages": { text: "string", from: "string", limit: "integer" },
+  "messages between": { people: "array", limit: "integer" },
+  "contacts show": { who: "string", limit: "integer" },
+  "chats admins list": { chat: "string" },
+  "commands list": {},
+  "sends list": {},
+  "recipients list": {},
+  "messages send": { chat: "string", text: "string", format: "enum", reply_to: "string", silent: "boolean" },
+  "messages edit": { chat: "string", message: "string", text: "string", format: "enum" },
+  "messages pin": { chat: "string", message: "string" },
+  "messages unpin": { chat: "string", message: "string" },
+  "chats action": { chat: "string", action: "enum" },
+  "callbacks answer": { callback: "string", text: "string", notification: "string" },
+  "messages delete": { chat: "string", message: "string" },
+  "chats members remove": { chat: "string", user: "string", block: "boolean" },
+  "chats moderate": { chat: "string", since_time: "string", dry_run: "boolean" },
+}
+/** Arguments that now carry the command's own option or argument name. */
+const RENAMED: Record<string, readonly string[]> = {
+  "search messages.text": ["query"],
+  "messages send.format": ["md", "html"],
+  "messages edit.format": ["md", "html"],
+  "messages delete.message": ["messages"],
+  "chats members remove.user": ["person"],
+}
+/** What the commands take that the hand-written tools did not. */
+const ADDED: Record<string, readonly string[]> = {
+  "chats list": ["offline"],
+  "chats show": ["offline"],
+  "chats admins list": ["offline"],
+  "commands list": ["offline"],
+  me: ["offline"],
+  "contacts show": ["offline", "sync_first"],
+  "search messages": ["newest", "offline", "page"],
+  "messages between": ["offline"],
+  "messages pin": ["notify"],
+  "chats moderate": ["no_block"],
+}
+
+const typeOf = (schema: { type?: string; enum?: unknown[] }) => (schema.enum ? "enum" : schema.type)
+
+describe("the generated bot catalogue", () => {
+  const catalogue = async () =>
+    Object.fromEntries(
+      (await connect()).tools.map((tool) => [
+        tool.command,
+        toJsonSchema(tool.input) as { properties: Record<string, { type?: string; enum?: unknown[] }> },
+      ]),
+    )
+
+  it("**offers every command the hand-written tools offered**, each argument under its command's name", async () => {
+    const after = await catalogue()
+    for (const [command, before] of Object.entries(BEFORE)) {
+      const properties = after[command]?.properties
+      expect(properties, command).toBeDefined()
+      for (const [name, type] of Object.entries(before)) {
+        const renamed = RENAMED[`${command}.${name}`]
+        if (renamed) for (const now of renamed) expect(properties?.[now], `${command} ${now}`).toBeDefined()
+        else expect(typeOf(properties?.[name] ?? {}), `${command} ${name}`).toBe(type)
+      }
+    }
+  })
+
+  it("**adds only the listed arguments and commands**", async () => {
+    const after = await catalogue()
+    const added = Object.fromEntries(
+      Object.entries(after).flatMap(([command, schema]) => {
+        const before = Object.keys(BEFORE[command] ?? {}).flatMap((name) => RENAMED[`${command}.${name}`] ?? [name])
+        const extra = Object.keys(schema.properties).filter((name) => !before.includes(name))
+        return BEFORE[command] && extra.length === 0 ? [] : [[command, extra.sort()]]
+      }),
+    )
+
+    expect(added).toEqual({ ...ADDED, "chats rules show": ["chat"] })
+  })
+
+  it("**is pinned**: a command or an argument agents gain or lose shows up here", async () => {
+    await expect(`${JSON.stringify(await catalogue(), null, 2)}\n`).toMatchFileSnapshot(
+      "__snapshots__/bot-catalogue.snap",
+    )
+  })
 })

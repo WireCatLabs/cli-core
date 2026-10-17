@@ -21,6 +21,8 @@ export interface OutputOptions {
   fields?: string
   /** How much of each found message: `brief`, the default or `full` (src/output-detail.ts). */
   hitDetail?: Detail
+  /** Takes the answer as an object in place of printing it — an agent's run (`BaseEnvironment.agent`). */
+  capture?: (value: unknown) => void
 }
 
 /**
@@ -41,11 +43,15 @@ export const resolveOutput = ({
   fields,
   hitDetail,
   env = process.env,
+  capture,
 }: OutputOptions = {}) => {
   const interactive = tty ?? process.stdout.isTTY === true
   const format: RenderFormat = jsonl ? "jsonl" : json || !interactive ? "json" : "pretty"
   const painted = format === "pretty" && (color ?? (env.NO_COLOR === undefined && env.TERM !== "dumb" && !env.CI))
-  const rendered = createRenderer({ format, color: painted, streams })
+  const printing = createRenderer({ format, color: painted, streams })
+  const rendered = capture
+    ? { ...printing, result: capture, stream: (items: Iterable<unknown>) => capture([...items]) }
+    : printing
   // `--json=<fields>` names exactly what to keep, so it chooses from everything unless a level was asked for too.
   const level = hitDetail ?? (fields === undefined ? "default" : "full")
   const standard =

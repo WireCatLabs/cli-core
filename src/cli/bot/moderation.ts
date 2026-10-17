@@ -10,7 +10,7 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { momentOf } from "../../services/moment.js"
 import { environmentOf } from "../context.js"
-import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "../messenger/ask.js"
 import { type BotContext, botContext, online } from "./context.js"
@@ -178,9 +178,11 @@ export const botModerateCommand = (bot: BotMessenger): Command =>
     .argument("<chat>", CHAT)
     .option("--since-time <time>", "judge what came after this ISO 8601 time, or 2h / 1d ago; the saved point stays")
     .option("--dry-run", "judge and plan; do nothing")
-    .option("--allow-dangerous", "yes to every action whose level in the group's rules is ask")
+    .addOption(ownerOnlyOption("--allow-dangerous", "yes to every action whose level in the group's rules is ask"))
     .option("--no-block", "remove without banning; by default a removed person cannot come back by the link")
-    .option("--max-actions <n>", `at most this many actions in one run; ${MAX_ACTIONS} if not given`)
+    .addOption(
+      ownerOnlyOption("--max-actions <n>", `at most this many actions in one run; ${MAX_ACTIONS} if not given`),
+    )
     .action(async function (this: Command, chat: string) {
       const context = online(botContext(this, bot), this)
       const options = this.opts<{

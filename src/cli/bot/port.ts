@@ -14,12 +14,12 @@ import type {
   Provider,
 } from "../../domain/models.js"
 import type { RunBotCommand } from "../../mcp/bot/server.js"
-import type { BotTool } from "../../mcp/bot/tools.js"
 import type { AppIdentity } from "../../ports/app.js"
 import type { MessagePins, MessengerCore } from "../../ports/messenger.js"
 import type { Fetching } from "../../ports/traits.js"
 import type { EventSink } from "../../runs/events.js"
 import type { GuardRequest } from "../../sends/guard.js"
+import type { PermissionKey } from "../../sends/permissions.js"
 import type { PersonFacts, StoredHit } from "../../store/index.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../settings.js"
 import type { ChatRegistry } from "./registry.js"
@@ -280,10 +280,16 @@ export interface BotMessenger {
 }
 
 export interface BotMcp {
-  /** The CLI's own `run`, loaded when the server starts: this package cannot import the CLI's program. */
+  /**
+   * The CLI's own `run`, loaded when the server starts: this package cannot import the CLI's program. Every tool
+   * is a command under `bot`, run through it; it must pass the whole environment it is given on.
+   */
   program: () => Promise<RunBotCommand>
-  /** The CLI's own tools, for the commands that are still its own. */
-  tools?: readonly BotTool[]
+  /**
+   * The key one of the CLI's own bot commands is guarded by, from its full path (`["bot", "comments", "send"]`),
+   * when it is not the path's own: a profile that denies the key then hides the tool as well as refusing it.
+   */
+  keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
   /** The CLI's SKILL.md, served as `<command>://skill`. */
   skill?: URL
 }

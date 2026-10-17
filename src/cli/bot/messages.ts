@@ -8,7 +8,7 @@ import { guardedWrite } from "../../sends/guarded.js"
 import { newOperationId } from "../../sends/send-id.js"
 import { readAttachments } from "../../sends/upload.js"
 import { environmentOf } from "../context.js"
-import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
+import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { wholeList } from "../messenger/chat-answers.js"
 import { messageItem } from "../messenger/message-items.js"
@@ -94,11 +94,15 @@ const sendCommand = (bot: BotMessenger): Command =>
     .option("--silent", "deliver without a notification")
     .option("--md", "read this messenger's Markdown; see its formatting guide for supported syntax")
     .option("--html", "the text is HTML: <b>, <i>, <a href>, <code>")
-    .option("--file <file>", "attach a file; the text becomes its caption")
-    .option("--photo <file>", "attach a .jpg, .png or .webp as a photo; the text becomes its caption")
-    .option("--as-file", "send the --file as a file to download, a video included")
-    .option("--voice <file>", "send an Ogg Opus file as a voice message, alone, with no text")
-    .option("--allow-any-file", "send a file even from credential folders or this CLI's own folders")
+    .addOption(ownerOnlyOption("--file <file>", "attach a file; the text becomes its caption"))
+    .addOption(
+      ownerOnlyOption("--photo <file>", "attach a .jpg, .png or .webp as a photo; the text becomes its caption"),
+    )
+    .addOption(ownerOnlyOption("--as-file", "send the --file as a file to download, a video included"))
+    .addOption(ownerOnlyOption("--voice <file>", "send an Ogg Opus file as a voice message, alone, with no text"))
+    .addOption(
+      ownerOnlyOption("--allow-any-file", "send a file even from credential folders or this CLI's own folders"),
+    )
     .action(async function (this: Command, chat: string, text: string | undefined) {
       const context = botContext(this, bot)
       const options = this.opts<{
@@ -280,7 +284,7 @@ const deleteCommand = (bot: BotMessenger): Command =>
     .description("delete messages in a chat the bot can delete in; it cannot be undone")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<messages...>", "message ids")
-    .option("--allow-dangerous", "delete without asking")
+    .addOption(ownerOnlyOption("--allow-dangerous", "delete without asking"))
     .action(async function (this: Command, chat: string, messageIds: string[]) {
       const context = botContext(this, bot)
       const ref = context.chatRef(chat)

@@ -1,3 +1,4 @@
+import { annotate } from "@wirecat/cli-base/commands"
 import { skillCommand as sharedSkillCommand } from "@wirecat/cli-base/skill"
 import type { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
@@ -21,7 +22,7 @@ export const skillCommand = (app: AppIdentity, skill: URL): Command => {
   // An installed skill is instructions every later agent follows.
   const install = command.commands.find((sub) => sub.name() === "install")
   if (install) grantsAuthority(install)
-  return command
+  return annotate(command, { mcp: false })
 }
 
 /** Skills this package ships for every CLI on it, printed by `skill show <name>`: `skills/` beside `dist/` and `src/`. */

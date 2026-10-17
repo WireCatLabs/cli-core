@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { capability } from "../../ports/messenger.js"
-import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
+import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { window, withPaging } from "../paging.js"
 import { lines, pageOf, topicAnswer } from "./chat-answers.js"
@@ -124,7 +124,9 @@ export const topicsCommand = (messenger: Messenger): Command => {
     .description("delete a forum topic and every message in it, for everyone; it cannot be undone")
     .argument("<chat>", messenger.chatArgument)
     .argument("<topic>", "the topic id, from `topics list`")
-    .option("--allow-dangerous", "go ahead without the question an ask level puts before a deletion")
+    .addOption(
+      ownerOnlyOption("--allow-dangerous", "go ahead without the question an ask level puts before a deletion"),
+    )
     .action(async function (this: Command, chat: string, topic: string) {
       const context = messengerContext(this, messenger)
       renderAnswer(
