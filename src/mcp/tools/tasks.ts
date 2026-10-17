@@ -459,7 +459,8 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "What needs a look, from the local store and without message text: open tasks overdue, due soon, due a " +
         "check, or never planned; chats where someone else wrote last and the owner has not answered (`owed`); " +
         "chats where the owner wrote last and nobody answered (`waiting`); chats that moved and whose newest " +
-        "message is not stored (`unsynced`: read them first). Read only what it names. `stale` means the store " +
+        "message is not stored (`unsynced`: read them first); open tasks someone else does, oldest first, with " +
+        "their `assignees` (`assigned`: what others owe the owner). Read only what it names. `stale` means the store " +
         "saved nothing for a day, so a chat may look quiet only because nothing was synced. `query` narrows " +
         "the chats by chat_kind:channel (default chat_kind:(dialog OR group)) and the tasks by tag:, category: and " +
         "claimed:none|mine|others|any (default claimed:(none OR mine)); `holder` says who you are.",

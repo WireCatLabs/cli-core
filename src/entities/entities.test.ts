@@ -388,6 +388,19 @@ const samples: Record<EntityName, unknown> = {
     ],
     waiting: [],
     unsynced: [],
+    assigned: [
+      {
+        id: "t2",
+        key: "R-2",
+        title: "send the contract",
+        kind: "request",
+        category: null,
+        source: "msg:chat/500/7/2",
+        due_at: null,
+        created_at: at,
+        assignees: ["person:12"],
+      },
+    ],
     unlisted_categories: [{ name: "finance", open_tasks: 2 }],
   },
   conversation: {

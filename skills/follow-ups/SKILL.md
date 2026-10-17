@@ -33,6 +33,8 @@ no message text — read all of it:
 - `unsynced` — the chat moved, and its newest message is not stored, so who wrote last is unknown.
   Read it — `{{command}} messages list "<chatId>" --limit 20 --json` saves it too — and judge it like
   the others. Never skip one: a chat nobody synced is how an agreement gets lost.
+- `assigned` — open tasks someone else does (`assignees`), oldest first: what others owe the owner. Chase the
+  oldest ones whose `due_at` passed or that have none.
 
 Anything not on the agenda waits for its own date. Do not open it.
 

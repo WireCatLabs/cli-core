@@ -318,9 +318,13 @@ describe("tasks", () => {
       [],
     )
     expect((await call("tasks", "agenda", "--waiting", "soon")).stderr).toContain("--waiting takes")
+    await call("tasks", "plan", added.id, "--assignee", "sender")
     const printed = (await call.pretty("tasks", "agenda", "--within", "3650d")).stdout.join("")
     expect(printed).toContain("Send the invoice")
     expect(printed).toContain("unsynced — moved, newest message not stored")
+    expect(printed).toMatch(
+      /assigned — others owe you, oldest first \(1\)\n {2}\S+ {2}person:\d+ {2}since .+Send the invoice/,
+    )
   })
 
   it("**keys, categorizes, tags and claims a task**: one holder at a time, hidden from others on the agenda", async () => {

@@ -90,6 +90,12 @@ export interface AgendaTask
   reasons: AgendaReason[]
 }
 
+export interface AgendaAssigned
+  extends Pick<TaskDetails, "id" | "key" | "title" | "type" | "category" | "source" | "dueAt" | "createdAt"> {
+  /** `person:<id>`, each one who does it. */
+  assignees: string[]
+}
+
 export interface AgendaChat extends Omit<ChatActivity, "lastMessageId"> {
   /** The newest message, as a locator to read around; never its text. `null` while it is not stored. */
   lastMessage: string | null
@@ -117,6 +123,8 @@ export interface Agenda {
    * until they are read. Never dropped, or a chat nobody synced would never come up.
    */
   unsynced: AgendaChat[]
+  /** Open tasks someone else does: what they owe the owner, oldest first. */
+  assigned: AgendaAssigned[]
   /** Open tasks carry these categories, which the list no longer holds: move them, or put the category back. */
   unlistedCategories: { name: string; openTasks: number }[]
 }
@@ -162,6 +170,25 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
         reasons,
       }))
 
+    const assigned = listed
+      .map((task) => ({
+        task,
+        assignees: task.assignments.filter((one) => one.role === "assignee").map((one) => one.to),
+      }))
+      .filter(({ assignees }) => assignees.length > 0)
+      .sort((a, b) => Date.parse(a.task.createdAt) - Date.parse(b.task.createdAt))
+      .map(({ task, assignees }) => ({
+        id: task.id,
+        key: task.key,
+        title: task.title,
+        type: task.type,
+        category: task.category,
+        source: task.source,
+        dueAt: task.dueAt,
+        createdAt: task.createdAt,
+        assignees,
+      }))
+
     const where = parts.chats ? queryFilter(parts.chats, AGENDA_COLUMNS, { command: "tasks agenda" }) : undefined
     const activity = await store.chats.chatActivity(account, at - within, where)
     const chats = activity.chats.map(({ lastMessageId, ...chat }) => ({
@@ -191,6 +218,7 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
       owed: chats.filter((chat) => chat.lastFromOwner === false && silentFor(chat) >= unanswered),
       waiting: chats.filter((chat) => chat.lastFromOwner === true && silentFor(chat) >= waiting),
       unsynced: chats.filter((chat) => chat.lastMessage === null),
+      assigned,
       unlistedCategories: [...unlisted].sort().map(([name, openTasks]) => ({ name, openTasks })),
     }
   },
@@ -313,6 +341,17 @@ export const agendaItem = (shown: Agenda): AgendaItem => {
     owed: shown.owed.map(chat),
     waiting: shown.waiting.map(chat),
     unsynced: shown.unsynced.map(chat),
+    assigned: shown.assigned.map((task) => ({
+      id: task.id,
+      key: task.key,
+      title: task.title,
+      kind: task.type,
+      category: task.category,
+      source: task.source,
+      due_at: task.dueAt,
+      created_at: task.createdAt,
+      assignees: task.assignees,
+    })),
     unlisted_categories: shown.unlistedCategories.map(({ name, openTasks }) => ({ name, open_tasks: openTasks })),
   }
 }

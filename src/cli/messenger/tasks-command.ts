@@ -94,6 +94,10 @@ const agendaText = (agenda: Agenda) => {
     ...agenda.waiting.map(chat),
     `unsynced — moved, newest message not stored: read before judging (${agenda.unsynced.length})`,
     ...agenda.unsynced.map(chat),
+    `assigned — others owe you, oldest first (${agenda.assigned.length})`,
+    ...agenda.assigned.map(
+      (task) => `  ${task.key}  ${task.assignees.join(",")}  since ${when(task.createdAt)}  ${task.title}`,
+    ),
     ...agenda.unlistedCategories.map(
       ({ name, openTasks }) =>
         `${openTasks} open task${openTasks === 1 ? "" : "s"} use ${name}, which is not in the task categories: ` +
@@ -475,10 +479,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
 
   withQuery(
     annotate(tasks.command("agenda"), { effects: LOCAL_READ })
-      .summary("what needs a look today: tasks due, chats you owe an answer, chats you wait on")
+      .summary("what needs a look today: tasks due, chats you owe or wait on, what you are owed")
       .description(
         "what needs a look today, from the local store and without message text: tasks overdue, due or to check, " +
-          "chats where you owe an answer, chats where you wait for one",
+          "chats where you owe an answer, chats where you wait for one, open tasks someone else does",
       ),
     AGENDA_QUERY,
   )
