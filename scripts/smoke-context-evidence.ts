@@ -58,7 +58,7 @@ export const smokeContextEvidence = async (check: (name: string, passes: boolean
       check(
         `${provider} assembles strict cross-source preparation`,
         answer.item.communications?.items.length === 5 &&
-          answer.item.communications.sources.length === 3 &&
+          answer.item.communications.coverage.sources.length === 3 &&
           answer.meta?.complete === true,
       )
     } finally {

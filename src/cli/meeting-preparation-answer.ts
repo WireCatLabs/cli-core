@@ -110,7 +110,7 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   boundMeetingPreparationItem(item)
   const issues = [
     ...item.coverage.skipped_unavailable.map((source) => ({ code: "not_found" as const, source })),
-    ...(item.communications?.sources.flatMap((source) =>
+    ...(item.communications?.coverage.sources.flatMap((source) =>
       source.issue ? [{ code: source.issue, source: source.selection_id }] : [],
     ) ?? []),
   ]

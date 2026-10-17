@@ -71,7 +71,7 @@ and 1 KiB, and retain reference, title/URL, provider/account, timestamp basis, u
 mark it truncated. A citation can be inspected separately;
 the excerpt is not accepted fact or meeting-cue evidence.
 
-`communications.sources` retains every selected identity and separates searched/unavailable/
+`communications.coverage.sources` retains every selected identity and separates searched/unavailable/
 read-limited state, index state, pagination, undated records, output limitation and restart.
 Missing/pending/unknown indexes are reported without repair. Source failure or incomplete index
 sets `meta.complete=false` and standard source issues; ordinary pagination alone does not. Archive
@@ -94,5 +94,7 @@ The shared CLI builder accepts repeatable `--context-source ID` or `--context-so
 `--context-query`, `--context-since-time` and `--context-before-time`. Time flags require zoned ISO
 timestamps. MCP `meeting_prepare` accepts optional `communications` with the same `sources`/`query`
 and ISO `after`/`before`. It refuses unknown nested fields in its handler as well as its schema.
+Communication scope/query/window/read-usage metadata lives under `communications.coverage`,
+which the standard projection helper retains even when selecting only `communications.items.ref`.
 No account ID, provider, file path or credential is a public selection argument. The registered
 entity and common envelope cover both adapters; projection does not reduce source read costs.

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, projectFields } from "@wirecat/cli-base"
 import { afterEach, expect, it, vi } from "vitest"
 import { meetingPreparationAnswer } from "../cli/meeting-preparation-answer.js"
 import type { ContextEvidenceReader } from "../context/evidence.js"
@@ -146,14 +146,20 @@ it("reports failed, pending and byte-refused sources without losing successful e
     },
     item: {
       communications: {
-        read_usage: { reads: 3, reserved_bytes: 0 },
-        sources: [
-          { state: "searched" },
-          { state: "unavailable", read_bytes: null },
-          { state: "read-limited", restart_required: true },
-        ],
+        coverage: {
+          read_usage: { reads: 3, reserved_bytes: 0 },
+          sources: [
+            { state: "searched" },
+            { state: "unavailable", read_bytes: null },
+            { state: "read-limited", restart_required: true },
+          ],
+        },
       },
     },
+  })
+  expect(projectFields(answer, ["communications.items.ref"])).toMatchObject({
+    meta: answer.meta,
+    item: { communications: { coverage: answer.item.communications?.coverage } },
   })
   f.db
     .prepare("INSERT OR REPLACE INTO document_index_pending(indexable_type,id) VALUES('document',?)")
@@ -162,7 +168,9 @@ it("reports failed, pending and byte-refused sources without losing successful e
   expect(pending).toMatchObject({
     meta: { complete: false, issues: [{ code: "configuration_error", source: "document" }] },
   })
-  expect(pending.item.communications?.sources.find((s) => s.selection_id === "document")?.index).toBe("pending")
+  expect(pending.item.communications?.coverage.sources.find((s) => s.selection_id === "document")?.index).toBe(
+    "pending",
+  )
 })
 
 it("refuses foreign adapter results and cancellation instead of returning partial success", async () => {

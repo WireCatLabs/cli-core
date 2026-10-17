@@ -41,6 +41,9 @@ shape of this file.
 
 ### Fixed
 
+- Compact preparation projections retain selected communications source coverage, continuation,
+  query/window and read charges under `communications.coverage`, alongside standard envelope metadata.
+
 - **The "no `serve` keeps profile … up to date" warning shows only when a command reads its answer from the
   store.** Since the connect-time lookup of stored messages, writes such as `reactions add`, `chats members add` and
   `messages send` printed it too.
