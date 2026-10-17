@@ -1,6 +1,7 @@
 import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import type { MessageEvent } from "../domain/models.js"
 import { resolveOutput } from "../output.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
@@ -43,6 +44,11 @@ export interface BaseEnvironment {
   runCommand?: (argv: string[], environment: BaseEnvironment) => Promise<number>
   /** Set by serve on a command it runs for a client through its relay. */
   relayed?: RelayedRun
+  /**
+   * A test's hook into `serve`: called with each event once its reply and task rules have run — to wait on "the
+   * message was handled, and nothing was sent" instead of on the next event or a sleep.
+   */
+  handled?: (event: MessageEvent) => void
   /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
   agent?: AgentRun
   /**

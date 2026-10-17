@@ -27,6 +27,9 @@ shape of this file.
   test gives one), and `run()` appends each parsed command and its long options to the file in
   `<PREFIX>_TEST_ARGV_LOG`, as wa's and max's test matrices did for themselves.
 - **`upgrade` has examples**: `<cli> upgrade --check` and `<cli> upgrade`, so a CLI drops its own wrapper's.
+- **`handled` in a run's environment** is a test's hook into `serve`: it is called with each event once that
+  event's reply and task rules have run, so a test waits on "handled, and nothing was sent" instead of on a timer or
+  the next event.
 
 ### Fixed
 

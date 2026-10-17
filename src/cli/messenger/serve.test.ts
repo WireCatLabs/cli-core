@@ -189,7 +189,7 @@ describe("serve with reply rules", () => {
       ...own,
     }
     const stop = new AbortController()
-    setTimeout(() => stop.abort(), 100)
+    let handled = 0
     const streams = captureStreams()
     await run(
       ["serve", "--json"],
@@ -199,6 +199,11 @@ describe("serve with reply rules", () => {
         tty: false,
         env,
         signal: stop.signal,
+        // Both pushed messages went through the reply and task rules: whatever was going to be sent, was.
+        handled: () => {
+          handled += 1
+          if (handled === 2) stop.abort()
+        },
       },
     )
     return { sent, answer: JSON.parse(streams.stdout[0] ?? "{}").item }
