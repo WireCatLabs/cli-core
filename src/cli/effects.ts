@@ -1,6 +1,8 @@
 import { annotate, annotateOption, stepTargets } from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
 import { type Command, Option } from "commander"
+import { readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
+import { environmentOf } from "./context.js"
 
 /** Reads the messenger; a page it keeps on the way is incidental. */
 export const REMOTE_READ: Effects = { remote: "read", local: "read" }
@@ -55,4 +57,15 @@ export const judgedTargets = (root: Command): NonNullable<StepInput["targets"]> 
     const effects = judgedStepEffects(target.effects)
     return { names: target.names, ...(effects ? { effects } : {}) }
   }
+}
+
+/**
+ * Refuses under `<PREFIX>_READ_ONLY` a write the send guard never sees: linking or unlinking the device (`session
+ * start`, `session end`), a messenger's own setup. Call it first in the action, before anything connects.
+ */
+export const refuseUnderReadOnly = (command: Command, what: string): void => {
+  const { app, env } = environmentOf(command)
+  if (!app) throw new Error("refuseUnderReadOnly runs inside run(), which says whose lock to read")
+  const lock = readOnlyLockOf(app, env ?? process.env)
+  if (lock) throw readOnlyRefusal(lock, what)
 }

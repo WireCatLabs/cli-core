@@ -14,7 +14,7 @@ export {
   type MessagesSearchArgs,
   messagesSearchInput,
 } from "../mcp/tools/search.js"
-export { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
+export { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 export type {
   AccountEditing,
   AccountHealth,
@@ -198,6 +198,7 @@ export {
   ownerOnlyOption,
   REMOTE_READ,
   REMOTE_WRITE,
+  refuseUnderReadOnly,
 } from "./effects.js"
 export {
   type AnswerOutput,

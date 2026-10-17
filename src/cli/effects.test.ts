@@ -1,11 +1,12 @@
+import { captureStreams } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
-import type { Command } from "commander"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { sharedProgram } from "../testing/shared-program.js"
-import { changesAuthority, judgedEffects, judgedTargets } from "./effects.js"
-import { createProgram } from "./program.js"
+import { changesAuthority, judgedEffects, judgedTargets, refuseUnderReadOnly } from "./effects.js"
+import { createProgram, run } from "./program.js"
 
 const program = createProgram(sharedProgram)
 
@@ -91,5 +92,48 @@ describe("command effects", () => {
     expect(targets("messages sync")?.effects).toEqual({ remote: "read", local: "none" })
     expect(targets("messages send")?.effects).toEqual({ remote: "write", local: "none" })
     expect(targets("server restart")?.effects).toEqual({ remote: "none", local: "write" })
+  })
+})
+
+describe("refuseUnderReadOnly", () => {
+  const unlink = async (env: NodeJS.ProcessEnv) => {
+    let ended = false
+    const streams = captureStreams()
+    const code = await run(
+      ["session", "end"],
+      {
+        app: sharedProgram.app,
+        commands: () => [
+          new Command("session").addCommand(
+            new Command("end").action(function (this: Command) {
+              refuseUnderReadOnly(this, "unlink the device")
+              ended = true
+            }),
+          ),
+        ],
+      },
+      { streams, tty: false, env },
+    )
+    return { code, ended, stderr: streams.stderr.join("") }
+  }
+
+  it("stops a write the send guard never sees, before it runs, under the app's lock", async () => {
+    const locked = await unlink({ CHAT_READ_ONLY: "1" })
+
+    expect(locked.ended).toBe(false)
+    expect(locked.code).toBe(5)
+    expect(JSON.parse(locked.stderr).error).toMatchObject({
+      code: "permission_error",
+      message: "this process is read-only (CHAT_READ_ONLY) — it cannot unlink the device",
+    })
+  })
+
+  it("lets it run without the lock, or with the lock set to 0", async () => {
+    expect((await unlink({})).ended).toBe(true)
+    expect((await unlink({ CHAT_READ_ONLY: "0" })).ended).toBe(true)
+  })
+
+  it("refuses to guess whose lock it is outside run()", () => {
+    expect(() => refuseUnderReadOnly(new Command("end"), "unlink the device")).toThrow(/inside run\(\)/)
   })
 })
