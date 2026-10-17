@@ -321,7 +321,11 @@ describe("places", () => {
     })
 
     const [place] = (await store.mentions.mentions(OWNER, q("kind:place"), { offset: 0 })).items
-    expect(place).toMatchObject({ value: "calle colón 5", status: "found", written: "C/ Colón 5, 46004 Valencia" })
+    expect(place).toMatchObject({
+      value: "calle colón 5, valencia",
+      status: "found",
+      written: "C/ Colón 5, 46004 Valencia",
+    })
     expect((await store.mentions.mentions(OWNER, q("kind:phone"), { offset: 0 })).items).toEqual([])
     await store.close()
   })
@@ -347,6 +351,27 @@ describe("places", () => {
       items: [{ id: 1, address: "Calle Mayor, 12", mentions: 2 }],
       hasMore: false,
     })
+    await store.close()
+  })
+
+  it("keeps a place confirmed before values carried the city, through a rebuild and in later mentions", async () => {
+    const { path, store } = await fresh()
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "офис: Calle Mayor 12, Madrid")], { via: "history" })
+    const raw = new DatabaseSync(path)
+    raw.prepare("UPDATE mentions SET value = 'calle mayor 12' WHERE kind = 'place'").run()
+    raw.close()
+    const [old] = (await store.mentions.mentions(OWNER, q("kind:place"), { offset: 0 })).items
+    await store.mentions.confirmMention(OWNER, old?.id ?? 0, undefined, { by: "owner" })
+
+    await store.mentions.rebuildMentions({ kinds: ["place"] })
+    await store.messages.saveMessages(OWNER, "-1", [message("2", "ждём на Calle Mayor 12, Madrid")], { via: "history" })
+    await store.messages.saveMessages(OWNER, "-1", [message("3", "Calle Mayor 12, Valencia")], { via: "history" })
+    const rows = (await store.mentions.mentions(OWNER, q("kind:place"), { offset: 0 })).items
+    expect(rows.map(({ messageId, value, status, target }) => [messageId, value, status, target]).sort()).toEqual([
+      ["1", "calle mayor 12, madrid", "linked", "place:1"],
+      ["2", "calle mayor 12, madrid", "linked", "place:1"],
+      ["3", "calle mayor 12, valencia", "found", null],
+    ])
     await store.close()
   })
 })

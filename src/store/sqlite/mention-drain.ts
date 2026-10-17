@@ -10,6 +10,7 @@ import { findNames, findUnknownNames, type KnownPerson, nameIndex } from "../../
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { storePhoneCountries } from "./phone-countries.js"
+import { placeOf } from "./place-key.js"
 
 /** Mentions a store write finds before it commits: an older binary may have queued thousands. */
 export const DRAIN_ON_WRITE = 500
@@ -56,15 +57,16 @@ const originalOf = (database: CacheDatabase) => {
     "SELECT 'linked' AS status, 'document' AS target_type, id AS target_id, 'rules' AS author FROM documents " +
       "WHERE json_extract(front_matter, '$.fileId') = ? AND deleted_at IS NULL ORDER BY id LIMIT 1",
   )
-  const place = database.prepare(
-    "SELECT 'linked' AS status, 'place' AS target_type, id AS target_id, 'rules' AS author FROM places WHERE folded = ?",
-  )
+  const place = placeOf(database)
   const byKind: Partial<Record<MentionKind, (value: string) => unknown>> = {
     phone: (value) => identity.get("phone", value),
     email: (value) => identity.get("email", value),
     document: (value) => document.get(value),
     url: telegram,
-    place: (value) => place.get(value),
+    place: (value) => {
+      const id = place(value)
+      return id === undefined ? undefined : { status: "linked", target_type: "place", target_id: id, author: "rules" }
+    },
   }
   return (kind: MentionKind, value: string): Decision | undefined =>
     (dismissed.get(kind, value) ?? byKind[kind]?.(value)) as Decision | undefined
@@ -170,6 +172,10 @@ export const writer = (database: CacheDatabase, now: number, kinds: readonly Men
     "UPDATE identities SET external_id = ? WHERE id = ? AND provider = 'phone' AND external_id = ? " +
       "AND NOT EXISTS (SELECT 1 FROM identities WHERE provider = 'phone' AND external_id = ?)",
   )
+  // A place confirmed while its value was the street alone takes the city its address names, once read again.
+  const rekeyPlace = database.prepare(
+    "UPDATE places SET folded = ? WHERE id = ? AND folded = ? AND NOT EXISTS (SELECT 1 FROM places WHERE folded = ?)",
+  )
   const remove = database.prepare(`DELETE FROM mentions WHERE source_type = ? AND source_id = ?${only}`)
   const insert = database.prepare(
     "INSERT OR IGNORE INTO mentions (kind, source_type, source_id, source_field, start_offset, end_offset, value, " +
@@ -230,9 +236,14 @@ export const writer = (database: CacheDatabase, now: number, kinds: readonly Men
     for (const one of type === "email" ? oneTrackedLinkPerSite(all) : all) {
       if (kinds && !kinds.includes(one.kind)) continue
       const here = `${one.kind}\u0000${one.start}`
-      const moved = one.kind === "phone" && !kept.has(`${one.kind}\u0000${one.value}`) ? keptHere.get(here) : undefined
+      const moved =
+        (one.kind === "phone" || one.kind === "place") && !kept.has(`${one.kind}\u0000${one.value}`)
+          ? keptHere.get(here)
+          : undefined
       if (moved?.target_type === "identity")
         rekey.run(one.value, Number(moved.target_id), String(moved.value), one.value)
+      if (moved?.target_type === "place")
+        rekeyPlace.run(one.value, Number(moved.target_id), String(moved.value), one.value)
       const decision =
         kept.get(`${one.kind}\u0000${one.value}`) ?? moved ?? one.decision ?? original(one.kind, one.value)
       written += Number(

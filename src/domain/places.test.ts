@@ -10,20 +10,20 @@ describe("findPlaces", () => {
     ["Невский проспект 28", "невский проспект 28"],
     ["пр-т Просвещения, 87к2", "проспект просвещения 87к2"],
     ["ул. 8 Марта, 3", "улица 8 марта 3"],
-    ["Calle Mayor, 12, Madrid", "calle mayor 12"],
-    ["C/ Colón 5, 46004 Valencia", "calle colón 5"],
+    ["Calle Mayor, 12, Madrid", "calle mayor 12, madrid"],
+    ["C/ Colón 5, 46004 Valencia", "calle colón 5, valencia"],
     ["Avda. del Puerto 120", "avenida del puerto 120"],
     ["Carrer de Mallorca 401", "calle de mallorca 401"],
-    ["12 rue de la Paix, 75002 Paris", "rue de la paix 12"],
-    ["Via Roma 10, Milano", "via roma 10"],
+    ["12 rue de la Paix, 75002 Paris", "rue de la paix 12, paris"],
+    ["Via Roma 10, Milano", "via roma 10, milano"],
     ["Rua Augusta 24", "rua augusta 24"],
     ["Berliner Straße 12", "berliner straße 12"],
-    ["Hauptstraße 5, 10115 Berlin", "hauptstraße 5"],
+    ["Hauptstraße 5, 10115 Berlin", "hauptstraße 5, berlin"],
     ["Kalverstraat 92", "kalverstraat 92"],
     ["ul. Marszałkowska 10", "ulica marszałkowska 10"],
-    ["221B Baker Street, London NW1 6XE", "221b baker street"],
+    ["221B Baker Street, London NW1 6XE", "221b baker street, london"],
     ["10 Downing St.", "10 downing street"],
-    ["1600 Amphitheatre Parkway, Mountain View, CA 94043", "1600 amphitheatre parkway"],
+    ["1600 Amphitheatre Parkway, Mountain View, CA 94043", "1600 amphitheatre parkway, mountain view"],
     ["350 5th Avenue", "350 5th avenue"],
   ])("finds %s", (text, value) => {
     expect(values(text)).toEqual([value])
@@ -110,10 +110,22 @@ describe("findPlaces", () => {
     expect(text.slice(place?.start, place?.end)).toBe(written)
   })
 
-  it("keeps the street and the house as the value however much of the address is written", () => {
-    expect(values("Calle de Alcalá 45, 3º B, 28014 Madrid, España")).toEqual(["calle de alcalá 45"])
-    expect(values("190000, г. Санкт-Петербург, ул. Ленина, д. 5, кв. 12")).toEqual(["улица ленина 5"])
+  it("keeps the street, the house and the city as the value however much of the address is written", () => {
+    expect(values("Calle de Alcalá 45, 3º B, 28014 Madrid, España")).toEqual(["calle de alcalá 45, madrid"])
+    expect(values("Calle de Alcalá 45, 28014 Madrid")).toEqual(["calle de alcalá 45, madrid"])
+    expect(values("190000, г. Санкт-Петербург, ул. Ленина, д. 5, кв. 12")).toEqual(["улица ленина 5, санкт-петербург"])
+    expect(values("109316, Регион 77, Москва, Тестовый проспект, дом 4")).toEqual(["тестовый проспект 4, москва"])
     expect(findPlaces("190000, г. Санкт-Петербург, ул. Ленина, д. 5")[0]?.confidence).toBe(0.7)
+  })
+
+  it("tells one street in two cities apart, and keeps an address with no city as it was", () => {
+    expect(values("Calle Mayor 5, Madrid. Calle Mayor 5, Valencia")).toEqual([
+      "calle mayor 5, madrid",
+      "calle mayor 5, valencia",
+    ])
+    expect(values("Calle Mayor 5")).toEqual(["calle mayor 5"])
+    expect(values("Россия, Московская обл., ул. Садовая, д. 3")).toEqual(["улица садовая 3"])
+    expect(values("4 Grand Canal Square, Dublin 2, Ireland")).toEqual(["4 grand canal square, dublin 2"])
   })
 
   it.each([

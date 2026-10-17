@@ -173,10 +173,23 @@ const MOST_TAIL = 100
 const isStreetWord = (word: string) =>
   typeOf(BEFORE, word) !== undefined || typeOf(AFTER, word) !== undefined || typeOf(ENGLISH, word) !== undefined
 
-/** How far the address runs past its house number, and whether a postcode is in it. */
-const tailOf = (text: string, end: number): { end: number; postcode: boolean } => {
+const REGION = /(?:обл\.|область|край|р-н|район)\)?$/u
+
+// The city a place word or a part before the street names, if any: a region, a country or capitals alone are not.
+const cityOf = (words: string): string | undefined => {
+  const city = words
+    .replace(/^(?:г\.|город)\s?/u, "")
+    .replace(/[()]/g, "")
+    .trim()
+  if (!/\p{Ll}/u.test(city) || REGION.test(city) || COUNTRY.test(city) || /^Регион \d/u.test(city)) return undefined
+  return city
+}
+
+/** How far the address runs past its house number, whether a postcode is in it, and the first city named. */
+const tailOf = (text: string, end: number): { end: number; postcode: boolean; city: string | undefined } => {
   let at = end
   let postcode = false
+  let city: string | undefined
   let previous: "unit" | "postcode" | "place" | "number" = "number"
   while (at - end < MOST_TAIL) {
     const gap = /^(?:[ \t]*\r?\n(?:[ \t]*\r?\n)?[ \t]*|, ?| ?\| ?| [–-] |[ \t\u00a0]{1,3})/.exec(text.slice(at))?.[0]
@@ -209,11 +222,22 @@ const tailOf = (text: string, end: number): { end: number; postcode: boolean } =
       at += gap.length + country.length
     } else if (place) {
       previous = "place"
+      city ??= cityOf(place)
       at += gap.length + cityWord.length + place.length
     } else break
   }
-  return { end: at, postcode }
+  return { end: at, postcode, city }
 }
+
+// «190000, г. Санкт-Петербург, » before the street: the last part that is a city.
+const headCity = (head: string): string | undefined =>
+  head
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part && !/^\d+$/.test(part) && !/^(?:Россия|РФ)$/u.test(part))
+    .map(cityOf)
+    .filter((part) => part !== undefined)
+    .at(-1)
 
 const folded = (words: string[]) =>
   words
@@ -225,9 +249,9 @@ const folded = (words: string[]) =>
 
 /**
  * Addresses by their grammar, never a number alone: a street word (ул., calle, rue, via, Straße, Street) next to a
- * name and a house number. The span runs on over the flat, postcode, city and country on the same line, but the
- * value is the street and the house alone, so one address written fully and briefly is one value. A postcode
- * raises the confidence. Unknown places start undecided.
+ * name and a house number. The span runs on over the flat, postcode, city and country on the same line; the value
+ * is the street and the house, then `, <city>` when a city is written, so one street in two cities is two values and
+ * a flat or a postcode does not split one address. A postcode raises the confidence. Unknown places start undecided.
  */
 export const findPlaces = (text: string): FoundPlace[] => {
   const tokens = tokensOf(text)
@@ -238,10 +262,11 @@ export const findPlaces = (text: string): FoundPlace[] => {
     const tail = tailOf(text, (tokens[last] as Token).end)
     const head = BEFORE_STREET.exec(text.slice(Math.max(0, street - 120), street))?.[0] ?? ""
     const postcode = tail.postcode || /\d{6}/.test(head)
+    const city = tail.city ?? headCity(head)
     found.push({
       start: street - head.length,
       end: tail.end,
-      value: folded(words),
+      value: city === undefined ? folded(words) : `${folded(words)}, ${folded([city])}`,
       confidence: postcode ? 0.7 : 0.5,
     })
   }
