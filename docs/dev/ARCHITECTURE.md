@@ -518,7 +518,8 @@ command and `since` in a tool.
 `--offline`, and never connects; writes still do. `serve` keeps the store filled, so such a read
 warns on stderr when no `serve` holds the profile, and a chat with nothing stored is `not_found`.
 `inbox` and `review` read the stored chats and messages through `storeReader`, the same code over
-an `InboxReader`, so their `--json` is the online one; `messages sync` refuses for now. The MCP chat
+an `InboxReader`, so their `--json` is the online one; `messages sync` refuses for now, and `--sync-first`, MCP
+`sync_first` and the `messages sync` next steps of search and contacts are not offered. The MCP chat
 resource reads the store too, and so does an MCP tool with a `served` body: it gets the services
 over the store and reaches the session's connection only through `connect`, for transcription.
 

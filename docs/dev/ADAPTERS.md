@@ -63,7 +63,7 @@ needs it. The ones a new messenger usually sets:
 
 `MessengerCore` is required: `self`, `me`, `resolve`, `chat`, `send`, `logout` and `close`. Every
 other group is optional: `ServerReads`, `ChatReading`, `MessageEditing`,
-`MessagePins`, `MessageReactions`, `ReadState`, `MessagePolls`, `LiveUpdates`, `PushedHistory`,
+`MessagePins`, `MessageReactions`, `ReadState`, `TopicReadState`, `MessagePolls`, `LiveUpdates`, `PushedHistory`,
 `MessageMedia`, `ScheduledMessages`, `GroupModeration`, `AccountTools`, `GroupAdmin`, `ChatFolders`, `ContactBook`
 and `AccountEditing`.
 
@@ -74,7 +74,13 @@ and `AccountEditing`.
   `history: "store"`. With the default `"server"`, the shared reads call it, and an adapter without
   it gets "this messenger cannot list chats" on every read.
 - Prefer a whole group to part of one. Write `implements MessageEditing` on the class, so the
-  compiler holds you to all of it.
+  compiler holds you to all of it. `ReadState` is `markRead` alone; `markTopicRead` is
+  `TopicReadState`, for a messenger with forum topics.
+- An adapter that needs what the store holds — WhatsApp addresses a message by its sender — reads it
+  through `ConnectOptions.stored` in `connect`: `message(chatId, id)` and `newestIncoming(chatId, before?)`,
+  over the command's own store handle. Never open a second one.
+- `Attachment.providerRef` is yours alone: keep there what fetches the file again, keys included.
+  No answer, live event or log prints it, and a later copy without it keeps the stored one.
 - An option your messenger cannot do is **refused with `validation_error`**. It is never dropped.
   For example, a messenger with no silent messages refuses `silent: true`.
 
