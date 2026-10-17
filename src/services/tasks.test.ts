@@ -206,6 +206,39 @@ const boilerStore = async (texts: string[]) => {
   return { store, tasks, add }
 }
 
+it("**compares tasks by when their messages were sent**, not by when an agent wrote them", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "task-sent-")), "m.db") })
+  const sent = (id: string, timestamp: string, text: string) => ({
+    id,
+    chatId: "7",
+    senderId: "9",
+    senderName: "Alice Example",
+    timestamp,
+    editedAt: null,
+    text,
+    outgoing: false,
+    attachments: [],
+    replyTo: null,
+    forwardedFrom: null,
+    reactions: null,
+  })
+  await store.messages.saveMessages(
+    account,
+    "7",
+    [sent("1", "2026-08-01T10:00:00.000Z", "see above"), sent("2", "2026-10-06T10:00:00.000Z", "see above")],
+    { via: "test" },
+  )
+  const tasks = tasksService(storeOnlyDeps(store, account, { app }))
+  const add = (message: string, title: string) =>
+    tasks.add(`msg:chat/500/7/${message}`, "request", "agent", { title, category: "home" })
+  try {
+    await add("1", "Send Alice the boiler photos")
+    expect(await add("2", "Send Alice the boiler invoice")).toMatchObject({ created: true })
+  } finally {
+    await store.close()
+  }
+})
+
 it("**tasks add follows up a task closed in the last 14 days instead of refusing**; an open look-alike still refuses", async () => {
   const { store, tasks, add } = await boilerStore([
     "The boiler repair is 15 000 rub",
