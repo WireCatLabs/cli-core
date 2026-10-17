@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { servingProfiles } from "../../background/lock.js"
-import type { AdminRight, GroupSettings } from "../../domain/models.js"
+import type { AdminRight, GroupSettings, Id, Message, Provider } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { EventSink } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
@@ -27,6 +27,17 @@ import { flooded } from "./flooded.js"
 import { observed } from "./observed.js"
 import { stored } from "./stored.js"
 
+/**
+ * What the local store holds of the connection's own account, read-only and opened on the first lookup — for an
+ * adapter that addresses a message by more than its id (WhatsApp: by its sender and whether it is the owner's).
+ * Answers nothing before the connection knows its account.
+ */
+export interface StoredMessages {
+  message(chatId: Id, messageId: Id): Promise<Message | undefined>
+  /** The newest message from someone else in the chat, older than `before` when it is given. */
+  newestIncoming(chatId: Id, before?: Id): Promise<Message | undefined>
+}
+
 /** `listen` opens a connection that receives updates — only `watch` asks; the rest stay quiet. */
 export interface ConnectOptions {
   listen?: boolean
@@ -34,6 +45,54 @@ export interface ConnectOptions {
   catchUp?: boolean
   /** The run's diagnostics, for a messenger that reports its own wire below the adapter's calls. */
   events?: EventSink
+  /** The command's own store handle, never a second one; given on every connect the shared commands make. */
+  stored?: StoredMessages
+}
+
+/** One store handle, opened on first use and closed once, shared by a connection's saves and its lookups. */
+export interface LazyStore {
+  open: () => Promise<MessageStore>
+  close: () => Promise<void>
+}
+
+export const lazyStore = (env: NodeJS.ProcessEnv, command: string): LazyStore => {
+  let opened: Promise<MessageStore> | undefined
+  return {
+    open: () => {
+      opened ??= openStore({ env, command })
+      return opened
+    },
+    close: async () => {
+      if (opened) await (await opened.catch(() => undefined))?.close()
+    },
+  }
+}
+
+export const storedMessages = (
+  provider: Provider,
+  store: () => Promise<MessageStore>,
+  account: () => Id | null | undefined,
+): StoredMessages => {
+  const key = () => {
+    const self = account()
+    return self ? { provider, account: self } : undefined
+  }
+  return {
+    message: async (chatId, messageId) => {
+      const at = key()
+      return at && (await store()).messages.message(at, messageId, { chatId })
+    },
+    newestIncoming: async (chatId, before) => {
+      const at = key()
+      if (!at) return undefined
+      const page = await (await store()).messages.messages(at, chatId, {
+        limit: 1,
+        outgoing: false,
+        ...(before === undefined ? {} : { before }),
+      })
+      return page.items.at(-1)
+    },
+  }
 }
 
 /** What one messenger CLI hands the shared commands. Everything else about it stays in its own code. */
@@ -216,6 +275,7 @@ export const connected = (
   }: Pick<Messenger, "app" | "provider" | "name" | "deletedWithoutChat" | "pace">,
   { settings, env, renderer }: Pick<BaseContext, "settings" | "env" | "renderer">,
   events: EventSink,
+  store: LazyStore = lazyStore(env, app.command),
 ): { adapter: MessengerAdapter; close: () => Promise<void> } => {
   const self = connection.self()
   if (self !== null) rememberAccount(app, settings.profile, self, env)
@@ -230,7 +290,6 @@ export const connected = (
     flooded(connection, memory, { name: name ?? app.command, warn: renderer.warn, pacer }),
     events,
   )
-  let store: Promise<MessageStore | undefined> | undefined
   const pending = new Set<Promise<void>>()
   return {
     adapter:
@@ -239,10 +298,7 @@ export const connected = (
         : stored(adapter, {
             account: { provider, account: self },
             profile: { app: app.command, name: settings.profile },
-            store: () => {
-              store ??= openStore({ env, command: app.command })
-              return store
-            },
+            store: store.open,
             warn: renderer.warn,
             events,
             pending,
@@ -258,11 +314,32 @@ export const connected = (
             renderer.warn("not saved to the local store: the last messages were still being written at exit")
           }
         } finally {
-          if (store) await (await store.catch(() => undefined))?.close()
+          await store.close()
         }
       }
     },
   }
+}
+
+/** `connectFor` and then `connected`, over one store handle: what the reads save and what the adapter looks up. */
+export const connectedFor = async (
+  command: Command,
+  messenger: Pick<Messenger, "connect" | "app" | "provider" | "name" | "deletedWithoutChat" | "pace">,
+  base: BaseContext,
+  options: ConnectOptions & { events: EventSink },
+): Promise<{ connection: MessengerAdapter; adapter: MessengerAdapter; close: () => Promise<void> }> => {
+  const store = lazyStore(base.env, messenger.app.command)
+  let connection: MessengerAdapter | undefined
+  try {
+    connection = await connectFor(command, messenger, base, {
+      ...options,
+      stored: storedMessages(messenger.provider, store.open, () => connection?.self()),
+    })
+  } catch (error) {
+    await store.close()
+    throw error
+  }
+  return { connection, ...connected(connection, messenger, base, options.events, store) }
 }
 
 const unrecorded = (command: Command, messenger: Messenger, profile: string): CliError => {
@@ -375,9 +452,8 @@ export const messengerContext = (
       base.run(
         async (events) => {
           if (base.settings.offline) throw new CliError("validation_error", OFFLINE)
-          const connection = await connectFor(command, messenger, base, { ...options, events })
+          const { connection, adapter, close } = await connectedFor(command, messenger, base, { ...options, events })
           base.track(connection)
-          const { adapter, close } = connected(connection, messenger, base, events)
           try {
             return await work(adapter)
           } finally {
@@ -421,7 +497,11 @@ export const messengerContext = (
               if (base.settings.offline) throw new CliError("validation_error", OFFLINE)
               if (released) throw new CliError("validation_error", "the read connection has already been released")
               if (!held) {
-                const connection = await connectFor(command, messenger, base, { events })
+                let connection: MessengerAdapter | undefined
+                connection = await connectFor(command, messenger, base, {
+                  events,
+                  stored: storedMessages(messenger.provider, deps.store, () => connection?.self()),
+                })
                 if (released) {
                   await connection.close()
                   throw new CliError("validation_error", "the read connection has already been released")

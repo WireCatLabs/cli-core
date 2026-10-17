@@ -97,7 +97,7 @@ describe("serve", () => {
     const { code, answer } = await call(["serve", "--json"], env, asked, stop.signal)
 
     expect(code).toBe(0)
-    expect(asked).toEqual([{ listen: true, catchUp: true, events: expect.any(Function) }])
+    expect(asked).toEqual([{ listen: true, catchUp: true, events: expect.any(Function), stored: expect.any(Object) }])
     expect(answer).toMatchObject({ profile: "default", kept: { message: 1, delete: 1 } })
     expect(seen.lock).toMatchObject({ pid: process.pid, version: "1.0.0", listeningAt: expect.any(String) })
     expect(existsSync(lockOf(root))).toBe(false)
