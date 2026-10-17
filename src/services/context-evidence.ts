@@ -5,33 +5,55 @@ import {
   contextEvidenceRequest,
   contextSource,
 } from "../context/evidence.js"
+import { contextSourceKey, validateContextEvidencePage } from "../context/evidence-response.js"
+import { type ContextReadLimits, type ContextReadUsage, contextReadBudget } from "../context/read-budget.js"
 
 /** The host supplies authorization; neither discovery nor absent selections expand it. */
+export interface ScopedContextEvidenceReader extends ContextEvidenceReader {
+  usage(): ContextReadUsage
+}
+
 export const createContextEvidenceReader = (
   port: ContextEvidenceReader,
   allowed: readonly ContextSource[],
-): ContextEvidenceReader => {
+  limits?: ContextReadLimits,
+): ScopedContextEvidenceReader => {
   if (!port || typeof port.read !== "function")
     throw new CliError("configuration_error", "context evidence reader is unavailable")
-  if (!Array.isArray(allowed) || !allowed.length || allowed.length > 32)
-    throw new CliError("validation_error", "allowed needs 1–32 explicitly authorized sources")
-  const key = (s: ContextSource) => JSON.stringify([s.kind, s.accountId, s.provider, s.account])
-  const keys = new Set(allowed.map(contextSource).map(key))
+  if (!Array.isArray(allowed) || !allowed.length || allowed.length > 8)
+    throw new CliError("validation_error", "allowed needs 1–8 explicitly authorized sources")
+  const keys = new Set(allowed.map(contextSource).map(contextSourceKey))
+  const budget = contextReadBudget(limits)
   const read = port.read.bind(port)
   return {
+    usage: budget.usage,
     async read(original) {
       const validated = contextEvidenceRequest(original)
       const { source, signal } = validated
-      if (!keys.has(key(source)))
+      if (!keys.has(contextSourceKey(source)))
         throw new CliError("validation_error", "source is outside the host's authorized selection")
       signal?.throwIfAborted()
-      const page = await read({ ...original, source, cursor: validated.cursor })
-      signal?.throwIfAborted()
-      if (key(page.source) !== key(source))
-        throw new CliError("validation_error", "context reader returned another source")
-      if (page.items.some((item) => item.provider !== source.provider || item.account !== source.account))
-        throw new CliError("validation_error", "context reader returned another account")
-      return page
+      const reservation = budget.reserve(validated.maxReadBytes)
+      const request = Object.freeze({
+        source: Object.freeze({ ...source }),
+        query: validated.query,
+        after: validated.after,
+        before: validated.before,
+        limit: validated.limit,
+        maxReadBytes: reservation.bytes,
+        cursor: validated.cursor ? Object.freeze({ ...validated.cursor }) : undefined,
+        signal,
+      })
+      try {
+        const page = await read(request)
+        signal?.throwIfAborted()
+        validateContextEvidencePage(page, request)
+        reservation.complete(page.readBytes)
+        return page
+      } catch (error) {
+        reservation.fail()
+        throw error
+      }
     },
   }
 }
@@ -43,3 +65,4 @@ export type {
   ContextEvidenceRequest,
   ContextSource,
 } from "../context/evidence.js"
+export type { ContextReadLimits, ContextReadUsage } from "../context/read-budget.js"

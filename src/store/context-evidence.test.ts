@@ -96,6 +96,7 @@ it("reports pending indexes, omits stale matches and keeps source/time boundarie
     next: null,
     coverage: { completeness: "unknown" },
   })
+  expect((await f.reader.read({ ...f.request, after: 200, before: 300 })).items.map((item) => item.at)).toEqual([200])
   expect(await f.reader.read({ ...f.request, after: 201, before: 299 })).toMatchObject({
     items: [],
     coverage: { hasMore: false },
@@ -177,12 +178,12 @@ it("refuses missing accounts and a host port returning another source", async ()
     { read: async () => ({ ...page, source: { ...page.source, accountId: f.otherId } }) },
     [f.request.source],
   )
-  await expect(reader.read(f.request)).rejects.toThrow(/another source/)
+  await expect(reader.read(f.request)).rejects.toMatchObject({ code: "invalid_response" })
   const wrongAccount = createContextEvidenceReader(
     { read: async () => ({ ...page, items: page.items.map((item) => ({ ...item, account: "OtherExample" })) }) },
     [f.request.source],
   )
-  await expect(wrongAccount.read(f.request)).rejects.toThrow(/another account/)
+  await expect(wrongAccount.read(f.request)).rejects.toMatchObject({ code: "invalid_response" })
   const controller = new AbortController()
   const cancelled = createContextEvidenceReader(
     {
@@ -217,7 +218,7 @@ it("holds one read snapshot when another connection changes a body after preflig
         const result = statement.get(...args)
         writer
           .prepare(
-            "UPDATE messages SET text='Changed after probe',updated_at=6000 WHERE account_id=? AND external_id='3'",
+            "UPDATE messages SET text='Changed after probe',normalized_text='changed after probe',normalizer_version=1,updated_at=6000 WHERE account_id=? AND external_id='3'",
           )
           .run(f.accountId)
         changed = true
@@ -300,7 +301,7 @@ it("projects existing import provenance without hydrating unrelated front matter
     ...f.request,
     source: f.sources.document,
     after: at,
-    before: at,
+    before: at + 1,
     maxReadBytes: 1024,
   })
   expect(page).toMatchObject({ items: [{ at, timeKind: "source-modified", url: front.sourceUrl }] })

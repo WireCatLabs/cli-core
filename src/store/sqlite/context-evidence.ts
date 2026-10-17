@@ -60,7 +60,7 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
   async read(original) {
     const request = contextEvidenceRequest(original)
     const { source, words, after, before, limit, maxReadBytes, cursor, signal } = request
-    const scope = contextCursorScope(original)
+    const scope = contextCursorScope({ source, query: request.query, after, before })
     signal?.throwIfAborted()
     return read(database, () => {
       const corpus = corpora[source.kind]
@@ -98,14 +98,14 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
         coverage.index = !state
           ? "unknown"
           : database
-                .prepare(`SELECT 1 ${base} AND ${corpus.at} BETWEEN ? AND ?
+                .prepare(`SELECT 1 ${base} AND ${corpus.at}>=? AND ${corpus.at}<?
           AND (n.normalized_text IS NULL OR n.normalizer_version IS NULL OR n.normalizer_version<>${NORMALIZER_VERSION} OR (n.id>? AND n.id<=?)) LIMIT 1`)
                 .get(...scopeParams, after, before, Number(state.filled_through), Number(state.watermark))
             ? "pending"
             : "ready"
       } else {
         coverage.index = database
-          .prepare(`SELECT 1 ${base} AND ${corpus.at} BETWEEN ? AND ?
+          .prepare(`SELECT 1 ${base} AND ${corpus.at}>=? AND ${corpus.at}<?
           AND EXISTS(SELECT 1 FROM ${source.kind === "mail" ? "email" : "document"}_index_pending p
             WHERE p.id=n.id AND p.indexable_type=?) LIMIT 1`)
           .get(...scopeParams, after, before, source.kind === "mail" ? "email" : "document")
@@ -115,7 +115,7 @@ export const contextEvidenceOver = ({ database }: Pick<StoreContext, "database">
       const selection = `SELECT n.id,n.external_id,${corpus.chat} AS chat,a.provider,a.external_id AS account,
         ${corpus.title} AS title,${corpus.body} AS body,${corpus.url} AS url,${corpus.at} AS at,
         n.updated_at,${corpus.revision} AS revision,${corpus.timeKind} AS time_kind ${base}
-        AND ${corpus.at} BETWEEN ? AND ?
+        AND ${corpus.at}>=? AND ${corpus.at}<?
         AND n.id IN (SELECT rowid FROM ${corpus.index} WHERE ${corpus.index} MATCH ?)
         ${source.kind === "message" ? `AND n.normalized_text IS NOT NULL AND n.normalizer_version=${NORMALIZER_VERSION}` : `AND NOT EXISTS(SELECT 1 FROM ${source.kind === "mail" ? "email" : "document"}_index_pending p WHERE p.id=n.id AND p.indexable_type='${source.kind === "mail" ? "email" : "document"}')`}
         ${cursor ? `AND (${corpus.at}<? OR (${corpus.at}=? AND n.id<?))` : ""}

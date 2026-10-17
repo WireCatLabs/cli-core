@@ -61,7 +61,7 @@ export const contextEvidenceFixture = async (provider = "example-calendar") => {
     source: sources.message,
     query: "harbour",
     after: 100,
-    before: 300,
+    before: 301,
     limit: 1,
   }
   return { ...f, folder, doc, mailId, port, reader, request, sources }

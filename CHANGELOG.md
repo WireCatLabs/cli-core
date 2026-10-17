@@ -11,7 +11,13 @@ shape of this file.
 
 ### Added
 
-- SDK hosts can bind explicitly authorized local message, mail and document sources through `createContextEvidenceReader` and optional `store.contextEvidence`. Native pages enforce account identity, dates, literal-word matching and UTF-8 text/metadata budgets before hydration, retain scoped continuation and index gaps, and perform no indexing or model work. Meeting preparation commands and their source coverage are unchanged; cross-source assembly follows separately.
+- SDK hosts can bind explicitly authorized local message, mail and document sources through
+  `createContextEvidenceReader` and optional `store.contextEvidence`. Native pages enforce account
+  identity, dates, literal-word matching and UTF-8 text/metadata budgets before hydration, reserve
+  aggregate bytes/read slots across concurrent calls and retries, reject unsupported selectors and
+  invalid adapter results, retain scoped continuation and index gaps, and perform no indexing or model
+  work. Meeting preparation commands and their source coverage are unchanged; cross-source assembly
+  follows separately.
 
 - **A pushed history batch carries poll votes.** `HistoryBatch` has an optional `votes` array of `HistoryVote`
   (`{ chatId, messageId, vote }`, the vote as `PollVoteEvent` carries it). The store saves a chat's votes in the

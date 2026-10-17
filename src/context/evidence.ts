@@ -64,6 +64,11 @@ export const contextCursorScope = (request: Pick<ContextEvidenceRequest, "source
     )
     .digest("hex")
 
+const fields = (value: object, allowed: readonly string[], prefix: string) => {
+  const unknown = Object.keys(value).find((key) => !allowed.includes(key))
+  if (unknown) throw new CliError("validation_error", `${prefix}${unknown} is not supported`)
+}
+
 export const contextSource = (value: ContextSource): ContextSource => {
   if (
     !value ||
@@ -72,6 +77,7 @@ export const contextSource = (value: ContextSource): ContextSource => {
     value.accountId < 1
   )
     throw new CliError("validation_error", "source needs a known kind and a positive accountId")
+  fields(value, ["kind", "accountId", "provider", "account"], "source.")
   for (const [key, max] of [
     ["provider", 128],
     ["account", 1024],
@@ -83,30 +89,35 @@ export const contextSource = (value: ContextSource): ContextSource => {
 
 export const contextEvidenceRequest = (input: ContextEvidenceRequest) => {
   const source = contextSource(input?.source)
+  fields(input, ["source", "query", "after", "before", "limit", "maxReadBytes", "cursor", "signal"], "")
   const integer = (value: number, name: string, low: number, high: number) => {
     if (!Number.isSafeInteger(value) || value < low || value > high)
       throw new CliError("validation_error", `${name} must be a whole number from ${low} to ${high}`)
     return value
   }
   const after = integer(input.after, "after", 0, 8_640_000_000_000_000)
-  const before = integer(input.before, "before", after, 8_640_000_000_000_000)
-  if (typeof input.query !== "string" || !input.query.trim() || Buffer.byteLength(input.query) > 2048)
+  const before = integer(input.before, "before", after + 1, 8_640_000_000_000_000)
+  if (before - after > 90 * 86400000)
+    throw new CliError("validation_error", "context time window must not exceed 90 days")
+  const query = input.query
+  if (typeof query !== "string" || !query.trim() || Buffer.byteLength(query) > 2048)
     throw new CliError("validation_error", "query needs 1–2048 UTF-8 bytes of literal words")
-  const words = input.query.match(/[\p{L}\p{N}]+/gu) ?? []
+  const words = query.match(/[\p{L}\p{N}]+/gu) ?? []
   if (!words.length || words.length > 16) throw new CliError("validation_error", "query needs 1–16 literal words")
   const limit = integer(input.limit ?? 10, "limit", 1, 20)
   const maxReadBytes = integer(input.maxReadBytes ?? 65536, "maxReadBytes", 1, 1048576)
   if (input.cursor !== undefined && (!input.cursor || typeof input.cursor !== "object"))
     throw new CliError("validation_error", "cursor needs at, id and scope")
+  if (input.cursor) fields(input.cursor, ["at", "id", "scope"], "cursor.")
   const cursor =
     input.cursor === undefined
       ? undefined
       : {
-          at: integer(input.cursor.at, "cursor.at", after, before),
+          at: integer(input.cursor.at, "cursor.at", after, before - 1),
           id: integer(input.cursor.id, "cursor.id", 1, Number.MAX_SAFE_INTEGER),
           scope: input.cursor.scope,
         }
-  if (cursor && cursor.scope !== contextCursorScope(input))
+  if (cursor && cursor.scope !== contextCursorScope({ source, query, after, before }))
     throw new CliError("validation_error", "cursor belongs to another source, query or time window")
-  return { source, words, after, before, limit, maxReadBytes, cursor, signal: input.signal }
+  return { source, query, words, after, before, limit, maxReadBytes, cursor, signal: input.signal }
 }

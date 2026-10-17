@@ -22,7 +22,7 @@ const QUERY: Entry[] = [
 ].map(([reason, message]) => validation(reason as string, message as string))
 
 const OTHERS: Entry[] = [
-  validation("context.read-budget", "the selected context page exceeds its stored text byte budget"),
+  validation("context.read-budget", "the selected context reads exceed their text or request allowance"),
   validation("meeting-findings.stale", "meeting findings changed since they were read; stage a new batch"),
   validation("meeting-findings.dedicated-review", "review meeting findings through the dedicated findings command"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),

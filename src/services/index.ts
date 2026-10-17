@@ -5,7 +5,10 @@ export type {
   ContextEvidencePage,
   ContextEvidenceReader,
   ContextEvidenceRequest,
+  ContextReadLimits,
+  ContextReadUsage,
   ContextSource,
+  ScopedContextEvidenceReader,
 } from "./context-evidence.js"
 export { createContextEvidenceReader } from "./context-evidence.js"
 

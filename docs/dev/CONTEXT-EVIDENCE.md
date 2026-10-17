@@ -11,8 +11,12 @@ Core's optional `MessageStore.contextEvidence` is the native read port. Wrap it 
 Account discovery is not authorization. Capture the selection from trusted profile/folder binding,
 not arbitrary account IDs supplied by a request.
 
+Only whole message/mail accounts and whole imported folders are supported in this slice.
+Chat, mailbox, thread, document-list or other selectors are refused by name instead of ignored.
+Requests, sources, cursors and allowance options reject unknown fields.
+
 Each source includes its resource kind, stored account ID, provider and external account key.
-The factory snapshots up to 32 authorized sources without I/O. Empty or missing authority fails;
+The factory snapshots up to eight authorized sources without I/O. Empty or missing authority fails;
 the request chooses one exact authorized source. The native query independently checks all account
 fields, so a reused ID does not grant access to its replacement. Document folders use their stored
 `folder` account identity; never classify all imported files as an authorized Drive profile.
@@ -34,7 +38,7 @@ async function readSelectedMessages(store: MessageStore, authorized: StoredAccou
     source,
     query: "launch checklist",
     after: Date.parse("2026-09-01T00:00:00Z"),
-    before: Date.parse("2026-09-30T23:59:59.999Z"),
+    before: Date.parse("2026-10-01T00:00:00Z"),
     limit: 10,
     maxReadBytes: 65536,
   })
@@ -50,22 +54,39 @@ The host owns resource lifetime and closes resources before publishing an answer
 
 Queries contain 1–16 literal Unicode words within 2,048 UTF-8 bytes. All words must match the
 existing word index; there are no stems, wildcard expansion, semantic search or query predicates.
-Words such as `OR` are literal words. Query text cannot change account or inclusive timestamp bounds.
+Words such as `OR` are literal words. Query text cannot change account or half-open `[after,before)` timestamp bounds. An explicit window spans at most 90 days.
 Each page returns at most 20 records (default 10), newest first by time and internal row ID.
 
 The read-text budget defaults to 64 KiB and is capped at 1 MiB. Before any record is hydrated,
 SQLite probes the UTF-8 sizes of its body, title, URL and locator metadata, including the one-row
 lookahead. An oversized page fails with `validation_error`, reason `context.read-budget`; it does
 not hydrate the records then truncate them. `readBytes` reports those bytes, including discarded
-lookahead. This is not a limit on serialized JSON, database scanning, SQL execution time or total
-work across several pages/sources. The later preparation assembler must enforce aggregate and
-final output budgets separately.
+lookahead. This is not a limit on serialized JSON, database scanning or SQL execution time.
+The native raw port bounds one page; the factory additionally enforces the per-invocation ledger
+below. The later preparation assembler must enforce final output budgets and preserve source
+coverage separately.
 
 Each item retains its canonical message/document reference, provider/account identity, text, title,
 available source URL, timestamp, update time and document revision. Imported document time prefers
 the stored remote modification time, including existing Drive front-matter provenance; a local
 update fallback is explicitly `stored-update`. Internal owner notes are excluded: the existing
 [preparation notes reader](MEETING-PREPARATION.md) applies their own association rules.
+
+## One invocation's read allowance
+
+Create a fresh scoped reader for each preparation invocation, retaining the host's trusted allowed
+snapshot. Do not reuse its allowance across a long-lived MCP server's requests. Configure optional
+`maxTotalReadBytes` (default 512 KiB, maximum 4 MiB) and `maxReads` (default 16, maximum 24) in the
+factory's third argument. The request's per-call ceiling is clamped to remaining free capacity.
+Reservations happen before dispatch, including concurrent calls. Valid successful pages charge
+reported actual bytes and release unused capacity. Failed, cancelled or invalid reads charge the
+full reservation; a retry cannot borrow those bytes. Empty pages still consume a read slot.
+`usage()` returns independent snapshots of dispatched reads, charged/reserved bytes and free capacity.
+
+The wrapper independently validates returned scope, references, dates, counts and text charges.
+Foreign, malformed or oversized adapter answers are `invalid_response`, never silently truncated.
+Native source queries retain their own scope/bounds validation before I/O; the wrapper does not
+make arbitrary third-party backend work safe if that backend violates its read contract.
 
 ## Coverage, continuation and consistency
 
