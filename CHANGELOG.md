@@ -5,6 +5,12 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **The preparation source flag advertises a vocabulary-compatible value name.** `--context-source <id=cursor>` still accepts either a selected ID or ID with its continuation cursor; the optional cursor syntax and runtime behavior are unchanged.
+
 ## 0.325.0 — 17.10.2026
 
 ### Added

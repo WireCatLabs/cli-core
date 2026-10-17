@@ -27,7 +27,7 @@ export const addMeetingPreparationCommand = (
       .argument("<series-id>", "exact provider series ID")
       .description("prepare cited context for one upcoming series")
       .option(
-        "--context-source <id[=cursor]>",
+        "--context-source <id=cursor>",
         "authorized communications selection ID, optionally ID=cursor; repeat",
         (value: string, previous: string[]) => [...previous, value],
         [],
