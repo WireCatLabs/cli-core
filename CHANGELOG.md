@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.316.0 — 17.10.2026
+
 ### Added
 
 - **Three more group settings: only admins send, only admins edit info, disappearing messages.** A new
