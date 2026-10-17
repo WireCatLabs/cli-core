@@ -130,8 +130,8 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2(vitest@5.0.2)
       '@wirecat/cli-base':
-        specifier: 0.40.4
-        version: 0.40.4(commander@15.0.0)(typescript@7.0.2)
+        specifier: 0.43.0
+        version: 0.43.0(commander@15.0.0)(typescript@7.0.2)(vitest@5.0.2)
       commander:
         specifier: 15.0.0
         version: 15.0.0
@@ -1436,14 +1436,17 @@ packages:
   '@wasm-audio-decoders/opus-ml@0.0.3':
     resolution: {integrity: sha512-SEeTmk0eb3q5etJA/NHCRWW6BivTx9tqvNTmG0kg2ynuATEQRUZnwQE6Ibvl1BBvqIGHqI57+qyJMWmJBwb5XQ==}
 
-  '@wirecat/cli-base@0.40.4':
-    resolution: {integrity: sha512-9qJf3/bmpa4HXpxxcXarOMLT1GEGpqplJ1t9oWocXgeqB+hewSTjcPZ4qF5zocMW6bdIZrV2RV08yFPDnZlIlw==}
+  '@wirecat/cli-base@0.43.0':
+    resolution: {integrity: sha512-S6PGOV/vNRsBHrd4Bdr6We8F7dTRj5cmFco9NCNjluCFjBXreQqbEyit0INqlh4ttiLb6e9DpLhvIBbpt60BBw==}
     engines: {node: '>=22'}
     hasBin: true
     peerDependencies:
       commander: '>=15'
+      vitest: '>=5'
     peerDependenciesMeta:
       commander:
+        optional: true
+      vitest:
         optional: true
 
   '@wirecat/cli-core-onnx@1.0.1':
@@ -3804,7 +3807,7 @@ snapshots:
     dependencies:
       '@wasm-audio-decoders/common': 9.0.7
 
-  '@wirecat/cli-base@0.40.4(commander@15.0.0)(typescript@7.0.2)':
+  '@wirecat/cli-base@0.43.0(commander@15.0.0)(typescript@7.0.2)(vitest@5.0.2)':
     dependencies:
       '@valibot/to-json-schema': 1.8.0(valibot@1.5.0(typescript@7.0.2))
       cli-table3: 0.6.5
@@ -3814,6 +3817,7 @@ snapshots:
     optionalDependencies:
       '@napi-rs/keyring': 2.1.0
       commander: 15.0.0
+      vitest: 5.0.2(@types/node@22.20.4)(@vitest/coverage-v8@5.0.2)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
     transitivePeerDependencies:
       - typescript
 
