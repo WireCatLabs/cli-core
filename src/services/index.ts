@@ -198,6 +198,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
   return deps.messenger.services ? { ...base, ...deps.messenger.services(base, deps) } : base
 }
 
+export { entriesOfList, type ListContext, type ListedEntry } from "../search/account-list.js"
 export { FIELD_VERSION, QUERY_FIELDS, QUERY_OPERATORS, validateAst } from "../search/lucene/registry.js"
 export { QUERY_LIMITS, QUERY_VERSION } from "../search/lucene/types.js"
 export { TASK_KINDS, TASK_ORIGINS, type TaskKind, type TaskOrigin } from "../tasks/index.js"
@@ -335,7 +336,7 @@ export {
   catchUpSearch,
   validateCatchUp,
 } from "./search-catchup.js"
-export { accountsOfKind, type SearchKind } from "./search-kind.js"
+export { accountsOfKind, listContextOf, type SearchKind } from "./search-kind.js"
 export type { SearchRefreshed, SyncOptions } from "./search-refresh.js"
 export { SYNC_BOUNDS, SYNC_KEY } from "./search-refresh.js"
 export {
