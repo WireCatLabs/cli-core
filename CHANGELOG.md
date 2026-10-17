@@ -17,6 +17,10 @@ shape of this file.
 
 ### Fixed
 
+- **Tasks are compared by when their messages were sent**, not by when a task was written. An agent going through
+  history writes many tasks in a minute, so every pair looked "created together" (+2) and "tomorrow" in each
+  meant the same day (+4): on a real-chat replay of 148 tasks this doubled the tasks `tasks add` refused as
+  possible duplicates (74 → 36 once fixed). A task with no source message keeps its creation time.
 - The release history attributes project-scoped meeting preparation to 0.309.0, its first published version, rather than 0.308.0.
 
 ## 0.309.0 — 17.10.2026

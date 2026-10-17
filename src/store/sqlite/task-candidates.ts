@@ -160,7 +160,9 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
         {
           title: side.title,
           description: side.description,
-          createdAt: side.createdAt,
+          // When the job came up, not when a task was written for it: an agent going through history writes many
+          // tasks in a minute, and "tomorrow" in a message means the day after it was sent.
+          createdAt: side.source?.sentAt ?? side.createdAt,
           ...(person === undefined ? {} : { person }),
           ...(side.category === undefined ? {} : { category: side.category }),
           ...(side.amount === undefined ? {} : { amount: side.amount }),
