@@ -228,6 +228,27 @@ describe("commands through serve's relay", () => {
     await serve.done
   })
 
+  it("ends a relayed run with 0 when its reader goes away, and serve goes on", async () => {
+    const { env } = setup()
+    const serve = await startServe(env)
+    const streams = captureStreams()
+    const stdout = new PassThrough()
+    const watching = run(["watch", "--jsonl"], definitionFor(messengerOver(refuseOwnConnection)), {
+      streams,
+      stdout,
+      tty: false,
+      env,
+    })
+    await vi.waitFor(() => expect(streams.stderr.join("\n")).toContain("listening"), { interval: 5 })
+
+    stdout.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }))
+
+    expect(await watching).toBe(0)
+    expect((await client(["messages", "send", "Book", "after"], env)).code).toBe(0)
+    serve.stop()
+    expect(await serve.done).toBe(0)
+  })
+
   it("ends a relayed watch that fails, and serve goes on keeping what arrives", async () => {
     const { env } = setup()
     const serve = await startServe(env)

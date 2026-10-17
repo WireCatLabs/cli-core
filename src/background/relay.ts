@@ -222,10 +222,15 @@ export const relayCommand = (path: string, request: RelayRequest, options: Relay
     let timer: NodeJS.Timeout | undefined
     const forward = (chunk: Buffer | string) => frame(socket, { stdin: Buffer.from(chunk).toString("base64") })
     const ended = () => frame(socket, { stdinEnd: true })
+    // `| head` stopped reading: the run in serve goes with the socket, and ending is not a failure.
+    const brokenPipe = (error: NodeJS.ErrnoException) => {
+      if (error.code === "EPIPE") finish({ code: 0 })
+    }
     const finish = (outcome: { code: number } | { error: unknown }) => {
       if (settled) return
       settled = true
       if (timer) clearTimeout(timer)
+      stdout.off("error", brokenPipe)
       signal.removeEventListener("abort", aborted)
       stdin.off("data", forward).off("end", ended)
       stdin.pause()
@@ -244,6 +249,7 @@ export const relayCommand = (path: string, request: RelayRequest, options: Relay
     const aborted = () => finish(listens ? { code: 0 } : { error: signal.reason })
     if (signal.aborted) return aborted()
     signal.addEventListener("abort", aborted, { once: true })
+    stdout.on("error", brokenPipe)
     if (deadlineMs !== undefined) timer = setTimeout(() => finish({ error: stopped() }), deadlineMs)
 
     socket.on("connect", () => {

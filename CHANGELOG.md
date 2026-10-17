@@ -18,7 +18,6 @@ shape of this file.
 
 ### Fixed
 
-- **The preparation source flag advertises a vocabulary-compatible value name.** `--context-source <id=cursor>` still accepts either a selected ID or ID with its continuation cursor; the optional cursor syntax and runtime behavior are unchanged.
 
 ### Changed — may break callers
 

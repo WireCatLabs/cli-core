@@ -274,6 +274,11 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
               }).profile,
             commandEnv,
           )
+    if (!options.streams) {
+      quietBrokenPipes()
+      process.stdout.on("error", pipeError)
+      process.stderr.on("error", pipeError)
+    }
     if (target) {
       const served = target.lock.version
       if (served !== undefined && served !== definition.app.version && !flags.quiet)
@@ -308,10 +313,6 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     }
     control.start(deadline)
     if (options.relayed) absolutePaths(action, options.relayed.cwd)
-    if (!options.streams) {
-      process.stdout.on("error", pipeError)
-      process.stderr.on("error", pipeError)
-    }
     const cooperative = persistent || stopsAtItsPace === true
     if (!cooperative) options.signal?.addEventListener("abort", externalAbort, { once: true })
     if (!cooperative && options.signal?.aborted) {
@@ -424,6 +425,21 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     }
     await control.finish()
   }
+}
+
+let pipesQuiet = false
+
+/**
+ * A reader that stopped reading (`| head`) is not an error, during the run or after it, when what was written is
+ * still flushing: without a listener Node prints a stack trace over the output that worked.
+ */
+const quietBrokenPipes = () => {
+  if (pipesQuiet) return
+  pipesQuiet = true
+  for (const stream of [process.stdout, process.stderr])
+    stream.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EPIPE") throw error
+    })
 }
 
 const failingNoticeFor = (app: AppIdentity, env: NodeJS.ProcessEnv) => {
