@@ -462,8 +462,11 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
       return { locator, url: null, access: "unavailable", reason: "unsupported_provider" }
     },
 
-    download: async (chat, message) =>
-      capability(await deps.connection(), "download", "download attachments")(chat, message),
+    download: async (chat, message) => {
+      const connection = await deps.connection()
+      const download = capability(connection, "download", "download attachments")
+      return download((await connection.resolve(chat)).id, message)
+    },
 
     keepDownloaded: (chat, message, files) =>
       inStore(async (store, account) => {

@@ -370,7 +370,7 @@ const walkChat = async (
       if (message.attachments.some(({ kind }) => !NOT_FILES.has(kind))) {
         let messageComplete = true
         try {
-          const { files } = await patiently(() => messages.download(chat, message.id), note, stop)
+          const { files } = await patiently(() => messages.download(message.chatId, message.id), note, stop)
           const previousFailures = batch.failed
           const downloaded = await saveFiles(messages, message.chatId, message.id, files, output, {
             unique: true,
