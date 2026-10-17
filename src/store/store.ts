@@ -1,5 +1,4 @@
 import type { ContextEvidenceReader } from "../context/evidence.js"
-import type { MeetingFindingsStore } from "../meetings/findings.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
 import { type AccountAccounts, type AccountsStore, accountAccountsOver, accountsStoreOver } from "./accounts.js"
 import {
@@ -11,6 +10,7 @@ import {
 import { type ChatsStore, chatsStoreOver } from "./chats.js"
 import { type ConversationsStore, conversationsStoreOver } from "./conversations.js"
 import { type AccountCounters, accountCountersOver, type CountersStore, countersStoreOver } from "./counters.js"
+import type { MeetingFindingsStore } from "./meeting-findings.js"
 import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
 import { type AccountMessages, accountMessagesOver, type MessagesStore, messagesStoreOver } from "./messages.js"
 import { type AccountPeople, accountPeopleOver, type PeopleStore, peopleStoreOver } from "./people.js"

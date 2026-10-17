@@ -22,6 +22,7 @@ export type {
   ParticipantPersonLinkInput,
   ParticipantPersonLinkReceipt,
 } from "./context-store.js"
+export { type MeetingCueIdentity, meetingCueFingerprint } from "./cue-fingerprint.js"
 export { linkEvent } from "./events.js"
 export {
   exportMeeting,
@@ -33,13 +34,14 @@ export {
 export {
   type FindingEvidence,
   type FindingOutcome,
+  findingHash,
+  MEETING_FINDINGS_KIND,
   type MeetingFactFinding,
   type MeetingFinding,
-  type MeetingFindingsBatch,
   type MeetingFindingsInput,
   type MeetingFindingsReceipt,
-  type MeetingFindingsStore,
   type MeetingTaskFinding,
+  meetingFindingFingerprint,
   validateMeetingFindings,
 } from "./findings.js"
 export { type ImportFile, importFiles } from "./import.js"
@@ -135,6 +137,7 @@ export {
   type MeetingProjectEvidenceAnswer,
   type MeetingProjectEvidenceItem,
   meetingProjectEvidence,
+  meetingProjectEvidenceAnswer,
 } from "./project-evidence-answer.js"
 export {
   MEETING_PROJECT_EVIDENCE_QUERY,

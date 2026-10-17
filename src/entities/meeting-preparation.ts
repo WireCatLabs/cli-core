@@ -1,6 +1,6 @@
 import { isoTime, reference } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import { meetingProjectEvidence } from "../meetings/project-evidence-answer.js"
+import { meetingProjectEvidence } from "../meetings/index.js"
 import { preparationCommunications } from "./meeting-communications.js"
 import {
   preparationCount as count,

@@ -15,8 +15,7 @@ import {
   type TaskRelation,
   type TaskRelationKind,
 } from "../store/index.js"
-import type { Author } from "../store/sqlite/memories.js"
-import type { AccountKey, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
+import type { AccountKey, Author, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
 import { type ColumnMap, queryFilter } from "../store/store.js"
 import {
   type ClosedState,

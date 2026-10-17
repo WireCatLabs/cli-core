@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import { FACT_TYPES, WORK_TASK_TYPES } from "../domain/knowledge.js"
-import type { AccountKey } from "../store/types.js"
+import { MEETING_FACT_TYPES } from "./meeting-context.js"
 import { canonicalMeetingReference, parseMeetingReference } from "./reference.js"
 import { meetingTimestamp } from "./timestamp.js"
+
+const MEETING_TASK_TYPES = ["bug", "feature", "chore"] as const
 
 export const MEETING_FINDINGS_KIND = "meeting_findings"
 export interface FindingEvidence {
@@ -17,12 +18,12 @@ interface FindingBase {
 }
 export interface MeetingFactFinding extends FindingBase {
   kind: "fact"
-  type: (typeof FACT_TYPES)[number]
+  type: (typeof MEETING_FACT_TYPES)[number]
   statement: string
 }
 export interface MeetingTaskFinding extends FindingBase {
   kind: "task"
-  type: (typeof WORK_TASK_TYPES)[number]
+  type: (typeof MEETING_TASK_TYPES)[number]
   title: string
   reason: string
   commitment: "explicit" | "inferred"
@@ -49,35 +50,6 @@ export interface MeetingFindingsReceipt {
   previewFingerprint: string
   accepted: string[]
   items: FindingOutcome[]
-}
-export interface MeetingFindingsBatch {
-  id: string
-  account: AccountKey
-  input: MeetingFindingsInput
-  fingerprint: string
-  status: "proposed" | "reviewed"
-  author: { type: "person" | "bot"; id: string; name: string | null }
-  decidedBy: { type: "person" | "bot"; id: string } | null
-  decidedAt: string | null
-  previous: FindingOutcome[]
-  receipt: MeetingFindingsReceipt | null
-}
-export interface MeetingFindingsStore {
-  stage(
-    account: AccountKey,
-    input: MeetingFindingsInput,
-    agent: { bot: string; model?: string },
-  ): Promise<MeetingFindingsBatch>
-  get(account: AccountKey, id: string): Promise<MeetingFindingsBatch>
-  list(
-    account: AccountKey,
-    options?: { limit?: number; offset?: number; status?: "proposed" | "reviewed" },
-  ): Promise<{ items: MeetingFindingsBatch[]; hasMore: boolean }>
-  review(
-    account: AccountKey,
-    id: string,
-    input: { fingerprint: string; accept: string[] },
-  ): Promise<MeetingFindingsBatch>
 }
 const invalid = (message: string): never => {
   throw new CliError("validation_error", message)
@@ -133,7 +105,7 @@ export const validateMeetingFindings = (input: MeetingFindingsInput): MeetingFin
     const base = { id, project, evidence }
     if (finding.kind === "fact") {
       fields(finding, ["id", "project", "evidence", "kind", "type", "statement"])
-      if (!FACT_TYPES.includes(finding.type)) return invalid("unknown fact finding type")
+      if (!MEETING_FACT_TYPES.includes(finding.type)) return invalid("unknown fact finding type")
       return { ...base, kind: "fact", type: finding.type, statement: text(finding.statement, 2000) }
     }
     if (finding.kind !== "task") return invalid("a finding is a fact or task")
@@ -151,7 +123,7 @@ export const validateMeetingFindings = (input: MeetingFindingsInput): MeetingFin
       "assignee",
       "assigneeEvidence",
     ])
-    if (!WORK_TASK_TYPES.includes(finding.type)) return invalid("a task finding type is bug, chore or feature")
+    if (!MEETING_TASK_TYPES.includes(finding.type)) return invalid("a task finding type is bug, chore or feature")
     if (!["explicit", "inferred"].includes(finding.commitment))
       return invalid("task commitment must be explicit or inferred")
     const support = (value: unknown): string[] => {

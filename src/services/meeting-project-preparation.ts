@@ -1,4 +1,4 @@
-import { prepareMeetingProjectEvidence } from "../meetings/project-evidence-query.js"
+import { prepareMeetingProjectEvidence } from "../meetings/index.js"
 import type { MeetingPreparation, MeetingPreparationPorts } from "./meeting-preparation-types.js"
 import { preparationCancelled, type preparationRequest } from "./meeting-preparation-validation.js"
 import { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"

@@ -37,6 +37,7 @@ export type {
   TranscriptContextPage,
 } from "./sqlite/meeting-reads.js"
 export type { MeetingVectors } from "./sqlite/meeting-vectors.js"
+export type { Author } from "./sqlite/memories.js"
 export { OTHER_SOURCES, type OtherSource, type SourceMention } from "./sqlite/mention-sources.js"
 export {
   MENTION_QUERY,
@@ -79,6 +80,7 @@ export { fillStems, resetStems } from "./sqlite/stems-fill.js"
 export type { StoredTag, TagFilter, TagTarget, TaskTagTarget } from "./sqlite/tags.js"
 export { savedTaskCategories } from "./sqlite/task-category-settings.js"
 export { DEFAULT_AGENT_CLOSE, savedAgentClose } from "./sqlite/task-close.js"
+export { DEFAULT_FIRST_PASS_PER_CHAT, firstPassPerChatOf, savedFirstPassPerChat } from "./sqlite/task-first-pass.js"
 export { inboxKey } from "./sqlite/tasks.js"
 export type { MatchPlace, ScoredHit } from "./sqlite/words.js"
 export type { TaskDetails } from "./sqlite/work-tasks.js"

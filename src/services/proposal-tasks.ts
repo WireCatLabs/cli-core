@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { MEETING_FINDINGS_KIND } from "../meetings/findings.js"
+import { MEETING_FINDINGS_KIND } from "../meetings/index.js"
 import type { MessageStore, ProposedAction } from "../store/store.js"
 import { createTaskService, type Task } from "../tasks/index.js"
 import { taskAccount } from "./task-rules.js"

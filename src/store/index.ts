@@ -19,15 +19,14 @@ export type {
   FindingOutcome,
   MeetingFactFinding,
   MeetingFinding,
-  MeetingFindingsBatch,
   MeetingFindingsInput,
   MeetingFindingsReceipt,
-  MeetingFindingsStore,
   MeetingTaskFinding,
-} from "../meetings/findings.js"
+} from "../meetings/index.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
 export type { CacheDatabase, CacheStatement, OpenDatabase, SqlValue } from "./driver.js"
 export { PRAGMAS } from "./driver.js"
+export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findings.js"
 export { MIGRATIONS, type Migration, migrate } from "./migrations.js"
 export { openCache } from "./open.js"
 export { storePath } from "./path.js"

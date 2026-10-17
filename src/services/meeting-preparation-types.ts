@@ -8,6 +8,7 @@ import type {
   MeetingPreparationNote,
   MeetingPreparationNotesSelection,
   MeetingPreparationNotesStore,
+  MeetingProjectDiscoveryPage,
   MeetingReadCapabilities,
   MeetingRelatedHistoryEntry,
   MeetingRelatedHistoryStore,
@@ -16,7 +17,6 @@ import type {
   MeetingStore,
   UpcomingMeetingResult,
 } from "../meetings/index.js"
-import type { MeetingProjectDiscoveryPage } from "../meetings/project-discovery.js"
 import type {
   MeetingCommunications,
   MeetingCommunicationsPort,

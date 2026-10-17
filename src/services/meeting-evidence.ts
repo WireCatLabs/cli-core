@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import { meetingCueFingerprint } from "../meetings/cue-fingerprint.js"
 import type { Transcript, TranscriptRow } from "../meetings/index.js"
-import { formatMeetingReference, parseMeetingReference } from "../meetings/index.js"
+import { formatMeetingReference, meetingCueFingerprint, parseMeetingReference } from "../meetings/index.js"
 import { authorizedMeetingMetadata, type MeetingReadStore } from "./meeting-reference.js"
 
 export interface MeetingEvidenceCue {

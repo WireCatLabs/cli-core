@@ -1,18 +1,17 @@
 import { CliError } from "@wirecat/cli-base"
-import { meetingCueFingerprint } from "../../meetings/cue-fingerprint.js"
 import {
   type FindingOutcome,
   findingHash,
   MEETING_FINDINGS_KIND,
   type MeetingFinding,
-  type MeetingFindingsBatch,
   type MeetingFindingsInput,
   type MeetingFindingsReceipt,
-  type MeetingFindingsStore,
+  meetingCueFingerprint,
   meetingFindingFingerprint,
+  parseMeetingReference,
   validateMeetingFindings,
-} from "../../meetings/findings.js"
-import { parseMeetingReference } from "../../meetings/reference.js"
+} from "../../meetings/index.js"
+import type { MeetingFindingsBatch, MeetingFindingsStore } from "../meeting-findings.js"
 import type { AccountKey } from "../types.js"
 import { factOperationsOver } from "./facts.js"
 import { authorActor, linkEvidence } from "./memories.js"
