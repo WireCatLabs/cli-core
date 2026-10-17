@@ -2,6 +2,12 @@
 
 Open work only. A finished item is deleted; its record is the merged pull request.
 
+- **Serve relay, what v1 leaves out** ([the serve relay](ARCHITECTURE.md#the-serve-relay)): a Windows named pipe
+  with an owner-only access list (NEED-1405; off on Windows now); forwarding an `ask` question to the client's
+  terminal instead of requiring `--yes`; waiting for a serve that is still starting instead of failing on the
+  messenger's own lock; per-watcher buffer budgets for a relayed `watch` (max-cli's `server/subscribers.ts`);
+  `mcp --http` through serve; a path type on options instead of the placeholder naming rule (DEBT-124).
+
 - **One message search without a language switch** — Lucene syntax with legacy's forgiving matching,
   matchers run in parallel, merged and ranked against the query, each hit labelled with how it matched
   (the legacy search and `--language` are already gone). Ranking test set and an owner-approved plan come first:

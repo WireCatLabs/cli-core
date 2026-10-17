@@ -21,7 +21,7 @@ import { parseDuration } from "../../domain/duration.js"
 import { readOnlyLockOf } from "../../ports/app.js"
 import { aheadOf } from "../../services/moment.js"
 import { storePath } from "../../store/path.js"
-import { type BaseEnvironment, environmentOf } from "../context.js"
+import { type BaseEnvironment, environmentOf, setExitCode } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -248,7 +248,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
         timer: timer(),
       })
       say(snakeKeys({ name, ...last }) as object, [`${name}: exit ${last.exitCode} — ${last.output}`])
-      if (last.exitCode !== 0) process.exitCode = 1
+      if (last.exitCode !== 0) setExitCode(this, 1)
     })
 
   grantsAuthority(annotate(command.command("remove"), { effects: LOCAL_WRITE }))
@@ -269,7 +269,7 @@ export const scheduleCommand = (messenger: Messenger): Command => {
     .action(async function (this: Command, file: string) {
       const { context, system, timer } = prepare(this)
       const last = await runSchedule(app, system, context.env, file, { timer: timer() })
-      if (last.exitCode !== 0) process.exitCode = 1
+      if (last.exitCode !== 0) setExitCode(this, 1)
     })
 
   return command

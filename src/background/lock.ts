@@ -3,6 +3,7 @@ import { dirname, join } from "node:path"
 import { resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { AppIdentity } from "../ports/app.js"
 import { alive } from "./processes.js"
+import type { RelayAddress } from "./relay.js"
 
 export interface Lock {
   pid: number
@@ -11,6 +12,8 @@ export interface Lock {
   listeningAt?: string
   /** The CLI version this serve runs: after an update it goes on running the old code until restarted. */
   version?: string
+  /** Set once serve runs commands for clients on its connection — a messenger with `connection: "exclusive"`. */
+  relay?: RelayAddress
 }
 
 export const lockPath = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv) =>

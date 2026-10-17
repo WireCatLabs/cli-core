@@ -15,6 +15,7 @@ import {
 import type { Command } from "commander"
 import * as v from "valibot"
 import { currentRun } from "../runs/scope.js"
+import { setExitCode } from "./context.js"
 import { nextStep, rootOf, runnable, stepLine, withSafety } from "./steps.js"
 
 export type ListBody<T> = Omit<ListEnvelope<T>, "meta"> & { meta?: Partial<Meta> }
@@ -200,7 +201,7 @@ export const renderAnswer = <T>(
   else if (view) streams.data(view(kept))
   else renderer.result("items" in kept ? kept.items : kept.item)
   const code = exitCodeOfAnswer(whole.meta, metaOf(command).partial === true)
-  if (code !== 0) process.exitCode = code
+  if (code !== 0) setExitCode(command, code)
   if (format === "json") return
   for (const step of next)
     renderer.note(step.kind === "command" ? `→ ${step.why}: ${stepLine(root, step)}` : `→ ${step.why}`)

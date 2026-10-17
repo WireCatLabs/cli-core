@@ -271,6 +271,7 @@ export { type CompletionOptions, completeCommand } from "./messenger/complete-co
 export { contactsCommand } from "./messenger/contacts-command.js"
 export {
   type ConnectOptions,
+  connectFor,
   type Messenger,
   type MessengerContext,
   messengerContext,

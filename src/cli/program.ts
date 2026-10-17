@@ -13,6 +13,7 @@ import {
 import { metaOf } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
+import { relayCommand } from "../background/relay.js"
 import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { parseDuration } from "../domain/duration.js"
 import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
@@ -29,6 +30,7 @@ import { checkJson, liftJson } from "./json-fields.js"
 import { movedPath, movedPointer } from "./moved.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, liftProfile } from "./profile.js"
+import { absolutePaths, relayTarget } from "./relay-route.js"
 import { type GlobalFlags, type ResolveOptions, type Settings, settingsFor } from "./settings.js"
 import { commandAt } from "./steps.js"
 
@@ -118,6 +120,16 @@ const forEachCommand = (command: Command, apply: (command: Command) => void): vo
 
 export type RunOptions = BaseEnvironment & Record<string, unknown>
 
+/** The command ran in serve, which printed its answer here; `run()` returns its exit code. */
+class Relayed extends Error {
+  constructor(readonly code: number) {
+    super("relayed")
+  }
+}
+
+/** How much longer than the command's own deadline a client waits for serve to say how it ended. */
+const RELAY_MARGIN_MS = 10_000
+
 /**
  * Runs the program and **returns an exit code instead of throwing**. A stack trace is not an error
  * message: it tells a script nothing it can branch on, and exits 1 for every kind of failure alike.
@@ -156,6 +168,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       help += text
     },
   })
+  const exit: { code?: number } = {}
   const environment: RunOptions = {
     ...options,
     streams: control.streams,
@@ -163,6 +176,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     commandSignal: control.signal,
     trackCloseable: control.trackCloseable,
     app: definition.app,
+    exit,
+    runCommand: (words, given) => run(words, definition, given as RunOptions),
   }
   provide(program, environment)
   program.hook("preAction", async (_root, action) => {
@@ -212,16 +227,65 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     const timeout = flags.timeout ?? (commandEnv[envName(definition.app, "TIMEOUT")]?.trim() || undefined)
     // A background fetch was asked to outlive the shell; only an explicit --timeout bounds it.
     const job = commandEnv[envName(definition.app, "BACKFILL_JOB")] !== undefined
-    control.start(
+    const deadline =
       timeout === undefined
         ? persistent || interactiveLogin || job
           ? undefined
           : DEFAULT_COMMAND_MS
         : persistent
           ? undefined
-          : parseDuration(timeout, flags.timeout === undefined ? envName(definition.app, "TIMEOUT") : "--timeout"),
-    )
-    process.on("SIGINT", sigint).on("SIGTERM", sigterm)
+          : parseDuration(timeout, flags.timeout === undefined ? envName(definition.app, "TIMEOUT") : "--timeout")
+    // serve's relay ends its runs by their signal; a handler each would also end serve's own work.
+    if (!options.relayed) process.on("SIGINT", sigint).on("SIGTERM", sigterm)
+    const target =
+      options.relayed || flags.dryRun
+        ? undefined
+        : relayTarget(
+            definition.app,
+            action,
+            flags as { offline?: boolean; http?: boolean },
+            () =>
+              (definition.configuration ?? settingsFor(definition.app)).resolveSettings(flags, {
+                env: commandEnv,
+                needsProfile: false,
+                readOnly: true,
+              }).profile,
+            commandEnv,
+          )
+    if (target) {
+      const served = target.lock.version
+      if (served !== undefined && served !== definition.app.version && !flags.quiet)
+        streams.diagnostic(
+          `${command} ${target.profile} serve runs ${served}, this is ${definition.app.version} — the command runs as ` +
+            `${served} does until serve restarts`,
+        )
+      const input = options.stdin ?? process.stdin
+      const code = await relayCommand(
+        target.lock.relay.path,
+        {
+          argv,
+          env: Object.fromEntries(
+            Object.entries(commandEnv).filter((entry): entry is [string, string] => entry[1] !== undefined),
+          ),
+          cwd: process.cwd(),
+          tty: options.tty ?? process.stdout.isTTY === true,
+          stdinTty: input.isTTY === true,
+        },
+        {
+          streams,
+          stdin: input,
+          stdout: options.stdout ?? process.stdout,
+          signal: environment.signal as AbortSignal,
+          listens: persistent,
+          ...(deadline === undefined ? {} : { deadlineMs: deadline + RELAY_MARGIN_MS }),
+          writes: metaOf(action).effects?.remote !== "read",
+          holder: `${command} ${target.profile} serve (PID ${target.lock.pid})`,
+        },
+      )
+      throw new Relayed(code)
+    }
+    control.start(deadline)
+    if (options.relayed) absolutePaths(action, options.relayed.cwd)
     if (!options.streams) {
       process.stdout.on("error", pipeError)
       process.stderr.on("error", pipeError)
@@ -282,12 +346,13 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
 
   try {
     await control.race(() => program.parseAsync(rest, { from: "user" }))
-    const code = process.exitCode === undefined ? 0 : Number(process.exitCode)
+    const code = exit.code ?? (process.exitCode === undefined ? 0 : Number(process.exitCode))
     const hint =
       code === 0 && rest[0] !== "commands" && !rest.includes("--quiet") ? hintFor(definition, rest, options) : undefined
     if (hint) streams.diagnostic(hint)
     return code
   } catch (caught) {
+    if (caught instanceof Relayed) return caught.code
     const error = control.failure() ?? caught
     if (error instanceof PreviewComplete) return 0
     if (signalExit === 0) return 0
