@@ -4,13 +4,13 @@ One word, one meaning, in every WireCat CLI: tg, max, memo, drive and zm. This p
 commands, resources and JSON keys, the one meaning of each, the words it replaces, and where a CLI
 uses it differently today.
 
-- [STANDARD.md](STANDARD.md#command-names) binds all five CLIs. The verb, resource and flag meanings
-  live in cli-base's vocabulary and are shown in [its tables](STANDARD.md#vocabulary-and-lint-rules);
+- The [WireCat CLI standards handbook](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/README.md) binds all five CLIs. The verb, resource and flag
+  meanings live in cli-base's vocabulary and are shown in [STANDARD.md's tables](STANDARD.md#vocabulary-and-lint-rules);
   this page repeats a word only to show where it applies and where it is broken.
 - Each CLI starts from its own lint baseline (`lint/baseline/`), which only shrinks; each repository
   fixes its violations in its own change.
-- A rule changes in STANDARD first, in its own pull request, and the owner approves new wording.
-  This page follows.
+- A word changes in cli-base's vocabulary first, in its own pull request, and the owner approves new
+  wording. This page follows.
 - "Current violations" were found on 2026-10-12 from `<cli> commands --json` (tg 0.51.0,
   max 0.48.0, memo and drive at their installed builds) and by reading the source. Nothing was
   renamed. Renames come in later pull requests, one per decision.
@@ -30,8 +30,8 @@ another meaning.
 | `add` / `remove` | put an existing thing into a set, or take it out | all | `rm`, `attach` | tg/max `contacts alias rm`; memo `folders attach` |
 | `update` | change a thing's fields | all | `plan`, `edit` for fields | tg/max `tasks plan` (sets title, due date) |
 | `set` / `unset` | one named key | all | `configure` | drive `models configure` |
-| `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say; `--all` for every chat or source (owner, 2026-10-12) | all | `import` for a catch-up, `refresh`, `store fetch` | tg/max `store fetch` (to become `messages sync`), memo `import` and `notes import` (to become `memo sync`), memo `mail <account> import`, tg/max `metadata refresh`, `stats messages counters refresh`; tg/max `contacts sync` help says "forget where the last sync left off and take the whole list again" — its help still describes a full re-read of the list, not only what changed |
-| `fetch` | one bounded pull of one named thing from the messenger, not a catch-up | tg, max | `refresh`, `get` | tg/max `store fetch` (a catch-up, see `sync`); `bot store fetch` (STANDARD rule 10 wants the personal name, `bot messages sync`); `--refresh` options (`contacts context`, `search conversations`) |
+| `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say; `--all` for every chat or source (owner, 2026-10-12) | all | `import` for a catch-up, `refresh`, `store fetch` | memo `import` and `notes import` (to become `memo sync`), memo `mail <account> import`, tg/max `metadata refresh`, `stats messages counters refresh`; tg/max `contacts sync` help says "forget where the last sync left off and take the whole list again" — its help still describes a full re-read of the list, not only what changed |
+| `fetch` | one bounded pull of one named thing from the messenger, not a catch-up | tg, max | `refresh`, `get` | `bot store fetch` ([STANDARD.md, Bot](STANDARD.md#bot) wants the personal name, `bot messages sync`); `--refresh` options (`contacts context`, `search conversations`) |
 | `import` | bring a file or list the user gives into the store or the messenger, once | all | — | memo `import`, `notes import` (a repeatable catch-up: `sync`) |
 | `export` | write from the store to a file | all | — | none |
 | `extract` | read the text inside files already on this machine into the store | tg, max | — | drive `memories extract` (sends text to a model and proposes memories: another meaning) |
@@ -44,11 +44,11 @@ another meaning.
 | `cancel` | stop a job or a pending thing | all | — | none |
 | `status` | how a thing stands right now | all | `readiness` | memo `tasks readiness` |
 | `info` | facts about a singular thing itself | tg, max | — | none |
-| `move` / `copy` | a file in the source | drive | — | none; not in STANDARD (drive only) |
+| `move` / `copy` | a file in the source | drive | — | none |
 | `restore` | put a backup back, or take a thing out of the trash | tg, max, drive | — | drive `files restore` (out of the trash: a second meaning) |
-| `rebuild` | compute again, from what the store holds, what the tool derives from it, keeping the owner's decisions | tg, max | — | none; tg/max `store reindex` is not in STANDARD's list |
+| `rebuild` | compute again, from what the store holds, what the tool derives from it, keeping the owner's decisions | tg, max | — | none; tg/max `store reindex` is not in the vocabulary |
 
-Verbs used but not in STANDARD's list, by CLI. Each needs a row above or a rename.
+Verbs used but not in cli-base's vocabulary, by CLI (2026-10-12). Each needs a registry entry or a rename.
 
 - tg/max: `accept`, `allow`, `answer`, `audit`, `build`, `decline`, `decrypt`, `deny`, `enable`,
   `exec`, `get`, `grant`, `mute`, `unmute`, `next`, `off`, `on`, `order`, `plan`, `press`, `put`,
@@ -62,7 +62,7 @@ Verbs used but not in STANDARD's list, by CLI. Each needs a row above or a renam
 
 | Term | One meaning | Not | Used wrongly |
 |---|---|---|---|
-| store (local store) | the one SQLite database tg, max, memo and drive share on this machine | archive, cache, message database, shared store | memo help says "shared store"; drive help says "cached sources"; max keeps a per-profile **cache**, a different thing (STANDARD rule 7) |
+| store (local store) | the one SQLite database tg, max, memo and drive share on this machine | archive, cache, message database, shared store | memo help says "shared store"; drive help says "cached sources"; max keeps a per-profile **cache**, a different thing ([STANDARD.md, Messenger words](STANDARD.md#messenger-words)) |
 | message | one post in a messenger chat, or one email | item, post (except a channel post), hit | none |
 | attachment | a file of a stored message | file, media | max `chats media` (the messenger's media list: allowed as the messenger's word) |
 | file text | the text read from an attachment and kept in the store, found by `content:` | extracted text, OCR text | `attachments text set` is the right place; no conflict found |
@@ -71,7 +71,7 @@ Verbs used but not in STANDARD's list, by CLI. Each needs a row above or a renam
 | document | a file imported from Google Drive or Docs | source, note | drive help says "imported sources" for documents; drive keeps documents as `note:` rows (`drive-cli/src/store.ts:111`), so one thing has two names |
 | folder | **open (NEED-988)**: three different things share the word | — | tg `chats folders` (Telegram chat folders), memo `folders` (notes folders), drive `folders` (Google Drive folders chosen to sync) |
 | tag | a label the owner puts on a thing; a `topic` is a tag kind only the owner makes | label | memo help says "labels" for tags; tg `tags auto` makes tags from rules |
-| topic | **open (NEED-989)**: two meanings | — | tg `topics`, `search topics` (forum topics in a group); memo `vocabulary create` (a kind of tag) |
+| topic | forum topics in a group: `topics`, `search topics` (cli-base vocabulary) | — | memo `vocabulary create` (a kind of tag) |
 | project | the owner's work unit with a task key | entity | `entity:` references still parse for old files |
 | organization | a company, team, family or community | entity | none |
 | person | one human, across every messenger and mail (`person:<uid>`) | user, people | tg bot help: "user:<id> for a person", "the person's user id"; drive `people` |
@@ -96,11 +96,11 @@ Read from source, not run.
 
 | Kind | Canonical key | Deviations |
 |---|---|---|
-| A list | `{ items, page, limit, hasMore }` (STANDARD, Output rule 1) | `search notes` answers `{ query, by, hits, hasMore, nextOffset, linked }` (`src/cli/messenger/search-command.ts:196`, `src/services/notes-search.ts:232`); drive `search` the same (`drive-cli/src/store.ts:109`); drive lists answer `{ items }` alone (`drive-cli/src/program.ts:243,313`); memo and drive `commands --json` add `items` beside `commands` (`drive-cli/src/program.ts:527`) |
+| A list | `{ items, page, next?, missing?, meta }` ([WC-OUT-4](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-4--answer-every-json-request-with-one-envelope-a-list-or-one-thing)) | drive `search` answers `{ query, by, hits, hasMore, nextOffset, linked }` (`drive-cli/src/store.ts:109`); drive lists answer `{ items }` alone (`drive-cli/src/program.ts:243,313`); memo and drive `commands --json` add `items` beside `commands` (`drive-cli/src/program.ts:527`) |
 | A message | `locator` (`msg:` only) | none in tg/max |
-| Any other stored thing | **open (NEED-986)**: `ref` or `reference` | `ref`: `search notes` hits, memo `tasks list` (`cli-memo/src/tasks/command.ts:171`), drive `documents show` (`drive-cli/src/program.ts:326`); `reference`: drive `documents list` (`drive-cli/src/program.ts:315`); `locator` holding a non-message: memo `search` |
-| A command to run next | a field that names its purpose, such as `next` | `chats show` and the members audit answer `fetch: "<cli> store fetch <chat>"` (`src/services/chats.ts:269,310`): the key is a verb |
-| A page cursor | `page` and `hasMore` | searches add `nextOffset`; MCP `search_notes` says it returns `hits` (`src/mcp/tools/search-tools.ts:152`) |
+| Any other stored thing | `ref` ([WC-OUT-13](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-13--write-times-durations-references-and-empty-values-one-way)) | `reference`: drive `documents list` (`drive-cli/src/program.ts:315`); `locator` holding a non-message: memo `search` |
+| A command to run next | a field that names its purpose, such as `next` | `chats show` and the members audit answer `fetch: "<cli> messages sync <chat>"` (`src/services/chats.ts:251,292`): the key is a verb |
+| A page cursor | `page.has_more`, with `page.next_page` or `page.next_cursor` ([WC-OUT-5](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-5--say-in-page-how-the-source-pages)) | none in tg/max |
 
 ## Decided (owner, 2026-10-12)
 
@@ -108,32 +108,26 @@ Read from source, not run.
   the source, only what changed; `--all` for every chat or source". `memo import` becomes
   `memo sync`. drive `sync` already has this meaning: it keeps a change cursor and reads
   everything only on the first run. `fetch` stays for a bounded pull of one named thing
-  (`chats members fetch`). STANDARD's verb list says so. The renames come in their own pull
-  requests; the violation rows above change when they merge.
+  (`chats members fetch`). cli-base's vocabulary says so. tg and max have renamed `store fetch`;
+  memo's `import` rows above were read on 2026-10-12.
+
+## Decided by the cli-base registries and the handbook
+
+- **NEED-985 · No alias for a renamed path**, `store fetch` and `memo import` included: a renamed path stops
+  working in the release that renames it ([WC-CMD-8](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-8--keep-no-aliases-a-renamed-path-stops-working-in-the-release-that-renames-it)).
+- **NEED-986 · A stored thing is named by `ref`** ([WC-OUT-13](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/output.md#wc-out-13--write-times-durations-references-and-empty-values-one-way)).
+- **NEED-989 · `topics` are forum topics in a group**, in cli-base's vocabulary. memo's topic tags need another word.
+- **NEED-991 · drive's file verbs map to the vocabulary:** `delete` replaces `trash` and `rm`, `create` replaces
+  `mkdir`, `show` replaces `get`; `move` and `copy` are registered verbs for a file in the source.
 
 ## Open questions for the owner
 
-- **NEED-985 · May `store fetch` and `memo import` keep working for three releases after the
-  rename, against STANDARD rule 9 ("No aliases")?** Proposed wording for rule 9: "`store fetch`
-  and `memo import` keep working for three releases after their rename, hidden from help, print
-  one line on stderr that names the new path, and then stop working. This is the only exception."
-  Saved background jobs and `schedule command` records do not need it: they are rewritten to the
-  new path when they run. What needs it: memo's installed timer (it runs `memo import`; without
-  the old name it fails before it can rewrite its own unit, and with it the unit is rewritten to
-  `memo sync` on its first run), hand-written scripts, and agents' skills such as tg-cli's
-  `skills/tg-cli/SKILL.md`.
-- **NEED-986 · A reference key:** `ref` or `reference` for a non-message thing? `ref` is shorter
-  and used more; `reference` matches the domain type and the plain-word rule for options.
 - **NEED-987 · `context`:** keep it for the entity card (memo, drive, `contacts context`) and
   rename `messages context` (for example `messages around`), or the reverse?
 - **NEED-988 · `folders`:** three meanings (Telegram chat folders, notes folders, Drive folders).
   Keep `folders` for the messenger's and prefix the others (`notes folders`, `drive folders`), or
   accept one word per CLI?
-- **NEED-989 · `topic`:** Telegram forum topics and memo's topic tags. Rename memo's kind (for
-  example `subject`), or keep both?
 - **NEED-990 · key document:** what does it mean, and which CLI has it?
-- **NEED-991 · drive file verbs:** keep Google's `trash`, `mkdir`, `move`, `copy`, `get` (they
-  mirror the Drive API), or map them to `delete`, `create`, `show`?
 - **NEED-992 · One permission for syncing:** `messages sync` (like `store fetch` before it) is
   checked against the read key `messages`, but `--sync-first` on a search is the write key
   `messages.sync-first`. A read-only profile can sync directly but not through `--sync-first`.

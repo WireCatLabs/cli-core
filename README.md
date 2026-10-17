@@ -10,7 +10,7 @@ search, a Lucene query language, the shared commands, an MCP server for AI agent
 write. A messenger plugs in as one adapter and gets all of it.
 
 [Architecture](docs/dev/ARCHITECTURE.md) · [Write an adapter](docs/dev/ADAPTERS.md) ·
-[Query language](docs/search/query-language.md) · [CLI standard](docs/dev/STANDARD.md) ·
+[Query language](docs/search/query-language.md) · [Messenger rules](docs/dev/STANDARD.md) ·
 [API reference](docs/REFERENCE.md) · [Changelog](CHANGELOG.md) · [wirecat.dev](https://wirecat.dev)
 
 [![npm](https://img.shields.io/npm/v/@wirecat/cli-core)](https://www.npmjs.com/package/@wirecat/cli-core)
@@ -26,7 +26,7 @@ write. A messenger plugs in as one adapter and gets all of it.
 | [Architecture](docs/dev/ARCHITECTURE.md) | The layers, the module map, the store internals and migrations, who consumes what |
 | [Document workflows](docs/dev/DOCUMENTS.md) | Shared file ingestion, sync, scoped knowledge and extraction; the ports a file provider supplies |
 | [Write an adapter](docs/dev/ADAPTERS.md) | How to add a messenger: the port, the `Messenger` description, the contract cases |
-| [CLI standard](docs/dev/STANDARD.md) | The rules every WireCat CLI follows: command shape, output, exit codes, permissions, MCP |
+| [Messenger rules](docs/dev/STANDARD.md) | What binds tg, max and wa beyond the [CLI standards handbook](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/README.md): parity, the option catalogue, `bot` |
 | [Glossary](docs/dev/GLOSSARY.md) | One word, one meaning across the tools |
 | [Query language](docs/search/query-language.md) · [spec](docs/search/query-language-spec.md) · [Image search](docs/search/images.md) | The search syntax and its exact grammar; finding pictures by context and by what they show |
 | [Mentions](docs/mentions.md) · [how they work](docs/dev/MENTIONS.md) | Phones, e-mail, links, documents and names found in messages: search, review, rebuild; the tables and the rules |
@@ -185,9 +185,10 @@ or a launchd agent.
 
 ## Engineering standards
 
-The [CLI standard](docs/dev/STANDARD.md) binds every WireCat CLI. It measures itself against POSIX, GNU, [Command Line Interface Guidelines](https://clig.dev),
-the MCP specification and JSON Schema 2020-12, and says where it deliberately differs. A rule changes in its own pull
-request, before the code that needs it.
+The [WireCat CLI standards handbook](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/README.md) in cli-base binds every WireCat CLI; the
+[messenger rules](docs/dev/STANDARD.md) add what binds tg, max and wa. They measure themselves against POSIX, GNU,
+[Command Line Interface Guidelines](https://clig.dev), the MCP specification and JSON Schema 2020-12, and say where
+they deliberately differ. A rule changes in its own pull request, before the code that needs it.
 
 - **stdout carries data, stderr carries diagnostics,** in every mode. `--json` prints one object; `--jsonl` one per
   line; `--json=id,text` only those fields.

@@ -1,21 +1,19 @@
 # Conventions
 
-**How commands, options, answers and MCP tools of the WireCat CLIs — tg, max, memo, drive and zm — are
-named and shaped is [`STANDARD.md`](STANDARD.md)** — it lives here, and every CLI links it.
+**The rules every WireCat CLI follows are the [WireCat CLI standards handbook](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/README.md)** in cli-base: commands,
+output, MCP, permissions, architecture, tests, documents and releases. When this page disagrees with it, the
+handbook wins. What binds only the messenger CLIs — tg, max and wa — is [`STANDARD.md`](STANDARD.md).
 
-**Code structure follows the shared
-[modularity standard](https://github.com/WireCatLabs/cli-base/blob/main/docs/dev/MODULARITY.md).**
-The [architecture map](ARCHITECTURE.md#responsibility-and-dependency-boundaries) applies its layers
-and module-size review guidelines here.
+The [architecture map](ARCHITECTURE.md#responsibility-and-dependency-boundaries) applies the handbook's layers here.
 
 **How tg and max are released and checked live is [`RELEASING.md`](RELEASING.md)**: the steps
 their `release` and `test-live` skills share.
 
-**The shared rules are max-cli's** —
-[max-cli `docs/dev/CONVENTIONS.md`](https://github.com/WireCatLabs/max-cli/blob/main/docs/dev/CONVENTIONS.md):
-the linter decides formatting, strict TypeScript with no `any`, sparse comments that say *why*,
-core code takes its environment as arguments, one-shot means the process exits, no credential or
-message in a log, a test must not prepare what a first run lacks.
+**The code rules are the handbook's too**: the linter decides formatting ([toolchain](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/toolchain.md)), sparse
+comments that say *why* ([style](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/style.md)), core code takes its environment as arguments
+([architecture](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/architecture.md)), one-shot means the process exits ([lifecycle](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md)), no credential
+or message in a log ([security](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md)). Stricter here: a test must not prepare what a
+first run lacks.
 
 **Documents state the current facts.** A fact that changed is rewritten — no "Correction" marks, no
 strikethrough, no "as of <date>" trail; git keeps what the text said before. A plan or handoff whose

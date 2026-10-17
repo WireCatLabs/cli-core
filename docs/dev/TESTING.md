@@ -4,13 +4,18 @@
 pnpm lint
 pnpm typecheck      # the package, then the tests (tsconfig.test.json)
 pnpm test           # vitest
-pnpm test:coverage  # CI runs this; the report is in coverage/index.html
+pnpm test:coverage  # the report is in coverage/index.html
 pnpm docs:check     # every relative link and anchor, and the changelog's shape
 pnpm test:slow      # the 20 slowest tests and the 10 slowest files
 pnpm smoke:bun      # the SQLite seam, the store and run records, executed under Bun
 ```
 
-CI runs all of them except `test:slow`, plus `pnpm build` and a secret scan — [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), through cli-base's shared `node-ci.yml`.
+A pull request runs only the fast checks ([`.github/workflows/standards.yml`](../../.github/workflows/standards.yml)):
+`pnpm standards:check`, `pnpm lint`, `pnpm docs:lint`, `pnpm ci:quick` (the typecheck and the command lint) and a
+secret scan of the new commits, beside the changelog guard. Run the rest yourself before you push. Full validation
+([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml), through cli-base's shared `node-ci.yml`) runs all of the
+commands above except `test:slow`, plus `pnpm build`, on each push to `main`, in the release and in the monthly run —
+after a merge, not before it.
 
 ## No test touches the owner's store
 
