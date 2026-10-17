@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A saint's name and a city that is also a first name are no longer taken for an unknown person.** No name after
+  Saint, St., Sant, San, Santa, São, Святого, Святой, Св. or Девы (Saint Michael's Bridge, Coves de Sant Josep, San
+  Francisco, Девы Марии), and no single Russian name in the prepositional case right after «в»/«во» («во Владимире»,
+  «в Милане»). On the owner's chats this drops 36 of 494 unknown names, all of them wrong; a sample of 20 went from
+  15 right and 5 wrong to 15 and 0. `person-name` rule version 3: `mentions rebuild person-name` redoes it.
+
 ## 0.319.0 — 17.10.2026
 
 ### Changed — may break callers

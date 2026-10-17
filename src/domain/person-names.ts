@@ -155,6 +155,11 @@ const SENTENCE_START = /(?:^|[.!?…\n]\s*)$/u
 // Russian surnames by their endings, in any case: Иванов, Петровой, Смирнову, Шевченко, Сухишвили.
 const SURNAME = /^\p{Lu}\p{Ll}+(?:ов|ев|ёв|ин|ын|ск|цк|енко|ук|юк|ян|дзе|швили)\p{Ll}{0,3}$/u
 const CYRILLIC_WORD = /^\p{Script=Cyrillic}+$/u
+// A saint's or a holy name is part of a place or a feast: Saint Michael's Bridge, Coves de Sant Josep, Девы Марии.
+const HOLY_BEFORE =
+  /(?:^|[^\p{L}])(?:saint|sainte|st\.|sant|santa|santo|san|são|святого|святой|святая|святых|св\.|девы|богородицы)\s$/iu
+// A city that is also a first name, in the prepositional case: «во Владимире», «в Милане».
+const IN_CITY = /(?:^|[^\p{L}])во?\s$/iu
 
 type Role = "first" | "word" | "patronymic"
 let forms: Map<string, Role> | undefined
@@ -219,6 +224,12 @@ export const findUnknownNames = (
       if (last - first < 2 && adjacent(last, last + 1) && surname) last += 1
     }
     if (first === last && role === "word") continue
+    const before = text.slice(
+      Math.max(0, (words[first] as { start: number }).start - 12),
+      (words[first] as { start: number }).start,
+    )
+    if (HOLY_BEFORE.test(before)) continue
+    if (first === last && cyrillic && /е$/u.test((words[at] as { text: string }).text) && IN_CITY.test(before)) continue
     const span = words.slice(first, last + 1)
     found.push({
       start: (span[0] as { start: number }).start,
