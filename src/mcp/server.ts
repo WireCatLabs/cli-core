@@ -9,6 +9,7 @@ import { judgedTargets } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
 import { connected, connectFor, type Messenger, type MessengerContext } from "../cli/messenger/context.js"
+import { syncsFirst } from "../cli/messenger/search-sync-options.js"
 import { rootOf } from "../cli/steps.js"
 import { warmEmbedders } from "../embeddings/embed.js"
 import { guardFor } from "../sends/guard.js"
@@ -131,7 +132,7 @@ export const createServer = (
           spawnJob: sessionOptions.spawnJob,
           limit: settings.limit,
           get syncAllowed() {
-            return levelOf("messages.sync-first") === "allow"
+            return syncsFirst(messenger) && levelOf("messages.sync-first") === "allow"
           },
           guard,
           settings,

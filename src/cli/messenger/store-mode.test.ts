@@ -15,6 +15,7 @@ import type { Messenger } from "./context.js"
 import { inboxCommand } from "./inbox.js"
 import { messagesCommand } from "./messages-command.js"
 import { reviewCommand } from "./review.js"
+import { searchCommand } from "./search-command.js"
 
 const app = {
   command: "chat",
@@ -104,6 +105,7 @@ const call = async (
         storeCommand(messenger),
         inboxCommand(messenger),
         reviewCommand(messenger),
+        searchCommand(messenger),
       ],
     },
     { streams, tty, env },
@@ -305,6 +307,22 @@ describe("a messenger whose history is read from the store", () => {
     expect(stderr).toContain("run `chat serve` or `chat watch` once to fill the local store")
     expect(stderr).not.toContain("--offline")
     expect(connects).toEqual([])
+  })
+
+  it("**BUG-273: offers no --sync-first and no `messages sync` where the messenger pushes its history**", async () => {
+    const { connect } = pushing()
+    const help = async (history?: "store") =>
+      [
+        (await call(["search", "messages", "--help"], sandbox(), connect, history)).stdout,
+        (await call(["contacts", "context", "--help"], sandbox(), connect, history)).stdout,
+      ].join("\n")
+    const pushed = await help("store")
+    expect(pushed).not.toContain("--sync-first")
+    expect(pushed).not.toContain("messages sync")
+    expect(pushed).toContain("what `chat serve` has kept")
+    const fetched = await help()
+    expect(fetched).toContain("--sync-first")
+    expect(fetched).toContain("chat messages sync --all --background")
   })
 
   it("**answers not_found for a chat with nothing stored**, known or not", async () => {

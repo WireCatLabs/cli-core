@@ -6,6 +6,7 @@ import { positiveCount, window } from "../paging.js"
 import { nextStep } from "../steps.js"
 import { documentLinkAnswer, lines, pageOf } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
+import { syncsFirst } from "./search-sync-options.js"
 
 /** `chats documents …`: the Google documents linked in a chat's stored messages. */
 export const documentsCommand = (messenger: Messenger): Command => {
@@ -30,7 +31,9 @@ export const documentsCommand = (messenger: Messenger): Command => {
             items: found.items.map(documentLinkAnswer),
             ...pageOf(context.settings, found),
             args: { chat },
-            ...(found.empty ? { next: [nextStep("messages.sync", { args: { chat: found.chatId } })] } : {}),
+            ...(found.empty && syncsFirst(messenger)
+              ? { next: [nextStep("messages.sync", { args: { chat: found.chatId } })] }
+              : {}),
           }),
           lines(({ sent_at, sender, title, url, in_store }) =>
             [sent_at, sender.name ?? sender.id ?? "?", title ?? url, in_store ? "in store" : "not in store"].join("  "),

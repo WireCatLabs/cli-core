@@ -6,15 +6,15 @@ import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { syncOptions, syncRequest } from "./search-sync-options.js"
+import { syncOptions, syncRequest, syncsFirst } from "./search-sync-options.js"
 import { countsAnswer, refuseJsonl } from "./stats-answers.js"
 
 const GROUPINGS: StatsGrouping[] = ["chat", "sender", "day", "hour"]
 
 export const messagesStatsCommand = (messenger: Messenger): Command =>
-  syncOptions(annotate(new Command("show"), { effects: REMOTE_READ, output: { entity: "message_counts" } }))
+  syncOptions(annotate(new Command("show"), { effects: REMOTE_READ, output: { entity: "message_counts" } }), messenger)
     .description(
-      "how many stored messages match, by chat, sender, day or hour — the local store only; optionally fetches new messages with --sync-first",
+      `how many stored messages match, by chat, sender, day or hour — the local store only${syncsFirst(messenger) ? "; optionally fetches new messages with --sync-first" : ""}`,
     )
     .argument(
       "[query...]",

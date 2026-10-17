@@ -8,7 +8,7 @@ import {
   answerMessagesSearch,
   backendArgs,
   backendInputs,
-  MESSAGES_SEARCH_DESCRIPTION,
+  messagesSearchDescription,
   messagesSearchInput,
   page,
 } from "./search.js"
@@ -110,7 +110,7 @@ export const searchTools = (messenger: Messenger): Record<string, AnyTool> => ({
 
   search_messages: tool({
     title: "Search messenger messages",
-    description: MESSAGES_SEARCH_DESCRIPTION,
+    description: messagesSearchDescription(messenger),
     input: messagesSearchInput(messenger),
     annotations: { ...READ, openWorldHint: Boolean(messenger.serverSearch) },
     output: { entity: "message.hit", list: true },

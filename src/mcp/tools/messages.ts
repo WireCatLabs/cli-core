@@ -13,7 +13,7 @@ import type { AccountKey } from "../../store/store.js"
 import { searchServices } from "../search-sync.js"
 import { threadArgs, threadInputs } from "../thread-options.js"
 import { type AnyTool, chatOf, limit, message, nameOf, READ, tool } from "../tool.js"
-import { answerMessagesStats, MESSAGES_STATS_DESCRIPTION, messagesStatsInput } from "./search.js"
+import { answerMessagesStats, messagesStatsDescription, messagesStatsInput } from "./search.js"
 
 const windowOf = (found: ReadMessage[], reader: AccountKey, window: { before: number; after: number }) =>
   listOf("messages context", {
@@ -228,7 +228,7 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
 
     stats_messages_show: tool({
       title: "Count messages",
-      description: MESSAGES_STATS_DESCRIPTION,
+      description: messagesStatsDescription(messenger),
       input: messagesStatsInput(messenger),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "message_counts", list: false },

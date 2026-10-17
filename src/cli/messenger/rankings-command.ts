@@ -32,7 +32,10 @@ const selectionOf = (value: string): unknown => {
   }
 }
 export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget): Command => {
-  const command = syncOptions(annotate(new Command("top"), { effects: REMOTE_READ, output: { entity: "ranking" } }))
+  const command = syncOptions(
+    annotate(new Command("top"), { effects: REMOTE_READ, output: { entity: "ranking" } }),
+    messenger,
+  )
     .description(
       `rank ${target === "messages" ? "stored messages" : "the human authors of stored messages"} by a measure or explainable score; counters are snapshots with per-field observation freshness`,
     )

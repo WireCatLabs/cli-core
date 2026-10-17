@@ -3,9 +3,13 @@ import { parseDuration } from "../../domain/duration.js"
 import type { SyncOptions } from "../../services/search-refresh.js"
 import { environmentOf } from "../context.js"
 import { positiveCount } from "../paging.js"
-import { type MessengerContext, refuseLocalWrite } from "./context.js"
+import { type Messenger, type MessengerContext, refuseLocalWrite } from "./context.js"
 
-export const syncOptions = (command: Command): Command => {
+/** Whether the messenger answers for older history; one that pushes it (`history: "store"`) has nothing to fetch first. */
+export const syncsFirst = (messenger: Pick<Messenger, "history">): boolean => messenger.history !== "store"
+
+export const syncOptions = (command: Command, messenger: Pick<Messenger, "history">): Command => {
+  if (!syncsFirst(messenger)) return command
   command.option("--sync-first", "first fetch new messages within the chat, time and message bounds")
   const existing = command.options.find((one) => one.long === "--max-chats")
   if (existing) existing.description = "at most this many chats; 5 with --sync-first, 20 with --catch-up if not given"
