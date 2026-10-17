@@ -917,7 +917,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--allow-people` | `<ids>` | replace allowed sender ids, comma-separated; empty clears |  | `replies audience`, `replies edit` |
 | `--allow-writes` |  | acknowledge that the profile offers writing tools when installing local MCP |  | `mcp setup` |
 | `--analyze` |  | link conversation batches using the configured analysis provider, with remembered chat/provider consent |  | `conversations build` |
-| `--anonymous` |  | nobody sees who voted for what |  | `polls create` (max, tg only) |
+| `--anonymous` |  | nobody sees who voted for what |  | `polls create` (planned) |
 | `--answerer` | `<person>` | stored name, alias, @username, ID or scoped person locator; ambiguous names require a choice; repeat it for more |  | `stats chats newcomers`, `stats contacts responses`, `stats messages unanswered` |
 | `--app` | `<how>` | the first time only: how to get this profile's app from my.telegram.org | `browser` | `session start` (tg-only), `setup` (tg-only) |
 | `--approval` |  | who joins by it asks first, and an admin lets them in |  | `chats link create` (tg-only), `chats link update` (tg-only) |
@@ -927,7 +927,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--as-reply` |  | send as a reply to the matched message |  | `replies edit` |
 | `--assignee` | `<person...>` | who does it: sender (whoever sent the task's message) or person:<id>; none clears it. Leave it out when unsure: a task with no assignee is better than none |  | `tasks add`, `tasks plan` |
 | `--at` | `<HH:MM>` | every day at this local time |  | `schedule agent` (planned), `schedule command` (planned) |
-| `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m. **schedule agent and schedule command take it for their one run: a duration from now or an ISO 8601 time** |  | `messages send` (max, tg only), `schedule agent` (planned), `schedule command` (planned) |
+| `--at-time` | `<time>` | let the messenger send it later, even with this machine off: a local time like 2026-09-25T09:00, or 30m. **schedule agent and schedule command take it for their one run: a duration from now or an ISO 8601 time** |  | `messages send` (planned), `schedule agent` (planned), `schedule command` (planned) |
 | `--attachment` | `<n>` | which file of the message, from 1; needed when it has more than one |  | `attachments show`, `attachments text set` |
 | `--backend` | `<archive\|server\|both>` | where to search: the local archive, the messenger's server, or both (default: both; message discovery uses archive only) |  | `search all` (planned), `search messages` (max, tg only) |
 | `--background` |  | run as a job that outlives this command; `store jobs show` follows it |  | `messages sync`, `store gaps repair` |
@@ -1130,12 +1130,12 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--score` | `<helpful\|active\|engaging>` | the named ranking score preset; not with an explicit --measure |  | `stats contacts top`, `stats messages top` |
 | `--secret-stdin` |  | a secret MAX sends back in X-Max-Bot-Api-Secret — asked for, or read from a pipe |  | `bot webhooks set` (max, tg only) |
 | `--selection` | `<json>` | the versioned resolved ranking selection returned by drilldown; authorisation is checked again |  | `searches create`, `stats contacts evidence`, `stats messages counters refresh`, `stats messages counters show`, `stats messages evidence` |
-| `--send-as` | `<id>` | send as one of the identities `chats send-as` lists for the chat; required where the chat posts as someone else by default, refused where the messenger has none |  | `messages forward` (max, tg only), `messages send` (max, tg only), `polls create` (max, tg only) |
+| `--send-as` | `<id>` | send as one of the identities `chats send-as` lists for the chat; required where the chat posts as someone else by default, refused where the messenger has none |  | `messages forward` (planned), `messages send` (planned), `polls create` (planned) |
 | `--serve` |  | start `serve` in the background if it is not running (the default) |  | every command (planned) |
 | `--server-time` | `<duration>` | stop waiting for the server after this long (default: 5s) |  | `search all` (planned), `search messages` (max, tg only) |
 | `--set` | `<id>` | the stickers in this set |  | `stickers list` (planned) |
 | `--show-phone` |  | print the whole phone number |  | `account show`, `contacts profile` |
-| `--silent` |  | deliver without a notification |  | `bot messages send` (max, tg only), `messages forward` (max, tg only), `messages send` (max, tg only), `polls create` (max, tg only) |
+| `--silent` |  | deliver without a notification |  | `bot messages send` (max, tg only), `messages forward` (planned), `messages send` (planned), `polls create` (planned) |
 | `--since` | `<id-or-time>` | from this message id, an ISO 8601 time, or 2h / 1d ago; each command says its default. **becomes `--since-time` everywhere — NEED-485** |  | `inbox` (planned), `review` (planned) |
 | `--since-time` | `<time>` | from this ISO 8601 time, or 2h / 1d ago; each command says its default |  | `bot chats moderate` (max, tg only), `bot store fetch` (max, tg only), `chats moderate`, `contacts context`, `contacts timeline`, `messages sync`, `replies test`, `runs search`, `search conversations`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `store export` |
 | `--size` | `<n>` | messages to answer per batch, 10–200; 50 by default |  | `conversations batches next`, `conversations batches status`, `conversations build` |

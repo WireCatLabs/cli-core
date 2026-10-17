@@ -28,10 +28,11 @@ shape of this file.
   (`--send-as` on the same three, and `chats send-as`), `scheduledSends` (`messages send --at-time` and
   `messages scheduled`). Off, the flag or command is not offered, and the MCP tools drop the matching argument or
   tool (`anonymous`, `silent`, `send_as`, `at_time`, `chats_send_as`, `messages_scheduled`); `polls_create` also
-  offers `topic` only where the messenger has forum topics. parity.json marks them absent for wa, with reasons.
+  offers `topic` only where the messenger has forum topics. parity.json marks them planned for wa until wa sets
+  the switches.
 - **`autoReplies: false`** keeps `serve` from answering by the reply rules, even with `replies.send` at `allow`, and
   makes every `replies` subcommand refuse with exit 2 ("<Messenger> cannot send automatic replies"). parity.json
-  marks the `replies` group absent for wa.
+  marks the `replies` group planned for wa until wa sets the switch.
 - **`Messenger.lacks`** names adapter methods a messenger never has. The sixteen commands that need one of them
   alone (`account update`, `account sessions list|end`, `chats events`, `chats inspect`, `chats folders
   list|show|create|update|delete`, `contacts add|remove|rename|import`, `messages pin|unpin`) then refuse on the
