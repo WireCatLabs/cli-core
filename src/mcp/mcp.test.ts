@@ -2761,6 +2761,25 @@ describe("sending over MCP", () => {
     expect((await call("messages scheduled", { chat: "7" })).isError).toBe(true)
   })
 
+  it("refuses a tool whose one method the messenger lacks before connecting", async () => {
+    const connects: number[] = []
+    const { call } = await connect(scripted(), {
+      own: { lacks: ["pin"] },
+      connect: async () => {
+        connects.push(1)
+        throw new Error("must not connect")
+      },
+    })
+
+    const refused = await call("messages pin", { chat: "7", message: "1" })
+
+    expect(refused.body.error).toMatchObject({
+      code: "validation_error",
+      message: "this messenger cannot pin a message",
+    })
+    expect(connects).toEqual([])
+  })
+
   it("preserves topic addressing through MCP send and poll tools", async () => {
     const validations: unknown[] = []
     const sends: unknown[] = []

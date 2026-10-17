@@ -16,6 +16,7 @@ import { judgedAnswer, sealed } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { MAX_BUFFERED_INPUT } from "../cli/input-policy.js"
 import type { Messenger } from "../cli/messenger/context.js"
+import { refuseLacking } from "../cli/messenger/lacks.js"
 import type { Settings } from "../cli/settings.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
 import { ENTITIES, type EntityName } from "../entities/index.js"
@@ -353,6 +354,7 @@ const callRunner = ({
             retryable: false,
           })
         assertStatsPermissionsCurrent(path, defaults.settings.permissions ?? {})
+        refuseLacking(messenger?.lacks, path)
         for (const permission of readKeysForCommand(path)) {
           if (levelFor(defaults.settings.permissions ?? {}, permission).level === "deny")
             throw new CliError("permission_error", `profile denies ${permission}`, { permission })

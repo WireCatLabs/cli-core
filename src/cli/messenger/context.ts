@@ -24,6 +24,7 @@ import { rootOf } from "../steps.js"
 import { recalledAccount, rememberAccount } from "./accounts.js"
 import { terminalAsker } from "./ask.js"
 import { flooded } from "./flooded.js"
+import { refuseLacking } from "./lacks.js"
 import { observed } from "./observed.js"
 import { stored } from "./stored.js"
 
@@ -173,6 +174,11 @@ export interface Messenger extends ServiceMessenger {
    * sends unless a typed command asked (WhatsApp bans accounts that answer like a bot).
    */
   autoReplies?: boolean
+  /**
+   * Adapter methods this messenger never has. The commands that need one alone (`COMMAND_NEEDS`) refuse before
+   * connecting, as the adapter would refuse after; one connection per device makes that connection a cost.
+   */
+  lacks?: readonly (keyof MessengerAdapter)[]
   /** Whether a message can be deleted for the owner alone; yes when unset. No: every delete is for everyone (WhatsApp). */
   deleteForMe?: boolean
   /** Whether the messenger has forum topics: `--topic`, `topic:` in `messages list` and the `topics_*` tools; yes when unset. */
@@ -484,6 +490,7 @@ export const messengerContext = (
   const base = baseContext(command, (flags, options) => messenger.resolveSettings(flags, { ...options, ...resolving }))
   const { profile } = base.settings
   refuseDenied(command, base.settings)
+  refuseLacking(messenger.lacks, pathOf(command))
   for (const key of unknownPermissionKeys(
     base.settings.permissions,
     knownPermissionKeys(command, messenger.permissionKey),
