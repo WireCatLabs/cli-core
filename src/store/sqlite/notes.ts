@@ -653,6 +653,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       if (after !== null && Number.isNaN(after))
         throw new CliError("validation_error", `since takes an ISO 8601 time, not "${since}"`)
       return write(database, () => {
+        // Older writers capture text revisions without advancing messages.updated_at.
         const candidates = database.prepare(
           "SELECT m.id, m.text FROM messages_fts f JOIN messages m ON m.id = f.rowid " +
             "WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND (? IS NULL OR m.created_at >= ? " +
