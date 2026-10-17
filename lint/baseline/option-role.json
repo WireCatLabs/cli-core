@@ -1,5 +1,8 @@
 [
   "bot search messages --from",
+  "chats update --disappear-time",
+  "chats update --only-admins-edit-info",
+  "chats update --only-admins-send",
   "replies audience --reply",
   "replies edit --as-reply",
   "replies edit --contacts-only",

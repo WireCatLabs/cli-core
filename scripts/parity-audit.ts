@@ -98,12 +98,16 @@ const auditHome = () => {
 
 const git = (dir: string, ...args: string[]) => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim()
 
+/** A CLI's repository, where it is not `<cli>-cli`. */
+const REPOSITORIES: Record<string, string> = { wa: "whatsapp-cli" }
+
 const fresh = (): Record<string, string> => {
   const dir = mkdtempSync(join(tmpdir(), "parity-audit-"))
   retainedPaths.push(dir)
   for (const cli of manifest.clis) {
     const into = join(dir, cli)
-    console.error(`cloning and building ${cli}-cli into ${into}`)
+    const repository = REPOSITORIES[cli] ?? `${cli}-cli`
+    console.error(`cloning and building ${repository} into ${into}`)
     execFileSync("git", [
       "clone",
       "-q",
@@ -111,7 +115,7 @@ const fresh = (): Record<string, string> => {
       "main",
       "--depth",
       "1",
-      `https://github.com/WireCatLabs/${cli}-cli.git`,
+      `https://github.com/WireCatLabs/${repository}.git`,
       into,
     ])
     const env = sandboxEnvironment(auditHome())
