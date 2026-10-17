@@ -84,4 +84,14 @@ describe("unknown names in a text", () => {
     expect(unknown("Жена сказала. Люди пришли")).toEqual([])
     expect(unknown("скажи Жене, или Женечке")).toEqual([["Женечке", 0.4]])
   })
+
+  it("takes no saint's name and no city that is also a first name", () => {
+    expect(unknown("мост Saint Michael's Bridge, Coves de Sant Josep, St. Patrick's Day")).toEqual([])
+    expect(unknown("собор Святого Петра, образ Девы Марии")).toEqual([])
+    expect(unknown("штаб остался во Владимире, офис в Милане")).toEqual([])
+    expect(unknown("скажи Владимиру, что Милана приедет")).toEqual([
+      ["Владимиру", 0.4],
+      ["Милана", 0.4],
+    ])
+  })
 })
