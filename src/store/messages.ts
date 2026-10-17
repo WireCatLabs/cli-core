@@ -1,5 +1,5 @@
 import type { CounterObservations } from "../domain/counters.js"
-import type { Id, Message, Page, Reactions, WindowedMessage } from "../domain/models.js"
+import type { Id, Message, Page, PollVote, Reactions, WindowedMessage } from "../domain/models.js"
 import { keysOver } from "./keys.js"
 import { applyCounterObservations } from "./sqlite/counters.js"
 import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
@@ -76,6 +76,10 @@ export interface AccountMessages {
     reactions: Reactions,
     options?: { observation?: CounterObservations["reactions"] },
   ): Promise<boolean>
+  /** One voter's vote in the poll a message carries, unless the store holds a newer one of theirs; no answers is a take-back. */
+  saveVote(key: AccountKey, chatId: Id, messageId: Id, vote: PollVote): Promise<void>
+  /** Each voter's newest vote in the poll a message carries, newest first. */
+  pollVotes(key: AccountKey, chatId: Id, messageId: Id): Promise<PollVote[]>
   /** One person's stored messages per chat of this account, newest first. */
   senderStats(key: AccountKey, senderId: Id): Promise<SenderChatStats[]>
   /** What a voice message said, when it was heard before, and by what. */
@@ -167,6 +171,17 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
           applyCounterObservations(context, Number(row.pk), { reactions: options.observation })
       })
       return saved
+    },
+
+    saveVote: async (key, chatId, messageId, vote) =>
+      write(database, () => {
+        const accountKey = accountPk(key)
+        messageWrites.saveVote(context, accountKey, key.provider, chatPkFor(accountKey, chatId), messageId, vote)
+      }),
+
+    pollVotes: async (key, chatId, messageId) => {
+      const chatKey = chatKeyOf(key, chatId)
+      return chatKey === undefined ? [] : messageWrites.pollVotes(context, chatKey, messageId)
     },
 
     senderStats: async (key, senderId) => {

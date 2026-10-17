@@ -554,7 +554,7 @@
             "noExcessiveLinesPerFile": {
               "level": "error",
               "options": {
-                "maxLines": 1493
+                "maxLines": 1507
               }
             }
           }
@@ -584,7 +584,7 @@
             "noExcessiveLinesPerFile": {
               "level": "error",
               "options": {
-                "maxLines": 1780
+                "maxLines": 1803
               }
             }
           }

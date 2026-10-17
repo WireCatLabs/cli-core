@@ -1443,6 +1443,35 @@ describe("the shared read commands", () => {
     expect(unlisted.code).not.toBe(0)
   })
 
+  it("**a messenger whose polls stay open and always take a changed vote** has no `polls close` and no `--revote`", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const created: unknown[] = []
+    const polling: MessengerAdapter = {
+      ...fake,
+      createPoll: async (_chatId, poll, { sendId }) => {
+        created.push(poll)
+        return { message: { ...message, id: "9" }, sendId }
+      },
+    }
+    const open = { pollClose: false, pollRevote: false }
+
+    const close = await call(["polls", "close", "Book", "9"], async () => polling, env, {}, open)
+    const revote = await call(
+      ["polls", "create", "Book", "When?", "Tue", "Fri", "--revote"],
+      async () => polling,
+      env,
+      {},
+      open,
+    )
+    const made = await call(["polls", "create", "Book", "When?", "Tue", "Fri"], async () => polling, env, {}, open)
+    const help = await call(["polls", "--help"], async () => polling, env, {}, open)
+
+    expect([close.code, revote.code, made.code]).toEqual([2, 2, 0])
+    expect(help.stdout.join("\n")).not.toContain("close")
+    expect(created).toEqual([expect.objectContaining({ revote: false })])
+  })
+
   it("**creates a quiz where the messenger makes them**, and refuses quiz options that do not go together", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }

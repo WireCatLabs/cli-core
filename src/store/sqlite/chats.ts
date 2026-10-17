@@ -20,6 +20,7 @@ import {
   messageRevisions,
   messages,
   messageTranscripts,
+  pollVotes,
   syncRanges,
 } from "./schema.js"
 import { ensureTag } from "./tags.js"
@@ -179,6 +180,7 @@ export const purgeChats = ({ orm }: StoreContext, pks: number[]): void => {
     )
     .run()
   orm.delete(messageTranscripts).where(inArray(messageTranscripts.chatId, pks)).run()
+  orm.delete(pollVotes).where(inArray(pollVotes.chatId, pks)).run()
   orm.delete(fetchLeases).where(inArray(fetchLeases.chatId, pks)).run()
   orm.delete(chatMembers).where(inArray(chatMembers.chatId, pks)).run()
   const observationsOf = orm

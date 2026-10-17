@@ -392,6 +392,8 @@ export type MessageChange =
       reactions: Reactions
       counterObservation?: CounterObservation
     }
+  /** One person's vote in the poll `messageId` carries, replacing theirs before; no answers takes it back. */
+  | { event: "vote"; chatId: Id; chatTitle: string | null; messageId: Id; vote: PollVote }
 
 /** What a listening connection reports: a new message, or a change to one. */
 export type MessageEvent = { event: "message"; message: MessageHit } | MessageChange

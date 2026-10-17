@@ -497,5 +497,12 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `account_identities` ADD `mail_signals` text;",
       "ALTER TABLE `account_identities` ADD `mail_scored_at` integer;"
     ]
+  },
+  {
+    "name": "20261017095620_version-20-poll-votes",
+    "statements": [
+      "CREATE TABLE `poll_votes` (\n\t`id` integer PRIMARY KEY,\n\t`chat_id` integer NOT NULL,\n\t`message_external_id` text NOT NULL,\n\t`identity_id` integer NOT NULL,\n\t`answers` text NOT NULL,\n\t`voted_at` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_poll_votes_chat_id_chats_id_fk` FOREIGN KEY (`chat_id`) REFERENCES `chats`(`id`),\n\tCONSTRAINT `fk_poll_votes_identity_id_identities_id_fk` FOREIGN KEY (`identity_id`) REFERENCES `identities`(`id`),\n\tCONSTRAINT `poll_votes_chat_id_message_external_id_identity_id_unique` UNIQUE(`chat_id`,`message_external_id`,`identity_id`)\n);",
+      "CREATE INDEX `poll_votes_by_identity_id` ON `poll_votes` (`identity_id`);"
+    ]
   }
 ]

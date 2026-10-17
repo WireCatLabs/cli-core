@@ -21,6 +21,7 @@ import {
   messageRevisions,
   messages,
   messageTranscripts,
+  pollVotes,
   projects,
   syncCursors,
   syncRanges,
@@ -108,6 +109,7 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   orm.delete(aliases).where(eq(aliases.accountId, accountKey)).run()
   orm.delete(syncs).where(eq(syncs.accountId, accountKey)).run()
   orm.delete(messageTranscripts).where(inArray(messageTranscripts.chatId, chatsOf)).run()
+  orm.delete(pollVotes).where(inArray(pollVotes.chatId, chatsOf)).run()
   orm.delete(fetchLeases).where(inArray(fetchLeases.chatId, chatsOf)).run()
   orm.delete(chatMembers).where(inArray(chatMembers.chatId, chatsOf)).run()
   const observationsOf = orm

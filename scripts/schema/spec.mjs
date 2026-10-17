@@ -337,6 +337,20 @@ const DROPPED = {
 const NEW = {
   chats: [
     {
+      name: "poll_votes",
+      doc: "Each voter's newest vote in a poll, where the messenger sends votes one by one (WhatsApp) instead of counting them. Keyed by chat and external id: a vote can arrive before the poll is stored.",
+      cols: [
+        id(),
+        fk("chat_id", "chats", { notnull: true }),
+        c("message_external_id", "text", { notnull: true, note: "the message that carries the poll" }),
+        fk("identity_id", "identities", { notnull: true, note: "who voted" }),
+        c("answers", "text", { notnull: true, note: "JSON array of answer ids; empty when the vote was taken back" }),
+        c("voted_at", "integer", { notnull: true, note: "an older vote never replaces a newer one" }),
+        ...ts(),
+      ],
+      keys: ["UNIQUE (chat_id, message_external_id, identity_id)"],
+    },
+    {
       name: "member_observations",
       doc: "One read of a chat's member list: when, whether it was the whole list, and how many it reported and returned. Retention reads presence at a checkpoint from these.",
       cols: [

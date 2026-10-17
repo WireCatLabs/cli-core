@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { servingProfiles } from "../../background/lock.js"
-import type { AdminRight, GroupSettingKey, Id, Message, Provider } from "../../domain/models.js"
+import type { AdminRight, GroupSettingKey, Id, Message, PollVote, Provider } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { EventSink } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
@@ -36,6 +36,12 @@ export interface StoredMessages {
   message(chatId: Id, messageId: Id): Promise<Message | undefined>
   /** The newest message from someone else in the chat, older than `before` when it is given. */
   newestIncoming(chatId: Id, before?: Id): Promise<Message | undefined>
+  /** The newest message in the chat sent at `at` or earlier; without `at`, the oldest one held. */
+  anchor(chatId: Id, at?: string): Promise<Message | undefined>
+  /** Whether the account ever sent this person a message in a one-to-one chat. */
+  wroteTo(personId: Id): Promise<boolean>
+  /** Each voter's newest vote in the poll the message carries, newest first; a retracted vote has no answers. */
+  pollVotes(chatId: Id, messageId: Id): Promise<PollVote[]>
 }
 
 /** `listen` opens a connection that receives updates — only `watch` asks; the rest stay quiet. */
@@ -92,6 +98,32 @@ export const storedMessages = (
       })
       return page.items.at(-1)
     },
+    anchor: async (chatId, at) => {
+      const owner = key()
+      if (!owner) return undefined
+      const window =
+        at === undefined ? { at: new Date(0).toISOString(), before: 0, after: 1 } : { at, before: 1, after: 0 }
+      return (await (await store()).messages.messagesWindow(owner, chatId, window))[0]
+    },
+    wroteTo: async (personId) => {
+      const owner = key()
+      if (!owner) return false
+      const opened = await store()
+      // A dialog named by its partner's id is the rule in WhatsApp and Telegram; MAX's are found by their members.
+      const dialogs = new Set([
+        personId,
+        ...(await opened.chats.chatsWith(owner, personId))
+          .filter((chat) => chat.kind === "dialog")
+          .map((chat) => chat.id),
+      ])
+      for (const chatId of dialogs)
+        if ((await opened.messages.messages(owner, chatId, { limit: 1, outgoing: true })).items.length > 0) return true
+      return false
+    },
+    pollVotes: async (chatId, messageId) => {
+      const owner = key()
+      return owner ? (await store()).messages.pollVotes(owner, chatId, messageId) : []
+    },
   }
 }
 
@@ -121,6 +153,13 @@ export interface Messenger extends ServiceMessenger {
   pollCloseSeconds?: readonly [min: number, max: number]
   /** Whether `polls voters` lists who voted for what; no when unset. */
   pollVoters?: boolean
+  /** Whether a poll can be closed — `polls close`; yes when unset. WhatsApp's stay open. */
+  pollClose?: boolean
+  /**
+   * Whether a new poll chooses if people may change their vote — `polls create --revote`; yes when unset. No: the
+   * messenger decides alone (WhatsApp: a vote can always be changed).
+   */
+  pollRevote?: boolean
   /** Whether the messenger has forum topics: `--topic`, `topic:` in `messages list` and the `topics_*` tools; yes when unset. */
   topics?: boolean
   /** Whether `topics show` reads one forum topic; no when unset. */

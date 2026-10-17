@@ -28,7 +28,11 @@ import { VOTERS_QUERY } from "./people-queries.js"
  * position, which changes nothing for a person and everything for a vote.
  */
 export const pollsCommand = (messenger: Messenger): Command => {
-  const polls = new Command("polls").description("read a poll, vote in it, close your own, create one")
+  const polls = new Command("polls").description(
+    messenger.pollClose === false
+      ? "read a poll, vote in it, create one"
+      : "read a poll, vote in it, close your own, create one",
+  )
 
   annotate(polls.command("show"), { effects: REMOTE_READ })
     .description("a poll and its answer ids, as the message carries it now")
@@ -115,17 +119,18 @@ export const pollsCommand = (messenger: Messenger): Command => {
       renderAnswer(this, context, itemOf(snakeKeys(voted)))
     })
 
-  annotate(polls.command("close"), { effects: REMOTE_WRITE })
-    .description("close your own poll; nobody can vote after that, and it cannot be reopened")
-    .argument("<chat>", messenger.chatArgument)
-    .argument("<message>", "the id of your own message that carries the poll")
-    .action(async function (this: Command, chat: string, message: string) {
-      const context = messengerContext(this, messenger)
-      const closed = await context.withMessenger((connection) =>
-        guardedClose(context.guard, connection, { chat, message: message.trim() }),
-      )
-      renderAnswer(this, context, itemOf(snakeKeys(closed)))
-    })
+  if (messenger.pollClose !== false)
+    annotate(polls.command("close"), { effects: REMOTE_WRITE })
+      .description("close your own poll; nobody can vote after that, and it cannot be reopened")
+      .argument("<chat>", messenger.chatArgument)
+      .argument("<message>", "the id of your own message that carries the poll")
+      .action(async function (this: Command, chat: string, message: string) {
+        const context = messengerContext(this, messenger)
+        const closed = await context.withMessenger((connection) =>
+          guardedClose(context.guard, connection, { chat, message: message.trim() }),
+        )
+        renderAnswer(this, context, itemOf(snakeKeys(closed)))
+      })
 
   const create = annotate(polls.command("create"), { effects: REMOTE_WRITE })
     .description("send a poll to a chat, as a message of its own; public unless --anonymous")
@@ -133,10 +138,9 @@ export const pollsCommand = (messenger: Messenger): Command => {
     .argument("<question>", "the question")
     .argument("<answers...>", "two answers or more")
   if (messenger.topics !== false) create.option("--topic <id>", "send to this forum topic")
+  create.option("--multiple", "people may pick several answers").option("--anonymous", "nobody sees who voted for what")
+  if (messenger.pollRevote !== false) create.option("--revote", "people may change their vote")
   create
-    .option("--multiple", "people may pick several answers")
-    .option("--anonymous", "nobody sees who voted for what")
-    .option("--revote", "people may change their vote")
     .option("--silent", "send without a notification")
     .option(
       "--send-as <id>",

@@ -17,7 +17,7 @@ import { type Messenger, type MessengerContext, messengerContext } from "./conte
 export const watchCommand = (messenger: Messenger): Command =>
   annotate(new Command("watch"), { effects: REMOTE_READ, lifetime: "persistent" })
     .description("print new messages as they arrive, until Ctrl-C or --timeout (either ends it normally)")
-    .option("--events", "also edits, deletions and reactions; every line then names its event")
+    .option("--events", "also edits, deletions, reactions and poll votes; every line then names its event")
     .action(async function (this: Command) {
       const events = this.opts<{ events?: boolean }>().events === true
       const context = messengerContext(this, messenger)
@@ -129,6 +129,11 @@ const describe = (event: MessageEvent, render: (message: MessageHit) => string):
     case "reaction": {
       const counts = event.reactions.counts.map(({ reaction, count }) => `${reaction} ${count}`).join(", ")
       return `reactions in ${event.chatTitle ?? event.chatId} on message ${event.messageId}: ${counts || "none"}\n`
+    }
+    case "vote": {
+      const { person, answers } = event.vote
+      const choice = answers.length > 0 ? answers.join(", ") : "took it back"
+      return `vote in ${event.chatTitle ?? event.chatId} on poll ${event.messageId}: ${person.name ?? person.id} — ${choice}\n`
     }
   }
 }
