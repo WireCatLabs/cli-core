@@ -22,26 +22,44 @@ export interface StoreContext extends OpenedSqlite {
  * file, so both are loaded by dynamic `import()` in the branch that has that runtime — see
  * `../open.ts` for why a static import breaks the other runtime.
  */
-export const openSqlite = async (path: string): Promise<OpenedSqlite> => {
-  const opened = "Bun" in globalThis ? await openUnderBun(path) : await openUnderNode(path)
-  opened.database.exec(PRAGMAS)
-  return opened
+export const openSqlite = async (
+  path: string,
+  { readOnly = false }: { readOnly?: boolean } = {},
+): Promise<OpenedSqlite> => {
+  const opened = "Bun" in globalThis ? await openUnderBun(path, readOnly) : await openUnderNode(path, readOnly)
+  try {
+    opened.database.exec(readOnly ? "PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON; PRAGMA query_only=ON" : PRAGMAS)
+    return opened
+  } catch (error) {
+    opened.database.close()
+    throw error
+  }
 }
 
-const openUnderNode = async (path: string): Promise<OpenedSqlite> => {
+const openUnderNode = async (path: string, readOnly: boolean): Promise<OpenedSqlite> => {
   const { DatabaseSync } = await import("node:sqlite")
   const { drizzle } = await import("./drizzle/node.js")
   const { cacheOverNodeSqlite } = await import("../drivers/node-sqlite.js")
-  const client = new DatabaseSync(path)
-  return { database: cacheOverNodeSqlite(client), orm: drizzle({ client }) as unknown as Orm }
+  const client = new DatabaseSync(path, { readOnly })
+  try {
+    return { database: cacheOverNodeSqlite(client), orm: drizzle({ client }) as unknown as Orm }
+  } catch (error) {
+    client.close()
+    throw error
+  }
 }
 
-const openUnderBun = async (path: string): Promise<OpenedSqlite> => {
+const openUnderBun = async (path: string, readOnly: boolean): Promise<OpenedSqlite> => {
   const { bunDatabase, cacheOverBunSqlite } = await import("../drivers/bun-sqlite.js")
   const Database = await bunDatabase()
   const { drizzle } = (await import("./drizzle/bun.js")) as unknown as {
     drizzle: (config: { client: unknown }) => unknown
   }
-  const client = new Database(path)
-  return { database: cacheOverBunSqlite(client), orm: drizzle({ client }) as Orm }
+  const client = readOnly ? new Database(path, { readonly: true, create: false }) : new Database(path)
+  try {
+    return { database: cacheOverBunSqlite(client), orm: drizzle({ client }) as Orm }
+  } catch (error) {
+    client.close()
+    throw error
+  }
 }

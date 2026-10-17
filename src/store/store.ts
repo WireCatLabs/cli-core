@@ -1,5 +1,3 @@
-import { mkdirSync, writeFileSync } from "node:fs"
-import { dirname } from "node:path"
 import type { ContextEvidenceReader } from "../context/evidence.js"
 import type { MeetingFindingsStore } from "../meetings/findings.js"
 import { type AccountStore, type Area, bindAccount, type Keyed } from "./account-store.js"
@@ -15,25 +13,19 @@ import { type ConversationsStore, conversationsStoreOver } from "./conversations
 import { type AccountCounters, accountCountersOver, type CountersStore, countersStoreOver } from "./counters.js"
 import { type AccountMentions, accountMentionsOver, type MentionsStore, mentionsStoreOver } from "./mentions.js"
 import { type AccountMessages, accountMessagesOver, type MessagesStore, messagesStoreOver } from "./messages.js"
-import { migrate } from "./migrations.js"
-import { storeCapable } from "./open.js"
-import { storePath } from "./path.js"
 import { type AccountPeople, accountPeopleOver, type PeopleStore, peopleStoreOver } from "./people.js"
 import { type QueriesStore, queriesStoreOver } from "./queries.js"
 import { type RosterStore, rosterStoreOver } from "./roster.js"
 import { type SearchIndexStore, searchIndexStoreOver } from "./search-index.js"
 import { type SearchesStore, searchesStoreOver } from "./searches.js"
-import { sharedConfigPath } from "./shared-config.js"
 import * as accounts from "./sqlite/accounts.js"
 import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
-import { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver } from "./sqlite/context-evidence.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
-import { fillFolded } from "./sqlite/folded.js"
 import { type InvolvementStore, involvementStoreOver } from "./sqlite/involvements.js"
 import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
@@ -44,10 +36,10 @@ import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
 import { type SourceMentionStore, sourceMentionStoreOver } from "./sqlite/mention-sources.js"
 import { noteSearchOver } from "./sqlite/note-search.js"
 import { type NotesStore, notesStoreOver } from "./sqlite/notes.js"
-import { openSqlite, type StoreContext } from "./sqlite/open.js"
+import type { StoreContext } from "./sqlite/open.js"
+import { openStoreContext, type StoreOptions } from "./sqlite/open-store.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
 import * as stems from "./sqlite/stems.js"
-import { fillStems, followDefaultStemmers } from "./sqlite/stems-fill.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
 import { type SyncStore, syncStoreOver } from "./sync.js"
 import { type TagsStore, tagsStoreOver } from "./tags.js"
@@ -115,44 +107,16 @@ export interface MessageStore {
   close(): Promise<void>
 }
 
-export interface StoreOptions {
-  path?: string
-  env?: NodeJS.ProcessEnv
-  now?: () => number
-  /** The CLI's own name, for the advice a failed migration gives. */
-  command?: string
-}
+export { BACKFILL_ON_OPEN, type StoreOptions } from "./sqlite/open-store.js"
 
-/** About 40 ms of the first open (129k rows/s measured at 1M, 2026-09-30); Tab opens the store too. */
-export const BACKFILL_ON_OPEN = 5_000
-
-export const openStore = async ({ path, env, now = Date.now, command }: StoreOptions = {}): Promise<MessageStore> => {
-  await storeCapable()
-  const file = path ?? storePath(env)
-  mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
-  // Created before SQLite opens it: SQLite gives -wal and -shm the mode of the database file.
-  writeFileSync(file, "", { flag: "a", mode: 0o600 })
-  const { database, orm } = await openSqlite(file)
+export const openStore = async (options: StoreOptions = {}): Promise<MessageStore> => {
+  const context = await openStoreContext(options)
   try {
-    migrate(database, { now, command })
-    fillFolded(database)
-    // A small file is filled on the spot; a larger one waits for `db migrate`, since nothing reads the copy yet.
-    const pending = pendingNormalization(database)
-    if (pending > 0 && pending <= BACKFILL_ON_OPEN) backfillNormalized(database)
-    followDefaultStemmers(database, now)
-    const stemming = stems.stemsState(database)
-    if (
-      stemming?.cause === "building" &&
-      stemming.watermark - stemming.filledThrough + stemming.pending <= BACKFILL_ON_OPEN
-    ) {
-      fillStems(database, { now })
-    }
-    logPruner(database, now)()
+    return storeOver(context)
   } catch (error) {
-    database.close()
+    context.database.close()
     throw error
   }
-  return storeOver({ database, orm, now, sharedConfig: sharedConfigPath(file, env ?? process.env) })
 }
 
 /** Built on first use, once, so a spy on an area sees every call. */

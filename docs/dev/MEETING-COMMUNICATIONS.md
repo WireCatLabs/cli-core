@@ -25,8 +25,8 @@ host label, not a project relationship or a transferable token. Never derive gra
 IDs or discovered accounts. Bind one to eight unique IDs and source identities. The service copies
 them and binds the reader at construction; later host mutations do not expand a running server.
 
-The port borrows an already-open store. Normal `openStore` performs maintenance; a host needs a
-safe opening/lifecycle policy before enabling communications. The service itself performs no
+The port borrows an already-open store. Use [read-only opening](STORE-OPENING.md)
+(`openStore({ readOnly: true })`) and a host-owned lifecycle; normal opening performs maintenance. The service itself performs no
 provider communication reads, indexing, models, associations or writes. Existing upcoming lookup
 still uses the meeting provider. Close host-owned resources before rendering an answer.
 
@@ -67,7 +67,8 @@ The assembler deduplicates canonical references within each source, preserves na
 round-robins up to twenty excerpts across sources. Equal text across accounts is retained. Excerpts
 use the shared word-centered helper with literal folded Unicode matching, at most 300 characters
 and 1 KiB, and retain reference, title/URL, provider/account, timestamp basis, update and revision.
-`text_truncated` identifies a shortened/flattened excerpt. A citation can be inspected separately;
+`text_truncated` identifies an excerpt whose content was cut; whitespace flattening alone does not
+mark it truncated. A citation can be inspected separately;
 the excerpt is not accepted fact or meeting-cue evidence.
 
 `communications.sources` retains every selected identity and separates searched/unavailable/

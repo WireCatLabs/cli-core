@@ -81,6 +81,9 @@ The README's table lists what each export offers; this page does not repeat it.
 
 ## The store
 
+[Read-only store opening](STORE-OPENING.md) separates native read-only handles and existing-schema
+checks from the ordinary opener's maintenance, while reusing the same lazy store adapters.
+
 `openCache` (`src/store/open.ts`) opens `node:sqlite` under Node and `bun:sqlite` under Bun. Both
 imports are dynamic: a static import of the other runtime's module fails at load time, before
 anything can catch it. `pnpm smoke:bun` is what proves the Bun half.

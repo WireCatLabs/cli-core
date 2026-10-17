@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- `openStore({ readOnly: true })` opens an existing compatible store through native read-only
+  Node/Bun handles, without creation, migration, backfills, stemming, pruning or journal-mode
+  changes. Missing/old/incompatible stores are refused rather than initialized or repaired.
+
 - Meeting preparation can assemble cited local message, mail and imported document excerpts from
   explicitly authorized host selections. Optional shared CLI/MCP communications inputs enforce
   selection, query, window and cursor bounds before upcoming lookup. Per-source coverage, aggregate
