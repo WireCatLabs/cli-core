@@ -10,8 +10,8 @@ import type {
   ChatEvent,
   Contact,
   Folder,
+  GroupCard,
   GroupMember,
-  GroupSettings,
   InviteLink,
   JoinRequest,
   Member,
@@ -50,7 +50,7 @@ const defined = <T extends Record<string, unknown>>(record: T): T =>
 export const chatRef = (account: AccountKey, chat: string): string =>
   formatReference({ type: "chat", provider: account.provider, account: account.account, chat })
 
-const settingsOf = (settings: GroupSettings) =>
+const settingsOf = (settings: GroupCard["settings"]) =>
   defined({
     all_can_pin: settings.allCanPin,
     only_admins_add: settings.onlyAdminsAdd,
@@ -58,13 +58,16 @@ const settingsOf = (settings: GroupSettings) =>
     only_owner_edits_info: settings.onlyOwnerEditsInfo,
     members_see_link: settings.membersSeeLink,
     join_approval: settings.joinApproval,
+    only_admins_send: settings.onlyAdminsSend,
+    only_admins_edit_info: settings.onlyAdminsEditInfo,
+    disappearing_seconds: settings.disappearingSeconds,
   })
 
 type ShownChat = Chat &
   Partial<Pick<ChatCard, "members">> & {
     description?: string | null
     link?: string | null
-    settings?: GroupSettings
+    settings?: GroupCard["settings"]
   }
 
 export const chatAnswer = (account: AccountKey, chat: ShownChat): Out<typeof chatSchema> =>

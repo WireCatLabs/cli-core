@@ -7,6 +7,31 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Three more group settings: only admins send, only admins edit info, disappearing messages.** A new
+  `MoreGroupSettings` — `onlyAdminsSend`, `onlyAdminsEditInfo` (every admin, where `onlyOwnerEditsInfo` is the owner
+  alone) and `disappearingSeconds` (0 keeps messages) — joins `GroupSettings` in `GroupCard.settings` and
+  `GroupChange.settings`; `Messenger.groupSettings` takes a `GroupSettingKey`. `chats update --only-admins-send
+  <on|off>`, `--only-admins-edit-info <on|off>` and `--disappear-time <duration|off>` (`24h`, `7d`; sent as seconds),
+  and the same keys in MCP `chats_update`. Like `joinApproval`, a messenger offers them only by listing them in
+  `groupSettings`; they are not in `GROUP_SETTINGS`, so a messenger with no list gets nothing new. `chats show`
+  answers them as `only_admins_send`, `only_admins_edit_info` and `disappearing_seconds`. They are a type of their
+  own so that a table keyed on `keyof GroupSettings`, like max-cli's, still compiles.
+- **`Messenger.pickAdminRights: false`** for a messenger whose admins have every right (WhatsApp): `admins add`
+  takes no `--can` and gives every right in `adminRights`; MCP `chats_admins_add` takes no `rights`.
+- **`./cli` exports the rest of the adapter's capability types**: `GroupAdmin`, `ContactBook`, `ChatFolders`,
+  `ChatDeletion`, `AccountSettings`, `AccountEditing`, `AccountRecords`, `ProfileChange`, `ProfilePhotos`,
+  `MessagePermalinks` and `TopicHistory`.
+- **whatsapp-cli (`wa`) joins the parity manifest** as a third CLI.
+
+### Fixed
+
+- **A messenger with `history: "store"` reads group members from the messenger.** `chats members fetch` and
+  `audit` were refused for it as if offline, and `chats members list` read only the stored members, so its
+  adapter's `members` was never reached. Now all three ask the adapter when it has `members`; only `--offline`
+  refuses `fetch` and `audit`. tg-cli and max-cli read from the server already and do not change.
+
 ## 0.315.0 — 17.10.2026
 
 ### Added

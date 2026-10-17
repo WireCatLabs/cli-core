@@ -1,7 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { ADMIN_RIGHTS, type AdminRight, GROUP_SETTINGS, type GroupSettings } from "../../domain/models.js"
+import { parseDuration } from "../../domain/duration.js"
+import {
+  ADMIN_RIGHTS,
+  type AdminRight,
+  GROUP_SETTINGS,
+  type GroupChange,
+  type GroupSettingKey,
+} from "../../domain/models.js"
 import { readUpload } from "../../sends/upload.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
@@ -12,25 +19,43 @@ import { inviteLinks, joinRequests } from "./chat-lists.js"
 import { LINKS_QUERY, REQUESTS_QUERY } from "./chat-queries.js"
 import { type Messenger, messengerContext } from "./context.js"
 
-const SETTING_FLAGS: Record<keyof GroupSettings, [flag: string, help: string]> = {
-  allCanPin: ["all-can-pin", "every member may pin messages"],
-  onlyAdminsAdd: ["only-admins-add", "only admins may add members"],
-  onlyAdminsCall: ["only-admins-call", "only admins may start a call"],
-  onlyOwnerEditsInfo: ["only-owner-edits-info", "only the owner may change the name and photo"],
-  membersSeeLink: ["members-see-link", "members may see the invite link"],
-  joinApproval: ["join-approval", "people ask to join, and an admin lets them in"],
+const SETTING_FLAGS: Record<GroupSettingKey, [flag: string, help: string]> = {
+  allCanPin: ["all-can-pin <on|off>", "every member may pin messages"],
+  onlyAdminsAdd: ["only-admins-add <on|off>", "only admins may add members"],
+  onlyAdminsCall: ["only-admins-call <on|off>", "only admins may start a call"],
+  onlyOwnerEditsInfo: ["only-owner-edits-info <on|off>", "only the owner may change the name and photo"],
+  membersSeeLink: ["members-see-link <on|off>", "members may see the invite link"],
+  joinApproval: ["join-approval <on|off>", "people ask to join, and an admin lets them in"],
+  onlyAdminsSend: ["only-admins-send <on|off>", "only admins may send messages"],
+  onlyAdminsEditInfo: ["only-admins-edit-info <on|off>", "only admins may change the name, photo and description"],
+  disappearingSeconds: [
+    "disappear-time <duration|off>",
+    "new messages disappear this long after sending: 24h, 7d, 90d; off keeps them",
+  ],
 }
 
+const flagOf = (key: GroupSettingKey) => `--${SETTING_FLAGS[key][0].split(" ")[0]}`
+
+/** Where commander puts the flag's value: `--disappear-time` is `disappearTime`, not the setting's own name. */
+const optionKey = (key: GroupSettingKey) =>
+  flagOf(key)
+    .slice(2)
+    .replace(/-(\w)/g, (_, letter: string) => letter.toUpperCase())
+
 const settingsOf = (
-  keys: readonly (keyof GroupSettings)[],
+  keys: readonly GroupSettingKey[],
   options: Record<string, unknown>,
-): Partial<GroupSettings> => {
-  const changes: Partial<GroupSettings> = {}
+): NonNullable<GroupChange["settings"]> => {
+  const changes: NonNullable<GroupChange["settings"]> = {}
   for (const key of keys) {
-    const value = options[key]
+    const value = options[optionKey(key)]
     if (value === undefined) continue
+    if (key === "disappearingSeconds") {
+      changes[key] = value === "off" ? 0 : Math.round(parseDuration(String(value), flagOf(key)) / 1000)
+      continue
+    }
     if (value !== "on" && value !== "off") {
-      throw new CliError("validation_error", `--${SETTING_FLAGS[key][0]} takes on or off, not "${String(value)}"`)
+      throw new CliError("validation_error", `${flagOf(key)} takes on or off, not "${String(value)}"`)
     }
     changes[key] = value === "on"
   }
@@ -45,7 +70,7 @@ const updateCommand = (messenger: Messenger): Command => {
     .option("--title <title>", "the new name")
     .option("--description <text>", "the new description")
   if (messenger.groupPhoto === true) update.option("--photo <file>", "a new photo for it — an image file")
-  for (const key of keys) update.option(`--${SETTING_FLAGS[key][0]} <on|off>`, SETTING_FLAGS[key][1])
+  for (const key of keys) update.option(`--${SETTING_FLAGS[key][0]}`, SETTING_FLAGS[key][1])
   return update.action(async function (this: Command, chat: string) {
     const context = messengerContext(this, messenger)
     const { title, description, photo, ...rest } = this.opts<{ title?: string; description?: string; photo?: string }>()
@@ -195,21 +220,22 @@ const linkCommand = (messenger: Messenger): Command => {
 const adminsCommand = (messenger: Messenger): Command => {
   const offered = messenger.adminRights ?? ADMIN_RIGHTS
   const admins = new Command("admins").description("give or take back a member's admin rights")
+  const picks = messenger.pickAdminRights !== false
+  const add = annotate(new Command("add"), { effects: REMOTE_WRITE })
+    .description(
+      picks
+        ? "make a member an admin with these rights"
+        : `make a member an admin, with every right: ${offered.join(", ")}`,
+    )
+    .argument("<chat>", messenger.chatArgument)
+    .argument("<person>", "an id, or part of a name")
+  if (picks) add.requiredOption("--can <rights>", `what they may do, comma-separated: ${offered.join(", ")}`)
   admins.addCommand(
-    annotate(new Command("add"), { effects: REMOTE_WRITE })
-      .description("make a member an admin with these rights")
-      .argument("<chat>", messenger.chatArgument)
-      .argument("<person>", "an id, or part of a name")
-      .requiredOption("--can <rights>", `what they may do, comma-separated: ${offered.join(", ")}`)
-      .action(async function (this: Command, chat: string, person: string) {
-        const context = messengerContext(this, messenger)
-        const rights = rightsOf(offered, this.opts<{ can: string }>().can)
-        renderItem(
-          this,
-          context,
-          await context.withServices((services) => services.admin.addAdmin(chat, person, rights)),
-        )
-      }),
+    add.action(async function (this: Command, chat: string, person: string) {
+      const context = messengerContext(this, messenger)
+      const rights = picks ? rightsOf(offered, this.opts<{ can: string }>().can) : [...offered]
+      renderItem(this, context, await context.withServices((services) => services.admin.addAdmin(chat, person, rights)))
+    }),
   )
   admins.addCommand(
     annotate(new Command("remove"), { effects: REMOTE_WRITE })

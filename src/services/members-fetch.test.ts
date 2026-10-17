@@ -106,6 +106,33 @@ describe("chats members fetch", () => {
     const deps = storedDeps(messenger, await heldStore(1), account, guard)
     await expect(chatsService(deps).fetchMembers("7", {})).rejects.toMatchObject({ code: "validation_error" })
   })
+
+  describe("for a messenger whose history is kept in the store", () => {
+    const pushed = (store: MessageStore, adapter: MessengerAdapter): ServiceDeps => ({
+      ...online(store, adapter),
+      reads: "store",
+    })
+
+    it("reads the roster from the messenger for fetch, audit and list", async () => {
+      const store = await heldStore(2)
+      const service = chatsService(pushed(store, listing([member("21"), member("22")])))
+
+      expect(await service.fetchMembers("7", { pauseMs: 0 })).toMatchObject({ read: 2, complete: true })
+      expect((await service.audit("7", { pauseMs: 0, minScore: 0 })).read).toBe(2)
+      expect((await service.members("7", { offset: 0 })).items.map(({ id }) => id)).toEqual(["21", "22"])
+    })
+
+    it("lists the stored roster when the adapter has no member list, and refuses fetch", async () => {
+      const store = await heldStore(2)
+      await store.forAccount(account).roster.saveMembers("7", ["21"])
+      const service = chatsService(pushed(store, { self: () => "500" } as unknown as MessengerAdapter))
+
+      expect((await service.members("7", { offset: 0 })).items.map(({ id }) => id)).toEqual(["21"])
+      await expect(service.fetchMembers("7", { pauseMs: 0 })).rejects.toThrow(
+        "this messenger cannot list a group's members",
+      )
+    })
+  })
 })
 
 describe("chats tracking", () => {

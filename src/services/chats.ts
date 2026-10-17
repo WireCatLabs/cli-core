@@ -194,7 +194,12 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
   },
 
   members: async (chat, window) => {
-    if (!fromStore(deps)) return capability(await deps.connection(), "members", "list a group's members")(chat, window)
+    if (!deps.offline) {
+      const connection = await deps.connection()
+      // A roster is a server read even where the history is pushed; without one, the stored roster answers.
+      if (!fromStore(deps) || connection.members)
+        return capability(connection, "members", "list a group's members")(chat, window)
+    }
     const store = await accountStore(deps)
     const chatId = await chatIdIn(deps.messenger, chat, store)
     const everyone = await store.roster.members(chatId)
@@ -259,10 +264,10 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     chat,
     { budget = AUDIT_BUDGET, minScore = AUDIT_MIN_SCORE, pauseMs = AUDIT_PAUSE_MS, deep = 0, registry },
   ) => {
-    if (fromStore(deps)) {
+    if (deps.offline) {
       throw new CliError(
         "validation_error",
-        "`chats members audit` reads the member list from the messenger; not offline",
+        "`chats members audit` reads the member list from the messenger; not with --offline",
       )
     }
     const connection = await deps.connection()
@@ -290,10 +295,10 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
   },
 
   fetchMembers: async (chat, { budget = AUDIT_BUDGET, pauseMs = AUDIT_PAUSE_MS, track = false }) => {
-    if (fromStore(deps)) {
+    if (deps.offline) {
       throw new CliError(
         "validation_error",
-        "`chats members fetch` reads the member list from the messenger; not offline",
+        "`chats members fetch` reads the member list from the messenger; not with --offline",
       )
     }
     const startedAt = new Date().toISOString()

@@ -81,7 +81,14 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
           v.pipe(
             v.partial(
               v.object(
-                Object.fromEntries((messenger.groupSettings ?? GROUP_SETTINGS).map((key) => [key, v.boolean()])),
+                Object.fromEntries(
+                  (messenger.groupSettings ?? GROUP_SETTINGS).map((key) => [
+                    key,
+                    key === "disappearingSeconds"
+                      ? v.pipe(v.number(), v.integer(), v.minValue(0), v.description("seconds; 0 keeps messages"))
+                      : v.boolean(),
+                  ]),
+                ),
               ),
             ),
             v.description("true turns a setting on, false off; one left out stays as it is"),
@@ -291,19 +298,39 @@ export const adminTools = (messenger: Messenger): Record<string, AnyTool> => {
       online: async (adapter, args, { guard }) =>
         itemOf(snakeKeys(await admin(adapter, guard).removeMembers(args.chat, args.people))),
     }),
-    chats_admins_add: tool({
-      title: "Make someone an admin",
-      description: "Make a member of a group an admin with these rights. Only when the owner asked, with these rights.",
-      input: v.object({
-        chat: chatOf(messenger),
-        person: v.pipe(v.string(), v.minLength(1)),
-        rights: v.pipe(v.array(v.picklist(messenger.adminRights ?? ADMIN_RIGHTS)), v.minLength(1)),
-      }),
-      annotations: WRITE,
-      permission: "groups",
-      online: async (adapter, args, { guard }) =>
-        itemOf(snakeKeys(await admin(adapter, guard).addAdmin(args.chat, args.person, args.rights))),
-    }),
+    chats_admins_add:
+      messenger.pickAdminRights === false
+        ? tool({
+            title: "Make someone an admin",
+            description:
+              "Make a member of a group an admin; this messenger gives every admin every right. Only when the owner " +
+              "asked.",
+            input: v.object({ chat: chatOf(messenger), person: v.pipe(v.string(), v.minLength(1)) }),
+            annotations: WRITE,
+            permission: "groups",
+            online: async (adapter, args, { guard }) =>
+              itemOf(
+                snakeKeys(
+                  await admin(adapter, guard).addAdmin(args.chat, args.person, [
+                    ...(messenger.adminRights ?? ADMIN_RIGHTS),
+                  ]),
+                ),
+              ),
+          })
+        : tool({
+            title: "Make someone an admin",
+            description:
+              "Make a member of a group an admin with these rights. Only when the owner asked, with these rights.",
+            input: v.object({
+              chat: chatOf(messenger),
+              person: v.pipe(v.string(), v.minLength(1)),
+              rights: v.pipe(v.array(v.picklist(messenger.adminRights ?? ADMIN_RIGHTS)), v.minLength(1)),
+            }),
+            annotations: WRITE,
+            permission: "groups",
+            online: async (adapter, args, { guard }) =>
+              itemOf(snakeKeys(await admin(adapter, guard).addAdmin(args.chat, args.person, args.rights))),
+          }),
     chats_admins_remove: tool({
       title: "Take admin rights back",
       description: "Take a group admin's rights back; they stay a member. Only when the owner asked.",

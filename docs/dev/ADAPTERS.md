@@ -55,8 +55,10 @@ needs it. The ones a new messenger usually sets:
 - `deletedWithoutChat` — set it only if your messenger reports a deletion without its chat. Without
   it, such a deletion tombstones nothing.
 - `inviteLinks` — your invite links, for `chats moderate`.
-- `groupSettings`, `adminRights`, `addsWithHistory`, `knowsAccountAge` — what your group commands
-  can offer.
+- `groupSettings`, `adminRights`, `pickAdminRights`, `addsWithHistory`, `knowsAccountAge` — what your group
+  commands can offer. `groupSettings` without `joinApproval`, `onlyAdminsSend`, `onlyAdminsEditInfo` or
+  `disappearingSeconds` never offers them: they are not in the default list. Set `pickAdminRights: false` when
+  every admin has every right; `admins add` then takes no `--can`.
 - `savedChatId`, `partnerOf` — the notes-to-self chat, and the other person in a one-to-one chat.
 
 ## Required core and optional groups
@@ -148,6 +150,9 @@ Some messengers push history to the client instead of answering a request for it
 - With `"store"`, the shared services answer `chats`, `history`, `around` and `contact` from the
   local store. They do not call the adapter, so leave the `ServerReads` group out. Writes still
   connect.
+- A group's member list is still a server read. When the adapter has `members`, `chats members list`, `fetch`
+  and `audit` connect and ask it; only `--offline` refuses `fetch` and `audit`, and `list` then reads the stored
+  members. Without `members`, `list` reads the stored members and `fetch` and `audit` say the messenger cannot.
 - Give the adapter the `PushedHistory` group. `feed(onBatch, signal)` hands over what the messenger
   pushes, as `HistoryBatch` objects: `{ chats?, people?, messages? }`, any of them, for any chats. It
   ends when `signal` aborts.
