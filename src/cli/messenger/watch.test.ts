@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -154,6 +154,52 @@ describe("watch", () => {
     expect(kept.map((one: MessageHit) => [one.id, one.text, one.reactions?.total])).toEqual([
       ["1", "message 1, corrected", 3],
     ])
+  })
+
+  it("**SEC-54: no output carries an attachment's providerRef — watch, --events, stored reads or run logs**", async () => {
+    const SECRET = "media-key-LEAK-SENTINEL"
+    const keyed = (id: string): MessageHit => ({
+      ...hit(id),
+      attachments: [{ kind: "photo", name: "a.jpg", providerRef: { directPath: "/v/t62", mediaKey: SECRET } }],
+      replyTo: {
+        id: "0",
+        senderId: "9",
+        senderName: "Olga",
+        text: "",
+        attachments: [{ kind: "photo", providerRef: { mediaKey: SECRET } }],
+      },
+    })
+    const arrive: MessageEvent[] = [
+      { event: "message", message: keyed("1") },
+      { event: "edit", message: { ...keyed("1"), text: "edited", editedAt: "2026-09-27T11:00:00.000Z" } },
+    ]
+    const outputs: string[] = []
+    let env: Record<string, string> = {}
+    let messenger: Messenger | undefined
+    for (const argv of [["watch", "--jsonl"], ["watch", "--jsonl", "--events"], ["watch"]]) {
+      const stop = new AbortController()
+      setTimeout(() => stop.abort(), 20)
+      const done = await call(argv, listening(arrive, []), stop.signal)
+      outputs.push(...done.streams.stdout, ...done.streams.stderr)
+      env = done.env
+      messenger = done.messenger
+    }
+    expect(outputs.join("\n")).toContain("edited")
+    for (const argv of [
+      ["messages", "list", "7", "--json", "--offline"],
+      ["messages", "list", "7", "--jsonl", "--offline"],
+      ["messages", "list", "7", "--offline", "-vv"],
+    ]) {
+      const streams = captureStreams()
+      await run(argv, { app, commands: () => [messagesCommand(messenger as Messenger)] }, { streams, tty: false, env })
+      outputs.push(...streams.stdout, ...streams.stderr)
+    }
+    expect(outputs.join("\n")).not.toContain(SECRET)
+    expect(outputs.join("\n")).not.toMatch(/provider_?ref/i)
+    const logs = readdirSync(env.CHAT_STATE_DIR ?? "", { recursive: true, withFileTypes: true })
+      .filter((one) => one.isFile())
+      .map((one) => readFileSync(join(one.parentPath, one.name), "utf8"))
+    expect(logs.join("\n")).not.toContain(SECRET)
   })
 
   it("prints only messages without --events", async () => {

@@ -6,6 +6,7 @@ import type { MessengerAdapter } from "../../ports/messenger.js"
 import { renderMessages } from "../../render/messages.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_READ } from "../effects.js"
+import { withoutProviderRefs } from "../provider-refs.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 
 /**
@@ -42,7 +43,9 @@ export const watchCommand = (messenger: Messenger): Command =>
       const print = (event: MessageEvent) => {
         if (stop.signal.aborted || (!events && event.event !== "message")) return
         if (context.format === "jsonl") {
-          context.streams.data(JSON.stringify(events ? event : (event as { message: MessageHit }).message))
+          context.streams.data(
+            JSON.stringify(withoutProviderRefs(events ? event : (event as { message: MessageHit }).message)),
+          )
         } else context.streams.data(describe(event, render))
       }
 
