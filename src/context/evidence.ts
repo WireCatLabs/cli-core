@@ -106,7 +106,7 @@ export const contextEvidenceRequest = (input: ContextEvidenceRequest) => {
   const words = query.match(/[\p{L}\p{N}]+/gu) ?? []
   if (!words.length || words.length > 16) throw new CliError("validation_error", "query needs 1–16 literal words")
   const limit = integer(input.limit ?? 10, "limit", 1, 20)
-  const maxReadBytes = integer(input.maxReadBytes ?? 65536, "maxReadBytes", 1, 1048576)
+  const maxReadBytes = integer(input.maxReadBytes ?? 65536, "maxReadBytes", 1, 262144)
   if (input.cursor !== undefined && (!input.cursor || typeof input.cursor !== "object"))
     throw new CliError("validation_error", "cursor needs at, id and scope")
   if (input.cursor) fields(input.cursor, ["at", "id", "scope"], "cursor.")

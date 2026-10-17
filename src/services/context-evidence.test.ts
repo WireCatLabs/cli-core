@@ -129,6 +129,7 @@ it("rejects unsupported selectors and invalid limits without source reads or res
   for (const patch of [
     { source: { ...source, folderIds: ["1"] } },
     { chatIds: ["room"] },
+    { maxReadBytes: 262145 },
     { after: 200, before: 200 },
     { after: 0, before: 91 * 86400000 },
     { cursor: { at: 200, id: 1, scope: contextCursorScope(request) } },
