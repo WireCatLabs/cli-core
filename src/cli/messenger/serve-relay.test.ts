@@ -13,6 +13,7 @@ import { type RunOptions, run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
+import { recipientsCommand } from "./guard-commands.js"
 import { mcpCommand } from "./mcp-command.js"
 import { messagesCommand } from "./messages-command.js"
 import { serveCommand } from "./serve-command.js"
@@ -90,7 +91,13 @@ const messengerOver = (connect: Messenger["connect"]): Messenger => ({
 
 const definitionFor = (messenger: Messenger) => ({
   app,
-  commands: () => [serveCommand(messenger), messagesCommand(messenger), watchCommand(messenger), mcpCommand(messenger)],
+  commands: () => [
+    serveCommand(messenger),
+    messagesCommand(messenger),
+    watchCommand(messenger),
+    mcpCommand(messenger),
+    recipientsCommand(messenger),
+  ],
 })
 
 /** A client never connects on its own while serve holds the profile. */
@@ -187,6 +194,18 @@ describe("commands through serve's relay", () => {
       serve.stop()
       await serve.done
     }
+  })
+
+  it("adds a recipient through serve, which resolves the chat on its own connection", async () => {
+    const { env } = setup()
+    const serve = await startServe(env)
+
+    const added = await client(["--json", "recipients", "add", "Book"], env)
+
+    expect(added.code, added.stderr.join("\n")).toBe(0)
+    expect(JSON.parse(added.stdout[0] ?? "{}").item).toMatchObject({ id: "7" })
+    serve.stop()
+    await serve.done
   })
 
   it("reads a relative path against the client's directory, not serve's", async () => {

@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
-import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { pagedList } from "../list-query.js"
 import { withPaging } from "../paging.js"
@@ -31,7 +31,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       else if (chats.length === 0) renderer.note("the recipient list is on and empty — this profile may send nowhere")
     })
 
-  grantsAuthority(annotate(command.command("add"), { effects: LOCAL_WRITE }))
+  grantsAuthority(annotate(command.command("add"), { effects: FETCH }))
     .argument("<chat>", messenger.chatArgument)
     .description("allow sending to this chat; the first add turns the list on")
     .action(async function (this: Command, chat: string) {

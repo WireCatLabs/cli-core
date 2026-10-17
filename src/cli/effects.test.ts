@@ -4,9 +4,11 @@ import { writes } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
-import { sharedProgram } from "../testing/shared-program.js"
+import { messenger, sharedProgram } from "../testing/shared-program.js"
 import { changesAuthority, judgedEffects, judgedTargets, refuseUnderReadOnly } from "./effects.js"
+import { chatsCommand } from "./messenger/chats-command.js"
 import { createProgram, run } from "./program.js"
+import { commandAt } from "./steps.js"
 
 const program = createProgram(sharedProgram)
 
@@ -135,5 +137,17 @@ describe("refuseUnderReadOnly", () => {
 
   it("refuses to guess whose lock it is outside run()", () => {
     expect(() => refuseUnderReadOnly(new Command("end"), "unlink the device")).toThrow(/inside run\(\)/)
+  })
+})
+
+describe("reads a pushed history answers from the store", () => {
+  it.each([
+    ["server", "read"],
+    ["store", "none"],
+  ] as const)("declares chats list and show for a %s history as remote %s", (history, remote) => {
+    const chats = new Command().addCommand(chatsCommand({ ...messenger, history }))
+
+    for (const path of ["chats list", "chats show"])
+      expect(metaOf(commandAt(chats, path) as Command).effects).toEqual({ remote, local: "read" })
   })
 })

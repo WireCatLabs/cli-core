@@ -1564,7 +1564,7 @@ describe("the shared read commands", () => {
     expect(find(["messages", "delete"])?.effects?.remote).toBe("write")
     expect(find(["polls", "vote"])?.effects?.remote).toBe("write")
     expect(find(["polls", "show"])?.effects?.remote).toBe("read")
-    expect(find(["recipients", "add"])?.effects).toEqual({ remote: "none", local: "write" })
+    expect(find(["recipients", "add"])?.effects).toEqual({ remote: "read", local: "write" })
     expect(find(["messages", "list"])?.effects?.remote).toBe("read")
   })
 
