@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.312.0 — 17.10.2026
+
 ### Fixed
 
 - **`mentions places` passes the command lint with `@wirecat/cli-base` 0.40.1**, which registers `places` as a view
