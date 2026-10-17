@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Store version 19: a mail sender's score per account.** `account_identities` gains `mail_score`, `mail_signals`
+  and `mail_scored_at`; `mail.setSenderScores(accountId, scores, now)` writes them, and every email hit carries
+  `email.senderScore` (`sender_score` in JSON) when its sender is scored. memo fills it with its spam score;
+  search order does not change. `mail.emailFacts` also returns `replyTo`, `dkim` and `dmarc` from the stored
+  headers, so the score can be worked out from the store alone.
+
 ### Fixed
 
 - **`mentions` help fits the 80-character summary rule**: the group's summary is shorter and `mentions places` has a
@@ -43,11 +51,6 @@ shape of this file.
 
 ### Added
 
-- **Store version 19: a mail sender's score per account.** `account_identities` gains `mail_score`, `mail_signals`
-  and `mail_scored_at`; `mail.setSenderScores(accountId, scores, now)` writes them, and every email hit carries
-  `email.senderScore` (`sender_score` in JSON) when its sender is scored. memo fills it with its spam score;
-  search order does not change. `mail.emailFacts` also returns `replyTo`, `dkim` and `dmarc` from the stored
-  headers, so the score can be worked out from the store alone.
 - **`tasks apply <chat...>`, and the MCP tool `tasks_apply`**: the task rules over a chat's newest stored messages
   (`--last`, 50 by default, at most 1000), for a chat whose history the owner wants as tasks. It lists what would
   open and changes nothing unless `--yes`; with `--yes` the duplicate check runs as on a sync. Local store only.
