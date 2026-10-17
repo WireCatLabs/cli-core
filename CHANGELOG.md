@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Mail writes work on Node 22.16.** Saving a thread and changing read/star flags use portable positional SQLite bindings. Numbered parameters produced `column index out of range` on the supported Node 22.16 runtime; thread counts, deletion state and unchanged-flag detection retain their existing semantics.
+
 ## 0.331.0 — 18.10.2026
 
 ### Fixed
@@ -18,6 +22,7 @@ shape of this file.
   shown as possible duplicates because one task's message replies to the other's were wrong 11 times in 13. At +2,
   shown-pair precision rose on both labelled sets (52% → 57%, 43% → 47%) for one lost true pair each; a reply that
   asks for something new now stays "different".
+
 
 ## 0.330.0 — 18.10.2026
 

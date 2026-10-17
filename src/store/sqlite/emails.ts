@@ -17,6 +17,7 @@ import {
   threadPieces,
   titleOf,
 } from "./email-index.js"
+import { recountEmailThread as recount, setEmailFlags } from "./email-state.js"
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { ensurePerson } from "./identities.js"
 import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
@@ -450,22 +451,6 @@ const identityOf = (database: CacheDatabase, { address, name }: EmailAddress, no
   )
 }
 
-const recount = (database: CacheDatabase, threadId: number, now: number) =>
-  database
-    .prepare(
-      `UPDATE email_threads SET
-         emails_count = (SELECT count(*) FROM emails WHERE email_thread_id = ?1 AND deleted_at IS NULL),
-         last_email_at = (SELECT max(coalesce(sent_at, received_at)) FROM emails
-           WHERE email_thread_id = ?1 AND deleted_at IS NULL),
-         deleted_at = CASE
-           WHEN EXISTS (SELECT 1 FROM emails WHERE email_thread_id = ?1 AND deleted_at IS NULL) THEN NULL
-           WHEN EXISTS (SELECT 1 FROM emails WHERE email_thread_id = ?1) THEN coalesce(deleted_at, ?2)
-           ELSE deleted_at END,
-         updated_at = ?2
-       WHERE id = ?1`,
-    )
-    .run(threadId, now)
-
 const mailboxPk = (database: CacheDatabase, accountId: number, box: MailboxInput, now: number): number => {
   if (!box.externalId) throw new Error("Invalid mailbox key")
   return Number(
@@ -625,7 +610,7 @@ const emailWhere = (filter: EmailFilter): [string, SqlValue[]] => {
   const params: SqlValue[] = [filter.includeDeleted ? 1 : 0]
   const add = (sql: string, ...values: SqlValue[]) => {
     where.push(sql)
-    params.push(...values)
+    for (const value of values) params.push(value)
   }
   if (filter.accountId !== undefined) add("e.account_id = ?", filter.accountId)
   if (filter.threadExternalId !== undefined)
@@ -923,16 +908,7 @@ export const mailStoreOver = (
   },
   async setFlags(accountId, flags, now) {
     return write(database, () => {
-      const update = database.prepare(
-        `UPDATE emails SET read = CASE WHEN ?1 IS NULL THEN read ELSE ?1 END,
-           flagged = CASE WHEN ?2 IS NULL THEN flagged ELSE ?2 END, updated_at = ?3
-         WHERE account_id = ?4 AND external_id = ?5
-           AND ((?1 IS NOT NULL AND read IS NOT ?1) OR (?2 IS NOT NULL AND flagged IS NOT ?2))`,
-      )
-      let changed = 0
-      for (const [externalId, { read, flagged }] of flags)
-        changed += update.run(flag(read), flag(flagged), now, accountId, externalId).changes
-      return changed
+      return setEmailFlags(database, accountId, flags, now)
     })
   },
   async markDeleted(accountId, externalIds, now) {
