@@ -1,8 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 
-export const DEFAULT_PROFILE = "default"
-
 /** How the command line names this profile: always the first word, since none is assumed. */
 export const asFirstWord = (profile: string): string => `${profile} `
 
@@ -34,7 +32,7 @@ export const commandWords = (program: Command): Set<string> =>
 
 /**
  * **The first word is the profile unless it names a command.** `tg personal chats list`, and
- * `tg chats list` on the default profile, with no flag in either. An option is never a profile, so
+ * `TG_PROFILE=personal tg chats list`, with no flag in either. An option is never a profile, so
  * `tg --json chats list` still works.
  */
 export const liftProfile = (argv: string[], words: Set<string>): { profile?: string; rest: string[] } => {

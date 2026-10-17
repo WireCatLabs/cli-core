@@ -16,7 +16,7 @@ import {
 import { loadSnakeCaseConfig } from "./config-keys.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
-import { DEFAULT_PROFILE, usableProfileName } from "./profile.js"
+import { usableProfileName } from "./profile.js"
 
 const DEFAULT_LIMIT = DEFAULT_CONFIG.defaults.limit
 const DEFAULT_KEEP_RUNS_FOR_DAYS = DEFAULT_CONFIG.defaults.keep_runs_for_days
@@ -245,6 +245,9 @@ export interface ResolveOptions {
 /** Where `profile` came from when none was named and the command needs none. */
 export const NONE_NAMED = "none named"
 
+/** A name for a command that speaks for no account; never chosen for one that does. */
+const NO_PROFILE = "default"
+
 /** The first candidate that is set, and which layer it came from. */
 export const first = <T>(candidates: [Source, T | undefined][], fallback: T): { value: T; from: Source } => {
   for (const [from, value] of candidates) if (value !== undefined) return { value, from }
@@ -336,7 +339,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
    * `default`: which account a command speaks for is the owner's choice, said every time.
    */
   const unnamed = (config: Config, env: NodeJS.ProcessEnv, needed: boolean): { value: string; from: Source } => {
-    if (!needed) return { value: DEFAULT_PROFILE, from: NONE_NAMED }
+    if (!needed) return { value: NO_PROFILE, from: NONE_NAMED }
     if (config.default_profile !== undefined) {
       throw new CliError(
         "validation_error",
