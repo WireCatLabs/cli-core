@@ -5,6 +5,7 @@ import type { Message, MessageHit } from "../../domain/models.js"
 import { renderMessages } from "../../render/messages.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_WRITE } from "../effects.js"
+import { withoutProviderRefs } from "../provider-refs.js"
 import { type BotContext, botContext, online } from "./context.js"
 import { botCan, botIdOf } from "./messages.js"
 import type { BotEvent, BotMessenger, BotNotice } from "./port.js"
@@ -139,7 +140,9 @@ export const botWatchCommand = (bot: BotMessenger): Command =>
       const print = (event: BotEvent) => {
         if (!everything && event.event !== "message") return
         if (context.format === "jsonl") {
-          context.streams.data(JSON.stringify(everything ? event : hit((event as { message: Message }).message)))
+          context.streams.data(
+            JSON.stringify(withoutProviderRefs(everything ? event : hit((event as { message: Message }).message))),
+          )
           return
         }
         if (event.event === "message" || event.event === "edit") {
