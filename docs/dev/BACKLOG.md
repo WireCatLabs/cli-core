@@ -65,3 +65,12 @@ Open work only. A finished item is deleted; its record is the merged pull reques
 - **Speech throughput** — voice messages are heard one after another, the recognizer is opened and freed for
   each (`src/speech/transcribe.ts` `hearLocally`), on one thread (`src/speech/recognize.ts`). Measure one
   recognizer per pass, then several workers over files (each holds its own model).
+- **Shared command-lint debt the CLIs baseline** (WC-CMD-1/10/13/19/22/24, WC-ACCT-8): measured on wa (2026-10-17),
+  all on shared commands — 195 leaves without examples, 88 summaries over 80 characters, 13 arguments without help,
+  no declared `output.entity` outside tests, and 7 flags with two meanings (`--by`, `--file`, `--kind`, `--limit`,
+  `--model`, `--provider`, `--source`). `--provider` names an AI model provider on `conversations build/embed/
+  related/status` and `search conversations` but a messenger elsewhere, and `tags remove --source` means
+  manual/auto; renaming them (`--model-provider`, `--origin`) breaks tg's and max's scripts, so it waits for a
+  breaking release with a deprecation alias. `store` destructive commands (`reset`, `restore`, `clear`, `migrate`,
+  `repair`, `copies delete`, `decrypt`) are refused under `<PREFIX>_READ_ONLY` only by tg's and max's own hooks;
+  moving that refusal here would let them drop it.
