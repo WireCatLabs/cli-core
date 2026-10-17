@@ -3258,7 +3258,10 @@
     "polls create": {
       "in": "all",
       "options": {
-        "--anonymous": "all",
+        "--anonymous": {
+          "in": ["max", "tg"],
+          "reason": "everyone in a WhatsApp chat sees who voted for what"
+        },
         "--close-time": {
           "in": ["tg"],
           "reason": "max-cli does not close a poll by itself; WhatsApp polls cannot be closed"
@@ -3277,8 +3280,14 @@
           "in": ["max", "tg"],
           "reason": "a WhatsApp vote can always be changed"
         },
-        "--send-as": "all",
-        "--silent": "all",
+        "--send-as": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp posts a poll as the account only"
+        },
+        "--silent": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp sends every poll with a notification"
+        },
         "--solution": {
           "in": ["tg"],
           "reason": "max-cli creates no quizzes; a WhatsApp poll is never a quiz"

@@ -350,6 +350,8 @@ interface Harness {
   /** Over `mcp --http` on 127.0.0.1, logged in through the owner login as a browser app would. */
   http?: boolean
   permission?: string[]
+  /** The messenger's other switches. */
+  own?: Partial<Messenger>
 }
 
 const connect = async (telegram: Scripted = scripted(), options: Partial<ServerOptions> & Harness = {}) => {
@@ -382,6 +384,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     root: _root,
     http,
     permission = [],
+    own = {},
     ...serverOptions
   } = options
   if (config) {
@@ -407,6 +410,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     ...(deleteForMe === undefined ? {} : { deleteForMe }),
     ...(counterFields ? { counterFields } : {}),
     ...(guard ? { guard } : {}),
+    ...own,
   }
   const streams = captureStreams()
   let made: ReturnType<typeof createServer> | undefined
@@ -2702,6 +2706,33 @@ describe("sending over MCP", () => {
     const plain = await connect(telegram, {})
     expect((await plain.call("polls create", quiz)).isError).toBe(true)
     expect(polls).toMatchObject([{ quiz: { correct: 1, solution: "four" } }])
+  })
+
+  it("offers no anonymous, send_as or topic on polls create where the messenger has none", async () => {
+    const polls: unknown[] = []
+    const telegram = scripted({
+      createPoll: async (_chatId, poll, options) => {
+        polls.push(poll)
+        return { message, sendId: options.sendId }
+      },
+    })
+    const { call } = await connect(telegram, { own: { pollAnonymous: false, pollSendAs: false, topics: false } })
+    const poll = { chat: "7", text: "Friday?", answers: ["yes", "no"] }
+
+    const refused = [
+      await call("polls create", { ...poll, anonymous: true }),
+      await call("polls create", { ...poll, send_as: "500" }),
+      await call("polls create", { ...poll, topic: "12" }),
+    ]
+    const made = await call("polls create", poll)
+
+    expect(refused.map((one) => [one.isError, one.body.error?.code])).toEqual([
+      [true, "validation_error"],
+      [true, "validation_error"],
+      [true, "validation_error"],
+    ])
+    expect(made.isError).toBe(false)
+    expect(polls).toEqual([expect.objectContaining({ anonymous: false })])
   })
 
   it("preserves topic addressing through MCP send and poll tools", async () => {

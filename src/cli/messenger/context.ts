@@ -160,6 +160,12 @@ export interface Messenger extends ServiceMessenger {
    * messenger decides alone (WhatsApp: a vote can always be changed).
    */
   pollRevote?: boolean
+  /** Whether a new poll can hide who voted for what — `polls create --anonymous`; yes when unset. WhatsApp's never can. */
+  pollAnonymous?: boolean
+  /** Whether a poll can go without a notification — `polls create --silent`; yes when unset. */
+  pollSilent?: boolean
+  /** Whether a poll can be posted as another identity — `polls create --send-as`; yes when unset. */
+  pollSendAs?: boolean
   /** Whether a message can be deleted for the owner alone; yes when unset. No: every delete is for everyone (WhatsApp). */
   deleteForMe?: boolean
   /** Whether the messenger has forum topics: `--topic`, `topic:` in `messages list` and the `topics_*` tools; yes when unset. */
