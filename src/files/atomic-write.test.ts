@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, readFile, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
@@ -42,4 +42,28 @@ it("publishes nothing when the last check before publishing refuses or the write
   await expect(writeFileAtomic(path, "after", { signal: controller.signal })).rejects.toThrow()
   expect(await readFile(path, "utf8")).toBe("before")
   expect(await readdir(dir)).toEqual(["checkpoint.json"])
+})
+
+it("writes into a folder reached through a symlink, and refuses a second write cleanly when overwrite is off", async () => {
+  const dir = await folder()
+  const real = join(dir, "real")
+  await mkdir(real)
+  await symlink(real, join(dir, "linked"), "junction")
+  const path = join(dir, "linked", "checkpoint.json")
+  await writeFileAtomic(path, "first", { overwrite: false })
+  expect(await readFile(join(real, "checkpoint.json"), "utf8")).toBe("first")
+  await expect(writeFileAtomic(path, "second", { overwrite: false })).rejects.toMatchObject({ code: "EEXIST" })
+  expect(await readFile(path, "utf8")).toBe("first")
+  await writeFileAtomic(path, "replaced")
+  expect(await readFile(path, "utf8")).toBe("replaced")
+  expect(await readdir(real)).toEqual(["checkpoint.json"])
+})
+
+it("writes nothing when the folder cannot be used", async () => {
+  const dir = await folder()
+  await symlink(join(dir, "missing"), join(dir, "dangling"), "junction")
+  await writeFile(join(dir, "plain"), "a file, not a folder")
+  await expect(writeFileAtomic(join(dir, "dangling", "state.json"), "x")).rejects.toMatchObject({ code: "ENOENT" })
+  await expect(writeFileAtomic(join(dir, "plain", "state.json"), "x")).rejects.toThrow()
+  expect((await readdir(dir)).sort()).toEqual(["dangling", "plain"])
 })
