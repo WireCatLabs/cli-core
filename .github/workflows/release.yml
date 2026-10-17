@@ -157,11 +157,12 @@ jobs:
         run: |
           # The version's own document, not `npm view`: on 2026-10-01 the document answered while the
           # version list `npm view` reads was still stale for minutes (cli-base 0.13.0 and 0.14.0).
-          for _ in $(seq 90); do
+          # npm took 26 minutes to show 0.323.0 and 0.325.0 on 2026-10-17; fifteen left both untagged.
+          for _ in $(seq 270); do
             curl -sfo /dev/null "https://registry.npmjs.org/@wirecat%2fcli-core/$VERSION" && exit 0
             sleep 10
           done
-          echo "::error::npm does not show $VERSION after fifteen minutes — not tagging; tag v$VERSION by hand once it does"
+          echo "::error::npm does not show $VERSION after 45 minutes — not tagging; tag v$VERSION by hand once it does"
           exit 1
 
   tag:
