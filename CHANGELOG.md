@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.311.0 — 17.10.2026
+
 ### Added
 
 - **Store version 19: a mail sender's score per account.** `account_identities` gains `mail_score`, `mail_signals`
