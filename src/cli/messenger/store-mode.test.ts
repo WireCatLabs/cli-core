@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { holdLock, lockPath } from "../../background/lock.js"
 import type { Chat, Message } from "../../domain/models.js"
@@ -307,6 +308,32 @@ describe("a messenger whose history is read from the store", () => {
     expect(stderr).toContain("run `chat serve` or `chat watch` once to fill the local store")
     expect(stderr).not.toContain("--offline")
     expect(connects).toEqual([])
+  })
+
+  it("**UX-58: names `<tool> <profile> setup` first where the CLI has one**", async () => {
+    const { connect } = pushing()
+    const env = sandbox()
+    const ask = async (history?: "store") => {
+      const messenger: Messenger = {
+        app,
+        provider: "chat",
+        resolveSettings: settingsFor(app).resolveSettings,
+        connect,
+        chatArgument: "a chat",
+        ...(history ? { history } : {}),
+      }
+      const streams = captureStreams()
+      await run(
+        ["messages", "list", "Book", "--json", ...(history ? [] : ["--offline"])],
+        { app, commands: () => [messagesCommand(messenger), new Command("setup")] },
+        { streams, tty: false, env },
+      )
+      return streams.stderr.join("\n")
+    }
+    expect(await ask("store")).toContain(
+      "link it with `chat default setup`, then run `chat serve` or `chat watch` once to fill the local store",
+    )
+    expect(await ask()).toContain("log in with `chat default setup`, or run the command once without --offline")
   })
 
   it("**BUG-273: offers no --sync-first and no `messages sync` where the messenger pushes its history**", async () => {
