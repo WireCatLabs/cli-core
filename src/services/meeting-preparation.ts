@@ -1,5 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { formatMeetingReference, type MeetingProviderScope, snapshotMeetingScope } from "../meetings/index.js"
+import { appendPreparationCommunications, readPreparationCommunications } from "./meeting-communications-preparation.js"
+import { captureCommunicationSelections } from "./meeting-communications-selection.js"
 import { readMeetingEvidence } from "./meeting-evidence.js"
 import { appendKnowledgePreparation } from "./meeting-knowledge-preparation.js"
 import { appendNotesPreparation } from "./meeting-notes-preparation.js"
@@ -50,6 +52,7 @@ export const createMeetingPreparationService = (
     )
   if (ports.upcoming.scope?.provider !== fixed.provider || ports.upcoming.scope?.account !== fixed.account)
     throw new CliError("configuration_error", "The upcoming reader belongs to another provider or account")
+  const communicationSelections = captureCommunicationSelections(ports.communications)
   const next = ports.upcoming.next.bind(ports.upcoming)
   return {
     scope: fixed,
@@ -58,6 +61,12 @@ export const createMeetingPreparationService = (
       const { signal, meetings, cues, contextLimit, maxReadBytes, bytes } = input
       if (input.project !== undefined && !projectDiscovery)
         throw new CliError("configuration_error", "Project evidence is unavailable in this preparation host")
+      if (input.communications !== undefined && !communicationSelections)
+        throw new CliError("configuration_error", "Communications are unavailable in this preparation host")
+      const communicationPlan =
+        input.communications === undefined || !communicationSelections
+          ? undefined
+          : communicationSelections(input.communications, input.after, maxReadBytes, signal)
       const owner = await store.account(accountId)
       preparationCancelled(signal)
       if (!owner || owner.provider !== fixed.provider || owner.account !== fixed.account)
@@ -74,7 +83,11 @@ export const createMeetingPreparationService = (
         throw new CliError("invalid_response", "The upcoming reader returned another selection")
       const history = await store.seriesHistory(input.history)
       preparationCancelled(signal)
+      const communications = communicationPlan
+        ? await readPreparationCommunications(communicationPlan, signal)
+        : undefined
       const result: MeetingPreparation = {
+        ...(communications ? { communications: communications.section } : {}),
         schemaVersion: 1,
         accountId,
         upcoming,
@@ -111,6 +124,7 @@ export const createMeetingPreparationService = (
         throw new CliError("validation_error", "Preparation metadata exceeds bytes; increase the output budget")
       if (!history.series) {
         await appendProjectPreparation(projectDiscovery, result, input)
+        appendPreparationCommunications(result, communications)
         return structuredClone(result)
       }
       const seriesId = history.series.id
@@ -160,6 +174,7 @@ export const createMeetingPreparationService = (
       await appendKnowledgePreparation(store, result, input)
       await appendNotesPreparation(store, result, input)
       await appendProjectPreparation(projectDiscovery, result, input)
+      appendPreparationCommunications(result, communications)
       preparationCancelled(signal)
       if (size(result) > bytes)
         throw new CliError("validation_error", "Preparation coverage exceeds bytes; increase the output budget")

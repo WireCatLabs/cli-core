@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { isoTime } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
+import { communicationFields } from "../context/communication-selection.js"
 import { validateMeetingChange } from "../meetings/index.js"
 import {
   MEETING_PREPARATION_LIMITS,
@@ -8,6 +9,7 @@ import {
   type MeetingPreparationRequest,
   validateMeetingPreparationRequest,
 } from "../services/index.js"
+import { validatePreparationCommunications } from "../services/meeting-communications-selection.js"
 import { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 
 export type MeetingPreparationReader = (
@@ -20,6 +22,9 @@ const bound = (name: keyof typeof MEETING_PREPARATION_LIMITS) => {
 }
 export const meetingPreparationInput = v.strictObject({
   series_id: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
+  communications: v.optional(
+    v.strictObject({ ...communicationFields, after: v.optional(isoTime), before: v.optional(isoTime) }),
+  ),
   project: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(200))),
   after: v.optional(isoTime),
   until: v.optional(isoTime),
@@ -54,7 +59,7 @@ export const readMeetingPreparation = async (
       throw new CliError("validation_error", `unknown preparation argument: ${key}`)
   const parsed = v.safeParse(meetingPreparationInput, input)
   if (!parsed.success) {
-    const field = parsed.issues[0]?.path?.[0]?.key ?? "arguments"
+    const field = parsed.issues[0]?.path?.map((p) => String(p.key)).join(".") ?? "arguments"
     throw new CliError("validation_error", `invalid meeting preparation field: ${String(field)}`)
   }
   const args = parsed.output
@@ -63,6 +68,19 @@ export const readMeetingPreparation = async (
   const historyAfter = instant(args.history_after, after - 30 * 86400000, "history_after")
   const request = validateMeetingPreparationRequest(args.series_id, {
     ...(args.project === undefined ? {} : { project: args.project }),
+    ...(args.communications === undefined
+      ? {}
+      : {
+          communications: {
+            ...args.communications,
+            after: instant(
+              args.communications.after,
+              Math.max(0, instant(args.communications.before, after, "communications.before") - 14 * 86400000),
+              "communications.after",
+            ),
+            before: instant(args.communications.before, after, "communications.before"),
+          },
+        }),
     after,
     until,
     historyAfter,
@@ -90,5 +108,6 @@ export const readMeetingPreparation = async (
     )
   )
     throw new CliError("invalid_response", "Meeting preparation reader returned another selection or limits")
+  validatePreparationCommunications(packet.communications, request.communications, request.after)
   return meetingPreparationAnswer(packet)
 }

@@ -1,3 +1,5 @@
+import { fold } from "../store/normalize.js"
+
 /** Words of a query worth finding in a text: no operators, no field names, nothing shorter than three letters. */
 export const queryWords = (query: string): string[] =>
   query
@@ -10,14 +12,19 @@ export const queryWords = (query: string): string[] =>
  * About `size` characters of `text` on one line, around the first word of `query` it holds, or its start when it
  * holds none: enough to tell a hit apart, a fraction of a whole email.
  */
-export const excerpt = (text: string, query: string, size = 240): string => {
+export const excerpt = (text: string, query: string, size = 240, options: { literal?: boolean } = {}): string => {
   const flat = text.replace(/\s+/g, " ").trim()
   if (flat.length <= size) return flat
   const lower = flat.toLowerCase()
-  const found = queryWords(query)
-    .map((word) => lower.indexOf(word))
-    .filter((index) => index >= 0)
-  const at = found.length ? Math.min(...found) : 0
+  const literalWords = new Set((query.match(/[\p{L}\p{N}]+/gu) ?? []).map(fold))
+  const found = options.literal
+    ? [...flat.matchAll(/[\p{L}\p{N}\p{M}]+/gu)]
+        .filter((match) => literalWords.has(fold(match[0])))
+        .map((match) => match.index)
+    : queryWords(query)
+        .map((word) => lower.indexOf(word))
+        .filter((index) => index >= 0)
+  const at = found.reduce((minimum, index) => Math.min(minimum, index), found[0] ?? 0)
   const start = Math.max(0, Math.min(at - Math.floor(size / 3), flat.length - size))
   const end = start + size
   return `${start > 0 ? "…" : ""}${flat.slice(start, end).trim()}${end < flat.length ? "…" : ""}`

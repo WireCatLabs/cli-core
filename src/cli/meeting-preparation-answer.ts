@@ -3,6 +3,7 @@ import * as v from "valibot"
 import { meetingPreparation } from "../entities/index.js"
 import type { MeetingPreparation } from "../services/index.js"
 import { itemOf, metaNow, sealed, snakeKeys } from "./envelope.js"
+import { mapPreparationCommunications } from "./meeting-communications.js"
 import { boundMeetingPreparationItem } from "./meeting-preparation-budget.js"
 import { mapPreparationProjectEvidence } from "./meeting-preparation-projects.js"
 
@@ -38,6 +39,7 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   const mapped = snakeKeys({
     ...packet,
     kind: "meeting_preparation",
+    ...(packet.communications ? { communications: mapPreparationCommunications(packet.communications) } : {}),
     accountId: String(packet.accountId),
     upcoming: {
       ...packet.upcoming,
@@ -106,13 +108,17 @@ export const meetingPreparationAnswer = (packet: MeetingPreparation) => {
   if (!parsed.success) throw new CliError("invalid_response", "Meeting preparation does not match its answer contract")
   const item = parsed.output
   boundMeetingPreparationItem(item)
+  const issues = [
+    ...item.coverage.skipped_unavailable.map((source) => ({ code: "not_found" as const, source })),
+    ...(item.communications?.sources.flatMap((source) =>
+      source.issue ? [{ code: source.issue, source: source.selection_id }] : [],
+    ) ?? []),
+  ]
   return sealed(
     itemOf(item, {
       meta: metaNow({
-        complete: item.coverage.skipped_unavailable.length === 0,
-        ...(item.coverage.skipped_unavailable.length
-          ? { issues: item.coverage.skipped_unavailable.map((source) => ({ code: "not_found" as const, source })) }
-          : {}),
+        complete: issues.length === 0,
+        ...(issues.length ? { issues } : {}),
         ...(item.coverage.output_limited ? { truncated: true } : {}),
       }),
     }),

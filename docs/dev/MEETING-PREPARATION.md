@@ -35,6 +35,9 @@ validator and mapper, producing the registered `meeting_preparation` entity in a
 These adapters are opt-in; importing Core does not mount them in a provider application.
 Automatic findings intake remains separate.
 
+[Selected communications](MEETING-COMMUNICATIONS.md) documents the optional host-captured local
+message/mail/document port, shared selection input, source coverage and output priorities.
+
 ## Context and limits
 
 | Part | Included | Coverage limit |
@@ -226,7 +229,7 @@ The public item uses snake_case keys, string IDs, ISO timestamps and `ref` for c
 Cue `offset_ms` is relative to its meeting. Its strict entity schema includes every coverage field;
 no source packet is replaced with an unchecked record. Evidence `content_bytes` counts its public
 cue array. The item's `limits.bytes` bounds its JSON representation, excluding the outer envelope;
-normalization removes project-evidence pages, notes, accepted knowledge and trailing related entries before exact-series entries to keep that bound,
+normalization removes communication excerpts first, then project-evidence pages, notes, accepted knowledge and trailing related entries before exact-series entries to keep that bound,
 reporting `output_limited`. Related public fields are `anchors`, `items`, `has_more`, `output_limited`
 and `selection`; each item contains `ref`, `meeting`, `evidence`, `shared_person` and `shared_project`.
 MCP reapplies the same item budget after making hidden/control characters visible. It recalculates

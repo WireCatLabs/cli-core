@@ -1,5 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
+import { meetingPreparationAnswer } from "../src/cli/meeting-preparation-answer.js"
 import { createContextEvidenceReader } from "../src/services/context-evidence.js"
+import { createMeetingPreparationService } from "../src/services/meeting-preparation.js"
 import { contextEvidenceFixture } from "../src/testing/context-evidence.js"
 
 export const smokeContextEvidence = async (check: (name: string, passes: boolean) => void) => {
@@ -40,6 +42,25 @@ export const smokeContextEvidence = async (check: (name: string, passes: boolean
         (error) => error instanceof CliError && error.details?.reason === "context.read-budget",
       )
       check(`${provider} refuses oversized context before hydration`, refused)
+      const selections = Object.entries(f.sources).map(([id, source]) => ({ id, source }))
+      const preparation = createMeetingPreparationService(f.key, f.accountId, {
+        meetings: f.store.meetings,
+        upcoming: f.upcoming,
+        communications: { selections, reader: f.store.contextEvidence },
+      })
+      const packet = await preparation.prepare("example-series", {
+        after: 10000,
+        until: 20000,
+        historyAfter: 0,
+        communications: { sources: selections.map(({ id }) => ({ id })), query: "launch" },
+      })
+      const answer = meetingPreparationAnswer(packet)
+      check(
+        `${provider} assembles strict cross-source preparation`,
+        answer.item.communications?.items.length === 5 &&
+          answer.item.communications.sources.length === 3 &&
+          answer.meta?.complete === true,
+      )
     } finally {
       await f.close()
     }

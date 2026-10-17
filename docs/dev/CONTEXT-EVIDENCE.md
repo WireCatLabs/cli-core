@@ -1,8 +1,9 @@
 # Bounded stored context readers
 
 For SDK hosts reading explicitly selected local messages, mail or imported documents. These readers
-are a foundation for cross-source meeting context; meeting preparation and its CLI/MCP arguments
-do not yet query these sources. Keep their existing `unqueried` coverage unchanged.
+can feed the optional [meeting communications assembler](MEETING-COMMUNICATIONS.md). A host
+must explicitly bind authorized selections; omitted communications retain existing preparation
+output and coverage. Production provider bindings are separate from this SDK capability.
 
 ## Bind authorized sources
 

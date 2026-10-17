@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import { REMOTE_READ } from "./effects.js"
+import { communicationOptions } from "./meeting-communications.js"
 import { type MeetingPreparationReader, readMeetingPreparation } from "./meeting-preparation-read.js"
 
 const integer = (value: string) => {
@@ -25,6 +26,21 @@ export const addMeetingPreparationCommand = (
       .command("prepare")
       .argument("<series-id>", "exact provider series ID")
       .description("prepare cited context for one upcoming series")
+      .option(
+        "--context-source <id[=cursor]>",
+        "authorized communications selection ID, optionally ID=cursor; repeat",
+        (value: string, previous: string[]) => [...previous, value],
+        [],
+      )
+      .option("--context-query <words>", "literal words to find within the selected communications")
+      .option(
+        "--context-since-time <time>",
+        "communications window start as zoned ISO timestamp (default fourteen days before end)",
+      )
+      .option(
+        "--context-before-time <time>",
+        "exclusive communications end as zoned ISO timestamp (default preparation start)",
+      )
       .option("--project <project>", "include unconfirmed word evidence for one existing project name, key or alias")
       .option("--since-time <time>", "window start as ISO timestamp with zone (default now)")
       .option("--before-time <time>", "exclusive window end as ISO timestamp (default seven days after start)")
@@ -40,6 +56,7 @@ export const addMeetingPreparationCommand = (
             deps.read,
             {
               series_id: seriesId,
+              communications: communicationOptions(options),
               project: options.project,
               after: options.sinceTime,
               until: options.beforeTime,
