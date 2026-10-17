@@ -3249,129 +3249,66 @@
       "in": "all"
     },
     "polls": {
-      "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: polls"
-      }
+      "in": "all"
     },
     "polls close": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: polls"
-      }
+      "reason": "WhatsApp polls cannot be closed"
     },
     "polls create": {
-      "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: polls"
-      },
+      "in": "all",
       "options": {
-        "--anonymous": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
-        },
+        "--anonymous": "all",
         "--close-time": {
           "in": ["tg"],
-          "reason": "max-cli does not close a poll by itself",
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
+          "reason": "max-cli does not close a poll by itself; WhatsApp polls cannot be closed"
         },
         "--correct": {
           "in": ["tg"],
-          "reason": "max-cli creates no quizzes",
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
+          "reason": "max-cli creates no quizzes; a WhatsApp poll is never a quiz"
         },
-        "--multiple": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
-        },
-        "--operation-id": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
-        },
+        "--multiple": "all",
+        "--operation-id": "all",
         "--quiz": {
           "in": ["tg"],
-          "reason": "max-cli creates no quizzes",
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
+          "reason": "max-cli creates no quizzes; a WhatsApp poll is never a quiz"
         },
         "--revote": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
+          "reason": "a WhatsApp vote can always be changed"
         },
-        "--send-as": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
-        },
-        "--silent": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
-        },
+        "--send-as": "all",
+        "--silent": "all",
         "--solution": {
           "in": ["tg"],
-          "reason": "max-cli creates no quizzes",
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
+          "reason": "max-cli creates no quizzes; a WhatsApp poll is never a quiz"
         },
         "--topic": {
           "in": ["tg"],
-          "reason": "MAX has no forum topics",
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
+          "reason": "MAX has no forum topics; WhatsApp has no forum topics"
         }
       }
     },
     "polls show": {
-      "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: polls"
-      }
+      "in": "all"
     },
     "polls vote": {
-      "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: polls"
-      },
+      "in": "all",
       "options": {
-        "--retract": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
-        }
+        "--retract": "all"
       }
     },
     "polls voters": {
-      "in": ["tg"],
+      "in": ["tg", "wa"],
       "reason": "max-cli does not list who voted in a poll",
-      "planned": {
-        "wa": "wa backlog: polls"
-      },
       "options": {
         "--limit": {
-          "in": ["tg"],
-          "reason": "max-cli does not list who voted in a poll",
-          "planned": {
-            "wa": "wa backlog: polls"
-          }
+          "in": ["tg", "wa"],
+          "reason": "max-cli does not list who voted in a poll"
+        },
+        "--page": {
+          "in": ["tg", "wa"],
+          "reason": "max-cli does not list who voted in a poll"
         }
       }
     },

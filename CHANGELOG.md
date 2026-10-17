@@ -7,8 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A pushed history batch carries poll votes.** `HistoryBatch` has an optional `votes` array of `HistoryVote`
+  (`{ chatId, messageId, vote }`, the vote as `PollVoteEvent` carries it). The store saves a chat's votes in the
+  transaction of that batch's messages, after them, so a poll pushed with its votes is held first; a voter's older
+  vote still never replaces a newer one. A messenger that pushed votes as `watch` events, kept only while a watch
+  ran, can send them with the history instead.
+
 ### Fixed
 
+- **wa's poll rows in the parity manifest** say what wa ships: `polls create`, `show`, `vote` and `voters` are
+  present; `polls close` ("WhatsApp polls cannot be closed"), `polls create --revote` ("a WhatsApp vote can always
+  be changed"), `--close-time`, the quiz options and `--topic` are absent with their reasons.
 - **A schedule that runs every few minutes no longer stops after a run longer than its interval.** Its systemd timer
   counted from when a run started (`OnUnitActiveSec`), so a run that outlasted the interval left no next run; it
   now counts from when a run ends (`OnUnitInactiveSec`). A schedule written before keeps its timer until saved again.

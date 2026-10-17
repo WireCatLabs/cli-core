@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Message, MessageEvent } from "../../domain/models.js"
+import type { Id, Message, MessageEvent, PollVote } from "../../domain/models.js"
 import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { isId, pickPerson } from "../../resolve.js"
 import type { EventSink } from "../../runs/events.js"
@@ -282,16 +282,22 @@ export const stored = (
 
 /**
  * A pushed batch as the store keeps it. No `markChatsLeft`: a push names some chats, never all of them.
- * No `seenAt`: a pushed snapshot may be older than a deletion this store already holds.
+ * No `seenAt`: a pushed snapshot may be older than a deletion this store already holds. A chat's votes go in the
+ * transaction of its messages, after them, so a poll in the batch is held, or known deleted, before its votes.
  */
 const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatch): Promise<void> => {
   if (batch.chats?.length) await store.chats.saveChats(account, batch.chats)
   if (batch.people?.length) await store.people.savePeople(account, batch.people)
-  const byChat = new Map<string, Message[]>()
-  for (const message of batch.messages ?? [])
-    byChat.set(message.chatId, [...(byChat.get(message.chatId) ?? []), message])
-  for (const [chatId, messages] of byChat)
-    await store.messages.saveMessages(account, chatId, messages, { via: "history" })
+  const byChat = new Map<Id, { messages: Message[]; votes: { messageId: Id; vote: PollVote }[] }>()
+  const of = (chatId: Id) => {
+    const held = byChat.get(chatId) ?? { messages: [], votes: [] }
+    byChat.set(chatId, held)
+    return held
+  }
+  for (const message of batch.messages ?? []) of(message.chatId).messages.push(message)
+  for (const { chatId, messageId, vote } of batch.votes ?? []) of(chatId).votes.push({ messageId, vote })
+  for (const [chatId, { messages, votes }] of byChat)
+    await store.messages.saveMessages(account, chatId, messages, { via: "history", votes })
 }
 
 /**

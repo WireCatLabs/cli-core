@@ -18,12 +18,14 @@ export interface AccountMessages {
    *
    * `seenAt` is when the messenger was asked: a message it still returned is not deleted, so a
    * tombstone older than that is lifted. A tombstone set after it stays — the deletion is newer.
+   *
+   * `votes` are saved after the messages in the same transaction, as `saveVote` saves each.
    */
   saveMessages(
     key: AccountKey,
     chatId: Id,
     messages: Message[],
-    options: { via: IngestedVia; seenAt?: number },
+    options: { via: IngestedVia; seenAt?: number; votes?: { messageId: Id; vote: PollVote }[] },
   ): Promise<void>
   /** Oldest to newest, like a provider's history page. */
   /** `threadId` keeps one forum topic's; `outgoing` only the owner's (true) or only the others' (false). */
@@ -109,13 +111,15 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
   const { database } = context
   const { accountPk, findAccountPk, findChatPk, chatKeyOf, chatPkFor, upsertMessage } = keysOver(context)
   return {
-    saveMessages: async (key, chatId, messages, { via, seenAt }) =>
+    saveMessages: async (key, chatId, messages, { via, seenAt, votes = [] }) =>
       write(database, () => {
         const accountKey = accountPk(key)
         const chatKey = chatPkFor(accountKey, chatId)
         for (const message of messages) {
           if (message.scheduledFor === undefined) upsertMessage(key, accountKey, chatKey, message, via, seenAt)
         }
+        for (const { messageId, vote } of votes)
+          messageWrites.saveVote(context, accountKey, key.provider, chatKey, messageId, vote)
       }),
 
     messages: async (key, chatId, window) => {

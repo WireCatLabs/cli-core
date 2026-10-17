@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import { countedPoll } from "../../domain/polls.js"
-import type { MessengerAdapter } from "../../ports/messenger.js"
+import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
 import { type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
 import { storedMessages } from "./context.js"
 import { stored } from "./stored.js"
@@ -295,6 +295,64 @@ describe("polls in the store", () => {
     await store.messages.saveVote(account, "7", "40", vote)
 
     expect(await store.messages.pollVotes(account, "7", "40")).toEqual([])
+  })
+})
+
+describe("votes in a pushed history batch", () => {
+  const olga = { id: "9", name: "Olga", username: null }
+  const vote = (answers: string[], votedAt: string, messageId = "40", chatId = "7") => ({
+    chatId,
+    messageId,
+    vote: { person: olga, answers, votedAt },
+  })
+  const fed = async (store: MessageStore, batch: HistoryBatch) => {
+    const pending = new Set<Promise<void>>()
+    const adapter = { self: () => "500", feed: async (onBatch: (batch: HistoryBatch) => void) => onBatch(batch) }
+    const wrapped = stored(adapter as unknown as MessengerAdapter, {
+      account,
+      store: async () => store,
+      warn: () => {},
+      events: () => {},
+      pending,
+    })
+    await wrapped.feed?.(() => {}, new AbortController().signal)
+    await Promise.all(pending)
+  }
+  const answers = async (store: MessageStore, messageId = "40", chatId = "7") =>
+    (await store.messages.pollVotes(account, chatId, messageId)).map((held) => [held.person.id, held.answers])
+
+  it("keeps a poll and its votes from one batch, the newest vote of each voter winning", async () => {
+    const { store } = await setUp()
+
+    await fed(store, {
+      messages: [message("40", "When?"), message("41", "Where?", "8")],
+      votes: [
+        vote(["fri"], "2026-09-26T10:02:00.000Z"),
+        vote(["tue"], "2026-09-26T10:01:00.000Z"),
+        vote(["home"], "2026-09-26T10:01:00.000Z", "41", "8"),
+      ],
+    })
+
+    expect(await answers(store)).toEqual([["9", ["fri"]]])
+    expect(await answers(store, "41", "8")).toEqual([["9", ["home"]]])
+  })
+
+  it("a history vote older than the one `watch` heard does not replace it", async () => {
+    const { store } = await setUp()
+    await store.messages.saveVote(account, "7", "1", vote(["tue"], "2026-09-26T10:05:00.000Z").vote)
+
+    await fed(store, { votes: [vote(["fri"], "2026-09-26T10:02:00.000Z", "1")] })
+
+    expect(await answers(store, "1")).toEqual([["9", ["tue"]]])
+  })
+
+  it("a vote in a poll the store holds as deleted is dropped", async () => {
+    const { store } = await setUp()
+    await store.messages.markDeleted(account, ["1"], { chatId: "7" })
+
+    await fed(store, { votes: [vote(["fri"], "2026-09-26T10:02:00.000Z", "1")] })
+
+    expect(await answers(store, "1")).toEqual([])
   })
 })
 
