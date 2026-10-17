@@ -4,6 +4,7 @@ import type { StepDefinition } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { REASONS } from "../errors/reasons.js"
+import { expected, type Manifest } from "../parity/manifest.js"
 import { botCommand } from "./bot/command.js"
 import { storeCommand } from "./messenger/archive-commands.js"
 import { attachmentsCommand } from "./messenger/attachments-command.js"
@@ -65,10 +66,7 @@ const program = createProgram({
     }),
   ],
 })
-const parity = JSON.parse(readFileSync(join(import.meta.dirname, "../../parity.json"), "utf8")) as {
-  clis: string[]
-  commands: Record<string, { in: unknown; planned?: Record<string, string> }>
-}
+const parity = JSON.parse(readFileSync(join(import.meta.dirname, "../../parity.json"), "utf8")) as Manifest
 
 /** A value of the right kind for each argument, so the line parses as typed. */
 const sample = (command: Command, name: string): unknown =>
@@ -84,9 +82,14 @@ describe("the next-step registry", () => {
     (step): step is Extract<StepDefinition, { kind: "command" }> => step.kind === "command" && step.command !== "*",
   )
 
-  it.each(named.map((step) => [step.id, step]))("%s names a command tg and max both have or both plan", (_, step) => {
+  it.each(named.map((step) => [step.id, step]))("%s names a command every CLI has or plans", (_, step) => {
     const row = parity.commands[step.command]
-    expect(row?.in === "all" || Object.keys(row?.planned ?? {}).length === parity.clis.length).toBe(true)
+    const root = parity.commands[step.command.split(" ")[0] as string]
+    // A step inside a tree a CLI does not have (wa has no `bot`) is never shown there.
+    const reaches = (cli: string) =>
+      !row || expected(row, cli) !== false || (root !== undefined && expected(root, cli) === false)
+    expect(row).toBeDefined()
+    expect(parity.clis.filter((cli) => !reaches(cli))).toEqual([])
     expect(commandAt(program, step.command)).toBeDefined()
   })
 

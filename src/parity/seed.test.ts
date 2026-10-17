@@ -46,7 +46,7 @@ describe("a new CLI joining parity", () => {
   })
 
   it("leaves the shipped manifest well-formed and max and tg checked as before", () => {
-    const seeded = seedCli(shipped, "wa")
+    const seeded = seedCli(shipped, "next")
     const max = program("max", command("store", [], [command("store fetch", ["--all"])]))
 
     expect(manifestProblems(seeded)).toEqual([])
