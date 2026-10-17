@@ -24,6 +24,12 @@ export type {
   MeetingTaskFinding,
 } from "../meetings/index.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
+export type {
+  DocumentTransferOptions,
+  DocumentTransferPreview,
+  DocumentTransferReceipt,
+} from "./document-transfer/index.js"
+export { applyDocumentTransfer, previewDocumentTransfer } from "./document-transfer/index.js"
 export type { CacheDatabase, CacheStatement, OpenDatabase, SqlValue } from "./driver.js"
 export { PRAGMAS } from "./driver.js"
 export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findings.js"

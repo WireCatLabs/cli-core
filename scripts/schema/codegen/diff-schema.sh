@@ -16,6 +16,15 @@ cp "$out/schema.ts" "$tmp"
 (cd "$repo" && npx biome format --write "$tmp" >/dev/null 2>&1) || true
 python3 "$here/comments.py" "$tmp"
 (cd "$repo" && npx biome format --write "$tmp" >/dev/null 2>&1) || true
-differences=$(diff -u "$repo/src/store/sqlite/schema.ts" "$tmp" | grep -E '^[-+][^-+]' | grep -v -E '^[-+]\s*(//|/\*\*|\*)' || true)
+python3 - "$repo/src/store/sqlite/schema.ts" "$out/expanded.ts" <<'PYCODE'
+import pathlib, re, sys
+source = pathlib.Path(sys.argv[1])
+def expand(match):
+    module = source.parent / "schema" / (match.group(1) + ".ts")
+    return re.sub(r'^import .* from .*\n\n', '', module.read_text(), count=1).rstrip()
+text = re.sub(r'^export \{[^}]+\} from "\./schema/([a-z-]+)\.js"$', expand, source.read_text(), flags=re.M)
+pathlib.Path(sys.argv[2]).write_text(text)
+PYCODE
+differences=$(diff -u "$out/expanded.ts" "$tmp" | grep -E '^[-+][^-+]' | grep -v -E '^[-+]\s*(//|/\*\*|\*)' || true)
 [ -z "$differences" ] || { printf '%s\n' "$differences"; echo "spec and schema.ts disagree" >&2; exit 1; }
 echo "spec and schema.ts agree"
