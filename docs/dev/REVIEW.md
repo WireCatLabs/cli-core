@@ -9,7 +9,7 @@ or not applicable.
 
 A new command, option or output change starts here and merges before its code.
 
-Apply the [external adoption profile](STANDARD.md#external-references-and-our-adoption-profile)
+Apply the [external adoption profile](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-28--use-the-external-command-line-references-as-a-baseline-and-keep-the-projects-choices-where-they-differ)
 and [compliance audit](CLI-COMPLIANCE.md). Say whether a cited rule is a protocol requirement,
 design guidance or our policy; record justified deviations instead of claiming blanket compliance.
 

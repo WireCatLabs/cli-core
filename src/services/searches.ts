@@ -33,7 +33,7 @@ export const savedSearchItem = (one: StoredSearch): SavedSearchItem => ({
 })
 
 export interface SearchesService {
-  /** Saves without running (STANDARD rule 4): the query is checked against today's fields first. */
+  /** Saves without running (WC-CMD-6): the query is checked against today's fields first. */
   create(name: string, params: SearchParams, options?: { replace?: boolean }): Promise<StoredSearch>
   show(reference: string): Promise<StoredSearch>
   list(): Promise<StoredSearch[]>

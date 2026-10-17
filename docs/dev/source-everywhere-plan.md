@@ -9,8 +9,8 @@ aliases, the three removals). Drive profile registration and folder-backed profi
 The owner chooses which accounts a search reads the same way in every search, for every kind of thing
 the store holds. The answer says which accounts were read. Owner, 2026-10-13: "make sure we can
 control which profiles we filter by in all entities". The standing rule applies: nothing picks an
-account for the owner, and a read across accounts covers all of them and says so ([STANDARD.md,
-Command names rule 1](STANDARD.md#command-names)).
+account for the owner, and a read across accounts covers all of them and says so ([WC-ACCT-3](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/accounts.md#wc-acct-3--a-missing-profile-is-an-error-that-lists-the-choices),
+[WC-ACCT-9](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/accounts.md#wc-acct-9--a-read-across-accounts-covers-all-of-them-and-says-which-it-read)).
 
 ## The model
 
@@ -103,7 +103,7 @@ together stay an error.
 - A group may hold accounts of any kind: `config set account_groups.work
   tg:work,max:work,email:me@work.example,drive:work,notes:4`.
 - **Linking is explicit**, never inferred from two profiles having the same name — the rule for
-  `contacts link` ([STANDARD.md, Command names rule 3](STANDARD.md#command-names)).
+  `contacts link` (the `link` verb in [STANDARD.md](STANDARD.md#verbs)).
 - **Each CLI's login or profile-create step offers to add the profile to a group**: "Add this profile
   to an account group? [none / work / new…]". A yes runs the same write as `config set`. Built per CLI
   later (tg, max, memo mail, drive, zoom); not in this plan's code.

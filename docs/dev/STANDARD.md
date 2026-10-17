@@ -7,10 +7,6 @@ the [parity manifest](#the-parity-manifest), the [option catalogue](#option-cata
 of the write guard, and how a messenger answer is presented. A heading whose rules moved to the handbook keeps one
 paragraph naming the rules that hold them now, so a link to it still leads somewhere.
 
-Two sections bind every WireCat CLI, not only the messengers, until the handbook takes them:
-[External references and our adoption profile](#external-references-and-our-adoption-profile) and
-[Resumable syncs](#resumable-syncs).
-
 How a pull request is checked against these rules is [REVIEW.md](REVIEW.md).
 
 A rule here changes first, in its own pull request, and the owner approves new wording. A word or a lint rule goes
@@ -20,50 +16,9 @@ messenger lacks the feature, and it is written down with its reason in the parit
 
 ## External references and our adoption profile
 
-We use external conventions as a baseline, with explicit project decisions below. This is not a
-claim of complete POSIX, GNU or agent-spec conformance. The [CLI compliance audit](CLI-COMPLIANCE.md)
-records implemented behaviour, gaps and follow-up work; the [architecture](ARCHITECTURE.md#cli-design-references)
-explains where these contracts are enforced.
-
-| Reference | Role here |
-|---|---|
-| [POSIX Utility Conventions, §12](https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap12.html) | Established utility syntax, including the end-of-options delimiter. This is the formal standards reference; our modern long options and nested tree are a project profile, not strict POSIX utility conformance. |
-| [GNU Command-Line Interfaces](https://www.gnu.org/prep/standards/html_node/Command_002dLine-Interfaces) | Conventional long-option names, help and version behaviour. We do not copy GNU-specific branding or licensing text. |
-| [Command Line Interface Guidelines](https://clig.dev/) | Practical design baseline for command discovery, streams, scripting and compatibility. A guide, not a certification scheme. |
-| [MCP tools specification, 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) | The protocol contract for the MCP adapter; it does not define our shell grammar. Structured tool results and annotations are relevant; outputSchema is optional. |
-| [JSON Schema specification](https://json-schema.org/specification) | The schema language for machine contracts. A future CLI schema surface must declare its dialect; a TypeScript interface alone is not runtime schema discovery. |
-| [Agent Skills specification](https://agentskills.io/specification) | The portable SKILL.md packaging format and progressive loading of agent guidance. It does not prescribe CLI commands. |
-| [Anthropic: writing effective tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents) | Engineering guidance for distinct tool purposes, informative results and economical discovery. Evaluate these choices against representative tasks. |
-| [CLI Agent Spec](https://cli-agent-spec.github.io/) | Independent community requirements and conformance ideas to assess selectively. We do not adopt its exit-code table or response envelope wholesale, or claim a conformance level. |
-| [Google Workspace CLI agent context](https://github.com/googleworkspace/cli/blob/main/CONTEXT.md) | A concrete example of schema discovery, response projection and request previews. This is a project example, not a standard or an officially supported Google product. |
-
-[Agent Client Protocol](https://agentclientprotocol.com/get-started/introduction) addresses
-editor-to-coding-agent communication. MAX/TG are tools an agent invokes, not coding-agent
-implementations, so ACP does not add a compliance requirement to our CLI.
-
-Our additional contract is **agent determinism before presentation convenience**: machine results
-are stable data; actions are explicit; uncertain write outcomes are not instructions to retry.
-Names, messages and retrieved documents remain untrusted data. Local guards enforce permissions;
-MCP hints and agent instructions never substitute for enforcement.
-
-Explicit choices and gaps:
-
-- `stats` and its resource hierarchy are our policy; external references do not require that root.
-- Data goes to stdout as one envelope ([WC-OUT-4]); a failure goes to stderr as one JSON object ([WC-OUT-14]),
-  with cli-base's exit codes ([WC-OUT-18]).
-- Explicit help/version requests retain conventional text on stdout. An agent discovering a
-  command uses `commands <path> --json`; help is not a JSON data response. The independent agent
-  spec's blanket non-TTY help-to-stderr rule is not adopted.
-- Machine output suppresses write-confirmation prompts, but credentials and setup need a broader
-  non-interactive contract. `--yes` grants confirmation; it is not a substitute for disabling input.
-- A read can have documented local effects such as ingestion, a stable device identity or a failed-run
-  record. Validation-before-remote-action does not promise zero local writes on every error.
-- Automatic retry of every write and logging full tool payloads are not adopted from agent examples.
-- A renamed path stops working in the release that renames it, with no alias ([WC-CMD-8]). This differs from
-  CLIG's deprecation guidance; the owner chose it.
-
-New commands are reviewed against this profile and the audit. Existing gaps require explicit
-implementation work with tests; citing a reference alone does not close them.
+This moved to the handbook: the external references are a baseline, and the project keeps its own choices where it
+differs from them ([WC-CMD-28]). The [CLI compliance audit](CLI-COMPLIANCE.md) records what cli-core implements
+against them and the gaps that are left.
 
 ## Command names
 
@@ -1159,32 +1114,10 @@ are the messenger CLIs' own; they keep their numbers, so a citation of one still
 
 ## Resumable syncs
 
-A long sync — a mailbox, a chat history, a Drive folder, a recording archive — is stopped by a kill, a reboot or a
-provider's limit as often as it ends. Every CLI holds it to three rules:
-
-1. **A kill loses nothing saved.** Work is saved per item or per page, in its own transaction, never at the end.
-2. **A rerun goes on from where the last one stopped**, by default. It skips what is stored *and* does not redo
-   the listing or paging that got there. Starting over is an option the owner asks for. drive's `--rescan` is
-   the name in use; a second CLI that needs one takes the same word, added to cli-base's flag registry first.
-3. **The status command says how far it is**, as the progress shape below, and on one line in text.
-
-Where the position lives, in this order:
-
-- **The store, when it already says.** tg and max: the held stretches of each chat (`fetchedKey`,
-  `historyStartKey`), so `messages sync --all` passes a chat held to its newest message without asking for it;
-  background runs are `store jobs`. zm: the monthly checkpoints of `recordings sync`.
-- **Otherwise a checkpoint file**, `<state>/checkpoints/<profile>/<job>.json`, written with `saveCheckpoint` from
-  `@wirecat/cli-core/background` and read with `readCheckpoint`. Its `cursor` is the tool's own (an IMAP mailbox's
-  UIDVALIDITY and last UID, a page token); `done` and `total` count items. The write is atomic, and a torn file reads
-  as no checkpoint, which costs one run from the start and never fails one. drive's saved plan in its state file is
-  this checkpoint under another name.
-
-**Progress** (`progressOf`, printed by `progressLine`): `{ job, profile, done, total, remaining, state, updated_at,
-cursor_age_ms }`. `state` is `partial` or `complete`; `total` and `remaining` are `null` when the source does not
-say how much there is. `store jobs show` answers it as `progress`.
-
-Whether the last *scheduled* run failed is a different question: `recordRun` and `failingNotice` in
-[the schedules](../../src/background/schedules.ts) answer it.
+These moved to the handbook's [lifecycle](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#resumable-syncs)
+page: a long sync saves its work per item or per page ([WC-LIFE-12]), a rerun goes on from where the last run stopped
+([WC-LIFE-13]), and its status command says how far it is in one shape ([WC-LIFE-14]). cli-core provides
+`saveCheckpoint`, `readCheckpoint`, `progressOf` and `progressLine` in `@wirecat/cli-core/background`.
 
 ## Permissions
 
@@ -1404,7 +1337,11 @@ is indexed as a complete result. Existing PDF/Word optional packages remain opti
 [WC-CMD-23]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-23--write-help-as-the-user-sees-the-command-one-line-lower-case-no-full-stop-no-internal-term
 [WC-CMD-25]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-25--give-a-shared-command-and-a-shared-option-the-same-sentence-in-every-cli-of-its-group
 [WC-CMD-26]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-26--print-the-command-tree-with-cli-bases-commandsdocument-and-keep-every-key-snake_case
+[WC-CMD-28]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/commands.md#wc-cmd-28--use-the-external-command-line-references-as-a-baseline-and-keep-the-projects-choices-where-they-differ
 [WC-LIFE-5]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-5--bound-every-one-shot-command-by-a-deadline
+[WC-LIFE-12]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-12--save-a-long-syncs-work-per-item-or-per-page-so-a-kill-loses-nothing-saved
+[WC-LIFE-13]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-13--a-rerun-goes-on-from-where-the-last-run-stopped-and-starting-over-is-an-option
+[WC-LIFE-14]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-14--a-syncs-status-command-says-how-far-it-is-in-one-shape
 [WC-MCP-1]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-1--a-server-offers-three-tools-not-one-per-command
 [WC-MCP-2]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-2--an-agent-calls-a-command-by-its-cli-path
 [WC-MCP-10]: https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/mcp.md#wc-mcp-10--a-tool-and-its-command-give-the-same-answer-and-the-same-error
