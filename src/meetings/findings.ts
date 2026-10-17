@@ -169,7 +169,10 @@ export const validateMeetingFindings = (input: MeetingFindingsInput): MeetingFin
       (finding.assignee === undefined) !== (finding.assigneeEvidence === undefined)
     )
       return invalid("optional dates and assignees require their supporting evidence")
-    if (finding.assignee !== undefined && !/^person:[1-9]\d*$/.test(finding.assignee))
+    if (
+      finding.assignee !== undefined &&
+      (typeof finding.assignee !== "string" || !/^person:[1-9]\d*$/.test(finding.assignee))
+    )
       return invalid("an assignee must be a person reference")
     return {
       ...base,

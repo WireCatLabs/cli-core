@@ -19,6 +19,7 @@ shape of this file.
 
 ### Fixed
 
+- Meeting findings reject non-string assignees before source lookup, without coercing arrays into person references.
 - **Tasks are compared by when their messages were sent**, not by when a task was written. An agent going through
   history writes many tasks in a minute, so every pair looked "created together" (+2) and "tomorrow" in each
   meant the same day (+4): on a real-chat replay of 148 tasks this doubled the tasks `tasks add` refused as
