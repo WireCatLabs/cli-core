@@ -87,7 +87,10 @@ export const botCheckService = (deps: ServiceDeps): BotCheckService => {
       let answers: RegistryAnswer[] = []
       if (!registries) notes.push("the ban lists were not asked")
       else if (deps.offline) notes.push("offline: the ban lists were not asked")
-      else answers = registriesCover(provider) ? await askRegistries(subject.id, registry) : notCovered(provider)
+      else
+        answers = registriesCover(provider)
+          ? await askRegistries(subject.id, registry)
+          : notCovered(deps.messenger.name ?? provider)
       const activity = await activityOf(subject.id)
       if (!activity) notes.push("no local store: what they wrote was not judged")
       return {

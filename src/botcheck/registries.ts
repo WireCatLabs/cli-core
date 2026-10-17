@@ -124,11 +124,11 @@ export const askLols = async (id: Id, options: RegistryOptions = {}): Promise<Re
 /** The registries list Telegram accounts only. */
 export const registriesCover = (provider: string): boolean => provider === "telegram"
 
-/** For a messenger the registries do not cover: every one `unknown`, saying why. */
-export const notCovered = (provider: string, now = new Date()): RegistryAnswer[] =>
+/** For a messenger the registries do not cover, by its name: every one `unknown`, saying why. */
+export const notCovered = (messenger: string, now = new Date()): RegistryAnswer[] =>
   (Object.keys(REGISTRIES) as RegistryName[]).map((name) => ({
     name,
     answer: "unknown",
     checkedAt: now.toISOString(),
-    detail: `lists Telegram accounts only, not ${provider}`,
+    detail: `lists Telegram accounts only, not ${messenger} ones`,
   }))
