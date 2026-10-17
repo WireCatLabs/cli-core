@@ -207,6 +207,9 @@ Each profile a person was seen with, a row when it differs from the one before; 
 | `created_at` | integer | not null |  | when this row was saved here |
 | `last_messaged_at` | integer |  |  | Their one-to-one chat's newest message, as `refreshRecency` last worked it out: the contact order. |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `mail_score` | integer |  |  | how much this sender's mail to the account looks like spam, a scam or a robot (memo's sender score); null when not scored |
+| `mail_signals` | text |  |  | JSON array of the signals behind `mail_score`, such as `brand_spoof` |
+| `mail_scored_at` | integer |  |  | when `mail_score` was worked out |
 
 *Keys and indexes:* `PRIMARY KEY (account_id, identity_id)`, `INDEX (identity_id)`
 

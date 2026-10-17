@@ -52,7 +52,21 @@ const EDITS = {
   },
   identity_link_events: { cols: { at: "created_at", by: "author" } },
   identity_revisions: { cols: { captured_at: "created_at" }, keys: ["INDEX (identity_id, created_at)"] },
-  account_identities: { cols: { first_seen_at: "created_at" }, add: [["updated_at", "integer", { notnull: true }]] },
+  account_identities: {
+    cols: { first_seen_at: "created_at" },
+    add: [
+      ["updated_at", "integer", { notnull: true }],
+      [
+        "mail_score",
+        "integer",
+        {
+          note: "how much this sender's mail to the account looks like spam, a scam or a robot (memo's sender score); null when not scored",
+        },
+      ],
+      ["mail_signals", "text", { note: "JSON array of the signals behind `mail_score`, such as `brand_spoof`" }],
+      ["mail_scored_at", "integer", { note: "when `mail_score` was worked out" }],
+    ],
+  },
   contact_aliases: {
     rename: "aliases",
     replaceCols: [

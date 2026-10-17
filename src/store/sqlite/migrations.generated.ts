@@ -489,5 +489,13 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "CREATE TABLE `places` (\n\t`id` integer PRIMARY KEY,\n\t`address` text NOT NULL,\n\t`folded` text NOT NULL UNIQUE,\n\t`author` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL\n);"
     ]
+  },
+  {
+    "name": "20261017000856_version-19-mail-sender-score",
+    "statements": [
+      "ALTER TABLE `account_identities` ADD `mail_score` integer;",
+      "ALTER TABLE `account_identities` ADD `mail_signals` text;",
+      "ALTER TABLE `account_identities` ADD `mail_scored_at` integer;"
+    ]
   }
 ]

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { migrate } from "./migrations.js"
-import { type EmailFilter, type EmailInput, mailStoreOver, type ThreadSave } from "./sqlite/emails.js"
+import { type EmailFilter, type EmailInput, emailHitsByPk, mailStoreOver, type ThreadSave } from "./sqlite/emails.js"
 import { openSqlite } from "./sqlite/open.js"
 import { openStore } from "./store.js"
 
@@ -144,6 +144,26 @@ describe("mail store", () => {
       (await mail.search("roadmap", { participant })).map(({ externalId }) => externalId)
     expect(await found("carol@example.com")).toEqual(["<second@example.com>"])
     expect(await found("bob@example.com")).toEqual(["<other@example.com>"])
+  })
+
+  it("keeps a sender's score per account and shows it on that sender's email hits", async () => {
+    const { database, mail } = await seeded()
+    await mail.saveThread(
+      thread([email({ headers: { "reply-to": "desk@elsewhere.example", dkim: "fail", dmarc: "fail" } })]),
+    )
+    const hitOf = async () => emailHitsByPk(database, [(await mail.emails({ accountId: 1 }))[0]?.id as number])[0]
+    expect((await hitOf())?.email?.senderScore).toBeUndefined()
+
+    expect(
+      await mail.setSenderScores(1, [{ address: "alice@example.com", score: 5, signals: ["dmarc_fail"] }], 3000),
+    ).toBe(1)
+
+    expect((await hitOf())?.email?.senderScore).toEqual({ score: 5, signals: ["dmarc_fail"] })
+    expect((await mail.emailFacts({ accountId: 1 }))[0]).toMatchObject({
+      replyTo: "desk@elsewhere.example",
+      dkim: "fail",
+      dmarc: "fail",
+    })
   })
 
   it("lists references with mailboxes and the deleted mark, without text", async () => {

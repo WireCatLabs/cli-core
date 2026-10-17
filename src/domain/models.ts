@@ -359,6 +359,8 @@ export interface MailFields {
   thread: string
   read: boolean | null
   flagged: boolean | null
+  /** How much the sender's mail looks like spam, a scam or a robot, and why; absent when the sender is not scored. */
+  senderScore?: { score: number; signals: string[] }
 }
 
 /** What happened to a message after it arrived, as `watch --events` prints it. */
