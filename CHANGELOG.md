@@ -7,6 +7,49 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`ConnectOptions.stored`: an adapter reads what the store holds of its own account.** `connect` gets a
+  read-only `StoredMessages` (`message(chatId, id)`, `newestIncoming(chatId, before?)`) over the store the command
+  already has — withServices' own, or for withMessenger and the MCP session one handle shared with what the reads
+  save (`connectedFor`). WhatsApp addresses a message by its sender, so it no longer opens a second store handle in
+  its `connect`. A command run through `serve` borrows serve's connection and its lookup.
+- **`messages_delete` over MCP takes `for_everyone`**, as `messages delete --for-everyone` does, under the same
+  service, delete permission, hourly limit and journal. A messenger that deletes only for everyone (WhatsApp) can now
+  delete through MCP.
+
+### Changed — may break callers
+
+- **`ReadState` is `markRead` alone; `markTopicRead` moved to a new optional group, `TopicReadState`** (exported from
+  `./cli`). A messenger without forum topics implements `ReadState` in full instead of `Pick<ReadState, "markRead">`.
+  Code that reads `markTopicRead` through the `ReadState` type uses `TopicReadState`; `implements ReadState` and
+  `Pick` usages compile unchanged. `chats_mark_read` over MCP no longer offers `topic` where `Messenger.topics` is
+  false, as the CLI's `--topic` already did.
+- **A messenger with `history: "store"` is offered no sync-first.** `search messages`, `stats messages show`,
+  `rankings top`, `search conversations` and `contacts context` do not mount `--sync-first` (nor `--max-chats`,
+  `--sync-time`, `--max-messages`), their MCP tools hide `sync_first` and its bounds and drop them from their
+  descriptions, the search help says `serve` keeps the archive instead of `messages sync --all --background`, and
+  contacts and `chats documents list` suggest no `messages sync` step. `syncOptions(command, messenger)` takes the
+  messenger.
+- `services.messages.download(chat, message)` resolves the chat first, so the adapter's `download` gets the chat's id,
+  never a typed name; `messages download --all` hands each message's own chat id.
+
+### Fixed
+
+- **A later copy of a message no longer erases its attachments' `providerRef`.** An edit event or a second push
+  without the keys overwrote the stored ones with nothing; a null or empty `providerRef` now keeps the stored value,
+  and a new one still replaces it.
+- **The "nothing recorded yet" error names `<tool> <profile> setup` first** where the CLI has a `setup` command:
+  link it with setup, then run `serve` or `watch` (a store-history messenger), or log in with setup or run without
+  `--offline`.
+
+### Security
+
+- **No output prints an attachment's `providerRef`.** `watch --jsonl` (and `--events`) and the bot's `watch --jsonl`
+  wrote the adapter's live event as it came, `providerRef` included: WhatsApp keeps the media's direct path and
+  decryption keys there, a MAX bot its token. Every answer envelope — CLI JSON, JSON lines, pretty output and MCP —
+  now drops `providerRef`/`provider_ref` at any depth, as stored reads already did.
+
 ## 0.314.0 — 17.10.2026
 
 ### Security
