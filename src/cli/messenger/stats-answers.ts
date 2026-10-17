@@ -104,6 +104,7 @@ export const rankingAnswer = (found: RankingFound): ItemBody<Of<"ranking">> => {
       messages: row.messages,
       known_reactions: row.knownReactions,
       unknown_reactions: row.unknownReactions,
+      reactions: row.reactions,
       score: row.ranking,
       quality: {
         reactions: row.quality.reactions,

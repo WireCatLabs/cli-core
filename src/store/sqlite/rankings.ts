@@ -41,6 +41,8 @@ export interface RankedStoreRow {
   messages: number
   knownReactions: number
   unknownReactions: number
+  /** A message's reactions by emoji, most first: only when ranking messages by reactions, and only when stored. */
+  reactions?: ReactionCount[]
   score: ScoreComponents | null
   counterObservations?: CounterState[]
   graphComplete?: boolean
@@ -57,6 +59,27 @@ export interface RankedStoreFound {
   maxima: Partial<Record<RankingComponent, number>>
   hasMore: boolean
   graphQuality?: ReturnType<typeof rankReplyGraph>["quality"]
+}
+export interface ReactionCount {
+  reaction: string
+  count: number
+}
+const reactionCounts = (stored: unknown): ReactionCount[] | undefined => {
+  let counts: unknown
+  try {
+    counts = typeof stored === "string" ? (JSON.parse(stored) as { counts?: unknown })?.counts : undefined
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(counts)) return undefined
+  const valid = counts.every(
+    (one) =>
+      typeof one?.reaction === "string" && one.reaction !== "" && Number.isSafeInteger(one.count) && one.count >= 0,
+  )
+  if (!valid) return undefined
+  return (counts as ReactionCount[])
+    .map(({ reaction, count }) => ({ reaction, count }))
+    .sort((a, b) => b.count - a.count || (a.reaction < b.reaction ? -1 : a.reaction > b.reaction ? 1 : 0))
 }
 const column = (name: string) => `"${name.replaceAll('"', '""')}"`
 const finite = (value: unknown): number | null =>
@@ -401,8 +424,14 @@ export const rankQuery = (
         .prepare(`${prefix}SELECT * FROM eligible ORDER BY ${order},provider,account,coalesce(chat,''),id LIMIT ?`)
         .all(...params, execution.limit + 1)
       check()
+      const storedReactions =
+        options.target === "messages" && componentNames.includes("reactions")
+          ? database.prepare("SELECT reactions FROM messages WHERE id = ?")
+          : undefined
       const items = rows.slice(0, execution.limit).map((row, index): RankedStoreRow => {
         const components = Object.fromEntries(componentNames.map((name) => [name, finite(row[name])]))
+        const reactions =
+          storedReactions && row.pk != null ? reactionCounts(storedReactions.get(Number(row.pk))?.reactions) : undefined
         const score = options.weights ? rankingScore(components, maxima, options.weights) : null
         return {
           ...(row.pk == null
@@ -421,6 +450,7 @@ export const rankQuery = (
           messages: Number(row.messages),
           knownReactions: Number(row.known_reactions),
           unknownReactions: Number(row.unknown_reactions),
+          ...(reactions ? { reactions } : {}),
           score,
           ...(graph ? { graphComplete: Number(row.graph_complete) === 1 } : {}),
         }

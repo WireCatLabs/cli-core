@@ -107,7 +107,11 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
     })
     renderAnswer(this, context, rankingAnswer(found), () =>
       [
-        ...found.items.map(({ rank, name, id, value }) => `${rank}. ${name ?? id}  ${value}`),
+        ...found.items.map(({ rank, name, id, value, reactions }) =>
+          [`${rank}. ${name ?? id}  ${value}`, reactions?.length ? emojiSplit(reactions) : undefined]
+            .filter(Boolean)
+            .join("  "),
+        ),
         `${found.eligible} eligible of ${found.population}; ${found.excludedMissing} excluded for missing measurements`,
         "",
       ].join("\n"),
@@ -115,6 +119,13 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
   })
   return command
 }
+
+const SHOWN_REACTIONS = 5
+const emojiSplit = (reactions: readonly { reaction: string; count: number }[]) =>
+  [
+    ...reactions.slice(0, SHOWN_REACTIONS).map(({ reaction, count }) => `${reaction} ${count}`),
+    ...(reactions.length > SHOWN_REACTIONS ? [`+${reactions.length - SHOWN_REACTIONS}`] : []),
+  ].join(" · ")
 
 export const rankingEvidenceCommand = (messenger: Messenger, target: RankingTarget): Command =>
   annotate(new Command("evidence"), { effects: LOCAL_READ, output: { entity: "evidence" } })

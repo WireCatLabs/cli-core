@@ -20,6 +20,7 @@ export const rankingRow = v.strictObject({
   messages: count,
   known_reactions: count,
   unknown_reactions: count,
+  reactions: v.optional(v.array(v.strictObject({ reaction: v.string(), count }))),
   score: v.nullable(v.strictObject({ score: v.number(), normalized: figures, contributions: figures })),
   quality: v.strictObject({
     reactions: v.picklist(["known", "partial", "unknown"]),

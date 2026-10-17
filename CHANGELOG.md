@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`stats messages top --measure reactions` splits each message's reactions by emoji**: the table prints
+  `1. Name  7  👍 4 · 😂 3` (five emoji, then `+N`), and each JSON row carries `reactions: [{reaction, count}]`, most
+  first. Only when messages are ranked by reactions, read for the rows returned; a message whose stored split is
+  not valid has no field.
+
 ## 0.323.0 — 17.10.2026
 
 ### Fixed
