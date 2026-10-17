@@ -165,7 +165,9 @@ describe("watch", () => {
         id: "0",
         senderId: "9",
         senderName: "Olga",
+        timestamp: null,
         text: "",
+        outgoing: false,
         attachments: [{ kind: "photo", providerRef: { mediaKey: SECRET } }],
       },
     })

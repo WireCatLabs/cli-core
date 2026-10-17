@@ -74,6 +74,33 @@ describe("the message store", () => {
     await store.close()
   })
 
+  it("**BUG-271: a later copy without an attachment's keys keeps the stored ones; one with new keys replaces them**", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(ME, [chat])
+    await store.messages.saveMessages(ME, chat.id, [message()], { via: "history" })
+    const bare = { kind: "photo" as const, width: 800, height: 600 }
+    await store.messages.saveMessages(ME, chat.id, [message({ text: "edited", attachments: [bare] })], { via: "live" })
+    await store.messages.saveMessages(
+      ME,
+      chat.id,
+      [message({ text: "edited", attachments: [{ ...bare, providerRef: {} }] })],
+      { via: "live" },
+    )
+    const kept = await store.messages.message(ME, "42", { chatId: chat.id })
+    expect([kept?.text, kept?.attachments[0]?.providerRef]).toEqual(["edited", { fileId: "abc" }])
+
+    await store.messages.saveMessages(
+      ME,
+      chat.id,
+      [message({ attachments: [{ ...bare, providerRef: { fileId: "new" } }] })],
+      { via: "history" },
+    )
+    expect((await store.messages.message(ME, "42", { chatId: chat.id }))?.attachments[0]?.providerRef).toEqual({
+      fileId: "new",
+    })
+    await store.close()
+  })
+
   it("saves two batches started together on one store, each whole", async () => {
     const store = await openStore({ path: fresh() })
     const batch = (ids: string[]) => ids.map((id) => message({ id, text: `text ${id}` }))

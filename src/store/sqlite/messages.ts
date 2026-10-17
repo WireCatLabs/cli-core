@@ -1,5 +1,5 @@
 import { validCounter } from "../../domain/counters.js"
-import type { ChatKind, Id, Message, Reactions } from "../../domain/models.js"
+import type { Attachment, ChatKind, Id, Message, Reactions } from "../../domain/models.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import type { AccountKey, DeletionScope } from "../types.js"
 import { findChatPk } from "./chats.js"
@@ -86,8 +86,15 @@ const prepare = (orm: Orm) => ({
     })
     .onConflictDoUpdate({
       target: [attachments.attachableType, attachments.attachableId, attachments.position],
+      // A later copy without the keys — an edit event, a second push — must not erase the ones that fetch the file.
       set: Object.fromEntries(
-        ATTACHMENT_FIELDS.map((name) => [name, sql.raw(`excluded.${attachments[name].name}`)]),
+        ATTACHMENT_FIELDS.map((name) => {
+          const column = attachments[name].name
+          return [
+            name,
+            sql.raw(name === "providerRef" ? `coalesce(excluded.${column}, ${column})` : `excluded.${column}`),
+          ]
+        }),
       ) as Record<(typeof ATTACHMENT_FIELDS)[number], ReturnType<typeof sql.raw>>,
     })
     .prepare(),
@@ -100,6 +107,9 @@ const statementsOf = (orm: Orm) => {
   prepared.set(orm, statements)
   return statements
 }
+
+const refOf = (ref: Attachment["providerRef"]): string | null =>
+  ref === undefined || ref === null || Object.keys(ref).length === 0 ? null : JSON.stringify(ref)
 
 const fieldsOf = (message: Message, sender: number | null): Fields => ({
   threadExternalId: message.threadId ?? message.threadRootId ?? null,
@@ -223,7 +233,7 @@ export const upsertMessage = (
       width: attachment.width ?? null,
       height: attachment.height ?? null,
       duration: attachment.duration ?? null,
-      providerRef: json(attachment.providerRef),
+      providerRef: refOf(attachment.providerRef),
     })
   })
   if (Number(heardFirst) > 0) intoVoiceAttachment(context, pk)
