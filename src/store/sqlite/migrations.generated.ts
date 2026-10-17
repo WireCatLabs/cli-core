@@ -510,5 +510,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "CREATE TABLE `document_annotation_transfers` (\n\t`source_key` text NOT NULL,\n\t`collection` text NOT NULL,\n\t`snapshot_hash` text NOT NULL,\n\t`bindings_hash` text NOT NULL,\n\t`reference_map` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `document_annotation_transfers_pk` PRIMARY KEY(`source_key`, `collection`)\n);"
     ]
+  },
+  {
+    "name": "20261017212239_version-22-mail-demoted",
+    "statements": [
+      "ALTER TABLE `account_identities` ADD `mail_demoted` integer;"
+    ]
   }
 ]

@@ -159,6 +159,12 @@ describe("mail store", () => {
     ).toBe(1)
 
     expect((await hitOf())?.email?.senderScore).toEqual({ score: 5, signals: ["dmarc_fail"] })
+    await mail.setSenderScores(
+      1,
+      [{ address: "alice@example.com", score: 8, signals: ["young_domain"], demoted: true }],
+      4000,
+    )
+    expect((await hitOf())?.email?.senderScore).toEqual({ score: 8, signals: ["young_domain"], demoted: true })
     expect((await mail.emailFacts({ accountId: 1 }))[0]).toMatchObject({
       replyTo: "desk@elsewhere.example",
       dkim: "fail",

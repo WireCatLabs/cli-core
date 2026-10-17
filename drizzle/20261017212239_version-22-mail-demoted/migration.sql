@@ -1,0 +1,1 @@
+ALTER TABLE `account_identities` ADD `mail_demoted` integer;
