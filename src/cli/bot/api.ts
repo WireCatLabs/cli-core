@@ -25,7 +25,7 @@ export interface ApiCommands {
 }
 
 export const generatedApiCommand = (api: ApiCommands): Command => {
-  const group = new Command("api").description(
+  const group = annotate(new Command("api"), { mcp: false }).description(
     api.description ?? "every operation of the official Bot API, generated from its schema",
   )
   group.option(

@@ -63,7 +63,7 @@ const EXCLUDES = ["message text", "chat titles", "names", "phone numbers", "the 
 
 const reportCommand = (messenger: Messenger): Command => {
   const { app } = messenger
-  const report = annotate(new Command("report"), { effects: REMOTE_READ })
+  const report = annotate(new Command("report"), { effects: REMOTE_READ, mcp: false })
     .description("what a problem report holds; writes nothing")
     .action(function (this: Command) {
       const output = outputFor(this)

@@ -13,7 +13,7 @@ import { type Messenger, messengerContext } from "./context.js"
 export const floodCommand = (messenger: Messenger): Command => {
   const { app } = messenger
   const name = messenger.name ?? app.command
-  return new Command("flood")
+  return annotate(new Command("flood"), { mcp: false })
     .description(`the waits ${name} asked this profile to keep, and a hold on its writes`)
     .addCommand(
       grantsAuthority(annotate(new Command("clear"), { effects: LOCAL_WRITE }))

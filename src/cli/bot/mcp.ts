@@ -1,31 +1,19 @@
 import { realpathSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
-import { annotate } from "@wirecat/cli-base/commands"
+import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { environmentOf } from "../context.js"
 import { LOCAL_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { type McpEnvironment, serverEntry } from "../messenger/mcp-command.js"
-import { nextStep } from "../steps.js"
+import { nextStep, rootOf } from "../steps.js"
 import { botContext } from "./context.js"
 import type { BotMessenger } from "./port.js"
-
-export const commandLookup = (group: Command) => (words: readonly string[]) => {
-  const found = words.reduce<Command | undefined>((at, word) => at?.commands.find((one) => one.name() === word), group)
-  if (!found) return undefined
-  return {
-    accepts: (flag: string) => {
-      for (let at: Command | null = found; at; at = at.parent)
-        if (at.options.some((one) => one.long === flag)) return true
-      return false
-    },
-  }
-}
 
 /** `bot mcp`, mounted only for a messenger that hands in its `run` on `BotMessenger.mcp`. */
 export const botMcpCommand = (bot: BotMessenger): Command => {
   const { app } = bot
-  const command = annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent" })
+  const command = annotate(new Command("mcp"), { effects: REMOTE_WRITE, lifetime: "persistent", mcp: false })
     .description(
       `serve this bot to an agent over MCP, on stdin and stdout — \`claude mcp add sales-bot -- ${app.command} sales bot mcp\``,
     )
@@ -38,17 +26,16 @@ export const botMcpCommand = (bot: BotMessenger): Command => {
         )
       }
       const mcp = bot.mcp
-      if (!mcp || !this.parent) throw new Error("bot mcp is mounted only with BotMessenger.mcp")
+      if (!mcp) throw new Error("bot mcp is mounted only with BotMessenger.mcp")
       // Loaded here: every other command would otherwise pay for the SDK.
       const [{ serveBotOverStdio }, run] = await Promise.all([import("../../mcp/bot/server.js"), mcp.program()])
       await serveBotOverStdio(
         {
           bot,
-          commandAt: commandLookup(this.parent),
+          program: { run, commands: describeProgram(rootOf(this)) },
           settings: context.settings,
+          levels: () => bot.resolveSettings(this.optsWithGlobals(), { env: context.env, kind: "bot" }).permissions,
           env: context.env,
-          run,
-          ...(mcp.tools ? { tools: mcp.tools } : {}),
           ...(mcp.skill ? { skill: mcp.skill } : {}),
         },
         context.streams.diagnostic,

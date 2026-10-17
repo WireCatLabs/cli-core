@@ -34,7 +34,7 @@ export const completeCommand = (
   config: Pick<Configuration, "configuredProfiles">,
   options: CompletionOptions = {},
 ): Command =>
-  annotate(new Command("complete"), { effects: LOCAL_READ })
+  annotate(new Command("complete"), { effects: LOCAL_READ, mcp: false })
     .description(`shell completion: \`${messenger.app.command} complete zsh\` prints the script to source`)
     .argument("[words...]")
     .allowUnknownOption()

@@ -23,7 +23,7 @@ import { storeMaintenanceCommands } from "./store-maintenance-command.js"
 
 /** `store`: the local store of messages — what it holds, filling it, reading it out, and looking after the file. */
 export const storeCommand = (messenger: Messenger): Command => {
-  const store = new Command("store")
+  const store = annotate(new Command("store"), { mcp: false })
     .description("the local store of messages")
     .addCommand(statusCommand(messenger))
     .addCommand(gapsCommand(messenger))

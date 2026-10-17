@@ -1,4 +1,5 @@
 import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
+import type { ErrorObject } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import { resolveOutput } from "../output.js"
 import type { AppIdentity } from "../ports/app.js"
@@ -37,6 +38,19 @@ export interface BaseEnvironment {
   runCommand?: (argv: string[], environment: BaseEnvironment) => Promise<number>
   /** Set by serve on a command it runs for a client through its relay. */
   relayed?: RelayedRun
+  /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
+  agent?: AgentRun
+}
+
+/**
+ * The command's answer and error go to the MCP server as objects, never as text. A write at level `ask` goes
+ * ahead (NEED-773): nobody is at a terminal, and the profile's permissions already decided.
+ */
+export interface AgentRun {
+  result: (value: unknown) => void
+  failure: (error: ErrorObject) => void
+  /** The server's own stricter levels, `key=level`, as `mcp --permission` takes them; they never loosen. */
+  overrides?: readonly string[]
 }
 
 export interface RelayedRun {
@@ -65,9 +79,10 @@ export const environmentOf = <E extends BaseEnvironment = BaseEnvironment>(comma
 
 /** For the commands that print but never need settings or a connection. */
 export const outputFor = (command: Command) => {
-  const { streams, tty, env } = environmentOf(command)
+  const { streams, tty, env, agent } = environmentOf(command)
   return resolveOutput({
     ...command.optsWithGlobals(),
+    ...(agent ? { capture: agent.result } : {}),
     ...(streams ? { streams } : {}),
     ...(env ? { env } : {}),
     ...(tty === undefined ? {} : { tty }),
@@ -106,7 +121,12 @@ const detailOf = ({ brief, full }: { brief?: boolean; full?: boolean }): { hitDe
 export const baseContext = (command: Command, resolveSettings: Resolve): BaseContext => {
   const environment = environmentOf(command)
   const env = environment.env ?? process.env
-  const settings = resolveSettings(command.optsWithGlobals<GlobalFlags>(), { env })
+  const flags = command.optsWithGlobals<GlobalFlags>()
+  const overrides = environment.agent?.overrides ?? []
+  const settings = resolveSettings(
+    overrides.length > 0 ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags,
+    { env },
+  )
   const { renderer, format, color, streams } = resolveOutput({
     ...settings,
     env,
@@ -114,6 +134,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
     ...(command.optsWithGlobals<{ fields?: string }>().fields
       ? { fields: command.optsWithGlobals<{ fields?: string }>().fields }
       : {}),
+    ...(environment.agent ? { capture: environment.agent.result } : {}),
     ...(environment.streams ? { streams: environment.streams } : {}),
     ...(environment.tty === undefined ? {} : { tty: environment.tty }),
   })

@@ -55,12 +55,13 @@ export const answerOf = async (command: Command, question: string): Promise<stri
 
 /**
  * For a command a person typed: the flag says yes, or the terminal asks, or nobody can — and it is
- * refused. Never asks under `--json` or `--jsonl`: a program reads those, and a harness that gives
+ * refused. An agent's run over MCP goes ahead (NEED-773). Never asks under `--json` or `--jsonl`: a program reads those, and a harness that gives
  * an agent a terminal would otherwise wait for ever.
  */
 export const terminalAsker =
   (command: Command): Asker =>
   async (key, request) => {
+    if (environmentOf(command).agent) return
     const flag = skipFlagFor(key)
     const given = command.optsWithGlobals<{
       yes?: boolean

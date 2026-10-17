@@ -23,7 +23,7 @@ const wholeNumber = (value: string): number => {
  * personal `messages sync` does. Mounted for a messenger whose Bot API pages back through a chat.
  */
 export const botStoreCommand = (bot: BotMessenger, fetching: NonNullable<BotMessenger["fetching"]>): Command => {
-  const command = new Command("store").description("the bot's local copy on this machine")
+  const command = annotate(new Command("store"), { mcp: false }).description("the bot's local copy on this machine")
   const fetch = annotate(command.command("fetch"), { effects: FETCH })
     .description("fetch a chat's history into the bot's local copy, newest first; run it again to continue")
     .argument("<chat>", "a chat id, or the title of a chat this bot has seen")

@@ -8,6 +8,44 @@ import { environmentOf } from "../context.js"
 import type { Messenger } from "./context.js"
 
 /**
+ * Someone else's open connection, lent to one command: closing it does nothing, it never feeds the store a second
+ * time, and its `watch` listens through the owner's `watchers` — without them, the lent connection has no `watch`.
+ */
+export const lentConnection = (
+  connection: MessengerAdapter,
+  watchers?: Set<(event: MessageEvent) => void>,
+): MessengerAdapter =>
+  throughWrapper(connection, {
+    close: async () => {},
+    feed: undefined,
+    ...(connection.watch && watchers
+      ? {
+          // A watcher that throws (its output limit, a closed reader) ends its own watch, never serve's.
+          watch: async (onEvent: (event: MessageEvent) => void, signal: AbortSignal, onReady?: () => void) => {
+            let watcher: ((event: MessageEvent) => void) | undefined
+            try {
+              await new Promise<void>((resolve, reject) => {
+                watcher = (event) => {
+                  try {
+                    onEvent(event)
+                  } catch (error) {
+                    reject(error)
+                  }
+                }
+                watchers.add(watcher)
+                signal.addEventListener("abort", () => resolve(), { once: true })
+                onReady?.()
+                if (signal.aborted) resolve()
+              })
+            } finally {
+              if (watcher) watchers.delete(watcher)
+            }
+          },
+        }
+      : { watch: undefined }),
+  } as unknown as MessengerAdapter)
+
+/**
  * serve's side of the relay (NEED-1389): it keeps the raw connection its messenger opened and lends it to the
  * commands clients send it. A borrowed connection never closes serve's, never feeds the store a second time, and
  * listens through serve's own events instead of a second `watch`.
@@ -20,35 +58,7 @@ export const serveRelay = (command: Command, messenger: Messenger) => {
   const borrowed = (): MessengerAdapter => {
     const connection = held
     if (!connection) throw new CliError("provider_unavailable", "serve is not connected yet", { retryable: true })
-    return throughWrapper(connection, {
-      close: async () => {},
-      feed: undefined,
-      ...(connection.watch
-        ? {
-            // A watcher that throws (its output limit, a closed reader) ends its own watch, never serve's.
-            watch: async (onEvent: (event: MessageEvent) => void, signal: AbortSignal, onReady?: () => void) => {
-              let watcher: ((event: MessageEvent) => void) | undefined
-              try {
-                await new Promise<void>((resolve, reject) => {
-                  watcher = (event) => {
-                    try {
-                      onEvent(event)
-                    } catch (error) {
-                      reject(error)
-                    }
-                  }
-                  watchers.add(watcher)
-                  signal.addEventListener("abort", () => resolve(), { once: true })
-                  onReady?.()
-                  if (signal.aborted) resolve()
-                })
-              } finally {
-                if (watcher) watchers.delete(watcher)
-              }
-            },
-          }
-        : {}),
-    } as unknown as MessengerAdapter)
+    return lentConnection(connection, watchers)
   }
 
   return {

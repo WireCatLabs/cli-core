@@ -40,7 +40,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("add"), { effects: REMOTE_WRITE })
+  annotate(command.command("add"), { effects: REMOTE_WRITE, mcp: false })
     .description("make a member an admin with these rights")
     .argument("<chat>", CHAT)
     .argument("<person>", PERSON)
@@ -71,7 +71,7 @@ export const botAdminsCommand = (bot: BotMessenger): Command => {
       })
     })
 
-  annotate(command.command("remove"), { effects: REMOTE_WRITE })
+  annotate(command.command("remove"), { effects: REMOTE_WRITE, mcp: false })
     .description("take an admin's rights back; they stay a member")
     .argument("<chat>", CHAT)
     .argument("<person>", PERSON)

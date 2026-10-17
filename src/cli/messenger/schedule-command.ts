@@ -88,7 +88,7 @@ const withWhen = (command: Command) =>
  */
 export const scheduleCommand = (messenger: Messenger): Command => {
   const { app } = messenger
-  const command = new Command("schedule").description(
+  const command = annotate(new Command("schedule"), { mcp: false }).description(
     `run a ${app.command} command or an agent later or on a timer (systemd, launchd, Task Scheduler); an agent cannot send`,
   )
 
