@@ -263,6 +263,39 @@ describe("chats create, join and leave", () => {
     expect(elsewhere.stderr.join("\n")).toContain("unknown option '--join-approval'")
   })
 
+  it("**sends, edits info and disappearing time** where the messenger lists them, the time in seconds", async () => {
+    const env = sandbox()
+    const changes: unknown[] = []
+    const adapter: MessengerAdapter = {
+      ...base,
+      updateGroup: async (chatId, change) => {
+        changes.push(change)
+        return { ...card(chatId, "Book club"), settings: { ...card(chatId, "").settings, ...change.settings } }
+      },
+    }
+    const whatsapp = { groupSettings: ["onlyAdminsSend", "onlyAdminsEditInfo", "disappearingSeconds"] as const }
+    const argv = ["chats", "update", "Book club", "--only-admins-send", "on", "--only-admins-edit-info", "off"]
+
+    const set = await call([...argv, "--disappear-time", "7d", "--json"], adapter, env, whatsapp)
+    await call(["chats", "update", "Book club", "--disappear-time", "off"], adapter, env, whatsapp)
+    const bad = await call(["chats", "update", "Book club", "--disappear-time", "7"], adapter, env, whatsapp)
+    const elsewhere = await call(["chats", "update", "Book club", "--only-admins-send", "on"], adapter, env)
+
+    expect(set.code).toBe(0)
+    expect(answer(set).chat.settings).toMatchObject({
+      only_admins_send: true,
+      only_admins_edit_info: false,
+      disappearing_seconds: 604_800,
+    })
+    expect(changes).toEqual([
+      { settings: { onlyAdminsSend: true, onlyAdminsEditInfo: false, disappearingSeconds: 604_800 } },
+      { settings: { disappearingSeconds: 0 } },
+    ])
+    expect(bad.code).toBe(2)
+    expect(bad.stderr.join("\n")).toContain("--disappear-time takes a duration")
+    expect(elsewhere.stderr.join("\n")).toContain("unknown option '--only-admins-send'")
+  })
+
   it("**sets a group's photo only where the messenger offers it**, journaled as an update", async () => {
     const env = sandbox()
     const root = mkdtempSync(join(tmpdir(), "photo-"))
@@ -614,6 +647,33 @@ describe("chats create, join and leave", () => {
       ["add", "7", "91", ["pin", "members"]],
       ["remove", "7", "91"],
     ])
+  })
+
+  it("**gives every right** where an admin cannot have some and not others, and offers no --can", async () => {
+    const env = sandbox()
+    const done: unknown[] = []
+    const adapter: MessengerAdapter = {
+      ...base,
+      people: async () => ["91"],
+      addAdmin: async (chatId, person, rights) => {
+        done.push([chatId, person, rights])
+      },
+    }
+    const whatsapp = { adminRights: ["members", "pin"] as const, pickAdminRights: false }
+
+    const made = await call(["chats", "admins", "add", "Book club", "Ivan", "--json"], adapter, env, whatsapp)
+    const can = await call(["chats", "admins", "add", "Book club", "Ivan", "--can", "pin"], adapter, env, whatsapp)
+    const tool = adminTools({
+      app,
+      provider: "chat",
+      chatArgument: "a chat",
+      ...whatsapp,
+    } as unknown as Messenger).chats_admins_add
+
+    expect(answer(made)).toMatchObject({ person_id: "91", rights: ["members", "pin"] })
+    expect(can.stderr.join("\n")).toContain("unknown option '--can'")
+    expect(done).toEqual([["7", "91", ["members", "pin"]]])
+    expect(Object.keys(tool?.input.entries ?? {})).toEqual(["chat", "person"])
   })
 
   it("**changes chat folders through the guard**, a folder named by its title, and refuses one it cannot tell apart", async () => {

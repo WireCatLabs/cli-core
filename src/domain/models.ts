@@ -57,11 +57,27 @@ export interface GroupSettings {
   joinApproval?: boolean | null
 }
 
+/**
+ * Switches only some messengers have, each only where the messenger lists it in `groupSettings`. Kept out of
+ * `GroupSettings` so that a table keyed on its keys — max-cli's flag names — does not have to name these.
+ */
+export interface MoreGroupSettings {
+  /** Only admins send messages. */
+  onlyAdminsSend?: boolean | null
+  /** Only admins change the name, photo and description — every admin, where `onlyOwnerEditsInfo` is the owner alone. */
+  onlyAdminsEditInfo?: boolean | null
+  /** New messages disappear this many seconds after sending; 0 keeps them. */
+  disappearingSeconds?: number | null
+}
+
+/** Every switch `chats update` knows. */
+export type GroupSettingKey = keyof GroupSettings | keyof MoreGroupSettings
+
 /** What `chats update` changes; a field left out stays as it is. */
 export interface GroupChange {
   title?: string
   description?: string
-  settings?: Partial<GroupSettings>
+  settings?: Partial<GroupSettings> & MoreGroupSettings
   photo?: Upload
 }
 
@@ -151,7 +167,7 @@ export interface GroupCard extends Chat {
   description: string | null
   /** The invite link; only a member who may see it gets one. */
   link: string | null
-  settings: GroupSettings
+  settings: GroupSettings & MoreGroupSettings
 }
 
 export interface Attachment {

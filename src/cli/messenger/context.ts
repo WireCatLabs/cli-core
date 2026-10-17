@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { servingProfiles } from "../../background/lock.js"
-import type { AdminRight, GroupSettings, Id, Message, Provider } from "../../domain/models.js"
+import type { AdminRight, GroupSettingKey, Id, Message, Provider } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { EventSink } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
@@ -114,7 +114,7 @@ export interface Messenger extends ServiceMessenger {
   /** The help for a `<chat>` argument, in this messenger's words. */
   chatArgument: string
   /** The group settings this messenger has, as `chats update` offers them; every one when unset. */
-  groupSettings?: readonly (keyof GroupSettings)[]
+  groupSettings?: readonly GroupSettingKey[]
   /** Whether `polls create` makes quizzes (`--quiz --correct --solution`); no when unset. */
   pollQuiz?: boolean
   /** How many seconds after sending a poll may close by itself — `polls create --close-time`; none when unset. */
@@ -161,6 +161,11 @@ export interface Messenger extends ServiceMessenger {
   addsWithHistory?: boolean
   /** The admin rights this messenger has, as `admins add --can` offers them; every one when unset. */
   adminRights?: readonly AdminRight[]
+  /**
+   * Whether an admin gets some rights and not others — `admins add --can`; yes when unset. No: every admin has
+   * every right in `adminRights`, so `admins add` takes no `--can` and gives them all.
+   */
+  pickAdminRights?: boolean
   /**
    * The account a command names itself, in place of the one its profile remembers: memo has no messenger
    * profile and mounts the local task builders with `--provider --account`.

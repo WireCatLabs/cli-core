@@ -32,6 +32,9 @@ export const chat = v.strictObject({
       only_owner_edits_info: setting,
       members_see_link: setting,
       join_approval: setting,
+      only_admins_send: setting,
+      only_admins_edit_info: setting,
+      disappearing_seconds: v.optional(v.nullable(count)),
     }),
   ),
   /** `chats show`: who is in it, as far as anyone recorded; `null` when nobody did — a channel, always. */
