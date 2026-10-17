@@ -131,7 +131,7 @@ export interface NotesStore extends NoteSearch, ImportedDocuments {
   replaceFileLinks(documentId: string, links: Omit<LinkInput, "from" | "origin">[]): Promise<Link[]>
   /**
    * Links every stored message whose text holds a Google link to one of the documents, in any account; a link
-   * already there is kept, not doubled. `since` (ISO 8601) looks only at messages stored at or after it.
+   * already there is kept, not doubled. `since` (ISO 8601) includes messages stored or locally revised at or after it.
    * Answers how many links it added.
    */
   linkMessages(input: { documents: MessageDocument[]; since?: string }): Promise<number>
@@ -655,7 +655,8 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       return write(database, () => {
         const candidates = database.prepare(
           "SELECT m.id, m.text FROM messages_fts f JOIN messages m ON m.id = f.rowid " +
-            "WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND (? IS NULL OR m.created_at >= ?)",
+            "WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND (? IS NULL OR m.created_at >= ? " +
+            "OR EXISTS (SELECT 1 FROM message_revisions r WHERE r.message_id = m.id AND r.created_at >= ?))",
         )
         const existing = database.prepare(
           "SELECT 1 FROM links WHERE from_type = 'message' AND from_id = ? AND to_type = 'document' AND to_id = ? " +
@@ -673,7 +674,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
             throw new CliError("validation_error", `${reference} is not a document; give document:<id>`)
           // The trigram index needs three characters, and no Google file id is that short.
           if (fileId.length < 3) continue
-          for (const row of candidates.all(`"${fileId.replaceAll('"', '""')}"`, after, after)) {
+          for (const row of candidates.all(`"${fileId.replaceAll('"', '""')}"`, after, after, after)) {
             const id = Number(row.id)
             if (!googleDocumentLinks(String(row.text)).some((link) => link.documentId === fileId)) continue
             if (existing.get(id, document.id)) continue
