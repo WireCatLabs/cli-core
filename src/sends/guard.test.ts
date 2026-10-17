@@ -432,4 +432,42 @@ describe("a read-only lock", () => {
     expect(unlocked.readOnlyLock).toBeUndefined()
     expect(() => guardFor(app, unlocked, () => {}, env).check({ chatId: "1" })).not.toThrow()
   })
+
+  const guarded = (permissions: Record<string, "allow" | "ask" | "deny">, readOnlyLock?: string) => {
+    const asker = vi.fn(async () => {})
+    const guard = sendGuard({
+      profile: "lock-order",
+      ...(readOnlyLock ? { readOnlyLock } : {}),
+      permissions,
+      ask: asker,
+      sendsPerHour: Infinity,
+      journal: new SendJournal(sendsPathFor("lock-order")),
+      recipients: new RecipientList(recipientsPathFor("lock-order"), app.command),
+      warn: () => {},
+    })
+    const act = vi.fn(async () => "done")
+    const write = () => guardedWrite(guard, { chatId: "1", key: "messages.delete", operationId: newSendId() }, act)
+    return { asker, act, write }
+  }
+
+  it("refuses an ask-level write as read-only before it asks", async () => {
+    const { asker, act, write } = guarded({ "messages.delete": "ask" }, "APP_READ_ONLY")
+    await expect(write()).rejects.toMatchObject({ code: "permission_error", message: /read-only \(APP_READ_ONLY\)/ })
+    expect(asker).not.toHaveBeenCalled()
+    expect(act).not.toHaveBeenCalled()
+  })
+
+  it("refuses a denied write before it asks", async () => {
+    const { asker, act, write } = guarded({ "messages.delete": "deny" })
+    await expect(write()).rejects.toMatchObject({ code: "permission_error" })
+    expect(asker).not.toHaveBeenCalled()
+    expect(act).not.toHaveBeenCalled()
+  })
+
+  it("still asks, then writes, without the lock", async () => {
+    const { asker, act, write } = guarded({ "messages.delete": "ask" })
+    await expect(write()).resolves.toBe("done")
+    expect(asker).toHaveBeenCalledOnce()
+    expect(act).toHaveBeenCalledOnce()
+  })
 })

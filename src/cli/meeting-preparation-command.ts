@@ -17,15 +17,18 @@ export const addMeetingPreparationCommand = (
     output: (answer: Awaited<ReturnType<typeof readMeetingPreparation>>) => void
     signal: () => AbortSignal | undefined
     now?: () => number
+    /** The host connects a messages source to search; without one the `--context-*` options could only refuse. */
+    communications?: boolean
   },
 ) => {
   const group = program.commands.find((command) => command.name() === "meetings")
   if (!group) throw new CliError("configuration_error", "meeting command group is unavailable")
-  return annotate(
-    group
-      .command("prepare")
-      .argument("<series-id>", "exact provider series ID")
-      .description("prepare cited context for one upcoming series")
+  const prepare = group
+    .command("prepare")
+    .argument("<series-id>", "exact provider series ID")
+    .description("prepare cited context for one upcoming series")
+  if (deps.communications)
+    prepare
       .option(
         "--context-source <id=cursor>",
         "authorized communications selection ID, optionally ID=cursor; repeat",
@@ -41,6 +44,8 @@ export const addMeetingPreparationCommand = (
         "--context-before-time <time>",
         "exclusive communications end as zoned ISO timestamp (default preparation start)",
       )
+  return annotate(
+    prepare
       .option("--project <project>", "include unconfirmed word evidence for one existing project name, key or alias")
       .option("--since-time <time>", "window start as ISO timestamp with zone (default now)")
       .option("--before-time <time>", "exclusive window end as ISO timestamp (default seven days after start)")

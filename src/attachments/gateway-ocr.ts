@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { type ModelSettings, modelGateway, modelTarget } from "../models/index.js"
 import type { AppIdentity } from "../ports/app.js"
@@ -9,6 +9,7 @@ export const gatewayOcr = ({
   app,
   settings,
   env,
+  keyring,
   enabled,
   signal,
   fetch,
@@ -17,6 +18,7 @@ export const gatewayOcr = ({
   app: AppIdentity
   settings: { models?: ModelSettings }
   env: NodeJS.ProcessEnv
+  keyring?: KeyringStore | undefined
   enabled: boolean
   signal?: AbortSignal
   fetch?: typeof globalThis.fetch
@@ -38,8 +40,9 @@ export const gatewayOcr = ({
     key:
       key ??
       ((provider, selected) =>
-        embeddingKeys(app, env).read(selected.baseUrl === undefined ? provider : endpointKeyName(selected.baseUrl))
-          ?.key),
+        embeddingKeys(app, env, keyring).read(
+          selected.baseUrl === undefined ? provider : endpointKeyName(selected.baseUrl),
+        )?.key),
     ...(signal === undefined ? {} : { signal }),
     ...(fetch === undefined ? {} : { fetch }),
   })

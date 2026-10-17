@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import type { AnalysisProvider } from "../analysis/provider.js"
 import { endpoint } from "../analysis/settings.js"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
@@ -15,6 +15,7 @@ export const analysisChoice = (
   app: AppIdentity,
   settings: Settings,
   env: NodeJS.ProcessEnv,
+  keyring?: KeyringStore,
 ): AnalysisProvider => {
   const configured = { ...settings.models?.default, ...settings.models?.analysis }
   settings = {
@@ -48,7 +49,7 @@ export const analysisChoice = (
   if (!endpoint(baseUrl))
     throw new CliError("validation_error", "use an HTTP/S analysis endpoint without credentials, query or fragment")
   const keyName = customUrl === undefined ? provider : endpointKeyName(baseUrl)
-  const apiKey = embeddingKeys(app, env).read(keyName)?.key
+  const apiKey = embeddingKeys(app, env, keyring).read(keyName)?.key
   if (!apiKey && customUrl === undefined)
     throw new CliError("authentication_error", `no ${provider} key — use models text key set ${provider}`)
   return { provider, model, baseUrl, ...(apiKey ? { apiKey } : {}) }

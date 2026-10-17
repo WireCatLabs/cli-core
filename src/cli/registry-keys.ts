@@ -1,4 +1,4 @@
-import { Credentials, pathsAreOverridden, resolvePaths } from "@wirecat/cli-base"
+import { Credentials, type KeyringStore, pathsAreOverridden, resolvePaths } from "@wirecat/cli-base"
 import { type AppIdentity, envName } from "../ports/app.js"
 
 /**
@@ -6,7 +6,11 @@ import { type AppIdentity, envName } from "../ports/app.js"
  * app's own service, `<PREFIX>_CAS_API_KEY`, or a 0600 file — as the AI providers' keys are. CAS
  * answers without one for now; never printed, never in an error.
  */
-export const casKey = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): string | undefined => {
+export const casKey = (
+  app: AppIdentity,
+  env: NodeJS.ProcessEnv = process.env,
+  keyring?: KeyringStore,
+): string | undefined => {
   const where = { appName: app.appName, prefix: app.envPrefix, env }
   return new Credentials({
     configDir: resolvePaths(where).config,
@@ -14,6 +18,7 @@ export const casKey = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): 
     envVar: envName(app, "CAS_API_KEY"),
     isolated: pathsAreOverridden(where),
     env,
+    ...(keyring ? { keyring } : {}),
     warn: (message) => process.stderr.write(`${message}\n`),
   }).read("registries:cas")?.secret
 }

@@ -20,10 +20,12 @@ export const botWords = (bot: BotMessenger, profile: string): string => `${bot.a
 /** What a bot command needs, resolved once: the bot's settings, its token, its lists. */
 export const botContext = (command: Command, bot: BotMessenger) => {
   const base = baseContext(command, (flags, options) => bot.resolveSettings(flags, { ...options, kind: "bot" }))
-  const { settings, env } = base
+  const { settings, env, keyring } = base
   const profile = settings.profile
   const files = botFiles(bot.app, profile, env)
-  const tokens = bot.tokenStore?.(command, profile) ?? new BotTokenStore({ app: bot.app, profile, env })
+  const tokens =
+    bot.tokenStore?.(command, profile) ??
+    new BotTokenStore({ app: bot.app, profile, env, ...(keyring ? { keyring } : {}) })
   const words = botWords(bot, profile)
   const registry = bot.registry?.(command, profile) ?? new ChatRegistry(bot.app, profile, env)
   const recipients = () => new RecipientList(files.recipients, words)

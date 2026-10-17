@@ -31,7 +31,13 @@ const setup = async () => {
   const program = new Command("example").exitOverride()
   program.command("meetings")
   const output = vi.fn()
-  addMeetingPreparationCommand(program, { read, output, signal: () => undefined, now: () => 10000 })
+  addMeetingPreparationCommand(program, {
+    read,
+    output,
+    signal: () => undefined,
+    now: () => 10000,
+    communications: true,
+  })
   return { ...f, read, program, output }
 }
 const input = { series_id: "example-series", communications: { sources: [{ id: "project-chat" }], query: "launch" } }
@@ -43,11 +49,11 @@ it("publishes the same strict optional contract through CLI and MCP", async () =
     { from: "user" },
   )
   const cli = f.output.mock.calls[0]?.[0]
-  const mcp = await callMeetingPreparationTool(f.read, input, undefined, {}, 10000)
+  const mcp = await callMeetingPreparationTool(f.read, input, undefined, {}, 10000, { communications: true })
   expect(mcp.structuredContent).toMatchObject({ item: cli.item })
   expect(v.safeParse(itemEnvelopeSchema(meetingPreparation), mcp.structuredContent).success).toBe(true)
   expect(JSON.stringify(describeProgram(f.program))).toContain("--context-source")
-  expect(JSON.stringify(meetingPreparationTool.inputSchema)).toContain("communications")
+  expect(JSON.stringify(meetingPreparationTool({ communications: true }).inputSchema)).toContain("communications")
   expect(cli.item.communications.coverage.window).toEqual({
     after: "1970-01-01T00:00:00.000Z",
     before: "1970-01-01T00:00:10.000Z",
@@ -96,7 +102,9 @@ it("rejects unknown nested fields and malformed selections in the handler before
     { ...input.communications, query: "?" },
     { ...input.communications, before: "not-zoned" },
   ]) {
-    const result = await callMeetingPreparationTool(f.read, { ...input, communications }, undefined, {}, 10000)
+    const result = await callMeetingPreparationTool(f.read, { ...input, communications }, undefined, {}, 10000, {
+      communications: true,
+    })
     expect(result).toMatchObject({ isError: true, structuredContent: { error: { code: "validation_error" } } })
   }
   const unknown = await callMeetingPreparationTool(
@@ -105,6 +113,7 @@ it("rejects unknown nested fields and malformed selections in the handler before
     undefined,
     {},
     10000,
+    { communications: true },
   )
   expect(JSON.stringify(unknown.structuredContent)).toContain("communications.surprise")
   expect(f.read).not.toHaveBeenCalled()
@@ -115,7 +124,9 @@ it("preserves required coverage and existing evidence when MCP escaping fills th
   const f = await setup()
   f.db.prepare("UPDATE messages SET text=? WHERE account_id=?").run(`Launch ${"\u202e".repeat(220)}`, f.accountId)
   const cli = await readMeetingPreparation(f.read, { ...input, bytes: 4096 }, undefined, 10000)
-  const mcp = await callMeetingPreparationTool(f.read, { ...input, bytes: 4096 }, undefined, {}, 10000)
+  const mcp = await callMeetingPreparationTool(f.read, { ...input, bytes: 4096 }, undefined, {}, 10000, {
+    communications: true,
+  })
   expect(mcp.isError).not.toBe(true)
   const body = mcp.structuredContent as typeof cli
   expect(Buffer.byteLength(JSON.stringify(body.item))).toBeLessThanOrEqual(4096)
@@ -211,6 +222,7 @@ it("refuses mandatory escaped coverage that cannot fit instead of silently dropp
     undefined,
     {},
     10000,
+    { communications: true },
   )
   expect(result).toMatchObject({ isError: true, structuredContent: { error: { code: "validation_error" } } })
 })

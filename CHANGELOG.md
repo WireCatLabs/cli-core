@@ -5,6 +5,32 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **A run's `keyring` reaches every key cli-core reads or stores**: `models text key set` and `remove`, the key
+  for a custom model endpoint that embeddings, `conversations build --analyze`, API OCR and reply previews read, the
+  CAS key of `contacts check` and `chats members audit --deep` (CLI and MCP), and the bot token store when the CLI
+  hands in none. These used the OS keyring directly, so a test that passed `memoryKeyring()` still reached the real
+  one. `keyring` is now a field of a run's environment and of `BaseContext`; tg's own field is the same one.
+  `contacts check --offline`, and a messenger the ban lists do not cover, no longer read the CAS key at all.
+- **`<PREFIX>_READ_ONLY` refuses a write that asks first before it asks**: `messages delete`, `topics delete`,
+  `account sessions end`, `chats delete` and `chats clear` under the lock stopped with exit 7, "asks before it acts",
+  as if `--allow-dangerous` would let them through. They now stop with exit 5 and "this process is read-only", as
+  every other write does. Without the lock they ask as before.
+
+### Changed — may break callers
+
+- **`meetings prepare` offers `--context-source`, `--context-query`, `--context-since-time` and
+  `--context-before-time` only to a host that connects a messages source**: pass `communications: true` to
+  `addMeetingPreparationCommand`. Without it the four options are gone from the help and `commands --json`, and
+  giving one fails as an unknown option; before, a host with no source (zm) offered them and could only refuse
+  them. A host that searches communications adds the flag. The MCP tool follows it: `meetingPreparationTool` is
+  now a function, `meetingPreparationTool({ communications })`, whose schema and description name `communications`
+  only with the flag, and `callMeetingPreparationTool` takes `{ communications }` last and refuses the argument
+  without it.
+
 ## 0.328.0 — 17.10.2026
 
 ### Added

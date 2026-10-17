@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import type { Chat, Message } from "../domain/models.js"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import { type ModelSettings, type ModelTarget, modelGateway, modelTarget } from "../models/index.js"
@@ -17,7 +17,9 @@ export const replyRenderer =
     settings: () => { models?: ModelSettings },
     env: NodeJS.ProcessEnv,
     warn: (message: string) => void,
-    options: { ai?: boolean; preview?: boolean; signal?: AbortSignal } = { ai: true },
+    options: { ai?: boolean; preview?: boolean; signal?: AbortSignal; keyring?: KeyringStore | undefined } = {
+      ai: true,
+    },
   ): ReplyRender =>
   async (rule, message, chat, now) => {
     let called: ModelTarget | undefined
@@ -34,7 +36,9 @@ export const replyRenderer =
           message.chatId,
         ),
       key: (provider, target) =>
-        embeddingKeys(app, env).read(target.baseUrl === undefined ? provider : endpointKeyName(target.baseUrl))?.key,
+        embeddingKeys(app, env, options.keyring).read(
+          target.baseUrl === undefined ? provider : endpointKeyName(target.baseUrl),
+        )?.key,
     })
     if (options.signal?.aborted) throw new CliError("cancelled", "reply rendering cancelled")
     const result = await renderReplyTemplate(rule.reply, {

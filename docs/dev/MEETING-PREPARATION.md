@@ -29,7 +29,7 @@ the provider read. Labels themselves are not authentication; the host binds cred
 The SDK never substitutes an occurrence ID or title for the exact provider series key.
 
 The host owns resource lifetime and response framing. These are SDK domain objects, not CLI
-envelopes. Hosts can mount `addMeetingPreparationCommand` and `meetingPreparationTool` from `./cli`
+envelopes. Hosts can mount `addMeetingPreparationCommand` and `meetingPreparationTool()` from `./cli`
 with an account-bound `MeetingPreparationReader`. CLI and MCP call the same `readMeetingPreparation`
 validator and mapper, producing the registered `meeting_preparation` entity in an item envelope.
 These adapters are opt-in; importing Core does not mount them in a provider application.
@@ -208,14 +208,18 @@ because a participant, project alias or meeting title looks similar.
 
 ## Shared CLI and MCP adapters
 
-`addMeetingPreparationCommand(program, { read, output, signal, now? })` mounts `meetings prepare
-<series-id>` under an existing meetings group. Options include `--project` for the optional selected-project evidence and `--since-time`, `--before-time`, `--history-since-time`,
+`addMeetingPreparationCommand(program, { read, output, signal, now?, communications? })` mounts `meetings prepare
+<series-id>` under an existing meetings group; `communications: true` adds the `--context-*` options of
+[MEETING-COMMUNICATIONS.md](MEETING-COMMUNICATIONS.md#shared-cli-and-mcp). Options include `--project` for the optional selected-project evidence and `--since-time`, `--before-time`, `--history-since-time`,
 `--meetings`, `--cues`, `--context-limit`, `--max-read-bytes` and `--bytes`. Time options take valid ISO
 instants with an explicit zone. The default window starts at the injected clock, ends seven days
 later and reads thirty days of history before its start. The answer retains absolute normalized
 windows for replay. Limits use the SDK's shared bounds and defaults.
 
-`callMeetingPreparationTool(read, args, signal?, failure?, now?)` implements `meeting_prepare`.
+`meetingPreparationTool({ communications? })` describes `meeting_prepare`, and
+`callMeetingPreparationTool(read, args, signal?, failure?, now?, { communications? })` implements it; with
+`communications: true` both take the `communications` argument, without it the schema has none and the handler
+refuses one.
 Arguments use `series_id`, optional `project`, `after`, `until`, `history_after`, `meetings`, `cues`, `context_limit`,
 `max_read_bytes` and `bytes`. The handler refuses unknown fields by name before calling `read`;
 caller-controlled accounts, providers and credentials are never arguments. JSON Schema advertises
