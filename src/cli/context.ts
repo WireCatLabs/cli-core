@@ -29,6 +29,8 @@ export interface BaseEnvironment {
   answer?: (question: string) => Promise<string | null> | string | null
   /** Set by `run()`; a command's run is recorded only when it is known whose run it is. */
   app?: AppIdentity
+  /** Set by `run()` from `process.platform` unless a test hands one in: the OS a command's paths and units are for. */
+  platform?: NodeJS.Platform
   /** The local speech recognizer in place of the downloaded model; tests hand one in. */
   recognizer?: OpenRecognizer
   /** Where raw bytes go when stdout is not this process's own — an MCP session relayed by serve. */

@@ -28,6 +28,20 @@ export const grantsAuthority = <T extends Command>(command: T): T => {
 
 export const changesAuthority = (command: Command): boolean => AUTHORITY.has(command)
 
+const LOGIN = new WeakSet<Command>()
+
+/**
+ * Marks a command that links or unlinks the account — `session start`, `session end`, a setup that logs in. It never
+ * runs through serve's relay, where it would log serve's own connection in or out, and `<PREFIX>_READ_ONLY` refuses
+ * it before it connects.
+ */
+export const logsInOrOut = <T extends Command>(command: T): T => {
+  LOGIN.add(command)
+  return command
+}
+
+export const isLogin = (command: Command): boolean => LOGIN.has(command)
+
 /** An option only the owner passes: MCP tools leave it out of their input (`mcp: false`). */
 export const ownerOnlyOption = (flags: string, description: string): Option =>
   annotateOption(new Option(flags, description), { mcp: false })

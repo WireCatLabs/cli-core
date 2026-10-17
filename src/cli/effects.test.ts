@@ -5,7 +5,7 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { messenger, sharedProgram } from "../testing/shared-program.js"
-import { changesAuthority, judgedEffects, judgedTargets, refuseUnderReadOnly } from "./effects.js"
+import { changesAuthority, judgedEffects, judgedTargets, logsInOrOut, refuseUnderReadOnly } from "./effects.js"
 import { chatsCommand } from "./messenger/chats-command.js"
 import { createProgram, run } from "./program.js"
 import { commandAt } from "./steps.js"
@@ -133,6 +133,30 @@ describe("refuseUnderReadOnly", () => {
   it("lets it run without the lock, or with the lock set to 0", async () => {
     expect((await unlink({})).ended).toBe(true)
     expect((await unlink({ CHAT_READ_ONLY: "0" })).ended).toBe(true)
+  })
+
+  it("refuses a command marked as a login or logout under the lock, before its action", async () => {
+    let ran = false
+    const streams = captureStreams()
+    const code = await run(
+      ["session", "end"],
+      {
+        app: sharedProgram.app,
+        commands: () => [
+          new Command("session").addCommand(
+            logsInOrOut(new Command("end")).action(() => {
+              ran = true
+            }),
+          ),
+        ],
+      },
+      { streams, tty: false, env: { CHAT_READ_ONLY: "1" } },
+    )
+
+    expect([code, ran]).toEqual([5, false])
+    expect(JSON.parse(streams.stderr.join("")).error.message).toBe(
+      "this process is read-only (CHAT_READ_ONLY) — it cannot log in or out",
+    )
   })
 
   it("refuses to guess whose lock it is outside run()", () => {

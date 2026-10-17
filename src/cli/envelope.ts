@@ -214,3 +214,13 @@ export const renderAnswer = <T>(
  */
 export const renderDocument = ({ renderer }: Pick<AnswerOutput, "renderer">, document: object): void =>
   renderer.result(document)
+
+/** One thing as a sealed `{ item, meta }` answer, for a command that prints without `renderAnswer`'s steps. */
+export const itemAnswer = <T>(item: T) => sealed(itemOf(item))
+
+/** Prints one thing: the envelope in `--json`, one record and the end line in `--jsonl`, the thing itself to a person. */
+export const printItem = ({ renderer, format }: Pick<AnswerOutput, "renderer" | "format">, item: unknown): void => {
+  if (format === "json") renderer.result(itemAnswer(item))
+  else if (format === "jsonl") renderer.stream(jsonlRecords(itemOf(item)))
+  else renderer.result(item)
+}

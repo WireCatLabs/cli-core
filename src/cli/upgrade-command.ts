@@ -17,7 +17,13 @@ export const upgradeCommand = (
   packageName: string,
   contextFor: (command: Command) => UpgradeContext,
 ): Command =>
-  grantsAuthority(annotate(new Command("upgrade"), { effects: LOCAL_WRITE, mcp: false }))
+  grantsAuthority(
+    annotate(new Command("upgrade"), {
+      effects: LOCAL_WRITE,
+      mcp: false,
+      examples: [`${app.command} upgrade --check`, `${app.command} upgrade`],
+    }),
+  )
     .description(`upgrade ${app.command} with the package manager that installed it; --check only looks`)
     .option("--check", "say whether a newer version exists, and install nothing")
     .action(async function (this: Command, { check }: { check?: boolean }) {

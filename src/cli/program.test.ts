@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
@@ -112,6 +112,33 @@ describe("running a messenger CLI", () => {
     expect(code).toBe(2)
     expect(stdout).toEqual([])
     expect(JSON.parse(stderr[0] ?? "").error.message).toBe(`"chats list" was given as one argument; run: ${fix}`)
+  })
+
+  it("logs each parsed command and its long options to <PREFIX>_TEST_ARGV_LOG, never a value", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "argv-")), "argv.jsonl")
+    const streams = captureStreams()
+    await run(
+      ["personal", "chats", "list", "--json", "--timeout", "5s"],
+      definition(async () => {}),
+      { streams, tty: false, env: { ...process.env, APP_TEST_ARGV_LOG: file } },
+    )
+
+    expect(readFileSync(file, "utf8")).toBe(
+      `${JSON.stringify({ command: "chats list", options: ["--json", "--timeout"] })}\n`,
+    )
+  })
+
+  it("hands the command its platform, the process's unless a test gives one", async () => {
+    let seen: unknown
+    const streams = captureStreams()
+    const record = definition(async (command) => {
+      seen = environmentOf(command).platform
+    })
+    await run(["chats", "list"], record, { streams, tty: false, env: process.env })
+    const real = seen
+    await run(["chats", "list"], record, { streams, tty: false, env: process.env, platform: "win32" })
+
+    expect([real, seen]).toEqual([process.platform, "win32"])
   })
 
   it("hands the first word to the command as its profile", async () => {

@@ -1,3 +1,4 @@
+export { bareCheck, type CheckWords, checkWords } from "./domain/checks.js"
 export type { CounterField, CounterObservation, CounterObservations, CounterState } from "./domain/counters.js"
 export { COUNTER_FIELDS, counterValue, observedCounters } from "./domain/counters.js"
 export {

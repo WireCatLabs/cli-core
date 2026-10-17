@@ -18,11 +18,12 @@ import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { parseDuration } from "../domain/duration.js"
 import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
-import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
+import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
+import { logParsedArgv } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
-import { changesAuthority, judgedEffects, judgedTargets } from "./effects.js"
+import { changesAuthority, isLogin, judgedEffects, judgedTargets } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
@@ -191,6 +192,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     commandSignal: control.signal,
     trackCloseable: control.trackCloseable,
     app: definition.app,
+    platform: options.platform ?? process.platform,
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),
     untilStopped: () => {
@@ -211,6 +213,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       }
     >()
     const commandEnv = options.env ?? process.env
+    const argvLog = commandEnv[envName(definition.app, "TEST_ARGV_LOG")]
+    if (argvLog) logParsedArgv(argvLog, action)
     const headless =
       machine || flags.input === false || Boolean(commandEnv.CI) || (options.tty ?? process.stdout.isTTY) !== true
     checkJson(action, requested, !flags.jsonl && (options.tty ?? process.stdout.isTTY) === true)
@@ -234,6 +238,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
     const path = commandPathOf(action)
     const lock = readOnlyLockOf(definition.app, commandEnv)
+    if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && changesAuthority(action) && !flags.dryRun)
       throw new CliError(
         "permission_error",

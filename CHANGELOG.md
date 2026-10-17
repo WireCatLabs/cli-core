@@ -16,6 +16,18 @@ shape of this file.
   block the copy. The original remains available; embeddings and entire messenger/contact archives
   are not copied.
 
+- **`logsInOrOut(command)`** (`@wirecat/cli-core/cli`) marks a command that links or unlinks the account. It never
+  runs through `serve`'s relay — `session end` used to be relayed and would have logged out `serve`'s own
+  connection — and `<PREFIX>_READ_ONLY` refuses it before its action with "it cannot log in or out". Mark
+  `session start`, `session end` and a `setup` that logs in; `isLogin(command)` reads the mark.
+- **Shared pieces CLIs carried as copies**: `printItem(output, item)` and `itemAnswer(item)` print one thing as a
+  sealed answer (`@wirecat/cli-core/cli`); `bareCheck`, `checkWords(cli, profile)` and the `CheckWords<C>` type name
+  the command a message sends a person to (`@wirecat/cli-core`); `COMMAND_NEEDS`, the commands that need one adapter
+  method, is exported for a CLI's own `lacks` test. A run's environment carries `platform` (the process's unless a
+  test gives one), and `run()` appends each parsed command and its long options to the file in
+  `<PREFIX>_TEST_ARGV_LOG`, as wa's and max's test matrices did for themselves.
+- **`upgrade` has examples**: `<cli> upgrade --check` and `<cli> upgrade`, so a CLI drops its own wrapper's.
+
 ### Fixed
 
 

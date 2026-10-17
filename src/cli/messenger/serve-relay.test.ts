@@ -4,11 +4,15 @@ import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 import { PassThrough, Writable } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
+import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { holdLock, lockPath, readLock } from "../../background/lock.js"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import type { MessengerAdapter, SendOptions } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
+import { environmentOf } from "../context.js"
+import { logsInOrOut, REMOTE_WRITE } from "../effects.js"
 import { type RunOptions, run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
@@ -194,6 +198,32 @@ describe("commands through serve's relay", () => {
       serve.stop()
       await serve.done
     }
+  })
+
+  it("never relays a logout into serve, which would log out serve's own connection", async () => {
+    const { env } = setup()
+    const serve = await startServe(env)
+    const ran: (string | undefined)[] = []
+    const logout = logsInOrOut(annotate(new Command("end"), { effects: REMOTE_WRITE })).action(function (
+      this: Command,
+    ) {
+      ran.push(environmentOf(this).relayed?.profile)
+    })
+
+    const code = await run(
+      ["session", "end"],
+      { app, commands: () => [new Command("session").addCommand(logout)] },
+      {
+        streams: captureStreams(),
+        tty: false,
+        env,
+      },
+    )
+
+    expect(code).toBe(0)
+    expect(ran).toEqual([undefined])
+    serve.stop()
+    await serve.done
   })
 
   it("adds a recipient through serve, which resolves the chat on its own connection", async () => {
