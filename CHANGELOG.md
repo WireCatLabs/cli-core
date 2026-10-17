@@ -5,14 +5,12 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.325.0 — 17.10.2026
 
 ### Fixed
 
 - **cli-core accepts cli-base 0.41 to 0.43** (peer range `>=0.40.0 <0.44.0`): before, the range stopped at 0.41, so an
   app on cli-base 0.43 (the shared test setup) got no warning but ran outside the supported range.
-
-## 0.325.0 — 17.10.2026
 
 ### Changed — may break callers
 
