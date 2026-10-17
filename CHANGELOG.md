@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`mentions places` passes the command lint with `@wirecat/cli-base` 0.40.1**, which registers `places` as a view
+  noun; a CLI's `cli-dev lint` reads its own cli-base, so bump that pin too. cli-core's pull requests now lint every
+  shared command against `lint/baseline/`, so a new violation fails here before it reaches a CLI.
+
 ## 0.311.0 — 17.10.2026
 
 ### Added
@@ -26,9 +32,6 @@ shape of this file.
 - A meeting sync whose participants call fails keeps the stored participant count instead of overwriting it with nothing. `MeetingInput.participantsCount` may be left out, which keeps the stored value; `null` still clears it.
 - **`mentions` help fits the 80-character summary rule**: the group's summary is shorter and `mentions places` has a
   summary of its own, so tg's and max's command lint no longer report them.
-- **`mentions places` passes the command lint with `@wirecat/cli-base` 0.40.1**, which registers `places` as a view
-  noun; a CLI's `cli-dev lint` reads its own cli-base, so bump that pin too. cli-core's pull requests now lint every
-  shared command against `lint/baseline/`, so a new violation fails here before it reaches a CLI.
 
 ## 0.310.0 — 17.10.2026
 
