@@ -9,6 +9,11 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **parity.json marks wa absent, with reasons, for what its switches turn off**: `--silent`, `--send-as`,
+  `--at-time` and `--anonymous` where they apply, `chats send-as`, `messages scheduled` and the whole `replies` group.
+  They were planned for wa, which passed whether wa offered them or not; wa's main now sets `silentSends`, `sendAs`,
+  `scheduledSends`, `pollAnonymous` and `autoReplies` to false, so a wa that offers one of them again fails its parity
+  check.
 - **In a group tagged `watch-tasks`, any member's reply closes a question** (owner, 2026-10-17): a direct reply
   from someone other than the asker settles it, with the resolution "answered in the group". Before, only the
   owner's answer closed it, so questions others answered stayed open. A later message that does not reply to the
