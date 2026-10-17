@@ -98,6 +98,7 @@ const CREDENTIAL_RUNS: readonly (readonly string[])[] = [
 const WIRECAT_APPS: readonly { appName: string; prefix: string }[] = [
   { appName: "max-cli", prefix: "MAX" },
   { appName: "tg-cli", prefix: "TG" },
+  { appName: "whatsapp-cli", prefix: "WA" },
   { appName: "cli-memo", prefix: "MEMO" },
   { appName: "drive-cli", prefix: "DRIVE" },
   { appName: "zm", prefix: "ZM" },

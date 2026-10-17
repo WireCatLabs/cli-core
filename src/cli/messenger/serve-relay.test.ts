@@ -158,6 +158,20 @@ describe("commands through serve's relay", () => {
     await serve.done
   })
 
+  it.each([undefined, "0"])("retains serve's read-only lock when the client supplies %s", async (value) => {
+    const { env } = setup()
+    const serve = await startServe({ ...env, CHAT_READ_ONLY: "1" })
+    try {
+      const refused = await client(["messages", "send", "Book", "hello"], { ...env, CHAT_READ_ONLY: value })
+      expect(refused.code).not.toBe(0)
+      expect(refused.stderr.join("\n")).toContain("permission_error")
+      expect(serve.sent).toEqual([])
+    } finally {
+      serve.stop()
+      await serve.done
+    }
+  })
+
   it("reads a relative path against the client's directory, not serve's", async () => {
     const { root, env } = setup()
     writeFileSync(join(root, "note.txt"), "words")

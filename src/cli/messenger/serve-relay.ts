@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { listenRelay, RELAY_PROTOCOL, type RelayAddress, relayPath } from "../../background/relay.js"
 import type { MessageEvent } from "../../domain/models.js"
+import { readOnlyLockOf } from "../../ports/app.js"
 import { type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { environmentOf } from "../context.js"
 import type { Messenger } from "./context.js"
@@ -63,12 +64,17 @@ export const serveRelay = (command: Command, messenger: Messenger) => {
     },
     /** Listens beside the lock; the address goes into it, which is how a client finds it. */
     open: async (lockPath: string, profile: string): Promise<RelayAddress | undefined> => {
-      const runCommand = environmentOf(command).runCommand
+      const environment = environmentOf(command)
+      const runCommand = environment.runCommand
       if (!runCommand) return undefined
+      const readOnly = readOnlyLockOf(messenger.app, environment.env ?? process.env)
       const path = relayPath(lockPath)
       relay = await listenRelay(path, (request, io) =>
         runCommand(request.argv, {
-          env: request.env,
+          env: {
+            ...request.env,
+            ...(readOnly ? { [`${messenger.app.envPrefix}_READ_ONLY`]: "1" } : {}),
+          },
           streams: io.streams,
           stdin: io.stdin,
           stdout: io.stdout,
