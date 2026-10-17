@@ -123,7 +123,7 @@ describe("compareTasks levels", () => {
 
   it("counts a reply chain only when the caller says so", () => {
     expect(compareTasks(bare(), bare()).levels.reply).toBe("no")
-    expect(compareTasks(bare(), bare(), { replyChain: true })).toMatchObject({ levels: { reply: "yes" }, score: 6 })
+    expect(compareTasks(bare(), bare(), { replyChain: true })).toMatchObject({ levels: { reply: "yes" }, score: 2 })
   })
 })
 
@@ -141,7 +141,7 @@ describe("weights and bands", () => {
       amount: { equal: 6, different: -4, missing: 0 },
       category: { same: 1, different: -1, unknown: 0 },
       due: { near: 4, far: -1, missing: 0 },
-      reply: { yes: 6, no: 0 },
+      reply: { yes: 2, no: 0 },
       time: { near: 2, weeks: -2, far: -3 },
     })
   })
@@ -343,7 +343,7 @@ describe("pairs from the cli-testing duplicate set", () => {
     expect(compareTasks(reminder, first)).toMatchObject({ band: "likely", levels: { due: "near" } })
   })
 
-  it("leaves a reply that asks for something new in maybe, not attached", () => {
+  it("keeps a reply that asks for something new apart", () => {
     const contract = task({
       title: "Send Alice the updated contract",
       description: "can you send the updated contract?",
@@ -359,8 +359,8 @@ describe("pairs from the cli-testing duplicate set", () => {
       createdAt: "2026-10-11T17:07:00.000Z",
     })
     expect(compareTasks(table, contract, { replyChain: true })).toMatchObject({
-      score: 6,
-      band: "maybe",
+      score: 2,
+      band: "different",
       reasons: ["same person", "in one reply chain", "0 of 10 stems shared"],
     })
   })

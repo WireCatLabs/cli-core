@@ -138,7 +138,10 @@ export const TASK_SIMILARITY_WEIGHTS = {
     missing: { weight: 0, why: "50 / 3780" },
   },
   reply: {
-    yes: { weight: 6, why: "6 / 5; scored, not certain: as a certain rule it was wrong 4 times in 9" },
+    yes: {
+      weight: 2,
+      why: "real chats: wrong 11 times in 13 among shown pairs; +2 lifted shown-pair precision on both labelled sets",
+    },
     no: { weight: 0, why: "74 / 4608" },
   },
   time: {

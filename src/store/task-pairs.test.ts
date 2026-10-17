@@ -52,7 +52,7 @@ describe("task pairs", () => {
   it("**a rule opens the task anyway and sends a likely or maybe pair to the review list**, once", async () => {
     const { store, agent, rule, pairs } = await setup([
       said("1", "Could you pay the 15 000 rub invoice?"),
-      said("2", "Any news on the payment?", "1"),
+      said("2", "Any news on the 15 000 rub invoice payment?", "1"),
     ])
     const first = await agent("1", "Pay the 15 000 rub invoice")
 
@@ -78,8 +78,8 @@ describe("task pairs", () => {
   it("**a rule's task about a recently closed one follows it up**: the closed one stays closed and off the list", async () => {
     const { store, agent, rule, pairs } = await setup([
       said("1", "Could you pay the 15 000 rub invoice?"),
-      said("2", "Any news on the payment?", "1"),
-      said("3", "And the invoice payment?", "1"),
+      said("2", "Any news on the 15 000 rub invoice payment?", "1"),
+      said("3", "And the 15 000 rub invoice payment?", "1"),
     ])
     const first = await agent("1", "Pay the 15 000 rub invoice")
     const closed = (await store.tasks.details(first)).id
