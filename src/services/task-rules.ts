@@ -121,7 +121,11 @@ export const applyTaskRules = async (
       result.closed += 1
       if (dryRun) continue
       await tasks.close(task.id, { as: "done", by: "rule" })
-      if (answer) await store.answer(task.id, { resolution: "answered by the owner", by: sourceOf(answer) })
+      if (answer)
+        await store.answer(task.id, {
+          resolution: answer.outgoing ? "answered by the owner" : "answered in the group",
+          by: sourceOf(answer),
+        })
     }
   }
   const hasTask = async (message: Message) => (await store.findBySource(owner, sourceOf(message))).length > 0
@@ -130,7 +134,17 @@ export const applyTaskRules = async (
     const scope = scopeOf(chat.kind, chat.watched === true)
     if (scope === "none") continue
     const opens: { message: Message; kind: TaskKind }[] = []
-    for (const { question, answer } of questions(chat.messages, { answerers: new Set() })) {
+    // In a group the owner watches, any member's direct reply settles a question (owner, 2026-10-17); a later
+    // message that does not reply to it may be about anything else.
+    const memberReply = (question: Message) =>
+      chat.watched === true
+        ? chat.messages.find(
+            (one) => (one.replyTo?.id ?? one.replyToId) === question.id && one.senderId !== question.senderId,
+          )
+        : undefined
+    for (const found of questions(chat.messages, { answerers: new Set() })) {
+      const { question } = found
+      const answer = found.answer ?? memberReply(question)
       if (answer) await close(question, "question", answer)
       else if (scope === "all" || (question.text.includes("?") && repliesToOwner(question, chat.messages)))
         opens.push({ message: question, kind: "question" })

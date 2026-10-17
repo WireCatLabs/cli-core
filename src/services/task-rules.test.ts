@@ -174,6 +174,14 @@ describe("where the rules open tasks", () => {
     expect(await opened()).toEqual(["2", "5"])
     await store.tags.addTags(account, { type: "chat", chatId: "-1001" }, ["watch-tasks"])
     expect(await opened()).toEqual(["2", "3", "4", "5"])
+
+    await store.messages.saveMessages(
+      account,
+      "-1001",
+      [said("6", 6, "I bring it", { senderId: "77", replyToId: "3" }), said("7", 7, "unrelated", { senderId: "78" })],
+      { via: "test" },
+    )
+    expect(await opened()).toEqual(["2", "4", "5"])
     await store.close()
   })
 
