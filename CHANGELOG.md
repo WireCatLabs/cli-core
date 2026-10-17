@@ -10,11 +10,14 @@ shape of this file.
 ### Added
 
 - Shared meeting findings intake stages bounded, cited fact and task proposals, then creates selected records and one review receipt atomically. Exact retries reuse receipts and records; stale sources and generic approve-as-task paths are refused.
-- Meeting preparation accepts an optional existing project name, key or alias and includes up to four bounded, cited word-evidence pages in the selected account/history window. Matches remain unconfirmed; resumable continuation and index coverage stay visible, with no writes or automatic project inference. Hosts opt into the shared discovery ports; requests without a project retain their previous behavior.
 
 ### Changed — may break callers
 
 - `meeting_findings` is reserved for the validated findings intake API. Generic proposed-action creation and state transitions refuse that kind; use `MessageStore.meetingFindings` for its staging and review.
+
+### Fixed
+
+- The release history attributes project-scoped meeting preparation to 0.309.0, its first published version, rather than 0.308.0.
 
 ## 0.309.0 — 17.10.2026
 
