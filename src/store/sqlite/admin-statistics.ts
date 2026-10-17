@@ -60,7 +60,7 @@ function fail(message: string, reason = "query.too-large"): never {
 }
 const joined =
   "FROM messages m JOIN chats c ON c.id=m.chat_id JOIN accounts ac ON ac.id=m.account_id LEFT JOIN identities i ON i.id=m.sender_identity_id"
-const attachmentSnapshot = `(SELECT json_group_array(json_object('position',position,'kind',kind,'mime',mime,'name',name,'title',title,'url',url,'size',size,'width',width,'height',height,'duration',duration,'providerRef',provider_ref,'localPath',local_path)) FROM attachments WHERE attachable_type='message' AND attachable_id=m.id)`
+const attachmentSnapshot = `(SELECT json_group_array(json_object('position',position,'kind',kind,'mime',mime,'name',name,'title',title,'url',url,'size',size,'width',width,'height',height,'duration',duration,'localPath',local_path)) FROM attachments WHERE attachable_type='message' AND attachable_id=m.id)`
 const snapshot = `json_object('edited',m.edited_at,'senderName',m.sender_name,'reply',m.reply_to,'forward',m.forward,'reactions',m.reactions,'outgoing',m.outgoing,'thread',m.thread_external_id,'attachments',${attachmentSnapshot},'counterObservations',(SELECT json_group_array(json_object('counter',counter,'value',value,'at',created_at,'source',source)) FROM message_counter_observations WHERE message_id=m.id))`
 
 export const adminStatisticsQuery = (
@@ -101,7 +101,7 @@ export const adminStatisticsQuery = (
       fail("admin statistics context exceeds node/byte budgets — narrow chat/date scope")
     const raw = database
       .prepare(
-        `${prefix}SELECT m.id AS pk,m.external_id AS id,c.id AS chat_id,ac.id AS account_id,c.external_id AS chat,c.title AS title,c.kind,ac.provider,ac.external_id AS account,i.external_id AS sender,m.sender_chat_external_id AS sender_chat,i.bot,m.sent_at,m.text,m.metadata,${snapshot} AS snapshot,${rankingCounter("m", "views")} AS views,${rankingCounter("m", "comments")} AS comments,m.id IN (SELECT id FROM selected) AS selected ${joined} WHERE ${where} ORDER BY m.id`,
+        `${prefix}SELECT m.id AS pk,m.external_id AS id,c.id AS chat_id,ac.id AS account_id,c.external_id AS chat,c.title AS title,c.kind,ac.provider,ac.external_id AS account,i.external_id AS sender,m.sender_chat_external_id AS sender_chat,i.bot,m.sent_at,m.text,m.metadata,${rankingCounter("m", "views")} AS views,${rankingCounter("m", "comments")} AS comments,m.id IN (SELECT id FROM selected) AS selected ${joined} WHERE ${where} ORDER BY m.id`,
       )
       .all(...bound)
     const nodes: AdminNode[] = raw.map((row) => {
