@@ -247,7 +247,67 @@ describe("a command's declared lifetime", () => {
     )
     await started
     await vi.advanceTimersByTimeAsync(31_000)
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(ended).toBe(false)
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(await done).toBe(9)
+  })
+})
+
+describe("a phase that runs until stopped", () => {
+  afterEach(() => vi.useRealTimers())
+
+  const phased = (options: { signal?: AbortSignal } = {}) => {
+    const streams = captureStreams()
+    let entered: () => void = () => {}
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const done = run(
+      ["chats", "list"],
+      definition(async (command) => {
+        const stop = environmentOf(command).untilStopped?.()
+        entered()
+        await new Promise((resolve) => stop?.addEventListener("abort", resolve, { once: true }))
+        environmentOf(command).streams?.data("kept 3 batches")
+      }),
+      { streams, tty: false, env: { ...process.env }, ...options },
+    )
+    return { done, started, streams }
+  }
+
+  it("outlives the default deadline, and ends 0 with its answer on Ctrl-C", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const { done, started, streams } = phased()
+    await started
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(ended).toBe(false)
+    vi.useRealTimers()
+
+    process.emit("SIGINT")
+
+    expect(await done).toBe(0)
+    expect(streams.stdout).toEqual(["kept 3 batches"])
+  })
+
+  it("ends 0 with its answer when the caller cancels", async () => {
+    const cancel = new AbortController()
+    const { done, started, streams } = phased({ signal: cancel.signal })
+    await started
+
+    cancel.abort()
+
+    expect(await done).toBe(0)
+    expect(streams.stdout).toEqual(["kept 3 batches"])
   })
 })
 

@@ -43,6 +43,12 @@ export interface BaseEnvironment {
   relayed?: RelayedRun
   /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
   agent?: AgentRun
+  /**
+   * Set by `run()`: the rest of the command has no deadline, and Ctrl-C, SIGTERM or a cancel aborts the signal it
+   * returns instead of the command, which then ends as it says — exit 0 with what it got. For a phase that keeps
+   * what each step brings and may stop at any point: the history a phone pushes after linking.
+   */
+  untilStopped?: () => AbortSignal
 }
 
 /**

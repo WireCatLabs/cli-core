@@ -127,6 +127,12 @@ class Relayed extends Error {
   }
 }
 
+/**
+ * An interactive command run without a terminal — an agent's `session start --qr-file` — waits on a person scanning a
+ * code somewhere else, which 30 s does not cover.
+ */
+export const HEADLESS_INTERACTIVE_MS = 5 * 60_000
+
 /** How much longer than the command's own deadline a client waits for serve to say how it ended. */
 const RELAY_MARGIN_MS = 10_000
 
@@ -146,7 +152,12 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   let signalExit: number | undefined
   // Ctrl-C or `kill` is how a command that listens until stopped ends: still aborted, but exit 0.
   let listens = false
+  // After untilStopped(), a signal or a cancel ends only that phase; the command finishes and says how it went.
+  const phase = new AbortController()
+  let phased = false
   const interrupted = (signal: "SIGINT" | "SIGTERM") => {
+    if (phased)
+      return phase.abort(new CliError("cancelled", `stopped by ${signal}`, { reason: signal, retryable: false }))
     signalExit = listens ? 0 : signal === "SIGINT" ? 130 : 143
     control.abort(new CliError("cancelled", `command interrupted by ${signal}`, { reason: signal, retryable: false }))
   }
@@ -158,7 +169,11 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       control.abort(error)
     }
   }
-  const externalAbort = () => control.abort(new CliError("cancelled", "command cancelled", { retryable: false }))
+  const externalAbort = () => {
+    const cancelled = new CliError("cancelled", "command cancelled", { retryable: false })
+    if (phased) phase.abort(cancelled)
+    else control.abort(cancelled)
+  }
   const { command } = definition.app
   // Commander's own error lines are replaced by ours; its help for a missing subcommand is kept for a person.
   let help = ""
@@ -178,6 +193,11 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     app: definition.app,
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),
+    untilStopped: () => {
+      phased = true
+      control.start(undefined)
+      return phase.signal
+    },
   }
   provide(program, environment)
   program.hook("preAction", async (_root, action) => {
@@ -231,7 +251,9 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       timeout === undefined
         ? persistent || interactiveLogin || job
           ? undefined
-          : DEFAULT_COMMAND_MS
+          : lifetime === "interactive"
+            ? HEADLESS_INTERACTIVE_MS
+            : DEFAULT_COMMAND_MS
         : persistent
           ? undefined
           : parseDuration(timeout, flags.timeout === undefined ? envName(definition.app, "TIMEOUT") : "--timeout")
