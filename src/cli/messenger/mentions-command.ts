@@ -20,7 +20,7 @@ const line = ({ id, kind, value, domain, status, sentAt, locator, field }: Menti
 export const mentionsCommand = (messenger: Messenger): Command => {
   const tool = messenger.app.command
   const mentions = new Command("mentions").description(
-    "phones, e-mail, links, documents, people's names and addresses found in stored messages",
+    "phones, e-mail, links, documents, names and addresses in stored messages",
   )
 
   annotate(mentions.command("list"), {
@@ -111,6 +111,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
     })
 
   annotate(mentions.command("places"), { effects: LOCAL_READ, examples: [`${tool} mentions places`] })
+    .summary("confirmed street addresses, most mentioned first")
     .description("confirmed addresses, in every account, most mentioned first; `mentions confirm <id>` adds one")
     .option("--limit <n>", "how many to show", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
