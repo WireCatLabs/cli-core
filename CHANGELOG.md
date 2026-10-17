@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.322.0 — 17.10.2026
+
 ### Added
 
 - **A pushed history batch carries poll votes.** `HistoryBatch` has an optional `votes` array of `HistoryVote`
