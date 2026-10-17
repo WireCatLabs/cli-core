@@ -858,6 +858,7 @@ describe("the MCP server", () => {
       "metadata get",
       "polls show",
       "review",
+      "runs search",
       "search all",
       "search conversations",
       "search messages",
@@ -880,6 +881,9 @@ describe("the MCP server", () => {
       "stats messages unanswered",
       "stats tasks show",
       "status",
+      "store gaps plan",
+      "store jobs list",
+      "store jobs show",
       "tags list",
       "tasks agenda",
       "tasks categories",
@@ -2058,10 +2062,84 @@ describe("the MCP server", () => {
     }
   })
 
-  it("offers no store or runs command, which the shared commands keep off MCP (NEED-1411)", async () => {
+  it("offers runs search, store gaps and store jobs, and no other store or runs command (NEED-1411)", async () => {
     const commands = await (await connect(scripted())).client.commands()
 
-    expect(commands.filter((one) => one.startsWith("store ") || one.startsWith("runs "))).toEqual([])
+    expect(commands.filter((one) => one.startsWith("store ") || one.startsWith("runs ")).sort()).toEqual([
+      "runs search",
+      "store gaps plan",
+      "store gaps repair",
+      "store jobs list",
+      "store jobs show",
+    ])
+  })
+
+  it("plans gaps locally and repairs them through the retained session", async () => {
+    const root = await filledRoot()
+    const backend = scripted()
+    const { call, env } = await connect(backend, { root })
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await store.sync.markRange({ provider: "chat", account: "500" }, "7", 100, 101)
+    await store.sync.markRange({ provider: "chat", account: "500" }, "7", 103, 104)
+    await store.close()
+    const plan = await call("store gaps plan", { chat: "7" })
+    expect(plan.body.item.gaps).toEqual([{ from: 102, to: 102 }])
+    expect(backend.opened()).toBe(0)
+    const repaired = await call("store gaps repair", {
+      chat: "7",
+      fingerprint: plan.body.item.fingerprint,
+      limit: 3,
+      max_gaps: 1,
+      page_size: 3,
+      pause: "1ms",
+      repair_time: "1s",
+    })
+    expect(repaired.isError, JSON.stringify(repaired.body)).toBe(false)
+    expect(repaired.body.item).toHaveProperty("scope", "interior")
+    expect((await call("store jobs list", {})).body).toMatchObject({ items: [], page: { has_more: false } })
+    expect((await call("store jobs show", { job: "missing" })).isError).toBe(true)
+    const readonly = await connect(scripted(), { root, config: READ_ONLY })
+    expect(await readonly.client.commands()).not.toContain("store gaps repair")
+  })
+
+  it("refuses secondary search preparation permission before repairing through MCP", async () => {
+    const root = await filledRoot()
+    const backend = scripted()
+    const { call } = await connect(backend, {
+      root,
+      config: levels({ store: "allow", "conversations.links": "readonly", "conversations.embed": "allow" }),
+    })
+    const result = await call("store gaps repair", { chat: "7", catch_up: true })
+    expect(result.isError).toBe(true)
+    expect(result.body.error).toMatchObject({
+      code: "permission_error",
+      details: { permission: "conversations.links" },
+    })
+    expect(backend.opened()).toBe(0)
+  })
+
+  it("queues a fingerprinted gap repair without opening a connection and filters job metadata by profile", async () => {
+    const root = await filledRoot()
+    const backend = scripted()
+    const spawnJob = vi.fn((_argv: string[], _env: NodeJS.ProcessEnv, _log: string) => 999999)
+    const { call } = await connect(backend, { root, spawnJob })
+    const queued = await call("store gaps repair", {
+      chat: "7",
+      background: true,
+      repair_time: "1s",
+      pause: "1ms",
+    })
+    expect(queued.isError, JSON.stringify(queued.body)).toBe(false)
+    expect(spawnJob.mock.calls[0]?.[0]).toEqual(expect.arrayContaining(["--fingerprint", "--repair-time", "1s"]))
+    expect(backend.opened()).toBe(0)
+    expect((await call("store jobs show", { job: queued.body.item.job })).body.item).toMatchObject({
+      profile: "default",
+      chat: "7",
+      pid: 999999,
+    })
+    expect((await call("store jobs list", { limit: 1, page: 1 })).body.items).toHaveLength(1)
+    expect((await call("store jobs list", { query: "chat:7" })).body.items).toHaveLength(1)
+    expect((await call("store jobs list", { query: "chat:8" })).body.items).toHaveLength(0)
   })
 
   it("checks one person without the ban lists when asked, and says a non-Telegram account is not in them", async () => {

@@ -11,9 +11,7 @@ import { type RunSearch, runsFound, searchRuns } from "./search.js"
 
 /** Reading the log is not itself worth recording, so **nothing here starts a run**. */
 export const runsCommand = (app: AppIdentity): Command => {
-  const command = annotate(new Command("runs"), { mcp: false }).description(
-    "recorded runs — what this tool did, and when",
-  )
+  const command = new Command("runs").description("recorded runs — what this tool did, and when")
   const dir = (from: Command) => runsDirFor(app, environmentOf(from).env ?? process.env)
   const runOrRefuse = (from: Command, id: string) => {
     const found = findRun(dir(from), id)
@@ -21,7 +19,7 @@ export const runsCommand = (app: AppIdentity): Command => {
     return found
   }
 
-  annotate(command.command("list"), { effects: LOCAL_READ })
+  annotate(command.command("list"), { effects: LOCAL_READ, mcp: false })
     .description("recorded runs, newest first")
     .option("--limit <n>", "how many to show", positiveCount("--limit"), 20)
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"), 1)
@@ -39,7 +37,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       if (runs.length === 0) renderer.note("nothing recorded — a run is kept with `--record`, or when it fails")
     })
 
-  annotate(command.command("show"), { effects: LOCAL_READ })
+  annotate(command.command("show"), { effects: LOCAL_READ, mcp: false })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("one run: what it was, how it ended, and every event it logged")
     .option("--problems", "only failed responses, warnings and crashes")
@@ -106,7 +104,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       )
     })
 
-  annotate(command.command("path"), { effects: NO_EFFECTS })
+  annotate(command.command("path"), { effects: NO_EFFECTS, mcp: false })
     .argument("<run-id>", `an id from \`${app.command} runs list\``)
     .description("the directory holding one run")
     .action(function (this: Command, id: string) {

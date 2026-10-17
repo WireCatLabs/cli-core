@@ -57,6 +57,7 @@ read  metadata get
 read  polls show
 read  recipients list
 read  review
+read  runs search
 read  search all
 read  search conversations
 read  search messages
@@ -79,6 +80,9 @@ read  stats messages show
 read  stats messages top
 read  stats messages unanswered
 read  stats tasks show
+read  store gaps plan
+read  store jobs list
+read  store jobs show
 read  tags list
 read  tasks agenda
 read  tasks categories
@@ -156,6 +160,7 @@ write searches create
 write searches delete
 write stats charts
 write stats messages counters refresh
+write store gaps repair
 write tags add
 write tags auto
 write tags remove

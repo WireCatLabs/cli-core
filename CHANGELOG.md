@@ -19,6 +19,10 @@ shape of this file.
   `account sessions end`, `chats delete` and `chats clear` under the lock stopped with exit 7, "asks before it acts",
   as if `--allow-dangerous` would let them through. They now stop with exit 5 and "this process is read-only", as
   every other write does. Without the lock they ask as before.
+- **Agents get `runs search`, `store gaps plan`, `store gaps repair`, `store jobs list` and `store jobs show` back**:
+  since 0.328.0 the personal MCP server follows each CLI's command tree, where the whole `store` and `runs` groups
+  were kept off MCP, so these five tools disappeared. Only the other `store` and `runs` commands are kept off now,
+  and the four store tools are restored.
 
 ### Changed — may break callers
 
