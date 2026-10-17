@@ -47,6 +47,7 @@ export type {
   MailboxInput,
   MailFilter,
   MailStore,
+  SenderScore,
   ThreadDetails,
   ThreadSave,
 } from "./sqlite/emails.js"

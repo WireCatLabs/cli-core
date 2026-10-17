@@ -87,6 +87,8 @@ export const message = v.strictObject({
       thread: reference,
       read: v.nullable(v.boolean()),
       flagged: v.nullable(v.boolean()),
+      /** How much the sender's mail looks like spam, a scam or a robot (memo's score), and why; absent when unscored. */
+      sender_score: v.optional(v.strictObject({ score: v.number(), signals: v.array(text) })),
     }),
   ),
   provider_metadata: providerMetadata,

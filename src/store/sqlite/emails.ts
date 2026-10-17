@@ -247,6 +247,17 @@ export interface EmailFacts {
   /** To and Cc addresses. */
   recipients: string[]
   mailboxes: { externalId: string; name: string; kind: string | null }[]
+  /** Reply-To and the DKIM and DMARC verdicts Gmail stamped, as the import kept them; null when absent. */
+  replyTo: string | null
+  dkim: string | null
+  dmarc: string | null
+}
+
+/** A sender's score as one mail account sees it: how much its mail looks like spam, a scam or a robot. */
+export interface SenderScore {
+  address: string
+  score: number
+  signals: string[]
 }
 
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
@@ -262,6 +273,11 @@ export interface MailStore {
   emailRefs(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailRef[]>
   /** Each matching email's sender, recipients, list, size, flag and mailboxes, oldest first; no text. */
   emailFacts(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailFacts[]>
+  /**
+   * Keeps each sender's score for the account, shown on its email hits. Senders left out keep the score they had.
+   * Answers how many were written.
+   */
+  setSenderScores(accountId: number, scores: readonly SenderScore[], now: number): Promise<number>
   mailboxes(accountId: number): Promise<Mailbox[]>
   /**
    * Sets each email's membership among the `scanned` mailboxes to the ones it was found in; membership outside
@@ -683,6 +699,15 @@ const mailFieldsOf = (database: CacheDatabase, email: Email, thread: string, key
       .map(({ identityId, address, name }) => person(identityId, address, name))
   const cc = of("cc")
   const copied = new Set(cc.map(({ address }) => address.toLowerCase()))
+  const scored =
+    email.fromIdentityId === null
+      ? undefined
+      : database
+          .prepare(
+            `SELECT mail_score, mail_signals FROM account_identities
+               WHERE account_id = ? AND identity_id = ? AND mail_score IS NOT NULL`,
+          )
+          .get(email.accountId, email.fromIdentityId)
   return {
     subject: email.subject,
     from: email.fromAddress === null ? null : person(email.fromIdentityId, email.fromAddress, email.fromName),
@@ -694,6 +719,14 @@ const mailFieldsOf = (database: CacheDatabase, email: Email, thread: string, key
     thread: formatReference({ type: "chat", provider: key.provider, account: key.account, chat: thread }),
     read: email.read,
     flagged: email.flagged,
+    ...(scored === undefined
+      ? {}
+      : {
+          senderScore: {
+            score: Number(scored.mail_score),
+            signals: JSON.parse(String(scored.mail_signals ?? "[]")) as string[],
+          },
+        }),
   }
 }
 
@@ -798,6 +831,8 @@ export const mailStoreOver = (
         `SELECT e.external_id, e.from_address, e.from_name, e.subject, coalesce(e.received_at, e.sent_at) AS at, e.size,
            e.read, e.flagged,
            e.outgoing, json_extract(e.metadata, '$.listId') AS list_id,
+           json_extract(e.headers, '$."reply-to"') AS reply_to, json_extract(e.headers, '$.dkim') AS dkim,
+           json_extract(e.headers, '$.dmarc') AS dmarc,
            (SELECT json_group_array(r.address) FROM email_recipients r
               WHERE r.email_id = e.id AND r.role IN ('to', 'cc')) AS recipients,
            (SELECT json_group_array(json_object('externalId', b.external_id, 'name', b.name, 'kind', b.kind))
@@ -818,7 +853,32 @@ export const mailStoreOver = (
         listId: str(row.list_id),
         recipients: JSON.parse(String(row.recipients)) as string[],
         mailboxes: JSON.parse(String(row.boxes)) as EmailFacts["mailboxes"],
+        replyTo: str(row.reply_to),
+        dkim: str(row.dkim),
+        dmarc: str(row.dmarc),
       }))
+  },
+  async setSenderScores(accountId, scores, now) {
+    return write(database, () => {
+      const link = database.prepare(
+        `INSERT INTO account_identities
+           (account_id, identity_id, created_at, updated_at, mail_score, mail_signals, mail_scored_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (account_id, identity_id) DO UPDATE SET mail_score = excluded.mail_score,
+             mail_signals = excluded.mail_signals, mail_scored_at = excluded.mail_scored_at`,
+      )
+      for (const { address, score, signals } of scores)
+        link.run(
+          accountId,
+          identityOf(database, { address, name: null }, now),
+          now,
+          now,
+          score,
+          JSON.stringify(signals),
+          now,
+        )
+      return scores.length
+    })
   },
   async mailboxes(accountId) {
     return database

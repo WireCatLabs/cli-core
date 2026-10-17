@@ -38,6 +38,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261015014428_version-16-mentions-in-other-texts", version: 16, minCompatible: 1 },
   { name: "20261016091439_version-17-agent-close", version: 17, minCompatible: 1 },
   { name: "20261016205235_version-18-places", version: 18, minCompatible: 1 },
+  { name: "20261017000856_version-19-mail-sender-score", version: 19, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

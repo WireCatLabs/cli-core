@@ -61,6 +61,7 @@ export const messageHitItem = (hit: FoundMessage, query = ""): MessageHitItem =>
           thread: hit.email.thread,
           read: hit.email.read,
           flagged: hit.email.flagged,
+          sender_score: hit.email.senderScore,
         }
       : undefined,
     context: around?.map((one) => ({

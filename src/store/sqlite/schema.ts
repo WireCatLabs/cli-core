@@ -220,6 +220,11 @@ export const accountIdentities = sqliteTable(
     /** Their one-to-one chat's newest message, as `refreshRecency` last worked it out: the contact order. */
     lastMessagedAt: integer("last_messaged_at"),
     updatedAt: integer("updated_at").notNull(),
+    /** How much this sender's mail to the account looks like spam, a scam or a robot (memo's sender score). */
+    mailScore: integer("mail_score"),
+    /** JSON array of the signals behind `mail_score`, such as `brand_spoof`. */
+    mailSignals: text("mail_signals"),
+    mailScoredAt: integer("mail_scored_at"),
   },
   (table) => [
     primaryKey({ columns: [table.accountId, table.identityId] }),
