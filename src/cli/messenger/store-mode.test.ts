@@ -11,10 +11,12 @@ import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
 import { chatsCommand } from "./chats-command.js"
+import { membersCommand } from "./chats-members-command.js"
 import { contactsCommand } from "./contacts-command.js"
 import type { Messenger } from "./context.js"
 import { inboxCommand } from "./inbox.js"
 import { messagesCommand } from "./messages-command.js"
+import { reactionsCommand } from "./reactions-command.js"
 import { reviewCommand } from "./review.js"
 import { searchCommand } from "./search-command.js"
 
@@ -109,6 +111,8 @@ const call = async (
         inboxCommand(messenger),
         reviewCommand(messenger),
         searchCommand(messenger),
+        reactionsCommand(messenger),
+        membersCommand(messenger),
       ],
     },
     { streams, tty, env },
@@ -522,6 +526,36 @@ describe("a messenger whose history is read from the store", () => {
     const { meta: _alone, ...first } = JSON.parse(alone.stdout)
     const { meta: _served, ...second } = JSON.parse(served.stdout)
     expect(second).toEqual(first)
+  })
+
+  it("**does not warn on a write whose connect looks into the store**: reactions, members, sends", async () => {
+    const env = await filled()
+    const looked: unknown[] = []
+    const connect: Messenger["connect"] = async (_command, _base, options) => ({
+      ...server(),
+      react: async (chatId, messageId) => {
+        looked.push((await options?.stored?.message(chatId, messageId))?.text)
+      },
+      people: async (people) => {
+        looked.push(await options?.stored?.wroteTo("20"))
+        return people
+      },
+      addMembers: async () => ({ notAdded: [] }),
+      send: async (chatId, text, { sendId }) => {
+        looked.push((await options?.stored?.newestIncoming(chatId))?.id)
+        return { message: { ...thread[0], text } as Message, sendId }
+      },
+    })
+
+    const writes = [
+      await call(["reactions", "add", "Book", "2", "👍"], env, connect, "store"),
+      await call(["members", "add", "Book", "30"], env, connect, "store"),
+      await call(["messages", "send", "Book", "see you"], env, connect, "store"),
+    ]
+
+    expect(writes.map((one) => one.code)).toEqual([0, 0, 0])
+    expect(looked).toEqual(["chapter three", false, "3"])
+    for (const { stderr } of writes) expect(stderr).not.toContain("keeps profile")
   })
 
   it("leaves a server-mode messenger's empty chat an empty answer offline", async () => {
