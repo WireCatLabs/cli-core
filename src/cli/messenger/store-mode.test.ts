@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest"
 import { holdLock, lockPath } from "../../background/lock.js"
 import type { Chat, Message } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
+import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
@@ -556,6 +557,36 @@ describe("a messenger whose history is read from the store", () => {
     expect(writes.map((one) => one.code)).toEqual([0, 0, 0])
     expect(looked).toEqual(["chapter three", false, "3"])
     for (const { stderr } of writes) expect(stderr).not.toContain("keeps profile")
+  })
+
+  it("**store export never writes an attachment's providerRef**, to stdout or a file", async () => {
+    const env = sandbox()
+    const keyed = thread.map((one) => ({
+      ...one,
+      attachments: [{ kind: "file", name: "a.pdf", providerRef: { mediaKey: "SYNTHETIC-KEY", path: "/v/t62" } }],
+    }))
+    const reading = async () => ({ ...server(), history: async () => ({ items: keyed, hasMore: false }) })
+    for (const argv of [
+      ["chats", "list", "--json"],
+      ["messages", "list", "Book", "--json"],
+    ])
+      expect((await call(argv, env, reading)).code).toBe(0)
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const held = await store.messages.message({ provider: "chat", account: "500" }, "1", { chatId: "7" })
+    await store.close()
+    expect(held?.attachments[0]?.providerRef).toMatchObject({ mediaKey: "SYNTHETIC-KEY" })
+    const into = join(env.MESSAGING_STORE, "..")
+
+    const outputs = [
+      (await call(["store", "export", "Book", "--json"], env, reading)).stdout,
+      (await call(["store", "export", "Book", "--jsonl"], env, reading)).stdout,
+      (await call(["store", "export", "Book", "--format", "markdown"], env, reading)).stdout,
+    ]
+    expect((await call(["store", "export", "Book", "--output", join(into, "out.jsonl")], env, reading)).code).toBe(0)
+    outputs.push(readFileSync(join(into, "out.jsonl"), "utf8"))
+
+    expect(outputs[0]).toContain("a.pdf")
+    for (const output of outputs) expect(output).not.toMatch(/SYNTHETIC-KEY|providerRef|provider_ref/)
   })
 
   it("leaves a server-mode messenger's empty chat an empty answer offline", async () => {
