@@ -104,6 +104,16 @@ export const meetingStoreContract = (make: () => MeetingStore | Promise<MeetingS
       assert.equal(other.transcripts.length, 3)
       assert.equal(other.transcripts[2]?.rows[0]?.speakerParticipantId, null)
     }),
+    test("an omitted participant count keeps the stored one", async (s) => {
+      const input = sampleMeeting()
+      const before = await s.saveMeeting(input)
+      assert.equal(before.meeting.participantsCount, 1)
+      const { participantsCount: _count, ...meeting } = input.meeting
+      const after = await s.saveMeeting({ meeting, now: 4000 })
+      assert.equal(after.meeting.participantsCount, 1)
+      const cleared = await s.saveMeeting({ meeting: { ...meeting, participantsCount: null }, now: 5000 })
+      assert.equal(cleared.meeting.participantsCount, null)
+    }),
     test("empty part lists preserve stored parts and omitted series", async (s) => {
       const input = sampleMeeting()
       const before = await s.saveMeeting(input)

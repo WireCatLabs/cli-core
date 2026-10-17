@@ -101,3 +101,24 @@ it("late lookback does not advance the cursor when one revisited part fails", as
   expect((await pull(source, store, { accountId: 1, now: 3000, lookbackMs: 1000 })).warnings).toHaveLength(1)
   expect(await store.cursor(1)).toBe("1970-01-01T00:00:02Z")
 })
+
+it("keeps the stored participant count when the participants read fails", async () => {
+  const store = memoryMeetingStore()
+  let broken = false
+  const source = fakeMeetingSource({
+    async participants() {
+      if (broken) throw new Error("Unavailable example participants")
+      const person = { email: null, externalId: null, role: null, joinedAt: null, leftAt: null, durationMs: null }
+      return [
+        { ...person, identityExternalId: "alice", displayName: "Alice Example", sessions: null, metadata: null },
+        { ...person, identityExternalId: "bob", displayName: "Bob Sample", sessions: null, metadata: null },
+      ]
+    },
+  })
+  await pull(source, store, { accountId: 1, since: "1970-01-01T00:00:00Z", now: 2000 })
+  expect((await store.meetings())[0]?.participantsCount).toBe(2)
+  broken = true
+  const report = await pull(source, store, { accountId: 1, since: "1970-01-01T00:00:00Z", now: 3000 })
+  expect(report.warnings).toHaveLength(1)
+  expect((await store.meetings())[0]?.participantsCount).toBe(2)
+})

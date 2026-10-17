@@ -277,7 +277,7 @@ const save = (context: StoreContext, input: MeetingSave): number => {
       duration_ms: meeting.durationMs,
       timezone: meeting.timezone,
       host_identity_id: meeting.hostIdentityId,
-      participants_count: meeting.participantsCount,
+      ...(meeting.participantsCount === undefined ? {} : { participants_count: meeting.participantsCount }),
       metadata: toJson(meeting.metadata),
       deleted_at: meeting.deletedAt,
     },

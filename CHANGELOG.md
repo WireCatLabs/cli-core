@@ -9,6 +9,7 @@ shape of this file.
 
 ### Fixed
 
+- A meeting sync whose participants call fails keeps the stored participant count instead of overwriting it with nothing. `MeetingInput.participantsCount` may be left out, which keeps the stored value; `null` still clears it.
 - **`mentions` help fits the 80-character summary rule**: the group's summary is shorter and `mentions places` has a
   summary of its own, so tg's and max's command lint no longer report them.
 
