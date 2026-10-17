@@ -10,6 +10,7 @@ shape of this file.
 ### Fixed
 
 - **Mail writes work on Node 22.16.** Saving a thread and changing read/star flags use portable positional SQLite bindings. Numbered parameters produced `column index out of range` on the supported Node 22.16 runtime; thread counts, deletion state and unchanged-flag detection retain their existing semantics.
+- **A store that fails to open is closed again.** When the file opens but its setup fails, for example because it is not a SQLite database, the connection is closed before the error is passed on. The open handle kept the file busy, so on Windows the folder could not be removed afterwards.
 
 ## 0.331.0 — 18.10.2026
 
