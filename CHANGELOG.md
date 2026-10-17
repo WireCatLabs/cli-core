@@ -27,6 +27,9 @@ shape of this file.
 
 ### Fixed
 
+- **`tasks show` and `tasks_show` read an owner project's task (`HRB-12`, `task:HRB-12`) without a messenger
+  account**, with its evidence links. A project task belongs to no account, so the account check refused it as
+  missing. A task of a messenger account still needs that account; another account's task stays not found.
 - **`upgrade`'s "held back" hint names the package again with cli-base 0.40.2 or newer.** cli-base now ends the pnpm
   upgrade command with `--config.minimumReleaseAgeExclude=<scope>/*`; the hint replaced the last word, so it printed
   `pnpm add -g <pkg>@latest <pkg>@<version>` without the exemption. It now replaces the package word and keeps the

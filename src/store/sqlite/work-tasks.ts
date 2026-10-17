@@ -9,6 +9,7 @@ import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
 import { type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
+import { inboxKey } from "./task-keys.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
 import { taskIdOf, taskRowOf, thingOf } from "./things.js"
 import { write } from "./transaction.js"
@@ -109,6 +110,11 @@ export interface WorkTasks extends TaskRelationsStore {
   /** `person:<id>` of whoever sent the task's source message; `undefined` for the owner, a note or an unknown sender. */
   sourceSender(id: string): Promise<string | undefined>
   details(id: string): Promise<TaskDetails>
+  /**
+   * Whether `id` is a live task of a live owner project, which belongs to no messenger account; `false` for an
+   * account's task, a deleted one or none.
+   */
+  projectTask(id: string): Promise<boolean>
   find(filter: {
     project?: string
     type?: TaskType
@@ -406,6 +412,17 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       return details(task)
     },
     details: async (id) => details(required(id)),
+    projectTask: async (id) => {
+      const row = taskRowOf(database, id.startsWith("task:") ? id.slice("task:".length) : id)
+      if (row === undefined) return false
+      const project = database
+        .prepare(
+          "SELECT p.key, p.name FROM tasks t JOIN projects p ON p.id = t.project_id " +
+            "WHERE t.id = ? AND t.deleted_at IS NULL AND p.deleted_at IS NULL",
+        )
+        .get(row)
+      return project !== undefined && String(project.key) !== inboxKey(String(project.name))
+    },
     find: async ({ project, type, status, assignee, where, limit = 100 }) => {
       if (type !== undefined && !TASK_TYPES.includes(type))
         throw new CliError("validation_error", `a task's type is one of ${TASK_TYPES.join(", ")}`)

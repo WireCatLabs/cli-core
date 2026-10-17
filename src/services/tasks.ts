@@ -290,6 +290,7 @@ export interface TasksService {
     targets: { references?: readonly string[]; chats?: readonly string[] },
     options: { kind: TaskLinkOptionKind; by: TaskOrigin },
   ): Promise<(TaskCard & { review?: number }) | { relations: TaskRelation[] }>
+  /** An owner project's task (`HRB-12`) belongs to no messenger account; any other task must be this account's. */
   show(id: string): Promise<TaskCard>
   /** The list a task's category comes from, with what each one means. */
   categories(): Promise<readonly TaskCategory[]>
@@ -697,11 +698,11 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
       })
     },
 
-    show: (id) =>
-      inStore(async (store, account) => {
-        await owned(store, account, id)
-        return cardOf(store, id)
-      }),
+    show: async (id) => {
+      const store = await deps.store()
+      if (!(await store.tasks.projectTask(id))) await owned(store, await deps.account(), id)
+      return cardOf(store, id)
+    },
 
     similar: (subject, { limit } = {}) =>
       inStore(async (store, account) => {
