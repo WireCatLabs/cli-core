@@ -5,6 +5,21 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **A word of a contact's name is no longer a person on its own unless it is a first name or a surname.** One
+  contact named like a company made «Account», «Spain», «Бизнес», «Smart» or «Agent» a person thousands of times;
+  on the owner's store about one known name in five was such a word. Now a word alone counts only as a listed first
+  name, a surname by its ending, or a word of an alias the owner gave; other words count only as the whole name.
+  Polite pronouns (Вы, Ваш, Вашей…) never count, and the saint and «в/во» city rules apply to known names too.
+  `person-name` rule version 4: `mentions rebuild person-name` redoes it.
+- **An account's own identity is the owner.** Messengers saved it as a person of its own, so the owner's own name
+  was looked for as a contact's (about 37,000 places on the owner's store). Saving an account now links its own
+  identity, and whoever was linked with it, to the owner; the next sync repairs an existing store.
+  `contacts link <person> me` does it for an identity the account id does not name, such as a Zoom user.
+
 ## 0.322.0 — 17.10.2026
 
 ### Fixed

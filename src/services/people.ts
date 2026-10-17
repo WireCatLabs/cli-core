@@ -199,6 +199,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       const store = await deps.store()
       const account = await deps.account()
       const one = await identityIn(store, account, person)
+      if (other === "me") return store.people.linkToOwner(one)
       const two = await identityIn(store, account, other)
       if (one.provider === two.provider && one.id === two.id)
         throw new CliError("validation_error", "that is the same person twice")

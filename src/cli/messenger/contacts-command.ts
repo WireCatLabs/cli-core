@@ -279,7 +279,10 @@ export const contactsCommand = (messenger: Messenger): Command => {
   annotate(contacts.command("link"), { effects: LOCAL_WRITE })
     .description("record that two people in the store are one person — the same name is never enough")
     .argument("<person>", "their id, @username, or part of their name")
-    .argument("<other>", "the same in another messenger of the store, as <messenger>:<person> — max:Ana")
+    .argument(
+      "<other>",
+      "the same in another messenger of the store, as <messenger>:<person> — max:Ana; me: it is you, as zoom:<id> me",
+    )
     .action(async function (this: Command, person: string, other: string) {
       const context = messengerContext(this, messenger)
       const linked = await context.withServices((services) => services.people.link(person, other))

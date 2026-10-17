@@ -4,6 +4,7 @@ import { keysOver } from "./keys.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import type { StoreContext } from "./sqlite/open.js"
+import { linkToOwner } from "./sqlite/own-identities.js"
 import * as personLinks from "./sqlite/person-links.js"
 import { personSeenInAccounts } from "./sqlite/person-scope.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
@@ -50,6 +51,8 @@ export interface PeopleStore extends AccountPeople {
   /** Records the decision in `identity_link_events`; `unlinkIdentity` undoes it. */
   linkIdentities(person: IdentityRef, other: IdentityRef, options: LinkOptions): Promise<PersonRecord>
   unlinkIdentity(identity: IdentityRef, options: LinkOptions): Promise<PersonRecord>
+  /** The identity, and everyone linked with it, is the owner. */
+  linkToOwner(identity: IdentityRef): Promise<PersonRecord>
 }
 
 export const accountPeopleOver = (context: StoreContext): AccountPeople => {
@@ -112,5 +115,6 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     unlinkIdentity: async (identity, options) => {
       return write(database, () => personLinks.unlinkIdentity(context, identity, options))
     },
+    linkToOwner: async (identity) => linkToOwner(context, identity),
   }
 }

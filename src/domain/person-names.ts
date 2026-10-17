@@ -5,11 +5,15 @@ import { FIRST_NAMES, NAME_WORDS, NOT_NAMES } from "./first-names.js"
 export interface KnownPerson {
   id: number
   names: string[]
+  /** The names the owner gave them: each word of one is a name on its own, «Кузнечик» too. */
+  aliases?: string[]
 }
 
 /** Name words by stem, each with the people whose names hold it. */
 export interface NameIndex {
   people: Map<string, Set<number>>
+  /** The words of the owner's aliases alone, in the same keys. */
+  own: Map<string, Set<number>>
   stem: Stemmer
 }
 
@@ -85,25 +89,31 @@ const keyOf = (stem: Stemmer, word: string) => `s:${stem.stemToken(word)}`
 
 export const nameIndex = (known: KnownPerson[], stem: Stemmer): NameIndex => {
   const people = new Map<string, Set<number>>()
-  const add = (key: string, person: number) => {
-    const bearers = people.get(key) ?? new Set<number>()
+  const own = new Map<string, Set<number>>()
+  const add = (map: Map<string, Set<number>>, key: string, person: number) => {
+    const bearers = map.get(key) ?? new Set<number>()
     bearers.add(person)
-    people.set(key, bearers)
+    map.set(key, bearers)
   }
-  const addWord = (word: string, person: number) => {
-    if (stem.stemToken(word).length >= MIN_STEM) add(keyOf(stem, word), person)
-    add(`w:${word.toLowerCase()}`, person)
+  const addWord = (map: Map<string, Set<number>>, word: string, person: number) => {
+    if (stem.stemToken(word).length >= MIN_STEM) add(map, keyOf(stem, word), person)
+    add(map, `w:${word.toLowerCase()}`, person)
   }
-  for (const { id, names } of known)
-    for (const name of names)
-      for (const word of name.split(/[\s.,()"«»-]+/u).filter((one) => NAME_WORD.test(one))) {
-        addWord(word, id)
-        if (/^[a-z]+$/i.test(word)) addWord(cyrillicOf(word), id)
+  const addName = (maps: Map<string, Set<number>>[], name: string, id: number) => {
+    for (const word of name.split(/[\s.,()"«»-]+/u).filter((one) => NAME_WORD.test(one)))
+      for (const map of maps) {
+        addWord(map, word, id)
+        if (/^[a-z]+$/i.test(word)) addWord(map, cyrillicOf(word), id)
       }
-  return { people, stem }
+  }
+  for (const { id, names, aliases = [] } of known) {
+    for (const name of names) addName([people], name, id)
+    for (const alias of aliases) addName([people, own], alias, id)
+  }
+  return { people, own, stem }
 }
 
-const bearersOf = ({ people, stem }: NameIndex, word: string): Set<number> | undefined => {
+const bearersOf = ({ people, stem }: Pick<NameIndex, "people" | "stem">, word: string): Set<number> | undefined => {
   const byStem = people.get(keyOf(stem, word))
   const lower = word.toLowerCase()
   for (let cut = 0; cut <= MAX_ENDING && lower.length - cut >= MIN_WORD - 1; cut++) {
@@ -117,15 +127,15 @@ const intersection = (a: Set<number>, b: Set<number>) => new Set([...a].filter((
 
 /**
  * Capitalized words that are a known person's name in some case: Валерию for Valery, Иванову for Иванов. Two such
- * words in a row that one person shares are one full name. A word alone is a first name or a surname, and may be
- * several people.
+ * words in a row that one person shares are one full name. A word alone counts only as a listed first name or a
+ * surname by its shape: a contact named «Smart Agents» or «Account Manager Spain» names nobody by one word.
  */
 export const findNames = (text: string, index: NameIndex): FoundName[] => {
   if (index.people.size === 0) return []
   const found: FoundName[] = []
   let previous: { start: number; end: number; key: string; bearers: Set<number> } | undefined
   for (const match of text.matchAll(WORD)) {
-    const bearers = bearersOf(index, match[0])
+    const bearers = POLITE.test(match[0]) ? undefined : bearersOf(index, match[0])
     const start = match.index
     const end = start + match[0].length
     if (!bearers) {
@@ -144,7 +154,19 @@ export const findNames = (text: string, index: NameIndex): FoundName[] => {
     found.push({ start, end, value: key, people: [...bearers], confidence: 0.6 })
     previous = { start, end, key, bearers }
   }
-  return found
+  return found.filter(({ start, end, confidence }) => {
+    const before = text.slice(Math.max(0, start - 12), start)
+    if (HOLY_BEFORE.test(before)) return false
+    if (confidence > 0.6) return true
+    const word = text.slice(start, end)
+    if (CYRILLIC_WORD.test(word) && /е$/u.test(word) && IN_CITY.test(before)) return false
+    return (
+      roleOf(word) === "first" ||
+      SURNAME.test(word) ||
+      LATIN_SURNAME.test(word) ||
+      bearersOf({ people: index.own, stem: index.stem }, word) !== undefined
+    )
+  })
 }
 
 // Case endings a Russian first name takes once its final vowel is dropped: Ольга → Ольге, Дмитрий → Дмитрию.
@@ -160,6 +182,10 @@ const HOLY_BEFORE =
   /(?:^|[^\p{L}])(?:saint|sainte|st\.|sant|santa|santo|san|são|святого|святой|святая|святых|св\.|девы|богородицы)\s$/iu
 // A city that is also a first name, in the prepositional case: «во Владимире», «в Милане».
 const IN_CITY = /(?:^|[^\p{L}])во?\s$/iu
+// Capitalized in letters out of politeness, and an alias or a contact may hold them: «в Вашем расписании».
+const POLITE =
+  /^(?:вы|вам|вас|вами|ваш|ваша|ваше|ваши|вашего|вашей|вашему|вашим|вашими|ваших|вашу|вашем|твой|твоя|твоё|твое|твои|тебе|тебя)$/iu
+const LATIN_SURNAME = /^\p{Lu}\p{Ll}+(?:ov|ova|ev|eva|sky|skaya|ski|enko|yan|dze|shvili)$/u
 
 type Role = "first" | "word" | "patronymic"
 let forms: Map<string, Role> | undefined

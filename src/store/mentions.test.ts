@@ -561,6 +561,24 @@ describe("known people's names", () => {
     await store.close()
   })
 
+  it("takes an account's own identity for the owner, so the owner's name is nobody's in a text", async () => {
+    const { store, belkin } = await named()
+    await store.people.savePeople(OWNER, [{ id: "1", name: "Viacheslav Ptsarev" }])
+    const stray = await store.people.personOf({ provider: "max", id: "1" })
+    await store.accounts.saveAccount(OWNER, { name: null })
+    const owner = await store.people.personOf({ provider: "max", id: "1" })
+    expect(owner?.uid).not.toBe(stray?.uid)
+    await store.accounts.saveAccount(OWNER, { name: null })
+    expect((await store.people.personOf({ provider: "max", id: "1" }))?.uid).toBe(owner?.uid)
+
+    await store.people.savePeople(OTHER, [{ id: "5", name: "Viacheslav" }])
+    const linked = await store.people.linkToOwner({ provider: "telegram", id: "5" })
+    expect(linked.uid).toBe(owner?.uid)
+    await store.messages.saveMessages(OWNER, "-1", [from("1", "7", "Ptsarev и Белкин придут")], { via: "history" })
+    expect(await names(store)).toEqual([`1 Белкин linked ${belkin}`])
+    await store.close()
+  })
+
   it("finds a person by the owner's own name for their contact", async () => {
     const { store, belkin } = await named()
     await store.people.setContactAlias(OWNER, "7", "Кузнечик")

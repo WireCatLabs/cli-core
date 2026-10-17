@@ -75,25 +75,33 @@ const originalOf = (database: CacheDatabase) => {
 /**
  * People whose names are looked for: not the owner, and only people met in a messenger, a meeting or a confirmed
  * phone. Thousands of persons can exist only as an e-mail sender, and their names look mostly like companies and
- * mailing lists. The owner's own name for a contact is that person's name too.
+ * mailing lists. An account's own identity is the owner's, even when the store has not linked it yet. The owner's
+ * own name for a contact is that person's name too, and each word of it a name alone.
  */
 export const knownPeople = (database: CacheDatabase): KnownPerson[] => {
+  const own = "EXISTS (SELECT 1 FROM accounts a WHERE a.provider = i.provider AND a.external_id = i.external_id)"
   const rows = database
     .prepare(
       "WITH met AS (SELECT DISTINCT l.person_id AS id FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
-        "JOIN persons p ON p.id = l.person_id WHERE p.owner = 0 AND i.provider <> 'email' AND coalesce(i.bot, 0) = 0) " +
-        "SELECT p.id, p.name FROM persons p JOIN met ON met.id = p.id WHERE p.name IS NOT NULL " +
-        "UNION SELECT l.person_id, i.name FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
-        "JOIN met ON met.id = l.person_id WHERE i.name IS NOT NULL AND i.provider <> 'email' " +
-        "UNION SELECT a.aliasable_id, a.name FROM aliases a JOIN persons p ON p.id = a.aliasable_id " +
+        `JOIN persons p ON p.id = l.person_id WHERE p.owner = 0 AND i.provider <> 'email' AND coalesce(i.bot, 0) = 0 ` +
+        `AND NOT ${own}) ` +
+        "SELECT p.id, p.name, 0 AS alias FROM persons p JOIN met ON met.id = p.id WHERE p.name IS NOT NULL " +
+        "UNION SELECT l.person_id, i.name, 0 FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
+        `JOIN met ON met.id = l.person_id WHERE i.name IS NOT NULL AND i.provider <> 'email' AND NOT ${own} ` +
+        "UNION SELECT a.aliasable_id, a.name, 1 FROM aliases a JOIN persons p ON p.id = a.aliasable_id " +
         "WHERE a.aliasable_type = 'person' AND p.owner = 0 " +
-        "UNION SELECT l.person_id, a.name FROM aliases a JOIN identity_links l ON l.identity_id = a.aliasable_id " +
+        "UNION SELECT l.person_id, a.name, 1 FROM aliases a JOIN identity_links l ON l.identity_id = a.aliasable_id " +
         "JOIN met ON met.id = l.person_id WHERE a.aliasable_type = 'identity'",
     )
     .all()
-  const names = new Map<number, string[]>()
-  for (const row of rows) names.set(Number(row.id), [...(names.get(Number(row.id)) ?? []), String(row.name)])
-  return [...names].map(([id, all]) => ({ id, names: all }))
+  const people = new Map<number, KnownPerson>()
+  for (const row of rows) {
+    const id = Number(row.id)
+    const person = people.get(id) ?? { id, names: [], aliases: [] }
+    ;(Number(row.alias) ? (person.aliases as string[]) : person.names).push(String(row.name))
+    people.set(id, person)
+  }
+  return [...people.values()]
 }
 
 /** Who wrote in a chat, as people: a name alone is linked by rule only to someone the chat already holds. */

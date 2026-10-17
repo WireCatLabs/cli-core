@@ -2661,6 +2661,16 @@ describe("the shared read commands", () => {
       },
     )
     expect(lonely.code).toBe(2)
+    const mine = await call(
+      ["contacts", "link", "max:900", "me", "--offline", "--json"],
+      never,
+      env,
+      {},
+      {
+        provider: "telegram",
+      },
+    )
+    expect(mine.code).toBe(0)
   })
 
   it("contacts timeline lists what a person took part in, newest first, within a time range and scope", async () => {
