@@ -133,7 +133,7 @@ describe("provider-neutral document annotation transfer", () => {
     })
     expect(preview.counts.links).toBeGreaterThanOrEqual(8)
     expect(existsSync(f.destination)).toBe(false)
-    expect(readFileSync(f.source)).toEqual(before)
+    expect(readFileSync(f.source).equals(before)).toBe(true)
     expect(statSync(f.source).mtimeMs).toBe(modified)
     expect(JSON.stringify(preview)).not.toContain("Reviewed owner note")
   })
@@ -226,7 +226,7 @@ describe("provider-neutral document annotation transfer", () => {
       token_digest: null,
       metadata: null,
     })
-    expect(readFileSync(f.source)).toEqual(before)
+    expect(readFileSync(f.source).equals(before)).toBe(true)
   })
 
   it("rolls back an interrupted copy and retries without duplicate annotations or relationships", async () => {
