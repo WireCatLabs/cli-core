@@ -526,8 +526,10 @@ export const messengerContext = (
         async (events) => {
           let held: ReturnType<typeof connected> | undefined
           let store: Promise<MessageStore> | undefined
+          let warned: Promise<MessageStore> | undefined
           let released: Promise<void> | undefined
           const releaseConnection = () => (released ??= held?.close() ?? Promise.resolve())
+          const openOnce = () => (store ??= openStore({ env: base.env, command: app.command }))
           const deps: ServiceDeps = {
             messenger,
             profile,
@@ -546,7 +548,7 @@ export const messengerContext = (
                 let connection: MessengerAdapter | undefined
                 connection = await connectFor(command, messenger, base, {
                   events,
-                  stored: storedMessages(messenger.provider, deps.store, () => connection?.self()),
+                  stored: storedMessages(messenger.provider, openOnce, () => connection?.self()),
                 })
                 if (released) {
                   await connection.close()
@@ -558,12 +560,13 @@ export const messengerContext = (
               return held.adapter
             },
             account: async () => accountFor(),
+            // The connect's stored lookup opens the store too; only a service reading its answer there warns.
             store: () => {
-              store ??= openStore({ env: base.env, command: app.command }).then(async (opened) => {
+              warned ??= openOnce().then(async (opened) => {
                 if (messenger.history === "store") await warnUnserved(messenger, profile, base, opened)
                 return opened
               })
-              return store
+              return warned
             },
           }
           try {
