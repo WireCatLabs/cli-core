@@ -9,6 +9,7 @@ export {
 } from "./domain/formatting.js"
 export { formatLocator, isLocator, type MessageLocator, parseLocator } from "./domain/locator.js"
 export { type Markup, parseMarkdown } from "./domain/markdown.js"
+export { parseMarkdownSpans } from "./domain/markdown-spans.js"
 export type { MessageLink, MessagePermalink } from "./domain/message-link.js"
 export type * from "./domain/models.js"
 export { countedPoll } from "./domain/polls.js"
