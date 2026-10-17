@@ -1,12 +1,14 @@
+import type { Readable, Writable } from "node:stream"
 import { McpServer } from "@modelcontextprotocol/server"
-import { serveStdio } from "@modelcontextprotocol/server/stdio"
+import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError } from "@wirecat/cli-base"
 import { skillResource } from "@wirecat/cli-base/skill"
 import * as v from "valibot"
+import { environmentOf } from "../cli/context.js"
 import { judgedTargets } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
-import { connected, type Messenger, type MessengerContext } from "../cli/messenger/context.js"
+import { connected, connectFor, type Messenger, type MessengerContext } from "../cli/messenger/context.js"
 import { rootOf } from "../cli/steps.js"
 import { warmEmbedders } from "../embeddings/embed.js"
 import { guardFor } from "../sends/guard.js"
@@ -65,7 +67,7 @@ export const createServer = (
     messenger.guard?.(command, settings, context.renderer.warn, goAhead) ??
     guardFor(app, settings, context.renderer.warn, context.env, goAhead)
   const session = new MessengerSession(
-    async (events) => connected(await messenger.connect(command, context, { events }), messenger, context, events),
+    async (events) => connected(await connectFor(command, messenger, context, { events }), messenger, context, events),
     (run, body) => context.run(body, { name: run }),
     sessionOptions,
   )
@@ -179,13 +181,24 @@ export const serveOverStdio = async (
   options: ServerOptions,
 ): Promise<void> => {
   const { session, embedders, build, log } = createServer(command, context, messenger, options)
-  const handle = serveStdio(build, { onerror: (error) => context.renderer.note(`mcp: ${error.message}`) })
+  // Relayed by serve, the session's bytes are the client's, not this process's stdio.
+  const { relayed, stdin, stdout, signal } = environmentOf(command)
+  const input = relayed && stdin && stdout ? stdin : process.stdin
+  const transport =
+    relayed && stdin && stdout ? new StdioServerTransport(stdin as Readable, stdout as Writable) : undefined
+  const handle = serveStdio(build, {
+    ...(transport ? { transport } : {}),
+    onerror: (error) => context.renderer.note(`mcp: ${error.message}`),
+  })
 
   await new Promise<void>((resolve) => {
-    process.stdin.once("end", resolve)
-    process.stdin.once("close", resolve)
-    process.once("SIGINT", resolve)
-    process.once("SIGTERM", resolve)
+    input.once("end", resolve)
+    input.once("close", resolve)
+    if (transport) signal?.addEventListener("abort", () => resolve(), { once: true })
+    else {
+      process.once("SIGINT", resolve)
+      process.once("SIGTERM", resolve)
+    }
   })
 
   try {

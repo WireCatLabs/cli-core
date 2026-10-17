@@ -36,6 +36,12 @@ export interface ConnectOptions {
 
 /** What one messenger CLI hands the shared commands. Everything else about it stays in its own code. */
 export interface Messenger extends ServiceMessenger {
+  /**
+   * `"exclusive"`: the messenger allows one connection per account, so while `serve` holds it, every command that
+   * reaches the messenger — writes, `watch`, `mcp` — runs inside that serve, through its relay, and never opens a
+   * second one. Not on Windows yet. Unset: each command connects on its own.
+   */
+  connection?: "exclusive"
   /** How fast one profile may ask the messenger, across processes, unless `requests_per_minute` says otherwise. */
   pace?: PaceRate
   resolveSettings: (flags: GlobalFlags, options?: ResolveOptions) => Settings
@@ -123,6 +129,30 @@ export interface Messenger extends ServiceMessenger {
   skill?: URL
   /** What only this messenger can say about itself for `doctor`, read from disk — never a secret. */
   diagnose?: (command: Command, context: BaseContext) => Promise<Record<string, unknown>>
+}
+
+/**
+ * The messenger's connection — or, in a command serve runs for a client, serve's own, borrowed. Every connect
+ * goes through here, so a relayed command never opens a second connection.
+ */
+export const connectFor = (
+  command: Command,
+  messenger: Pick<Messenger, "connect">,
+  base: BaseContext,
+  options: ConnectOptions = {},
+): Promise<MessengerAdapter> => {
+  const { relayed } = environmentOf(command)
+  if (!relayed) return messenger.connect(command, base, options)
+  if (base.settings.profile !== relayed.profile) {
+    return Promise.reject(
+      new CliError(
+        "permission_error",
+        `this serve holds profile ${relayed.profile}; it does not run commands for profile ${base.settings.profile}`,
+        { sent: false },
+      ),
+    )
+  }
+  return Promise.resolve(relayed.connection())
 }
 
 export type ReadConnection = <T>(work: (adapter: MessengerAdapter) => Promise<T>) => Promise<T>
@@ -337,7 +367,7 @@ export const messengerContext = (
       base.run(
         async (events) => {
           if (base.settings.offline) throw new CliError("validation_error", OFFLINE)
-          const connection = await messenger.connect(command, base, { ...options, events })
+          const connection = await connectFor(command, messenger, base, { ...options, events })
           base.track(connection)
           const { adapter, close } = connected(connection, messenger, base, events)
           try {
@@ -383,7 +413,7 @@ export const messengerContext = (
               if (base.settings.offline) throw new CliError("validation_error", OFFLINE)
               if (released) throw new CliError("validation_error", "the read connection has already been released")
               if (!held) {
-                const connection = await messenger.connect(command, base, { events })
+                const connection = await connectFor(command, messenger, base, { events })
                 if (released) {
                   await connection.close()
                   throw new CliError("validation_error", "the read connection has already been released")

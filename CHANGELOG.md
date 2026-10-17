@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Commands run through `serve` for a messenger with one connection.** `Messenger.connection: "exclusive"` makes
+  `serve` listen on a socket beside its lock (`<state>/serve/<profile>.sock`, owner-only) and say so in the lock.
+  While it runs, every command that reaches the messenger — `messages send`, `watch`, `mcp` and the rest — is run
+  inside that serve on its connection, with the client's arguments, environment, working directory and stdin, and
+  prints there what it would have printed, with the same exit code. The send guard and permissions run in serve
+  as in a direct run, so the socket is no way around them. A serve that does not answer is an error, never a
+  second connection; one that stops mid-write leaves `outcome_unknown`. Not on Windows yet. `./background` adds
+  `listenRelay`, `relayCommand`, `relayPath` and `RELAY_PROTOCOL`; `./cli` adds `connectFor`, which a CLI's own
+  connecting command uses so it never opens a second connection inside serve. A partial answer's exit code is now
+  kept per run inside `run()`, not in `process.exitCode`, so two runs in one process do not share it.
+
 ## 0.312.0 — 17.10.2026
 
 ### Fixed

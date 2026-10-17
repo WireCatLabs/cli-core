@@ -10,6 +10,15 @@ export {
 } from "./checkpoints.js"
 export { holdLock, type Lock, lockPath, readLock, releaseLock, servingProfiles, takeLock } from "./lock.js"
 export { alive, carries, holdersOf } from "./processes.js"
+export {
+  listenRelay,
+  RELAY_PROTOCOL,
+  type RelayAddress,
+  type RelayIo,
+  type RelayRequest,
+  relayCommand,
+  relayPath,
+} from "./relay.js"
 export { failingNotice, type LastRun, reasonOf, recordRun, scheduledRuns } from "./schedules.js"
 export { type Ran, runProgram, type ServerSystem, thisMachine } from "./system.js"
 export {

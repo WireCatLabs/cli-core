@@ -450,6 +450,36 @@ token for `/mcp`, and sends 2025-era requests to per-session servers bound to th
 stateless server forgets the form capability a client declared in `initialize`. Writes over HTTP follow the
 profile's permissions exactly as over stdio; no form is forced (NEED-774, which replaced NEED-593).
 
+## The serve relay
+
+A messenger that allows one connection per account — WhatsApp drops the first when a second opens — sets
+`Messenger.connection: "exclusive"`. Its `serve` then runs the other commands for the profile on the connection
+it holds (NEED-1389):
+
+- **Discovery.** Once listening, serve opens a Unix socket beside its lock (`relayPath`, mode 0600 in the 0700
+  `serve/` directory; a path too long for a socket moves to a private directory under the system's temporary one)
+  and writes `relay: { path, protocol }` into the lock. `run()`'s `preAction` (`relayTarget`, `src/cli/relay-route.ts`)
+  sends a command there when the lock's process is alive and offers a relay, and the command reaches the messenger
+  (`effects.remote` not `none`) — except `serve`, `server`, `bot`, logins (`lifetime: "interactive"`), `--offline`,
+  `--dry-run` and `mcp --http`.
+- **The command, not the adapter.** The client sends its argv, environment, working directory and stdin
+  (`src/background/relay.ts`, one JSON object per line); serve runs `run()` again in-process (`runCommand`) and
+  streams back each `data`, `diagnostic` and raw stdout write, then the exit code. Parsing, settings, the send guard,
+  the journal and rendering are the direct run's own code — the guard runs in serve with the client's environment,
+  so `<PREFIX>_READ_ONLY` holds and the socket is no way around it.
+- **The borrowed connection** (`serveRelay`, `src/cli/messenger/serve-relay.ts`): serve keeps the raw adapter its
+  `connect` returned; `connectFor` hands a relayed run that adapter with `close` doing nothing, no `feed`, and a
+  `watch` that subscribes to serve's own events. A relayed run for another profile is refused. A CLI's own
+  command that connects goes through `connectFor` too, or inside serve it would open a second connection.
+- **Per run, not per process.** A relayed run adds no signal handlers, never prompts (`answer` is null — `ask`
+  needs `--yes`), resolves path-named options and arguments (`<file>`, `<path>`, `<dir>`…) against the client's
+  directory (`absolutePaths`), keeps its exit code in `environment.exit`, and `mcp` runs its stdio session over
+  the relayed streams.
+- **Failures.** No live lock: the command connects on its own. A lock that offers a relay whose socket does not
+  answer: `provider_unavailable`, never a second connection. serve gone before the exit: `outcome_unknown` for a
+  write. Another relay protocol: refused with "restart serve"; another CLI version is relayed with one line naming
+  both. A relayed watcher that throws ends its own watch, never serve's.
+
 ## Services
 
 Five layers, each calling only the ones below it: the **domain** (`src/domain/`), the **adapters**

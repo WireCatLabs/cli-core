@@ -2,6 +2,7 @@ import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirec
 import type { Command } from "commander"
 import { resolveOutput } from "../output.js"
 import type { AppIdentity } from "../ports/app.js"
+import type { MessengerAdapter } from "../ports/messenger.js"
 import type { EventSink } from "../runs/events.js"
 import { recorded } from "../runs/recording.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
@@ -28,6 +29,29 @@ export interface BaseEnvironment {
   app?: AppIdentity
   /** The local speech recognizer in place of the downloaded model; tests hand one in. */
   recognizer?: OpenRecognizer
+  /** Where raw bytes go when stdout is not this process's own — an MCP session relayed by serve. */
+  stdout?: NodeJS.WritableStream
+  /** Set by `run()`: this run's exit code, so two runs in one process (serve's relay) do not share one. */
+  exit?: { code?: number }
+  /** Set by `run()`: the same program again, for serve to run a client's command. */
+  runCommand?: (argv: string[], environment: BaseEnvironment) => Promise<number>
+  /** Set by serve on a command it runs for a client through its relay. */
+  relayed?: RelayedRun
+}
+
+export interface RelayedRun {
+  /** The profile serve holds; a command for another is refused before it touches the connection. */
+  profile: string
+  /** The client's working directory, which its relative paths mean. */
+  cwd: string
+  connection: () => MessengerAdapter
+}
+
+/** A partial answer's exit code, for this run alone. */
+export const setExitCode = (command: Command, code: number): void => {
+  const slot = environmentOf(command).exit
+  if (slot) slot.code = code
+  else process.exitCode = code
 }
 
 const environments = new WeakMap<Command, BaseEnvironment>()

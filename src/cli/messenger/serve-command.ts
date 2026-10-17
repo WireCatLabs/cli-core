@@ -21,6 +21,7 @@ import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 import { memberFetches } from "./serve-members.js"
 import { noticeFor, recordDiagnostics, type ServeNotice } from "./serve-notice.js"
+import { serveRelay } from "./serve-relay.js"
 import { stemFills } from "./serve-stems.js"
 import { listenUntilStopped } from "./watch-command.js"
 
@@ -37,7 +38,9 @@ export const serveCommand = (messenger: Messenger): Command => {
   )
 
   command.action(async function (this: Command) {
-    const context = recordDiagnostics(messengerContext(this, messenger), messenger.app)
+    const relay =
+      messenger.connection === "exclusive" && process.platform !== "win32" ? serveRelay(this, messenger) : undefined
+    const context = recordDiagnostics(messengerContext(this, relay?.messenger ?? messenger), messenger.app)
     const warn = noticeFor(context, messenger.app)
     const note = noticeFor(context, messenger.app, "info")
     if (context.settings.offline) throw new CliError("validation_error", "serve listens live; --offline cannot")
@@ -51,13 +54,25 @@ export const serveCommand = (messenger: Messenger): Command => {
         `${messenger.app.command} serve is already running for profile ${context.profile} (PID ${held.pid}, since ${held.startedAt})`,
       )
     }
+    let relaying: Promise<void> | undefined
     // `server start` answers on this, not on the lock alone: a lock is written before the connection opens.
     const onReady = () => {
-      holdLock(path, { pid: process.pid, startedAt, version, listeningAt: new Date().toISOString() })
+      const listening = { pid: process.pid, startedAt, version, listeningAt: new Date().toISOString() }
+      holdLock(path, listening)
       note({
         code: "listening",
         text: `listening for profile ${context.profile}, catching up on what arrived while it was down`,
       })
+      if (!relay || relaying) return
+      relaying = relay
+        .open(path, context.profile)
+        .then((address) => {
+          if (address) holdLock(path, { ...listening, relay: address })
+        })
+        .catch((error) => {
+          const errorCode = failureKey(error)
+          warn({ code: "relay_failed", errorCode, text: `commands cannot run through this serve: ${errorCode}` })
+        })
     }
 
     const counts: Record<string, number> = {}
@@ -65,9 +80,11 @@ export const serveCommand = (messenger: Messenger): Command => {
     const tasks = tasking(context, warn)
     const count = (event: MessageEvent) => {
       counts[event.event] = (counts[event.event] ?? 0) + 1
-      if (event.event !== "message") return
-      rules.arrived(event.message)
-      tasks.arrived(event.message)
+      if (event.event === "message") {
+        rules.arrived(event.message)
+        tasks.arrived(event.message)
+      }
+      relay?.arrived(event)
     }
     let connection: MessengerAdapter | undefined
     const members = memberFetches({
@@ -88,7 +105,7 @@ export const serveCommand = (messenger: Messenger): Command => {
       warn,
     })
     try {
-      await listenUntilStopped(this, context, messenger, count, {
+      await listenUntilStopped(this, context, relay?.messenger ?? messenger, count, {
         stop: new AbortController(),
         catchUp: true,
         onReady,
@@ -100,6 +117,8 @@ export const serveCommand = (messenger: Messenger): Command => {
         },
       })
     } finally {
+      await relaying
+      await relay?.close()
       rules.stop()
       await members.stop()
       await stems.stop()
