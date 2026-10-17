@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **The parity manifest matches whatsapp-cli built on this version**: `--sync-first`, `--sync-time`, `--max-chats`
+  and `--max-messages` of `search messages|conversations`, `stats messages show|top`, `stats contacts top` and
+  `contacts context` are not offered to a messenger that pushes its history (0.315.0), so wa's column says so.
+  0.316.0's release stopped on that row.
+
 ## 0.316.0 — 17.10.2026
 
 ### Added

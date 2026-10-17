@@ -2441,7 +2441,10 @@
         "--chat": "all",
         "--limit": "all",
         "--since-time": "all",
-        "--sync-first": "all"
+        "--sync-first": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        }
       }
     },
     "contacts import": {
@@ -3682,7 +3685,8 @@
           "in": "all"
         },
         "--max-messages": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--model": "all",
         "--provider": "all",
@@ -3691,10 +3695,12 @@
           "in": "all"
         },
         "--sync-first": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--sync-time": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--timezone": {
           "in": "all"
@@ -3713,10 +3719,12 @@
         "--exact": "all",
         "--limit": "all",
         "--max-chats": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--max-messages": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--newest": "all",
         "--page": "all",
@@ -3729,10 +3737,12 @@
         },
         "--source": "all",
         "--sync-first": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--sync-time": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--thread": {
           "in": "all"
@@ -4048,16 +4058,28 @@
         "--chat": "all",
         "--exact": "all",
         "--limit": "all",
-        "--max-chats": "all",
-        "--max-messages": "all",
+        "--max-chats": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        },
+        "--max-messages": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        },
         "--measure": "all",
         "--message-kind": "all",
         "--min-messages": "all",
         "--saved": "all",
         "--score": "all",
         "--source": "all",
-        "--sync-first": "all",
-        "--sync-time": "all",
+        "--sync-first": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        },
+        "--sync-time": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        },
         "--timezone": "all",
         "--weights": "all"
       }
@@ -4132,10 +4154,12 @@
           "in": "all"
         },
         "--max-chats": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--max-messages": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--saved": {
           "in": "all"
@@ -4144,10 +4168,12 @@
           "in": "all"
         },
         "--sync-first": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--sync-time": {
-          "in": "all"
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
         },
         "--timezone": {
           "in": "all"
@@ -4160,15 +4186,27 @@
         "--chat": "all",
         "--exact": "all",
         "--limit": "all",
-        "--max-chats": "all",
-        "--max-messages": "all",
+        "--max-chats": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        },
+        "--max-messages": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        },
         "--measure": "all",
         "--message-kind": "all",
         "--saved": "all",
         "--score": "all",
         "--source": "all",
-        "--sync-first": "all",
-        "--sync-time": "all",
+        "--sync-first": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        },
+        "--sync-time": {
+          "in": ["max", "tg"],
+          "reason": "a messenger that pushes its history has nothing to sync first: wa reads the local store, which serve keeps filled"
+        },
         "--timezone": "all",
         "--weights": "all"
       }
