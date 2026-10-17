@@ -153,7 +153,7 @@
     "standards:check": "node config/wirecat/check.mjs",
     "docs:lint": "markdownlint-cli2",
     "docs:spell": "cspell lint --config cspell.json --no-progress README.md",
-    "ci:quick": "pnpm typecheck"
+    "ci:quick": "pnpm typecheck && vitest run src/cli/command-lint.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
