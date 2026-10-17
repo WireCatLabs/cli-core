@@ -36,6 +36,12 @@ nothing now.
 - Release only through `bin/release`: `gh workflow run release.yml` started by hand skips the lock below.
   When you must start it by hand, pass the `main` you checked: `-f commit=<its full 40-character sha>`.
   The run refuses any other commit, so a merge that lands after your checks is not published.
+- Once a publisher captures its checked commit, treat that dated changelog section as frozen,
+  even before npm visibility and tagging finish. New work starts a fresh `## Unreleased` above it.
+  After rebasing, inspect the actual headings around every new note: a clean rebase or green PR
+  does not prove the note belongs to the captured release. Keep the captured section identical to
+  its checked source; when a tagged section needs historical correction, restore the exact tag
+  section and describe the correction under Unreleased. Never rewrite an immutable release tag.
 - Each session releases its own merged work: `git fetch`, `npm view`, a `chore: release` pull request
   that raises the version from what npm really has, then `bin/release`.
 - `bin/release` in every repository takes one machine-wide lock (`$XDG_RUNTIME_DIR/leemour-release.lock`),
