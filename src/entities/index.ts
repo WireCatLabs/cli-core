@@ -31,6 +31,7 @@ import {
   meetingSummary,
   meetingTranscript,
 } from "./meeting.js"
+import { meetingFindings } from "./meeting-findings.js"
 import { meetingPreparation } from "./meeting-preparation.js"
 import { member } from "./member.js"
 import { memory } from "./memory.js"
@@ -163,6 +164,7 @@ export const ENTITIES = {
   meeting_hit: meetingHit,
   meeting_project_evidence: meetingProjectEvidence,
   meeting_preparation: meetingPreparation,
+  meeting_findings: meetingFindings,
   meeting_transcript: meetingTranscript,
   meeting_summary: meetingSummary,
   reference,
@@ -204,4 +206,5 @@ export const entityDefinitions = (): Record<EntityName, unknown> =>
     }),
   ) as Record<EntityName, unknown>
 
+export { meetingFindings } from "./meeting-findings.js"
 export { meetingPreparation } from "./meeting-preparation.js"

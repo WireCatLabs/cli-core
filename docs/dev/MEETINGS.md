@@ -293,3 +293,5 @@ example meetings passage meeting:1/2/3/9 --before-n 0 --after-n 0 --json
 ```
 
 The selected account is passed separately from the reference; a foreign reference fails before a read. CLI and MCP use one reader and formatter. A second synthetic provider needs no provider-specific branch.
+
+For staged decisions and project work with atomic owner review, see [reviewed meeting findings](MEETING-FINDINGS.md).

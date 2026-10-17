@@ -130,6 +130,32 @@ const samples: Record<EntityName, unknown> = {
     created_at: at,
     updated_at: at,
   },
+  meeting_findings: {
+    id: "1",
+    account: { provider: "example", account: "synthetic" },
+    input: {
+      schema_version: 1,
+      key: "batch",
+      extractor: "synthetic",
+      findings: [
+        {
+          id: "d1",
+          kind: "fact",
+          type: "decision",
+          statement: "Ship the draft",
+          project: "project:1",
+          evidence: [{ reference: "meeting:1/2/3/0", fingerprint: "a".repeat(64) }],
+        },
+      ],
+    },
+    fingerprint: "b".repeat(64),
+    status: "proposed",
+    author: { type: "bot", id: "2", name: "synthetic" },
+    decided_by: null,
+    decided_at: null,
+    previous: [],
+    receipt: null,
+  },
   memory: {
     ref: "memory:1",
     id: "1",

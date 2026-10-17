@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
+import { meetingCueFingerprint } from "../meetings/cue-fingerprint.js"
 import type { Transcript, TranscriptRow } from "../meetings/index.js"
 import { formatMeetingReference, parseMeetingReference } from "../meetings/index.js"
 import { authorizedMeetingMetadata, type MeetingReadStore } from "./meeting-reference.js"
@@ -94,7 +95,7 @@ export const cueEvidence = (
   // Revision availability is read-time metadata, not part of immutable cue identity.
   return {
     ...content,
-    fingerprint: hash(content),
+    fingerprint: meetingCueFingerprint(content),
     revision: transcript.supersededAt === null ? "current" : "superseded",
   }
 }
