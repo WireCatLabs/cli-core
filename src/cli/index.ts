@@ -183,6 +183,7 @@ export {
   environmentOf,
   outputFor,
   provide,
+  secretInputOf,
 } from "./context.js"
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"

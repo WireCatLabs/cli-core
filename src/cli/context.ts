@@ -7,6 +7,7 @@ import type { MessengerAdapter } from "../ports/messenger.js"
 import type { EventSink } from "../runs/events.js"
 import { recorded } from "../runs/recording.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
+import type { SecretInput } from "../terminal/prompt.js"
 import { type Closeable, withDeadline } from "./deadline.js"
 import { withAbort } from "./execution.js"
 import { rootOf } from "./profile.js"
@@ -32,6 +33,8 @@ export interface BaseEnvironment {
   recognizer?: OpenRecognizer
   /** Where raw bytes go when stdout is not this process's own — an MCP session relayed by serve. */
   stdout?: NodeJS.WritableStream
+  /** Where a prompt and what is typed at it go, in place of the process's stderr; tests hand one in. */
+  stderr?: NodeJS.WritableStream
   /** Set by `run()`: this run's exit code, so two runs in one process (serve's relay) do not share one. */
   exit?: { code?: number }
   /** Set by `run()`: the same program again, for serve to run a client's command. */
@@ -76,6 +79,15 @@ export const provide = (program: Command, environment: BaseEnvironment): void =>
 
 export const environmentOf = <E extends BaseEnvironment = BaseEnvironment>(command: Command): E =>
   (environments.get(rootOf(command)) ?? {}) as E
+
+/**
+ * The input and output `readSecret` uses for this command: the run's own, so a prompt goes where the run's other
+ * output goes and a test that captures it sees it. `readSecret(prompt, { ...secretInputOf(this), echo: true })`.
+ */
+export const secretInputOf = (command: Command): Pick<SecretInput, "input" | "output"> => {
+  const { stdin, stderr } = environmentOf(command)
+  return { ...(stdin ? { input: stdin } : {}), ...(stderr ? { output: stderr } : {}) }
+}
 
 /** For the commands that print but never need settings or a connection. */
 export const outputFor = (command: Command) => {
