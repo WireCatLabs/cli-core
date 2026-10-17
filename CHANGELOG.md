@@ -24,6 +24,9 @@ shape of this file.
 
 ### Added
 
+- **`./store` exports `MENTION_QUERY`, `MENTION_STATUSES` and `OTHER_SOURCES`, and `./services` exports
+  `entriesOfList` and `listContextOf`**, so memo reads mention queries and `--source` lists through cli-core instead
+  of its own copies.
 - SDK hosts can bind explicitly authorized local message, mail and document sources through
   `createContextEvidenceReader` and optional `store.contextEvidence`. Native pages enforce account
   identity, dates, literal-word matching and UTF-8 text/metadata budgets before hydration, reserve
