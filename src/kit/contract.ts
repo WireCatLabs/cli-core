@@ -51,6 +51,7 @@ export const OPTIONAL_METHODS = [
   "unpin",
   "react",
   "markRead",
+  "markTopicRead",
   "poll",
   "vote",
   "closePoll",

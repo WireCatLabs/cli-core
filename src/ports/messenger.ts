@@ -243,6 +243,10 @@ export interface MessageReactions {
 export interface ReadState {
   /** Marks the chat read up to `until`, or to its newest message; the other side sees it. */
   markRead(chatId: Id, until?: Id): Promise<void>
+}
+
+/** Only for a messenger with forum topics (`Messenger.topics`); one without them implements `ReadState` alone. */
+export interface TopicReadState {
   /** One forum topic only, up to `until` or its newest message; the rest of the chat stays as it is. */
   markTopicRead(chatId: Id, topicId: Id, until?: Id): Promise<void>
 }
@@ -600,6 +604,7 @@ export interface MessengerAdapter
     Partial<MessagePins>,
     Partial<MessageReactions>,
     Partial<ReadState>,
+    Partial<TopicReadState>,
     Partial<MessagePolls>,
     Partial<MessageButtons>,
     Partial<BotChats>,

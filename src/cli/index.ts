@@ -69,6 +69,7 @@ export type {
   ServerReads,
   ThreadAddressing,
   TopicEditing,
+  TopicReadState,
   Transcript,
 } from "../ports/messenger.js"
 export type { Fetching, MediaOption, MessengerTraits } from "../ports/traits.js"
