@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **An agent can no longer delete for everyone**, as the standard says. The MCP `messages delete` has no
+  `for_everyone` argument, so passing it is refused as unknown; the owner still has `messages delete --for-everyone`.
+  A messenger whose every delete is for everyone sets the new `Messenger.deleteForMe: false`, and there the MCP
+  delete refuses with `permission_error` saying why, without connecting.
+- **`mcp --permission <key=level>` only tightens**, as the standard says: no `mcp` flag grants access. An
+  override that would loosen the profile's level — `readonly` to `allow`, a deny to anything, a built-in question to
+  `allow`, or a parent key that would hide a stricter key under it — is refused at startup with a
+  `validation_error` naming the key. Narrowing works as before.
+
 ### Fixed
 
 - **An agent's commands carry the CLI's names and permission keys.** The catalogue listed `chats send as`,

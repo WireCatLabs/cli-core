@@ -1404,7 +1404,9 @@ whose values are levels. It holds for a command the owner types and for an agent
    A default is never tightened without the owner's word. **A built-in default only ever tightens**:
    against a broader key of the owner's, the stricter of the two holds — `messages: readonly` still
    stops a deletion, and `messages: allow` keeps its question until `messages.delete` is named.
-4. **Limits no level lifts**: an agent never deletes for everyone and never ends other sessions.
+4. **Limits no level lifts**: an agent never deletes for everyone and never ends other sessions. The MCP
+   delete has no for-everyone argument; where every delete is for everyone (WhatsApp) it refuses with
+   `permission_error`.
 5. **A group's moderation rules use the same four levels** for each kind of action (delete,
    remove, accept, decline), `readonly` meaning "report it, do nothing". A rule's level can only be
    as loose as the profile's level for `chats.moderate`.
@@ -1464,7 +1466,10 @@ it writes no file and uses the same `messages` read permission.
 3. **Every command says whether it writes**; `read` refuses a writing one and `write` a reading one.
 4. **A command is found and run by its [permission](#permissions)**, never by a flag of its own:
    `deny` hides it, `readonly` hides the writing ones, `ask` and `allow` act — no form, since nobody
-   is at a terminal to answer (NEED-772, NEED-773). `mcp` takes no flag that grants or confirms access.
+   is at a terminal to answer (NEED-772, NEED-773). No `mcp` flag grants or confirms access:
+   `--permission <key=level>` only narrows a level for that server, and one that would loosen the profile
+   is refused at startup; `mcp setup --allow-writes` only acknowledges, when installing, that the profile
+   offers writes.
 5. **Unknown arguments are refused before execution.** A retired schedule field must never turn
    a scheduled write into an immediate one.
 6. **A tool and its command run the same service method**, so they answer the same result and the

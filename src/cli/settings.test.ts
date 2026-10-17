@@ -251,6 +251,38 @@ describe("permissions across sections", () => {
   })
 })
 
+describe("a --permission override", () => {
+  const resolved = (file: object, permission: string[]) => {
+    withConfig(JSON.stringify(file))
+    return () => resolveSettings({ profile: "agent", permission }, { env: {}, configDir })
+  }
+  const readonlyMessages = { profiles: { agent: { permissions: { messages: "readonly" } } } }
+
+  it("**only tightens**: it refuses to lift readonly, deny or a built-in question, naming the key", () => {
+    for (const [file, permission, key] of [
+      [readonlyMessages, ["messages=allow"], "messages"],
+      [readonlyMessages, ["messages.send=ask"], "messages.send"],
+      [{ profiles: { agent: { permissions: { "messages.delete": "deny" } } } }, ["messages=allow"], "messages"],
+      [
+        { profiles: { agent: { permissions: { "messages.delete": "deny" } } } },
+        ["messages.delete=readonly"],
+        "messages.delete",
+      ],
+      [{ profiles: { agent: {} } }, ["messages.delete=allow"], "messages.delete"],
+    ] as const) {
+      expect(resolved(file, [...permission])).toThrow(
+        expect.objectContaining({ code: "validation_error", message: expect.stringContaining(key) }),
+      )
+    }
+  })
+
+  it("narrows a profile's level, and may repeat it", () => {
+    const { permissions } = resolved(readonlyMessages, ["messages.send=deny", "messages=readonly"])()
+    expect(levelFor(permissions, "messages.send").level).toBe("deny")
+    expect(levelFor(permissions, "messages.list").level).toBe("readonly")
+  })
+})
+
 describe("a process locked to one profile", () => {
   it("uses the locked profile when nothing names one, and refuses any other a first word or APP_PROFILE names", () => {
     withConfig(JSON.stringify({ profiles: {} }))

@@ -160,6 +160,8 @@ export interface Messenger extends ServiceMessenger {
    * messenger decides alone (WhatsApp: a vote can always be changed).
    */
   pollRevote?: boolean
+  /** Whether a message can be deleted for the owner alone; yes when unset. No: every delete is for everyone (WhatsApp). */
+  deleteForMe?: boolean
   /** Whether the messenger has forum topics: `--topic`, `topic:` in `messages list` and the `topics_*` tools; yes when unset. */
   topics?: boolean
   /** Whether `topics show` reads one forum topic; no when unset. */

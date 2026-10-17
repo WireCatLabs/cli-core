@@ -42,9 +42,9 @@ describe("HTTP MCP startup", () => {
       "--public-url",
       "https://device.example",
       "--permission",
-      "messages.send=allow",
+      "messages.send=deny",
       "--permission",
-      "chats=allow",
+      "chats=readonly",
     ])
     expect(code).toBe(0)
     expect(streams.stdout).toEqual([])
@@ -52,7 +52,7 @@ describe("HTTP MCP startup", () => {
       expect.anything(),
       expect.objectContaining({
         settings: expect.objectContaining({
-          permissions: expect.objectContaining({ "messages.send": "allow", chats: "allow" }),
+          permissions: expect.objectContaining({ "messages.send": "deny", chats: "readonly" }),
         }),
       }),
       expect.anything(),
@@ -61,12 +61,18 @@ describe("HTTP MCP startup", () => {
     )
   })
   it("preserves parent permission overrides in a generated stdio configuration", async () => {
-    const { code, streams } = await cli(["mcp", "--permission", "messages.send=allow", "config", "--json"])
+    const { code, streams } = await cli(["mcp", "--permission", "chats=readonly", "config", "--json"])
     expect(code).toBe(0)
     const entry = JSON.parse(streams.stdout.join("")).item.config
-    expect(entry.mcpServers["chat-default"].args).toEqual(
-      expect.arrayContaining(["--permission", "messages.send=allow"]),
-    )
+    expect(entry.mcpServers["chat-default"].args).toEqual(expect.arrayContaining(["--permission", "chats=readonly"]))
+  })
+  it("refuses at startup an override that would loosen the profile, naming the key", async () => {
+    const { code, streams } = await cli(["mcp", "--http", "--permission", "messages.send=allow", "--json"])
+    expect(code).toBe(2)
+    expect(JSON.parse(streams.stderr.at(-1) ?? "null")).toMatchObject({
+      error: { code: "validation_error", message: expect.stringContaining("messages.send") },
+    })
+    expect(serveOverHttpUntilStopped).not.toHaveBeenCalled()
   })
   it.each([["--http", "--permission", "messages.send=yes"]])(
     "rejects invalid options before starting: %j",

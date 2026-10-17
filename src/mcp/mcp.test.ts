@@ -341,6 +341,7 @@ interface Harness {
   topicShow?: boolean
   forwardTopic?: boolean
   pollCloseSeconds?: readonly [number, number]
+  deleteForMe?: boolean
   counterFields?: Messenger["counterFields"]
   guard?: Messenger["guard"]
   serverSearch?: boolean
@@ -375,6 +376,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     topicShow,
     forwardTopic,
     pollCloseSeconds,
+    deleteForMe,
     counterFields,
     guard,
     root: _root,
@@ -402,6 +404,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     ...(topicShow ? { topicShow } : {}),
     ...(forwardTopic ? { forwardTopic } : {}),
     ...(pollCloseSeconds ? { pollCloseSeconds } : {}),
+    ...(deleteForMe === undefined ? {} : { deleteForMe }),
     ...(counterFields ? { counterFields } : {}),
     ...(guard ? { guard } : {}),
   }
@@ -3015,7 +3018,7 @@ describe("sending over MCP", () => {
     expect(marks).toEqual([["7", "1"]])
   })
 
-  it("**deletes the owner's copy with no form at level ask**, and for everyone only with for_everyone (BUG-274)", async () => {
+  it("**deletes the owner's copy with no form at level ask**, and never for everyone (BUG-274)", async () => {
     const deletions: unknown[] = []
     const telegram = scripted({
       delete: async (chatId, ids, options) => {
@@ -3035,17 +3038,46 @@ describe("sending over MCP", () => {
       deleted: ["1", "2"],
       for_everyone: false,
     })
-    expect(everyone.body.item).toMatchObject({ deleted: ["3"], for_everyone: true })
-    expect(deletions).toEqual([
-      ["7", ["1", "2"], { forEveryone: false }],
-      ["7", ["3"], { forEveryone: true }],
-    ])
+    expect(everyone).toMatchObject({ isError: true, body: { error: { code: "validation_error" } } })
+    expect(deletions).toEqual([["7", ["1", "2"], { forEveryone: false }]])
     const denied = await (await connect(telegram, { config: levels({ "messages.delete": "deny" }) })).call(
       "messages delete",
-      { chat: "7", messages: ["4"], for_everyone: true },
+      { chat: "7", messages: ["4"] },
     )
     expect(denied.isError).toBe(true)
-    expect(deletions).toHaveLength(2)
+    expect(deletions).toHaveLength(1)
+  })
+
+  it("**refuses to delete where every delete is for everyone**, saying why and naming the owner's command", async () => {
+    const deletions: unknown[] = []
+    let connected = 0
+    const everyoneOnly = scripted({
+      delete: async (chatId, ids, options) => {
+        if (!options.forEveryone) throw new CliError("validation_error", "deletes only for everyone")
+        deletions.push([chatId, ids, options])
+      },
+    })
+    const { call } = await connect(everyoneOnly, {
+      deleteForMe: false,
+      connect: async () => {
+        connected += 1
+        return everyoneOnly.connect()
+      },
+    })
+
+    const refused = await call("messages delete", { chat: "7", messages: ["1"] })
+
+    expect(refused).toMatchObject({
+      isError: true,
+      body: {
+        error: {
+          code: "permission_error",
+          message: expect.stringMatching(/deletes only for everyone.*never deletes for everyone.*--for-everyone/),
+        },
+      },
+    })
+    expect(deletions).toEqual([])
+    expect(connected).toBe(0)
   })
 
   it("**sends with no form where the level is ask**", async () => {
@@ -3413,13 +3445,13 @@ describe("sending over MCP", () => {
       expect(printed).not.toContain(issued?.refresh_token)
     })
 
-    it("sends with no form, as the profile and its startup overrides allow", async () => {
+    it("sends with no form where the profile allows, beside an override that narrows another key", async () => {
       const { telegram, sent } = sending()
       const { call, client, forms } = await connect(telegram, {
         http: true,
         era,
-        permission: ["messages.send=allow"],
-        config: { defaults: { permissions: { messages: "readonly", "messages.send": "deny" } } },
+        permission: ["messages.delete=deny"],
+        config: { defaults: { permissions: { messages: "allow" } } },
       })
       expect(await client.commands()).toContain("messages send")
       expect((await call("chats list")).isError).toBe(false)
