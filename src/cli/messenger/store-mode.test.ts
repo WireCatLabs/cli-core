@@ -85,6 +85,7 @@ const call = async (
   connect: Messenger["connect"],
   history?: "store",
   tty = false,
+  own: Partial<Messenger> = {},
 ) => {
   const messenger: Messenger = {
     app,
@@ -93,6 +94,7 @@ const call = async (
     connect,
     chatArgument: "a chat",
     ...(history ? { history } : {}),
+    ...own,
   }
   const streams = captureStreams()
   const code = await run(
@@ -393,6 +395,34 @@ describe("a messenger whose history is read from the store", () => {
       expect(stderr).toContain("this messenger")
     }
     expect(connects).toEqual([])
+  })
+
+  it("**reads one chat back page by page** where the messenger can, capped at its page size, never --all", async () => {
+    const env = await filled()
+    const windows: unknown[] = []
+    const connect: Messenger["connect"] = async () => ({
+      ...server(),
+      history: async (_chat, window) => {
+        windows.push(window)
+        return { items: thread.slice(0, window.limit), hasMore: false }
+      },
+    })
+    const onDemand: Partial<Messenger> = {
+      historyOnDemand: true,
+      fetching: { page: 2, maxPageSize: 2, pause: "1ms", maxPages: 5, orderBy: "time" },
+    }
+    const sync = (...argv: string[]) => call(["messages", "sync", ...argv], env, connect, "store", false, onDemand)
+
+    const synced = await sync("Book", "--last", "2", "--json")
+    const wide = await sync("Book", "--page-size", "3")
+    const all = await sync("--all")
+
+    expect(synced.code, synced.stderr).toBe(0)
+    expect(windows).toEqual([expect.objectContaining({ limit: 2 })])
+    expect(wide.stderr).toContain("--page-size takes at most 2")
+    expect(all.code).toBe(2)
+    expect(all.stderr).toContain("name one chat")
+    expect(windows).toHaveLength(1)
   })
 
   it("**answers `inbox` and `review` from the store as the messenger would**, never connecting", async () => {

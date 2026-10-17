@@ -116,6 +116,13 @@ export const syncCommand = (messenger: Messenger): Command => {
       if ((chat === undefined) === (all !== true))
         throw new CliError("validation_error", "name a chat, or --all for every chat")
       if (all && estimate) throw new CliError("validation_error", "--dry-run prices one chat; not with --all")
+      if (all && messenger.history === "store") {
+        throw new CliError(
+          "validation_error",
+          `--all walks the messenger's chat list, and ${messenger.name ?? messenger.app.command} pushes its chats ` +
+            `instead — keep \`${messenger.app.command} serve\` running${messenger.historyOnDemand ? ", or name one chat" : ""}`,
+        )
+      }
       if (since !== undefined && last !== undefined) {
         throw new CliError("validation_error", "give --since-time or --last, not both: how far back the fetch goes")
       }
