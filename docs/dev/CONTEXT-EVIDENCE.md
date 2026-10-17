@@ -47,8 +47,8 @@ async function readSelectedMessages(store: MessageStore, authorized: StoredAccou
 ```
 
 This factory borrows an already-open port. It does not open or close a store, resolve profiles,
-synchronize providers, fill indexes, load models or write records. Store opening has its own
-migration/backfill behavior; this API does not make opening the store a read-only operation.
+synchronize providers, fill indexes, load models or write records. Normal store opening has migration/backfill behavior. A host requiring no maintenance must use
+[read-only opening](STORE-OPENING.md); this reader factory does not change an already-open connection.
 The host owns resource lifetime and closes resources before publishing an answer.
 
 ## Read bounds and evidence

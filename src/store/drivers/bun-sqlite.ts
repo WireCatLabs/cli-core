@@ -13,7 +13,7 @@ export interface BunDatabase {
 }
 
 export interface BunDatabaseClass {
-  new (path: string): BunDatabase
+  new (path: string, options?: { readonly?: boolean; create?: boolean }): BunDatabase
   setCustomSQLite(path: string): void
 }
 

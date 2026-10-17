@@ -24,6 +24,7 @@ import { accounts } from "../src/store/sqlite/schema.js"
 import { officeFixture } from "../src/testing/office-files.js"
 import { smokeContextEvidence } from "./smoke-context-evidence.js"
 import { smokeMeetingPreparation } from "./smoke-meeting-preparation.js"
+import { smokeReadOnlyStore } from "./smoke-read-only-store.js"
 
 const runtime = typeof (globalThis as { Bun?: unknown }).Bun === "undefined" ? "node" : "bun"
 const failures: string[] = []
@@ -215,6 +216,7 @@ for (const { name, run } of meetingStoreContract(async () => {
 
 await smokeMeetingPreparation(check)
 await smokeContextEvidence(check)
+await smokeReadOnlyStore(check)
 
 if (failures.length > 0) {
   console.error(`smoke failed under ${runtime}:\n${failures.map((one) => `  - ${one}`).join("\n")}`)
