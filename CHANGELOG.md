@@ -7,16 +7,8 @@ shape of this file.
 
 ## Unreleased
 
-## 0.327.0 — 17.10.2026
-
 ### Added
 
-- `previewDocumentTransfer` and `applyDocumentTransfer` in `./store` copy one explicitly selected
-  document collection and its tags, aliases, notes, memories, facts, revisions and relationships
-  between databases. Source handles are read-only; fingerprints, identity checks, atomic writes and
-  durable reference receipts protect retries. External references without a verified destination
-  block the copy. The original remains available; embeddings and entire messenger/contact archives
-  are not copied.
 - **`refuseUnderReadOnly(command, what)`** (`@wirecat/cli-core/cli`) refuses, under `<PREFIX>_READ_ONLY`, a write
   the send guard never sees, such as linking or unlinking the device: call it first in `session start`, `session end`
   and `setup`. It fails with `permission_error` and "this process is read-only (TG_READ_ONLY) — it cannot <what>",
@@ -31,7 +23,6 @@ shape of this file.
   `readSecret(prompt, { ...secretInputOf(this), echo: true })`. A run's environment takes `stderr` beside `stdout`,
   where a prompt and what is typed at it go; a test that hands one in now sees the prompt, which before went to the
   process's real stderr. `contacts lookup` and the bot's token prompt use it.
-
 - **`logsInOrOut(command)`** (`@wirecat/cli-core/cli`) marks a command that links or unlinks the account. It never
   runs through `serve`'s relay — `session end` used to be relayed and would have logged out `serve`'s own
   connection — and `<PREFIX>_READ_ONLY` refuses it before its action with "it cannot log in or out". Mark
@@ -49,7 +40,6 @@ shape of this file.
 
 ### Fixed
 
-- **The preparation source flag advertises a vocabulary-compatible value name.** `--context-source <id=cursor>` still accepts either a selected ID or ID with its continuation cursor; the optional cursor syntax and runtime behavior are unchanged.
 - **`polls vote` and `polls voters` say nothing of anonymous polls where a messenger has none**
   (`pollAnonymous: false`, wa), in their help and in the agent's tool descriptions.
 - **A reader that stops reading ends a run quietly, relayed or not**: `wa chats list --json | head` through a running
@@ -80,6 +70,21 @@ shape of this file.
   the shared tree keeps off MCP are no longer offered there either (`store gaps plan`, `store gaps repair`,
   `store jobs list`, `store jobs show`, `runs search`). `toolsFromCommands` lists a group that runs on its own, such
   as `tasks duplicates`, beside its subcommands.
+
+## 0.327.0 — 17.10.2026
+
+### Added
+
+- `previewDocumentTransfer` and `applyDocumentTransfer` in `./store` copy one explicitly selected
+  document collection and its tags, aliases, notes, memories, facts, revisions and relationships
+  between databases. Source handles are read-only; fingerprints, identity checks, atomic writes and
+  durable reference receipts protect retries. External references without a verified destination
+  block the copy. The original remains available; embeddings and entire messenger/contact archives
+  are not copied.
+
+### Fixed
+
+- **The preparation source flag advertises a vocabulary-compatible value name.** `--context-source <id=cursor>` still accepts either a selected ID or ID with its continuation cursor; the optional cursor syntax and runtime behavior are unchanged.
 
 ## 0.325.0 — 17.10.2026
 
