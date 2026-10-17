@@ -10,6 +10,7 @@ import {
   readinessList,
   refreshedAnswer,
 } from "../../cli/messenger/conversation-answers.js"
+import { syncsFirst } from "../../cli/messenger/search-sync-options.js"
 import { nextStep } from "../../cli/steps.js"
 import { BATCH_SIZE, CONVERSATION_QUERY } from "../../services/conversations.js"
 import { REFRESH_BOUNDS } from "../../services/embeddings.js"
@@ -157,9 +158,12 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
         "some (conversations.embed), chats changed since the build or never built (conversations.build), a fetch " +
         "that stopped early (messages.sync). filter is strict Lucene: any message in the conversation must match " +
         "before ranking. source explicitly widens accounts; by default only the active account is searched " +
-        "(meta.accounts). Hits include source and locator. sync_first optionally fetches new messages first under " +
-        "messages.sync-first; max_chats (5), sync_time (30s) and max_messages (500) bound the fetch. This does not " +
-        "build or embed. Uses the profile embedding provider/model settings; remote providers receive query text.",
+        "(meta.accounts). Hits include source and locator. " +
+        (syncsFirst(messenger)
+          ? "sync_first optionally fetches new messages first under messages.sync-first; max_chats (5), sync_time " +
+            "(30s) and max_messages (500) bound the fetch. "
+          : "") +
+        "This does not build or embed. Uses the profile embedding provider/model settings; remote providers receive query text.",
       input: v.object({
         ...syncInputs,
         query: v.pipe(v.string(), v.description("what to look for, in your own words")),

@@ -14,23 +14,24 @@ import { archiveSummary } from "./archive-summary.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { messagesAnswer, offsetOf } from "./search-answers.js"
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
-import { syncOptions, syncRequest } from "./search-sync-options.js"
+import { syncOptions, syncRequest, syncsFirst } from "./search-sync-options.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
 
 const PLACES = { transcript: "transcript", filename: "file name", file: "file text" } as const
 
 /** `search messages`: this messenger's messages; mail is memo's, read by the same services with kind mail. */
 export const messagesSearchCommand = (messenger: Messenger): Command => {
-  const command = annotate(backendOptions(threadOptions(syncOptions(new Command("messages"))), messenger), {
+  const command = annotate(backendOptions(threadOptions(syncOptions(new Command("messages"), messenger)), messenger), {
     effects: REMOTE_READ,
     partial: true,
     output: { entity: "message", view: "hit" },
   })
+  const syncing = syncsFirst(messenger) ? "; optionally fetches new messages with --sync-first" : ""
   return command
     .description(
       messenger.serverSearch
-        ? "search messenger messages in the local store and on the messenger's server (--backend); optionally fetches new messages with --sync-first; --discover searches the archive only"
-        : "search messenger messages in the local store — what was read, fetched or kept by serve; optionally fetches new messages with --sync-first; --discover searches the archive only",
+        ? `search messenger messages in the local store and on the messenger's server (--backend)${syncing}; --discover searches the archive only`
+        : `search messenger messages in the local store — what was read, fetched or kept by serve${syncing}; --discover searches the archive only`,
     )
     .argument(
       "[query...]",
@@ -57,9 +58,14 @@ export const messagesSearchCommand = (messenger: Messenger): Command => {
     .addHelpText("after", SAVE_HELP)
     .addHelpText(
       "after",
-      `Search reads the local archive: a chat never fetched is not searched. Prepare it once with
+      `${
+        syncsFirst(messenger)
+          ? `Search reads the local archive: a chat never fetched is not searched. Prepare it once with
 \`${messenger.app.command} messages sync --all --background\` (the last 90 days of every chat); the answer's
-coverage says what was searched and coverage.next what would improve it. Notes are
+coverage says what was searched and coverage.next what would improve it.`
+          : `Search reads the local archive: what \`${messenger.app.command} serve\` has kept since the account was linked.
+Keep serve running so new messages are searchable.`
+      } Notes are
 \`${messenger.app.command} search notes\`, messages and notes at once \`${messenger.app.command} search all\`; mail is memo's:
 \`memo search mail\`.
 A bare word looks in message text, voice transcripts, file names and file text. text:, transcript:,
@@ -183,7 +189,7 @@ const searchAction = (messenger: Messenger) =>
     const chats = incomplete.length
     const summary = found.coverage ? archiveSummary(found.coverage, found.items.length) : undefined
     if (summary) context.renderer.note(summary)
-    else if (!found.coverage && chats > 0) {
+    else if (!found.coverage && chats > 0 && syncsFirst(messenger)) {
       context.renderer.note(
         `${chats} of the chats searched are not held in full — \`${command} messages sync <chat>\` syncs one`,
       )

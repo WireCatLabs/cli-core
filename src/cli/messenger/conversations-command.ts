@@ -714,7 +714,10 @@ const readinessLine = ({ chat, state, graph, pending, vectors }: ChatReadiness, 
 
 /** `search conversations`: the conversations nearest to a query, in meaning and in words. */
 export const conversationsSearchCommand = (messenger: Messenger): Command =>
-  syncOptions(boundOptions(withModelOptions(annotate(new Command("conversations"), { effects: LOCAL_READ }))))
+  syncOptions(
+    boundOptions(withModelOptions(annotate(new Command("conversations"), { effects: LOCAL_READ }))),
+    messenger,
+  )
     .description(
       "the conversations nearest to a query in meaning and in words, best first, in one chat or every one — " +
         "meaning after `conversations embed`; runs on this machine",

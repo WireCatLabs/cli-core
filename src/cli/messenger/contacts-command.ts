@@ -20,6 +20,7 @@ import { contactAnswer, lines, pageOf } from "./chat-answers.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { CONTACTS_QUERY, notesAllowed } from "./people-queries.js"
 import { privatePeopleCommands } from "./private-people-command.js"
+import { syncsFirst } from "./search-sync-options.js"
 
 /** People this account has a one-to-one chat with, as the people service counts them. */
 const collect = (value: string, previous: string[] = []) => [...previous, value]
@@ -112,12 +113,14 @@ export const contactsCommand = (messenger: Messenger): Command => {
         this,
         context,
         itemOf(snakeKeys(whole ? found : maskedAccount(found)), {
-          next: partial.map((one) => nextStep("messages.sync", { args: { chat: one.id } })),
+          next: syncsFirst(messenger)
+            ? partial.map((one) => nextStep("messages.sync", { args: { chat: one.id } }))
+            : [],
         }),
       )
     })
 
-  annotate(contacts.command("context"), { effects: REMOTE_READ })
+  const contextCommand = annotate(contacts.command("context"), { effects: REMOTE_READ })
     .description(
       "what the store holds about one person, in every messenger linked to them: shared chats, the last " +
         "messages each way, their recent messages, where others mentioned them — never connects",
@@ -134,58 +137,63 @@ export const contactsCommand = (messenger: Messenger): Command => {
       `a chat, by id or name; repeat it for more — then their newest messages in each, ${CHAT_MESSAGES} unless --limit, short unless -v`,
       collect,
     )
-    .option("--sync-first", "with --chat, read their newest messages in each from the messenger first")
-    .action(async function (this: Command, person: string) {
-      const { limit, sinceTime, chat, syncFirst } = this.opts<{
-        limit?: number
-        sinceTime?: string
-        chat?: string[]
-        syncFirst?: boolean
-      }>()
-      const context = messengerContext(this, messenger)
-      if (chat === undefined) {
-        if (syncFirst) throw new CliError("validation_error", "--sync-first reads the chats named with --chat")
-      } else {
-        if (sinceTime !== undefined) throw new CliError("validation_error", "--since-time is not used with --chat")
-        const found = await context.withServices((services) =>
-          services.people.messagesIn(person, {
-            chats: chat,
-            ...(limit === undefined ? {} : { limit }),
-            detail: context.settings.detail,
-            fetch: syncFirst === true,
-          }),
-        )
-        renderAnswer(
-          this,
-          context,
-          itemOf(snakeKeys(found), {
-            next: found.chats
-              .filter((one) => !one.complete)
-              .map((one) => nextStep("messages.sync", { args: { chat: one.chat.id } })),
-          }),
-        )
-        return
-      }
+  if (syncsFirst(messenger))
+    contextCommand.option("--sync-first", "with --chat, read their newest messages in each from the messenger first")
+  contextCommand.action(async function (this: Command, person: string) {
+    const { limit, sinceTime, chat, syncFirst } = this.opts<{
+      limit?: number
+      sinceTime?: string
+      chat?: string[]
+      syncFirst?: boolean
+    }>()
+    const context = messengerContext(this, messenger)
+    if (chat === undefined) {
+      if (syncFirst) throw new CliError("validation_error", "--sync-first reads the chats named with --chat")
+    } else {
+      if (sinceTime !== undefined) throw new CliError("validation_error", "--since-time is not used with --chat")
       const found = await context.withServices((services) =>
-        services.people.context(person, {
-          messages: limit ?? CONTEXT_MESSAGES,
-          bytes: CONTEXT_BYTES,
-          ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
+        services.people.messagesIn(person, {
+          chats: chat,
+          ...(limit === undefined ? {} : { limit }),
+          detail: context.settings.detail,
+          fetch: syncFirst === true,
         }),
       )
-      const { hasMore, ...rest } = found
       renderAnswer(
         this,
         context,
-        itemOf(snakeKeys(rest), {
-          next: found.notRead
-            .filter((chat) => chat.provider === messenger.provider)
-            .map((chat) => nextStep("messages.sync", { args: { chat: chat.chatId } })),
-          ...(hasMore ? { meta: { truncated: true } } : {}),
+        itemOf(snakeKeys(found), {
+          next: syncsFirst(messenger)
+            ? found.chats
+                .filter((one) => !one.complete)
+                .map((one) => nextStep("messages.sync", { args: { chat: one.chat.id } }))
+            : [],
         }),
       )
-      if (hasMore) context.renderer.note("cut at --limit; a larger one shows more")
-    })
+      return
+    }
+    const found = await context.withServices((services) =>
+      services.people.context(person, {
+        messages: limit ?? CONTEXT_MESSAGES,
+        bytes: CONTEXT_BYTES,
+        ...(sinceTime === undefined ? {} : { since: momentOf(sinceTime, "--since-time") }),
+      }),
+    )
+    const { hasMore, ...rest } = found
+    renderAnswer(
+      this,
+      context,
+      itemOf(snakeKeys(rest), {
+        next: syncsFirst(messenger)
+          ? found.notRead
+              .filter((chat) => chat.provider === messenger.provider)
+              .map((chat) => nextStep("messages.sync", { args: { chat: chat.chatId } }))
+          : [],
+        ...(hasMore ? { meta: { truncated: true } } : {}),
+      }),
+    )
+    if (hasMore) context.renderer.note("cut at --limit; a larger one shows more")
+  })
 
   annotate(contacts.command("timeline"), { effects: REMOTE_READ })
     .description(

@@ -762,16 +762,37 @@ describe("the MCP server", () => {
     },
   )
 
+  it("**BUG-273: a messenger that pushes its history offers no sync_first and suggests no messages sync**", async () => {
+    const root = await filledRoot()
+    const backend = scripted()
+    const { client, raw } = await connect(backend, {
+      root,
+      history: "store",
+      config: levels({ "messages.sync-first": "allow" }),
+    })
+    for (const name of ["search messages", "stats messages show", "search conversations"]) {
+      const schema = (await client.describe(name))?.arguments.properties
+      expect(schema).not.toHaveProperty("sync_first")
+      expect(schema).not.toHaveProperty("max_chats")
+    }
+    const found = await raw.callTool({ name: "chat_tools_search", arguments: { query: "search messages" } })
+    const description = (found.content as { text: string }[])[0]?.text ?? ""
+    expect(description).toContain("Search messenger messages")
+    expect(description).not.toContain("messages sync")
+    expect(description).not.toContain("sync_first")
+    expect(description).toContain("what serve has kept")
+    expect(backend.opened()).toBe(0)
+  })
+
   it("conversation sync refresh is separate from local graph freshness", async () => {
     const root = await filledRoot()
     const backend = scripted()
-    const { call } = await connect(backend, { root, history: "store" })
+    const { call } = await connect(backend, { root })
     const answer = await call("search conversations", { query: "chapter", chat: "7", sync_first: true })
     expect(answer.isError).toBe(false)
     expect(answer.body).toMatchObject({
       missing: expect.arrayContaining([expect.objectContaining({ field: "coverage", step: "messages.sync" })]),
     })
-    expect(backend.opened()).toBe(0)
   })
 
   it("offers only reading on a read-only profile, named after the command, each marked read-only", async () => {
