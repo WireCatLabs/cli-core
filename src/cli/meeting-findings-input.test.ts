@@ -43,3 +43,7 @@ it("normalizes an explicitly offset due date", () => {
     dueAt: "2026-11-01T10:00:00.000Z",
   })
 })
+it("rejects a non-string due date rather than coercing it", () => {
+  const findings = input.findings.map((finding) => ({ ...finding, due_at: ["2026-11-01T10:00:00Z"] }))
+  expect(() => parseMeetingFindingsJson(JSON.stringify({ ...input, findings }))).toThrow("timestamp")
+})
