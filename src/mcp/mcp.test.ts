@@ -39,6 +39,7 @@ import { pdf } from "../testing/files.js"
 import { freePort, mcpHttpClient as httpClient } from "../testing/mcp-http-client.js"
 import { surfaceOf } from "../testing/mcp-surface.js"
 import { searchRecipes, seedSearchRecipes } from "../testing/search-recipes.js"
+import { sharedCommands } from "../testing/shared-program.js"
 import { serveOverHttp } from "./http/serve.js"
 import { instructions } from "./instructions.js"
 import { createServer, type ServerOptions } from "./server.js"
@@ -352,6 +353,8 @@ interface Harness {
   permission?: string[]
   /** The messenger's other switches. */
   own?: Partial<Messenger>
+  /** Shared root commands this CLI does not mount, as wa mounts no `metadata`. */
+  unmounted?: string[]
 }
 
 const connect = async (telegram: Scripted = scripted(), options: Partial<ServerOptions> & Harness = {}) => {
@@ -385,6 +388,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     http,
     permission = [],
     own = {},
+    unmounted = [],
     ...serverOptions
   } = options
   if (config) {
@@ -422,8 +426,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
         .action(function (this: Command) {
           made = createServer(this, messengerContext(this, messenger), messenger, serverOptions)
         }),
-      inboxCommand(messenger),
-      reviewCommand(messenger),
+      ...sharedCommands(messenger).filter((one) => !unmounted.includes(one.name())),
     ],
   })
   provide(program, { streams, tty: false, env, app })
@@ -855,7 +858,6 @@ describe("the MCP server", () => {
       "metadata get",
       "polls show",
       "review",
-      "runs search",
       "search all",
       "search conversations",
       "search messages",
@@ -878,9 +880,6 @@ describe("the MCP server", () => {
       "stats messages unanswered",
       "stats tasks show",
       "status",
-      "store gaps plan",
-      "store jobs list",
-      "store jobs show",
       "tags list",
       "tasks agenda",
       "tasks categories",
@@ -2059,72 +2058,10 @@ describe("the MCP server", () => {
     }
   })
 
-  it("plans gaps locally and repairs them through the retained session", async () => {
-    const root = await filledRoot()
-    const backend = scripted()
-    const { call, env } = await connect(backend, { root })
-    const store = await openStore({ path: env.MESSAGING_STORE })
-    await store.sync.markRange({ provider: "chat", account: "500" }, "7", 100, 101)
-    await store.sync.markRange({ provider: "chat", account: "500" }, "7", 103, 104)
-    await store.close()
-    const plan = await call("store gaps plan", { chat: "7" })
-    expect(plan.body.item.gaps).toEqual([{ from: 102, to: 102 }])
-    expect(backend.opened()).toBe(0)
-    const repaired = await call("store gaps repair", {
-      chat: "7",
-      fingerprint: plan.body.item.fingerprint,
-      limit: 3,
-      max_gaps: 1,
-      page_size: 3,
-      pause: "1ms",
-      repair_time: "1s",
-    })
-    expect(repaired.isError, JSON.stringify(repaired.body)).toBe(false)
-    expect(repaired.body.item).toHaveProperty("scope", "interior")
-    expect((await call("store jobs list", {})).body).toMatchObject({ items: [], page: { has_more: false } })
-    expect((await call("store jobs show", { job: "missing" })).isError).toBe(true)
-    const readonly = await connect(scripted(), { root, config: READ_ONLY })
-    expect(await readonly.client.commands()).not.toContain("store gaps repair")
-  })
+  it("offers no store or runs command, which the shared commands keep off MCP (NEED-1411)", async () => {
+    const commands = await (await connect(scripted())).client.commands()
 
-  it("refuses secondary search preparation permission before repairing through MCP", async () => {
-    const root = await filledRoot()
-    const backend = scripted()
-    const { call } = await connect(backend, {
-      root,
-      config: levels({ store: "allow", "conversations.links": "readonly", "conversations.embed": "allow" }),
-    })
-    const result = await call("store gaps repair", { chat: "7", catch_up: true })
-    expect(result.isError).toBe(true)
-    expect(result.body.error).toMatchObject({
-      code: "permission_error",
-      details: { permission: "conversations.links" },
-    })
-    expect(backend.opened()).toBe(0)
-  })
-
-  it("queues a fingerprinted gap repair without opening a connection and filters job metadata by profile", async () => {
-    const root = await filledRoot()
-    const backend = scripted()
-    const spawnJob = vi.fn((_argv: string[], _env: NodeJS.ProcessEnv, _log: string) => 999999)
-    const { call } = await connect(backend, { root, spawnJob })
-    const queued = await call("store gaps repair", {
-      chat: "7",
-      background: true,
-      repair_time: "1s",
-      pause: "1ms",
-    })
-    expect(queued.isError, JSON.stringify(queued.body)).toBe(false)
-    expect(spawnJob.mock.calls[0]?.[0]).toEqual(expect.arrayContaining(["--fingerprint", "--repair-time", "1s"]))
-    expect(backend.opened()).toBe(0)
-    expect((await call("store jobs show", { job: queued.body.item.job })).body.item).toMatchObject({
-      profile: "default",
-      chat: "7",
-      pid: 999999,
-    })
-    expect((await call("store jobs list", { limit: 1, page: 1 })).body.items).toHaveLength(1)
-    expect((await call("store jobs list", { query: "chat:7" })).body.items).toHaveLength(1)
-    expect((await call("store jobs list", { query: "chat:8" })).body.items).toHaveLength(0)
+    expect(commands.filter((one) => one.startsWith("store ") || one.startsWith("runs "))).toEqual([])
   })
 
   it("checks one person without the ban lists when asked, and says a non-Telegram account is not in them", async () => {
@@ -2438,6 +2375,24 @@ describe("the transcribe tool", () => {
 
     expect(isError).toBe(true)
     expect(body.error.message).toContain("chat models audio download parakeet-v3")
+  })
+})
+
+describe("the catalogue follows each CLI's own command tree", () => {
+  it("offers what a CLI with every shared command mounts, agent-only tools included", async () => {
+    const commands = await (await connect(scripted())).client.commands()
+
+    expect(commands).toEqual(
+      expect.arrayContaining(["chats link create", "metadata get", "metadata refresh", "messages photo"]),
+    )
+  })
+
+  it("drops the commands a CLI's switches or its own mounts leave out, as wa's do", async () => {
+    const { client } = await connect(scripted(), { own: { inviteLinkCreate: false }, unmounted: ["metadata"] })
+    const commands = await client.commands()
+
+    expect(commands.filter((one) => one === "chats link create" || one.startsWith("metadata "))).toEqual([])
+    expect(commands).toEqual(expect.arrayContaining(["chats link show", "messages photo", "conversations refresh"]))
   })
 })
 
@@ -2761,9 +2716,9 @@ describe("sending over MCP", () => {
     expect((await call("messages scheduled", { chat: "7" })).isError).toBe(true)
   })
 
-  it("refuses a tool whose one method the messenger lacks before connecting", async () => {
+  it("offers no tool whose one method the messenger lacks, and never connects for it", async () => {
     const connects: number[] = []
-    const { call } = await connect(scripted(), {
+    const { call, client } = await connect(scripted(), {
       own: { lacks: ["pin"] },
       connect: async () => {
         connects.push(1)
@@ -2773,10 +2728,10 @@ describe("sending over MCP", () => {
 
     const refused = await call("messages pin", { chat: "7", message: "1" })
 
-    expect(refused.body.error).toMatchObject({
-      code: "validation_error",
-      message: "this messenger cannot pin a message",
-    })
+    expect(await client.commands()).not.toContain("messages pin")
+    expect(await client.commands()).toContain("messages unpin")
+    expect(refused.isError).toBe(true)
+    expect(refused.body.error).toMatchObject({ code: "validation_error" })
     expect(connects).toEqual([])
   })
 

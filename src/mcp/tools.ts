@@ -1,6 +1,10 @@
+import type { CommandInfo } from "@wirecat/cli-base/commands"
 import * as v from "valibot"
 import type { Messenger } from "../cli/messenger/context.js"
-import type { AnyTool } from "./tool.js"
+import { COMMAND_NEEDS } from "../cli/messenger/lacks.js"
+import { toolsFromCommands } from "./agent.js"
+import { type AnyTool, commandOf } from "./tool.js"
+
 import { accountTools } from "./tools/account.js"
 import { adminTools } from "./tools/admin.js"
 import { adminStatisticsTools } from "./tools/admin-statistics.js"
@@ -96,3 +100,20 @@ export const personalMcpTools = (messenger: Messenger): Record<string, AnyTool> 
       ...deleteTools(messenger),
     }).map(([name, definition]) => [name, { ...definition, input: v.strictObject(definition.input.entries) }]),
   )
+
+/**
+ * The tools this CLI's own command tree answers, as `toolsFromCommands` reads it: a tool whose command the CLI's
+ * switches left unmounted, that `mcp: false` keeps off MCP, or whose one adapter method the messenger lacks, is not
+ * offered — an agent is not handed what the CLI does not have.
+ */
+export const mountedMcpTools = (commands: readonly CommandInfo[], messenger: Messenger): Record<string, AnyTool> => {
+  const offered = new Set(toolsFromCommands(commands).map((tool) => tool.command))
+  return Object.fromEntries(
+    Object.entries(personalMcpTools(messenger)).filter(([name, definition]) => {
+      if (definition.agentOnly) return true
+      const path = commandOf(name, definition)
+      const need = COMMAND_NEEDS[path]
+      return offered.has(path) && !(need && messenger.lacks?.includes(need[0]))
+    }),
+  )
+}

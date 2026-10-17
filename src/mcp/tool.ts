@@ -102,6 +102,8 @@ interface Tool<S extends Input> {
   command?: string
   /** A permission key other than its command's. */
   key?: PermissionKey | null
+  /** No CLI command answers it — a photo handed to the model, a build-then-embed in one call — so no tree drops it. */
+  agentOnly?: true
   /** A host-owned entry with its own connection and confirmation lifecycle. */
   custom?: (args: v.InferOutput<S>, defaults: Defaults, ctx: ServerContext) => Promise<object>
   /** Neither the store nor the connection: answers from what this process already knows. */

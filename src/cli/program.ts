@@ -10,7 +10,7 @@ import {
   resolvePaths,
   type Streams,
 } from "@wirecat/cli-base"
-import { metaOf } from "@wirecat/cli-base/commands"
+import { metaOf, refuseJoinedPath } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
 import { relayCommand } from "../background/relay.js"
@@ -18,11 +18,12 @@ import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { parseDuration } from "../domain/duration.js"
 import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
-import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
+import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
+import { logParsedArgv } from "./argv-log.js"
 import { commandPathOf } from "./command-contract.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
-import { changesAuthority, judgedEffects, judgedTargets } from "./effects.js"
+import { changesAuthority, isLogin, judgedEffects, judgedTargets } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { byteCount, DEFAULT_COMMAND_MS, DEFAULT_OUTPUT_BYTES, execution } from "./execution.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
@@ -127,6 +128,12 @@ class Relayed extends Error {
   }
 }
 
+/**
+ * An interactive command run without a terminal — an agent's `session start --qr-file` — waits on a person scanning a
+ * code somewhere else, which 30 s does not cover.
+ */
+export const HEADLESS_INTERACTIVE_MS = 5 * 60_000
+
 /** How much longer than the command's own deadline a client waits for serve to say how it ended. */
 const RELAY_MARGIN_MS = 10_000
 
@@ -136,6 +143,7 @@ const RELAY_MARGIN_MS = 10_000
  */
 export const run = async (argv: string[], definition: ProgramDefinition, options: RunOptions = {}): Promise<number> => {
   const streams = options.streams ?? processStreams
+  if (!options.streams) quietBrokenPipes()
   const delimiter = argv.indexOf("--")
   const flags = argv.slice(0, delimiter < 0 ? undefined : delimiter)
   const machine = flags.some((word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl")
@@ -146,7 +154,16 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   let signalExit: number | undefined
   // Ctrl-C or `kill` is how a command that listens until stopped ends: still aborted, but exit 0.
   let listens = false
+  // After untilStopped(), a signal or a cancel ends only that phase; the command finishes and says how it went.
+  const phase = new AbortController()
+  let phased = false
+  let phaseTimer: NodeJS.Timeout | undefined
+  // The deadline a person or a script set, which a phase keeps; the default one it ends.
+  let explicitEnd: number | undefined
   const interrupted = (signal: "SIGINT" | "SIGTERM") => {
+    // A second signal ends the command as any signal does: one that ignores its phase can still be stopped.
+    if (phased && !phase.signal.aborted)
+      return phase.abort(new CliError("cancelled", `stopped by ${signal}`, { reason: signal, retryable: false }))
     signalExit = listens ? 0 : signal === "SIGINT" ? 130 : 143
     control.abort(new CliError("cancelled", `command interrupted by ${signal}`, { reason: signal, retryable: false }))
   }
@@ -158,7 +175,11 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       control.abort(error)
     }
   }
-  const externalAbort = () => control.abort(new CliError("cancelled", "command cancelled", { retryable: false }))
+  const externalAbort = () => {
+    const cancelled = new CliError("cancelled", "command cancelled", { retryable: false })
+    if (phased) phase.abort(cancelled)
+    else control.abort(cancelled)
+  }
   const { command } = definition.app
   // Commander's own error lines are replaced by ours; its help for a missing subcommand is kept for a person.
   let help = ""
@@ -176,8 +197,26 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     commandSignal: control.signal,
     trackCloseable: control.trackCloseable,
     app: definition.app,
+    platform: options.platform ?? process.platform,
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),
+    untilStopped: () => {
+      if (phased) return phase.signal
+      phased = true
+      control.start(undefined)
+      if (explicitEnd !== undefined)
+        phaseTimer = setTimeout(
+          () =>
+            phase.abort(
+              new CliError("timeout", "the command reached its --timeout", {
+                retryable: false,
+                reason: "command.timed-out",
+              }),
+            ),
+          Math.max(0, explicitEnd - Date.now()),
+        )
+      return phase.signal
+    },
   }
   provide(program, environment)
   program.hook("preAction", async (_root, action) => {
@@ -191,6 +230,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       }
     >()
     const commandEnv = options.env ?? process.env
+    const argvLog = commandEnv[envName(definition.app, "TEST_ARGV_LOG")]
+    if (argvLog) logParsedArgv(argvLog, action)
     const headless =
       machine || flags.input === false || Boolean(commandEnv.CI) || (options.tty ?? process.stdout.isTTY) !== true
     checkJson(action, requested, !flags.jsonl && (options.tty ?? process.stdout.isTTY) === true)
@@ -214,6 +255,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
     const path = commandPathOf(action)
     const lock = readOnlyLockOf(definition.app, commandEnv)
+    if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && changesAuthority(action) && !flags.dryRun)
       throw new CliError(
         "permission_error",
@@ -231,7 +273,9 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       timeout === undefined
         ? persistent || interactiveLogin || job
           ? undefined
-          : DEFAULT_COMMAND_MS
+          : lifetime === "interactive"
+            ? HEADLESS_INTERACTIVE_MS
+            : DEFAULT_COMMAND_MS
         : persistent
           ? undefined
           : parseDuration(timeout, flags.timeout === undefined ? envName(definition.app, "TIMEOUT") : "--timeout")
@@ -252,6 +296,10 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
               }).profile,
             commandEnv,
           )
+    if (!options.streams) {
+      process.stdout.on("error", pipeError)
+      process.stderr.on("error", pipeError)
+    }
     if (target) {
       const served = target.lock.version
       if (served !== undefined && served !== definition.app.version && !flags.quiet)
@@ -285,11 +333,8 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       throw new Relayed(code)
     }
     control.start(deadline)
+    if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline
     if (options.relayed) absolutePaths(action, options.relayed.cwd)
-    if (!options.streams) {
-      process.stdout.on("error", pipeError)
-      process.stderr.on("error", pipeError)
-    }
     const cooperative = persistent || stopsAtItsPace === true
     if (!cooperative) options.signal?.addEventListener("abort", externalAbort, { once: true })
     if (!cooperative && options.signal?.aborted) {
@@ -320,6 +365,19 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   // Before commander, not inside it: commander has no hook that runs before it decides which
   // subcommand it is looking at.
   const { profile, rest: lifted } = liftProfile(argv, commandWords(program))
+  // `wa 'chats list' --help` reads "chats list" as a profile and prints the root help with exit 0.
+  try {
+    // Only before `--`: what follows is a positional, an agent's text among them, never a command word.
+    const end = lifted.indexOf("--")
+    for (const words of [flags, end < 0 ? lifted : lifted.slice(0, end)])
+      refuseJoinedPath(
+        program,
+        words.filter((word) => !word.startsWith("-")),
+      )
+  } catch (failure) {
+    const settled = await settleFailure(failure, { definition, program, rest: lifted, profile, options })
+    return report(streams, reporting, failed(definition, program, lifted, failure, settled, debug))
+  }
   if (profile !== undefined) program.setOptionValue("profile", profile)
   const requested = liftJson(lifted, (words) => commandAt(program, commandPath(program, words)))
   const rest = requested.argv
@@ -389,8 +447,24 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       process.stdout.off("error", pipeError)
       process.stderr.off("error", pipeError)
     }
+    if (phaseTimer) clearTimeout(phaseTimer)
     await control.finish()
   }
+}
+
+let pipesQuiet = false
+
+/**
+ * A reader that stopped reading (`| head`) is not an error, during the run or after it, when what was written is
+ * still flushing: without a listener Node prints a stack trace over the output that worked.
+ */
+const quietBrokenPipes = () => {
+  if (pipesQuiet) return
+  pipesQuiet = true
+  for (const stream of [process.stdout, process.stderr])
+    stream.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EPIPE") throw error
+    })
 }
 
 const failingNoticeFor = (app: AppIdentity, env: NodeJS.ProcessEnv) => {

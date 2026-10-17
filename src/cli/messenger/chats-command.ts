@@ -1,7 +1,8 @@
 import { annotate } from "@wirecat/cli-base/commands"
+import type { Effects } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { EVENTS_DAYS } from "../../services/chats.js"
-import { REMOTE_READ } from "../effects.js"
+import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { withQuery } from "../list-query.js"
 import { withPaging } from "../paging.js"
@@ -26,7 +27,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
     withQuery(
       annotate(
         withPaging(
-          annotate(new Command("list"), { effects: REMOTE_READ })
+          annotate(new Command("list"), { effects: storedRead(messenger) })
             .summary("chats, newest first, archived ones included")
             .description(
               "chats, newest first, archived ones included; the query is answered from the local store, " +
@@ -90,7 +91,7 @@ export const chatsCommand = (messenger: Messenger): Command => {
 
   chats.addCommand(
     annotate(
-      annotate(new Command("show"), { effects: REMOTE_READ })
+      annotate(new Command("show"), { effects: storedRead(messenger) })
         .description("one chat: its kind, unread count, last message time and who is in it")
         .argument("<chat>", messenger.chatArgument),
       { output: { entity: "chat" } },
@@ -129,3 +130,6 @@ export const chatsCommand = (messenger: Messenger): Command => {
 
   return chats
 }
+
+/** Where the history is pushed, the chat list and a chat's card answer from the store and never connect. */
+const storedRead = (messenger: Messenger): Effects => (messenger.history === "store" ? LOCAL_READ : REMOTE_READ)

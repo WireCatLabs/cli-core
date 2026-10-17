@@ -18,6 +18,7 @@ const ascii = (bytes: Uint8Array, from: number, to: number) => String.fromCharCo
 export const messagesPhotoTools = (messenger: Messenger): Record<string, AnyTool> => ({
   messages_photo: tool({
     title: "Look at a photo",
+    agentOnly: true,
     description:
       `A message's photo, as an image to look at. Up to ${PHOTO_LIMIT / 1024} KB; anything larger, and ` +
       "files, videos and voice messages, are refused with the command the owner runs to save them.",

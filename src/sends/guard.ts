@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
-import type { AppIdentity } from "../ports/app.js"
+import { type AppIdentity, readOnlyRefusal } from "../ports/app.js"
 import { FloodMemory, floodPathFor } from "./flood.js"
 import {
   type AccountAction,
@@ -140,10 +140,7 @@ export const sendGuard = ({
   const permitted = (request: GuardRequest) => {
     const { chatId, kind = "message", action, personIds } = request
     if (readOnlyLock) {
-      throw new CliError(
-        "permission_error",
-        `this process is read-only (${readOnlyLock}) — it cannot send, react, change chats or change the account`,
-      )
+      throw readOnlyRefusal(readOnlyLock, "send, react, change chats or change the account")
     }
     const levels = currentPermissions()
     if (levels !== undefined) {

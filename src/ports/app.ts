@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import type { AppErrors } from "../errors/reasons.js"
 
 /** Who a messenger CLI is: the word people type, where its files live, what its variables start with. */
@@ -26,3 +27,7 @@ export const readOnlyLockOf = (app: AppIdentity, env: NodeJS.ProcessEnv): string
   const value = env[name]
   return value === undefined || value.trim() === "" || value === "0" ? undefined : name
 }
+
+/** The one wording for a write `<PREFIX>_READ_ONLY` stops: `what` finishes "it cannot …". */
+export const readOnlyRefusal = (lock: string, what: string): CliError =>
+  new CliError("permission_error", `this process is read-only (${lock}) — it cannot ${what}`)

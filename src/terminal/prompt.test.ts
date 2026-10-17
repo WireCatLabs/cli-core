@@ -1,5 +1,9 @@
 import { PassThrough, Readable } from "node:stream"
+import { captureStreams } from "@wirecat/cli-base"
+import { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { secretInputOf } from "../cli/context.js"
+import { run } from "../cli/program.js"
 import { readSecret } from "./prompt.js"
 
 const terminal = () => Object.assign(new PassThrough(), { isTTY: true })
@@ -83,5 +87,32 @@ describe("readSecret", () => {
     input.destroy(new Error("synthetic input failure"))
     await expect(answer).rejects.toThrow("synthetic input failure")
     expect(input.listenerCount("data")).toBe(0)
+  })
+})
+
+describe("secretInputOf", () => {
+  it("prompts on the run's own input and output, not the process's", async () => {
+    const input = terminal()
+    const { output, text } = collected()
+    let answer = ""
+    const running = run(
+      ["session", "start"],
+      {
+        app: { command: "app", appName: "app-cli", envPrefix: "APP", description: "A test CLI", version: "1.0.0" },
+        commands: () => [
+          new Command("session").addCommand(
+            new Command("start").action(async function (this: Command) {
+              answer = await readSecret("phone: ", { ...secretInputOf(this), echo: true })
+            }),
+          ),
+        ],
+      },
+      { streams: captureStreams(), stdin: input, stderr: output, tty: true, env: {} },
+    )
+    setImmediate(() => input.write("+34600000000\n"))
+
+    expect(await running).toBe(0)
+    expect(answer).toBe("+34600000000")
+    expect(text()).toContain("phone: ")
   })
 })

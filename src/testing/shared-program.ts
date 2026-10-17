@@ -60,10 +60,12 @@ export const messenger: Messenger = {
   groupSettings: [...GROUP_SETTINGS, "joinApproval", "onlyAdminsSend", "onlyAdminsEditInfo", "disappearingSeconds"],
 }
 
-/** A messenger that mounts every shared command, as tg, max and wa do between them. */
-export const sharedProgram: ProgramDefinition = {
-  app,
-  commands: () => [
+/** Every shared command over `over`, as tg, max and wa mount them between them; its switches drop what they drop. */
+export const sharedCommands = (over: Messenger = messenger) => {
+  const messenger = over
+  const { app } = over
+  const config = settingsFor(app)
+  return [
     accountCommand(messenger),
     attachmentsCommand(messenger),
     chatsCommand(messenger),
@@ -107,5 +109,8 @@ export const sharedProgram: ProgramDefinition = {
       connect: refuse,
       mcp: { program: refuse },
     }),
-  ],
+  ]
 }
+
+/** A messenger that mounts every shared command, as tg, max and wa do between them. */
+export const sharedProgram: ProgramDefinition = { app, commands: () => sharedCommands() }

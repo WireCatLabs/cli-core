@@ -4,15 +4,20 @@ import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 import { PassThrough, Writable } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
+import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { holdLock, lockPath, readLock } from "../../background/lock.js"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import type { MessengerAdapter, SendOptions } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
+import { environmentOf } from "../context.js"
+import { logsInOrOut, REMOTE_WRITE } from "../effects.js"
 import { type RunOptions, run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
+import { recipientsCommand } from "./guard-commands.js"
 import { mcpCommand } from "./mcp-command.js"
 import { messagesCommand } from "./messages-command.js"
 import { serveCommand } from "./serve-command.js"
@@ -90,7 +95,13 @@ const messengerOver = (connect: Messenger["connect"]): Messenger => ({
 
 const definitionFor = (messenger: Messenger) => ({
   app,
-  commands: () => [serveCommand(messenger), messagesCommand(messenger), watchCommand(messenger), mcpCommand(messenger)],
+  commands: () => [
+    serveCommand(messenger),
+    messagesCommand(messenger),
+    watchCommand(messenger),
+    mcpCommand(messenger),
+    recipientsCommand(messenger),
+  ],
 })
 
 /** A client never connects on its own while serve holds the profile. */
@@ -189,6 +200,44 @@ describe("commands through serve's relay", () => {
     }
   })
 
+  it("never relays a logout into serve, which would log out serve's own connection", async () => {
+    const { env } = setup()
+    const serve = await startServe(env)
+    const ran: (string | undefined)[] = []
+    const logout = logsInOrOut(annotate(new Command("end"), { effects: REMOTE_WRITE })).action(function (
+      this: Command,
+    ) {
+      ran.push(environmentOf(this).relayed?.profile)
+    })
+
+    const code = await run(
+      ["session", "end"],
+      { app, commands: () => [new Command("session").addCommand(logout)] },
+      {
+        streams: captureStreams(),
+        tty: false,
+        env,
+      },
+    )
+
+    expect(code).toBe(0)
+    expect(ran).toEqual([undefined])
+    serve.stop()
+    await serve.done
+  })
+
+  it("adds a recipient through serve, which resolves the chat on its own connection", async () => {
+    const { env } = setup()
+    const serve = await startServe(env)
+
+    const added = await client(["--json", "recipients", "add", "Book"], env)
+
+    expect(added.code, added.stderr.join("\n")).toBe(0)
+    expect(JSON.parse(added.stdout[0] ?? "{}").item).toMatchObject({ id: "7" })
+    serve.stop()
+    await serve.done
+  })
+
   it("reads a relative path against the client's directory, not serve's", async () => {
     const { root, env } = setup()
     writeFileSync(join(root, "note.txt"), "words")
@@ -226,6 +275,27 @@ describe("commands through serve's relay", () => {
     expect(JSON.parse(streams.stdout[0] ?? "{}")).toMatchObject({ text: "news" })
     serve.stop()
     await serve.done
+  })
+
+  it("ends a relayed run with 0 when its reader goes away, and serve goes on", async () => {
+    const { env } = setup()
+    const serve = await startServe(env)
+    const streams = captureStreams()
+    const stdout = new PassThrough()
+    const watching = run(["watch", "--jsonl"], definitionFor(messengerOver(refuseOwnConnection)), {
+      streams,
+      stdout,
+      tty: false,
+      env,
+    })
+    await vi.waitFor(() => expect(streams.stderr.join("\n")).toContain("listening"), { interval: 5 })
+
+    stdout.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }))
+
+    expect(await watching).toBe(0)
+    expect((await client(["messages", "send", "Book", "after"], env)).code).toBe(0)
+    serve.stop()
+    expect(await serve.done).toBe(0)
   })
 
   it("ends a relayed watch that fails, and serve goes on keeping what arrives", async () => {

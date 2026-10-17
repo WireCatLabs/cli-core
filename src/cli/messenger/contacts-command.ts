@@ -9,6 +9,7 @@ import { maskedAccount } from "../../services/people.js"
 import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/person-context.js"
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
 import { readSecret } from "../../terminal/prompt.js"
+import { secretInputOf } from "../context.js"
 import { FETCH, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, nativeTerms, typedQuery, withQuery } from "../list-query.js"
@@ -318,7 +319,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
         )
       }
       const context = messengerContext(this, messenger)
-      const phone = phoneOf(await readSecret("phone number: ", { input: context.stdin, echo: true }))
+      const phone = phoneOf(await readSecret("phone number: ", { ...secretInputOf(this), echo: true }))
       renderAnswer(
         this,
         context,

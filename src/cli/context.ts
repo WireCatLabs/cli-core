@@ -1,12 +1,14 @@
 import { CliError, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
+import type { MessageEvent } from "../domain/models.js"
 import { resolveOutput } from "../output.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { EventSink } from "../runs/events.js"
 import { recorded } from "../runs/recording.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
+import type { SecretInput } from "../terminal/prompt.js"
 import { type Closeable, withDeadline } from "./deadline.js"
 import { withAbort } from "./execution.js"
 import { rootOf } from "./profile.js"
@@ -28,18 +30,34 @@ export interface BaseEnvironment {
   answer?: (question: string) => Promise<string | null> | string | null
   /** Set by `run()`; a command's run is recorded only when it is known whose run it is. */
   app?: AppIdentity
+  /** Set by `run()` from `process.platform` unless a test hands one in: the OS a command's paths and units are for. */
+  platform?: NodeJS.Platform
   /** The local speech recognizer in place of the downloaded model; tests hand one in. */
   recognizer?: OpenRecognizer
   /** Where raw bytes go when stdout is not this process's own — an MCP session relayed by serve. */
   stdout?: NodeJS.WritableStream
+  /** Where a prompt and what is typed at it go, in place of the process's stderr; tests hand one in. */
+  stderr?: NodeJS.WritableStream
   /** Set by `run()`: this run's exit code, so two runs in one process (serve's relay) do not share one. */
   exit?: { code?: number }
   /** Set by `run()`: the same program again, for serve to run a client's command. */
   runCommand?: (argv: string[], environment: BaseEnvironment) => Promise<number>
   /** Set by serve on a command it runs for a client through its relay. */
   relayed?: RelayedRun
+  /**
+   * A test's hook into `serve`: called with each event once its reply and task rules have run — to wait on "the
+   * message was handled, and nothing was sent" instead of on the next event or a sleep.
+   */
+  handled?: (event: MessageEvent) => void
   /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
   agent?: AgentRun
+  /**
+   * Set by `run()`: the rest of the command has no default deadline, and Ctrl-C, SIGTERM, a cancel or an explicit
+   * `--timeout` aborts the signal it returns instead of the command, which then ends as it says — exit 0 with what it
+   * got. A second signal ends the command. For a phase that keeps
+   * what each step brings and may stop at any point: the history a phone pushes after linking.
+   */
+  untilStopped?: () => AbortSignal
 }
 
 /**
@@ -76,6 +94,15 @@ export const provide = (program: Command, environment: BaseEnvironment): void =>
 
 export const environmentOf = <E extends BaseEnvironment = BaseEnvironment>(command: Command): E =>
   (environments.get(rootOf(command)) ?? {}) as E
+
+/**
+ * The input and output `readSecret` uses for this command: the run's own, so a prompt goes where the run's other
+ * output goes and a test that captures it sees it. `readSecret(prompt, { ...secretInputOf(this), echo: true })`.
+ */
+export const secretInputOf = (command: Command): Pick<SecretInput, "input" | "output"> => {
+  const { stdin, stderr } = environmentOf(command)
+  return { ...(stdin ? { input: stdin } : {}), ...(stderr ? { output: stderr } : {}) }
+}
 
 /** For the commands that print but never need settings or a connection. */
 export const outputFor = (command: Command) => {

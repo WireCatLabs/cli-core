@@ -5,7 +5,7 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { ENTITIES } from "../entities/index.js"
 import { inRun } from "../runs/scope.js"
-import { itemOf, listOf, renderAnswer, sealed, snakeKeys, snakeKeysKeeping } from "./envelope.js"
+import { itemOf, listOf, printItem, renderAnswer, sealed, snakeKeys, snakeKeysKeeping } from "./envelope.js"
 import { nextStep } from "./steps.js"
 
 const at = "2026-10-13T10:00:00.000Z"
@@ -120,6 +120,17 @@ describe("the answer envelope", () => {
     expect(streams.stderr.join("\n")).toContain(
       "→ the local copy is missing messages; syncing brings them in: chat messages sync 2",
     )
+  })
+})
+
+describe("printItem", () => {
+  it.each(["json", "jsonl"] as const)("prints one thing as a sealed answer in %s", (format) => {
+    const streams = captureStreams()
+    printItem({ renderer: createRenderer({ format, color: false, streams }), format }, { profile: "work", ended: true })
+    const [first] = streams.stdout.map((line) => JSON.parse(line))
+
+    expect(format === "json" ? first.item : first.data).toEqual({ profile: "work", ended: true })
+    if (format === "json") expect(first.meta).toBeDefined()
   })
 })
 

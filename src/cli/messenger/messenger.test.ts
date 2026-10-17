@@ -1476,6 +1476,7 @@ describe("the shared read commands", () => {
     expect([close.code, revote.code, made.code]).toEqual([2, 2, 0])
     expect(refused.map((one) => one.code)).toEqual([2, 2, 2])
     expect(help.stdout.join("\n")).not.toContain("close")
+    expect(help.stdout.join("\n")).not.toContain("anonymous")
     expect(createHelp).not.toMatch(/--anonymous|--silent|--send-as/)
     expect(createHelp).toContain("everyone sees who voted for what")
     expect(created).toEqual([expect.objectContaining({ revote: false })])
@@ -1564,7 +1565,7 @@ describe("the shared read commands", () => {
     expect(find(["messages", "delete"])?.effects?.remote).toBe("write")
     expect(find(["polls", "vote"])?.effects?.remote).toBe("write")
     expect(find(["polls", "show"])?.effects?.remote).toBe("read")
-    expect(find(["recipients", "add"])?.effects).toEqual({ remote: "none", local: "write" })
+    expect(find(["recipients", "add"])?.effects).toEqual({ remote: "read", local: "write" })
     expect(find(["messages", "list"])?.effects?.remote).toBe("read")
   })
 

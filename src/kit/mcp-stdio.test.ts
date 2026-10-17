@@ -5,6 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
 import { mcpCommand } from "../cli/messenger/mcp-command.js"
+import { pollsCommand } from "../cli/messenger/polls-command.js"
 import { run } from "../cli/program.js"
 import { settingsFor } from "../cli/settings.js"
 import { mcpOverStdio } from "./mcp-stdio.js"
@@ -30,7 +31,7 @@ const cli = () => {
       throw new Error("no connection in this test")
     },
   }
-  return { env, connects, program: { app, commands: () => [mcpCommand(messenger)] } }
+  return { env, connects, program: { app, commands: () => [mcpCommand(messenger), pollsCommand(messenger)] } }
 }
 
 describe("mcpOverStdio", () => {

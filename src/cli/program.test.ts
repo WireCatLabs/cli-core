@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
@@ -96,6 +96,68 @@ describe("running a messenger CLI", () => {
     expect(help).toContain("Usage: app chats")
     expect(help).toMatch(/^\s+list\b/m)
     expect(help).not.toContain("(outputHelp)")
+  })
+
+  it.each([
+    [["chats list", "--help"], "app chats list"],
+    [["personal", "chats list"], "app chats list"],
+    [["personal", "--json", "chats list", "--limit", "5"], "app chats list"],
+  ])("refuses a command path given as one argument, %j, instead of printing the root help", async (argv, fix) => {
+    let ran = false
+    const { code, stdout, stderr } = await call(argv, async () => {
+      ran = true
+    })
+
+    expect(ran).toBe(false)
+    expect(code).toBe(2)
+    expect(stdout).toEqual([])
+    expect(JSON.parse(stderr[0] ?? "").error.message).toBe(`"chats list" was given as one argument; run: ${fix}`)
+  })
+
+  it("logs each parsed command and its long options to <PREFIX>_TEST_ARGV_LOG, never a value", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "argv-")), "argv.jsonl")
+    const streams = captureStreams()
+    await run(
+      ["personal", "chats", "list", "--json", "--timeout", "5s"],
+      definition(async () => {}),
+      { streams, tty: false, env: { ...process.env, APP_TEST_ARGV_LOG: file } },
+    )
+
+    expect(readFileSync(file, "utf8")).toBe(
+      `${JSON.stringify({ command: "chats list", options: ["--json", "--timeout"] })}\n`,
+    )
+  })
+
+  it("hands the command its platform, the process's unless a test gives one", async () => {
+    let seen: unknown
+    const streams = captureStreams()
+    const record = definition(async (command) => {
+      seen = environmentOf(command).platform
+    })
+    await run(["chats", "list"], record, { streams, tty: false, env: process.env })
+    const real = seen
+    await run(["chats", "list"], record, { streams, tty: false, env: process.env, platform: "win32" })
+
+    expect([real, seen]).toEqual([process.platform, "win32"])
+  })
+
+  it("never reads a positional after -- as a command path", async () => {
+    let given: string | undefined
+    const notes = new Command("notes").argument("[text]").action((text: string) => {
+      given = text
+    })
+    notes.addCommand(new Command("add").action(() => {}))
+    const code = await run(
+      ["notes", "--", "add milk"],
+      { app, commands: () => [notes] },
+      {
+        streams: captureStreams(),
+        tty: false,
+        env: process.env,
+      },
+    )
+
+    expect([code, given]).toEqual([0, "add milk"])
   })
 
   it("hands the first word to the command as its profile", async () => {
@@ -231,7 +293,119 @@ describe("a command's declared lifetime", () => {
     )
     await started
     await vi.advanceTimersByTimeAsync(31_000)
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(ended).toBe(false)
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(await done).toBe(9)
+  })
+})
+
+describe("a phase that runs until stopped", () => {
+  afterEach(() => vi.useRealTimers())
+
+  const phased = (options: { signal?: AbortSignal } = {}) => {
+    const streams = captureStreams()
+    let entered: () => void = () => {}
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const done = run(
+      ["chats", "list"],
+      definition(async (command) => {
+        const stop = environmentOf(command).untilStopped?.()
+        entered()
+        await new Promise((resolve) => stop?.addEventListener("abort", resolve, { once: true }))
+        environmentOf(command).streams?.data("kept 3 batches")
+      }),
+      { streams, tty: false, env: { ...process.env }, ...options },
+    )
+    return { done, started, streams }
+  }
+
+  it("outlives the default deadline, and ends 0 with its answer on Ctrl-C", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const { done, started, streams } = phased()
+    await started
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    let ended = false
+    void done.then(() => {
+      ended = true
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(ended).toBe(false)
+    vi.useRealTimers()
+
+    process.emit("SIGINT")
+
+    expect(await done).toBe(0)
+    expect(streams.stdout).toEqual(["kept 3 batches"])
+  })
+
+  it("ends as any signal does on a second Ctrl-C, when the command ignores its phase", async () => {
+    let entered: () => void = () => {}
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const done = run(
+      ["chats", "list"],
+      definition(async (command) => {
+        environmentOf(command).untilStopped?.()
+        entered()
+        await new Promise(() => {})
+      }),
+      { streams: captureStreams(), tty: false, env: { ...process.env } },
+    )
+    await started
+
+    process.emit("SIGINT")
+    process.emit("SIGINT")
+
+    expect(await done).toBe(130)
+  })
+
+  it("keeps an explicit --timeout, which ends the phase instead of the command", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const streams = captureStreams()
+    let entered: () => void = () => {}
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    let reason: unknown
+    const done = run(
+      ["chats", "list", "--timeout", "2m"],
+      definition(async (command) => {
+        const stop = environmentOf(command).untilStopped?.()
+        entered()
+        await new Promise((resolve) => stop?.addEventListener("abort", resolve, { once: true }))
+        reason = stop?.reason
+        environmentOf(command).streams?.data("kept 1 batch")
+      }),
+      { streams, tty: false, env: { ...process.env } },
+    )
+    await started
+    await vi.advanceTimersByTimeAsync(119_000)
+    expect(reason).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(2_000)
+    vi.useRealTimers()
+
+    expect(await done).toBe(0)
+    expect(reason).toMatchObject({ code: "timeout" })
+    expect(streams.stdout).toEqual(["kept 1 batch"])
+  })
+
+  it("ends 0 with its answer when the caller cancels", async () => {
+    const cancel = new AbortController()
+    const { done, started, streams } = phased({ signal: cancel.signal })
+    await started
+
+    cancel.abort()
+
+    expect(await done).toBe(0)
+    expect(streams.stdout).toEqual(["kept 3 batches"])
   })
 })
 

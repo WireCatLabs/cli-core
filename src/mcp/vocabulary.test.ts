@@ -8,9 +8,6 @@ import { personalMcpTools } from "./tools.js"
 
 const tools = personalMcpTools(messenger)
 
-/** Agent-only: the photo is handed to the model as an image, and refresh is build-then-embed in one bounded call. */
-const MCP_ONLY = new Set(["messages photo", "conversations refresh"])
-
 interface Listed {
   path: readonly string[]
   effects?: object
@@ -33,10 +30,17 @@ describe("one vocabulary for the CLI and its agent catalogue", () => {
   it("lists every tool under a command the CLI has", async () => {
     const commands = await cliCommands()
     const strays = Object.entries(tools)
+      .filter(([, definition]) => !definition.agentOnly)
       .map(([name, definition]) => commandOf(name, definition))
-      .filter((command) => !commands.has(command) && !MCP_ONLY.has(command))
+      .filter((command) => !commands.has(command))
 
     expect(strays).toEqual([])
+    expect(
+      Object.entries(tools)
+        .filter(([, definition]) => definition.agentOnly)
+        .map(([name]) => name)
+        .sort(),
+    ).toEqual(["conversations_refresh", "messages_photo"])
   })
 
   it("reads a tool's level from its command's permission key", () => {

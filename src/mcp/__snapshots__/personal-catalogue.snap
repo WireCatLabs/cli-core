@@ -20,6 +20,7 @@ read  chats send-as
 read  chats show
 read  chats tracking list
 read  chats tracking show
+read  commands
 read  contacts check
 read  contacts context
 read  contacts list
@@ -37,6 +38,7 @@ read  conversations list
 read  conversations related
 read  conversations show
 read  conversations status
+read  doctor
 read  inbox
 read  mentions domains
 read  mentions list
@@ -80,6 +82,7 @@ read  stats tasks show
 read  tags list
 read  tasks agenda
 read  tasks categories
+read  tasks duplicates
 read  tasks list
 read  tasks related
 read  tasks show
@@ -126,6 +129,7 @@ write contacts unblock
 write contacts unlink
 write conversations build
 write conversations consents revoke
+write conversations embed
 write conversations embed clear
 write conversations links add
 write conversations links clear

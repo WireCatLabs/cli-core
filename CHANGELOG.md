@@ -17,10 +17,69 @@ shape of this file.
   durable reference receipts protect retries. External references without a verified destination
   block the copy. The original remains available; embeddings and entire messenger/contact archives
   are not copied.
+- **`refuseUnderReadOnly(command, what)`** (`@wirecat/cli-core/cli`) refuses, under `<PREFIX>_READ_ONLY`, a write
+  the send guard never sees, such as linking or unlinking the device: call it first in `session start`, `session end`
+  and `setup`. It fails with `permission_error` and "this process is read-only (TG_READ_ONLY) — it cannot <what>",
+  the guard's own wording, which `readOnlyRefusal(lock, what)` builds for a CLI that holds the lock name already.
+  Before, `session end` under the lock logged out and deleted the device's keys.
+- **`untilStopped()` in a run's environment** ends the default deadline for the rest of the command and turns
+  Ctrl-C, SIGTERM, a cancel and an explicit `--timeout` into an abort of the signal it returns; the command then
+  prints what it got and exits 0. A second signal ends the command as before (130, 143). For the
+  history a phone pushes after linking, which keeps each batch as it comes: wa and tg end that wait through it
+  instead of their own SIGINT handler, so a successful link no longer ends with exit 9 or 130.
+- **`secretInputOf(command)`** (`@wirecat/cli-core/cli`) gives `readSecret` the run's own input and output:
+  `readSecret(prompt, { ...secretInputOf(this), echo: true })`. A run's environment takes `stderr` beside `stdout`,
+  where a prompt and what is typed at it go; a test that hands one in now sees the prompt, which before went to the
+  process's real stderr. `contacts lookup` and the bot's token prompt use it.
+
+- **`logsInOrOut(command)`** (`@wirecat/cli-core/cli`) marks a command that links or unlinks the account. It never
+  runs through `serve`'s relay — `session end` used to be relayed and would have logged out `serve`'s own
+  connection — and `<PREFIX>_READ_ONLY` refuses it before its action with "it cannot log in or out". Mark
+  `session start`, `session end` and a `setup` that logs in; `isLogin(command)` reads the mark.
+- **Shared pieces CLIs carried as copies**: `printItem(output, item)` and `itemAnswer(item)` print one thing as a
+  sealed answer (`@wirecat/cli-core/cli`); `bareCheck`, `checkWords(cli, profile)` and the `CheckWords<C>` type name
+  the command a message sends a person to (`@wirecat/cli-core`); `COMMAND_NEEDS`, the commands that need one adapter
+  method, is exported for a CLI's own `lacks` test. A run's environment carries `platform` (the process's unless a
+  test gives one), and `run()` appends each parsed command and its long options to the file in
+  `<PREFIX>_TEST_ARGV_LOG`, as wa's and max's test matrices did for themselves.
+- **`upgrade` has examples**: `<cli> upgrade --check` and `<cli> upgrade`, so a CLI drops its own wrapper's.
+- **`handled` in a run's environment** is a test's hook into `serve`: it is called with each event once that
+  event's reply and task rules have run, so a test waits on "handled, and nothing was sent" instead of on a timer or
+  the next event.
 
 ### Fixed
 
 - **The preparation source flag advertises a vocabulary-compatible value name.** `--context-source <id=cursor>` still accepts either a selected ID or ID with its continuation cursor; the optional cursor syntax and runtime behavior are unchanged.
+- **`polls vote` and `polls voters` say nothing of anonymous polls where a messenger has none**
+  (`pollAnonymous: false`, wa), in their help and in the agent's tool descriptions.
+- **A reader that stops reading ends a run quietly, relayed or not**: `wa chats list --json | head` through a running
+  `serve` kept the client streaming into the closed pipe, and an EPIPE after `run()` returned printed a stack trace.
+  The relay client now ends with 0 when its output closes, which ends the command in serve, and `run()` keeps
+  EPIPE quiet on stdout and stderr for the rest of the process. A CLI can drop its own `process.exit(0)` on EPIPE.
+
+### Changed — may break callers
+
+- **`chats list` and `chats show` declare a local read where the messenger's history is pushed** (`history:
+  "store"`, wa): they answer from the store and never connect, and `commands --json` now says so; with `serve`
+  running they run here instead of through its relay. tg and max are unchanged.
+- **`recipients add` declares that it reads the messenger** (`{ remote: "read", local: "write" }`): it resolves the
+  chat on a connection, so it failed while `serve` held the profile. It now runs through `serve`'s relay.
+- **An interactive command without a terminal gets 5 minutes by default, not 30 seconds**: an agent's
+  `session start --qr-file` waits on a person scanning the code elsewhere, and the 30 s default could end it before
+  the device linked. `--timeout` and `<PREFIX>_TIMEOUT` still decide when given; at a terminal there is still no
+  default deadline.
+- **A command path given as one argument fails** with `validation_error` and the line to run:
+  `wa 'chats list' --help`, what a shell loop over a quoted `$c` passes, used to print the root help and exit 0, so
+  the loop read every command as present. Applies to every CLI's `run()`, after a leading profile too.
+- **An agent's MCP catalogue lists only the commands the CLI itself has**: a tool whose command the CLI's switches
+  left unmounted (`chats link create` without invite links), whose root it never mounts (`metadata` in wa), whose one
+  adapter method the messenger lacks, or which `mcp: false` keeps off MCP, is no longer offered. Before, wa's agents
+  were offered `chats link create`, `metadata get` and `metadata refresh`, which then failed. A tool with no CLI
+  command (`messages photo`, `conversations refresh`) is marked `agentOnly` and stays.
+  The personal server now reads the same catalogue `toolsFromCommands` builds, so the `store` and `runs` commands
+  the shared tree keeps off MCP are no longer offered there either (`store gaps plan`, `store gaps repair`,
+  `store jobs list`, `store jobs show`, `runs search`). `toolsFromCommands` lists a group that runs on its own, such
+  as `tasks duplicates`, beside its subcommands.
 
 ## 0.325.0 — 17.10.2026
 

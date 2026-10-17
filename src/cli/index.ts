@@ -14,7 +14,7 @@ export {
   type MessagesSearchArgs,
   messagesSearchInput,
 } from "../mcp/tools/search.js"
-export { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
+export { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 export type {
   AccountEditing,
   AccountHealth,
@@ -183,6 +183,7 @@ export {
   environmentOf,
   outputFor,
   provide,
+  secretInputOf,
 } from "./context.js"
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
@@ -190,20 +191,24 @@ export {
   changesAuthority,
   FETCH,
   grantsAuthority,
+  isLogin,
   judgedEffects,
   judgedTargets,
   LOCAL_READ,
   LOCAL_WRITE,
+  logsInOrOut,
   NO_EFFECTS,
   ownerOnlyOption,
   REMOTE_READ,
   REMOTE_WRITE,
+  refuseUnderReadOnly,
 } from "./effects.js"
 export {
   type AnswerOutput,
   answerSchema,
   type Body,
   type ItemBody,
+  itemAnswer,
   itemOf,
   jsonlRecords,
   judgedAnswer,
@@ -211,6 +216,7 @@ export {
   type ListInput,
   listOf,
   metaNow,
+  printItem,
   renderAnswer,
   sealed,
   snakeKeys,
@@ -285,6 +291,7 @@ export { floodCommand } from "./messenger/flood-command.js"
 export { recipientsCommand, sendsCommand } from "./messenger/guard-commands.js"
 export { imagesCommand } from "./messenger/images-command.js"
 export { inboxCommand } from "./messenger/inbox.js"
+export { COMMAND_NEEDS } from "./messenger/lacks.js"
 export { httpTokenFile, type McpEnvironment, mcpCommand, serverEntry } from "./messenger/mcp-command.js"
 export { mentionsCommand } from "./messenger/mentions-command.js"
 export { type MessageItem, messageItem, type ReadMessage } from "./messenger/message-items.js"

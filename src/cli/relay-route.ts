@@ -7,6 +7,7 @@ import { alive } from "../background/processes.js"
 import { RELAY_PROTOCOL } from "../background/relay.js"
 import type { AppIdentity } from "../ports/app.js"
 import { commandPathOf } from "./command-contract.js"
+import { isLogin } from "./effects.js"
 
 /** Not through serve: serve itself, its unit, and what has no messenger profile. */
 const LOCAL_ROOTS = new Set(["serve", "server", "bot"])
@@ -18,7 +19,8 @@ export interface RelayTarget {
 
 /**
  * The serve that runs this command for us, when one holds the profile's connection and offers its relay. Only a
- * command that reaches the messenger goes; one that reads or writes this machine alone runs here, as does a login.
+ * command that reaches the messenger goes; one that reads or writes this machine alone runs here, as does a login
+ * or a logout.
  */
 export const relayTarget = (
   app: AppIdentity,
@@ -28,7 +30,8 @@ export const relayTarget = (
   env: NodeJS.ProcessEnv,
 ): RelayTarget | undefined => {
   const { effects, lifetime } = metaOf(action)
-  if (effects === undefined || effects.remote === "none" || lifetime === "interactive") return undefined
+  if (effects === undefined || effects.remote === "none" || lifetime === "interactive" || isLogin(action))
+    return undefined
   const path = commandPathOf(action)
   if (LOCAL_ROOTS.has(path[0] ?? "") || flags.offline === true) return undefined
   if (path[0] === "mcp" && flags.http === true) return undefined

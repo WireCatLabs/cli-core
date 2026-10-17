@@ -15,6 +15,7 @@ import { newSendId } from "../../sends/send-id.js"
 import { onlineDeps } from "../../services/deps.js"
 import { servicesFor } from "../../services/index.js"
 import { applyTaskRulesOnArrival, openRequestTask } from "../../services/task-rules.js"
+import { environmentOf } from "../context.js"
 import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { recalledAccount } from "./accounts.js"
@@ -78,6 +79,7 @@ export const serveCommand = (messenger: Messenger): Command => {
     const counts: Record<string, number> = {}
     const rules = replying(context, messenger, Date.parse(startedAt))
     const tasks = tasking(context, warn)
+    const { handled } = environmentOf(this)
     const count = (event: MessageEvent) => {
       counts[event.event] = (counts[event.event] ?? 0) + 1
       if (event.event === "message") {
@@ -85,6 +87,7 @@ export const serveCommand = (messenger: Messenger): Command => {
         tasks.arrived(event.message)
       }
       relay?.arrived(event)
+      if (handled) void Promise.all([rules.settled(), tasks.settled()]).then(() => handled(event))
     }
     let connection: MessengerAdapter | undefined
     const members = memberFetches({

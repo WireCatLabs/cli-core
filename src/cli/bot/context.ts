@@ -6,7 +6,7 @@ import { SendJournal } from "../../sends/journal.js"
 import type { Level, PermissionKey } from "../../sends/permissions.js"
 import { RecipientList } from "../../sends/recipients.js"
 import { readSecret } from "../../terminal/prompt.js"
-import { baseContext, environmentOf } from "../context.js"
+import { baseContext, secretInputOf } from "../context.js"
 import { terminalAsker } from "../messenger/ask.js"
 import { asFirstWord } from "../profile.js"
 import { botCopy } from "./copy.js"
@@ -72,8 +72,7 @@ export const botContext = (command: Command, bot: BotMessenger) => {
       return pickChat(trimmed, registry.list()).id
     },
     readSecret: (prompt: string) => {
-      const stdin = environmentOf(command).stdin
-      return bot.readSecret?.(command, prompt) ?? readSecret(prompt, stdin ? { input: stdin } : {})
+      return bot.readSecret?.(command, prompt) ?? readSecret(prompt, secretInputOf(command))
     },
     /** A client for this token, closed when the command ends. */
     connect,
