@@ -5,6 +5,13 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`mentions` help fits the 80-character summary rule**: the group's summary is shorter and `mentions places` has a
+  summary of its own, so tg's and max's command lint no longer report them.
+
 ## 0.310.0 — 17.10.2026
 
 ### Added
