@@ -1,5 +1,6 @@
 import { validCounter } from "../../domain/counters.js"
 import type { Attachment, ChatKind, Id, Message, PollVote, Provider, Reactions } from "../../domain/models.js"
+import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import type { AccountKey, DeletionScope } from "../types.js"
 import { findChatPk } from "./chats.js"
@@ -328,6 +329,24 @@ export const markDeleted = (
   return changed
 }
 
+const voteStatements = new WeakMap<CacheDatabase, { gone: CacheStatement; upsert: CacheStatement }>()
+const voteStatementsOf = (database: CacheDatabase) => {
+  const held = voteStatements.get(database)
+  if (held) return held
+  const statements = {
+    gone: database.prepare("SELECT 1 FROM messages WHERE chat_id=? AND external_id=? AND deleted_at IS NOT NULL"),
+    upsert: database.prepare(
+      `INSERT INTO poll_votes (chat_id, message_external_id, identity_id, answers, voted_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (chat_id, message_external_id, identity_id) DO UPDATE SET
+         answers = excluded.answers, voted_at = excluded.voted_at, updated_at = excluded.updated_at
+       WHERE excluded.voted_at >= poll_votes.voted_at`,
+    ),
+  }
+  voteStatements.set(database, statements)
+  return statements
+}
+
 /** A vote older than the one held for that voter is dropped, and so is any vote in a deleted poll. */
 export const saveVote = (
   context: StoreContext,
@@ -338,10 +357,8 @@ export const saveVote = (
   { person, answers, votedAt }: PollVote,
 ): void => {
   const { database, now } = context
-  const gone = database
-    .prepare("SELECT 1 FROM messages WHERE chat_id=? AND external_id=? AND deleted_at IS NOT NULL")
-    .get(chatKey, messageId)
-  if (gone) return
+  const statements = voteStatementsOf(database)
+  if (statements.gone.get(chatKey, messageId)) return
   const voter = identityPk(
     context,
     accountKey,
@@ -350,15 +367,7 @@ export const saveVote = (
     person.name,
     person.username ? { username: person.username } : {},
   )
-  database
-    .prepare(
-      `INSERT INTO poll_votes (chat_id, message_external_id, identity_id, answers, voted_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (chat_id, message_external_id, identity_id) DO UPDATE SET
-         answers = excluded.answers, voted_at = excluded.voted_at, updated_at = excluded.updated_at
-       WHERE excluded.voted_at >= poll_votes.voted_at`,
-    )
-    .run(chatKey, messageId, voter, JSON.stringify(answers), toMs(votedAt) ?? now(), now(), now())
+  statements.upsert.run(chatKey, messageId, voter, JSON.stringify(answers), toMs(votedAt) ?? now(), now(), now())
 }
 
 export const pollVotes = ({ database }: StoreContext, chatKey: number, messageId: Id): PollVote[] =>
