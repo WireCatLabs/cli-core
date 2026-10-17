@@ -22,6 +22,9 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **A command path given as one argument fails** with `validation_error` and the line to run:
+  `wa 'chats list' --help`, what a shell loop over a quoted `$c` passes, used to print the root help and exit 0, so
+  the loop read every command as present. Applies to every CLI's `run()`, after a leading profile too.
 - **An agent's MCP catalogue lists only the commands the CLI itself has**: a tool whose command the CLI's switches
   left unmounted (`chats link create` without invite links), whose root it never mounts (`metadata` in wa), whose one
   adapter method the messenger lacks, or which `mcp: false` keeps off MCP, is no longer offered. Before, wa's agents

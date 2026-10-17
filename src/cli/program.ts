@@ -10,7 +10,7 @@ import {
   resolvePaths,
   type Streams,
 } from "@wirecat/cli-base"
-import { metaOf } from "@wirecat/cli-base/commands"
+import { metaOf, refuseJoinedPath } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
 import { Command } from "commander"
 import { relayCommand } from "../background/relay.js"
@@ -320,6 +320,17 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   // Before commander, not inside it: commander has no hook that runs before it decides which
   // subcommand it is looking at.
   const { profile, rest: lifted } = liftProfile(argv, commandWords(program))
+  // `wa 'chats list' --help` reads "chats list" as a profile and prints the root help with exit 0.
+  try {
+    for (const words of [flags, lifted])
+      refuseJoinedPath(
+        program,
+        words.filter((word) => !word.startsWith("-")),
+      )
+  } catch (failure) {
+    const settled = await settleFailure(failure, { definition, program, rest: lifted, profile, options })
+    return report(streams, reporting, failed(definition, program, lifted, failure, settled, debug))
+  }
   if (profile !== undefined) program.setOptionValue("profile", profile)
   const requested = liftJson(lifted, (words) => commandAt(program, commandPath(program, words)))
   const rest = requested.argv

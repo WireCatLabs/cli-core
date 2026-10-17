@@ -98,6 +98,22 @@ describe("running a messenger CLI", () => {
     expect(help).not.toContain("(outputHelp)")
   })
 
+  it.each([
+    [["chats list", "--help"], "app chats list"],
+    [["personal", "chats list"], "app chats list"],
+    [["personal", "--json", "chats list", "--limit", "5"], "app chats list"],
+  ])("refuses a command path given as one argument, %j, instead of printing the root help", async (argv, fix) => {
+    let ran = false
+    const { code, stdout, stderr } = await call(argv, async () => {
+      ran = true
+    })
+
+    expect(ran).toBe(false)
+    expect(code).toBe(2)
+    expect(stdout).toEqual([])
+    expect(JSON.parse(stderr[0] ?? "").error.message).toBe(`"chats list" was given as one argument; run: ${fix}`)
+  })
+
   it("hands the first word to the command as its profile", async () => {
     let profile = ""
     await call(["work", "chats", "list"], async (command) => {
