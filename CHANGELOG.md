@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- SDK hosts can bind explicitly authorized local message, mail and document sources through
+  `createContextEvidenceReader` and optional `store.contextEvidence`. Native pages enforce account
+  identity, dates, literal-word matching and UTF-8 text/metadata budgets before hydration, reserve
+  aggregate bytes/read slots across concurrent calls and retries, reject unsupported selectors and
+  invalid adapter results, retain scoped continuation and index gaps, and perform no indexing or model
+  work. Meeting preparation commands and their source coverage are unchanged; cross-source assembly
+  follows separately.
+
 ## 0.322.0 — 17.10.2026
 
 ### Added

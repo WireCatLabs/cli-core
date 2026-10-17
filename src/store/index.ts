@@ -1,3 +1,10 @@
+export type {
+  ContextEvidenceItem,
+  ContextEvidencePage,
+  ContextEvidenceReader,
+  ContextEvidenceRequest,
+  ContextSource,
+} from "../context/evidence.js"
 export {
   FACT_STATUSES,
   FACT_TYPES,
