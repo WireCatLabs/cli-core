@@ -52,7 +52,11 @@ export const pollsCommand = (messenger: Messenger): Command => {
       withQuery(
         annotate(
           annotate(new Command("voters"), { effects: REMOTE_READ })
-            .description("who voted for what, newest first; not in an anonymous poll")
+            .description(
+              messenger.pollAnonymous === false
+                ? "who voted for what, newest first"
+                : "who voted for what, newest first; not in an anonymous poll",
+            )
             .argument("<chat>", messenger.chatArgument)
             .argument("<message>", "the id of the message that carries the poll")
             .option("--limit <n>", "how many to show", positiveCount("--limit"))
@@ -92,7 +96,11 @@ export const pollsCommand = (messenger: Messenger): Command => {
     )
 
   annotate(polls.command("vote"), { effects: REMOTE_WRITE })
-    .description("vote in a poll, or take your vote back; the others see it unless the poll is anonymous")
+    .description(
+      messenger.pollAnonymous === false
+        ? "vote in a poll, or take your vote back; the others see it"
+        : "vote in a poll, or take your vote back; the others see it unless the poll is anonymous",
+    )
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the id of the message that carries the poll")
     .argument("[answers...]", "answer ids, as `polls show` prints them")

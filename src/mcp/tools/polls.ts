@@ -29,7 +29,8 @@ export const pollReadTools = (messenger: Messenger): Record<string, AnyTool> => 
         polls_voters: tool({
           title: "Who voted in a poll",
           description:
-            "Who voted for what in a poll that is not anonymous, newest first: items [{ person_id, name, username, " +
+            `Who voted for what${messenger.pollAnonymous === false ? "" : " in a poll that is not anonymous"}, newest ` +
+            "first: items [{ person_id, name, username, " +
             "answers, voted_at }]. query answers:<id> keeps those who chose that answer. Reading changes nothing.",
           input: v.object({ chat: chatOf(messenger), message, query: queryArgument(VOTERS_QUERY), limit, page }),
           annotations: { ...READ, idempotentHint: true },
@@ -76,8 +77,8 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
     polls_vote: tool({
       title: "Vote in a poll",
       description:
-        "Vote as the owner, by answer ids from `polls show`; an empty list takes the vote back. The others see it " +
-        "unless the poll is anonymous. Only when the owner asked for this vote.",
+        "Vote as the owner, by answer ids from `polls show`; an empty list takes the vote back. The others see it" +
+        `${messenger.pollAnonymous === false ? "" : " unless the poll is anonymous"}. Only when the owner asked for this vote.`,
       input: v.object({ chat, message, answers: v.array(answerId) }),
       annotations: WRITE,
       permission: "reaction",
