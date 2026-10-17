@@ -10,6 +10,7 @@ import type { Message } from "../../domain/models.js"
 import { job as jobEntity } from "../../entities/job.js"
 import type { MessengerAdapter, ServerReads } from "../../ports/messenger.js"
 import type { Fetching } from "../../ports/traits.js"
+import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { storeCommand } from "./archive-commands.js"
@@ -387,6 +388,11 @@ describe("messages sync", () => {
       history: async () => ({ items: [recent(1, "morning"), recent(2, "who has the keys?")], hasMore: false }),
     } as unknown as MessengerAdapter
 
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await store.chats.saveChats({ provider: "chat", account: "500" }, [
+      { id: "7", title: "Ana", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.close()
     const first = await call(["messages", "sync", "7", "--json"], chat, env)
     expect(first.answer.tasks).toEqual({ added: 0, closed: 0, review: 0, held: 1, held_chats: 1 })
     expect(first.stderr).toContain("tasks apply <chat>")

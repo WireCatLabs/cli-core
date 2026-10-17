@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../domain/channel-tags.js"
-import type { Chat, Id, Page } from "../domain/models.js"
+import type { Chat, ChatKind, Id, Page } from "../domain/models.js"
 import { keysOver } from "./keys.js"
 import type { ChatMetadata } from "./sqlite/chats.js"
 import * as chatQueries from "./sqlite/chats.js"
@@ -31,6 +31,8 @@ export interface ChatsStore {
   chatCompleteness(key: AccountKey, chatIds: Id[]): Promise<ChatCompleteness[]>
   /** Per chat that has messages: how many, the oldest and newest, and when the last one was stored. */
   chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>
+  /** A stored chat's kind, with or without messages; `undefined` when the store does not know the chat. */
+  chatKind(key: AccountKey, chatId: Id): Promise<ChatKind | undefined>
   /** Per chat that spoke since `since` (ms): its newest message and who sent it when stored, never the text. */
   /** `where` is a `tasks agenda` query compiled over `AGENDA_COLUMNS`. */
   chatActivity(
@@ -101,6 +103,15 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
     chatStats: async (key, chatId) => {
       const accountKey = findAccountPk(key)
       return accountKey === undefined ? [] : reads.chatStats(context, accountKey, chatId)
+    },
+
+    chatKind: async (key, chatId) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) return undefined
+      const row = context.database
+        .prepare("SELECT kind FROM chats WHERE account_id = ? AND external_id = ?")
+        .get(accountKey, chatId)
+      return row ? (String(row.kind) as ChatKind) : undefined
     },
 
     chatActivity: async (key, since, where) => {

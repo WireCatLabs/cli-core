@@ -1,5 +1,5 @@
 import { formatLocator } from "../domain/locator.js"
-import type { Id, Message, ReviewChat } from "../domain/models.js"
+import type { ChatKind, Id, Message, ReviewChat } from "../domain/models.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { createTaskService, type TaskKind, type TaskStore } from "../tasks/index.js"
 import { questions } from "./questions.js"
@@ -32,8 +32,27 @@ export const taskAccount = ({ provider, account }: AccountKey): string => `${pro
  * Only the owner's answers count: the store knows no admins, and a review without `--unanswered` asks
  * for none. A mention is one the messenger marks by id; an `@handle` is not seen.
  */
+/**
+ * Where the rules open tasks for the owner (owner, 2026-10-17): every unanswered question in a one-to-one chat; in a
+ * group only a question that replies to the owner, and a mention; nothing in a channel or Saved Messages. A group
+ * of strangers' questions is not the owner's work. `unknown` is read as a group: it may be one.
+ */
+export const RULES_IN: Record<ChatKind, "all" | "addressed" | "none"> = {
+  dialog: "all",
+  group: "addressed",
+  unknown: "addressed",
+  channel: "none",
+  saved: "none",
+}
+
+const repliesToOwner = (message: Message, messages: readonly Message[]) => {
+  const to = message.replyTo?.id ?? message.replyToId
+  const quoted = to === undefined ? undefined : messages.find((one) => one.id === to)
+  return quoted ? quoted.outgoing === true : message.replyTo?.outgoing === true
+}
+
 export const applyTaskRules = async (
-  review: { chats: Pick<ReviewChat, "id" | "messages">[] },
+  review: { chats: Pick<ReviewChat, "id" | "messages" | "kind">[] },
   {
     store,
     account,
@@ -85,10 +104,13 @@ export const applyTaskRules = async (
   const hasTask = async (message: Message) => (await store.findBySource(owner, sourceOf(message))).length > 0
 
   for (const chat of review.chats) {
+    const scope = RULES_IN[chat.kind]
+    if (scope === "none") continue
     const opens: { message: Message; kind: TaskKind }[] = []
     for (const { question, answer } of questions(chat.messages, { answerers: new Set() })) {
       if (answer) await close(question, "question", answer)
-      else opens.push({ message: question, kind: "question" })
+      else if (scope === "all" || (question.text.includes("?") && repliesToOwner(question, chat.messages)))
+        opens.push({ message: question, kind: "question" })
     }
     for (const [index, message] of chat.messages.entries()) {
       if (message.outgoing || !message.mentions?.includes(account.account)) continue
@@ -116,6 +138,10 @@ export const applyTaskRules = async (
 /** How far back `serve` looks when a message arrives: enough to see whether it answers a recent question. */
 export const ARRIVAL_WINDOW = 50
 
+/** A chat the store has no message of yet is `unknown`, which the rules read as a group: only what is addressed. */
+const kindOf = async (store: MessageStore, account: AccountKey, chat: Id): Promise<ChatKind> =>
+  (await store.chats.chatKind(account, chat)) ?? "unknown"
+
 /** `serve`'s rule pass: the new message with the chat's stored messages before it, as a review would read them. */
 export const applyTaskRulesOnArrival = async (
   store: MessageStore,
@@ -127,7 +153,7 @@ export const applyTaskRulesOnArrival = async (
     (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp),
   )
   return applyTaskRules(
-    { chats: [{ id: message.chatId, messages }] },
+    { chats: [{ id: message.chatId, messages, kind: await kindOf(store, account, message.chatId) }] },
     { store: store.tasks, account, categories: await store.tasks.categories() },
   )
 }
@@ -154,7 +180,10 @@ export const applyTaskRulesToStored = async (
   for (const chat of await store.chats.chatStats(account)) {
     if (chat.lastStoredAt === null || (since !== undefined && chat.lastStoredAt <= since)) continue
     // A skipped chat still moves the stop point, or the next pass would read all of it as new.
-    if (newerThan !== undefined && (chat.newestAt === null || chat.newestAt < newerThan)) {
+    if (
+      RULES_IN[chat.kind] === "none" ||
+      (newerThan !== undefined && (chat.newestAt === null || chat.newestAt < newerThan))
+    ) {
       if (result.until === null || chat.lastStoredAt > result.until) result.until = chat.lastStoredAt
       continue
     }
@@ -167,7 +196,7 @@ export const applyTaskRulesToStored = async (
       limit: Math.min(ARRIVAL_WINDOW + fresh, STORED_PASS_LIMIT),
     })
     const pass = await applyTaskRules(
-      { chats: [{ id: chat.chatId, messages: page.items }] },
+      { chats: [{ id: chat.chatId, messages: page.items, kind: chat.kind }] },
       { store: store.tasks, account, categories, ...(openLimit === undefined ? {} : { openLimit }) },
     )
     result.added += pass.added
@@ -264,7 +293,7 @@ export const applyTaskRulesToChats = async (
     const page = await store.messages.messages(account, chat, { limit: Math.min(last, STORED_PASS_LIMIT) })
     const tasks: HeldTask[] = []
     const pass = await applyTaskRules(
-      { chats: [{ id: chat, messages: page.items }] },
+      { chats: [{ id: chat, messages: page.items, kind: await kindOf(store, account, chat) }] },
       { store: store.tasks, account, categories, dryRun: !yes, onHeld: (task) => tasks.push(task) },
     )
     passes.push({ chat, messages: page.items.length, ...pass, tasks })

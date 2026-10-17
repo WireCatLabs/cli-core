@@ -36,6 +36,13 @@ shape of this file.
 
 ### Fixed
 
+- **The task rules open tasks only where something is asked of you** (owner, 2026-10-17). In a one-to-one chat
+  every question you did not answer opens one, as before; in a group only a question in reply to your message and a
+  mention of you; in a channel or Saved Messages nothing. Before, any unanswered question in any chat became your
+  task: on the owner's store, 300 posts of one channel would have opened 85. A chat kind the store does not know is
+  read as a group. `held` no longer counts chats where the rules open nothing.
+- **Two tasks taken from one message are compared by their own words only**, not by that message's text, which
+  made two different jobs look like one.
 - **An edit no longer erases what the edit event did not carry.** The store saved an edit as a whole message, so a
   live edit stamped with the edit's time moved the message's send time, and an edit that counted no reactions
   replaced the stored ones. On an edit (`editedAt` set) the store now keeps the earlier send time of the two (0
