@@ -12,6 +12,10 @@ shape of this file.
 - Incremental document linking includes URLs added to previously stored messages. The local text-revision
   time keeps edits written by older messaging releases visible without fetching history or requiring a
   messenger upgrade. Current text and deletion guards remain; repeated linking does not duplicate links.
+- **A reply chain counts +2, not +6, in the task duplicate check**: on 213 labelled pairs from real chats, pairs
+  shown as possible duplicates because one task's message replies to the other's were wrong 11 times in 13. At +2,
+  shown-pair precision rose on both labelled sets (52% → 57%, 43% → 47%) for one lost true pair each; a reply that
+  asks for something new now stays "different".
 
 ## 0.330.0 — 18.10.2026
 

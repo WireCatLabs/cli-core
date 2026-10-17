@@ -207,11 +207,15 @@ weights, set by hand and tuned on the test set (§ Test set) before they are tru
 | Amount equal / different / missing | +3 / −4 / 0 | +6 / −4 / 0 |
 | Category same / different | +1 / −1 | +1 / −1 |
 | Due ≤ 2 days / more / missing | +1 / −1 / 0 | +4 / −1 / 0 |
-| Reply chain | +6 | +6 |
+| Reply chain | +6 | +6, then +2 after real chats (below) |
 | Time ≤ 3 / 4–14 / > 14 days | +1 / 0 / −1 | +2 / −2 / −3 |
 
 Levels no duplicate in the set showed (a different person, amount or category) would count to −5 or −6 from zero
 observations; they keep the first draft's values.
+
+On 213 labelled pairs from real chats (cli-testing `performance/tasks/duplicates`, "Follow-up: a second labelled
+set"), pairs shown because of a reply chain were wrong 11 times in 13; at +2 the shown pairs' precision rose on both
+labelled sets. The other weights stay.
 
 Bands: **≥ 10 likely, 5–9 maybe, < 5 different.** On the set (cli-testing#60) "maybe or likely" finds 90% of
 duplicates at 58% precision and refuses 21% of new tasks; "likely" alone is 85% precise, 43% recall. **No
