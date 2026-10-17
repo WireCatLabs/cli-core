@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.316.0 — 17.10.2026
 
 ### Fixed
 
@@ -13,8 +13,10 @@ shape of this file.
   and `--max-messages` of `search messages|conversations`, `stats messages show|top`, `stats contacts top` and
   `contacts context` are not offered to a messenger that pushes its history (0.315.0), so wa's column says so.
   0.316.0's release stopped on that row.
-
-## 0.316.0 — 17.10.2026
+- **A messenger with `history: "store"` reads group members from the messenger.** `chats members fetch` and
+  `audit` were refused for it as if offline, and `chats members list` read only the stored members, so its
+  adapter's `members` was never reached. Now all three ask the adapter when it has `members`; only `--offline`
+  refuses `fetch` and `audit`. tg-cli and max-cli read from the server already and do not change.
 
 ### Added
 
@@ -37,13 +39,6 @@ shape of this file.
   `ChatDeletion`, `AccountSettings`, `AccountEditing`, `AccountRecords`, `ProfileChange`, `ProfilePhotos`,
   `MessagePermalinks` and `TopicHistory`.
 - **whatsapp-cli (`wa`) joins the parity manifest** as a third CLI.
-
-### Fixed
-
-- **A messenger with `history: "store"` reads group members from the messenger.** `chats members fetch` and
-  `audit` were refused for it as if offline, and `chats members list` read only the stored members, so its
-  adapter's `members` was never reached. Now all three ask the adapter when it has `members`; only `--offline`
-  refuses `fetch` and `audit`. tg-cli and max-cli read from the server already and do not change.
 
 ## 0.315.0 — 17.10.2026
 
