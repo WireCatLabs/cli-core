@@ -52,8 +52,9 @@ export interface BaseEnvironment {
   /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
   agent?: AgentRun
   /**
-   * Set by `run()`: the rest of the command has no deadline, and Ctrl-C, SIGTERM or a cancel aborts the signal it
-   * returns instead of the command, which then ends as it says — exit 0 with what it got. For a phase that keeps
+   * Set by `run()`: the rest of the command has no default deadline, and Ctrl-C, SIGTERM, a cancel or an explicit
+   * `--timeout` aborts the signal it returns instead of the command, which then ends as it says — exit 0 with what it
+   * got. A second signal ends the command. For a phase that keeps
    * what each step brings and may stop at any point: the history a phone pushes after linking.
    */
   untilStopped?: () => AbortSignal

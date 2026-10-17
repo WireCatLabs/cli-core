@@ -143,6 +143,7 @@ const RELAY_MARGIN_MS = 10_000
  */
 export const run = async (argv: string[], definition: ProgramDefinition, options: RunOptions = {}): Promise<number> => {
   const streams = options.streams ?? processStreams
+  if (!options.streams) quietBrokenPipes()
   const delimiter = argv.indexOf("--")
   const flags = argv.slice(0, delimiter < 0 ? undefined : delimiter)
   const machine = flags.some((word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl")
@@ -156,8 +157,12 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   // After untilStopped(), a signal or a cancel ends only that phase; the command finishes and says how it went.
   const phase = new AbortController()
   let phased = false
+  let phaseTimer: NodeJS.Timeout | undefined
+  // The deadline a person or a script set, which a phase keeps; the default one it ends.
+  let explicitEnd: number | undefined
   const interrupted = (signal: "SIGINT" | "SIGTERM") => {
-    if (phased)
+    // A second signal ends the command as any signal does: one that ignores its phase can still be stopped.
+    if (phased && !phase.signal.aborted)
       return phase.abort(new CliError("cancelled", `stopped by ${signal}`, { reason: signal, retryable: false }))
     signalExit = listens ? 0 : signal === "SIGINT" ? 130 : 143
     control.abort(new CliError("cancelled", `command interrupted by ${signal}`, { reason: signal, retryable: false }))
@@ -196,8 +201,20 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),
     untilStopped: () => {
+      if (phased) return phase.signal
       phased = true
       control.start(undefined)
+      if (explicitEnd !== undefined)
+        phaseTimer = setTimeout(
+          () =>
+            phase.abort(
+              new CliError("timeout", "the command reached its --timeout", {
+                retryable: false,
+                reason: "command.timed-out",
+              }),
+            ),
+          Math.max(0, explicitEnd - Date.now()),
+        )
       return phase.signal
     },
   }
@@ -280,7 +297,6 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
             commandEnv,
           )
     if (!options.streams) {
-      quietBrokenPipes()
       process.stdout.on("error", pipeError)
       process.stderr.on("error", pipeError)
     }
@@ -317,6 +333,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       throw new Relayed(code)
     }
     control.start(deadline)
+    if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline
     if (options.relayed) absolutePaths(action, options.relayed.cwd)
     const cooperative = persistent || stopsAtItsPace === true
     if (!cooperative) options.signal?.addEventListener("abort", externalAbort, { once: true })
@@ -350,7 +367,9 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   const { profile, rest: lifted } = liftProfile(argv, commandWords(program))
   // `wa 'chats list' --help` reads "chats list" as a profile and prints the root help with exit 0.
   try {
-    for (const words of [flags, lifted])
+    // Only before `--`: what follows is a positional, an agent's text among them, never a command word.
+    const end = lifted.indexOf("--")
+    for (const words of [flags, end < 0 ? lifted : lifted.slice(0, end)])
       refuseJoinedPath(
         program,
         words.filter((word) => !word.startsWith("-")),
@@ -428,6 +447,7 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
       process.stdout.off("error", pipeError)
       process.stderr.off("error", pipeError)
     }
+    if (phaseTimer) clearTimeout(phaseTimer)
     await control.finish()
   }
 }
