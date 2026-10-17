@@ -63,7 +63,7 @@ const portOf = (given: string | undefined): number => {
 const withFlags = (command: Command): Command =>
   command.option(
     "--permission <key=level>",
-    "override a permission for this server only; repeat for more keys",
+    "make a permission stricter for this server only, like messages.send=deny; it never loosens the profile; repeat for more keys",
     (value: string, previous: string[] = []) => [...previous, value],
   )
 

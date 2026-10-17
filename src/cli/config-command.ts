@@ -62,7 +62,8 @@ export const configCommand = (
     const sub = grantsAuthority(annotate(command.command(action), { effects: LOCAL_WRITE }))
       .argument(
         "<setting>",
-        `one of: ${[...config.allSettings, ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
+        // default_profile is only removed now: `config unset` still takes it, `config set` refuses it.
+        `one of: ${[...config.allSettings.filter((one) => action === "unset" || one !== "default_profile"), ...STORE_SETTINGS, "account_groups.<name>"].join(", ")}`,
       )
       .option("--defaults", "change what every profile gets, rather than this profile")
       .option("--personal", "only for personal accounts — the personal section of the file")

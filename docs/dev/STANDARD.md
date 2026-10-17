@@ -1097,7 +1097,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `bot store fetch` (max, tg only), `messages download`, `messages sync`, `store gaps repair` |
 | `--per-chat` | `<limit>` | at most this many per chat, such as 1/12h |  | `replies edit` |
 | `--per-person` | `<limit>` | at most this many per person, such as 1/1d |  | `replies edit` |
-| `--permission` | `<key=level>` | override a permission for this MCP server only; repeat for more keys |  | `mcp`, `mcp config`, `mcp doctor`, `mcp setup` |
+| `--permission` | `<key=level>` | make a permission stricter for this MCP server only, like messages.send=deny; it never loosens the profile; repeat for more keys |  | `mcp`, `mcp config`, `mcp doctor`, `mcp setup` |
 | `--personal` |  | the personal account's section of the profile's settings |  | `config set`, `config unset` |
 | `--phone-number` | `<who>` | who sees the number: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--photo` | `<file>` | an image file — a profile photo in `account update`, a group's photo in `chats update`, a photo to send in `messages send` |  | `account update`, `bot messages send` (max, tg only), `chats update` (planned), `messages send` |
