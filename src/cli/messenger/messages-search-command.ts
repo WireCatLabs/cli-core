@@ -3,6 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { parseLocator } from "../../domain/locator.js"
 import { SAVE_HELP } from "../../meetings/index.js"
+import { syncsOneChat } from "../../ports/traits.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
 import type { SearchFound } from "../../services/messages.js"
@@ -189,7 +190,7 @@ const searchAction = (messenger: Messenger) =>
     const chats = incomplete.length
     const summary = found.coverage ? archiveSummary(found.coverage, found.items.length) : undefined
     if (summary) context.renderer.note(summary)
-    else if (!found.coverage && chats > 0 && syncsFirst(messenger)) {
+    else if (!found.coverage && chats > 0 && syncsOneChat(messenger)) {
       context.renderer.note(
         `${chats} of the chats searched are not held in full — \`${command} messages sync <chat>\` syncs one`,
       )

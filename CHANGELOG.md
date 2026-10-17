@@ -14,6 +14,12 @@ shape of this file.
   transaction of that batch's messages, after them, so a poll pushed with its votes is held first; a voter's older
   vote still never replaces a newer one. A messenger that pushed votes as `watch` events, kept only while a watch
   ran, can send them with the history instead.
+- **`parseMarkdownSpans(text)`** (`.`): one Markdown parser for every messenger, into `FormattedText` — text and
+  neutral spans. tg's dialect (`**` and `*` bold, `_` italic, `__` underline, `~~` and `~` strike, `||` spoiler,
+  `` ` `` code, fenced blocks, `> ` quotes, links) plus `#` headings and a one-line ```` ```mono``` ```` block. It
+  refuses only what no messenger can send (an unsafe link, an open fence, more than 100 spans or 32 levels); each
+  messenger keeps its own renderer and refuses the nesting it cannot show. Over the same text a quote or heading
+  sorts before the spans inside it.
 
 ### Fixed
 
@@ -23,6 +29,10 @@ shape of this file.
 - **A schedule that runs every few minutes no longer stops after a run longer than its interval.** Its systemd timer
   counted from when a run started (`OnUnitActiveSec`), so a run that outlasted the interval left no next run; it
   now counts from when a run ends (`OnUnitInactiveSec`). A schedule written before keeps its timer until saved again.
+- **No `messages sync` advice a messenger cannot follow** (UX-59). For `history: "store"`, `chats members audit`,
+  `stats chats show`, `search conversations`, MCP `chats_documents_list`, `store check` and the message-search
+  coverage no longer name `messages sync`; the caveat that the store does not hold the chat whole stays, without
+  a step. With `historyOnDemand` they name `messages sync <chat>` for one chat, never `--all`.
 
 ## 0.321.0 — 17.10.2026
 

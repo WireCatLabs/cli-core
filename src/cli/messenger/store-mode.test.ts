@@ -354,6 +354,22 @@ describe("a messenger whose history is read from the store", () => {
     expect(fetched).toContain("chat messages sync --all --background")
   })
 
+  it("**UX-59: `store check` names `messages sync` only as this messenger can run it**", async () => {
+    const env = await filled()
+    const { connect } = pushing()
+    const steps = async (history?: "store", own: Partial<Messenger> = {}) => {
+      const { code, stdout } = await call(["store", "check", "--json"], env, connect, history, false, own)
+      expect(code).toBe(0)
+      return (JSON.parse(stdout).next ?? []).filter((one: { step: string }) => one.step === "messages.sync")
+    }
+
+    expect(await steps()).toEqual([expect.objectContaining({ step: "messages.sync" })])
+    expect(await steps("store")).toEqual([])
+    expect(await steps("store", { historyOnDemand: true })).toEqual([
+      expect.objectContaining({ step: "messages.sync", args: { chat: "20" } }),
+    ])
+  })
+
   it("**answers not_found for a chat with nothing stored**, known or not", async () => {
     const env = await filled()
     const { connect } = pushing()

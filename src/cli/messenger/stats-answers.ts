@@ -514,17 +514,17 @@ export const chatStatsAnswer = (stats: ChatStats, account: AccountKey): ItemBody
   })
   return itemOf(
     item,
-    fetch === undefined
+    completeness.state === "complete"
       ? {}
       : {
           missing: [
             {
               field: "messages",
               why: "the store does not hold this chat whole, so these are lower bounds",
-              step: "messages.sync",
+              ...(fetch === undefined ? {} : { step: "messages.sync" }),
             },
           ],
-          next: [nextStep("messages.sync", { args: { chat: chatId } })],
+          ...(fetch === undefined ? {} : { next: [nextStep("messages.sync", { args: { chat: chatId } })] }),
         },
   )
 }

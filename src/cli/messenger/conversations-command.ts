@@ -222,7 +222,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     renderAnswer(
       this,
       context,
-      foundConversations("conversations related", { ...found, meaning: "searched" }, limit),
+      foundConversations("conversations related", { ...found, meaning: "searched" }, limit, messenger),
       () => `like ${line(found.source)}\n\n${found.hits.map((hit) => `${hitLine(hit)}\n`).join("")}`,
     )
     if (found.hits.length === 0 && context.format === "pretty")
@@ -790,7 +790,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         return { found, refreshed: found.prepared }
       })
       if (refreshed) for (const note of leftNotes(refreshed, rootOf(this))) context.renderer.note(note)
-      renderAnswer(this, context, foundConversations("search conversations", found, limit, chat), () =>
+      renderAnswer(this, context, foundConversations("search conversations", found, limit, messenger, chat), () =>
         found.hits.map((hit) => `${hitLine(hit)}\n`).join(""),
       )
       if (found.hits.length === 0 && context.format === "pretty")

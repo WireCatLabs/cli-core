@@ -71,3 +71,10 @@ export interface MessengerTraits {
    */
   serverSearch?: boolean | "chat"
 }
+
+/**
+ * Whether `messages sync <chat>` can fill one chat, so an answer may advise it: a messenger that answers for its
+ * history, or a pushed-history one with `historyOnDemand`. `--all` needs `history` other than `store`.
+ */
+export const syncsOneChat = (messenger: Pick<MessengerTraits, "history" | "historyOnDemand">): boolean =>
+  messenger.history !== "store" || messenger.historyOnDemand === true

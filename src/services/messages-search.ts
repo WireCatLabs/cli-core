@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { calendarKey } from "../domain/calendar.js"
 import { parseLocator } from "../domain/locator.js"
-import type { MessengerTraits } from "../ports/traits.js"
+import { type MessengerTraits, syncsOneChat } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
 import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
@@ -339,7 +339,7 @@ const indexNotReady = async (store: MessageStore, command: string | undefined): 
 export const coverageOf = async (
   store: MessageStore,
   { scopeAccounts, selectedChat }: Prepared,
-  messenger: Partial<Pick<MessengerTraits, "app" | "history" | "provider">> = {},
+  messenger: Partial<Pick<MessengerTraits, "app" | "history" | "historyOnDemand" | "provider">> = {},
 ): Promise<{ completeness: (ChatCompleteness & AccountKey)[]; coverage: SearchCoverage }> => {
   const completeness: (ChatCompleteness & AccountKey)[] = []
   const stats = new Map<string, ChatStats>()
@@ -380,15 +380,15 @@ export const coverageOf = async (
   const neverFetched = own.filter(({ state }) => state === "unknown").length
   const behindCount = own.filter(behind).length
   // A chat held back to a window stays partial for good, so only what a fetch would change is advised.
-  const command = messenger.history === "store" ? undefined : messenger.app?.command
+  const command = messenger.app?.command
   const next =
     command === undefined
       ? null
       : selectedChat
-        ? neverFetched || behindCount
+        ? (neverFetched || behindCount) && syncsOneChat(messenger)
           ? `${command} messages sync ${selectedChat.chatId}`
           : null
-        : neverFetched || behindCount || !ownInventory
+        : (neverFetched || behindCount || !ownInventory) && messenger.history !== "store"
           ? `${command} messages sync --all --background`
           : null
   const state =

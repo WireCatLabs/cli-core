@@ -196,7 +196,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
           ...(args.chat === undefined ? {} : { chat: args.chat }),
           ...(args.since === undefined ? {} : { since: new Date(momentOf(args.since, "since")).toISOString() }),
         })
-        return foundConversations("search conversations", found, size, args.chat)
+        return foundConversations("search conversations", found, size, messenger, args.chat)
       },
     }),
 
@@ -222,7 +222,7 @@ export const conversationsTools = (messenger: Messenger): Record<string, AnyTool
           limit: size,
           model: embeddingChoice({}, messenger.app, defaults.settings, defaults.env, { needKey: false }),
         })
-        return foundConversations("conversations related", { ...found, meaning: "searched" }, size)
+        return foundConversations("conversations related", { ...found, meaning: "searched" }, size, messenger)
       },
     }),
 

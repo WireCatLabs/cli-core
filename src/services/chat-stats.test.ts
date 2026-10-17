@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
+import { chatStatsAnswer } from "../cli/messenger/stats-answers.js"
 import type { ChatEvents, Message } from "../domain/models.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { SendGuard } from "../sends/guard.js"
@@ -169,6 +170,28 @@ describe("stats chats show", () => {
     expect(stats.complete).toBe(false)
     expect(stats.completeness.state).toBe("unknown")
     expect(stats.fetch).toBe("chat messages sync 7")
+  })
+
+  it("**UX-59: advises `messages sync <chat>` only where the messenger can sync one chat**", async () => {
+    const answered = async (traits: Partial<Messenger>) => {
+      const store = await heldStore({ whole: false })
+      const deps = {
+        ...storedDeps({ ...messenger, ...traits }, store, account, guard),
+        connection: async () => adapter,
+      }
+      return chatStatsAnswer(await chatsService(deps).stats("7", { since: SINCE }), account)
+    }
+
+    const pushed = await answered({ history: "store" })
+    const onDemand = await answered({ history: "store", historyOnDemand: true })
+    const fetched = await answered({})
+
+    expect(pushed.missing).toEqual([{ field: "messages", why: expect.stringContaining("lower bounds") }])
+    expect(pushed).not.toHaveProperty("next")
+    for (const body of [onDemand, fetched]) {
+      expect(body.missing).toEqual([expect.objectContaining({ step: "messages.sync" })])
+      expect(body.next).toEqual([expect.objectContaining({ step: "messages.sync", args: { chat: "7" } })])
+    }
   })
 
   it("says the counts are lower bounds when the messenger stopped reading joins early", async () => {
