@@ -37,6 +37,7 @@ import type {
   ScheduledMessages,
   Sent,
   ServerReads,
+  TopicReadState,
 } from "../ports/messenger.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
 import { uploadSize } from "../sends/upload.js"
@@ -50,6 +51,7 @@ export type FakeAdapter = MessengerCore &
   MessagePins &
   MessageReactions &
   ReadState &
+  TopicReadState &
   MessagePolls &
   LiveUpdates &
   MessageMedia &

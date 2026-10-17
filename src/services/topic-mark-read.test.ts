@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
+import { chatsReadTools } from "../mcp/tools/chats-read.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { SendGuard } from "../sends/guard.js"
 import type { SendEntry } from "../sends/journal.js"
@@ -45,5 +46,29 @@ describe("marking one forum topic read", () => {
     const f = fixture()
     expect(await f.service.markRead({ chat: "synthetic" })).not.toHaveProperty("threadId")
     expect(f.markRead).toHaveBeenCalledWith("7", undefined)
+  })
+})
+
+describe("chats_mark_read over MCP (BUG-275)", () => {
+  const messenger = (topics?: false) =>
+    ({ provider: "test", chatArgument: "a chat", ...(topics === false ? { topics } : {}) }) as Messenger
+
+  it("offers topic only where the messenger has forum topics", () => {
+    const without = chatsReadTools(messenger(false)).chats_mark_read
+    const withTopics = chatsReadTools(messenger()).chats_mark_read
+    expect(Object.keys(without?.input.entries ?? {})).not.toContain("topic")
+    expect(without?.description).not.toContain("topic")
+    expect(Object.keys(withTopics?.input.entries ?? {})).toContain("topic")
+  })
+
+  it("marks a chat read on an adapter that has markRead alone", async () => {
+    const markRead = vi.fn(async () => {})
+    const adapter = {
+      resolve: async () => ({ id: "7", title: "synthetic", kind: "dialog" }),
+      markRead,
+    } as unknown as MessengerAdapter
+    const guard = { check: () => {}, record: () => {} } as unknown as SendGuard
+    await chatsService(onlineDeps(messenger(false), adapter, guard)).markRead({ chat: "synthetic" })
+    expect(markRead).toHaveBeenCalledWith("7", undefined)
   })
 })
