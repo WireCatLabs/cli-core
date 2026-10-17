@@ -2757,6 +2757,8 @@ describe("sending over MCP", () => {
     expect(refused.map((one) => one.body.error?.code)).toEqual(Array(5).fill("validation_error"))
     expect(sent.isError).toBe(false)
     expect(sends).toEqual([["7", "hi"]])
+    expect((await call("chats send-as", { chat: "7" })).isError).toBe(true)
+    expect((await call("messages scheduled", { chat: "7" })).isError).toBe(true)
   })
 
   it("preserves topic addressing through MCP send and poll tools", async () => {

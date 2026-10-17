@@ -2278,8 +2278,8 @@
       "in": "all"
     },
     "chats send-as": {
-      "in": ["tg", "wa"],
-      "reason": "MAX has no identities to post as other than the account itself"
+      "in": ["tg"],
+      "reason": "MAX has no identities to post as other than the account itself; WhatsApp posts as the account only"
     },
     "chats show": {
       "in": "all"
@@ -3089,7 +3089,8 @@
       }
     },
     "messages scheduled": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp has no scheduled messages"
     },
     "messages send": {
       "in": "all",

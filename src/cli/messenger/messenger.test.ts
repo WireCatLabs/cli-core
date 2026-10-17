@@ -1496,6 +1496,8 @@ describe("the shared read commands", () => {
     expect(forward).not.toMatch(/--silent|--send-as/)
     expect(send).toContain("--reply-to")
     expect(refused.code).toBe(2)
+    expect(await help(["messages"])).not.toMatch(/^\s+scheduled/m)
+    expect(await help(["chats"])).not.toMatch(/^\s+send-as/m)
   })
 
   it("**creates a quiz where the messenger makes them**, and refuses quiz options that do not go together", async () => {

@@ -104,14 +104,15 @@ export const chatsCommand = (messenger: Messenger): Command => {
     }),
   )
 
-  annotate(chats.command("send-as"), { effects: REMOTE_READ })
-    .description("who this account may post as in a chat; changes no saved choice")
-    .argument("<chat>", messenger.chatArgument)
-    .action(async function (this: Command, chat: string) {
-      const context = messengerContext(this, messenger)
-      const identities = await context.withServices((services) => services.chats.sendAs(chat))
-      renderAnswer(this, context, wholeList("chats send-as", identities.map(snakeKeys)))
-    })
+  if (messenger.sendAs !== false)
+    annotate(chats.command("send-as"), { effects: REMOTE_READ })
+      .description("who this account may post as in a chat; changes no saved choice")
+      .argument("<chat>", messenger.chatArgument)
+      .action(async function (this: Command, chat: string) {
+        const context = messengerContext(this, messenger)
+        const identities = await context.withServices((services) => services.chats.sendAs(chat))
+        renderAnswer(this, context, wholeList("chats send-as", identities.map(snakeKeys)))
+      })
 
   chats.addCommand(documentsCommand(messenger))
   chats.addCommand(membersCommand(messenger))

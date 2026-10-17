@@ -20,6 +20,12 @@ const pagingOf = (args: { limit?: number; page?: number }, defaults: { limit: nu
 }
 
 export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
+  const tools = chatTools(messenger)
+  if (messenger.sendAs === false) delete tools.chats_send_as
+  return tools
+}
+
+const chatTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
   return {
     chats_list: tool({
