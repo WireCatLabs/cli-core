@@ -49,6 +49,7 @@ export type {
   GroupAdmin,
   GroupModeration,
   HistoryBatch,
+  HistoryVote,
   InviteLinks,
   JoinRequests,
   LiveUpdates,

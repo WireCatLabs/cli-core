@@ -321,11 +321,22 @@ export interface LiveUpdates {
   watch(onEvent: (event: MessageEvent) => void, signal: AbortSignal, onReady?: () => void): Promise<void>
 }
 
-/** What a messenger pushed in one go: any of chats, the people in them, and past messages of any chats. */
+/** One voter's vote in the poll message `messageId` of `chatId` carries, as `PollVoteEvent` has it. */
+export interface HistoryVote {
+  chatId: Id
+  messageId: Id
+  vote: PollVote
+}
+
+/**
+ * What a messenger pushed in one go: any of chats, the people in them, past messages of any chats, and votes in
+ * their polls. A vote is saved with its chat's messages, so a poll in the same batch is held before its votes.
+ */
 export interface HistoryBatch {
   chats?: Chat[]
   people?: Member[]
   messages?: Message[]
+  votes?: HistoryVote[]
 }
 
 /** For a messenger that pushes its history to the client instead of answering for it (`Messenger.history: "store"`). */
