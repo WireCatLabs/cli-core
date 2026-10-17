@@ -6,13 +6,20 @@ import { type AnyTool, chatOf, message, tool, WRITE } from "../tool.js"
 
 export const messageDeleteTools = (messenger: Messenger): Record<string, AnyTool> => ({
   messages_delete: tool({
-    title: "Delete messages for the owner",
+    title: "Delete messages",
     description:
       `Delete up to ${DELETE_AT_ONCE} messages from the owner's view of a chat; the other people still see them. ` +
+      "With for_everyone, delete them for everyone in the chat — only when the owner asked for exactly that. " +
       "Cannot be undone. Only when the owner asked for these exact messages to be deleted.",
     input: v.object({
       chat: chatOf(messenger),
       messages: v.pipe(v.array(message), v.minLength(1), v.maxLength(DELETE_AT_ONCE)),
+      for_everyone: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description("delete for everyone in the chat, not only for the owner; some messengers delete only so"),
+        ),
+      ),
     }),
     annotations: WRITE,
     permission: "delete",
@@ -22,7 +29,7 @@ export const messageDeleteTools = (messenger: Messenger): Record<string, AnyTool
           await servicesFor(onlineDeps(messenger, adapter, guard)).messages.delete({
             chat: args.chat,
             messages: args.messages,
-            forEveryone: false,
+            forEveryone: args.for_everyone === true,
           }),
         ),
       ),
