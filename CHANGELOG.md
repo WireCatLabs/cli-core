@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.320.0 — 17.10.2026
+
 ### Changed — may break callers
 
 - **`tasks apply` is now `tasks scan`** (owner, 2026-10-17): the MCP tool is `tasks_scan` and the permission key
