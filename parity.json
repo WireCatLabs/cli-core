@@ -2279,10 +2279,7 @@
     },
     "chats send-as": {
       "in": ["tg"],
-      "reason": "MAX has no identities to post as other than the account itself",
-      "planned": {
-        "wa": "wa adopts cli-core sendAs: false: WhatsApp posts as the account only"
-      }
+      "reason": "MAX has no identities to post as other than the account itself; WhatsApp posts as the account only"
     },
     "chats show": {
       "in": "all"
@@ -3049,15 +3046,11 @@
         "--operation-id": "all",
         "--send-as": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa adopts cli-core sendAs: false: WhatsApp posts as the account only"
-          }
+          "reason": "WhatsApp posts as the account only"
         },
         "--silent": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa adopts cli-core silentSends: false: WhatsApp sends every message with a notification"
-          }
+          "reason": "WhatsApp sends every message with a notification"
         },
         "--to": "all",
         "--topic": {
@@ -3097,9 +3090,7 @@
     },
     "messages scheduled": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core scheduledSends: false: WhatsApp has no scheduled messages"
-      }
+      "reason": "WhatsApp has no scheduled messages"
     },
     "messages send": {
       "in": "all",
@@ -3108,9 +3099,7 @@
         "--as-file": "all",
         "--at-time": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa adopts cli-core scheduledSends: false: WhatsApp has no scheduled messages"
-          }
+          "reason": "WhatsApp has no scheduled messages"
         },
         "--caption-above": {
           "in": ["tg"],
@@ -3136,15 +3125,11 @@
         "--reply-to": "all",
         "--send-as": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa adopts cli-core sendAs: false: WhatsApp posts as the account only"
-          }
+          "reason": "WhatsApp posts as the account only"
         },
         "--silent": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa adopts cli-core silentSends: false: WhatsApp sends every message with a notification"
-          }
+          "reason": "WhatsApp sends every message with a notification"
         },
         "--spoiler": {
           "in": ["tg"],
@@ -3291,9 +3276,7 @@
       "options": {
         "--anonymous": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa adopts cli-core pollAnonymous: false: everyone in a WhatsApp chat sees who voted for what"
-          }
+          "reason": "everyone in a WhatsApp chat sees who voted for what"
         },
         "--close-time": {
           "in": ["tg"],
@@ -3315,15 +3298,11 @@
         },
         "--send-as": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa adopts cli-core sendAs: false: WhatsApp posts as the account only"
-          }
+          "reason": "WhatsApp posts as the account only"
         },
         "--silent": {
           "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa adopts cli-core silentSends: false: WhatsApp sends every message with a notification"
-          }
+          "reason": "WhatsApp sends every message with a notification"
         },
         "--solution": {
           "in": ["tg"],
@@ -3384,21 +3363,15 @@
     },
     "replies": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies add": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies audience": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      },
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies",
       "options": {
         "--allow-chats": "all",
         "--allow-people": "all",
@@ -3409,45 +3382,31 @@
     },
     "replies consents": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents allow": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents deny": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents grant": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents revoke": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents show": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies edit": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      },
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies",
       "options": {
         "--allow-chats": "all",
         "--allow-people": "all",
@@ -3476,39 +3435,27 @@
     },
     "replies off": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies on": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies pause": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies resume": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies status": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      }
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies test": {
       "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa adopts cli-core autoReplies: false: WhatsApp sends nothing the owner did not type: no automatic replies"
-      },
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies",
       "options": {
         "--ai": "all",
         "--since-time": "all"
