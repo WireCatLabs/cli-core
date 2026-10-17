@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import {
+  captureModes,
   check,
   mcpSchemas,
   mountingEvidence,
@@ -146,4 +147,17 @@ it("keeps every assertion status/count without duplicating the raw coverage map 
   expect(summary.testResults[0]?.assertionResults.map((test) => test.status)).toEqual(["passed", "failed", "skipped"])
   expect(summary).toMatchObject({ numPassedTests: 1, numFailedTests: 1, numPendingTests: 1 })
   expect(summary).not.toHaveProperty("coverageMap")
+})
+
+describe("MCP capture modes", () => {
+  it("captures under profiles that differ, without the --allow-* flags no CLI has any more", () => {
+    const modes = captureModes(["messages", "chats", "bot"])
+    const settings = modes.map(({ argv, config }) => JSON.stringify({ argv, config }))
+
+    expect(new Set(settings).size).toBe(modes.length)
+    expect(modes.flatMap(({ argv }) => argv).filter((one) => one.startsWith("--allow-"))).toEqual([])
+    expect(modes.find(({ mode }) => mode === "read-only")?.config).toEqual({
+      profiles: { audit: { permissions: { messages: "readonly", chats: "readonly" } } },
+    })
+  })
 })

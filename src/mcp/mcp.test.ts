@@ -800,7 +800,7 @@ describe("the MCP server", () => {
     const tools = await client.listed()
 
     expect(tools.map((one) => one.command).sort()).toEqual([
-      "account sessions",
+      "account sessions list",
       "account show",
       "attachments list",
       "attachments show",
@@ -812,12 +812,12 @@ describe("the MCP server", () => {
       "chats link list",
       "chats link show",
       "chats list",
-      "chats members",
       "chats members audit",
       "chats members history",
+      "chats members list",
       "chats requests list",
       "chats rules show",
-      "chats send as",
+      "chats send-as",
       "chats show",
       "chats tracking list",
       "chats tracking show",
@@ -2756,9 +2756,9 @@ describe("sending over MCP", () => {
       },
     })
     const { call, client } = await connect(telegram, {})
-    const offered = await client.describe("chats send as")
+    const offered = await client.describe("chats send-as")
     expect(offered?.writes).toBe(false)
-    expect((await call("chats send as", { chat: "7" })).body.items).toEqual(
+    expect((await call("chats send-as", { chat: "7" })).body.items).toEqual(
       identities.map(({ premiumRequired, ...one }) => ({ ...one, premium_required: premiumRequired })),
     )
     expect((await call("messages send", { chat: "7", text: "hi", send_as: "-1002" })).isError).toBe(false)

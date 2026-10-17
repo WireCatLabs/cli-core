@@ -11,7 +11,7 @@ import { capability } from "../../ports/messenger.js"
 import { closeAfterOf, guardedClose, guardedCreatePoll, guardedVote, pollVoters, quizOf } from "../../sends/polls.js"
 import { type AnyTool, chatOf, limit, message, page, READ, tool, WRITE } from "../tool.js"
 
-const answerId = v.pipe(v.string(), v.minLength(1), v.description("an answer id, as polls_show gives it"))
+const answerId = v.pipe(v.string(), v.minLength(1), v.description("an answer id, as `polls show` gives it"))
 
 export const pollReadTools = (messenger: Messenger): Record<string, AnyTool> => ({
   ...(messenger.pollVoters
@@ -66,7 +66,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
     polls_vote: tool({
       title: "Vote in a poll",
       description:
-        "Vote as the owner, by answer ids from polls_show; an empty list takes the vote back. The others see it " +
+        "Vote as the owner, by answer ids from `polls show`; an empty list takes the vote back. The others see it " +
         "unless the poll is anonymous. Only when the owner asked for this vote.",
       input: v.object({ chat, message, answers: v.array(answerId) }),
       annotations: WRITE,
@@ -120,7 +120,7 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
             v.string(),
             v.minLength(1),
             v.description(
-              "an id from chats_send_as to post as; required where the chat posts as someone else by default",
+              "an id from `chats send-as` to post as; required where the chat posts as someone else by default",
             ),
           ),
         ),

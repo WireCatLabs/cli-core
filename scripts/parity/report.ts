@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import { commandMap, type Difference, inlineJson } from "../../dist/parity/deep.js"
 import type { DeepBundle, DeepSide, Snapshot } from "./deep-audit.ts"
-import type { TestEvidence } from "./evidence.ts"
+import { CAPTURE_MODES, type TestEvidence } from "./evidence.ts"
 
 const lines = (output: string, file: string, contents: string[]) =>
   writeFileSync(join(output, file), `${contents.join("\n").trim()}\n`)
@@ -74,10 +74,10 @@ export const renderReports = (bundle: DeepBundle, output: string): void => {
     "",
     "## MCP visibility and structural differences",
     "",
-    "Modes describe flags/configuration, not permission verdicts. Default visibility is not necessarily read-only. Configured exposure includes source-declared opt-in tool groups where present. Failed captures are not empty tool lists.",
+    "Each mode is a permission profile: default (no levels set), read-only (every resource readonly) and deny-send (messages.send denied). Default visibility is not necessarily read-only. Failed captures are not empty tool lists.",
     "",
   ]
-  for (const mode of ["default", "send", "flags", "configured"]) {
+  for (const mode of CAPTURE_MODES) {
     const tools = bundle.tools[mode]
     const captures = sides.map(
       ([cli, side]) => `${cli}: ${side.mcp.find((one) => one.mode === mode)?.tools?.length ?? "capture failed"}`,
@@ -150,7 +150,7 @@ export const renderReports = (bundle: DeepBundle, output: string): void => {
     "Schema collection invokes no tools; separate synthetic tool calls are recorded in scenarios.md. Required/enum/choices sets ignore order for structural comparison; positional arrays keep order. Missing outputSchema is unknown output validation, not proof of equal results.",
     "",
   ]
-  for (const mode of ["default", "send", "flags", "configured"]) {
+  for (const mode of CAPTURE_MODES) {
     mcp.push(`## ${mode}`, "")
     for (const [cli, side] of sides) {
       const capture = side.mcp.find((one) => one.mode === mode)

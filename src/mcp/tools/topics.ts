@@ -42,7 +42,7 @@ const readTopicTools = (messenger: Messenger): Record<string, AnyTool> => ({
     title: "A forum group's topics",
     description:
       "The topics of a forum group, newest activity first. A message in a topic carries its id as its thread. " +
-      "search_topics matches titles.",
+      "`search topics` matches titles.",
     input: v.object({ chat: chatOf(messenger), limit, page }),
     annotations: READ,
     output: { entity: "topic", list: true },
@@ -68,7 +68,7 @@ const readTopicTools = (messenger: Messenger): Record<string, AnyTool> => ({
           description: "One topic of a forum group. Reading changes nothing.",
           input: v.object({
             chat: chatOf(messenger),
-            topic: v.pipe(v.string(), v.minLength(1), v.description("the topic id, from topics_list")),
+            topic: v.pipe(v.string(), v.minLength(1), v.description("the topic id, from `topics list`")),
           }),
           annotations: { ...READ, idempotentHint: true },
           output: { entity: "topic", list: false },
@@ -101,7 +101,7 @@ const writeTopicTools = (messenger: Messenger): Record<string, AnyTool> => ({
   topics_create: tool({
     title: "Create a forum topic",
     description:
-      "Only when the owner requested this topic. The group must already have topics enabled. On outcome_unknown, check topics_list and do not repeat the creation, even with the same operation_id.",
+      "Only when the owner requested this topic. The group must already have topics enabled. On outcome_unknown, check `topics list` and do not repeat the creation, even with the same operation_id.",
     input: v.object({
       chat: chatOf(messenger),
       title: v.pipe(v.string(), v.minLength(1)),
@@ -123,10 +123,10 @@ const writeTopicTools = (messenger: Messenger): Record<string, AnyTool> => ({
     description:
       "Only when the owner asked to delete this topic. Deletes the topic and every message in it, for everyone; it " +
       "cannot be undone, and asks first unless topics.delete is allow. The General topic (1) cannot be deleted. " +
-      "Returns { operation_id, chat_id, topic_id }. On outcome_unknown, read topics_list: a topic that is gone was deleted.",
+      "Returns { operation_id, chat_id, topic_id }. On outcome_unknown, read `topics list`: a topic that is gone was deleted.",
     input: v.object({
       chat: chatOf(messenger),
-      topic: v.pipe(v.string(), v.minLength(1), v.description("the topic id, from topics_list")),
+      topic: v.pipe(v.string(), v.minLength(1), v.description("the topic id, from `topics list`")),
     }),
     annotations: WRITE,
     permission: "groups",
@@ -140,7 +140,7 @@ const writeTopicTools = (messenger: Messenger): Record<string, AnyTool> => ({
       "false reopens it; pinned: true pins it, false unpins it; hidden hides or shows the General topic. Returns { operation_id, chat_id, topic }. On outcome_unknown, repeating it is safe.",
     input: v.object({
       chat: chatOf(messenger),
-      topic: v.pipe(v.string(), v.minLength(1), v.description("the topic id, from topics_list")),
+      topic: v.pipe(v.string(), v.minLength(1), v.description("the topic id, from `topics list`")),
       title: v.optional(v.pipe(v.string(), v.minLength(1))),
       closed: v.optional(v.boolean()),
       pinned: v.optional(v.boolean()),

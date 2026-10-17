@@ -9,6 +9,7 @@ import { agentArguments } from "./text.js"
 import {
   type AnyTool,
   answered,
+  commandOf,
   entryRunner,
   failed,
   inputOf,
@@ -37,9 +38,6 @@ export interface McpCommand {
   checked?: boolean
   run: (args: Record<string, unknown>, ctx: ServerContext) => Promise<CallToolResult>
 }
-
-/** `chats_mark_read` is `chats mark-read`: the one verb with a hyphen. */
-export const commandOf = (key: string): string => key.replaceAll("_", " ").replace("mark read", "mark-read")
 
 const normal = (command: string): string =>
   command
@@ -222,7 +220,7 @@ export const registerSurface = (server: McpServer, tools: Record<string, AnyTool
     registration.command,
     Object.fromEntries(
       Object.entries(tools).map(([key, definition]) => [
-        commandOf(key),
+        commandOf(key, definition),
         {
           title: definition.title,
           description: definition.description,

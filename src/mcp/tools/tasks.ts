@@ -48,7 +48,7 @@ const ahead = (what: string) =>
 // Names only: with each meaning the default list is ~1.9k characters in two tool schemas; tasks_categories has them.
 const category = text(
   30,
-  "what it is about, a name from tasks_categories (it says what each means) — by default " +
+  "what it is about, a name from `tasks categories` (it says what each means) — by default " +
     DEFAULT_TASK_CATEGORIES.map(({ name }) => name).join(", "),
 )
 const PLAN = {
@@ -127,7 +127,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "key: the message is linked to it, no task opens) or `new: true` (open it anyway). When only tasks closed in " +
         "the last 14 days match, it opens the task and links it follow-up-of the best one, which stays closed " +
         "(`follow_up_of`); new: true does the same. Writes only to the local store; nothing is sent. After into, the " +
-        "task now reads that message too, so tasks it may duplicate go to tasks_duplicates. Returns " +
+        "task now reads that message too, so tasks it may duplicate go to `tasks duplicates`. Returns " +
         `${ROW} with created, follow_up_of { ref, key, title, status } when it follows one up and, after into, ` +
         "attached and review (how many pairs went there).",
       input: v.object({
@@ -166,10 +166,10 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "`certainty` that the task needs nothing more: when the owner allows agent closes and it is at least the " +
         "owner's threshold (config task_agent_close_min, default 0.8), the task closes; otherwise it stays open " +
         "with `close_suggestion` set, and the owner confirms or refuses it — do not ask again. A closed task stays " +
-        "closed, and the rules never reopen it; only tasks_unmerge reopens a merged one. Writes only to the local " +
+        "closed, and the rules never reopen it; only `tasks unmerge` reopens a merged one. Writes only to the local " +
         `store; nothing is sent. Returns ${ROW_CLOSED}.`,
       input: v.object({
-        task: v.pipe(v.string(), v.minLength(1), v.description("the task's id or key, from tasks_list")),
+        task: v.pipe(v.string(), v.minLength(1), v.description("the task's id or key, from `tasks list`")),
         as: v.picklist(["done", "dismissed"]),
         certainty: v.pipe(
           v.number(),
@@ -203,7 +203,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "(next_check_at). It is yours: nothing reaches the owner. Writes only to the local store; nothing is sent. " +
         `Returns ${CARD}.`,
       input: v.object({
-        task: text(200, "the task's id or key, from tasks_list or tasks_agenda"),
+        task: text(200, "the task's id or key, from `tasks list` or `tasks agenda`"),
         ...PLAN,
         category: v.optional(category),
       }),
@@ -218,7 +218,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         "Links a task to what it concerns, so the next look starts from there: msg: locators, chats, person:<id>, " +
         "document:<id>, note:<id>, or a URL. A message the store has not saved yet is kept as written. A linked " +
         "message is read when tasks are compared, so after a msg: target the tasks this one may now duplicate go to " +
-        "tasks_duplicates and `review` counts them; the link stands either way. Writes only to the local store; " +
+        "`tasks duplicates` and `review` counts them; the link stands either way. Writes only to the local store; " +
         `nothing is sent. Returns ${CARD}, with review after a msg: target.`,
       input: v.object({
         task: text(200, "the task's id or key"),
@@ -271,8 +271,8 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Pairs to review",
       description:
         "Pairs of tasks a rule opened that may be one job, newest first: `task` is the newer one, `other` the one it " +
-        "may duplicate, with score, band, levels and reasons. Decide each: tasks_merge when they are one job, " +
-        "tasks_duplicates_reject when they are not, tasks_duplicates_defer when the meaning cannot tell — the owner " +
+        "may duplicate, with score, band, levels and reasons. Decide each: `tasks merge` when they are one job, " +
+        "`tasks duplicates reject` when they are not, `tasks duplicates defer` when the meaning cannot tell — the owner " +
         "then lists it with query decision:unsure. Returns { items: [{ task, source, other, score, band, levels, reasons, " +
         "decision, decided_at, created_at }] }.",
       input: v.object({
@@ -316,7 +316,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Leave a pair to the owner",
       description:
         "Marks a pair the fields and the text cannot decide — a gift for mum or for dad — so the owner decides it; " +
-        "it leaves your list and shows under tasks_duplicates with query decision:unsure. Writes only to the local store. " +
+        "it leaves your list and shows under `tasks duplicates` with query decision:unsure. Writes only to the local store. " +
         "Returns { item: pair }.",
       input: v.object({ dup: text(200, "the task listed as `task`"), task: text(200, "the task listed as `other`") }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
@@ -332,9 +332,9 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Merge a duplicate task",
       description:
         "One job seen twice: links every message of `dup` to `into`, closes `dup` dismissed with a duplicate-of " +
-        "relation, and records the decision. Nothing is deleted; tasks_unmerge undoes it. Writes only to the local " +
+        "relation, and records the decision. Nothing is deleted; `tasks unmerge` undoes it. Writes only to the local " +
         "store. Returns { item: { pair, linked, review, task } }: `linked` counts the messages added to `into`, " +
-        "`review` the pairs its new messages sent to tasks_duplicates, `task` is its card.",
+        "`review` the pairs its new messages sent to `tasks duplicates`, `task` is its card.",
       input: v.object({
         dup: text(200, "the duplicate's key; it must be open"),
         into: text(200, "the task that stays"),
@@ -359,9 +359,9 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
       title: "Task categories",
       description:
         "The categories a task takes, with what each means and the words a rule picks it by. The owner edits the list " +
-        "in `file` (its task_categories section) or with config set task_categories.<name>; tasks_add and tasks_plan " +
+        "in `file` (its task_categories section) or with config set task_categories.<name>; `tasks add` and `tasks plan` " +
         "refuse a name not on it. `unlisted` names the " +
-        "categories tasks still carry after they left the list; tasks_plan moves such a task to a listed one. " +
+        "categories tasks still carry after they left the list; `tasks plan` moves such a task to a listed one. " +
         "Returns { item: { categories: [{ name, meaning, triggers }], unlisted: [{ name, open, total }], file } }.",
       input: v.object({}),
       annotations: { ...READ, openWorldHint: false },
@@ -442,7 +442,7 @@ export const tasksTools = (messenger: Messenger): Record<string, AnyTool> => {
         `the local store. Returns ${CARD}.`,
       input: v.object({
         task: text(200, "the task's id or key"),
-        holder: v.optional(text(200, "who you are for claims, as tasks_claim named you")),
+        holder: v.optional(text(200, "who you are for claims, as `tasks claim` named you")),
       }),
       annotations: { ...LOCAL, destructiveHint: false, idempotentHint: true },
       stored: async (store, account, args, defaults) =>

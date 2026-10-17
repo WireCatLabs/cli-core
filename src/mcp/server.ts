@@ -21,8 +21,8 @@ import { instructions } from "./instructions.js"
 import { registerPrompts } from "./prompts.js"
 import { registerResources } from "./resources.js"
 import { MessengerSession, type SessionOptions } from "./session.js"
-import { commandOf, registerSurface } from "./surface.js"
-import { READ, tool, toolKey } from "./tool.js"
+import { registerSurface } from "./surface.js"
+import { commandOf, READ, tool, toolKey } from "./tool.js"
 import { personalMcpTools } from "./tools.js"
 
 export type ServerOptions = SessionOptions & { spawnJob?: import("../services/backfill-jobs.js").SpawnJob }
@@ -57,7 +57,7 @@ export const createServer = (
       return (
         level !== "deny" &&
         !(writes && level === "readonly") &&
-        readKeysForCommand(key.split("_")).every((data) => levelOf(data) !== "deny")
+        readKeysForCommand(commandOf(key, one).split(" ")).every((data) => levelOf(data) !== "deny")
       )
     }),
   )
@@ -85,7 +85,7 @@ export const createServer = (
       itemOf({
         profile: settings.profile,
         account: recalledAccount(app, provider, settings.profile, context.env)?.account ?? null,
-        writes: Object.keys(writes).map(commandOf),
+        writes: Object.entries(writes).map(([name, definition]) => commandOf(name, definition)),
         permissions: settings.permissions,
         ...(messenger.diagnose ? { [messenger.provider]: await messenger.diagnose(command, context) } : {}),
       }),

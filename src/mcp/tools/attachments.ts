@@ -89,7 +89,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
     attachments_extract: tool({
       title: "Extract text from saved files",
       description:
-        "Keep file text in the local content index. Agents normally transcribe scans themselves and use attachments_text_set. Explicit ocr calls models.ocr for bulk images/scanned PDFs; concurrency1–8 (default4). from_dir needs chat; download needs output_dir. Returns { item } with counts, `files` (statuses and paths, never text) and `cursor`; a cut-short run names the attachments.extract step.",
+        "Keep file text in the local content index. Agents normally transcribe scans themselves and use `attachments text set`. Explicit ocr calls models.ocr for bulk images/scanned PDFs; concurrency1–8 (default4). from_dir needs chat; download needs output_dir. Returns { item } with counts, `files` (statuses and paths, never text) and `cursor`; a cut-short run names the attachments.extract step.",
       key: "attachments.extract",
       input: v.object({
         chat: v.optional(chatOf(messenger)),
@@ -184,9 +184,9 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
       description:
         "Files of this account's stored messages, newest first: where each was saved on this machine and whether " +
         "its text is held — never the text. With `is:needs_text`, only files saved here that nobody has text for " +
-        "yet, such as a scan or a photo: use attachments_show to receive bytes remotely, or read `local_path` on the " +
-        "server, then write the text with attachments_text_set (`message`, `position`), and content:<word> in " +
-        `search_messages finds it. \`${command} attachments extract\` reads text layers (plain text, Word, PDF).`,
+        "yet, such as a scan or a photo: use `attachments show` to receive bytes remotely, or read `local_path` on the " +
+        "server, then write the text with `attachments text set` (`message`, `position`), and content:<word> in " +
+        `\`search messages\` finds it. \`${command} attachments extract\` reads text layers (plain text, Word, PDF).`,
       input: v.object({ query: queryArgument(ATTACHMENT_QUERY), limit, page }),
       annotations: { ...READ, openWorldHint: false },
       output: { entity: "attachment", list: true },
@@ -205,7 +205,7 @@ export const attachmentsTools = (messenger: Messenger): Record<string, AnyTool> 
       title: "Keep the text read from a file",
       description:
         "Keeps text you read from one file of a stored message — a scan, a photo, a PDF of pictures — in the local " +
-        "store, replacing what was there, so content:<word> in search_messages finds the message. Nothing is sent. " +
+        "store, replacing what was there, so content:<word> in `search messages` finds the message. Nothing is sent. " +
         "`message` is an id in `chat`, or a msg: locator alone; `attachment` (from 1) is needed when the message " +
         "has more than one file. Returns { item: { locator, attachment, origin, chars, replaced } }.",
       input: v.object({

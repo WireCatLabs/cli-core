@@ -27,7 +27,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
         "A name that matches several chats is refused with the candidates — pick an id, never guess. " +
         `On outcome_unknown, retry with the operation_id it returns and ${name} drops the duplicate; never with a new one. ` +
         `With \`at\`, ${name} sends it later and the answer carries scheduled_for; never retry a scheduled send — ` +
-        "read messages_scheduled instead.",
+        "read `messages scheduled` instead.",
       input: v.object({
         chat,
         text: v.optional(v.pipe(v.string(), v.description("the message, or the caption of a file or photo"))),
@@ -60,7 +60,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
             v.string(),
             v.minLength(1),
             v.description(
-              "an id from chats_send_as to post as; required where the chat posts as someone else by default",
+              "an id from `chats send-as` to post as; required where the chat posts as someone else by default",
             ),
           ),
         ),

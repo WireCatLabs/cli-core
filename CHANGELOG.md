@@ -5,6 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **An agent's commands carry the CLI's names and permission keys.** The catalogue listed `chats send as`,
+  `chats members` and `account sessions`, which are not commands, and read their levels from `chats.send.as` and
+  `chats.members`, so a deny on `chats.send-as` or `chats.members.list` did not reach them. They are now
+  `chats send-as`, `chats members list` and `account sessions list`, with those commands' keys. A tool whose name
+  does not spell its command declares the command (`command`); the old `mark-read` special case is gone, and a test
+  checks that every catalogue entry is a command the CLI has.
+- **Descriptions name other commands by path** (`` `chats send-as` ``, `` `tasks merge` ``), not by the retired
+  per-tool names an agent no longer sees.
+- **The parity audit captures MCP under permission profiles** — default, read-only and one that denies
+  `messages.send` — instead of `--allow-*` flags tg and max no longer have, so its modes differ again. The capture
+  names a configured profile: a server started without one stops, so every capture had failed.
+
 ## 0.320.0 — 17.10.2026
 
 ### Changed — may break callers

@@ -10,8 +10,12 @@ import {
   valueDifferences,
 } from "../../dist/parity/deep.js"
 import type { CommandsJson, Manifest } from "../../dist/parity/manifest.js"
+import { RESOURCES } from "../../dist/sends/permissions.js"
 import {
+  CAPTURE_MODES,
+  type CaptureMode,
   type Coverage,
+  captureModes,
   check,
   git,
   type MountEvidence,
@@ -29,10 +33,7 @@ import {
 } from "./evidence.ts"
 import { renderReports } from "./report.ts"
 
-export interface ToolCapture {
-  mode: string
-  argv: string[]
-  config?: unknown
+export interface ToolCapture extends CaptureMode {
   tools?: CapturedTool[]
   error?: string
 }
@@ -101,12 +102,6 @@ const snapshot = (root: string): Snapshot => {
     dirty: git(root, "status", "--porcelain"),
   }
 }
-const groupChoices = (root: string): string[] => {
-  const path = join(root, "src/config.ts")
-  if (!existsSync(path)) return []
-  const match = readFileSync(path, "utf8").match(/export const MCP_TOOL_GROUPS\s*=\s*\[([^\]]*)\]/)
-  return [...(match?.[1] ?? "").matchAll(/["']([^"']+)["']/g)].map((one) => one[1] ?? "")
-}
 const captureTools = async (
   root: string,
   cli: string,
@@ -114,22 +109,9 @@ const captureTools = async (
   retained: string[],
 ): Promise<ToolCapture[]> => {
   const bin = join(root, "dist/bin", `${cli}.js`)
-  const mcp = commandMap(program).get("mcp")
-  if (!mcp) return [{ mode: "default", argv: ["mcp"], error: "mcp command absent" }]
-  const flags = mcp.options.map((one) => one.flags.split(/\s/)[0] ?? "").filter((one) => one.startsWith("--allow-"))
-  const groups = groupChoices(root)
-  const modes: { mode: string; argv: string[]; config?: unknown }[] = [
-    { mode: "default", argv: ["mcp"] },
-    { mode: "send", argv: ["mcp", ...(flags.includes("--allow-send") ? ["--allow-send"] : [])] },
-    { mode: "flags", argv: ["mcp", ...flags] },
-    {
-      mode: "configured",
-      argv: ["mcp", ...flags],
-      ...(groups.length ? { config: { defaults: { mcpTools: groups } } } : {}),
-    },
-  ]
+  if (!commandMap(program).get("mcp")) return [{ mode: "default", argv: ["mcp"], error: "mcp command absent" }]
   const captures: ToolCapture[] = []
-  for (const mode of modes) {
+  for (const mode of captureModes(RESOURCES)) {
     const home = temporaryHome()
     retained.push(home)
     const env = sandboxEnvironment(home)
@@ -358,7 +340,7 @@ export const runDeepAudit = async (options: {
   const right = b && sides[b]
   if (!left || !right || Object.keys(sides).length !== 2) throw new Error("deep comparison requires exactly two CLIs")
   const tools: DeepBundle["tools"] = {}
-  for (const mode of ["default", "send", "flags", "configured"]) {
+  for (const mode of CAPTURE_MODES) {
     const one = left.mcp.find((capture) => capture.mode === mode)
     const two = right.mcp.find((capture) => capture.mode === mode)
     if (one?.tools && two?.tools) tools[mode] = compareTools({ cli: a, tools: one.tools }, { cli: b, tools: two.tools })

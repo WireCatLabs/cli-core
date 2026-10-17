@@ -16,7 +16,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { parseArgs } from "node:util"
-import { allowFlags, type CliSide, renderAudit } from "../dist/parity/audit.js"
+import { type CliSide, renderAudit } from "../dist/parity/audit.js"
 import type { CommandRow, CommandsJson, Entry, Manifest } from "../dist/parity/manifest.js"
 import { runDeepAudit } from "./parity/deep-audit.ts"
 import { mcpSchemas, sandboxEnvironment, temporaryHome } from "./parity/evidence.ts"
@@ -125,8 +125,8 @@ const fresh = (): Record<string, string> => {
   return Object.fromEntries(manifest.clis.map((cli) => [cli, join(dir, cli)]))
 }
 
-const mcpTools = async (bin: string, flags: string[]): Promise<string[]> =>
-  (await mcpSchemas(bin, ["mcp", ...flags], sandboxEnvironment(auditHome()))).map((tool) => tool.name).sort()
+const mcpTools = async (bin: string): Promise<string[]> =>
+  (await mcpSchemas(bin, ["mcp"], sandboxEnvironment(auditHome()))).map((tool) => tool.name).sort()
 
 const markdown = (dir: string) => (existsSync(dir) ? readdirSync(dir).filter((name) => name.endsWith(".md")) : [])
 
@@ -154,7 +154,7 @@ const side = async (cli: string, dir: string): Promise<CliSide> => {
     commit: git(dir, "rev-parse", "--short", "HEAD"),
     pins,
     program,
-    tools: await mcpTools(bin, allowFlags(program)),
+    tools: await mcpTools(bin),
     pages,
     scripts: Object.keys(scripts).filter((name) => !name.startsWith("probe:")),
     skills,
