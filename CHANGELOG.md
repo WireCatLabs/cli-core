@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.328.0 — 17.10.2026
+
 ### Added
 
 - **`refuseUnderReadOnly(command, what)`** (`@wirecat/cli-core/cli`) refuses, under `<PREFIX>_READ_ONLY`, a write
