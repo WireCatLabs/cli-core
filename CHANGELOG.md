@@ -9,6 +9,12 @@ shape of this file.
 
 ### Added
 
+- Meeting preparation can assemble cited local message, mail and imported document excerpts from
+  explicitly authorized host selections. Optional shared CLI/MCP communications inputs enforce
+  selection, query, window and cursor bounds before upcoming lookup. Per-source coverage, aggregate
+  read charges and escaped-output limits remain visible; omitted communications preserve existing
+  behavior. Hosts must bind the optional reader and trusted selections before enabling this feature.
+
 - **`stats messages top --measure reactions` splits each message's reactions by emoji**: the table prints
   `1. Name  7  👍 4 · 😂 3` (five emoji, then `+N`), and each JSON row carries `reactions: [{reaction, count}]`, most
   first. Only when messages are ranked by reactions, read for the rows returned; a message whose stored split is

@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { communicationRequest } from "../context/communication-selection.js"
 import { validateMeetingSeriesHistory } from "../meetings/index.js"
 import type { MeetingPreparationRequest } from "./meeting-preparation-types.js"
 
@@ -26,6 +27,7 @@ export const validateMeetingPreparationRequest = (externalId: string, original: 
     if (
       ![
         "project",
+        "communications",
         "after",
         "until",
         "historyAfter",
@@ -70,8 +72,18 @@ export const validateMeetingPreparationRequest = (externalId: string, original: 
   const maxReadBytes = bounded("maxReadBytes")
   if (!Number.isSafeInteger(input.until) || Math.abs(input.until) > 8640000000000000 || input.until <= input.after)
     throw new CliError("validation_error", "until must be an absolute timestamp later than after")
+  const communications =
+    input.communications === undefined ? undefined : communicationRequest(input.communications, input.after)
   preparationCancelled(input.signal)
-  return { ...input, meetings, cues, contextLimit, bytes, maxReadBytes }
+  return {
+    ...input,
+    ...(communications === undefined ? {} : { communications }),
+    meetings,
+    cues,
+    contextLimit,
+    bytes,
+    maxReadBytes,
+  }
 }
 
 export const preparationRequest = (accountId: number, externalId: string, original: MeetingPreparationRequest) => {

@@ -17,10 +17,16 @@ import type {
   UpcomingMeetingResult,
 } from "../meetings/index.js"
 import type { MeetingProjectDiscoveryPage } from "../meetings/project-discovery.js"
+import type {
+  MeetingCommunications,
+  MeetingCommunicationsPort,
+  MeetingCommunicationsRequest,
+} from "./meeting-communications-types.js"
 import type { MeetingEvidencePacket } from "./meeting-evidence.js"
 import type { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
 
 export interface MeetingPreparationRequest {
+  communications?: MeetingCommunicationsRequest
   project?: string
   after: number
   until: number
@@ -33,6 +39,7 @@ export interface MeetingPreparationRequest {
   signal?: AbortSignal
 }
 export interface MeetingPreparationPorts {
+  communications?: MeetingCommunicationsPort
   meetings: Pick<MeetingStore, "account"> &
     MeetingReadCapabilities &
     MeetingSeriesHistoryStore &
@@ -49,6 +56,7 @@ export interface MeetingPreparationEntry {
   context: MeetingPreparationContext
 }
 export interface MeetingPreparation {
+  communications?: MeetingCommunications
   schemaVersion: 1
   accountId: number
   upcoming: UpcomingMeetingResult
@@ -70,7 +78,7 @@ export interface MeetingPreparation {
       hasMore: boolean
       outputLimited: boolean
       factEvidence: "not-revalidated"
-      otherSources: "not-queried"
+      otherSources: "not-queried" | "see-communications"
     }
   }
   notes?: {
@@ -81,7 +89,7 @@ export interface MeetingPreparation {
       hasMore: boolean
       outputLimited: boolean
       sourceEvidence: "not-revalidated"
-      otherSources: "not-queried"
+      otherSources: "not-queried" | "see-communications"
     }
   }
   projectEvidence?: {
@@ -105,6 +113,8 @@ export interface MeetingPreparation {
       | "project-wide-context"
       | "person-nonmeeting-context"
       | "project-nonmeeting-context"
+      | "other-person-nonmeeting-context"
+      | "other-project-nonmeeting-context"
       | "project-alias-candidates"
     )[]
   }

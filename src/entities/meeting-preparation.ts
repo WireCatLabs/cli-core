@@ -1,6 +1,7 @@
 import { isoTime, reference } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { meetingProjectEvidence } from "../meetings/project-evidence-answer.js"
+import { preparationCommunications } from "./meeting-communications.js"
 import {
   preparationCount as count,
   preparationId as id,
@@ -11,6 +12,7 @@ import {
 } from "./meeting-preparation-parts.js"
 
 export const meetingPreparation = v.strictObject({
+  communications: v.optional(preparationCommunications),
   schema_version: v.literal(1),
   kind: v.literal("meeting_preparation"),
   account_id: id,
@@ -68,7 +70,7 @@ export const meetingPreparation = v.strictObject({
         has_more: v.boolean(),
         output_limited: v.boolean(),
         fact_evidence: v.literal("not-revalidated"),
-        other_sources: v.literal("not-queried"),
+        other_sources: v.picklist(["not-queried", "see-communications"]),
       }),
     }),
   ),
@@ -95,7 +97,7 @@ export const meetingPreparation = v.strictObject({
         has_more: v.boolean(),
         output_limited: v.boolean(),
         source_evidence: v.literal("not-revalidated"),
-        other_sources: v.literal("not-queried"),
+        other_sources: v.picklist(["not-queried", "see-communications"]),
       }),
     }),
   ),
@@ -134,6 +136,8 @@ export const meetingPreparation = v.strictObject({
         "person-nonmeeting-context",
         "project-nonmeeting-context",
         "project-alias-candidates",
+        "other-person-nonmeeting-context",
+        "other-project-nonmeeting-context",
       ]),
     ),
   }),
