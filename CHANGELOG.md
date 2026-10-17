@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.321.0 — 17.10.2026
+
 ### Changed — may break callers
 
 - **An agent can no longer delete for everyone**, as the standard says. The MCP `messages delete` has no
