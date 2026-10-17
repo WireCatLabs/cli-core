@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.319.0 — 17.10.2026
+
 ### Changed — may break callers
 
 - **`default_profile` no longer picks a profile.** The owner's rule is that a command names its profile every time:
