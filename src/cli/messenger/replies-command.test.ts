@@ -191,3 +191,23 @@ describe("replies test", () => {
     expect(stderr.join("")).toContain("away")
   })
 })
+
+describe("replies where the messenger sends no automatic replies", () => {
+  it("refuses every subcommand with exit 2, naming the messenger", async () => {
+    const { env } = await setUp()
+    const quiet = { ...messenger, name: "Chat", autoReplies: false }
+    const answers = []
+    for (const argv of [
+      ["replies", "status"],
+      ["replies", "on", "away"],
+      ["replies", "test"],
+    ]) {
+      const streams = captureStreams()
+      const code = await run(argv, { app, commands: () => [repliesCommand(quiet)] }, { streams, tty: false, env })
+      answers.push({ code, stderr: streams.stderr.join("\n") })
+    }
+
+    expect(answers.map((one) => one.code)).toEqual([2, 2, 2])
+    for (const { stderr } of answers) expect(stderr).toContain("Chat cannot send automatic replies")
+  })
+})

@@ -3346,13 +3346,16 @@
       "in": "all"
     },
     "replies": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies add": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies audience": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies",
       "options": {
         "--allow-chats": "all",
         "--allow-people": "all",
@@ -3362,25 +3365,32 @@
       }
     },
     "replies consents": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents allow": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents deny": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents grant": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents revoke": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies consents show": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies edit": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies",
       "options": {
         "--allow-chats": "all",
         "--allow-people": "all",
@@ -3408,22 +3418,28 @@
       }
     },
     "replies off": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies on": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies pause": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies resume": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies status": {
-      "in": "all"
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies"
     },
     "replies test": {
-      "in": "all",
+      "in": ["max", "tg"],
+      "reason": "WhatsApp sends nothing the owner did not type: no automatic replies",
       "options": {
         "--ai": "all",
         "--since-time": "all"

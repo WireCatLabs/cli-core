@@ -159,7 +159,7 @@ describe("serve with reply rules", () => {
       writeFileSync(join(config, "config.json"), JSON.stringify({ profiles: { default: { permissions } } }))
   }
 
-  const serving = async (env: NodeJS.ProcessEnv) => {
+  const serving = async (env: NodeJS.ProcessEnv, own: Partial<Messenger> = {}) => {
     rememberAccount(app, "default", "500", env)
     const sent: { chatId: string; text: string }[] = []
     const now = new Date(Date.now() + 1000).toISOString()
@@ -186,6 +186,7 @@ describe("serve with reply rules", () => {
       resolveSettings: settingsFor(app).resolveSettings,
       connect,
       chatArgument: "a chat",
+      ...own,
     }
     const stop = new AbortController()
     setTimeout(() => stop.abort(), 100)
@@ -216,6 +217,18 @@ describe("serve with reply rules", () => {
       .entries()
       .filter((one) => one.outcome === "sent")
     expect(entry).toMatchObject({ chatId: "77", origin: "rule:away" })
+  })
+
+  it("**runs no rule where the messenger sends no automatic replies**, even with replies.send allow", async () => {
+    const { root, env } = setup()
+    const withConfig = { ...env, CHAT_CONFIG_DIR: join(root, "config") }
+    rulesFor(withConfig, { "replies.send": "allow" })
+
+    const { sent, answer } = await serving(withConfig, { autoReplies: false })
+
+    expect(sent).toEqual([])
+    expect(answer.replies).toBeUndefined()
+    expect(answer.kept).toMatchObject({ message: 2 })
   })
 
   it("sends nothing while replies.send is not allow", async () => {
