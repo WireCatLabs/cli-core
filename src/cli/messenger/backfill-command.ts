@@ -224,18 +224,26 @@ export const syncCommand = (messenger: Messenger): Command => {
         renderAnswer(
           this,
           context,
-          itemOf(snakeKeys(tasks && tasks.added + tasks.closed > 0 ? { ...result, tasks } : result), {
-            next: [
-              ...(unprepared
-                ? [
-                    nextStep("conversations.build", { args: { chat: result.chat } }),
-                    nextStep("conversations.embed", { args: { chat: result.chat } }),
-                  ]
-                : []),
-              ...(toReview > 0 ? [nextStep("mentions.review", { args: { new: true }, values: { shown } })] : []),
-            ],
-          }),
+          itemOf(
+            snakeKeys(tasks && tasks.added + tasks.closed + (tasks.held ?? 0) > 0 ? { ...result, tasks } : result),
+            {
+              next: [
+                ...(unprepared
+                  ? [
+                      nextStep("conversations.build", { args: { chat: result.chat } }),
+                      nextStep("conversations.embed", { args: { chat: result.chat } }),
+                    ]
+                  : []),
+                ...(toReview > 0 ? [nextStep("mentions.review", { args: { new: true }, values: { shown } })] : []),
+              ],
+            },
+          ),
         )
+        if (tasks?.held)
+          context.renderer.note(
+            `the first sync left ${tasks.held} possible task(s) in ${tasks.heldChats ?? 0} chat(s) unopened ` +
+              `(config task_first_pass_per_chat) — ask the owner, then \`${messenger.app.command} tasks apply <chat>\``,
+          )
         if (toReview > 0)
           context.renderer.note(
             `${shown} mention${toReview === 1 ? "" : "s"} found since the last review — ` +

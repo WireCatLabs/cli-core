@@ -10,6 +10,17 @@ export interface RuleResult {
   closed: number
   /** Opened tasks that may be the same job as another: on the review list (`tasks duplicates`). */
   review: number
+  /** Tasks the rules found but did not open: over the per-chat limit, or a dry run. */
+  held?: number
+  /** Chats with at least one held task. */
+  heldChats?: number
+}
+
+/** A task the rules would open, for a dry run. */
+export interface HeldTask {
+  source: string
+  kind: TaskKind
+  category: string | null
 }
 
 export const taskAccount = ({ provider, account }: AccountKey): string => `${provider}:${account}`
@@ -28,7 +39,20 @@ export const applyTaskRules = async (
     account,
     now,
     categories,
-  }: { store: TaskStore; account: AccountKey; now?: () => Date; categories?: readonly TaskCategory[] },
+    openLimit,
+    dryRun = false,
+    onHeld,
+  }: {
+    store: TaskStore
+    account: AccountKey
+    now?: () => Date
+    categories?: readonly TaskCategory[]
+    /** Per chat: the newest this many are opened, the rest held. */
+    openLimit?: number
+    /** Changes nothing: what would open is held and passed to `onHeld`. */
+    dryRun?: boolean
+    onHeld?: (task: HeldTask) => void
+  },
 ): Promise<RuleResult> => {
   const tasks = createTaskService({ store, ...(now ? { now } : {}) })
   const owner = taskAccount(account)
@@ -52,21 +76,38 @@ export const applyTaskRules = async (
   const close = async (message: Message, kind: TaskKind, answer?: Message) => {
     for (const task of await store.findBySource(owner, sourceOf(message))) {
       if (task.kind !== kind || task.state !== "open") continue
+      result.closed += 1
+      if (dryRun) continue
       await tasks.close(task.id, { as: "done", by: "rule" })
       if (answer) await store.answer(task.id, { resolution: "answered by the owner", by: sourceOf(answer) })
-      result.closed += 1
     }
   }
+  const hasTask = async (message: Message) => (await store.findBySource(owner, sourceOf(message))).length > 0
 
   for (const chat of review.chats) {
+    const opens: { message: Message; kind: TaskKind }[] = []
     for (const { question, answer } of questions(chat.messages, { answerers: new Set() })) {
       if (answer) await close(question, "question", answer)
-      else await open(question, chat.id, "question")
+      else opens.push({ message: question, kind: "question" })
     }
     for (const [index, message] of chat.messages.entries()) {
       if (message.outgoing || !message.mentions?.includes(account.account)) continue
       if (ownerAnswered(chat.messages, index)) await close(message, "mention")
-      else await open(message, chat.id, "mention")
+      else opens.push({ message, kind: "mention" })
+    }
+    opens.sort((a, b) => Date.parse(a.message.timestamp) - Date.parse(b.message.timestamp))
+    const keep = dryRun ? 0 : openLimit === undefined ? opens.length : Math.min(openLimit, opens.length)
+    let held = 0
+    for (const [index, { message, kind }] of opens.entries()) {
+      if (index >= opens.length - keep) await open(message, chat.id, kind)
+      else if (!(await hasTask(message))) {
+        held += 1
+        onHeld?.({ source: sourceOf(message), kind, category: categorize(message.text, categories) })
+      }
+    }
+    if (held > 0) {
+      result.held = (result.held ?? 0) + held
+      result.heldChats = (result.heldChats ?? 0) + 1
     }
   }
   return result
@@ -98,13 +139,15 @@ export const STORED_PASS_LIMIT = 1000
  * The rule pass over what is already stored, for a program that reads no messenger (memo): every chat of
  * the account stored into after `since`, its new messages with the ARRIVAL_WINDOW before them, through the
  * rules `review` applies. `until` is the newest store time it saw — the next pass's `since`, so a pass reads
- * only what changed. A chat with more new messages than STORED_PASS_LIMIT has its oldest left unread.
+ * only what changed. A chat with more new messages than STORED_PASS_LIMIT has its oldest left unread. After
+ * `since`, a chat with nothing sent since is skipped: a backfill of old history is not new work.
  */
 export const applyTaskRulesToStored = async (
   store: MessageStore,
   account: AccountKey,
   since?: string,
   newerThan?: string,
+  openLimit?: number,
 ): Promise<RuleResult & { until: string | null }> => {
   const result: RuleResult & { until: string | null } = { added: 0, closed: 0, review: 0, until: since ?? null }
   const categories = await store.tasks.categories()
@@ -116,16 +159,24 @@ export const applyTaskRulesToStored = async (
       continue
     }
     const fresh = since === undefined ? 0 : await store.messages.countMessages(account, chat.chatId, { since })
+    if (since !== undefined && fresh === 0) {
+      if (result.until === null || chat.lastStoredAt > result.until) result.until = chat.lastStoredAt
+      continue
+    }
     const page = await store.messages.messages(account, chat.chatId, {
       limit: Math.min(ARRIVAL_WINDOW + fresh, STORED_PASS_LIMIT),
     })
     const pass = await applyTaskRules(
       { chats: [{ id: chat.chatId, messages: page.items }] },
-      { store: store.tasks, account, categories },
+      { store: store.tasks, account, categories, ...(openLimit === undefined ? {} : { openLimit }) },
     )
     result.added += pass.added
     result.closed += pass.closed
     result.review += pass.review
+    if (pass.held) {
+      result.held = (result.held ?? 0) + pass.held
+      result.heldChats = (result.heldChats ?? 0) + (pass.heldChats ?? 0)
+    }
     if (result.until === null || chat.lastStoredAt > result.until) result.until = chat.lastStoredAt
   }
   return result
@@ -137,7 +188,8 @@ export const FIRST_PASS_DAYS = 14
 /**
  * The task rules over what a sync stored, from where the account's last pass stopped. The first pass reads only
  * chats with a message in the last FIRST_PASS_DAYS, so a store that already holds years of chats opens no task
- * for a question asked long ago.
+ * for a question asked long ago, and opens at most `task_first_pass_per_chat` per chat (0 by default): what it
+ * holds back is counted, for the owner to build with `tasks apply`.
  */
 export const applyTaskRulesSinceLastPass = async (
   store: MessageStore,
@@ -146,9 +198,10 @@ export const applyTaskRulesSinceLastPass = async (
 ): Promise<RuleResult> => {
   const since = await store.sync.taskRulesStop(account)
   const newerThan = since === null ? new Date(now.getTime() - FIRST_PASS_DAYS * 86_400_000).toISOString() : undefined
-  const { added, closed, review, until } = await applyTaskRulesToStored(store, account, since ?? undefined, newerThan)
+  const openLimit = since === null ? await store.tasks.firstPassPerChat() : undefined
+  const { until, ...result } = await applyTaskRulesToStored(store, account, since ?? undefined, newerThan, openLimit)
   if (until !== null && until !== since) await store.sync.setTaskRulesStop(account, until)
-  return { added, closed, review }
+  return result
 }
 
 /**
@@ -185,4 +238,36 @@ const ownerAnswered = (messages: Message[], index: number): boolean => {
     const repliedSender = one.replyTo?.senderId ?? (to === undefined ? undefined : senders.get(to))
     return repliedSender != null && repliedSender === message.senderId
   })
+}
+
+/** What `tasks apply` did, or would do without `--yes`, in one chat. */
+export interface ChatRulePass extends RuleResult {
+  chat: string
+  messages: number
+  tasks: HeldTask[]
+}
+
+/**
+ * `tasks apply`: the task rules over the newest `last` stored messages of chats the owner names — how a chat's
+ * history becomes tasks when the first sync left it alone. Without `yes` it changes nothing and lists what would
+ * open; with it, it opens them through the duplicate check, as a sync's pass would.
+ */
+export const applyTaskRulesToChats = async (
+  store: MessageStore,
+  account: AccountKey,
+  chatIds: readonly string[],
+  { last = ARRIVAL_WINDOW, yes = false }: { last?: number; yes?: boolean } = {},
+): Promise<ChatRulePass[]> => {
+  const categories = await store.tasks.categories()
+  const passes: ChatRulePass[] = []
+  for (const chat of chatIds) {
+    const page = await store.messages.messages(account, chat, { limit: Math.min(last, STORED_PASS_LIMIT) })
+    const tasks: HeldTask[] = []
+    const pass = await applyTaskRules(
+      { chats: [{ id: chat, messages: page.items }] },
+      { store: store.tasks, account, categories, dryRun: !yes, onHeld: (task) => tasks.push(task) },
+    )
+    passes.push({ chat, messages: page.items.length, ...pass, tasks })
+  }
+  return passes
 }

@@ -98,6 +98,24 @@ const item = (result: { stdout: string[] }) => json(result).item
 const PROMISE = "msg:chat/500/7/1"
 
 describe("tasks", () => {
+  it("**tasks apply lists what a chat's history would open**, and opens it only with --yes", async () => {
+    const call = await setup()
+    const dry = json(await call("tasks", "apply", "7", "--last", "2", "--json"))
+    expect(dry.items).toEqual([
+      expect.objectContaining({
+        chat: "7",
+        messages: 2,
+        added: 0,
+        tasks: [{ source: "msg:chat/500/7/2", kind: "question", category: "access" }],
+      }),
+    ])
+    expect(json(await call("tasks", "list", "--json")).items).toEqual([])
+
+    const opened = json(await call("tasks", "apply", "7", "--yes", "--json"))
+    expect(opened.items).toEqual([expect.objectContaining({ added: 1, tasks: [] })])
+    expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
+  })
+
   it("**adds a task by locator and lists it with the message it points at**, once however often it is added", async () => {
     const call = await setup()
     const added = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))

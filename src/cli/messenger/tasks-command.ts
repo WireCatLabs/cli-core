@@ -2,8 +2,10 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { AGENDA_QUERY, type Agenda, agendaItem } from "../../services/agenda.js"
+import { storedChatId } from "../../services/message-resolution.js"
 import { aheadOf, momentOf } from "../../services/moment.js"
 import { unlistedNote } from "../../services/task-categories.js"
+import { ARRIVAL_WINDOW, applyTaskRulesToChats, type ChatRulePass } from "../../services/task-rules.js"
 import {
   CLAIM_LEASE_MS,
   closedStateOf,
@@ -60,6 +62,16 @@ const card = (task: TaskCard) =>
     ...task.links.map((link) => `${link.kind.padEnd(12)} ${link.to ?? link.targetText ?? "?"}`),
     ...task.linkedFrom.map((link) => `${link.from} ${link.kind} this task`),
   ].join("\n")
+
+const applyText = (pass: ChatRulePass, yes: boolean, tool: string) =>
+  yes
+    ? `${pass.chat}: ${pass.messages} messages read; ${pass.added} opened, ${pass.closed} closed` +
+      (pass.review ? `; ${pass.review} may be the same job as another — ${tool} tasks duplicates` : "")
+    : [
+        `${pass.chat}: ${pass.messages} messages read; would open ${pass.tasks.length}, close ${pass.closed}`,
+        ...pass.tasks.map((task) => `  ${task.kind.padEnd(8)} ${(task.category ?? "—").padEnd(13)} ${task.source}`),
+        ...(pass.tasks.length > 0 ? [`  ${tool} tasks apply ${pass.chat} --yes opens them`] : []),
+      ].join("\n")
 
 const agendaText = (agenda: Agenda) => {
   const chat = (one: Agenda["owed"][number]) =>
@@ -523,6 +535,43 @@ export const tasksCommand = (messenger: Messenger): Command => {
             : []),
           "",
         ].join("\n"),
+      )
+    })
+
+  annotate(tasks.command("apply"), {
+    effects: LOCAL_WRITE,
+    examples: [`${tool} tasks apply <chat>`, `${tool} tasks apply <chat> --last 300 --yes`],
+  })
+    .summary("build tasks from a chat's stored history: unanswered questions and mentions")
+    .description(
+      "the task rules over a chat's newest stored messages: a question nobody answered and a mention of you open a " +
+        "task, and your answer closes one — for a chat the first sync left alone (config task_first_pass_per_chat). " +
+        "Lists what would open and changes nothing unless --yes; with --yes the duplicate check runs as on a sync. " +
+        "Reads only the local store",
+    )
+    .argument("<chat...>", messenger.chatArgument)
+    .option(
+      "--last <n>",
+      `read the newest n stored messages of each chat (default ${ARRIVAL_WINDOW}, at most 1000)`,
+      positiveCount("--last"),
+    )
+    .action(async function (this: Command, chats: string[]) {
+      const context = messengerContext(this, messenger)
+      const { last, yes = false } = this.optsWithGlobals<{ last?: number; yes?: boolean }>()
+      if (yes) refuseLocalWrite(context, messenger.app.command, "tasks.apply")
+      const passes = await context.withStore(
+        async (store, account) => {
+          const ids = []
+          for (const chat of chats) ids.push(await storedChatId(messenger, chat, store, account))
+          return applyTaskRulesToChats(store, account, ids, { ...(last === undefined ? {} : { last }), yes })
+        },
+        { name: "tasks apply" },
+      )
+      renderAnswer(
+        this,
+        context,
+        listOf("tasks apply", { items: passes.map(snakeKeys), limit: passes.length, has_more: false }),
+        () => `${passes.map((pass) => applyText(pass, yes, tool)).join("\n")}\n`,
       )
     })
 
