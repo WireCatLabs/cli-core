@@ -11,6 +11,16 @@ import { capability } from "../../ports/messenger.js"
 import { closeAfterOf, guardedClose, guardedCreatePoll, guardedVote, pollVoters, quizOf } from "../../sends/polls.js"
 import { type AnyTool, chatOf, limit, message, page, READ, tool, WRITE } from "../tool.js"
 
+const ANONYMOUS = v.optional(v.boolean())
+const TOPIC = v.optional(v.pipe(v.string(), v.minLength(1), v.description("the forum topic id")))
+const SEND_AS = v.optional(
+  v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("an id from `chats send-as` to post as; required where the chat posts as someone else by default"),
+  ),
+)
+
 const answerId = v.pipe(v.string(), v.minLength(1), v.description("an answer id, as `polls show` gives it"))
 
 export const pollReadTools = (messenger: Messenger): Record<string, AnyTool> => ({
@@ -94,14 +104,16 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
     polls_create: tool({
       title: "Create a poll",
       description:
-        "Send a poll as the owner: public unless anonymous is true. Only when the owner asked for this exact poll " +
-        "in this exact chat. On outcome_unknown, retry with the operation_id it returns, never a new one.",
+        `Send a poll as the owner: ${messenger.pollAnonymous === false ? "everyone sees who voted for what" : "public unless anonymous is true"}. ` +
+        "Only when the owner asked for this exact poll in this exact chat. On outcome_unknown, retry with the " +
+        "operation_id it returns, never a new one.",
       input: v.object({
         chat,
         text: v.pipe(v.string(), v.minLength(1), v.description("the question")),
         answers: v.pipe(v.array(v.pipe(v.string(), v.minLength(1))), v.minLength(2)),
         multiple: v.optional(v.boolean()),
-        anonymous: v.optional(v.boolean()),
+        // Typed as present so the call reads them; offered only where the messenger has them.
+        ...((messenger.pollAnonymous === false ? {} : { anonymous: ANONYMOUS }) as { anonymous: typeof ANONYMOUS }),
         revote: v.optional(
           v.pipe(
             v.boolean(),
@@ -112,18 +124,8 @@ export const pollWriteTools = (messenger: Messenger): Record<string, AnyTool> =>
             ),
           ),
         ),
-        topic: v.optional(
-          v.pipe(v.string(), v.minLength(1), v.description("the forum topic id; unsupported without topics")),
-        ),
-        send_as: v.optional(
-          v.pipe(
-            v.string(),
-            v.minLength(1),
-            v.description(
-              "an id from `chats send-as` to post as; required where the chat posts as someone else by default",
-            ),
-          ),
-        ),
+        ...((messenger.topics === false ? {} : { topic: TOPIC }) as { topic: typeof TOPIC }),
+        ...((messenger.pollSendAs === false ? {} : { send_as: SEND_AS }) as { send_as: typeof SEND_AS }),
         operation_id: v.optional(v.pipe(v.string(), v.minLength(1), v.description("from an earlier outcome_unknown"))),
         quiz: v.optional(
           v.pipe(

@@ -133,20 +133,25 @@ export const pollsCommand = (messenger: Messenger): Command => {
       })
 
   const create = annotate(polls.command("create"), { effects: REMOTE_WRITE })
-    .description("send a poll to a chat, as a message of its own; public unless --anonymous")
+    .description(
+      messenger.pollAnonymous === false
+        ? "send a poll to a chat, as a message of its own; everyone sees who voted for what"
+        : "send a poll to a chat, as a message of its own; public unless --anonymous",
+    )
     .argument("<chat>", messenger.chatArgument)
     .argument("<question>", "the question")
     .argument("<answers...>", "two answers or more")
   if (messenger.topics !== false) create.option("--topic <id>", "send to this forum topic")
-  create.option("--multiple", "people may pick several answers").option("--anonymous", "nobody sees who voted for what")
+  create.option("--multiple", "people may pick several answers")
+  if (messenger.pollAnonymous !== false) create.option("--anonymous", "nobody sees who voted for what")
   if (messenger.pollRevote !== false) create.option("--revote", "people may change their vote")
-  create
-    .option("--silent", "send without a notification")
-    .option(
+  if (messenger.pollSilent !== false) create.option("--silent", "send without a notification")
+  if (messenger.pollSendAs !== false)
+    create.option(
       "--send-as <id>",
       "post as one of the identities `chats send-as` lists; required where the chat posts as someone else by default",
     )
-    .option("--operation-id <id>", "repeat a create whose outcome was unknown, without risking a second poll")
+  create.option("--operation-id <id>", "repeat a create whose outcome was unknown, without risking a second poll")
   if (messenger.pollQuiz)
     create
       .option("--quiz", "a quiz: one answer is right, and a vote is final")

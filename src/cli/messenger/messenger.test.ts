@@ -1443,7 +1443,7 @@ describe("the shared read commands", () => {
     expect(unlisted.code).not.toBe(0)
   })
 
-  it("**a messenger whose polls stay open and always take a changed vote** has no `polls close` and no `--revote`", async () => {
+  it("**a messenger whose polls stay open, public, loud and the account's own** offers none of the flags it refuses", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const created: unknown[] = []
@@ -1454,7 +1454,7 @@ describe("the shared read commands", () => {
         return { message: { ...message, id: "9" }, sendId }
       },
     }
-    const open = { pollClose: false, pollRevote: false }
+    const open = { pollClose: false, pollRevote: false, pollAnonymous: false, pollSilent: false, pollSendAs: false }
 
     const close = await call(["polls", "close", "Book", "9"], async () => polling, env, {}, open)
     const revote = await call(
@@ -1466,9 +1466,18 @@ describe("the shared read commands", () => {
     )
     const made = await call(["polls", "create", "Book", "When?", "Tue", "Fri"], async () => polling, env, {}, open)
     const help = await call(["polls", "--help"], async () => polling, env, {}, open)
+    const refused = []
+    for (const flag of [["--anonymous"], ["--silent"], ["--send-as", "500"]])
+      refused.push(
+        await call(["polls", "create", "Book", "When?", "Tue", "Fri", ...flag], async () => polling, env, {}, open),
+      )
+    const createHelp = (await call(["polls", "create", "--help"], async () => polling, env, {}, open)).stdout.join("\n")
 
     expect([close.code, revote.code, made.code]).toEqual([2, 2, 0])
+    expect(refused.map((one) => one.code)).toEqual([2, 2, 2])
     expect(help.stdout.join("\n")).not.toContain("close")
+    expect(createHelp).not.toMatch(/--anonymous|--silent|--send-as/)
+    expect(createHelp).toContain("everyone sees who voted for what")
     expect(created).toEqual([expect.objectContaining({ revote: false })])
   })
 
