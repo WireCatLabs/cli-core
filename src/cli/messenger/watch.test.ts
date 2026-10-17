@@ -99,7 +99,7 @@ describe("watch", () => {
     const { code, streams, env } = await call(["watch", "--jsonl"], listening([hit("1"), hit("2")], asked), stop.signal)
 
     expect(code).toBe(0)
-    expect(asked).toEqual([{ listen: true, events: expect.any(Function) }])
+    expect(asked).toEqual([{ listen: true, events: expect.any(Function), stored: expect.any(Object) }])
     expect(streams.stdout.map((line) => JSON.parse(line).id)).toEqual(["1", "2"])
     const offline = captureStreams()
     const messenger: Messenger = {
@@ -202,6 +202,39 @@ describe("watch", () => {
       .filter((one) => one.isFile())
       .map((one) => readFileSync(join(one.parentPath, one.name), "utf8"))
     expect(logs.join("\n")).not.toContain(SECRET)
+  })
+
+  it("**DEBT-126: hands connect a lookup of the stored messages, over the command's own store**", async () => {
+    const asked: ConnectOptions[] = []
+    const stop = new AbortController()
+    setTimeout(() => stop.abort(), 20)
+    const { env, messenger } = await call(["watch", "--jsonl"], listening([hit("1"), hit("2")], asked), stop.signal)
+    const looked: unknown[] = []
+    const lookingUp: Messenger["connect"] = async (command, base, options) => {
+      const adapter = await listening([], asked)(command, base, options)
+      return {
+        ...adapter,
+        resolve: async () => ({ id: "7", title: "Book club", kind: "group" }),
+        send: async () => {
+          const stored = options?.stored
+          looked.push(
+            (await stored?.message("7", "1"))?.text,
+            (await stored?.message("7", "missing")) ?? null,
+            (await stored?.newestIncoming("7"))?.id,
+            (await stored?.newestIncoming("7", "2"))?.id,
+          )
+          return { message: hit("4"), sendId: "x" }
+        },
+      } as unknown as MessengerAdapter
+    }
+    const streams = captureStreams()
+    await run(
+      ["messages", "send", "7", "hi", "--json"],
+      { app, commands: () => [messagesCommand({ ...messenger, connect: lookingUp })] },
+      { streams, tty: false, env },
+    )
+    expect(streams.stderr.join("\n")).toBe("")
+    expect(looked).toEqual(["message 1", null, "2", "1"])
   })
 
   it("prints only messages without --events", async () => {

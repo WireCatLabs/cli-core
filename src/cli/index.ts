@@ -277,6 +277,7 @@ export {
   type MessengerContext,
   messengerContext,
   type ReadConnection,
+  type StoredMessages,
 } from "./messenger/context.js"
 export { conversationsCommand } from "./messenger/conversations-command.js"
 export { doctorCommand } from "./messenger/doctor-command.js"

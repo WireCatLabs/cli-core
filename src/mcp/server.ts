@@ -8,7 +8,7 @@ import { environmentOf } from "../cli/context.js"
 import { judgedTargets } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
-import { connected, connectFor, type Messenger, type MessengerContext } from "../cli/messenger/context.js"
+import { connectedFor, type Messenger, type MessengerContext } from "../cli/messenger/context.js"
 import { syncsFirst } from "../cli/messenger/search-sync-options.js"
 import { rootOf } from "../cli/steps.js"
 import { warmEmbedders } from "../embeddings/embed.js"
@@ -68,7 +68,7 @@ export const createServer = (
     messenger.guard?.(command, settings, context.renderer.warn, goAhead) ??
     guardFor(app, settings, context.renderer.warn, context.env, goAhead)
   const session = new MessengerSession(
-    async (events) => connected(await connectFor(command, messenger, context, { events }), messenger, context, events),
+    async (events) => connectedFor(command, messenger, context, { events }),
     (run, body) => context.run(body, { name: run }),
     sessionOptions,
   )
