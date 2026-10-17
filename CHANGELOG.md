@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.310.0 — 17.10.2026
+
 ### Added
 
 - Shared meeting findings intake stages bounded, cited fact and task proposals, then creates selected records and one review receipt atomically. Exact retries reuse receipts and records; stale sources and generic approve-as-task paths are refused.
