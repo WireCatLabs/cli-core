@@ -115,7 +115,7 @@ const timeOf = (entry: Pick<SendEntry, "at" | "scheduledFor">): number => Date.p
 /**
  * These stop a model that was talked into sending by a message it read. They do **not** stop an
  * agent that edits the configuration itself — that needs a boundary outside this process
- * (`docs/security.md`).
+ * ([what the controls cannot protect](https://wirecat.dev/en/docs/security#what-the-controls-cannot-protect)).
  */
 export const sendGuard = ({
   profile,

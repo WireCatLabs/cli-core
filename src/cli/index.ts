@@ -351,7 +351,6 @@ export {
 export {
   asFirstWord,
   commandWords,
-  DEFAULT_PROFILE,
   liftProfile,
   refuseCommandName,
   rootOf,

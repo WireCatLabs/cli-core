@@ -8,7 +8,7 @@ export interface CliSide {
   /** The `@wirecat/*` packages it pins, by name. */
   pins: Record<string, string>
   program: CommandsJson
-  /** What its MCP server offers under the default profile, prefix kept. */
+  /** What its MCP server offers started with no profile named, prefix kept. */
   tools: string[]
   /** `README.md` and `docs/*.md`, by path from the checkout, with their text. */
   pages: Record<string, string>
