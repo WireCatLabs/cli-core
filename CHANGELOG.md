@@ -7,8 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.322.0 — 17.10.2026
-
 ### Added
 
 - SDK hosts can bind explicitly authorized local message, mail and document sources through
@@ -18,6 +16,10 @@ shape of this file.
   invalid adapter results, retain scoped continuation and index gaps, and perform no indexing or model
   work. Meeting preparation commands and their source coverage are unchanged; cross-source assembly
   follows separately.
+
+## 0.322.0 — 17.10.2026
+
+### Added
 
 - **A pushed history batch carries poll votes.** `HistoryBatch` has an optional `votes` array of `HistoryVote`
   (`{ chatId, messageId, vote }`, the vote as `PollVoteEvent` carries it). The store saves a chat's votes in the
