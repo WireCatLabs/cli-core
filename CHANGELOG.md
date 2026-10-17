@@ -31,7 +31,7 @@ shape of this file.
 - **A schedule that runs every few minutes no longer stops after a run longer than its interval.** Its systemd timer
   counted from when a run started (`OnUnitActiveSec`), so a run that outlasted the interval left no next run; it
   now counts from when a run ends (`OnUnitInactiveSec`). A schedule written before keeps its timer until saved again.
-- **No `messages sync` advice a messenger cannot follow** (UX-59). For `history: "store"`, `chats members audit`,
+- **No `messages sync` advice a messenger cannot follow.** For `history: "store"`, `chats members audit`,
   `stats chats show`, `search conversations`, MCP `chats_documents_list`, `store check` and the message-search
   coverage no longer name `messages sync`; the caveat that the store does not hold the chat whole stays, without
   a step. With `historyOnDemand` they name `messages sync <chat>` for one chat, never `--all`.
