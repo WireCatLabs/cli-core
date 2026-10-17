@@ -166,6 +166,11 @@ export interface Messenger extends ServiceMessenger {
   pollSilent?: boolean
   /** Whether a poll can be posted as another identity — `polls create --send-as`; yes when unset. */
   pollSendAs?: boolean
+  /**
+   * Whether `serve` may answer messages by the reply rules, and `replies` manages them; yes when unset. No: nothing
+   * sends unless a typed command asked (WhatsApp bans accounts that answer like a bot).
+   */
+  autoReplies?: boolean
   /** Whether a message can be deleted for the owner alone; yes when unset. No: every delete is for everyone (WhatsApp). */
   deleteForMe?: boolean
   /** Whether the messenger has forum topics: `--topic`, `topic:` in `messages list` and the `topics_*` tools; yes when unset. */

@@ -18,6 +18,10 @@ export const repliesCommand = (messenger: Messenger): Command => {
   const replies = new Command("replies").description(
     "rules that answer messages for you, kept in a file of this profile",
   )
+  if (messenger.autoReplies === false)
+    replies.hook("preAction", () => {
+      throw new CliError("validation_error", `${messenger.name ?? messenger.app.command} cannot send automatic replies`)
+    })
   addReplyEditors(replies, messenger)
   replies.addCommand(replyConsentsCommand(messenger))
 

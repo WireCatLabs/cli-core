@@ -150,7 +150,16 @@ export const serveCommand = (messenger: Messenger): Command => {
  * The reply rules, one message at a time in the order they came: two at once would both read the
  * limits before either counted its reply.
  */
+const NO_REPLIES = {
+  connected: (_open: MessengerAdapter) => {},
+  arrived: (_message: Message) => {},
+  settled: () => Promise.resolve(),
+  stop: () => {},
+  summary: () => ({}),
+}
+
 const replying = (context: MessengerContext, messenger: Messenger, since: number) => {
+  if (messenger.autoReplies === false) return NO_REPLIES
   const controller = new AbortController()
   const { app, provider } = messenger
   const { profile, env, settings, renderer } = context
