@@ -21,7 +21,6 @@ const withChatDeletion = () =>
 
 describe("what the shared commands keep off MCP servers (NEED-1411)", () => {
   it.each([
-    "store",
     "server",
     "schedule",
     "config",
@@ -29,7 +28,6 @@ describe("what the shared commands keep off MCP servers (NEED-1411)", () => {
     "models",
     "skill",
     "flood",
-    "runs",
     "replies",
     "doctor report",
     "complete",
@@ -51,6 +49,17 @@ describe("what the shared commands keep off MCP servers (NEED-1411)", () => {
     expect(found, path).toBeDefined()
     expect(found?.mcp).toBe(false)
     for (const below of flatten(found?.commands ?? [])) expect(below.mcp, below.path.join(" ")).toBe(false)
+  })
+
+  it("**of store and runs, agents get only runs search, store gaps and store jobs**", () => {
+    const offered = ["runs search", "store gaps plan", "store gaps repair", "store jobs list", "store jobs show"]
+    const leaves = flatten(withChatDeletion()).filter(
+      (one) => ["store", "runs"].includes(one.path[0] ?? "") && (one.commands ?? []).length === 0,
+    )
+
+    for (const path of offered) expect(leaves.find((one) => one.path.join(" ") === path)?.mcp, path).not.toBe(false)
+    for (const one of leaves.filter((leaf) => !offered.includes(leaf.path.join(" "))))
+      expect(one.mcp, one.path.join(" ")).toBe(false)
   })
 
   it("upgrade", () => {
