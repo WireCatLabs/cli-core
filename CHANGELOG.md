@@ -5,12 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.322.0 — 17.10.2026
 
 ### Fixed
 
 - Bound each stored-context reader call to 256 KiB, preserving the 64 KiB default and refusing
   higher requested limits before adapter dispatch.
+- **wa's poll rows in the parity manifest** say what wa ships: `polls create`, `show`, `vote` and `voters` are
+  present; `polls close` ("WhatsApp polls cannot be closed"), `polls create --revote` ("a WhatsApp vote can always
+  be changed"), `--close-time`, the quiz options and `--topic` are absent with their reasons.
+- **A schedule that runs every few minutes no longer stops after a run longer than its interval.** Its systemd timer
+  counted from when a run started (`OnUnitActiveSec`), so a run that outlasted the interval left no next run; it
+  now counts from when a run ends (`OnUnitInactiveSec`). A schedule written before keeps its timer until saved again.
+- **No `messages sync` advice a messenger cannot follow.** For `history: "store"`, `chats members audit`,
+  `stats chats show`, `search conversations`, MCP `chats_documents_list`, `store check` and the message-search
+  coverage no longer name `messages sync`; the caveat that the store does not hold the chat whole stays, without
+  a step. With `historyOnDemand` they name `messages sync <chat>` for one chat, never `--all`.
 
 ### Added
 
@@ -21,11 +31,6 @@ shape of this file.
   invalid adapter results, retain scoped continuation and index gaps, and perform no indexing or model
   work. Meeting preparation commands and their source coverage are unchanged; cross-source assembly
   follows separately.
-
-## 0.322.0 — 17.10.2026
-
-### Added
-
 - **A pushed history batch carries poll votes.** `HistoryBatch` has an optional `votes` array of `HistoryVote`
   (`{ chatId, messageId, vote }`, the vote as `PollVoteEvent` carries it). The store saves a chat's votes in the
   transaction of that batch's messages, after them, so a poll pushed with its votes is held first; a voter's older
@@ -37,19 +42,6 @@ shape of this file.
   refuses only what no messenger can send (an unsafe link, an open fence, more than 100 spans or 32 levels); each
   messenger keeps its own renderer and refuses the nesting it cannot show. Over the same text a quote or heading
   sorts before the spans inside it.
-
-### Fixed
-
-- **wa's poll rows in the parity manifest** say what wa ships: `polls create`, `show`, `vote` and `voters` are
-  present; `polls close` ("WhatsApp polls cannot be closed"), `polls create --revote` ("a WhatsApp vote can always
-  be changed"), `--close-time`, the quiz options and `--topic` are absent with their reasons.
-- **A schedule that runs every few minutes no longer stops after a run longer than its interval.** Its systemd timer
-  counted from when a run started (`OnUnitActiveSec`), so a run that outlasted the interval left no next run; it
-  now counts from when a run ends (`OnUnitInactiveSec`). A schedule written before keeps its timer until saved again.
-- **No `messages sync` advice a messenger cannot follow.** For `history: "store"`, `chats members audit`,
-  `stats chats show`, `search conversations`, MCP `chats_documents_list`, `store check` and the message-search
-  coverage no longer name `messages sync`; the caveat that the store does not hold the chat whole stays, without
-  a step. With `historyOnDemand` they name `messages sync <chat>` for one chat, never `--all`.
 
 ## 0.321.0 — 17.10.2026
 
