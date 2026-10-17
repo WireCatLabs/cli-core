@@ -258,6 +258,8 @@ export interface SenderScore {
   address: string
   score: number
   signals: string[]
+  /** Search ranks this sender's mail lower. */
+  demoted?: boolean
 }
 
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
@@ -704,7 +706,7 @@ const mailFieldsOf = (database: CacheDatabase, email: Email, thread: string, key
       ? undefined
       : database
           .prepare(
-            `SELECT mail_score, mail_signals FROM account_identities
+            `SELECT mail_score, mail_signals, mail_demoted FROM account_identities
                WHERE account_id = ? AND identity_id = ? AND mail_score IS NOT NULL`,
           )
           .get(email.accountId, email.fromIdentityId)
@@ -725,6 +727,7 @@ const mailFieldsOf = (database: CacheDatabase, email: Email, thread: string, key
           senderScore: {
             score: Number(scored.mail_score),
             signals: JSON.parse(String(scored.mail_signals ?? "[]")) as string[],
+            ...(scored.mail_demoted ? { demoted: true } : {}),
           },
         }),
   }
@@ -862,12 +865,13 @@ export const mailStoreOver = (
     return write(database, () => {
       const link = database.prepare(
         `INSERT INTO account_identities
-           (account_id, identity_id, created_at, updated_at, mail_score, mail_signals, mail_scored_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+           (account_id, identity_id, created_at, updated_at, mail_score, mail_signals, mail_scored_at, mail_demoted)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (account_id, identity_id) DO UPDATE SET mail_score = excluded.mail_score,
-             mail_signals = excluded.mail_signals, mail_scored_at = excluded.mail_scored_at`,
+             mail_signals = excluded.mail_signals, mail_scored_at = excluded.mail_scored_at,
+             mail_demoted = excluded.mail_demoted`,
       )
-      for (const { address, score, signals } of scores)
+      for (const { address, score, signals, demoted } of scores)
         link.run(
           accountId,
           identityOf(database, { address, name: null }, now),
@@ -876,6 +880,7 @@ export const mailStoreOver = (
           score,
           JSON.stringify(signals),
           now,
+          demoted ? 1 : null,
         )
       return scores.length
     })

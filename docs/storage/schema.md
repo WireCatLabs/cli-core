@@ -210,6 +210,7 @@ Each profile a person was seen with, a row when it differs from the one before; 
 | `mail_score` | integer |  |  | how much this sender's mail to the account looks like spam, a scam or a robot (memo's sender score); null when not scored |
 | `mail_signals` | text |  |  | JSON array of the signals behind `mail_score`, such as `brand_spoof` |
 | `mail_scored_at` | integer |  |  | when `mail_score` was worked out |
+| `mail_demoted` | integer |  |  | 1 when search ranks this sender's mail lower: signs of fraud, not one of the owner's own |
 
 *Keys and indexes:* `PRIMARY KEY (account_id, identity_id)`, `INDEX (identity_id)`
 

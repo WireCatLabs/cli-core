@@ -225,6 +225,8 @@ export const accountIdentities = sqliteTable(
     /** JSON array of the signals behind `mail_score`, such as `brand_spoof`. */
     mailSignals: text("mail_signals"),
     mailScoredAt: integer("mail_scored_at"),
+    /** 1 when search ranks this sender's mail lower: signs of fraud, not one of the owner's own. */
+    mailDemoted: integer("mail_demoted"),
   },
   (table) => [
     primaryKey({ columns: [table.accountId, table.identityId] }),

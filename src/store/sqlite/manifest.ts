@@ -41,6 +41,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261017000856_version-19-mail-sender-score", version: 19, minCompatible: 1 },
   { name: "20261017095620_version-20-poll-votes", version: 20, minCompatible: 1 },
   { name: "20261017141028_version-21-document-annotation-transfers", version: 21, minCompatible: 1 },
+  { name: "20261017212239_version-22-mail-demoted", version: 22, minCompatible: 1 },
 ]
 
 export const generatedMigrations = (

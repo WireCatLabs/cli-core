@@ -66,6 +66,11 @@ const EDITS = {
       ],
       ["mail_signals", "text", { note: "JSON array of the signals behind `mail_score`, such as `brand_spoof`" }],
       ["mail_scored_at", "integer", { note: "when `mail_score` was worked out" }],
+      [
+        "mail_demoted",
+        "integer",
+        { note: "1 when search ranks this sender's mail lower: signs of fraud, not one of the owner's own" },
+      ],
     ],
   },
   contact_aliases: {
