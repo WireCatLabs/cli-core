@@ -8,6 +8,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import { parseLucene } from "@wirecat/cli-base/query"
 import { skillResource } from "@wirecat/cli-base/skill"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { Command } from "commander"
 import { PNG } from "pngjs"
 import * as v from "valibot"
@@ -429,7 +430,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
       ...sharedCommands(messenger).filter((one) => !unmounted.includes(one.name())),
     ],
   })
-  provide(program, { streams, tty: false, env, app })
+  provide(program, { streams, tty: false, env, app, keyring: memoryKeyring() })
   await program.parseAsync(["probe", ...permission.flatMap((entry) => ["--permission", entry])], { from: "user" })
   const { session, build, log } = made as ReturnType<typeof createServer>
 

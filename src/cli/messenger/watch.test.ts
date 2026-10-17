@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, onTestFinished } from "vitest"
 import type { MessageEvent, MessageHit } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { run } from "../program.js"
@@ -70,6 +70,12 @@ const call = async (argv: string[], connect: Messenger["connect"], signal?: Abor
 
 describe("watch", () => {
   it("**a signal sent twice — as mtcute does after closing its storage — exits 0 and removes listeners**", async () => {
+    // cli-base's setup removes the sandbox and re-raises on SIGTERM; the emits below are meant for watch alone.
+    const others = process.rawListeners("SIGTERM") as NodeJS.SignalsListener[]
+    process.removeAllListeners("SIGTERM")
+    onTestFinished(() => {
+      for (const listener of others) process.on("SIGTERM", listener)
+    })
     const before = process.listenerCount("SIGTERM")
     let during = 0
     const connect = async () =>

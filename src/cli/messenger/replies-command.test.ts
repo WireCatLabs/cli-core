@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { defaultRule } from "../../replies/rules.js"
@@ -78,7 +79,11 @@ const setUp = async () => {
 
 const replies = async (argv: string[], env: NodeJS.ProcessEnv) => {
   const streams = captureStreams()
-  const code = await run(argv, { app, commands: () => [repliesCommand(messenger)] }, { streams, tty: false, env })
+  const code = await run(
+    argv,
+    { app, commands: () => [repliesCommand(messenger)] },
+    { streams, tty: false, env, keyring: memoryKeyring() },
+  )
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }
 
@@ -203,7 +208,11 @@ describe("replies where the messenger sends no automatic replies", () => {
       ["replies", "test"],
     ]) {
       const streams = captureStreams()
-      const code = await run(argv, { app, commands: () => [repliesCommand(quiet)] }, { streams, tty: false, env })
+      const code = await run(
+        argv,
+        { app, commands: () => [repliesCommand(quiet)] },
+        { streams, tty: false, env, keyring: memoryKeyring() },
+      )
       answers.push({ code, stderr: streams.stderr.join("\n") })
     }
 

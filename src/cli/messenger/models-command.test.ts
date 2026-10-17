@@ -4,6 +4,7 @@ import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
 import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import { placedText, textModelsDirectory } from "../../embeddings/embed.js"
@@ -51,6 +52,7 @@ const call = async (argv: string[], speechModels?: string[], tty = false, stdin?
     CHAT_CONFIG_DIR: join(root, "config"),
     WIRECAT_STATE_DIR: join(root, "cache"),
   }
+  const keyring = memoryKeyring()
   const messenger: Messenger = {
     app,
     provider: "chat",
@@ -77,12 +79,13 @@ const call = async (argv: string[], speechModels?: string[], tty = false, stdin?
         streams,
         tty,
         env,
+        keyring,
         ...(stdin === undefined ? {} : { stdin: Object.assign(Readable.from([stdin]), { isTTY: false }) }),
       },
     )
     return { code, stdout: streams.stdout, stderr: streams.stderr }
   }
-  return { go, place, env }
+  return { go, place, env, keyring }
 }
 
 describe("models audio", () => {
@@ -179,6 +182,6 @@ describe("models text key", () => {
     expect(code).toBe(0)
     expect(JSON.parse(stdout[0] ?? "")).toMatchObject({ item: { provider: "openai" } })
     expect([...stdout, ...stderr].join("\n")).not.toContain("sk-test")
-    expect(embeddingKeys(app, set.env).read("openai")?.key).toBe("sk-test")
+    expect(embeddingKeys(app, set.env, set.keyring).read("openai")?.key).toBe("sk-test")
   })
 })

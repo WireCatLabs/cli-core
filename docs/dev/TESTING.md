@@ -17,13 +17,26 @@ secret scan of the new commits, beside the changelog guard. Run the rest yoursel
 commands above except `test:slow`, plus `pnpm build`, on each push to `main`, in the release and in the monthly run —
 after a merge, not before it.
 
-## No test touches the owner's store
+## No test touches the owner's store, keyring or network
 
-⚠ `src/testing/sandbox.ts` runs before every test file (vitest `setupFiles`) and points
-`MESSAGING_STORE`, `WIRECAT_STATE_DIR` (the store's folder and the models), the `MESSAGING_*` directories and the test apps' `APP_`, `CHAT_` and `TG_`
-directories at a temporary directory. The store is the owner's system of record and migrations are
-forward-only: a test that fell back to the default path would migrate the real file, and nothing
-undoes that. A test that defines a new app prefix adds it to the sandbox.
+⚠ vitest's `setupFiles` runs cli-base's shared setup (`@wirecat/cli-base/testing/setup`) before every test
+file. It points the temporary folder, the home folder and every `<PREFIX>_CONFIG_DIR`, `_STATE_DIR`,
+`_CACHE_DIR` and `MESSAGING_STORE` at a fresh directory
+([WC-TEST-1](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/testing.md#wc-test-1--point-every-path-a-test-could-write-at-a-temporary-directory)), replaces the
+OS keyring with one that throws
+([WC-TEST-2](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/testing.md#wc-test-2--no-test-reaches-the-real-keyring)), and refuses every connection that is not
+to localhost ([WC-TEST-3](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/testing.md#wc-test-3--no-test-contacts-a-provider-or-the-network)). The store is the
+owner's system of record and migrations are forward-only: a test that reached the real file would migrate
+it, and nothing undoes that.
+
+A test that stores a key passes `keyring: memoryKeyring()` (from `@wirecat/cli-base/testing`) to `run()`,
+`provide()`, the MCP tool defaults or the function it calls. The throwing keyring does not fail the test on
+its own — `Credentials` falls back to a file and prints `a test reached the real OS keyring` on stderr — so
+a full run should print that line zero times.
+
+`src/testing/sandbox.ts` runs after it and holds only what is cli-core's own: the test apps' profile and
+pace, and the agent and model variables an agent's shell would leak in. A test that defines a new app prefix
+adds it there.
 
 ## Coverage has a floor
 

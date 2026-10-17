@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { Readable } from "node:stream"
 import { captureStreams } from "@wirecat/cli-base"
 import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { PNG } from "pngjs"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
@@ -137,6 +138,7 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
         }
       : {}),
   }
+  const keyring = memoryKeyring()
   const runs =
     (tty: boolean, stdin?: string) =>
     async (...argv: string[]) => {
@@ -156,6 +158,7 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
           streams,
           tty,
           env: { ...env, NO_COLOR: "1" },
+          keyring,
           ...(stdin === undefined ? {} : { stdin: Object.assign(Readable.from([stdin]), { isTTY: false }) }),
         },
       )

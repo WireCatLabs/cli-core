@@ -2,9 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
-import { CliError, captureStreams } from "@wirecat/cli-base"
+import { CliError, captureStreams, type KeyringStore } from "@wirecat/cli-base"
 import type { CommandInfo } from "@wirecat/cli-base/commands"
 import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import { parseMarkdown } from "../../domain/markdown.js"
@@ -138,6 +139,14 @@ const withoutMeta = <T extends { stdout: string[] }>(result: T): T => ({
   }),
 })
 
+// One env is one machine: a key set by one call is there for the next call on the same env.
+const keyrings = new WeakMap<NodeJS.ProcessEnv, KeyringStore>()
+const keyringOf = (env: NodeJS.ProcessEnv): KeyringStore => {
+  const known = keyrings.get(env) ?? memoryKeyring()
+  keyrings.set(env, known)
+  return known
+}
+
 const call = async (
   argv: string[],
   connect: Messenger["connect"],
@@ -178,7 +187,7 @@ const call = async (
         searchCommand(messenger, { topics: true }),
       ],
     },
-    { streams, tty: false, env, ...options },
+    { streams, tty: false, env, keyring: keyringOf(env), ...options },
   )
   return { code, stdout: streams.stdout, stderr: streams.stderr }
 }

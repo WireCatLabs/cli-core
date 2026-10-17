@@ -9,7 +9,12 @@ const PNPM =
 
 const setup = (latest: string | Error = "99.0.0", enabled: (env: NodeJS.ProcessEnv) => boolean = () => true) => {
   const home = mkdtempSync(join(tmpdir(), "core-update-"))
-  const env: NodeJS.ProcessEnv = { ...process.env, DEMO_NO_UPDATE_CHECK: undefined, CI: undefined }
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    DEMO_NO_UPDATE_CHECK: undefined,
+    CI: undefined,
+    NO_UPDATE_NOTIFIER: undefined,
+  }
   let asked = 0
   let now = 1_000_000
   const environment: UpdateEnvironment = {
