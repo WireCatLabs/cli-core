@@ -1,5 +1,6 @@
 import type { Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { Message } from "../../domain/models.js"
+import { type MessengerTraits, syncsOneChat } from "../../ports/traits.js"
 import { conversationItem } from "../../services/conversations.js"
 import type { ChatReadiness, FoundConversations, Refreshed } from "../../services/embeddings.js"
 import type { AccountKey, ConversationSummary } from "../../store/store.js"
@@ -8,12 +9,20 @@ import { nextStep } from "../steps.js"
 import { messageItems } from "./message-items.js"
 
 type Readiness = Pick<FoundConversations, "meaning" | "model" | "readiness" | "refreshed" | "coverage">
+type Syncing = Pick<MessengerTraits, "history" | "historyOnDemand">
+
+/** The sync that fills a stale answer, where this messenger can run it: one chat on demand, never `--all` of a pushed history. */
+const syncArgs = (messenger: Syncing, chat?: string): Record<string, unknown> | undefined => {
+  if (chat !== undefined) return syncsOneChat(messenger) ? { chat } : undefined
+  return messenger.history === "store" ? undefined : { all: true, background: true }
+}
 
 const chats = (ids: readonly string[]) => `chat ${ids.join(", ")}`
 
 /** What a conversation search could not see, each with the step that fixes it. */
 export const readinessGaps = (
   { meaning, model, readiness, refreshed, coverage }: Readiness,
+  messenger: Syncing,
   chat?: string,
 ): { next: NextStep[]; missing: Missing[] } => {
   const next: NextStep[] = []
@@ -45,11 +54,12 @@ export const readinessGaps = (
     })
   }
   if (refreshed?.complete === false || coverage !== undefined) {
-    next.push(nextStep("messages.sync", { args: chat === undefined ? { all: true, background: true } : { chat } }))
+    const args = syncArgs(messenger, chat)
+    if (args) next.push(nextStep("messages.sync", { args }))
     missing.push({
       field: "coverage",
       why: "the fetch before searching stopped early or the store is behind, so the answer may be stale",
-      step: "messages.sync",
+      ...(args ? { step: "messages.sync" } : {}),
     })
   }
   return { next, missing }
@@ -60,13 +70,14 @@ export const foundConversations = (
   command: string,
   found: Readiness & Pick<FoundConversations, "hits" | "accounts">,
   limit: number,
+  messenger: Syncing,
   chat?: string,
 ) =>
   listOf(command, {
     items: found.hits.map((hit) => snakeKeys(hit)),
     limit,
     has_more: false,
-    ...readinessGaps(found, chat),
+    ...readinessGaps(found, messenger, chat),
     ...(found.accounts ? { meta: { accounts: found.accounts.map((one) => `${one.provider}:${one.account}`) } } : {}),
   })
 

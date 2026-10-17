@@ -17,6 +17,7 @@ import type {
 } from "../domain/models.js"
 import { threadIdOf } from "../domain/thread.js"
 import { capability, type MessengerAdapter } from "../ports/messenger.js"
+import { syncsOneChat } from "../ports/traits.js"
 import { codeOf, guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
 import type { AccountStore } from "../store/account-store.js"
@@ -245,7 +246,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     })
     const counts = await store.roster.memberCounts(chatId, { since: new Date(from).toISOString().slice(0, 10) })
     const counted = counts.length > 0 ? { ...stats, memberCounts: counts } : stats
-    return completeness.state === "complete"
+    return completeness.state === "complete" || !syncsOneChat(deps.messenger)
       ? counted
       : { ...counted, fetch: `${deps.messenger.app.command} messages sync ${chatId}` }
   },
@@ -287,7 +288,7 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
       more,
       unknown,
       ...(stored?.completeness ? { completeness: stored.completeness } : {}),
-      ...(stored?.completeness && stored.completeness.state !== "complete"
+      ...(stored?.completeness && stored.completeness.state !== "complete" && syncsOneChat(deps.messenger)
         ? { fetch: `${deps.messenger.app.command} messages sync ${id}` }
         : {}),
       items,

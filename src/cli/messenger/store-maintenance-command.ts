@@ -18,6 +18,7 @@ import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
+import { syncsOneChat } from "../../ports/traits.js"
 import { isSealed, sealFile, unsealFile } from "../../sealed.js"
 import type { CacheDatabase } from "../../store/driver.js"
 import { MIGRATIONS, migrate } from "../../store/migrations.js"
@@ -258,7 +259,9 @@ const checkCommand = (messenger: Messenger): Command =>
       if (words && (words.filledThrough < words.watermark || (words.ready && !words.termsReady))) step("store.migrate")
       if (stems?.cause === "stemmer_changed") step("store.reindex")
       else if (stems && !stems.ready) step("store.migrate")
-      if (answer.chatsBehind.some((chat) => chat.provider === messenger.provider)) step("messages.sync")
+      const behind = answer.chatsBehind.find((chat) => chat.provider === messenger.provider)
+      if (behind && messenger.history !== "store") step("messages.sync")
+      else if (behind && syncsOneChat(messenger)) step("messages.sync", { chat: behind.chat })
       result(this, answer, [...next.values()])
       if (answer.schema.version < SPEAKS) {
         renderer.note(

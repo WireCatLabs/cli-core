@@ -13,6 +13,10 @@ Open work only. A finished item is deleted; its record is the merged pull reques
   (the legacy search and `--language` are already gone). Ranking test set and an owner-approved plan come first:
   [combined-search-handoff.md](combined-search-handoff.md). Approved plan for the narrow first step (B):
   [typo-search-default-plan.md](typo-search-default-plan.md).
+- **One Markdown parser in the messengers** — `parseMarkdownSpans` (`.`) is the shared parser; tg-cli and
+  whatsapp-cli switch to it and keep only their renderers. max-cli's dialect differs (`*` italic, `__` bold, `++`
+  underline, `^^` highlight, newlines in inline code become spaces) and waits for the owner's call. The legacy
+  `parseMarkdown` (`{ text, markup }`, one level deep, used by nobody) goes in the next breaking release.
 - **Messenger feature gaps** — albums, archiving, typing and location, MAX cloud password and video
   notes. Proposed, not claimed: [messenger-feature-gaps.md](messenger-feature-gaps.md).
 - **Chat briefs and news digests** — decisions, requests and open questions per chat for a time window,

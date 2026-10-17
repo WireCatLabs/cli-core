@@ -282,16 +282,16 @@ export const scoreFloor = (ast: QueryAst | undefined): number => {
 export const auditAnswer = (audit: MembersAudit) =>
   wholeList("chats members audit", audit.items.map(memberAnswer), {
     ...(audit.more ? { meta: { truncated: true } } : {}),
-    ...(audit.fetch
+    ...(audit.completeness && audit.completeness.state !== "complete"
       ? {
           missing: [
             {
               field: "reasons",
               why: "never_wrote counts only stored messages, and the store does not hold the chat whole",
-              step: "messages.sync",
+              ...(audit.fetch ? { step: "messages.sync" } : {}),
             },
           ],
-          next: [nextStep("messages.sync", { args: { chat: audit.chatId } })],
+          ...(audit.fetch ? { next: [nextStep("messages.sync", { args: { chat: audit.chatId } })] } : {}),
         }
       : {}),
   })

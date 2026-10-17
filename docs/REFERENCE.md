@@ -115,7 +115,7 @@ provider has travels in `providerMetadata`.
 
 | | |
 |---|---|
-| `.` | `Chat`, `Message`, `Contact`, `Page`… · `formatLocator` / `parseLocator` · `renderMessages` · `pickChat` / `pickPerson` |
+| `.` | `Chat`, `Message`, `Contact`, `Page`… · `formatLocator` / `parseLocator` · `renderMessages` · `pickChat` / `pickPerson` · `parseMarkdownSpans` (Markdown into text and neutral spans; each messenger renders them) |
 | `./charts` | neutral chart data, a replaceable renderer interface and on-demand dark SVG and PNG images |
 | `./models` | `modelGateway`, provider-neutral requests, adapter-owned option checks, injected keys and purpose consent, and `modelTarget` for effective configuration; [provider settings](search/ai-providers.md) |
 | `./store` | `openCache` — `node:sqlite` under Node, `bun:sqlite` under Bun, WAL and a busy timeout on both · `openStore` — the shared message store, every method async: one file for every messenger (`wirecat.db` in `~/.local/share/WireCat/`, `%LOCALAPPDATA%\WireCat\Data\` on Windows; `MESSAGING_STORE` overrides where), forward-only migrations with `min_compatible`, every sender an identity with a person of their own, edits kept as revisions, a message by its id, deletions kept as tombstones, trigram search · `find` — by text, by sender, or both; `together` for the chats where every sender wrote, `perChat` to cap each chat · `savePeople` and `people` — usernames and bot flags, and a `PeopleLookup` for `pickPerson` |

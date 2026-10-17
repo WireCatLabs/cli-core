@@ -9,6 +9,7 @@ import type { Messenger } from "../../cli/messenger/context.js"
 import { chatStatsAnswer } from "../../cli/messenger/stats-answers.js"
 import { casKey } from "../../cli/registry-keys.js"
 import { nextStep } from "../../cli/steps.js"
+import { syncsOneChat } from "../../ports/traits.js"
 import { EVENTS_DAYS, onlineDeps, servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import { type AnyTool, chatOf, limit, page, paging, READ, tool } from "../tool.js"
@@ -157,7 +158,9 @@ export const chatsTools = (messenger: Messenger): Record<string, AnyTool> => {
           has_more: found.hasMore,
           page: number,
           args: { chat: args.chat },
-          ...(found.empty ? { next: [nextStep("messages.sync", { args: { chat: found.chatId } })] } : {}),
+          ...(found.empty && syncsOneChat(messenger)
+            ? { next: [nextStep("messages.sync", { args: { chat: found.chatId } })] }
+            : {}),
         })
       },
     }),
