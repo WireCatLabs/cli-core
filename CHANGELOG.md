@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- Incremental document linking includes URLs added to previously stored messages. The local text-revision
+  time keeps edits written by older messaging releases visible without fetching history or requiring a
+  messenger upgrade. Current text and deletion guards remain; repeated linking does not duplicate links.
+
 ## 0.330.0 — 18.10.2026
 
 ## 0.329.0 — 17.10.2026

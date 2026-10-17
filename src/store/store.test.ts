@@ -1,6 +1,6 @@
 import { mkdtempSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, sep } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Chat, Message } from "../domain/models.js"
 import { MIGRATIONS, migrate } from "./migrations.js"
@@ -337,7 +337,7 @@ describe("the message store", () => {
   })
 
   it("defaults to the test sandbox, never the owner's file", () => {
-    expect(storePath().startsWith(String(process.env.HOME))).toBe(true)
+    expect(storePath().startsWith(`${process.env.TMPDIR}${sep}`)).toBe(true)
     expect(storePath({})).toContain("WireCat")
   })
 
