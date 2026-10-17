@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.315.0 — 17.10.2026
+
 ### Added
 
 - **`ConnectOptions.stored`: an adapter reads what the store holds of its own account.** `connect` gets a
