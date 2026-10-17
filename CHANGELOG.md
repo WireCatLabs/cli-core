@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.309.0 — 17.10.2026
+
 ### Changed — may break callers
 
 - **A first sync opens no task from history** (owner, 2026-10-17). The rule pass after an account's first sync
