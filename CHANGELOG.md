@@ -32,8 +32,6 @@ shape of this file.
   connection opened; it is now refused as `validation_error` first, as the command refuses `--expire-time`. A tool
   definition can now declare `check`, run on its arguments before the store or the connection opens.
 
-### Fixed
-
 - **`store gaps repair --background` runs its job instead of failing at once.** The command and the MCP tool handed
   the job `--timeout 0`, which the job's own parser refuses, so every background gap repair died before it connected.
   The job now gets no deadline of its own, like a `messages sync --background` job: its `--repair-time` bounds it, and
