@@ -101,7 +101,6 @@ shape of this file.
   `search topics`), `chats events`, `chats inspect`, `chats send-as`, `chats members audit`, `chats members fetch`,
   every `chats folders` command and `meetings sync`. `inbox` and `review` keep the input, because a messenger whose
   history lives in the store answers them offline.
-||||||| parent of 1a5fc338 (feat(account): more privacy settings per messenger, examples for privacy and mute)
 
 ## 0.334.0 — 18.10.2026
 
