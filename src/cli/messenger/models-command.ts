@@ -4,23 +4,21 @@ import { annotate } from "@wirecat/cli-base/commands"
 import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command, Option } from "commander"
 import type * as v from "valibot"
-import { isTextModelInstalled, placedText, textModelsDirectory } from "../../embeddings/embed.js"
+import { isTextModelInstalled, textModelsDirectory } from "../../embeddings/embed.js"
 import { embeddingKeys } from "../../embeddings/keys.js"
-import { DEFAULT_TEXT_MODEL, TEXT_MODELS, type TextModel, textModel } from "../../embeddings/models.js"
+import { DEFAULT_TEXT_MODEL, TEXT_MODELS, type TextModel } from "../../embeddings/models.js"
 import { model as modelEntity } from "../../entities/model.js"
 import {
   DEFAULT_IMAGE_MODEL,
   IMAGE_MODELS,
   type ImageModel,
-  imageModel,
   imageModelsDirectory,
   isImageModelInstalled,
-  placedImage,
 } from "../../images/picture/models.js"
+import { downloadImageModel, downloadTextModel } from "../../services/model-downloads.js"
 import {
   install,
   installedBytes,
-  installFiles,
   isInstalled,
   megabytes,
   modelPath,
@@ -178,30 +176,11 @@ export const modelsCommand = (messenger: Messenger): Command => {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(
         async () => {
-          const model = textModel(id)
-          if (model.terms && !options.acceptTerms) {
-            throw new CliError(
-              "validation_error",
-              `${model.id} comes under the ${model.licence} (${model.terms}): read them, then run this again with --accept-terms`,
-            )
-          }
-          const directory = textModelsDirectory(context.env)
-          if (!isTextModelInstalled(model, directory)) {
-            context.renderer.note(
-              `${model.id}: ${megabytes(model.files.reduce((sum, file) => sum + file.bytes, 0))} from Hugging Face`,
-            )
-            await installFiles(placedText(model, directory), { progress: (line) => context.renderer.note(line) })
-          }
-          context.renderer.note(`${model.id}: loading it once to check it works`)
-          const { openEmbedder } = await import("../../embeddings/embed.js")
-          const embedder = await openEmbedder(model, directory)
-          try {
-            const [vector] = await embedder.embed(["check"], "query")
-            if (vector?.length !== model.dims)
-              throw new CliError("invalid_response", `${model.id} gave a vector of the wrong size`)
-          } finally {
-            await embedder.close()
-          }
+          const { model, directory } = await downloadTextModel(id, {
+            env: context.env,
+            acceptTerms: options.acceptTerms === true,
+            progress: (line) => context.renderer.note(line),
+          })
           renderAnswer(this, context, itemOf(textItem(model, directory)), downloaded)
         },
         { unbounded: true },
@@ -287,24 +266,10 @@ export const imageModelsCommand = (messenger: Messenger): Command => {
       const context = baseContext(this, messenger.resolveSettings)
       await context.run(
         async () => {
-          const model = imageModel(id)
-          const directory = imageModelsDirectory(context.env)
-          if (!isImageModelInstalled(model, directory)) {
-            context.renderer.note(
-              `${model.id}: ${megabytes(model.files.reduce((sum, file) => sum + file.bytes, 0))} from Hugging Face`,
-            )
-            await installFiles(placedImage(model, directory), { progress: (line) => context.renderer.note(line) })
-          }
-          context.renderer.note(`${model.id}: loading it once to check it works`)
-          const { openPictureEmbedder } = await import("../../images/picture/embedder.js")
-          const embedder = await openPictureEmbedder(model, directory)
-          try {
-            const vector = await embedder.embedQuery("check")
-            if (vector.length !== model.dims)
-              throw new CliError("invalid_response", `${model.id} gave a vector of the wrong size`)
-          } finally {
-            await embedder.close()
-          }
+          const { model, directory } = await downloadImageModel(id, {
+            env: context.env,
+            progress: (line) => context.renderer.note(line),
+          })
           renderAnswer(this, context, itemOf(imageItem(model, directory)), downloaded)
         },
         { unbounded: true },
