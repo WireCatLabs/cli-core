@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { type CacheDatabase, PRAGMAS } from "./driver.js"
+import { quietSqliteWarning } from "./sqlite-warning.js"
 
 /**
  * Opens the cache with whichever SQLite the runtime actually has.
@@ -33,6 +34,7 @@ const openUnderBun = async (path: string): Promise<CacheDatabase> => {
 }
 
 const openUnderNode = async (path: string): Promise<CacheDatabase> => {
+  quietSqliteWarning()
   const { openWithNodeSqlite } = await import("./drivers/node-sqlite.js")
   return openWithNodeSqlite(path)
 }
