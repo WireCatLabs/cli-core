@@ -39,6 +39,12 @@ const ACCOUNT: Record<AccountAction, Permission> = {
   "folder-join": "folders",
   "sessions-end": "sessions",
   "chat-mute": "profile",
+  "chat-unmute": "profile",
+  "chat-archive": "profile",
+  "chat-unarchive": "profile",
+  "chat-pin": "profile",
+  "chat-unpin": "profile",
+  "chat-mark-unread": "profile",
   privacy: "profile",
 }
 
@@ -184,6 +190,12 @@ const nearest = (levels: Readonly<Record<PermissionKey, Level>>, key: Permission
 }
 
 /**
+ * `chats unmute` was checked as `chats.mute` before it had its own key; a config that names only the old key
+ * keeps meaning it, so a `chats.mute: readonly` written then still stops an unmute.
+ */
+const FORMER_KEYS: Partial<Record<PermissionKey, PermissionKey>> = { "chats.unmute": "chats.mute" }
+
+/**
  * The most specific key the owner set wins. A built-in default (`DEFAULT_PERMISSIONS`) only ever
  * tightens: against a broader key of the owner's, the stricter of the two holds — so
  * `messages: readonly` still stops a deletion, and `messages: allow` does not drop its question.
@@ -194,6 +206,8 @@ export const levelFor = (
   key: PermissionKey,
   defaults: Readonly<Record<PermissionKey, Level>> = DEFAULT_PERMISSIONS,
 ): { level: Level; key: PermissionKey | null } => {
+  const former = FORMER_KEYS[key]
+  if (former !== undefined && permissions[key] === undefined) return levelFor(permissions, former, defaults)
   const own = nearest(permissions, key)
   const builtIn = nearest(defaults, key)
   if (!builtIn || (own && own.depth >= builtIn.depth)) return own ? { level: own.level, key: own.key } : ALLOWED
@@ -218,6 +232,12 @@ const ACCOUNT_KEYS: Record<AccountAction, PermissionKey> = {
   "folder-join": "chats.folders.join",
   "sessions-end": "account.sessions.end",
   "chat-mute": "chats.mute",
+  "chat-unmute": "chats.unmute",
+  "chat-archive": "chats.archive",
+  "chat-unarchive": "chats.unarchive",
+  "chat-pin": "chats.pin",
+  "chat-unpin": "chats.unpin",
+  "chat-mark-unread": "chats.mark-unread",
   privacy: "account.privacy.set",
 }
 

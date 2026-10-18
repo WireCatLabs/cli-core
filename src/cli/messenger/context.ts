@@ -198,6 +198,12 @@ export interface Messenger extends ServiceMessenger {
   privacy?: boolean
   /** Whether `chats mute` and `unmute` exist; no when unset. */
   chatMute?: boolean
+  /** Whether `chats archive` and `unarchive` exist; no when unset. */
+  chatArchive?: boolean
+  /** Whether `chats pin` and `unpin` exist — a chat at the top of the list, not a message pin; no when unset. */
+  chatPin?: boolean
+  /** Whether `chats mark-unread` exists; no when unset. */
+  chatMarkUnread?: boolean
   /** Whether `chats delete` and `chats clear` exist; no when unset. */
   chatDeletion?: boolean
   /** Whether `messages press`, `chats start` and `chats app` exist — a bot met on the personal account; no when unset. */

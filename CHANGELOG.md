@@ -10,9 +10,20 @@ shape of this file.
 ### Added
 
 - Shared `/cli` inventory adapters add `meetings scheduled` and the explicitly mounted `meeting_series_inventory` MCP tool over the bounded provider series reader. They preserve unverified date hints, unknown calendar coverage, absolute continuation windows, strict named-field validation, snake_case envelopes and output budgets. Generic MCP routers do not expose the CLI path; hosts supply the captured provider binding and explicit tool grant.
+- **Archive, pin and mark unread a chat in the owner's own chat list.** `chats archive` and `chats unarchive`,
+  `chats pin` and `chats unpin` (the chat at the top of the list; `messages pin` still pins a message) and
+  `chats mark-unread`. Nobody in the chat is told, and none of them counts toward the hourly send limit. Each is
+  checked under its own permission key (`chats.archive`, `chats.unarchive`, `chats.pin`, `chats.unpin`,
+  `chats.mark-unread`), passes the recipient list, and refuses `--offline`. A CLI offers them only by setting
+  `chatArchive`, `chatPin` or `chatMarkUnread` on its `Messenger` and giving its adapter `archiveChat(chatId,
+  archived)`, `pinChat(chatId, pinned)` or `markChatUnread(chatId)`; without them nothing changes. The MCP server
+  has no tool for them yet.
 
 ### Fixed
 
+- **`chats.unmute: readonly` now stops `chats unmute`.** The unmute was checked under `chats.mute`, so its own key
+  was ignored. It is checked under `chats.unmute` now and journaled as `chat-unmute`. A config that names only
+  `chats.mute` behaves as before: that level still covers the unmute, until `chats.unmute` is set too.
 - **The read-only lock also keeps what the owner saved.** With `<PREFIX>_READ_ONLY` set, `searches delete`,
   `searches clear`, `contacts notes edit`, `contacts notes remove`, `contacts alias rm` and `tags remove` refuse
   with `permission_error`, and so do their MCP tools, which deleted or overwrote under the lock before. Clearing what

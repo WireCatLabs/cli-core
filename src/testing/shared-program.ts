@@ -60,6 +60,7 @@ export const messenger: Messenger = {
   resolveSettings: config.resolveSettings,
   connect: refuse,
   groupSettings: [...GROUP_SETTINGS, "joinApproval", "onlyAdminsSend", "onlyAdminsEditInfo", "disappearingSeconds"],
+  chatPin: true,
 }
 
 /** Every shared command over `over`, as tg, max and wa mount them between them; its switches drop what they drop. */

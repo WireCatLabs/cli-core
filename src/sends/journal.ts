@@ -63,6 +63,12 @@ export type AccountAction =
   | "folder-join"
   | "sessions-end"
   | "chat-mute"
+  | "chat-unmute"
+  | "chat-archive"
+  | "chat-unarchive"
+  | "chat-pin"
+  | "chat-unpin"
+  | "chat-mark-unread"
   | "privacy"
 
 /** One attempt to send. **Never the text** — only its length. */

@@ -112,10 +112,12 @@ write chats members add
 write chats members fetch
 write chats members remove
 write chats moderate
+write chats pin
 write chats requests accept
 write chats requests decline
 write chats tracking add
 write chats tracking remove
+write chats unpin
 write chats update
 write contacts add
 write contacts alias rm

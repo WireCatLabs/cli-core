@@ -4,6 +4,7 @@ import { Command } from "commander"
 import { type Audience, MEDIA_KINDS, type MediaKind, type PrivacySettings } from "../../domain/models.js"
 import { sendTime } from "../../domain/send-time.js"
 import { capability } from "../../ports/messenger.js"
+import type { Services } from "../../services/index.js"
 import { ownerOnlyOption, REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { positiveCount } from "../paging.js"
@@ -165,6 +166,52 @@ export const muteCommands = (messenger: Messenger): Command[] => [
       )
     }),
 ]
+
+const onChatCommand = (
+  messenger: Messenger,
+  name: string,
+  description: string,
+  change: (services: Services, chat: string) => Promise<object>,
+): Command =>
+  annotate(new Command(name), {
+    effects: REMOTE_WRITE,
+    examples: [`${messenger.app.command} chats ${name} 123456789`],
+  })
+    .description(description)
+    .argument("<chat>", messenger.chatArgument)
+    .action(async function (this: Command, chat: string) {
+      const context = messengerContext(this, messenger)
+      renderAnswer(this, context, itemOf(snakeKeys(await context.withServices((services) => change(services, chat)))))
+    })
+
+/** `chats archive` and `unarchive` — the messenger's archive of chats, not the local store. */
+export const archiveCommands = (messenger: Messenger): Command[] => [
+  onChatCommand(messenger, "archive", "move a chat into the archive; nobody in it is told", (services, chat) =>
+    services.account.archive(chat, true),
+  ),
+  onChatCommand(messenger, "unarchive", "bring an archived chat back to the chat list", (services, chat) =>
+    services.account.archive(chat, false),
+  ),
+]
+
+/** `chats pin` and `unpin` — where the chat sits in the owner's list; `messages pin` pins a message for everyone. */
+export const chatPinCommands = (messenger: Messenger): Command[] => [
+  onChatCommand(messenger, "pin", "keep a chat at the top of your chat list; nobody in it is told", (services, chat) =>
+    services.account.pinChat(chat, true),
+  ),
+  onChatCommand(messenger, "unpin", "let a pinned chat move down the chat list again", (services, chat) =>
+    services.account.pinChat(chat, false),
+  ),
+]
+
+/** `chats mark-unread` — undone by `chats mark-read`, which the other side does see. */
+export const markUnreadCommand = (messenger: Messenger): Command =>
+  onChatCommand(
+    messenger,
+    "mark-unread",
+    "mark a chat unread on your own devices; nobody in it is told",
+    (services, chat) => services.account.markUnread(chat),
+  )
 
 const AUDIENCES: readonly Audience[] = ["everyone", "contacts", "nobody"]
 

@@ -529,6 +529,12 @@ export interface BotChats {
 export interface AccountSettings {
   /** `forever`, an ISO 8601 time, or null to hear the chat again. */
   mute(chatId: Id, until: string | null): Promise<void>
+  /** Moves the chat into the archive, or back out of it with `false`. */
+  archiveChat(chatId: Id, archived: boolean): Promise<void>
+  /** Pins the chat at the top of the chat list, or unpins it with `false`; not a message pin. */
+  pinChat(chatId: Id, pinned: boolean): Promise<void>
+  /** Marks the chat unread on the owner's devices; no read receipt changes. */
+  markChatUnread(chatId: Id): Promise<void>
   /** Only the settings named change; answers them all as they now are. One the messenger lacks is refused. */
   updatePrivacy(change: PrivacySettings): Promise<PrivacySettings>
 }

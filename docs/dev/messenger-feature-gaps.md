@@ -36,7 +36,7 @@ decisions taken here and points there.
 | Mute and notification settings, remote media search | Telegram actions, G3 (B4) | same plan, §3 and §4 G3 |
 
 Slices 1, 2 and the mute half of 4 below are therefore coordination notes, not work to start
-from this plan. Slices 3, 4 (archive), 5, 6, 7 and 8 have no other owner.
+from this plan. Slices 3, 5, 6, 7 and 8 have no other owner.
 
 ## Rules every slice follows
 
@@ -108,16 +108,19 @@ The agent writes the reply into the chat's draft; the person reads it and presse
 - Guard: `messages.send`, normal send guard; each item counts toward the hourly limit (decide).
 - Medium. Remove the line from tg's roadmap and "Not in tg yet" when it ships.
 
-### 4. Archive and mute — `chats update --archived` / `--muted` (mute owned by G3, B4)
+### 4. Archive, chat pins and unread — shared commands built; tg and max adapters open
 
-No new verb: the same pattern as `--all-can-pin`.
+cli-core has `chats archive` / `unarchive`, `chats pin` / `unpin` (a chat at the top of the list, not
+`messages pin`) and `chats mark-unread`, each behind its own switch (`chatArchive`, `chatPin`,
+`chatMarkUnread`) and adapter method (`archiveChat`, `pinChat`, `markChatUnread` in `AccountSettings`). They
+are the owner's own settings: guarded as account changes under `chats.<command>`, not counted toward the hourly
+limit. Not `chats update --archived`: `chats.update` is a group setting others see, under the `groups` word.
 
-- tg: `archiveChats` / `unarchiveChats`; raw `account.updateNotifySettings` for mute. Easy.
-- max: no known opcode for either. Mark the options unsupported there (or `planned` after a
-  capture).
-- Guard: `chats.update`.
-- Mute belongs to G3's notification-settings slice; agree the option there. `--archived` can go
-  ahead alone.
+- tg: mtcute's `archiveChats` / `unarchiveChats` and `markChatUnread`; pinning a dialog has no high-level
+  method there. Easy.
+- max: no measured request for any of them (max-api-docs calls opcode 77 pin/archive/mute; measured otherwise).
+- `archive`, `unarchive` and `mark-unread` are not cli-base vocabulary words yet, so the synthetic CLI mounts
+  only `chats pin`; mute belongs to G3's notification-settings slice.
 
 ### 5. Typing and location — both, shared
 

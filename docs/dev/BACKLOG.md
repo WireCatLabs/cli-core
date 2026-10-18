@@ -17,8 +17,11 @@ Open work only. A finished item is deleted; its record is the merged pull reques
   whatsapp-cli switch to it and keep only their renderers. max-cli's dialect differs (`*` italic, `__` bold, `++`
   underline, `^^` highlight, newlines in inline code become spaces) and waits for the owner's call. The legacy
   `parseMarkdown` (`{ text, markup }`, one level deep, used by nobody) goes in the next breaking release.
-- **Messenger feature gaps** — albums, archiving, typing and location, MAX cloud password and video
+- **Messenger feature gaps** — albums, typing and location, MAX cloud password and video
   notes. Proposed, not claimed: [messenger-feature-gaps.md](messenger-feature-gaps.md).
+- **Words for `chats archive`, `unarchive` and `mark-unread`** — not in cli-base's vocabulary, so the synthetic
+  CLI (`src/testing/shared-program.ts`) leaves `chatArchive` and `chatMarkUnread` off and `cli-dev lint` never
+  sees them. Once cli-base registers the words, turn both switches on there.
 - **Chat briefs and news digests** — decisions, requests and open questions per chat for a time window,
   and a cited digest of selected news feeds, prepared for the owner's agent. Not designed beyond a
   proposal; needs the owner's scope before a plan.
