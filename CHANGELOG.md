@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.334.0 — 18.10.2026
 
 ### Added
 
@@ -15,15 +15,6 @@ shape of this file.
   notes, votes, history markers and task sources move with it; a message both held is kept once, and stays deleted
   if either copy was. A messenger that pushes its history sends it as `rekeys` in a pushed batch, which the store
   applies before the batch's messages. Running it again changes nothing. No store migration.
-
-### Fixed
-
-- Project-candidate CLI scanning stays off generic MCP command routers. Hosts expose the separate read-only tool only after explicitly granting access to the shared project vocabulary; default server catalogues remain unchanged.
-
-## 0.334.0 — 18.10.2026
-
-### Added
-
 - `createMeetingSeriesInventoryReader` discovers one bounded page of series candidates for a captured provider/account and finite window. Scope-bound cursors, unknown calendar completeness and unverified date hints stay explicit; choosing an exact series still uses the existing upcoming-occurrence proof. The SDK does not materialize calendars, open a store or add a provider transport.
 - `createStoredMeetingProjectCandidateReader` authorizes one stored meeting account, hydrates bounded current transcript evidence, and suggests existing projects without writes. Shared `/cli` adapters add `meetings projects scan <ref>` and the opt-in `meeting_project_candidates` MCP tool, with strict arguments, snake_case item envelopes, execution metadata, evidence cursors and retained coverage. Hosts own connector lifetime and explicitly grant the global project vocabulary.
 - `createMeetingProjectCandidateReader` suggests existing projects from explicit bounded meeting title/cue evidence and one bounded global project vocabulary read. Canonical names, keys and aliases match literal Unicode word boundaries; title hints remain separate from transcript citations, ambiguity and unknown archive coverage remain visible, and no membership or finding is saved. The SDK captures one provider/account; it adds no automatic preparation behavior or provider transport.
@@ -41,18 +32,9 @@ shape of this file.
   `doctor --json`, `flood clear --json` and `server status --json`, and the text says "until lifted". A spam limit
   and a frozen account without an end keep their hour and day.
 
-### Changed — may break callers
-
-- Core now requires Base `>=0.44.0 <0.45.0` and validates against registry Base 0.44.1. Every command must declare its effects; command discovery can include `runnable` on groups. Consumers must adopt the compatible Base range together and accept that optional discovery field.
-
-- **A hold on writes stops every write, not only the counted ones.** While the messenger has the account frozen,
-  limited or banned, a reaction, marking a chat read, a quiet pin, a title change and a profile change are refused
-  with `permission_error` too; reads still work. Sending any of them during a ban is what makes it last longer.
-  A command at level `ask` is refused before it asks. `inbox` and `review` with `--mark-read` (or
-  `catch_up_marks_read`) still show what they read, and warn that nothing was marked read.
-
 ### Fixed
 
+- Project-candidate CLI scanning stays off generic MCP command routers. Hosts expose the separate read-only tool only after explicitly granting access to the shared project vocabulary; default server catalogues remain unchanged.
 - **The read-only lock now guards the message store in every messenger CLI.** With `<PREFIX>_READ_ONLY` set,
   `store reset`, `restore`, `clear`, `migrate`, `repair`, `decrypt` and `copies delete` refuse with
   `permission_error` and leave the store as it was; `--dry-run` still previews. tg and max did this on their own,
@@ -65,6 +47,16 @@ shape of this file.
   one-shot command had met it.
 - **serve refuses a login or logout an older client relays to it** with `permission_error`, instead of logging its
   own connection in or out. Stop serve first, or update the client, which runs it locally.
+
+### Changed — may break callers
+
+- Core now requires Base `>=0.44.0 <0.45.0` and validates against registry Base 0.44.1. Every command must declare its effects; command discovery can include `runnable` on groups. Consumers must adopt the compatible Base range together and accept that optional discovery field.
+
+- **A hold on writes stops every write, not only the counted ones.** While the messenger has the account frozen,
+  limited or banned, a reaction, marking a chat read, a quiet pin, a title change and a profile change are refused
+  with `permission_error` too; reads still work. Sending any of them during a ban is what makes it last longer.
+  A command at level `ask` is refused before it asks. `inbox` and `review` with `--mark-read` (or
+  `catch_up_marks_read`) still show what they read, and warn that nothing was marked read.
 
 ## 0.333.0 — 18.10.2026
 
