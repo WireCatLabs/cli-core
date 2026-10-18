@@ -325,7 +325,7 @@ export interface MessengerContext extends BaseContext {
 
 /** Long enough for a local write; a store that hangs must not keep the process alive. */
 const SAVES_WAIT_MS = 5_000
-/** The lock wait blocks serve's event loop; an owner's `recipients` change holds the list for milliseconds. */
+/** A batch's history is saved behind its re-keys; an owner's `recipients` change holds the list for milliseconds. */
 const REKEY_LOCK_WAIT_MS = 250
 
 /** Whether every save finished within `ms`. Saves never reject: `stored` turns a failure into a warning. */
@@ -343,16 +343,16 @@ const settled = async (pending: Set<Promise<void>>, ms: number): Promise<boolean
 }
 
 /** A list that cannot be read stays as it is, which refuses every send: the warning says why. */
-const rekeyRecipients = (
+const rekeyRecipients = async (
   app: Messenger["app"],
   profile: string,
   env: NodeJS.ProcessEnv,
   warn: (message: string) => void,
   from: Id,
   to: Id,
-): void => {
+): Promise<void> => {
   try {
-    new RecipientList(recipientsPathFor(app, profile, env), app.command, REKEY_LOCK_WAIT_MS).rekey(from, to)
+    await new RecipientList(recipientsPathFor(app, profile, env), app.command, REKEY_LOCK_WAIT_MS).rekey(from, to)
   } catch (error) {
     warn(`the recipient list still names ${from}: ${error instanceof Error ? error.message : String(error)}`)
   }

@@ -18,6 +18,21 @@ shape of this file.
   send journal records the kind and size. `--sticker <id>` and `stickers: true` are unchanged, so tg and max see
   no difference.
 
+### Changed — may break callers
+
+- **`RecipientList.rekey` returns a promise.** It waits for the list's lock on timers now; await it. No consumer
+  calls it today.
+
+### Fixed
+
+- **A held lock no longer stalls `serve`.** The send-journal reservation, the request pace and the recipient-list
+  re-key used to wait for another process's lock by blocking the thread, so every relayed command and the
+  messenger's keep-alives stopped for up to 5 s. They now wait on timers. The wait, the `timeout` error (exit 9)
+  and the refusal are unchanged. `SendGuard` gains an optional `reserve`, which `guardedWrite` calls after
+  `check(request, { reserve: false })`; a guard built without it is reserved by `check` as before, which still
+  blocks while it waits. A write whose command ran out of time while it waited is not sent, and is journaled as
+  failed.
+
 ## 0.339.0 — 18.10.2026
 
 ### Added

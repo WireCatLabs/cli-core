@@ -1,13 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, unlinkSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
 import { flooded } from "../cli/messenger/flooded.js"
 import { settingsFor } from "../cli/settings.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { FloodMemory } from "./flood.js"
 import { guardFor, sendGuard } from "./guard.js"
-import { guardedWrite } from "./guarded.js"
+import { guardedWrite, stopWrites, type WriteInFlight, withWriteScope } from "./guarded.js"
 import { SendJournal, sendsPathFor as sendsPath } from "./journal.js"
 import { RecipientList, recipientsPathFor as recipientsPath } from "./recipients.js"
 import { newSendId } from "./send-id.js"
@@ -109,6 +110,58 @@ describe("two senders at once", () => {
 
     expect(() => guard("g-lock", 1).check({ chatId: "111" })).not.toThrow()
     expect(existsSync(lock)).toBe(false)
+  })
+
+  it("waits for a held journal without blocking the thread, and refuses the write after 5 s", async () => {
+    vi.useFakeTimers()
+    try {
+      const path = sendsPathFor("g-lock-async")
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(`${path}.lock`, "")
+      const act = vi.fn(async () => "sent")
+      let ticked = false
+      setTimeout(() => {
+        ticked = true
+      }, 1_000)
+      const writing = guardedWrite(guard("g-lock-async", 5), { chatId: "111", operationId: "op-1" }, act)
+      const refused = expect(writing).rejects.toMatchObject({ code: "timeout" })
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(ticked).toBe(true)
+      await vi.advanceTimersByTimeAsync(4_000)
+      await refused
+
+      expect(act).not.toHaveBeenCalled()
+      expect(new SendJournal(path).entries()).toMatchObject([{ outcome: "refused", errorCode: "timeout" }])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("does not send a write whose command ended while it waited for the journal", async () => {
+    vi.useFakeTimers()
+    try {
+      const path = sendsPathFor("g-lock-stopped")
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(`${path}.lock`, "")
+      const act = vi.fn(async () => "sent")
+      const scope = new Set<WriteInFlight>()
+      const writing = withWriteScope(scope, () =>
+        guardedWrite(guard("g-lock-stopped", 5), { chatId: "111", operationId: "op-2" }, act),
+      )
+      const refused = expect(writing).rejects.toMatchObject({ code: "timeout" })
+
+      await vi.advanceTimersByTimeAsync(100)
+      stopWrites(scope, new CliError("timeout", "the command ran out of time"))
+      unlinkSync(`${path}.lock`)
+      await vi.advanceTimersByTimeAsync(20)
+      await refused
+
+      expect(act).not.toHaveBeenCalled()
+      expect(new SendJournal(path).entries()).toMatchObject([{ outcome: "failed", errorCode: "timeout" }])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("counts a scheduled message in the hour it goes out, not the hour it was queued", () => {

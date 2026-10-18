@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import type { AppIdentity } from "../ports/app.js"
-import { withFileLock } from "./file-lock.js"
+import { withFileLock, withFileLockAsync } from "./file-lock.js"
 
 export interface Recipient {
   id: Id
@@ -85,23 +85,28 @@ export class RecipientList {
    * The chat the messenger now names `to`: its entry, and a partner of that id, follow it. Only an entry already there
    * changes, and no list is created, so the list never opens up. Whether anything changed.
    */
-  rekey(from: Id, to: Id): boolean {
+  async rekey(from: Id, to: Id): Promise<boolean> {
     if (from === to) return false
-    return this.#locked(() => {
-      const chats = this.read()
-      if (!chats?.some((chat) => chat.id === from || chat.partnerId === from)) return false
-      const held = chats.some((chat) => chat.id === to)
-      this.#write(
-        chats
-          .filter((chat) => !(held && chat.id === from))
-          .map((chat) => ({
-            ...chat,
-            ...(chat.id === from ? { id: to } : {}),
-            ...(chat.partnerId === from ? { partnerId: to } : {}),
-          })),
-      )
-      return true
-    })
+    return withFileLockAsync(
+      this.path,
+      "the recipient list",
+      () => {
+        const chats = this.read()
+        if (!chats?.some((chat) => chat.id === from || chat.partnerId === from)) return false
+        const held = chats.some((chat) => chat.id === to)
+        this.#write(
+          chats
+            .filter((chat) => !(held && chat.id === from))
+            .map((chat) => ({
+              ...chat,
+              ...(chat.id === from ? { id: to } : {}),
+              ...(chat.partnerId === from ? { partnerId: to } : {}),
+            })),
+        )
+        return true
+      },
+      this.lockWaitMs,
+    )
   }
 
   /** Whether there was a list to turn off. */
@@ -115,7 +120,8 @@ export class RecipientList {
 
   /**
    * Every change reads and writes under one lock: a `serve` re-keying while the owner removes a chat must not write
-   * the removed chat back. A lock held too long refuses the change and leaves the list as it was.
+   * the removed chat back. A lock held too long refuses the change and leaves the list as it was. Blocks the thread
+   * while it waits: the owner's one-shot `recipients` commands only; `serve`'s `rekey` waits on timers.
    */
   #locked<T>(body: () => T): T {
     return withFileLock(this.path, "the recipient list", body, this.lockWaitMs)

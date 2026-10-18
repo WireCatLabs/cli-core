@@ -20,11 +20,11 @@ export const floodCommand = (messenger: Messenger): Command => {
         .description(
           `forget them, lift the hold and the profile's pace, once ${name} no longer limits the account; changes nothing there`,
         )
-        .action(function (this: Command) {
+        .action(async function (this: Command) {
           const context = messengerContext(this, messenger)
           const { profile } = context
           const { deadlines, sendBlock } = new FloodMemory(floodPathFor(app, profile, context.env)).clear()
-          new Pacer(pacePathFor(app, profile, context.env), DEFAULT_PACE).reset()
+          await new Pacer(pacePathFor(app, profile, context.env), DEFAULT_PACE).reset()
           const waits = deadlines.map(
             (one) =>
               `- the wait before ${one.operation}${one.chatId ? ` in chat ${one.chatId}` : ""}, until ${one.until}`,

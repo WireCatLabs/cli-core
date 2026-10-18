@@ -7,7 +7,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { LOG_ATTRIBUTES } from "../runs/log-attributes.js"
 import { fromLogAttributes, logAttributes } from "../runs/log-keys.js"
 import { currentRun } from "../runs/scope.js"
-import { withFileLock } from "./file-lock.js"
+import { withFileLock, withFileLockAsync } from "./file-lock.js"
 
 /** `reserved` holds a place under the hourly limit while the write is on its way; its outcome follows. */
 export type SendOutcome = "sent" | "outcome_unknown" | "refused" | "failed" | "reserved"
@@ -145,6 +145,11 @@ export class SendJournal {
    */
   locked<T>(body: () => T): T {
     return withFileLock(this.path, "the send journal", body)
+  }
+
+  /** `locked` without blocking the thread while another process holds the journal: what `serve` uses. */
+  lockedAsync<T>(body: () => T): Promise<T> {
+    return withFileLockAsync(this.path, "the send journal", body)
   }
 
   append(entry: SendEntry): void {
