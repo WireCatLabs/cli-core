@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.337.0 — 18.10.2026
+
 ### Added
 
 - **A messenger whose history lives in the local store finds chats and people by name there.** A send, a group
