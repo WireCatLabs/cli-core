@@ -60,6 +60,8 @@ messages, mail and imported documents without index/model work. It is a shared S
 meeting preparation includes communications only through explicit host-captured selections.
 The project-candidate SDK separately matches bounded host-supplied evidence against existing project
 names, keys and aliases; it neither reads other meetings nor confirms membership.
+[Project evidence gathering](PROJECT-GATHERING.md) plans bounded reads of those context readers across
+alias, keyword and person lanes and returns cited evidence with a resume checkpoint; it writes nothing.
 
 | Export | Directory | What it holds |
 |---|---|---|
