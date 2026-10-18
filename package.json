@@ -196,7 +196,7 @@
     "@types/node": "^22.20.4",
     "@types/pngjs": "6.0.5",
     "@vitest/coverage-v8": "^5.0.2",
-    "@wirecat/cli-base": "0.44.4",
+    "@wirecat/cli-base": "0.45.0",
     "commander": "15.0.0",
     "cspell": "10.3.6",
     "drizzle-kit": "1.0.0-rc.4",
@@ -216,7 +216,7 @@
   },
   "peerDependencies": {
     "@napi-rs/canvas": ">=0.1.69 <2",
-    "@wirecat/cli-base": ">=0.44.0 <0.45.0",
+    "@wirecat/cli-base": ">=0.45.0 <0.46.0",
     "commander": ">=15"
   },
   "bin": {
