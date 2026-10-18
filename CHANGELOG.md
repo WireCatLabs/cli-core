@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`loginQr` shows a login QR code the same way in every messenger CLI**: drawn on the diagnostic stream, which
+  `--quiet` does not hide, or written to the `--qr-file` PNG with `writeSecurely` (a temporary file created with
+  mode `0600`, renamed over the path, never chmodded afterwards). On a terminal too narrow for the code it draws
+  nothing and says to widen the terminal or pass `--qr-file`; it opens nothing. `close()` removes the image it
+  wrote, never a file it did not. `qrNeedsTerminal(command)` is the shared refusal when nobody could scan, and
+  `atTerminal(input)` the shared test. `parity.json` plans `--qr-file` on `session start` and `setup` for max, beside tg and wa.
+
 ## 0.346.0 — 18.10.2026
 
 ### Added

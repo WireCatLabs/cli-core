@@ -4047,7 +4047,9 @@
         },
         "--qr-file": {
           "in": ["tg", "wa"],
-          "reason": "ruled tg-only with the app registration it belongs to"
+          "planned": {
+            "max": "max-cli#736, on the cli-core release that exports loginQr"
+          }
         },
         "--sms": {
           "in": ["tg"],
@@ -4066,7 +4068,9 @@
         "--method": "all",
         "--qr-file": {
           "in": ["tg", "wa"],
-          "reason": "Telegram can expose its temporary QR login token as a PNG"
+          "planned": {
+            "max": "max-cli#736, on the cli-core release that exports loginQr"
+          }
         }
       }
     },
