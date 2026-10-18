@@ -2764,6 +2764,18 @@
         "--limit": "all"
       }
     },
+    "conversations rebuild": {
+      "in": "all",
+      "options": {
+        "--chat": "all",
+        "--max-chats": {
+          "in": "all"
+        },
+        "--max-chunks": {
+          "in": "all"
+        }
+      }
+    },
     "conversations related": {
       "in": "all",
       "options": {
