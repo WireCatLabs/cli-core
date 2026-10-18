@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../../domain/channel-tags.js"
-import type { Chat, Id, Member, Page } from "../../domain/models.js"
+import type { Chat, Id, Member, Page, ProviderMetadata } from "../../domain/models.js"
 import type { AccountKey, StoredChatFilter } from "../types.js"
 import { and, eq, inArray, or, sql } from "./drizzle/core.js"
 import { identityPk } from "./identities.js"
@@ -26,7 +26,7 @@ import {
   syncRanges,
 } from "./schema.js"
 import { ensureTag } from "./tags.js"
-import { json, parsed, present, toIso, toMs } from "./values.js"
+import { parsed, present, toIso, toMs } from "./values.js"
 
 /** The chat's own id, when the store key is a chat of this account. */
 export const chatOf = ({ orm }: StoreContext, accountKey: number, chatKey: number): Id | undefined =>
@@ -62,7 +62,12 @@ export const chatPkFor = (context: StoreContext, accountKey: number, chatId: Id)
 
 export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat): void => {
   const { orm, now } = context
-  const parent = chat.parentChatId === undefined ? null : chatPkFor(context, accountKey, chat.parentChatId)
+  const parent = chat.parentChatId == null ? null : chatPkFor(context, accountKey, chat.parentChatId)
+  const stored = orm
+    .select({ metadata: chats.metadata })
+    .from(chats)
+    .where(and(eq(chats.accountId, accountKey), eq(chats.externalId, chat.id)))
+    .get()
   orm
     .insert(chats)
     .values({
@@ -75,7 +80,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       unreadCount: chat.unreadCount,
       lastMessageAt: toMs(chat.lastMessageAt),
       participantsCount: chat.participantsCount,
-      metadata: json(chat.providerMetadata),
+      metadata: mergedMetadata(stored?.metadata ?? null, chat.providerMetadata),
       membershipState: chat.membershipState ?? null,
       createdAt: now(),
       updatedAt: now(),
@@ -84,7 +89,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       target: [chats.accountId, chats.externalId],
       set: {
         kind: sql`excluded.kind`,
-        parentChatId: sql`coalesce(excluded.parent_chat_id, ${chats.parentChatId})`,
+        ...(chat.parentChatId === undefined ? {} : { parentChatId: sql`excluded.parent_chat_id` }),
         scope: sql`coalesce(excluded.scope, ${chats.scope})`,
         title: sql`excluded.title`,
         unreadCount: sql`excluded.unread_count`,
@@ -98,6 +103,22 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       },
     })
     .run()
+}
+
+const mergedMetadata = (stored: string | null, incoming: ProviderMetadata | undefined): string | null => {
+  if (incoming === undefined) return stored
+  const merged = Object.entries({ ...metadataObject(stored), ...incoming }).filter(([, value]) => value !== null)
+  return merged.length === 0 ? null : JSON.stringify(Object.fromEntries(merged))
+}
+
+// Stored metadata that is not an object has no keys to keep.
+const metadataObject = (stored: string | null): ProviderMetadata => {
+  try {
+    const value: unknown = stored === null ? null : JSON.parse(stored)
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as ProviderMetadata) : {}
+  } catch {
+    return {}
+  }
 }
 
 /** Replaces who is in the chat, whole. */

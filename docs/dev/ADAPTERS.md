@@ -144,6 +144,11 @@ No type from your messenger's library goes above the adapter. Every answer is a 
 `.`, such as `Chat`, `Message` or `Page`. Put a field that only your messenger has into
 `providerMetadata`. Never put a token or a phone number there.
 
+The store merges a saved chat's `providerMetadata` into the one it holds, key by key. A key you leave out keeps its
+stored value; a key set to `null` is removed. So leave a key out only when you do not know it, and send `null` when
+it is gone or a flag turned false: `{ pinned: null }`, `{ username: null }`. `parentChatId` works the same way:
+left out keeps the stored parent, `null` clears it. Every reader treats a `null` key as an absent one.
+
 ## One socket per linked device
 
 Some messengers allow one connection per linked device. A second one pushes the first one off.
