@@ -1,7 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { type Audience, MEDIA_KINDS, type MediaKind, type PrivacySettings } from "../../domain/models.js"
+import {
+  type Audience,
+  MEDIA_KINDS,
+  type MediaKind,
+  type PrivacyKey,
+  type PrivacySettings,
+} from "../../domain/models.js"
 import { sendTime } from "../../domain/send-time.js"
 import { capability } from "../../ports/messenger.js"
 import type { Services } from "../../services/index.js"
@@ -140,7 +146,13 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
 
 /** `chats mute` and `unmute` — the owner's own notifications for one chat; nobody in it is told. */
 export const muteCommands = (messenger: Messenger): Command[] => [
-  annotate(new Command("mute"), { effects: REMOTE_WRITE })
+  annotate(new Command("mute"), {
+    effects: REMOTE_WRITE,
+    examples: [
+      `${messenger.app.command} chats mute "Book club"`,
+      `${messenger.app.command} chats mute "Book club" --until 2h`,
+    ],
+  })
     .description("stop notifications from a chat, for good or until a time; nobody in it is told")
     .argument("<chat>", messenger.chatArgument)
     .option("--until <time>", "only until then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now")
@@ -154,7 +166,10 @@ export const muteCommands = (messenger: Messenger): Command[] => [
         itemOf(snakeKeys(await context.withServices((services) => services.account.mute(chat, when)))),
       )
     }),
-  annotate(new Command("unmute"), { effects: REMOTE_WRITE })
+  annotate(new Command("unmute"), {
+    effects: REMOTE_WRITE,
+    examples: [`${messenger.app.command} chats unmute "Book club"`],
+  })
     .description("hear a muted chat again")
     .argument("<chat>", messenger.chatArgument)
     .action(async function (this: Command, chat: string) {
@@ -215,17 +230,60 @@ export const markUnreadCommand = (messenger: Messenger): Command =>
 
 const AUDIENCES: readonly Audience[] = ["everyone", "contacts", "nobody"]
 
-const audienceOf = (flag: string, value: string | undefined): Audience | undefined => {
-  if (value === undefined) return undefined
+const audienceOf = (flag: string, value: string): Audience => {
   if (!(AUDIENCES as readonly string[]).includes(value))
     throw new CliError("validation_error", `${flag} takes ${AUDIENCES.join(", ")}, not "${value}"`)
   return value as Audience
 }
 
+const PRIVACY_SETTINGS: readonly PrivacyKey[] = ["findByPhone", "phoneNumber", "calls", "chatInvites", "hideOnline"]
+
+const SWITCHES: ReadonlySet<PrivacyKey> = new Set(["hideOnline", "readReceipts"])
+
+const PRIVACY_FLAGS: Record<PrivacyKey, [flag: string, help: string]> = {
+  findByPhone: ["find-by-phone", "who finds the account by its number: everyone, contacts or nobody"],
+  phoneNumber: ["phone-number", "who sees the number: everyone, contacts or nobody"],
+  calls: ["calls", "whose calls ring: everyone, contacts or nobody"],
+  chatInvites: ["chat-invites", "who may add the account to groups and channels: everyone, contacts or nobody"],
+  hideOnline: ["hide-online", "hide online status and last seen"],
+  readReceipts: ["read-receipts", "send read receipts"],
+  profilePhoto: ["profile-photo", "who sees the profile photo: everyone, contacts or nobody"],
+  about: ["about-text", "who sees the about text: everyone, contacts or nobody"],
+  lastSeen: ["last-seen", "who sees when the account was last online: everyone, contacts or nobody"],
+}
+
+const optionKey = (key: PrivacyKey) =>
+  PRIVACY_FLAGS[key][0].replace(/-(\w)/g, (_, letter: string) => letter.toUpperCase())
+
+const privacyChange = (keys: readonly PrivacyKey[], typed: Record<string, string | undefined>): PrivacySettings => {
+  const change: Record<string, Audience | boolean> = {}
+  for (const key of keys) {
+    const value = typed[optionKey(key)]
+    if (value === undefined) continue
+    const flag = `--${PRIVACY_FLAGS[key][0]}`
+    if (!SWITCHES.has(key)) {
+      change[key] = audienceOf(flag, value)
+      continue
+    }
+    if (value !== "on" && value !== "off")
+      throw new CliError("validation_error", `${flag} takes on or off, not "${value}"`)
+    change[key] = value === "on"
+  }
+  return change as PrivacySettings
+}
+
+const exampleOf = (tool: string, key: PrivacyKey) =>
+  `${tool} account privacy set --${PRIVACY_FLAGS[key][0]} ${SWITCHES.has(key) ? "on" : "contacts"}`
+
 /** `account privacy` — who may find, call or invite the account, as the messenger reports it. */
 export const privacyCommand = (messenger: Messenger): Command => {
+  const tool = messenger.app.command
+  const keys = messenger.privacySettings ?? PRIVACY_SETTINGS
   const privacy = new Command("privacy").description("who may find, call or add the account")
-  annotate(privacy.command("show"), { effects: REMOTE_READ })
+  annotate(privacy.command("show"), {
+    effects: REMOTE_READ,
+    examples: [`${tool} account privacy show`, `${tool} account privacy show --json`],
+  })
     .description("the account's privacy settings; reading changes nothing")
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
@@ -234,40 +292,24 @@ export const privacyCommand = (messenger: Messenger): Command => {
       )
       renderAnswer(this, context, itemOf(snakeKeys(privacy)))
     })
+  const audience = keys.find((key) => !SWITCHES.has(key))
+  const toggle = keys.find((key) => SWITCHES.has(key))
+  const set = annotate(new Command("set"), {
+    effects: REMOTE_WRITE,
+    examples: [audience, toggle].flatMap((key) => (key === undefined ? [] : [exampleOf(tool, key)])),
+  }).description("change who may find, call or add the account; the settings not named stay")
+  for (const key of keys)
+    set.option(`--${PRIVACY_FLAGS[key][0]} ${SWITCHES.has(key) ? "<on|off>" : "<who>"}`, PRIVACY_FLAGS[key][1])
   privacy.addCommand(
-    annotate(new Command("set"), { effects: REMOTE_WRITE })
-      .description("change who may find, call or add the account; the settings not named stay")
-      .option("--find-by-phone <who>", "who finds the account by its number: everyone, contacts or nobody")
-      .option("--phone-number <who>", "who sees the number: everyone, contacts or nobody")
-      .option("--calls <who>", "who may call: everyone, contacts or nobody")
-      .option("--chat-invites <who>", "who may add the account to groups and channels: everyone, contacts or nobody")
-      .option("--hide-online <on|off>", "hide online status and last seen")
-      .action(async function (this: Command) {
-        const context = messengerContext(this, messenger)
-        const typed = this.opts<{
-          findByPhone?: string
-          phoneNumber?: string
-          calls?: string
-          chatInvites?: string
-          hideOnline?: string
-        }>()
-        if (typed.hideOnline !== undefined && typed.hideOnline !== "on" && typed.hideOnline !== "off")
-          throw new CliError("validation_error", `--hide-online takes on or off, not "${typed.hideOnline}"`)
-        const change: PrivacySettings = Object.fromEntries(
-          Object.entries({
-            findByPhone: audienceOf("--find-by-phone", typed.findByPhone),
-            phoneNumber: audienceOf("--phone-number", typed.phoneNumber),
-            calls: audienceOf("--calls", typed.calls),
-            chatInvites: audienceOf("--chat-invites", typed.chatInvites),
-            hideOnline: typed.hideOnline === undefined ? undefined : typed.hideOnline === "on",
-          }).filter(([, value]) => value !== undefined),
-        )
-        renderAnswer(
-          this,
-          context,
-          itemOf(snakeKeys(await context.withServices((services) => services.account.updatePrivacy(change)))),
-        )
-      }),
+    set.action(async function (this: Command) {
+      const context = messengerContext(this, messenger)
+      const change = privacyChange(keys, this.opts<Record<string, string | undefined>>())
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(await context.withServices((services) => services.account.updatePrivacy(change)))),
+      )
+    }),
   )
   return privacy
 }

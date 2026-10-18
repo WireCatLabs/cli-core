@@ -61,6 +61,19 @@ export const messenger: Messenger = {
   connect: refuse,
   groupSettings: [...GROUP_SETTINGS, "joinApproval", "onlyAdminsSend", "onlyAdminsEditInfo", "disappearingSeconds"],
   chatPin: true,
+  privacy: true,
+  privacySettings: [
+    "findByPhone",
+    "phoneNumber",
+    "calls",
+    "chatInvites",
+    "hideOnline",
+    "readReceipts",
+    "profilePhoto",
+    "about",
+    "lastSeen",
+  ],
+  chatMute: true,
 }
 
 /** Every shared command over `over`, as tg, max and wa mount them between them; its switches drop what they drop. */

@@ -41,6 +41,13 @@ shape of this file.
   counts the joins and leaves from there too. A messenger asked for its history (Telegram, MAX) still asks the
   server, as before.
   `store.roster.saveChatEvents` and `store.roster.chatEvents` read and write them.
+- **`account privacy` can show and change four more settings, for a messenger that lists them.** Who sees read
+  receipts (`--read-receipts on|off`), the profile photo (`--profile-photo`), the about text (`--about-text`) and
+  when the account was last online (`--last-seen`). A messenger names the settings it has in `privacySettings`;
+  `account privacy set` offers only those, and a messenger that lists none keeps the first five, so tg and max
+  offer and show the same as before. `account privacy show` may also report "the owner's contacts except some" as
+  `contacts_except`, which `set` cannot choose.
+- **`account privacy show`, `account privacy set`, `chats mute` and `chats unmute` have examples in their help.**
 
 ### Fixed
 
@@ -65,6 +72,8 @@ shape of this file.
   arrived marked the old one left, and the merged chat kept that mark. It is now left only when both were.
 - **A second wait-until-stopped phase gets a full `--timeout`.** After `--timeout` ended the first phase, a second
   one ended at once. A phase asked for after the command finished now starts no timer.
+- **`account privacy set --calls` now reads "whose calls ring".** Before, it said "who may call", which is not what
+  WhatsApp's setting does: a call from someone else still arrives, only without ringing.
 
 ### Changed — may break callers
 
@@ -92,6 +101,7 @@ shape of this file.
   `search topics`), `chats events`, `chats inspect`, `chats send-as`, `chats members audit`, `chats members fetch`,
   every `chats folders` command and `meetings sync`. `inbox` and `review` keep the input, because a messenger whose
   history lives in the store answers them offline.
+||||||| parent of 1a5fc338 (feat(account): more privacy settings per messenger, examples for privacy and mute)
 
 ## 0.334.0 — 18.10.2026
 

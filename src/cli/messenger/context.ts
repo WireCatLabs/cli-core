@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { servingProfiles } from "../../background/lock.js"
-import type { AdminRight, GroupSettingKey, Id, Message, PollVote, Provider } from "../../domain/models.js"
+import type { AdminRight, GroupSettingKey, Id, Message, PollVote, PrivacyKey, Provider } from "../../domain/models.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { EventSink } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
@@ -196,6 +196,8 @@ export interface Messenger extends ServiceMessenger {
   chatMedia?: boolean
   /** Whether `account privacy show` and `set` read and change the account's privacy; no when unset. */
   privacy?: boolean
+  /** The settings `account privacy set` offers; the first five of `PrivacySettings` when unset. */
+  privacySettings?: readonly PrivacyKey[]
   /** Whether `chats mute` and `unmute` exist; no when unset. */
   chatMute?: boolean
   /** Whether `chats archive` and `unarchive` exist; no when unset. */

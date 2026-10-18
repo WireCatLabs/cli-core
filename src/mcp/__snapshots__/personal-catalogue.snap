@@ -1,4 +1,5 @@
 read  account list
+read  account privacy show
 read  account sessions list
 read  account show
 read  attachments list
@@ -91,6 +92,7 @@ read  tasks list
 read  tasks related
 read  tasks show
 read  topics list
+write account privacy set
 write account update
 write attachments extract
 write attachments text set
@@ -112,11 +114,13 @@ write chats members add
 write chats members fetch
 write chats members remove
 write chats moderate
+write chats mute
 write chats pin
 write chats requests accept
 write chats requests decline
 write chats tracking add
 write chats tracking remove
+write chats unmute
 write chats unpin
 write chats update
 write contacts add

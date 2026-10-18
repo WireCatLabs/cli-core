@@ -593,19 +593,36 @@ export interface CallRecord {
 /** Who may do something to the owner: everyone, only contacts, or nobody. */
 export type Audience = "everyone" | "contacts" | "nobody"
 
+/**
+ * An audience as `account privacy show` may report it: also the owner's contacts but some of them, which `set`
+ * cannot choose. Kept apart from `Audience` so that a table keyed on it does not have to name it.
+ */
+export type ShownAudience = Audience | "contacts_except"
+
 /** The account's privacy, as the messenger reports it; a setting it does not have is left out. */
 export interface PrivacySettings {
   /** Who finds the account by its phone number. */
   findByPhone?: Audience
   /** Who sees the phone number. */
   phoneNumber?: Audience
-  /** Who may call. */
+  /** Whose calls ring; a call from anyone else is refused, or arrives without ringing. */
   calls?: Audience
   /** Who may add the account to groups and channels. */
   chatInvites?: Audience
   /** Whether online status and last seen are hidden. */
   hideOnline?: boolean
+  /** Whether the owner sends read receipts. */
+  readReceipts?: boolean
+  /** Who sees the profile photo. */
+  profilePhoto?: ShownAudience
+  /** Who sees the about text — the profile's description. */
+  about?: ShownAudience
+  /** Who sees when the account was last online. */
+  lastSeen?: ShownAudience
 }
+
+/** Every setting `account privacy set` knows. */
+export type PrivacyKey = keyof PrivacySettings
 
 /** A set of stickers the account has added. */
 export interface StickerSet {
