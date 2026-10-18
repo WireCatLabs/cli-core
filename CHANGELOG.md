@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.340.0 — 18.10.2026
+
 ### Added
 
 - **A sticker can be sent from a .webp file.** The new `Messenger` trait `stickerFileBytes` (the largest sticker, in
