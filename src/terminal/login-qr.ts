@@ -50,11 +50,14 @@ export const loginQr = ({
   columns = () => process.stderr.columns,
 }: LoginQrOptions): LoginQr => {
   const path = qrFile === undefined ? undefined : resolve(qrFile)
+  // Only what this login wrote is removed: a refused or never-reached write leaves the owner's file alone.
+  let written = false
   return {
     path,
     show: (link) => {
       if (path) {
         writeSecurely(path, qrPng(link), 0o600)
+        written = true
         note(`the QR code is in ${path} — it is replaced when the code renews`)
         return
       }
@@ -71,7 +74,9 @@ export const loginQr = ({
       diagnostic(`\n${indent(drawn.text, pad + MARGIN)}`)
     },
     close: () => {
-      if (path) rmSync(path, { force: true })
+      if (!path || !written) return
+      written = false
+      rmSync(path, { force: true })
     },
   }
 }

@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { lstatSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PassThrough } from "node:stream"
@@ -39,6 +39,32 @@ describe("loginQr", () => {
 
     qr.close()
     expect(readdirSync(dir)).toEqual([])
+  })
+
+  it("replaces a symlink at the path instead of writing through it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "login-qr-"))
+    const elsewhere = join(mkdtempSync(join(tmpdir(), "login-qr-elsewhere-")), "target")
+    writeFileSync(elsewhere, "not for the code")
+    const path = join(dir, "login.png")
+    symlinkSync(elsewhere, path)
+    const { sinks } = capture()
+
+    loginQr({ qrFile: path, ...sinks }).show(LINK)
+
+    expect(readFileSync(elsewhere, "utf8")).toBe("not for the code")
+    expect(lstatSync(path).isSymbolicLink()).toBe(false)
+    expect(lstatSync(path).mode & 0o777).toBe(0o600)
+  })
+
+  it("leaves a file it never wrote in place on close", () => {
+    const dir = mkdtempSync(join(tmpdir(), "login-qr-"))
+    const path = join(dir, "login.png")
+    writeFileSync(path, "the owner's own file")
+    const { sinks } = capture()
+
+    loginQr({ qrFile: path, ...sinks }).close()
+
+    expect(readFileSync(path, "utf8")).toBe("the owner's own file")
   })
 
   it("draws the code on the diagnostic stream when the terminal is wide enough", () => {
