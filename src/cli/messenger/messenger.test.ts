@@ -3249,7 +3249,7 @@ describe("the shared read commands", () => {
     expect((await call(["conversations", "batches", "next", "--chat", "7"], never, env)).code).toBe(5)
   })
 
-  it("**asks before chat text leaves the machine**: --yes in machine mode, --max-tokens, none for a local server", async () => {
+  it("**asks before chat text leaves the machine**: --yes in machine mode, --max-tokens, never under the read-only lock, none for a local server", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -3290,6 +3290,17 @@ describe("the shared read commands", () => {
       expect(capped.stderr.join("\n")).toContain("above --max-tokens 1 — nothing was sent")
       expect(sent).toEqual([])
 
+      const locked = await call(
+        ["conversations", "embed", "--chat", "7", "--provider", "openai", "--yes", "--json"],
+        never,
+        { ...env, CHAT_READ_ONLY: "1" },
+      )
+      expect(locked.code).toBe(5)
+      expect(JSON.parse(locked.stderr.find((line) => line.startsWith("{")) ?? "{}").error.message).toBe(
+        "this process is read-only (CHAT_READ_ONLY) — it cannot send chat text to api.openai.com",
+      )
+      expect(sent).toEqual([])
+
       const agreed = await call(
         ["conversations", "embed", "--chat", "7", "--provider", "openai", "--yes", "--json"],
         never,
@@ -3305,7 +3316,10 @@ describe("the shared read commands", () => {
 
       sent.length = 0
       const local = ["--base-url", "http://127.0.0.1:11434/v1", "--model", "m", "--dims", "8"]
-      expect((await call(["conversations", "embed", "--chat", "7", ...local, "--json"], never, env)).code).toBe(0)
+      const onThisMachine = { ...env, CHAT_READ_ONLY: "1" }
+      expect(
+        (await call(["conversations", "embed", "--chat", "7", ...local, "--json"], never, onThisMachine)).code,
+      ).toBe(0)
       expect(sent[0]?.url).toBe("http://127.0.0.1:11434/v1/embeddings")
       const status = await call(["conversations", "embed", "status", "--chat", "7", ...local, "--json"], never, env)
       expect(JSON.parse(status.stdout[0] ?? "").item).toMatchObject({ model: "url:127.0.0.1:11434:m", left: 0 })

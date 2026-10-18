@@ -11,7 +11,7 @@ import { seal } from "../../sealed.js"
 import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { momentOf } from "../../services/moment.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { changesStore, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { jobsCommand } from "./backfill-command.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -60,7 +60,7 @@ const statusCommand = (messenger: Messenger): Command =>
  * store is not offered.
  */
 const clearCommand = (messenger: Messenger): Command =>
-  annotate(new Command("clear"), { effects: LOCAL_WRITE, mcp: false })
+  changesStore(annotate(new Command("clear"), { effects: LOCAL_WRITE, mcp: false }))
     .description("delete from the store the chats this account has left, with their messages")
     .option("--left", "the chats this account has left — the only thing this clears")
     .option("--allow-dangerous", "yes, delete — it cannot be undone, and a chat you left cannot be fetched again")

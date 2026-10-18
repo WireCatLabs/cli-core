@@ -19,7 +19,7 @@ import { servicesFor, storedDeps } from "../../services/index.js"
 import { momentOf } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
-import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE, reachesOtherService, refuseUnderReadOnly } from "../effects.js"
 import { embeddingChoice, type ModelOptions } from "../embedding-choice.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
@@ -351,7 +351,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
     })
 
   const embed = withModelOptions(
-    annotate(new Command("embed"), { effects: LOCAL_WRITE })
+    reachesOtherService(annotate(new Command("embed"), { effects: REMOTE_WRITE }))
       .description(
         "compute a vector for each chunk of a chat's conversations for search by meaning — on this machine, or " +
           "with --provider through a service and your key; resumes where it stopped; without --chat, every " +
@@ -401,6 +401,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
           (status.estimateSeconds === null ? "" : `, ${minutes(status.estimateSeconds)} on one session`),
       )
       if (typeof model !== "string" && status.left > 0 && !isLocal(model.remote.baseUrl)) {
+        refuseUnderReadOnly(this, `send chat text to ${new URL(model.remote.baseUrl).host}`)
         await consent(this, status, model.remote.baseUrl, options)
       }
       return services.embeddings.embed(chat, {

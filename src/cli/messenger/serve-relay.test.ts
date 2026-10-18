@@ -12,7 +12,7 @@ import type { Message, MessageEvent } from "../../domain/models.js"
 import type { MessengerAdapter, SendOptions } from "../../ports/messenger.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { environmentOf } from "../context.js"
-import { logsInOrOut, REMOTE_WRITE } from "../effects.js"
+import { logsInOrOut, REMOTE_WRITE, reachesOtherService } from "../effects.js"
 import { type RunOptions, run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
@@ -218,6 +218,28 @@ describe("commands through serve's relay", () => {
         tty: false,
         env,
       },
+    )
+
+    expect(code).toBe(0)
+    expect(ran).toEqual([undefined])
+    serve.stop()
+    await serve.done
+  })
+
+  it("never relays a command whose remote side is another service: serve has no connection to lend it", async () => {
+    const { env } = setup()
+    const serve = await startServe(env)
+    const ran: (string | undefined)[] = []
+    const embed = reachesOtherService(annotate(new Command("embed"), { effects: REMOTE_WRITE })).action(function (
+      this: Command,
+    ) {
+      ran.push(environmentOf(this).relayed?.profile)
+    })
+
+    const code = await run(
+      ["conversations", "embed"],
+      { app, commands: () => [new Command("conversations").addCommand(embed)] },
+      { streams: captureStreams(), tty: false, env },
     )
 
     expect(code).toBe(0)

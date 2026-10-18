@@ -42,6 +42,33 @@ export const logsInOrOut = <T extends Command>(command: T): T => {
 
 export const isLogin = (command: Command): boolean => LOGIN.has(command)
 
+const STORE_CHANGE = new WeakSet<Command>()
+
+/**
+ * Marks a `store` command that replaces, deletes or rewrites the message store or a file made from it. The store is
+ * the owner's archive, so `<PREFIX>_READ_ONLY` refuses it even though nothing leaves the machine; `--dry-run` still
+ * previews it.
+ */
+export const changesStore = <T extends Command>(command: T): T => {
+  STORE_CHANGE.add(command)
+  return command
+}
+
+export const isStoreChange = (command: Command): boolean => STORE_CHANGE.has(command)
+
+const OTHER_SERVICE = new WeakSet<Command>()
+
+/**
+ * Marks a command whose remote side is a service other than the messenger — an embedding provider. Its effects
+ * still say what leaves the machine, but serve's relay has no connection to lend it, so it always runs here.
+ */
+export const reachesOtherService = <T extends Command>(command: T): T => {
+  OTHER_SERVICE.add(command)
+  return command
+}
+
+export const isOtherService = (command: Command): boolean => OTHER_SERVICE.has(command)
+
 /** An option only the owner passes: MCP tools leave it out of their input (`mcp: false`). */
 export const ownerOnlyOption = (flags: string, description: string): Option =>
   annotateOption(new Option(flags, description), { mcp: false })
