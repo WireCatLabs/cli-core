@@ -105,7 +105,7 @@ export const searchAll = async (
   // Each resource is read deep enough for the merged page, then the merge is cut.
   const window = offset + request.limit
   const only = request.only ?? RESOURCES_SEARCHED
-  const command = messenger.app?.command ?? "tg"
+  const command = messenger.app?.command
   const lists: SearchAllItem[][] = []
   const searched: SearchedResource[] = []
   const accounts: SearchedAccount[] = []
