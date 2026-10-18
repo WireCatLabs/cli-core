@@ -544,6 +544,10 @@ an `InboxReader`, so their `--json` is the online one; `messages sync` refuses f
 `sync_first` and the `messages sync` next steps of search and contacts are not offered. The MCP chat
 resource reads the store too, and so does an MCP tool with a `served` body: it gets the services
 over the store and reaches the session's connection only through `connect`, for transcription.
+Names come from the store too. A write still connects, but the chat it names (`resolve`), the people a group
+change names (`people`) and the chat titles `watch` leaves out are looked up among the stored chats and people
+first (`Saving.namesFromStore` in `stored.ts`), with the same matching and the same refusal of an ambiguous name as
+the store reads; only a name the store does not hold reaches the adapter.
 
 **A CLI replaces a use case, not a command.** `Messenger.services` is an `Override`: it gets the
 shared services and returns the ones it changes, and can call the shared method inside its own:

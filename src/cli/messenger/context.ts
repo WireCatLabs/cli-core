@@ -364,7 +364,9 @@ export const connected = (
     name,
     deletedWithoutChat,
     pace,
-  }: Pick<Messenger, "app" | "provider" | "name" | "deletedWithoutChat" | "pace">,
+    history,
+    savedChatId,
+  }: Pick<Messenger, "app" | "provider" | "name" | "deletedWithoutChat" | "pace" | "history" | "savedChatId">,
   { settings, env, renderer }: Pick<BaseContext, "settings" | "env" | "renderer">,
   events: EventSink,
   store: LazyStore = lazyStore(env, app.command),
@@ -396,6 +398,7 @@ export const connected = (
             pending,
             ...(deletedWithoutChat ? { deletedWithoutChat } : {}),
             rekeyed: (from, to) => rekeyRecipients(app, settings.profile, env, renderer.warn, from, to),
+            ...(history === "store" ? { namesFromStore: savedChatId ? { savedChatId } : {} } : {}),
           }),
     close: async () => {
       try {
@@ -417,7 +420,10 @@ export const connected = (
 /** `connectFor` and then `connected`, over one store handle: what the reads save and what the adapter looks up. */
 export const connectedFor = async (
   command: Command,
-  messenger: Pick<Messenger, "connect" | "app" | "provider" | "name" | "deletedWithoutChat" | "pace">,
+  messenger: Pick<
+    Messenger,
+    "connect" | "app" | "provider" | "name" | "deletedWithoutChat" | "pace" | "history" | "savedChatId"
+  >,
   base: BaseContext,
   options: ConnectOptions & { events: EventSink },
 ): Promise<{ connection: MessengerAdapter; adapter: MessengerAdapter; close: () => Promise<void> }> => {

@@ -64,7 +64,8 @@ export interface MessengerTraits {
   /**
    * Where `chats`, `messages list|context` and `contacts` read from. `store` is for a messenger that
    * pushes its history instead of answering for it: those reads answer from the local store, which
-   * `serve` keeps filled, and never connect; writes still do. `server` when unset.
+   * `serve` keeps filled, and never connect; writes still do, but the chats and people they name are looked up in
+   * the store first. `server` when unset.
    */
   history?: "server" | "store"
   /**

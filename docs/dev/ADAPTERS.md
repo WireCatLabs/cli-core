@@ -79,6 +79,9 @@ and `AccountEditing`.
 - `ServerReads` — `chats`, `history`, `around` and `contact` — is optional only for a messenger with
   `history: "store"`. With the default `"server"`, the shared reads call it, and an adapter without
   it gets "this messenger cannot list chats" on every read.
+- With `history: "store"`, `resolve` and `people` see only what the store has no answer for: a chat or person named
+  by a stored name or id never reaches them, and `watch` events get a missing `chatTitle` from the stored chats.
+  Such an adapter needs no chat directory of its own to answer names.
 - Prefer a whole group to part of one. Write `implements MessageEditing` on the class, so the
   compiler holds you to all of it. `ReadState` is `markRead` alone; `markTopicRead` is
   `TopicReadState`, for a messenger with forum topics.

@@ -629,3 +629,92 @@ describe("a messenger whose history is read from the store", () => {
     expect(asked).toEqual(["3", "1"])
   })
 })
+
+describe("names where the history is read from the store", () => {
+  const naming = (store: "store" | undefined) => {
+    const asked: string[] = []
+    const sent: string[] = []
+    const connect: Messenger["connect"] = async () => ({
+      ...server(sent),
+      resolve: async (reference) => {
+        asked.push(reference)
+        if (reference === "Newcomer") return { ...zoe, id: "40", title: "Newcomer" }
+        if (reference === "500") return { ...zoe, id: "500", title: null }
+        return reference === "Zoe" ? zoe : club
+      },
+      people: async (people) => {
+        asked.push(...people)
+        return people.map(() => "41")
+      },
+      addMembers: async () => ({ notAdded: [] }),
+    })
+    return {
+      asked,
+      sent,
+      send: (...argv: string[]) =>
+        call(argv, filledEnv, connect, store, false, { savedChatId: (account) => account.account }),
+    }
+  }
+  let filledEnv: NodeJS.ProcessEnv
+
+  it("**a send finds the chat by its stored name** and never asks the messenger to look it up", async () => {
+    filledEnv = await filled()
+    const { asked, sent, send } = naming("store")
+
+    expect((await send("messages", "send", "Book", "see you")).code).toBe(0)
+    expect((await send("messages", "send", "me", "note")).code).toBe(0)
+
+    expect(sent).toEqual(["7:see you", "500:note"])
+    expect(asked).toEqual(["500"])
+  })
+
+  it("**asks the messenger for a name the store does not hold**", async () => {
+    filledEnv = await filled()
+    const { asked, sent, send } = naming("store")
+
+    expect((await send("messages", "send", "Newcomer", "hi")).code).toBe(0)
+
+    expect(asked).toEqual(["Newcomer"])
+    expect(sent).toEqual(["40:hi"])
+  })
+
+  it("**refuses a name two stored chats share**, without asking the messenger", async () => {
+    filledEnv = sandbox()
+    const two: Messenger["connect"] = async () => ({
+      ...server(),
+      chats: async () => ({ items: [club, zoe, { ...club, id: "8", title: "Book fair" }], hasMore: false }),
+    })
+    expect((await call(["chats", "list", "--json"], filledEnv, two)).code).toBe(0)
+    const { asked, sent, send } = naming("store")
+
+    const refused = await send("messages", "send", "Book", "see you", "--json")
+    const shown = await send("chats", "show", "Book", "--json")
+
+    expect(refused.code).toBe(2)
+    const error = (run: { stderr: string }) => JSON.parse(run.stderr.split("\n").at(-1) ?? "").error
+    expect(error(refused).code).toBe("validation_error")
+    expect(error(refused).message).toBe(error(shown).message)
+    expect(asked).toEqual([])
+    expect(sent).toEqual([])
+  })
+
+  it("**finds a person by their stored name** and asks the messenger only for the rest", async () => {
+    filledEnv = await filled()
+    const { asked, send } = naming("store")
+
+    expect((await send("members", "add", "Book", "Olga", "Nobody")).code).toBe(0)
+
+    expect(asked).toEqual(["Nobody"])
+  })
+
+  it("leaves a messenger that answers for its history asking it, as before", async () => {
+    filledEnv = await filled()
+    const { asked, sent, send } = naming(undefined)
+
+    expect((await send("messages", "send", "Book", "see you")).code).toBe(0)
+    expect((await send("members", "add", "Book", "Zoe")).code).toBe(0)
+
+    expect(sent).toEqual(["7:see you"])
+    expect(asked).toEqual(["Book", "Zoe", "Book"])
+  })
+})
