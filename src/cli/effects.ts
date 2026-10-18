@@ -1,7 +1,7 @@
 import { annotate, annotateOption, stepTargets } from "@wirecat/cli-base/commands"
 import type { Effects, StepInput } from "@wirecat/cli-base/standards"
 import { type Command, Option } from "commander"
-import { readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
+import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { environmentOf } from "./context.js"
 
 /** Reads the messenger; a page it keeps on the way is incidental. */
@@ -56,6 +56,14 @@ export const changesStore = <T extends Command>(command: T): T => {
 }
 
 export const isStoreChange = (command: Command): boolean => STORE_CHANGE.has(command)
+
+export const STORE_CHANGE_REFUSAL = "change the message store"
+
+/** Under `<PREFIX>_READ_ONLY`, refuses a change `changesStore` marks — for a caller outside `run()`, an MCP tool. */
+export const refuseStoreChange = (app: AppIdentity, env: NodeJS.ProcessEnv): void => {
+  const lock = readOnlyLockOf(app, env)
+  if (lock) throw readOnlyRefusal(lock, STORE_CHANGE_REFUSAL)
+}
 
 const OTHER_SERVICE = new WeakSet<Command>()
 

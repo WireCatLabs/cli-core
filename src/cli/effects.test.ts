@@ -102,6 +102,7 @@ describe("command effects", () => {
     const marked = commands.filter(({ command }) => isStoreChange(command)).map(({ path }) => path)
     expect(marked.sort()).toEqual(
       [
+        "contacts alias rm",
         "contacts notes remove",
         "searches clear",
         "searches delete",
@@ -112,6 +113,7 @@ describe("command effects", () => {
         "store repair",
         "store reset",
         "store restore",
+        "tags remove",
       ].sort(),
     )
   })
@@ -253,6 +255,8 @@ describe("the read-only lock on the message store", () => {
     ["searches delete", ["searches", "delete", "daily"]],
     ["searches clear", ["searches", "clear"]],
     ["contacts notes remove", ["contacts", "notes", "remove", "Alice", "1"]],
+    ["contacts alias rm", ["contacts", "alias", "rm", "Alice"]],
+    ["tags remove", ["tags", "remove", "work", "--chat", "7"]],
   ])("refuses %s, which deletes what the owner saved", async (name, argv) => {
     const store = kept(`${name}.db`)
 

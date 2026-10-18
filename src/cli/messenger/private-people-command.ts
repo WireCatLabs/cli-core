@@ -30,7 +30,7 @@ export const privatePeopleCommands = (messenger: Messenger): Command[] => {
         itemOf(snakeKeys(await context.withServices((services) => services.privatePeople.alias(person, value)))),
       )
     })
-  annotate(alias.command("rm"), { effects: LOCAL_WRITE })
+  changesStore(annotate(alias.command("rm"), { effects: LOCAL_WRITE }))
     .argument("<person>")
     .action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)

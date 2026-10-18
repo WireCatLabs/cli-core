@@ -11,7 +11,7 @@ import {
 } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { AISettings } from "../analysis/settings.js"
-import { judgedEffects, LOCAL_WRITE, REMOTE_WRITE } from "../cli/effects.js"
+import { judgedEffects, LOCAL_WRITE, REMOTE_WRITE, refuseStoreChange } from "../cli/effects.js"
 import { judgedAnswer, sealed } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { MAX_BUFFERED_INPUT } from "../cli/input-policy.js"
@@ -99,6 +99,8 @@ interface Tool<S extends Input> {
   _meta?: Record<string, unknown>
   /** A write, and what the profile's `allow` must name for it to be offered. */
   permission?: Permission
+  /** Deletes what the owner saved in the store, as its command's `changesStore`: `<PREFIX>_READ_ONLY` refuses it. */
+  changesStore?: true
   /** The CLI command it answers as, where its name does not spell it: `chats send-as`. Its level is read from it. */
   command?: string
   /** A permission key other than its command's. */
@@ -356,6 +358,7 @@ const callRunner = ({
             max_bytes: MAX_BUFFERED_INPUT,
             retryable: false,
           })
+        if (definition.changesStore) refuseStoreChange(messenger.app, defaults.env)
         assertStatsPermissionsCurrent(path, defaults.settings.permissions ?? {})
         refuseLacking(messenger?.lacks, path)
         for (const permission of readKeysForCommand(path)) {

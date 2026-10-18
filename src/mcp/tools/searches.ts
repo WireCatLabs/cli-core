@@ -112,6 +112,7 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
     }),
 
     searches_delete: tool({
+      changesStore: true,
       title: "Delete a saved search",
       description: "Deletes a saved search, or one run from the history. Writes only to the local store.",
       input: v.object({ name: reference }),
@@ -123,6 +124,7 @@ export const searchesTools = (messenger: Messenger): Record<string, AnyTool> => 
     }),
 
     searches_clear: tool({
+      changesStore: true,
       title: "Clear search history",
       description:
         "Empties the search history; saved searches stay. Writes only to the local store. Returns { item: { cleared } }.",

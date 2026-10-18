@@ -27,7 +27,7 @@ import {
   reachesOtherService,
   refuseUnderReadOnly,
 } from "../effects.js"
-import { embeddingChoice, type ModelOptions } from "../embedding-choice.js"
+import { embeddingChoice, type ModelOptions, refuseRemoteQuery } from "../embedding-choice.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { listQuery, pagedList, pageOf, typedQuery, withQuery } from "../list-query.js"
 import { positiveCount } from "../paging.js"
@@ -767,8 +767,7 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
       const { chat, sinceTime: since } = options
       const context = messengerContext(this, messenger)
       const model = choiceOf(options, messenger, context)
-      if (typeof model !== "string" && !isLocal(model.remote.baseUrl))
-        refuseUnderReadOnly(this, `send the query to ${new URL(model.remote.baseUrl).host}`)
+      refuseRemoteQuery(model, messenger.app, context.env)
       if (options.catchUp) {
         if (options.filter !== undefined || options.source !== undefined)
           throw new CliError(

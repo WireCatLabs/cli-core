@@ -356,6 +356,8 @@ interface Harness {
   own?: Partial<Messenger>
   /** Shared root commands this CLI does not mount, as wa mounts no `metadata`. */
   unmounted?: string[]
+  /** More of the server's environment, as `CHAT_READ_ONLY`. */
+  extraEnv?: Record<string, string>
 }
 
 const connect = async (telegram: Scripted = scripted(), options: Partial<ServerOptions> & Harness = {}) => {
@@ -367,6 +369,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     MESSAGING_STORE: join(root, "m.db"),
     WIRECAT_STATE_DIR: join(root, "cache"),
     CHAT_CACHE_DIR: join(root, "chat-cache"),
+    ...options.extraEnv,
   }
   const {
     connect: connecting,
@@ -390,6 +393,7 @@ const connect = async (telegram: Scripted = scripted(), options: Partial<ServerO
     permission = [],
     own = {},
     unmounted = [],
+    extraEnv: _extraEnv,
     ...serverOptions
   } = options
   if (config) {
@@ -1528,6 +1532,55 @@ describe("the MCP server", () => {
           expect((await call(`conversations ${tool}`, args)).body?.error?.code).not.toBe("confirmation_required")
         }
       }
+    }
+  })
+
+  it("under the read-only lock refuses the tools that delete what the owner saved, and deletes nothing", async () => {
+    const { call } = await connect(scripted(), { extraEnv: { CHAT_READ_ONLY: "1" } })
+    await call("chats list")
+    const created = await call("searches create", { name: "daily", text: "cat" })
+    expect(created.isError, JSON.stringify(created.body)).toBe(false)
+    const refused = "this process is read-only (CHAT_READ_ONLY) — it cannot change the message store"
+
+    for (const [command, args] of [
+      ["searches delete", { name: "daily" }],
+      ["searches clear", {}],
+      ["contacts notes remove", { person: "Alice", id: "1" }],
+      ["contacts alias rm", { person: "Alice" }],
+      ["tags remove", { chat: "7", tags: ["work"] }],
+    ] as const) {
+      const { isError, body } = await call(command, args)
+      expect([command, isError, body.error?.code, body.error?.message]).toEqual([
+        command,
+        true,
+        "permission_error",
+        refused,
+      ])
+    }
+    expect((await call("searches list")).body.items).toMatchObject([{ name: "daily" }])
+  })
+
+  it("under the read-only lock refuses search_conversations with a remote embedder, before the query leaves", async () => {
+    const sent: string[] = []
+    vi.stubGlobal("fetch", async (url: string) => {
+      sent.push(url)
+      return new Response("{}")
+    })
+    try {
+      const { call } = await connect(scripted(), {
+        config: { profiles: { default: { embedding_provider: "openai" } } },
+        extraEnv: { CHAT_READ_ONLY: "1", CHAT_OPENAI_API_KEY: "sk-test" },
+      })
+      await call("chats list")
+      const { isError, body } = await call("search conversations", { query: "cat" })
+      expect([isError, body.error?.code, body.error?.message]).toEqual([
+        true,
+        "permission_error",
+        "this process is read-only (CHAT_READ_ONLY) — it cannot send the query to api.openai.com",
+      ])
+      expect(sent).toEqual([])
+    } finally {
+      vi.unstubAllGlobals()
     }
   })
 
