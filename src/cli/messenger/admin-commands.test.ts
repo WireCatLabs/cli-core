@@ -375,6 +375,10 @@ describe("chats create, join and leave", () => {
     const root = mkdtempSync(join(tmpdir(), "photo-"))
     const png = join(root, "group.png")
     writeFileSync(png, new Uint8Array([0x89, 0x50]))
+    const renamed = join(root, "renamed.jpg")
+    writeFileSync(renamed, new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
+    const jpeg = join(root, "group.jpeg")
+    writeFileSync(jpeg, new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))
     let connected = 0
     const own: Partial<Messenger> = {
       groupPhoto: true,
@@ -387,13 +391,18 @@ describe("chats create, join and leave", () => {
 
     const group = await call(["chats", "update", "Book club", "--photo", png], base, env, own)
     const profile = await call(["account", "update", "--photo", png], base, env, own)
+    const disguised = await call(["chats", "update", "Book club", "--photo", renamed], base, env, own)
     const help = await call(["chats", "update", "--help"], base, env, own)
     const plain = await call(["chats", "update", "--help"], base, env, { groupPhoto: true })
 
-    expect([group.code, profile.code]).toEqual([2, 2])
+    expect([group.code, profile.code, disguised.code]).toEqual([2, 2, 2])
+    expect(disguised.stderr.join("\n")).toContain("is not a .jpg or .jpeg image inside")
     expect(group.stderr.join("\n")).toContain("must be a .jpg or .jpeg file")
     expect(profile.stderr.join("\n")).toContain("must be a .jpg or .jpeg file")
     expect(connected).toBe(0)
+    const genuine = await call(["chats", "update", "Book club", "--photo", jpeg], base, env, own)
+    expect(genuine.stderr.join("\n")).not.toContain("image inside")
+    expect(connected).toBe(1)
     expect(help.stdout.join("")).toContain("a new photo for it — a .jpg or .jpeg file")
     expect(plain.stdout.join("")).toContain("a new photo for it — an image file")
   })

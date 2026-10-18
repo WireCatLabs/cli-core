@@ -24,7 +24,7 @@ shape of this file.
   hourly limit. tg and max offer neither the flag nor the field.
 - **A messenger names the photo types it takes.** The new `Messenger` trait `profilePhotoTypes` (extensions, such as
   `[".jpg", ".jpeg"]` for WhatsApp) narrows `chats update --photo` and `account update --photo`: their help says
-  "a .jpg or .jpeg file", and another file is refused before connecting. Unset, both stay as they were: "an image
+  "a .jpg or .jpeg file", and another file — by its extension or its first bytes — is refused before connecting. Unset, both stay as they were: "an image
   file", `.jpg`, `.png` or `.webp`. `messages send --photo` does not read it.
 
 ### Changed — may break callers

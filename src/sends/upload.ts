@@ -39,6 +39,25 @@ export const uploadBytes = async (source: UploadSource): Promise<Uint8Array> => 
 const PHOTO = new Set([".jpg", ".jpeg", ".png", ".webp"])
 const VOICE = new Set([".ogg", ".oga", ".opus"])
 
+const JPEG = (head: Uint8Array) => head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff
+const SIGNATURES: Record<string, (head: Uint8Array) => boolean> = {
+  ".jpg": JPEG,
+  ".jpeg": JPEG,
+  ".png": (head) => Buffer.from(head.subarray(0, 4)).toString("latin1") === "\x89PNG",
+  ".webp": (head) => Buffer.from(head.subarray(8, 12)).toString("latin1") === "WEBP",
+}
+
+const fileHead = async (path: string): Promise<Uint8Array> => {
+  const file = await open(path, "r")
+  try {
+    const head = new Uint8Array(12)
+    const { bytesRead } = await file.read(head, 0, head.length, 0)
+    return head.subarray(0, bytesRead)
+  } finally {
+    await file.close()
+  }
+}
+
 /** `[".jpg", ".jpeg"]` as help says it: ".jpg or .jpeg". */
 export const typesText = (types: readonly string[]): string =>
   types.length < 2 ? (types[0] ?? "") : `${types.slice(0, -1).join(", ")} or ${types.at(-1)}`
@@ -197,15 +216,23 @@ export const readUpload = async (
         "store are not sent — the owner adds --allow-any-file to the command if this file is meant to go",
     )
   }
+  let size: number
+  let head: Uint8Array | undefined
   try {
     const info = await stat(path)
     if (!info.isFile()) throw Object.assign(new Error("not a file"), { code: "EISDIR" })
-    return { kind, name: basename(path), source: { kind: "file", path: resolve(path), size: info.size } }
+    size = info.size
+    if (photoTypes !== undefined && SIGNATURES[extension] !== undefined) head = await fileHead(path)
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     const reason = code === "ENOENT" ? "no such file" : code === "EISDIR" ? "it is a folder" : "it cannot be read"
     throw new CliError("validation_error", `cannot send ${path}: ${reason}`)
   }
+  // A renamed file passes the extension check, and the messenger would refuse it only after connecting.
+  if (head !== undefined && SIGNATURES[extension]?.(head) !== true) {
+    throw new CliError("validation_error", `${path} is not a ${typesText(photoTypes ?? [])} image inside`)
+  }
+  return { kind, name: basename(path), source: { kind: "file", path: resolve(path), size } }
 }
 
 const checkFilename = (filename: string, file: string | undefined): void => {
