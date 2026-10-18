@@ -44,6 +44,8 @@ export interface MessengerTraits {
   quietPins?: boolean
   /** How many seconds a pin may last — `messages pin --expire-time`; pins never expire when unset. */
   pinDurations?: readonly number[]
+  /** One of `pinDurations`: how many seconds a pin lasts without `--expire-time`; the adapter decides when unset. */
+  pinDefaultDuration?: number
   /** Whether `messages forward --topic` forwards into a forum topic; no when unset. */
   forwardTopic?: boolean
   /** Whether folders take kinds of chat, skip muted, read or archived ones, exclude and pin chats; no when unset. */

@@ -241,7 +241,7 @@ export interface MessageEditing {
 export interface MessagePins {
   /**
    * `notify` tells the chat's members; without it the pin is quiet. `duration` is how many seconds the pin lasts,
-   * one of `MessengerTraits.pinDurations`; the messenger's own default when absent.
+   * one of `MessengerTraits.pinDurations`, or its `pinDefaultDuration` when the caller gave none; absent when neither.
    */
   pin(chatId: Id, messageId: Id, options: { notify: boolean; duration?: number }): Promise<void>
   unpin(chatId: Id, messageId: Id): Promise<void>

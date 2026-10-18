@@ -1,6 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { pinDurationOf, pinDurationsText } from "../../domain/pin-duration.js"
+import { pinDurationOf, pinLengthHelp } from "../../domain/pin-duration.js"
 import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -22,12 +22,8 @@ export const pinCommand = (messenger: Messenger): Command => {
     )
     .argument("<chat>", messenger.chatArgument)
     .argument("<message>", "the message id")
-    .option(
-      "--notify",
-      quiet ? "tell the chat's members about the pin" : "tell the chat's members; every pin here does",
-    )
-  if (durations)
-    command.option("--expire-time <time>", `the pin ends by itself then: ${pinDurationsText(durations)} from now`)
+  if (quiet) command.option("--notify", "tell the chat's members about the pin")
+  if (durations) command.option("--expire-time <time>", pinLengthHelp(durations, messenger.pinDefaultDuration))
   return command.action(async function (this: Command, chat: string, message: string) {
     const context = messengerContext(this, messenger)
     const { notify, expireTime } = this.opts<{ notify?: boolean; expireTime?: string }>()

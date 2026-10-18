@@ -15,6 +15,22 @@ shape of this file.
   the stored attachment of that account. A later download and `messages forward` then use the new path, not the
   dead one. A ref the store cannot place on an attachment is dropped with a warning that never shows the ref. Other
   readers of `bytes()` (`messages transcribe --local`, photo and picture readers) do not save it yet.
+- **A messenger says how long a pin lasts without `--expire-time`.** The new `Messenger` trait `pinDefaultDuration`
+  (seconds, one of `pinDurations`) is stated in `messages pin --expire-time`'s help and the MCP `expire_time`
+  description ("24h, 7d or 30d; 7d by default"), and is handed to the adapter's `pin` as `duration` when the caller
+  gave none, so the adapter no longer has to pick one itself.
+
+### Changed — may break callers
+
+- **`messages pin` takes no `--notify` where every pin notifies** (`quietPins: false`, WhatsApp). The flag changed
+  nothing there, so it is no longer mounted, and passing it exits 2 (`validation_error`) as an unknown option; MCP
+  `messages_pin` already took no `notify`. Telegram and MAX keep it.
+
+### Fixed
+
+- **MCP `messages_pin` refuses a bad `expire_time` before it connects.** It was checked only after the session's
+  connection opened; it is now refused as `validation_error` first, as the command refuses `--expire-time`. A tool
+  definition can now declare `check`, run on its arguments before the store or the connection opens.
 
 ## 0.338.0 — 18.10.2026
 

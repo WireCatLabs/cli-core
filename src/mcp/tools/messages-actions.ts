@@ -3,7 +3,7 @@ import { itemOf, snakeKeys } from "../../cli/envelope.js"
 import type { Messenger } from "../../cli/messenger/context.js"
 import { selfOf } from "../../cli/messenger/message-items.js"
 import { writtenAnswer } from "../../cli/messenger/message-writes.js"
-import { pinDurationOf, pinDurationsText } from "../../domain/pin-duration.js"
+import { pinDurationOf, pinLengthHelp } from "../../domain/pin-duration.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import type { SendGuard } from "../../sends/guard.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
@@ -41,11 +41,7 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
     message,
     notify: v.optional(v.pipe(v.boolean(), v.description("tell the chat's members"))),
     expire_time: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(`the pin ends by itself then: ${pinDurationsText(durations ?? [])} from now`),
-      ),
+      v.pipe(v.string(), v.minLength(1), v.description(pinLengthHelp(durations ?? [], messenger.pinDefaultDuration))),
     ),
   }
   // Refused rather than dropped: a quiet pin asked for here would otherwise go out loud.
@@ -119,6 +115,7 @@ export const messageActionTools = (messenger: Messenger): Record<string, AnyTool
       input: v.object(pinInput),
       annotations: WRITE,
       permission: "pin",
+      check: (args) => pinDurationOf(args.expire_time, durations, "expire_time"),
       online: async (adapter, args, { guard }) => {
         const duration = pinDurationOf(args.expire_time, durations, "expire_time")
         return itemOf(

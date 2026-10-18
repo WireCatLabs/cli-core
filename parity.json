@@ -3163,13 +3163,13 @@
       "in": "all",
       "options": {
         "--expire-time": {
-          "in": [],
-          "planned": {
-            "wa": "wa's next cli-core bump"
-          },
+          "in": ["wa"],
           "reason": "Telegram's and MAX's pins stay until someone unpins them"
         },
-        "--notify": "all"
+        "--notify": {
+          "in": ["max", "tg"],
+          "reason": "WhatsApp has no quiet pin: every pin tells the chat's members"
+        }
       }
     },
     "messages press": {

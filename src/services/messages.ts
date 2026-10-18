@@ -241,7 +241,7 @@ export interface MessagesService {
   ): Promise<Operated<{ sendId: string; message: Message }>>
   /**
    * Counts toward the hourly limit only when it notifies, which every pin does where the messenger has no quiet
-   * one. `duration`, in seconds, is one of the messenger's `pinDurations`.
+   * one. `duration`, in seconds, is one of the messenger's `pinDurations`; its `pinDefaultDuration` when absent.
    */
   pin(target: MessageTarget & { notify: boolean; duration?: number }): Promise<Operated<Pinned>>
   unpin(target: MessageTarget): Promise<Operated<Pinned>>
@@ -294,14 +294,15 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     { chat, message }: MessageTarget,
     pinned: boolean,
     asked: boolean,
-    duration?: number,
+    requested?: number,
   ): Promise<Operated<Pinned>> => {
     const allowed = deps.messenger.pinDurations
-    if (duration !== undefined && !allowed?.includes(duration))
+    if (requested !== undefined && !allowed?.includes(requested))
       throw new CliError(
         "validation_error",
         allowed?.length ? `a pin lasts ${pinDurationsText(allowed)} here` : "pins here never expire",
       )
+    const duration = pinned ? (requested ?? deps.messenger.pinDefaultDuration) : undefined
     const notify = pinned && (asked || deps.messenger.quietPins === false)
     const connection = await deps.connection()
     const act = pinned

@@ -109,6 +109,8 @@ interface Tool<S extends Input> {
   agentOnly?: true
   /** A host-owned entry with its own connection and confirmation lifecycle. */
   custom?: (args: v.InferOutput<S>, defaults: Defaults, ctx: ServerContext) => Promise<object>
+  /** Refuses arguments the schema cannot judge before the store or the connection opens, as its command does. */
+  check?: (args: v.InferOutput<S>) => void
   /** Neither the store nor the connection: answers from what this process already knows. */
   local?: (args: v.InferOutput<S>, defaults: Defaults) => Promise<object>
   /** Over the session's connection. */
@@ -132,7 +134,8 @@ interface Tool<S extends Input> {
   served?: (services: Services, args: v.InferOutput<S>, defaults: Defaults, connect: Connect) => Promise<object>
 }
 
-export type AnyTool = Omit<Tool<Input>, "online" | "stored" | "served" | "local"> & {
+export type AnyTool = Omit<Tool<Input>, "online" | "stored" | "served" | "local" | "check"> & {
+  check?: (args: Record<string, unknown>) => void
   local?: (args: Record<string, unknown>, defaults: Defaults) => Promise<object>
   online?: (adapter: MessengerAdapter, args: Record<string, unknown>, defaults: Defaults) => Promise<object>
   stored?: (
@@ -364,6 +367,7 @@ const callRunner = ({
             max_bytes: MAX_BUFFERED_INPUT,
             retryable: false,
           })
+        definition.check?.(args)
         if (definition.changesStore) refuseStoreChange(messenger.app, defaults.env)
         assertStatsPermissionsCurrent(path, defaults.settings.permissions ?? {})
         refuseLacking(messenger, path)
