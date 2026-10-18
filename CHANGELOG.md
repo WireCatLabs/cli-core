@@ -23,7 +23,7 @@ shape of this file.
   commander looks for it only after the query check had run. A mistyped `--limt` is still refused.
 - **`help` and `guide` need no permission key**: `keyForCommand` returned nothing for them, so a tool that maps every
   command to a key (max) crashed on `help options`. They are housekeeping now, like `commands` and `skill`.
-- **`parity.json` has a `guide` row**, in max, planned for tg and wa, so `cli-core-parity` stops failing a tool that
+- **`parity.json` has a `guide` row**, planned for max, tg and wa, so `cli-core-parity` stops failing a tool that
   mounts it with "guide: not in the manifest".
 
 ## 0.346.0 — 18.10.2026
