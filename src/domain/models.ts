@@ -51,6 +51,14 @@ export interface Chat {
   providerMetadata?: ProviderMetadata
 }
 
+/**
+ * A chat as an adapter saves it. A `title`, `unreadCount`, `lastMessageAt` or `participantsCount` left out keeps the
+ * stored value; `null` stores none. So a push that knows only some of them, such as a notice that a group left its
+ * community, leaves the rest out.
+ */
+export type ChatUpdate = Omit<Chat, KeptFields> & Partial<Pick<Chat, KeptFields>>
+type KeptFields = "title" | "unreadCount" | "lastMessageAt" | "participantsCount"
+
 /** A group's switches; `null` where the messenger does not say, or has no such switch. */
 export interface GroupSettings {
   allCanPin: boolean | null

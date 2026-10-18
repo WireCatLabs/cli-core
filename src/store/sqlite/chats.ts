@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../../domain/channel-tags.js"
-import type { Chat, Id, Member, Page, ProviderMetadata } from "../../domain/models.js"
+import type { Chat, ChatUpdate, Id, Member, Page, ProviderMetadata } from "../../domain/models.js"
 import type { AccountKey, StoredChatFilter } from "../types.js"
 import { and, eq, inArray, or, sql } from "./drizzle/core.js"
 import { identityPk } from "./identities.js"
@@ -60,7 +60,7 @@ export const chatPkFor = (context: StoreContext, accountKey: number, chatId: Id)
       .get()?.pk,
   )
 
-export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat): void => {
+export const upsertChat = (context: StoreContext, accountKey: number, chat: ChatUpdate): void => {
   const { orm, now } = context
   const parent = chat.parentChatId == null ? null : chatPkFor(context, accountKey, chat.parentChatId)
   const stored = orm
@@ -76,10 +76,10 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       kind: chat.kind,
       parentChatId: parent,
       scope: chat.scope ?? null,
-      title: chat.title,
-      unreadCount: chat.unreadCount,
+      title: chat.title ?? null,
+      unreadCount: chat.unreadCount ?? null,
       lastMessageAt: toMs(chat.lastMessageAt),
-      participantsCount: chat.participantsCount,
+      participantsCount: chat.participantsCount ?? null,
       metadata: mergedMetadata(stored?.metadata ?? null, chat.providerMetadata),
       membershipState: chat.membershipState ?? null,
       createdAt: now(),
@@ -91,10 +91,10 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
         kind: sql`excluded.kind`,
         ...(chat.parentChatId === undefined ? {} : { parentChatId: sql`excluded.parent_chat_id` }),
         scope: sql`coalesce(excluded.scope, ${chats.scope})`,
-        title: sql`excluded.title`,
-        unreadCount: sql`excluded.unread_count`,
-        lastMessageAt: sql`excluded.last_message_at`,
-        participantsCount: sql`excluded.participants_count`,
+        ...(chat.title === undefined ? {} : { title: sql`excluded.title` }),
+        ...(chat.unreadCount === undefined ? {} : { unreadCount: sql`excluded.unread_count` }),
+        ...(chat.lastMessageAt === undefined ? {} : { lastMessageAt: sql`excluded.last_message_at` }),
+        ...(chat.participantsCount === undefined ? {} : { participantsCount: sql`excluded.participants_count` }),
         metadata: sql`excluded.metadata`,
         // A chat the list names again has been rejoined; any other state it had is kept.
         membershipState: sql`CASE WHEN excluded.membership_state IS NOT NULL THEN excluded.membership_state

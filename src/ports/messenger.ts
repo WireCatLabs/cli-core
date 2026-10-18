@@ -14,6 +14,7 @@ import type {
   ChatCard,
   ChatEvent,
   ChatEvents,
+  ChatUpdate,
   Discussion,
   Folder,
   FolderChange,
@@ -380,7 +381,7 @@ export interface HistoryStar {
  */
 export interface HistoryBatch {
   rekeys?: { from: Id; to: Id }[]
-  chats?: Chat[]
+  chats?: ChatUpdate[]
   people?: Member[]
   messages?: Message[]
   votes?: HistoryVote[]

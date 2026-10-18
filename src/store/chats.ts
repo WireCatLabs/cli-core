@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ChannelTagMatch } from "../domain/channel-tags.js"
-import type { Chat, ChatKind, Id, Page } from "../domain/models.js"
+import type { Chat, ChatKind, ChatUpdate, Id, Page } from "../domain/models.js"
 import { keysOver } from "./keys.js"
 import { type ChatRekey, rekeyChat } from "./sqlite/chat-rekey.js"
 import type { ChatMetadata } from "./sqlite/chats.js"
@@ -14,7 +14,7 @@ import { write } from "./sqlite/transaction.js"
 import type { AccountKey, ChatActivity, ChatStats, StoredChatFilter } from "./types.js"
 
 export interface ChatsStore {
-  saveChats(key: AccountKey, chats: Chat[]): Promise<void>
+  saveChats(key: AccountKey, chats: ChatUpdate[]): Promise<void>
   /** Newest first. `query` matches three letters or more of a title; `unread` keeps chats with unread messages. */
   chats(key: AccountKey, window: { limit?: number; offset?: number } & StoredChatFilter): Promise<Page<Chat>>
   countChats(key: AccountKey, filter?: StoredChatFilter): Promise<number>
