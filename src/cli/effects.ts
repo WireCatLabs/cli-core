@@ -90,11 +90,12 @@ const OTHER_SERVICE = new WeakSet<Command>()
 /**
  * Marks a command whose remote side is a service other than the messenger — an embedding or analysis provider, a
  * model host. Its effects still say what leaves the machine, but serve's relay has no connection to lend it, so it
- * always runs here.
+ * always runs here. Its description says `reaches: "other_service"`, so the commands page does not call it a change
+ * in the messenger.
  */
 export const reachesOtherService = <T extends Command>(command: T): T => {
   OTHER_SERVICE.add(command)
-  return command
+  return annotate(command, { reaches: "other_service" })
 }
 
 export const isOtherServiceCall = (command: Command): boolean => OTHER_SERVICE.has(command)

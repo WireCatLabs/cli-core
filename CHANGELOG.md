@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **The commands page no longer calls the embedding, analysis and model-download commands a change in the
+  messenger.** `conversations embed`, `conversations build`, `search conversations` and the model downloads say
+  `reaches: "other_service"` in `commands --json`, so a CLI's generated `docs/commands.md` labels them "Sends text to
+  an outside service" or "Reads from an outside service" instead of "Changes something in <messenger>" — they send
+  chat text to an embedding or analysis provider, or fetch a model, and never write to the messenger. The label needs
+  cli-base 0.44.3 (the dev pin now); on 0.44.0–0.44.2 the field is ignored and nothing breaks. Run `pnpm generate`
+  after adopting to regenerate `docs/commands.md`.
+
 ## 0.340.0 — 18.10.2026
 
 ### Added
