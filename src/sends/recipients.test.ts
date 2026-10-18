@@ -25,6 +25,8 @@ describe("a re-keyed chat in the recipient list", () => {
     expect(await list.rekey(PHONE, LID)).toBe(true)
     expect(list.read()).toEqual([entry(LID, { partnerId: LID }), entry("9@lid", { title: "Bo" })])
     expect(await list.rekey(PHONE, LID)).toBe(false)
+    expect(await list.addAsync(entry("5@lid"))).toBe(true)
+    expect(await list.addAsync(entry("5@lid"))).toBe(false)
   })
 
   it("keeps one entry when the list already held both ids", async () => {
@@ -89,6 +91,7 @@ describe("two writers of one recipient list", () => {
     expect(() => list.remove("9@lid")).toThrow(expect.objectContaining({ code: "timeout" }))
     await expect(list.rekey(PHONE, LID)).rejects.toThrow(/stayed locked/)
     expect(() => list.add(entry("5@lid"))).toThrow(/stayed locked/)
+    await expect(list.addAsync(entry("5@lid"))).rejects.toThrow(/stayed locked/)
     expect(() => list.off()).toThrow(/stayed locked/)
     expect(readFileSync(list.path, "utf8")).toBe(before)
   })

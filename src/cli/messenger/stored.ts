@@ -20,7 +20,7 @@ export interface Saving {
   /** The app command and profile running, recorded with the first save so another app can name this account. */
   profile?: { app: string; name: string }
   /** After a re-key is saved: what outside the store spells the chat id follows it. */
-  rekeyed?: (from: Id, to: Id) => Promise<void>
+  rekeyed?: (from: Id, to: Id) => void | Promise<void>
   /**
    * Set for a messenger whose history is pushed into the store (`history: "store"`): chat and person names, and the
    * titles `watch` leaves out, are answered from the store first. Its server has no directory to ask.

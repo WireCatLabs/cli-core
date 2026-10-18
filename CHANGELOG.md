@@ -30,7 +30,8 @@ shape of this file.
   messenger's keep-alives stopped for up to 5 s. They now wait on timers. The wait, the `timeout` error (exit 9)
   and the refusal are unchanged. `SendGuard` gains an optional `reserve`, which `guardedWrite` calls after
   `check(request, { reserve: false })`; a guard built without it is reserved by `check` as before, which still
-  blocks while it waits. A write whose command ran out of time while it waited is not sent, and is journaled as
+  blocks while it waits. `recipients add`, which connects and so runs inside `serve`, uses the new
+  `RecipientList.addAsync`. A write whose command ran out of time while it waited is not sent, and is journaled as
   failed.
 
 ## 0.339.0 — 18.10.2026

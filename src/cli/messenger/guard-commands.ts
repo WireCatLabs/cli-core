@@ -38,7 +38,7 @@ export const recipientsCommand = (messenger: Messenger): Command => {
       const context = messengerContext(this, messenger)
       const found = await context.withMessenger((connection) => connection.resolve(chat))
       const partnerId = messenger.partnerOf?.(found)
-      const added = listFor(context.settings.profile, context.env).add({
+      const added = await listFor(context.settings.profile, context.env).addAsync({
         id: found.id,
         title: found.title,
         ...(partnerId === undefined ? {} : { partnerId }),

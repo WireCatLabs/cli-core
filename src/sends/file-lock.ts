@@ -10,8 +10,9 @@ const pause = new Int32Array(new SharedArrayBuffer(4))
 
 /**
  * Runs `body` with `<path>.lock` held, across processes. A lock file opened with `wx`, because `flock` is not
- * there on Windows. The wait blocks the thread: only for a caller that cannot be async and never runs inside
- * `serve` — a one-shot `recipients` command, a consumer's own synchronous `SendGuard.check`.
+ * there on Windows. The wait blocks the thread: only for a caller that cannot be async (a consumer's own synchronous
+ * `SendGuard.check`, the stable `RecipientList` methods), and for `recipients remove` and `clear`, which never connect
+ * and so never run inside `serve`.
  */
 export const withFileLock = <T>(path: string, what: string, body: () => T, waitMs = LOCK_WAIT_MS): T => {
   const lock = lockFor(path)
