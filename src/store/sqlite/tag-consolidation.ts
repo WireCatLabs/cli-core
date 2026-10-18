@@ -137,6 +137,14 @@ const previewRows = (
   const aliases = rows.get("aliases") ?? []
   const claims = rows.get("auto_tag_claims") ?? []
   const links = rows.get("links") ?? []
+  const byTargetType = new Map<string, { type: string; source: number; survivor: number }>()
+  for (const row of assignments) {
+    const type = String(row.taggable_type)
+    const totals = byTargetType.get(type) ?? { type, source: 0, survivor: 0 }
+    if (Number(row.tag_id) === source) totals.source++
+    else totals.survivor++
+    byTargetType.set(type, totals)
+  }
   const counts = (values: Row[], field: string) => ({
     source: values.filter((row) => Number(row[field]) === source).length,
     survivor: values.filter((row) => Number(row[field]) === survivor).length,
@@ -157,13 +165,7 @@ const previewRows = (
     assignments: {
       ...counts(assignments, "tag_id"),
       overlappingTargets: overlaps(assignments, (row) => JSON.stringify([row.taggable_type, row.taggable_id])),
-      byTargetType: [...new Set(assignments.map((row) => String(row.taggable_type)))].sort().map((type) => ({
-        type,
-        ...counts(
-          assignments.filter((row) => row.taggable_type === type),
-          "tag_id",
-        ),
-      })),
+      byTargetType: [...byTargetType.values()].sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0)),
       samples: assignments.slice(0, limit).map((row) => ({
         id: String(row.id),
         tagId: String(row.tag_id),

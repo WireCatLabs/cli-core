@@ -74,6 +74,7 @@ it("previews complete selected dependencies, overlaps and bounded samples withou
     coverage: { completeWithinInspectedTables: true, rows: 6, samplesComplete: false, applySupported: false },
   })
   expect(preview.assignments.samples).toHaveLength(1)
+  expect(preview.assignments.samples[0]).toMatchObject({ source: "manual", authorType: "person", authorId: "11" })
   expect(JSON.stringify(preview)).not.toContain("private evidence")
   expect(await store.knowledge.previewTagConsolidation({ ...input, sampleLimit: 2 })).toMatchObject({
     previewFingerprint: preview.previewFingerprint,
