@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.339.0 — 18.10.2026
+
 ### Added
 
 - **A download keeps the new path of a file the messenger fetched again.** An adapter that gets a fresh reference
