@@ -57,7 +57,9 @@ conformance or imply that planned command paths are already implemented.
 
 The optional [bounded context reader](CONTEXT-EVIDENCE.md) reads explicitly selected local
 messages, mail and imported documents without index/model work. It is a shared SDK foundation;
-meeting preparation has not yet opted into communications context.
+meeting preparation includes communications only through explicit host-captured selections.
+The project-candidate SDK separately matches bounded host-supplied evidence against existing project
+names, keys and aliases; it neither reads other meetings nor confirms membership.
 
 | Export | Directory | What it holds |
 |---|---|---|

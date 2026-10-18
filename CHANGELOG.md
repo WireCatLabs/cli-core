@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- `createMeetingProjectCandidateReader` suggests existing projects from explicit bounded meeting title/cue evidence and one bounded global project vocabulary read. Canonical names, keys and aliases match literal Unicode word boundaries; title hints remain separate from transcript citations, ambiguity and unknown archive coverage remain visible, and no membership or finding is saved. The SDK captures one provider/account; it adds no automatic preparation behavior or provider transport.
+
 ## 0.333.0 — 18.10.2026
 
 ## 0.332.0 — 18.10.2026

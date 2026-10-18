@@ -41,6 +41,13 @@ import { type TagsService, tagsService } from "./tags.js"
 import { type TasksService, tasksService } from "./tasks.js"
 import { type TopicsService, topicsService } from "./topics.js"
 
+export type {
+  MeetingProjectCandidateInput,
+  MeetingProjectCandidateMatch,
+  MeetingProjectCandidateOptions,
+  MeetingProjectCandidateReader,
+  MeetingProjectCandidates,
+} from "../meetings/index.js"
 export type { AccountService } from "./account.js"
 export { accountService } from "./account.js"
 export type { AdminService, NewGroup } from "./admin.js"
@@ -75,6 +82,7 @@ export type { InboxService } from "./inbox.js"
 export { inboxService } from "./inbox.js"
 export { readMail } from "./mail-search.js"
 export { type MeetingHitSearchRequest, refreshMeetingIndex, searchMeetingHits } from "./meeting-hit-search.js"
+export { createMeetingProjectCandidateReader } from "./meeting-project-candidates.js"
 export { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
 export { chatIdIn, storedChatId } from "./message-resolution.js"
 export type {

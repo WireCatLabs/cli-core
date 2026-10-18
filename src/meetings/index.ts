@@ -128,6 +128,13 @@ export type {
   MeetingPreparationNotesStore,
 } from "./preparation-notes.js"
 export type {
+  MeetingProjectCandidateInput,
+  MeetingProjectCandidateMatch,
+  MeetingProjectCandidateOptions,
+  MeetingProjectCandidateReader,
+  MeetingProjectCandidates,
+} from "./project-candidates.js"
+export type {
   MeetingProjectDiscoveryOptions,
   MeetingProjectDiscoveryPage,
   MeetingProjectDiscoveryReader,
