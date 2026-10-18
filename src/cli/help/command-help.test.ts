@@ -72,7 +72,7 @@ describe("generated command help", () => {
       "Returns:       message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 26 more; every field: tg commands schema messages list
       Next usually:  tg messages link <chat> <message>
                      tg messages delete <chat> <message>
-      Example:       tg personal messages list Team
+      Example:       tg messages list Team
       "
     `)
   })
@@ -82,19 +82,13 @@ describe("generated command help", () => {
     expect(link).toContain("Example:       tg messages link Team 1234")
     expect(link).toContain("Returns:       a message's permalink")
 
-    expect((await help(["messages", "send"])).stdout).toContain(
-      'Example:       tg personal messages send Team "on my way"',
-    )
+    expect((await help(["messages", "send"])).stdout).toContain('Example:       tg messages send Team "on my way"')
   })
 
   it("puts search text and mandatory options into a generated example", async () => {
     expect((await help(["search", "messages"])).stdout).toContain(
-      'Example:       tg personal search messages "invoice" --since 1d',
+      'Example:       tg search messages "invoice" --since 1d',
     )
-  })
-
-  it("names no profile in the example of a command that reads none", async () => {
-    expect((await help(["commands", "schema"])).stdout).toContain("Example:       tg commands schema <path>")
   })
 
   it("lets a definition pin and drop what comes next", async () => {
@@ -117,7 +111,7 @@ describe("generated command help", () => {
     expect(commandHelpMarkdown(createProgram(tool), ["messages", "list"])).toEqual([
       "**Returns:** message — ref, id, chat_id, sender_id, sender_name, timestamp, edited_at, text, and 26 more; every field: tg commands schema messages list",
       "**Next usually:** `tg messages link <chat> <message>`, `tg messages delete <chat> <message>`",
-      "**Example:** `tg personal messages list Team`",
+      "**Example:** `tg messages list Team`",
     ])
     expect(commandHelpMarkdown(createProgram(tool), ["messages"])).toEqual([])
   })

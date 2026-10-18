@@ -16,13 +16,21 @@ shape of this file.
   the help is shown. Returns names the declared output entity and its first fields, or repeats the description
   when there is none. Next usually lists up to three commands whose arguments take what this one returns (a
   message, a chat, a person, a task…), reads first; `nextUsually(command, { pin, drop })` overrides them. Example
-  is the definition's own `examples`, or one built from the usage with the profile `personal` where the command
-  reads one, a sample value per argument (`Team`, `1234`, `"invoice"`) and the mandatory options.
+  is the definition's own `examples`, or one built from the usage, a sample value per argument (`Team`, `1234`,
+  `"invoice"`) and the mandatory options. Examples leave out the profile, as the first screen does; the Usage line
+  shows `<profile>`.
   `commandHelpMarkdown(root, path)` gives the same three lines for `docs/commands.md`, and
   `exampleReport(program)` lists the commands still on a generated example.
+- **`contacts alias set|rm`, `contacts notes list|show|add|edit|remove`, `conversations consents list|revoke` and
+  `bot sends list` have descriptions**, in `--help`, `commands` and the commands document.
 
 ### Fixed
 
+- **`inbox` and `review` declare their output**: they named the view `message.summary`, so the entity looked
+  up was `message.message.summary`, which does not exist. `commands schema inbox` now gives the message summary's
+  fields instead of open items, and `--help` ends with "Returns: message summary — …". `--json=<fields>` is now
+  checked against those fields, so a name they do not have is refused with the list instead of giving empty items.
+  The JSON they print is unchanged.
 - **`--brief` and `--full` no longer mention mail in a messenger's help.** They said "found messages and mail"; tg,
   max and wa have no mail. Consumers' help snapshots change on bump.
 

@@ -504,20 +504,23 @@ export const conversationsCommand = (messenger: Messenger): Command => {
   const consents = conversations
     .command("consents")
     .description("remembered analysis permissions for this account's chats and provider endpoints")
-  annotate(consents.command("list"), { effects: LOCAL_READ }).action(async function (this: Command) {
-    const context = messengerContext(this, messenger)
-    const items = await context.withStore((store, account) => analysisConsents(store, account).list())
-    renderAnswer(
-      this,
-      context,
-      listOf("conversations consents list", {
-        items: items.map(snakeKeys),
-        limit: Math.max(1, items.length),
-        has_more: false,
-      }),
-    )
-  })
+  annotate(consents.command("list"), { effects: LOCAL_READ })
+    .description("which chats and provider endpoints you allowed to analyse, and when")
+    .action(async function (this: Command) {
+      const context = messengerContext(this, messenger)
+      const items = await context.withStore((store, account) => analysisConsents(store, account).list())
+      renderAnswer(
+        this,
+        context,
+        listOf("conversations consents list", {
+          items: items.map(snakeKeys),
+          limit: Math.max(1, items.length),
+          has_more: false,
+        }),
+      )
+    })
   annotate(consents.command("revoke"), { effects: LOCAL_WRITE })
+    .description("forget analysis permissions so the next analysis asks again")
     .option("--chat <chat>", "revoke only this chat's consents; defaults to every chat")
     .option("--provider <identity>", "exact provider identity from consents list; defaults to every provider")
     .action(async function (this: Command) {

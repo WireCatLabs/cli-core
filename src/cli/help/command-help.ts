@@ -2,7 +2,6 @@ import { metaOf } from "@wirecat/cli-base/commands"
 import { writes } from "@wirecat/cli-base/standards"
 import type { Argument, Command } from "commander"
 import { commandPathOf, outputOf } from "../command-contract.js"
-import { PROFILE_FREE } from "../profile.js"
 import { commandAt } from "../steps.js"
 import { short } from "./commands-text.js"
 
@@ -95,7 +94,6 @@ export interface NextChoice {
 }
 
 const choices = new WeakMap<Command, NextChoice>()
-const profileFree = new WeakSet<Command>()
 
 /** Overrides the "Next usually" a command's help derives from types. Kept off `annotate`, like its section. */
 export const nextUsually = <T extends Command>(command: T, choice: NextChoice): T => {
@@ -189,11 +187,8 @@ const generatedExample = (command: Command): string => {
       if (!(option.required || option.optional)) return [flag]
       return [flag, option.argChoices?.[0] ?? sample(placeholder ?? option.attributeName())]
     })
-  const root = rootOf(command)
-  const path = commandPathOf(command)
-  // Runs as written: an account command names its profile, as `<tool> personal setup` does.
-  const profile = profileFree.has(root) || PROFILE_FREE.has(path[0] ?? "") ? [] : ["personal"]
-  return [root.name(), ...profile, ...path, ...words, ...options].join(" ")
+  // No profile word, as on the first screen and in written examples: the Usage line already shows `<profile>`.
+  return [rootOf(command).name(), ...commandPathOf(command), ...words, ...options].join(" ")
 }
 
 export interface CommandHelp {
@@ -241,8 +236,7 @@ export const commandHelpMarkdown = (root: Command, path: readonly string[]): str
 }
 
 /** Puts Returns, Next usually and Example on every leaf command's `--help`, worked out when the help is shown. */
-export const installCommandHelp = (program: Command, { profile = true }: { profile?: boolean } = {}): void => {
-  if (!profile) profileFree.add(program)
+export const installCommandHelp = (program: Command): void => {
   for (const command of leaves(program)) command.addHelpText("after", () => commandHelpText(command))
 }
 
