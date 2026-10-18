@@ -12,6 +12,7 @@ import type {
   CallRecord,
   Chat,
   ChatCard,
+  ChatEvent,
   ChatEvents,
   Discussion,
   Folder,
@@ -336,9 +337,15 @@ export interface HistoryVote {
   vote: PollVote
 }
 
+/** One change to who is in chat `chatId`, or to its title, as `ChatEventNotice` has it. */
+export interface HistoryChatEvent {
+  chatId: Id
+  change: ChatEvent
+}
+
 /**
- * What a messenger pushed in one go: any of chats, the people in them, past messages of any chats, and votes in
- * their polls. A vote is saved with its chat's messages, so a poll in the same batch is held before its votes.
+ * What a messenger pushed in one go: any of chats, the people in them, past messages of any chats, votes in
+ * their polls, and changes to who is in them. A vote is saved with its chat's messages, so a poll in the same batch is held before its votes.
  * `rekeys` are chats the messenger now names by another id; they apply first, so the batch's messages under the
  * new id join the chat already stored under the old one.
  */
@@ -348,6 +355,7 @@ export interface HistoryBatch {
   people?: Member[]
   messages?: Message[]
   votes?: HistoryVote[]
+  events?: HistoryChatEvent[]
 }
 
 /** For a messenger that pushes its history to the client instead of answering for it (`Messenger.history: "store"`). */

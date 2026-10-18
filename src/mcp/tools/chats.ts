@@ -49,8 +49,7 @@ const chatTools = (messenger: Messenger): Record<string, AnyTool> => {
       input: v.object({ chat, query: queryArgument(EVENTS_QUERY) }),
       annotations: READ,
       output: { entity: "chat_event", list: true },
-      online: (adapter, args, { guard }) =>
-        chatEvents(servicesFor(onlineDeps(messenger, adapter, guard)), args.chat, args.query),
+      served: (services, args) => chatEvents(services, args.chat, args.query),
     }),
 
     stats_chats_show: tool({
@@ -59,8 +58,11 @@ const chatTools = (messenger: Messenger): Record<string, AnyTool> => {
         `Counts over a chat's stored messages since \`since_time\` (${EVENTS_DAYS} days back if not given): messages, ` +
         "senders, replies, threads, reactions, views, forwards and comments where the messenger gave them, top_posts, and " +
         "questions { asked, answered, median_minutes_to_answer }. `by` adds a series row per day or week. Reads the local " +
-        "store only, so joins and leaves are not in it — `chats events` has them. complete is false when the store does " +
-        "not hold the chat whole: then every number is a lower bound, and next names the sync that fills it.",
+        (messenger.history === "store"
+          ? "store only, joins and leaves included. "
+          : "store only, so joins and leaves are not in it — `chats events` has them. ") +
+        "complete is false when the store does not hold the chat whole: then every number is a lower bound, and next " +
+        "names the sync that fills it.",
       input: v.object({
         chat,
         since_time: v.optional(v.pipe(v.string(), v.description("an ISO 8601 time, or 2h / 1d ago"))),

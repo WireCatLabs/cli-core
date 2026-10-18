@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Id, Message, MessageEvent, PollVote } from "../../domain/models.js"
+import type { ChatEvent, Id, Message, MessageEvent, PollVote } from "../../domain/models.js"
 import { capability, type HistoryBatch, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { isId, pickPerson } from "../../resolve.js"
 import type { EventSink } from "../../runs/events.js"
@@ -308,11 +308,14 @@ const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatc
   for (const { chatId, messageId, vote } of batch.votes ?? []) of(chatId).votes.push({ messageId, vote })
   for (const [chatId, { messages, votes }] of byChat)
     await store.messages.saveMessages(account, chatId, messages, { via: "history", votes })
+  const changes = new Map<Id, ChatEvent[]>()
+  for (const { chatId, change } of batch.events ?? []) changes.set(chatId, [...(changes.get(chatId) ?? []), change])
+  for (const [chatId, events] of changes) await store.roster.saveChatEvents(account, chatId, events)
 }
 
 /**
  * Each change as the store keeps it: a message or an edit upserted, a deletion a tombstone, reactions replaced, a
- * voter's vote replacing their older one.
+ * voter's vote replacing their older one, a chat event kept once.
  */
 const keep = async (
   store: MessageStore,
@@ -337,6 +340,9 @@ const keep = async (
       return
     case "vote":
       await store.messages.saveVote(account, event.chatId, event.messageId, event.vote)
+      return
+    case "chat_event":
+      await store.roster.saveChatEvents(account, event.chatId, [event.change])
       return
     case "reaction":
       await store.messages.saveReactions(

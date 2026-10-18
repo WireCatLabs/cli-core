@@ -134,9 +134,16 @@ const absorb = (context: StoreContext, kept: number, gone: number): Omit<ChatRek
       "DELETE FROM poll_votes WHERE chat_id = ? AND EXISTS (SELECT 1 FROM poll_votes g WHERE g.chat_id = ? AND g.message_external_id = poll_votes.message_external_id AND g.identity_id = poll_votes.identity_id AND g.voted_at > poll_votes.voted_at)",
     )
     .run(kept, gone)
+  // The absorbed copy of an event both chats hold is purged, so the people only it named move first.
+  database
+    .prepare(
+      "INSERT OR IGNORE INTO chat_event_people (chat_event_id, identity_id) SELECT k.id, p.identity_id FROM chat_events g JOIN chat_events k ON k.chat_id = ? AND k.source_id = g.source_id JOIN chat_event_people p ON p.chat_event_id = g.id WHERE g.chat_id = ?",
+    )
+    .run(kept, gone)
   foldOpenStays(context, kept, gone)
   for (const table of [
     "poll_votes",
+    "chat_events",
     "message_transcripts",
     "chat_members",
     "member_stays",

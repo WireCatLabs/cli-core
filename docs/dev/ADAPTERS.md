@@ -168,12 +168,17 @@ Some messengers push history to the client instead of answering a request for it
   and `audit` connect and ask it; only `--offline` refuses `fetch` and `audit`, and `list` then reads the stored
   members. Without `members`, `list` reads the stored members and `fetch` and `audit` say the messenger cannot.
 - Give the adapter the `PushedHistory` group. `feed(onBatch, signal)` hands over what the messenger
-  pushes, as `HistoryBatch` objects: `{ chats?, people?, messages?, votes? }`, any of them, for any chats. It
+  pushes, as `HistoryBatch` objects: `{ chats?, people?, messages?, votes?, events? }`, any of them, for any chats. It
   ends when `signal` aborts.
 - A vote in `votes` is `{ chatId, messageId, vote: { person, answers, votedAt } }` (`HistoryVote`): the poll
   message's chat and id, and the vote as `PollVoteEvent` carries it. `votedAt` is when the person voted, not when the
   push came: a voter's older vote never replaces a newer one, so a push dated now would hide a later change. No
   `answers` is a take-back. Send pushed votes here, not as `watch` events: only `serve` and `watch` keep those.
+- A chat event in `events` is `{ chatId, change }` (`HistoryChatEvent`), `change` a `ChatEvent`: who joined, left, was
+  added, removed, promoted or demoted, or a new title. A live one comes from `watch` as `{ event: "chat_event",
+  chatId, chatTitle, change }` (`ChatEventNotice`). `change.messageId` names the event: the same event must always
+  carry the same id, from the push and from `watch` alike, so that each is kept once. `chats events` then answers
+  from the store, so the adapter needs no `chatEvents`.
 - `serve` and `watch` run `feed` beside `watch`, on the same connection, and save each batch to the
   store. Chats are saved first, then people, then messages. A chat's votes are saved in the same transaction as its
   messages, after them, so a poll in the batch is held before its votes. Batches are saved in the order they come.

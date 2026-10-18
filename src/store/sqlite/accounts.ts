@@ -9,6 +9,8 @@ import {
   accounts,
   aliases,
   botUpdates,
+  chatEventPeople,
+  chatEvents,
   chatMembers,
   chats,
   chunks,
@@ -110,6 +112,16 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   orm.delete(syncs).where(eq(syncs.accountId, accountKey)).run()
   orm.delete(messageTranscripts).where(inArray(messageTranscripts.chatId, chatsOf)).run()
   orm.delete(pollVotes).where(inArray(pollVotes.chatId, chatsOf)).run()
+  orm
+    .delete(chatEventPeople)
+    .where(
+      inArray(
+        chatEventPeople.chatEventId,
+        orm.select({ id: chatEvents.id }).from(chatEvents).where(inArray(chatEvents.chatId, chatsOf)),
+      ),
+    )
+    .run()
+  orm.delete(chatEvents).where(inArray(chatEvents.chatId, chatsOf)).run()
   orm.delete(fetchLeases).where(inArray(fetchLeases.chatId, chatsOf)).run()
   orm.delete(chatMembers).where(inArray(chatMembers.chatId, chatsOf)).run()
   const observationsOf = orm

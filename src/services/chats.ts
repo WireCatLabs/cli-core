@@ -123,6 +123,25 @@ export interface ChatsService {
   markRead(request: { chat: string; until?: string; threadId?: string }): Promise<Operated<MarkedRead>>
 }
 
+/** How many events `chats events` lists from the store at most, the newest; a longer period is cut, and says so. */
+export const STORED_EVENTS = 1000
+
+/** For a messenger whose history is pushed: the events `serve` kept, never asking the messenger. */
+const storedEvents = async (
+  store: AccountStore,
+  deps: ServiceDeps,
+  chat: string,
+  since: number,
+): Promise<ChatEvents> => {
+  const chatId = await chatIdIn(deps.messenger, chat, store)
+  const found = await store.roster.chatEvents(chatId, {
+    since: new Date(since).toISOString(),
+    limit: STORED_EVENTS + 1,
+  })
+  const more = found.length > STORED_EVENTS
+  return { chatId, since: new Date(since).toISOString(), events: more ? found.slice(1) : found, more }
+}
+
 /** One person a second: a whole group at once would be many requests, and some go to the ban lists. */
 const deepChecks = async (
   deps: ServiceDeps,
@@ -209,10 +228,11 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
   },
 
   events: async (chat, { since }) => {
+    const from = since ?? Date.now() - EVENTS_DAYS * 86_400_000
+    if (deps.reads === "store") return storedEvents(await accountStore(deps), deps, chat, from)
     if (deps.offline) {
       throw new CliError("validation_error", "`chats events` reads the chat's history; with `--offline` there is none")
     }
-    const from = since ?? Date.now() - EVENTS_DAYS * 86_400_000
     return capability(await deps.connection(), "chatEvents", "read who joined or left")(chat, { since: from })
   },
 
@@ -232,7 +252,12 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
     const until = Date.now()
     const messages = await storedSince(store, chatId, new Date(from).toISOString())
     const connection = fromStore(deps) ? undefined : await deps.connection()
-    const events = connection?.chatEvents ? await connection.chatEvents(chatId, { since: from }) : undefined
+    const events =
+      deps.reads === "store"
+        ? await storedEvents(store, deps, chatId, from)
+        : connection?.chatEvents
+          ? await connection.chatEvents(chatId, { since: from })
+          : undefined
     const admins = (await connection?.admins?.(chatId)) ?? null
     const stats = chatStats(messages, {
       chatId,

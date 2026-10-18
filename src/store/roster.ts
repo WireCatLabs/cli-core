@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Id, Member } from "../domain/models.js"
+import type { ChatEvent, Id, Member } from "../domain/models.js"
 import type { RetentionOptions } from "../domain/retention.js"
 import { keysOver } from "./keys.js"
+import { chatEventsOf, saveChatEvents } from "./sqlite/chat-events.js"
 import * as chatQueries from "./sqlite/chats.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { type RetentionResult, retentionQuery } from "./sqlite/retention.js"
@@ -33,6 +34,10 @@ export interface RosterStore {
   memberCounts(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<MemberCount[]>
   /** Every profile the chat's members were seen with, oldest first. */
   profileRevisions(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<ProfileRevision[]>
+  /** Who joined, left, was added, removed, promoted or demoted, as the messenger reported it; a replay changes nothing. */
+  saveChatEvents(key: AccountKey, chatId: Id, events: ChatEvent[]): Promise<void>
+  /** Oldest first, from `since` (ISO); only the newest `limit` when there are more. */
+  chatEvents(key: AccountKey, chatId: Id, options?: { since?: string; limit?: number }): Promise<ChatEvent[]>
   /** Starts or stops `serve`'s daily fetch of the chat's members; history already kept stays. */
   trackMembers(key: AccountKey, chatId: Id, tracked: boolean): Promise<void>
   trackedChats(key: AccountKey): Promise<TrackedChat[]>
@@ -82,6 +87,24 @@ export const rosterStoreOver = (context: StoreContext): RosterStore => {
       return chatKey === undefined
         ? []
         : roster.profileRevisionsOf(context, chatKey, since === undefined ? undefined : Date.parse(since))
+    },
+
+    saveChatEvents: async (key, chatId, events) =>
+      write(database, () => {
+        const accountKey = accountPk(key)
+        saveChatEvents(context, accountKey, key.provider, chatPkFor(accountKey, chatId), events)
+      }),
+
+    chatEvents: async (key, chatId, { since, limit } = {}) => {
+      const chatKey = chatKeyOf(key, chatId)
+      return chatKey === undefined
+        ? []
+        : read(database, () =>
+            chatEventsOf(context, chatKey, {
+              ...(since === undefined ? {} : { since: Date.parse(since) }),
+              ...(limit === undefined ? {} : { limit }),
+            }),
+          )
     },
 
     trackMembers: async (key, chatId, tracked) =>

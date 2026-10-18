@@ -27,8 +27,23 @@ export const COMMAND_NEEDS: Readonly<Record<string, Need>> = {
   "messages unpin": ["unpin", "unpin a message"],
 }
 
+/** The commands the store answers for a messenger whose history is pushed to it, so the method is not needed there. */
+const STORE_ANSWERS: ReadonlySet<string> = new Set(["chats events"])
+
+interface Lacking {
+  lacks?: readonly (keyof MessengerAdapter)[]
+  history?: "server" | "store"
+}
+
+/** The one method this command needs and this messenger never has; none when it has it or the store answers. */
+export const lackedNeed = (messenger: Lacking | undefined, path: string): Need | undefined => {
+  const need = COMMAND_NEEDS[path]
+  if (!need || !messenger?.lacks?.includes(need[0])) return undefined
+  return messenger.history === "store" && STORE_ANSWERS.has(path) ? undefined : need
+}
+
 /** Refuses, before a connection, a command whose one method this messenger never has. */
-export const refuseLacking = (lacks: readonly (keyof MessengerAdapter)[] | undefined, path: readonly string[]) => {
-  const need = COMMAND_NEEDS[path.join(" ")]
-  if (need && lacks?.includes(need[0])) throw new CliError("validation_error", `this messenger cannot ${need[1]}`)
+export const refuseLacking = (messenger: Lacking | undefined, path: readonly string[]) => {
+  const need = lackedNeed(messenger, path.join(" "))
+  if (need) throw new CliError("validation_error", `this messenger cannot ${need[1]}`)
 }

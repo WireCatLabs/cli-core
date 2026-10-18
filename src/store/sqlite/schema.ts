@@ -600,6 +600,45 @@ export const pollVotes = sqliteTable(
   ],
 )
 
+/** Changes to who is in a chat, and to its title, for a messenger whose history is pushed to the store. */
+export const chatEvents = sqliteTable(
+  "chat_events",
+  {
+    id: integer("id").primaryKey(),
+    chatId: integer("chat_id")
+      .notNull()
+      .references(() => chats.id),
+    sourceId: text("source_id").notNull(),
+    action: text("action").notNull(),
+    actorIdentityId: integer("actor_identity_id").references(() => identities.id),
+    title: text("title"),
+    happenedAt: integer("happened_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.chatId, table.sourceId),
+    index("chat_events_by_chat_id_happened_at").on(table.chatId, table.happenedAt),
+    index("chat_events_by_actor_identity_id").on(table.actorIdentityId),
+  ],
+)
+
+export const chatEventPeople = sqliteTable(
+  "chat_event_people",
+  {
+    chatEventId: integer("chat_event_id")
+      .notNull()
+      .references(() => chatEvents.id),
+    identityId: integer("identity_id")
+      .notNull()
+      .references(() => identities.id),
+  },
+  (table) => [
+    primaryKey({ columns: [table.chatEventId, table.identityId] }),
+    index("chat_event_people_by_identity_id").on(table.identityId),
+  ],
+)
+
 /** One read of a chat's member list. Retention reads presence at a checkpoint from these, not from stays. */
 export const memberObservations = sqliteTable(
   "member_observations",

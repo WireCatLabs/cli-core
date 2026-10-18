@@ -402,8 +402,16 @@ export interface PollVoteEvent {
   vote: PollVote
 }
 
-/** What a listening connection reports: a new message, a change to one, or a vote in a poll. */
-export type MessageEvent = { event: "message"; message: MessageHit } | MessageChange | PollVoteEvent
+/** Who joined, left, was added, removed, promoted or demoted, or a new title, as it happens; saved for `chats events`. */
+export interface ChatEventNotice {
+  event: "chat_event"
+  chatId: Id
+  chatTitle: string | null
+  change: ChatEvent
+}
+
+/** What a listening connection reports: a new message, a change to one, a vote in a poll, or a change to a chat. */
+export type MessageEvent = { event: "message"; message: MessageHit } | MessageChange | PollVoteEvent | ChatEventNotice
 
 /** One chat's share of `inbox`: other people's messages since the last check, oldest first. */
 export interface InboxChat extends Pick<Chat, "id" | "title" | "kind" | "unreadCount"> {
@@ -460,10 +468,11 @@ export interface Review {
 
 /** One change to who is in a chat, or to the chat itself, read from a service message. */
 export interface ChatEvent {
+  /** The service message, or the id the messenger gives the event: the same event always has the same one. */
   messageId: Id
   /** ISO 8601. */
   timestamp: string
-  /** `join`, `leave`, `add`, `remove`, `create`, `title` or `pin`; a messenger may pass others through. */
+  /** `join`, `leave`, `add`, `remove`, `promote`, `demote`, `create`, `title` or `pin`; a messenger may pass others. */
   event: string
   by: { id: Id | null; name: string | null }
   people: { id: Id; name: string | null }[]
