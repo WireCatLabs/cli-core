@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.344.0 — 18.10.2026
+
 ### Changed — may break callers
 
 - **`<tool> --help` and a bare `<tool>` show a short first screen instead of commander's full help**: the tool's
