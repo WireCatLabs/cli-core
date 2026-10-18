@@ -133,7 +133,7 @@
       "meaning": "also read these bots' copies, comma separated — each allowed by read_other_bots"
     },
     "--brief": {
-      "meaning": "found messages and mail as reference, title, time, sender and excerpt only"
+      "meaning": "found messages as reference, title, time, sender and excerpt only"
     },
     "--by": {
       "value": "<grouping>",
@@ -394,7 +394,7 @@
       "meaning": "read nonrecursive files from this directory for one explicit chat"
     },
     "--full": {
-      "meaning": "found messages and mail with their whole text and every provider field"
+      "meaning": "found messages with their whole text and every provider field"
     },
     "--hidden": {
       "value": "<on|off>",

@@ -799,7 +799,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--block` | `<value>` | Set to `true` if user should be blocked in chat. |  | `bot chats members remove` (max, tg only) |
 | `--bot` |  | the bot section of the profile's settings, rather than the personal account's |  | `config set`, `config show`, `config unset` |
 | `--bots` | `<profiles>` | also read these bots' copies, comma separated — each allowed by read_other_bots |  | `bot contacts show` (max, tg only), `bot messages between` (max, tg only), `bot search messages` (max, tg only) |
-| `--brief` |  | found messages and mail as reference, title, time, sender and excerpt only |  | every command (planned) |
+| `--brief` |  | found messages as reference, title, time, sender and excerpt only |  | every command (planned) |
 | `--by` | `<grouping>` | what to count by. **each command names its own groupings — stats messages show chat, sender, day or hour, and searches create the same for stats messages show --saved; stats chats show day or week, as a series beside its totals — so it differs on purpose (Help text rule 4)** |  | `searches create`, `stats charts`, `stats chats retention`, `stats chats show`, `stats messages show` |
 | `--calls` | `<who>` | whose calls ring: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--can` | `<rights>` | what they may do, comma-separated: read, members, admins, info, pin, link, post, edit, delete. **lists the rights each messenger has — MAX has `read`, Telegram does not — so it differs on purpose (Help text rule 4)** |  | `bot chats admins add` (max, tg only), `chats admins add` (planned) |
@@ -865,7 +865,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
 | `--from` | `<who>` | sender to match in `bot search messages` |  | `bot search messages` (max, tg only) |
 | `--from-dir` | `<dir>` | read nonrecursive files from this directory for one explicit chat |  | `attachments extract` |
-| `--full` |  | found messages and mail with their whole text and every provider field |  | every command (planned) |
+| `--full` |  | found messages with their whole text and every provider field |  | every command (planned) |
 | `--hidden` | `<on\|off>` | on hides a forum's General topic from the topic list, off shows it |  | `topics edit` (tg-only) |
 | `--hide-online` | `<on\|off>` | hide online status and last seen |  | `account privacy set` (planned) |
 | `--history` |  | the people added also see the messages from before they came |  | `chats members add` (max-only) |
