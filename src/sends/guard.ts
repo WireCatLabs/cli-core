@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
-import { type AppIdentity, readOnlyRefusal } from "../ports/app.js"
+import { type AppIdentity, MESSENGER_CHANGE_REFUSAL, readOnlyRefusal } from "../ports/app.js"
 import { FloodMemory, floodPathFor, holdEnd } from "./flood.js"
 import {
   type AccountAction,
@@ -160,7 +160,7 @@ export const sendGuard = ({
   const answered = new WeakSet<GuardRequest>()
 
   const refuseReadOnly = () => {
-    if (readOnlyLock) throw readOnlyRefusal(readOnlyLock, "send, react, change chats or change the account")
+    if (readOnlyLock) throw readOnlyRefusal(readOnlyLock, MESSENGER_CHANGE_REFUSAL)
   }
 
   // Every write, counted or not: a reaction or a read receipt sent through a ban is what makes the ban stick.

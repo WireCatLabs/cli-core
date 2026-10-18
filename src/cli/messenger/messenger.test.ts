@@ -1221,6 +1221,32 @@ describe("the shared read commands", () => {
     expect(deletions).toEqual([])
   })
 
+  it.each([
+    ["messages send", ["messages", "send", "Book", "hi"]],
+    ["messages send --dry-run", ["messages", "send", "Book", "hi", "--dry-run"]],
+    ["messages edit", ["messages", "edit", "Book", "3", "hi"]],
+    ["messages delete --for-everyone", ["messages", "delete", "Book", "3", "--for-everyone", "--allow-dangerous"]],
+    ["reactions add", ["reactions", "add", "Book", "3", "👍"]],
+  ])("refuses %s under the read-only lock before it connects", async (_name, argv) => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_READ_ONLY: "1" }
+    let connected = 0
+
+    const locked = await call(
+      [...argv, "--json"],
+      async () => {
+        connected += 1
+        return fake
+      },
+      env,
+    )
+
+    expect([locked.code, connected]).toEqual([5, 0])
+    expect(JSON.parse(locked.stderr.join("")).error.message).toBe(
+      "this process is read-only (CHAT_READ_ONLY) — it cannot send, react, change chats or change the account",
+    )
+  })
+
   it("**delete only with --allow-dangerous**, each message counted toward the hourly limit", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }

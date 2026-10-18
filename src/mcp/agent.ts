@@ -10,6 +10,7 @@ import {
 import { type ErrorObject, writes } from "@wirecat/cli-base/standards"
 import { VOCABULARY } from "@wirecat/cli-base/standards/tables"
 import * as v from "valibot"
+import { changesMessenger } from "../cli/effects.js"
 import { lentConnection } from "../cli/messenger/serve-relay.js"
 import type { RunOptions } from "../cli/program.js"
 import type { StdinField } from "../cli/stdin-field.js"
@@ -61,6 +62,8 @@ export interface CatalogueOptions {
   exclude?: readonly (readonly string[])[]
   /** The profile's levels when the server starts: what they refuse is not offered. */
   levels?: Readonly<Record<PermissionKey, Level>>
+  /** Under `<PREFIX>_READ_ONLY`: a change on the messenger is not offered either. */
+  readOnly?: boolean
   keyOf?: (path: readonly string[]) => PermissionKey | null | undefined
   /** Arguments left out of every tool, by name. */
   omit?: readonly string[]
@@ -224,7 +227,7 @@ const refusal = (
  * command tree and the shared flag vocabulary say; an option marked `mcp: false` is left out.
  */
 export const toolsFromCommands = (commands: readonly CommandInfo[], options: CatalogueOptions = {}): AgentTool[] => {
-  const { root = [], exclude = [], levels, keyOf } = options
+  const { root = [], exclude = [], levels, keyOf, readOnly = false } = options
   return flatten(commands)
     .filter(
       (info) =>
@@ -235,6 +238,7 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
         !exclude.some((skipped) => startsWith(info.path.slice(root.length), skipped)) &&
         info.mcp !== false &&
         info.lifetime === undefined &&
+        !(readOnly && changesMessenger(info)) &&
         (levels === undefined || refusal(info, levels, keyOf) === undefined),
     )
     .map((info) => ({

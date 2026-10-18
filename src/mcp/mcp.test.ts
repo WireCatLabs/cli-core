@@ -2551,6 +2551,13 @@ describe("sending over MCP", () => {
     expect(send?.writes).toBe(true)
   })
 
+  it("offers no change on the messenger under the read-only lock", async () => {
+    const commands = await (await connect(scripted(), { extraEnv: { CHAT_READ_ONLY: "1" } })).client.commands()
+
+    expect(commands).toContain("messages list")
+    expect(commands.filter((one) => /^(messages (send|edit|delete)|reactions add)$/.test(one))).toEqual([])
+  })
+
   it("sends through the guard, with the reply, and journals it without the text", async () => {
     const { telegram, sent } = sending()
     const { call, env } = await connect(telegram, {})
@@ -2954,13 +2961,14 @@ describe("sending over MCP", () => {
       ])
     })
 
-    it("refuses every one of them under the read-only lock, before the messenger is asked", async () => {
+    it("offers none of them under the read-only lock, so a call never reaches the messenger", async () => {
       const writes: unknown[] = []
-      const { call } = await connect(owning(writes), { own: ALL, extraEnv: { CHAT_READ_ONLY: "1" } })
+      const { call, client } = await connect(owning(writes), { own: ALL, extraEnv: { CHAT_READ_ONLY: "1" } })
 
       const refused = await Promise.all(COMMANDS.map((command) => call(command, { chat: "7" })))
 
-      expect(refused.map((one) => one.body.error?.code)).toEqual(Array(7).fill("permission_error"))
+      expect((await client.commands()).filter((one) => COMMANDS.includes(one))).toEqual([])
+      expect(refused.every((one) => one.isError)).toBe(true)
       expect(writes).toEqual([])
     })
   })

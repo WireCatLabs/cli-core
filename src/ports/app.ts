@@ -28,6 +28,8 @@ export const readOnlyLockOf = (app: AppIdentity, env: NodeJS.ProcessEnv): string
   return value === undefined || value.trim() === "" || value === "0" ? undefined : name
 }
 
+export const MESSENGER_CHANGE_REFUSAL = "send, react, change chats or change the account"
+
 /** The one wording for a write `<PREFIX>_READ_ONLY` stops: `what` finishes "it cannot …". */
 export const readOnlyRefusal = (lock: string, what: string): CliError =>
   new CliError("permission_error", `this process is read-only (${lock}) — it cannot ${what}`)

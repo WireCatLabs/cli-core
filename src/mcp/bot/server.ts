@@ -8,6 +8,7 @@ import type { BotMessenger } from "../../cli/bot/port.js"
 import { itemOf } from "../../cli/envelope.js"
 import { wholeList } from "../../cli/messenger/chat-answers.js"
 import type { Settings } from "../../cli/settings.js"
+import { readOnlyLockOf } from "../../ports/app.js"
 import type { Level, PermissionKey } from "../../sends/permissions.js"
 import { type AgentAnswer, type AgentProgram, runCommandForAgent, toolsFromCommands } from "../agent.js"
 import { type McpCommand, registerCommands } from "../surface.js"
@@ -46,6 +47,7 @@ export const createBotServer = (options: BotServerOptions) => {
   const tools = toolsFromCommands(program.commands, {
     root: ["bot"],
     levels: settings.permissions,
+    readOnly: readOnlyLockOf(bot.app, env) !== undefined,
     ...(options.keyOf ? { keyOf: options.keyOf } : {}),
     offline: true,
     // Another bot's copy is this bot's to read only where `read_other_bots` says so.
