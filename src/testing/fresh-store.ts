@@ -8,16 +8,18 @@ import { vi } from "vitest"
 // The rest of opening — the fills, the stemmers, the log pruner — still runs on the copy, with the test's clock.
 vi.mock(import("../store/sqlite/open-store.js"), async (importOriginal) => {
   const original = await importOriginal()
-  let template: Buffer | undefined
-  const migrated = async (): Promise<Buffer> => {
-    if (template) return template
-    const { openSqlite } = await import("../store/sqlite/open.js")
-    const { migrate } = await import("../store/migrations.js")
-    const path = join(tmpdir(), "migrated-template.db")
-    const { database } = await openSqlite(path)
-    migrate(database)
-    database.close()
-    template = readFileSync(path)
+  let template: Promise<Buffer> | undefined
+  // One promise, so two stores opened at once in a file do not open the template file side by side.
+  const migrated = (): Promise<Buffer> => {
+    template ??= (async () => {
+      const { openSqlite } = await import("../store/sqlite/open.js")
+      const { migrate } = await import("../store/migrations.js")
+      const path = join(tmpdir(), "migrated-template.db")
+      const { database } = await openSqlite(path)
+      migrate(database)
+      database.close()
+      return readFileSync(path)
+    })()
     return template
   }
   return {
