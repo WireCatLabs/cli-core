@@ -48,7 +48,7 @@ export const matchDownloads = (stored: readonly StoredAttachment[], files: reado
   })
 }
 
-export type UploadKind = "photo" | "file" | "voice" | "sticker"
+export type UploadKind = "photo" | "file" | "voice"
 
 /** Where an upload's bytes are: a file read only when it is sent, or bytes made in memory (a converted voice). */
 export type UploadSource = { kind: "file"; path: string; size: number } | { kind: "bytes"; bytes: Uint8Array }
@@ -60,4 +60,10 @@ export interface Upload {
   source: UploadSource
   /** A `file` that goes as a file to download even where the messenger would play it — a video. */
   asFile?: true
+}
+
+/** A .webp checked for sending as a sticker. Its name goes to the messenger and never to the journal. */
+export interface StickerFile {
+  name: string
+  source: UploadSource
 }

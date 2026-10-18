@@ -1,4 +1,4 @@
-export type { Upload, UploadKind, UploadSource } from "../domain/attachments.js"
+export type { StickerFile, Upload, UploadKind, UploadSource } from "../domain/attachments.js"
 export {
   type FloodDeadline,
   FloodMemory,

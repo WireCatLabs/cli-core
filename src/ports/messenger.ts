@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Upload } from "../domain/attachments.js"
+import type { StickerFile, Upload } from "../domain/attachments.js"
 import type { CounterField, CounterObservations } from "../domain/counters.js"
 import type { HtmlFormatting, MarkdownFormatting, TextSpan } from "../domain/formatting.js"
 import type { Markup } from "../domain/markdown.js"
@@ -91,6 +91,8 @@ export interface SendOptions {
   attachments?: Upload[]
   /** One sticker by id, alone: no text, no attachment. Only where `Messenger.stickers` is on. */
   sticker?: Id
+  /** One .webp sent as a sticker, alone: no text, no attachment. Only where `Messenger.stickerFileBytes` is set. */
+  stickerFile?: StickerFile
   /** The photo or video hidden until tapped. Only where `Messenger.mediaOptions` has it. */
   spoiler?: boolean
   /** The caption shown above the attachment. Only where `Messenger.mediaOptions` has it. */

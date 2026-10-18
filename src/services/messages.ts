@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { DownloadedFile, Upload } from "../domain/attachments.js"
+import type { DownloadedFile, StickerFile, Upload } from "../domain/attachments.js"
 import { type FormattedText, validateFormattedText, visibleFormattedText } from "../domain/formatting.js"
 import { formatLocator } from "../domain/locator.js"
 import { type MessageLink, messageLinkTarget, validatePermalink } from "../domain/message-link.js"
@@ -166,6 +166,8 @@ export interface SendRequest {
   captionAbove?: boolean
   /** A sticker by id, sent alone. */
   sticker?: Id
+  /** A .webp sent as a sticker, alone. */
+  stickerFile?: StickerFile
   /** One of the ids `chats.sendAs` lists for this chat. */
   sendAs?: Id
   /** A post of `chat`, a channel: the message goes to the post's discussion as a reply to it. */
@@ -571,8 +573,10 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
       sendAs,
       commentTo,
       sticker,
+      stickerFile,
     }) => {
-      if (sticker !== undefined && (typed.trim() !== "" || attachments.length > 0 || markdown || html))
+      const stickers = (sticker === undefined ? 0 : 1) + (stickerFile === undefined ? 0 : 1)
+      if (stickers > 0 && (stickers > 1 || typed.trim() !== "" || attachments.length > 0 || markdown || html))
         throw new CliError("validation_error", "a sticker goes alone — no text, no file, no photo")
       if (commentTo !== undefined && (typedReplyTo !== undefined || typedThread !== undefined))
         throw new CliError("validation_error", "a comment answers the post itself; not with --reply-to or --topic")
@@ -587,7 +591,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
       }
       const prepared = await formatted(connection, typed, { markdown, html })
       const { text, spans } = deps.agentText ? visibleFormattedText(prepared) : prepared
-      if (text.trim() === "" && attachments.length === 0 && sticker === undefined) {
+      if (text.trim() === "" && attachments.length === 0 && stickers === 0) {
         throw new CliError("validation_error", "nothing to send — the marks leave no text")
       }
       const threadId = threadIdOf(typedThread)
@@ -614,9 +618,16 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
         ...(at === undefined ? {} : { scheduledFor: at }),
         ...(key === undefined ? {} : { key }),
         ...(origin === undefined ? {} : { origin }),
-        ...(attachments.length === 0
+        ...(attachments.length === 0 && stickerFile === undefined
           ? {}
-          : { attachments: attachments.map(({ kind, source }) => ({ kind, bytes: uploadSize(source) })) }),
+          : {
+              attachments: [
+                ...attachments.map(({ kind, source }) => ({ kind, bytes: uploadSize(source) })),
+                ...(stickerFile === undefined
+                  ? []
+                  : [{ kind: "sticker" as const, bytes: uploadSize(stickerFile.source) }]),
+              ],
+            }),
       }
       try {
         const done = await guardedWrite(
@@ -633,6 +644,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
               ...(at === undefined ? {} : { at }),
               ...(attachments.length === 0 ? {} : { attachments }),
               ...(sticker === undefined ? {} : { sticker }),
+              ...(stickerFile === undefined ? {} : { stickerFile }),
               ...media,
               ...(sendAs === undefined ? {} : { sendAs }),
             }),

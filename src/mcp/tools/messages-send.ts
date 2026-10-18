@@ -4,7 +4,7 @@ import type { Messenger } from "../../cli/messenger/context.js"
 import { selfOf } from "../../cli/messenger/message-items.js"
 import { writtenAnswer } from "../../cli/messenger/message-writes.js"
 import { sendTime } from "../../domain/send-time.js"
-import { readAttachments } from "../../sends/upload.js"
+import { readAttachments, readStickerFile } from "../../sends/upload.js"
 import { onlineDeps, servicesFor } from "../../services/index.js"
 import { type AnyTool, chatOf, message, nameOf, tool, WRITE } from "../tool.js"
 
@@ -90,11 +90,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
       online: async (adapter, args, { guard, env }) => {
         const at = args.at_time === undefined ? undefined : sendTime(args.at_time)
         // Never anyFile here: a path an agent was talked into is how a key would leave the machine.
-        const read = {
-          app: messenger.app,
-          env,
-          ...(messenger.stickerFileBytes === undefined ? {} : { stickerBytes: messenger.stickerFileBytes }),
-        }
+        const read = { app: messenger.app, env }
         if (args.filename !== undefined && !messenger.mediaOptions?.includes("fileName"))
           throw new CliError("validation_error", "this messenger has no --filename")
         const attachments = await readAttachments(
@@ -102,14 +98,17 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
             ...(args.photo === undefined ? {} : { photo: args.photo }),
             ...(args.file === undefined ? {} : { file: args.file }),
             ...(args.voice === undefined ? {} : { voice: args.voice }),
-            ...(args.sticker_file === undefined ? {} : { sticker: args.sticker_file }),
             ...(args.text === undefined ? {} : { text: args.text }),
             asFile: args.as_file === true,
             ...(args.filename === undefined ? {} : { filename: args.filename }),
           },
           read,
         )
-        if ((args.text ?? "").trim() === "" && attachments.length === 0) {
+        const stickerFile =
+          args.sticker_file === undefined || messenger.stickerFileBytes === undefined
+            ? undefined
+            : await readStickerFile(args.sticker_file, messenger.stickerFileBytes, read)
+        if ((args.text ?? "").trim() === "" && attachments.length === 0 && stickerFile === undefined) {
           throw new CliError("validation_error", "nothing to send — give text, a file or a photo")
         }
         const reader = selfOf(messenger, adapter)
@@ -117,6 +116,7 @@ export const messageSendTools = (messenger: Messenger): Record<string, AnyTool> 
           chat: args.chat,
           text: args.text ?? "",
           ...(attachments.length === 0 ? {} : { attachments }),
+          ...(stickerFile === undefined ? {} : { stickerFile }),
           ...(args.spoiler === true ? { spoiler: true } : {}),
           ...(args.caption_above === true ? { captionAbove: true } : {}),
           ...(args.operation_id === undefined ? {} : { sendId: args.operation_id }),

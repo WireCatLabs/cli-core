@@ -68,7 +68,7 @@ needs it. The ones a new messenger usually sets:
 - `stickers`, `stickerFileBytes` — how a sticker is sent: `stickers: true` mounts `messages send --sticker <id>`
   for a sticker from a set (`stickers list`); `stickerFileBytes`, the largest file in bytes, mounts
   `messages send --sticker-file <file>` and the MCP `sticker_file` for a messenger whose sticker is an uploaded
-  .webp. `send` then gets it as `attachments: [{ kind: "sticker" }]`, alone, read through the same file guard as
+  .webp. `send` then gets it as `stickerFile: { name, source }`, alone, read through the same file guard as
   `--file`.
 
 ## Required core and optional groups

@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { sendTime } from "../../domain/send-time.js"
 import { threadIdOf } from "../../domain/thread.js"
 import { typedSendAs } from "../../sends/send-as.js"
-import { readAttachments } from "../../sends/upload.js"
+import { readAttachments, readStickerFile } from "../../sends/upload.js"
 import { REMOTE_WRITE } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
@@ -116,26 +116,25 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
   const sendAs = typedSendAs(givenSendAs)
   const commentTo = typedCommentTo?.trim()
   if (commentTo === "") throw new CliError("validation_error", "--comment-to needs the post's message id")
-  const read = {
-    app: messenger.app,
-    env: context.env,
-    anyFile: allowAnyFile === true,
-    ...(messenger.stickerFileBytes === undefined ? {} : { stickerBytes: messenger.stickerFileBytes }),
-  }
+  const read = { app: messenger.app, env: context.env, anyFile: allowAnyFile === true }
   const attachments = await readAttachments(
     {
       ...(photo === undefined ? {} : { photo }),
       ...(file === undefined ? {} : { file }),
       ...(voice === undefined ? {} : { voice }),
-      ...(stickerFile === undefined ? {} : { sticker: stickerFile }),
       ...(text === undefined ? {} : { text }),
       asFile: asFile === true,
       ...(filename === undefined ? {} : { filename }),
     },
     read,
   )
-  const body = text ?? (attachments.length > 0 || sticker !== undefined ? "" : await readAll(context.stdin))
-  if (body.trim() === "" && attachments.length === 0 && sticker === undefined) {
+  const stickerUpload =
+    stickerFile === undefined || messenger.stickerFileBytes === undefined
+      ? undefined
+      : await readStickerFile(stickerFile, messenger.stickerFileBytes, read)
+  const alone = sticker !== undefined || stickerUpload !== undefined
+  const body = text ?? (attachments.length > 0 || alone ? "" : await readAll(context.stdin))
+  if (body.trim() === "" && attachments.length === 0 && !alone) {
     throw new CliError("validation_error", "nothing to send — give the text or pipe it in")
   }
   const { sent, reader } = await context.withServices(async (services) => {
@@ -156,6 +155,7 @@ const sendText = async (command: Command, messenger: Messenger, chat: string, te
       ...(spoiler === true ? { spoiler } : {}),
       ...(captionAbove === true ? { captionAbove } : {}),
       ...(sticker === undefined ? {} : { sticker }),
+      ...(stickerUpload === undefined ? {} : { stickerFile: stickerUpload }),
     })
     return afterWrite(sent, async () => ({ sent, reader: await services.messages.reader() }))
   })
