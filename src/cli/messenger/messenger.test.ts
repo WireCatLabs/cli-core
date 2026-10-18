@@ -1245,6 +1245,32 @@ describe("the shared read commands", () => {
     expect(JSON.parse(locked.stderr.join("")).error.message).toBe(
       "this process is read-only (CHAT_READ_ONLY) — it cannot send, react, change chats or change the account",
     )
+    const journal = new SendJournal(sendsPathFor(app, "default", env)).entries()
+    expect(journal.map(({ outcome }) => outcome)).toEqual(argv.includes("--dry-run") ? [] : ["refused"])
+  })
+
+  it("refuses a write on a readonly profile before it connects, and journals what it knows", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ profiles: { default: { permissions: { messages: "readonly", reactions: "readonly" } } } }),
+    )
+    let connected = 0
+    const write = (argv: string[]) => call([...argv, "--json"], async () => (connected++, fake), env)
+
+    const sent = await write(["messages", "send", "Book", "hi"])
+    const unpinned = await write(["messages", "unpin", "7", "3"])
+    const reacted = await write(["reactions", "add", "7", "3", "👍"])
+
+    expect([sent.code, unpinned.code, reacted.code, connected]).toEqual([5, 5, 5, 0])
+    expect(JSON.parse(sent.stderr.join("")).error.message).toContain("permissions.messages is readonly")
+    expect(new SendJournal(sendsPathFor(app, "default", env)).entries()).toMatchObject([
+      { chatId: null, kind: "message", key: "messages.send", outcome: "refused", errorCode: "permission_error" },
+      { chatId: "7", kind: "pin", key: "messages.unpin", outcome: "refused" },
+      { chatId: "7", kind: "reaction", key: "reactions.add", outcome: "refused" },
+    ])
   })
 
   it("**delete only with --allow-dangerous**, each message counted toward the hourly limit", async () => {

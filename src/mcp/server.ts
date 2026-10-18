@@ -8,6 +8,7 @@ import type { ErrorObject } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { findCommand } from "../cli/command-contract.js"
 import { environmentOf } from "../cli/context.js"
+import { refuseWriteBeforeConnecting } from "../cli/early-refusal.js"
 import { judgedTargets } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
@@ -31,7 +32,7 @@ import { instructions } from "./instructions.js"
 import { registerPrompts } from "./prompts.js"
 import { registerResources } from "./resources.js"
 import { harmless, MessengerSession, type SessionOptions } from "./session.js"
-import { type McpCommand, outputOf, registerCommands, surfaceCommands } from "./surface.js"
+import { type McpCommand, normal, outputOf, registerCommands, surfaceCommands } from "./surface.js"
 import { agentJson } from "./text.js"
 import {
   answered,
@@ -153,7 +154,18 @@ export const createServer = (
         }
       : one,
   )
-  const mounted = new Set(toolsFromCommands(program.commands, { exclude: [["bot"]] }).map((one) => one.command))
+  const catalogue = toolsFromCommands(program.commands, { exclude: [["bot"]] })
+  const mounted = new Set(catalogue.map((one) => one.command))
+  const withheld = (asked: string) => {
+    const one = catalogue.find((tool) => normal(tool.command) === asked)
+    if (one)
+      refuseWriteBeforeConnecting(findCommand(root, one.path), {
+        app,
+        env: context.env,
+        dryRun: false,
+        resolve: messenger.resolveSettings,
+      })
+  }
   const pictures = Object.fromEntries(
     Object.entries(pictureTools(messenger)).filter(([key, one]) => {
       const path = commandOf(key, one).split(" ")
@@ -345,6 +357,7 @@ export const createServer = (
         ...surfaceCommands({ ...pictures, status }, registration),
       },
       app.errors,
+      withheld,
     )
     // The prompts and resources show messages, so a profile that may not read them gets neither.
     if (levelOf("messages") !== "deny") registerPrompts(server, { command: app.command, name })

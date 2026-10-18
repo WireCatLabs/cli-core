@@ -1,17 +1,19 @@
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
 import { serveStdio } from "@modelcontextprotocol/server/stdio"
 import { mcpErrorResult } from "@wirecat/cli-base"
+import { flatten } from "@wirecat/cli-base/commands"
 import { skillResource } from "@wirecat/cli-base/skill"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { BotMessenger } from "../../cli/bot/port.js"
+import { changesMessenger } from "../../cli/effects.js"
 import { itemOf } from "../../cli/envelope.js"
 import { wholeList } from "../../cli/messenger/chat-answers.js"
 import type { Settings } from "../../cli/settings.js"
-import { readOnlyLockOf } from "../../ports/app.js"
+import { MESSENGER_CHANGE_REFUSAL, readOnlyLockOf, readOnlyRefusal } from "../../ports/app.js"
 import type { Level, PermissionKey } from "../../sends/permissions.js"
 import { type AgentAnswer, type AgentProgram, runCommandForAgent, toolsFromCommands } from "../agent.js"
-import { type McpCommand, registerCommands } from "../surface.js"
+import { type McpCommand, normal, registerCommands } from "../surface.js"
 import { agentJson } from "../text.js"
 import { answered } from "../tool.js"
 import { botInstructions } from "./instructions.js"
@@ -121,7 +123,13 @@ export const createBotServer = (options: BotServerOptions) => {
         )
       },
     }
-    registerCommands(server, `${command}_bot`, commands)
+    registerCommands(server, `${command}_bot`, commands, undefined, (asked) => {
+      const lock = readOnlyLockOf(bot.app, env)
+      const one = flatten(program.commands).find(
+        (info) => info.path[0] === "bot" && normal(info.path.slice(1).join(" ")) === asked,
+      )
+      if (lock && one && changesMessenger(one)) throw readOnlyRefusal(lock, MESSENGER_CHANGE_REFUSAL)
+    })
     return server
   }
   return { build, tools, offered: tools.map((tool) => tool.command) }

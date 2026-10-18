@@ -134,6 +134,25 @@ const weightOf = ({ kind, action, count, people }: Counted): number =>
 /** A scheduled message counts in the hour the provider sends it. */
 const timeOf = (entry: Pick<SendEntry, "at" | "scheduledFor">): number => Date.parse(entry.scheduledFor ?? entry.at)
 
+/** A write the profile's level refuses, worded alike by the guard and by the check before connecting. */
+export const levelRefusal = (
+  refused: {
+    profile: string
+    command: string
+    key: PermissionKey
+    level: Level
+    named: PermissionKey | null | undefined
+    permissionSources: Readonly<Record<PermissionKey, string>>
+  },
+  fix = `${refused.command} ${refused.profile} config set permissions.${refused.key} allow`,
+): CliError =>
+  new CliError(
+    "permission_error",
+    `profile ${refused.profile} does not let ${refused.key} write (permissions.${refused.named} is ${refused.level}, ` +
+      `from the ${refused.permissionSources[refused.named ?? ""] ?? "default"}); to allow it: ${fix}`,
+    { permission: refused.key },
+  )
+
 /**
  * These stop a model that was talked into sending by a message it read. They do **not** stop an
  * agent that edits the configuration itself — that needs a boundary outside this process
@@ -184,15 +203,8 @@ export const sendGuard = ({
     if (levels !== undefined) {
       const key = request.key ?? keyForWrite(kind, action)
       const { level, key: named } = levelFor(levels, key, permissionDefaults)
-      if (level === "deny" || level === "readonly") {
-        const fix = permissionFix?.(request, key) ?? `${command} ${profile} config set permissions.${key} allow`
-        throw new CliError(
-          "permission_error",
-          `profile ${profile} does not let ${key} write (permissions.${named} is ${level}, from the ` +
-            `${permissionSources[named ?? ""] ?? "default"}); to allow it: ${fix}`,
-          { permission: key },
-        )
-      }
+      if (level === "deny" || level === "readonly")
+        throw levelRefusal({ profile, command, key, level, named, permissionSources }, permissionFix?.(request, key))
       if (level === "ask" && !answered.has(request)) {
         throw new CliError("confirmation_required", `${key} asks before it acts, and it was not asked`)
       }

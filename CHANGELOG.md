@@ -42,13 +42,17 @@ shape of this file.
   `<PREFIX>_READ_ONLY`, `messages send`, `edit`, `delete`, `reactions add` and every other command that changes
   something on the messenger used to connect and resolve the chat first; only the send guard refused, and a broken
   login turned the refusal into a network failure (exit 10). The shared `run()` now refuses them with exit 5 before
-  the connection opens. Such a refusal is no longer in `sends list`: nothing was resolved to record. A profile level
-  `readonly` still refuses in the send guard, after the chat is resolved, so its refusal stays journaled.
+  the connection opens. A profile level `readonly` or `deny` on the command's key does the same, in the guard's
+  words. Either refusal is in `sends list` as a shorter line: the command's key and kind (`message`, `pin`, `chat`
+  with its action, `account` with its action), and the chat only when the command was given its id — nothing is
+  resolved. A preview journals nothing.
 - **`--dry-run` answers as the write would**: under the lock a preview of a send is refused too, instead of
   reporting it allowed.
 - **The MCP servers leave out writes to the messenger under the lock**, as they already leave out what a level
-  refuses (`toolsFromCommands` takes `readOnly`). A long-running command (`serve`, `mcp`, `watch`), a call to another
-  service and a schedule keep running under the lock.
+  refuses (`toolsFromCommands` takes `readOnly`). Asked for one anyway through `<prefix>_read` or `<prefix>_write`, the
+  server answers with the lock's or the level's refusal, not "no command here". `<prefix>_write` stays listed while
+  a local write is left to offer. A long-running command (`serve`, `mcp`, `watch`), a call to another service and a
+  schedule keep running under the lock.
 
 ## 0.342.0 — 18.10.2026
 
