@@ -35,6 +35,7 @@ export const messagesTools = (messenger: Messenger): Record<string, AnyTool> => 
 const messageTools = (messenger: Messenger): Record<string, AnyTool> => {
   const chat = chatOf(messenger)
   const name = nameOf(messenger)
+  const topics = messenger.topics !== false
   return {
     messages_evidence: tool({
       title: "Prepare stored chat evidence",
@@ -65,15 +66,18 @@ const messageTools = (messenger: Messenger): Record<string, AnyTool> => {
     messages_list: tool({
       title: "Read a chat",
       description:
-        "Recent messages in a chat, oldest first. Does not mark anything read. `query` says where to start and " +
-        "which topic, all terms together: id<42 or date<2h reads back, id>42 or date>2026-10-01 forward, " +
-        "topic:12 one forum topic" +
+        "Recent messages in a chat, oldest first. Does not mark anything read. `query` says where to start" +
+        (topics ? " and which topic" : "") +
+        ", all terms together: id<42 or date<2h reads back, id>42 or date>2026-10-01 forward" +
+        (topics ? ", topic:12 one forum topic" : "") +
         (messenger.messageStars === true ? ", starred:true only the ones the owner starred" : "") +
         ". When more exist, next has page.next: pass its cursor. A voice message carries " +
         "`transcript` once heard; `transcribe` hears the rest.",
       input: v.object({
         chat,
-        query: v.optional(v.pipe(v.string(), v.description("id<42, date>2026-10-01, topic:12"))),
+        query: v.optional(
+          v.pipe(v.string(), v.description(topics ? "id<42, date>2026-10-01, topic:12" : "id<42, date>2026-10-01")),
+        ),
         cursor: v.optional(v.pipe(v.string(), v.minLength(1), v.description("page.next's cursor"))),
         limit,
         transcribe: v.optional(
@@ -91,12 +95,7 @@ const messageTools = (messenger: Messenger): Record<string, AnyTool> => {
       output: { entity: "message", list: true },
       served: async (services, args, defaults, connect) => {
         const size = args.limit ?? defaults.limit
-        const window = historyWindow(
-          args.query,
-          args.cursor,
-          "messages list",
-          historyQuery({ messageStars: messenger.messageStars === true }),
-        )
+        const window = historyWindow(args.query, args.cursor, "messages list", historyQuery(messenger))
         const found = await services.messages.list(args.chat, { limit: size, ...window })
         const hearing = await hearForTool(
           messenger,

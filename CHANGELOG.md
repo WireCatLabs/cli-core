@@ -43,6 +43,12 @@ shape of this file.
   `RecipientList.addAsync`. A write whose command ran out of time while it waited is not sent, and is journaled as
   failed.
 
+### Fixed
+
+- **The MCP `messages list` tool offers `topic:` only where the messenger has forum topics.** For a messenger with
+  `topics: false` (WhatsApp, MAX) its description and `query` help no longer name `topic:12`, and a `topic:` term
+  is refused as an unknown query field, as `messages list` on the command line already refuses it.
+
 ## 0.339.0 — 18.10.2026
 
 ### Added

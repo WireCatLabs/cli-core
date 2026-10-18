@@ -2945,6 +2945,24 @@ describe("sending over MCP", () => {
     expect(await plain.client.commands()).not.toContain("messages star")
   })
 
+  it("offers topic: on messages list only where the messenger has forum topics", async () => {
+    const forum = await connect(scripted({ topicHistory: async () => ({ items: [message], hasMore: false }) }))
+    const flat = await connect(scripted(), { own: { topics: false } })
+    const described = async (from: typeof forum.raw) => {
+      const found = await from.callTool({ name: "chat_tools_search", arguments: { query: "messages list" } })
+      return (found.content as { text: string }[])[0]?.text ?? ""
+    }
+
+    const refused = await flat.call("messages list", { chat: "7", query: "topic:12" })
+    const read = await forum.call("messages list", { chat: "7", query: "topic:12" })
+
+    expect(await described(forum.raw)).toContain("topic:12")
+    expect(await described(flat.raw)).not.toContain("topic")
+    expect(read.isError).toBe(false)
+    expect(refused.body.error).toMatchObject({ code: "validation_error" })
+    expect(refused.body.error?.message).toContain('no field "topic"')
+  })
+
   describe("the owner's own chat list", () => {
     const ALL = { chatMute: true, chatArchive: true, chatPin: true, chatMarkUnread: true }
     const COMMANDS = [
