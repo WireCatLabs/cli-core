@@ -4552,6 +4552,11 @@ describe("the guard, account and mcp config commands", () => {
     ])
   })
 
+  it("**mcp --help suggests an mcp add line that names the profile**", async () => {
+    const help = (await call(["mcp", "--help"], async () => fake, sandbox())).stdout.join("\n").replace(/\s+/g, " ")
+    expect(help).toContain("claude mcp add chat -- chat <profile> mcp")
+  })
+
   it("refuse a script in npx's cache", async () => {
     const env = sandbox()
     const mcp = { execPath: "/usr/bin/node", scriptPath: "/usr/lib/chat/bin/chat.js" }
