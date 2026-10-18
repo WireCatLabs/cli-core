@@ -27,6 +27,7 @@ jobs:
         pnpm schema:check
         pnpm check:dist
         pnpm check:agent-process
+        pnpm help:examples
       # The smoke runs the sources; only the second line loads the Bun half of the Drizzle bundle in dist.
       bun-run: |
         pnpm smoke:bun

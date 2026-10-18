@@ -276,6 +276,12 @@ every command, and `<cli> --help-all` the full commander help.
 Organise, Automate, Set up, Other); `<cli> commands <path>` narrows it. cli-core's groups carry their section; a
 tool puts its own groups in one with `inSection(command, "setup")`.
 
+Each leaf command's `--help` ends with **Returns** (the declared output entity and its first fields, or the
+description), **Next usually** (up to three commands whose arguments take what it returns; `nextUsually(command,
+{ pin, drop })` overrides them) and **Example** (the definition's `examples`, or one generated from the usage).
+`commandHelpMarkdown(root, path)` renders the same for `docs/commands.md`; `exampleReport(program)` lists the
+commands still on a generated example, and `pnpm help:examples` prints that list for the shared commands.
+
 ## Evidence packets for agents
 
 `prepareEvidencePacket` from `@wirecat/cli-core/services` packages a message page that the

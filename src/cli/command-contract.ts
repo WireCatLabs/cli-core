@@ -14,7 +14,7 @@ export const SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
  * What `--json` prints, from the entity the command declares (`annotate(…, { output })`): a list or one thing of it.
  * A command that declares none answers the same envelopes with items of any shape; `--jsonl` streams the items.
  */
-const outputOf = (command: Command) => {
+export const outputOf = (command: Command) => {
   const output = metaOf(command).output
   const entity = output
     ? (ENTITIES[(output.view ? `${output.entity}.${output.view}` : output.entity) as EntityName] as

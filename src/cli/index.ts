@@ -228,6 +228,15 @@ export {
 } from "./envelope.js"
 export { withAbort } from "./execution.js"
 export {
+  type CommandHelp,
+  commandHelp,
+  commandHelpMarkdown,
+  commandHelpText,
+  exampleReport,
+  type NextChoice,
+  nextUsually,
+} from "./help/command-help.js"
+export {
   type FirstScreen,
   type FirstScreenLine,
   firstScreen,
