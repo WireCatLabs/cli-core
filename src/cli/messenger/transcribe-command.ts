@@ -1,5 +1,6 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
+import type { RemoteFile } from "../../ports/messenger.js"
 import { type Kept, openKept } from "../../speech/hearing.js"
 import { isInstalled } from "../../speech/install.js"
 import { choose, type Heard, hearLocally, hearOnline, notDownloaded } from "../../speech/transcribe.js"
@@ -7,6 +8,7 @@ import { REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { heardAnswer } from "./message-answers.js"
+import { keepRefreshedRefs } from "./refreshed-refs.js"
 
 /** `messages transcribe`: a voice message as text, by the messenger or by a model on this machine. */
 export const transcribeSubcommand = (messages: Command, messenger: Messenger): Command =>
@@ -45,7 +47,9 @@ export const transcribeSubcommand = (messages: Command, messenger: Messenger): C
         if (before && !(choice.with === "local" && before.source !== choice.model.id)) {
           return [resolved, before, undefined] as const
         }
-        return [resolved, undefined, await hearOnline(messenger, connection, resolved, id, choice)] as const
+        const read = (file: RemoteFile) =>
+          keepRefreshedRefs(messenger, context, resolved, id, [file], context.renderer.warn)
+        return [resolved, undefined, await hearOnline(messenger, connection, resolved, id, choice, read)] as const
       })
       const heard: Heard = before
         ? {

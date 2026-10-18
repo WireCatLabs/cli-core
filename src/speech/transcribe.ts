@@ -62,6 +62,7 @@ export const notDownloaded = (messenger: Messenger, model: SpeechModel): CliErro
 /**
  * Over an open connection: the messenger's own transcript, or the recording's bytes for a local model.
  * The model runs after the connection closes — a minute of speech should not hold a socket open.
+ * `read` gets the recording once its bytes are all in, for a reference the messenger renewed while they were read.
  */
 export const hearOnline = async (
   messenger: Messenger,
@@ -69,6 +70,7 @@ export const hearOnline = async (
   chat: string,
   messageId: string,
   choice: Choice,
+  read?: (file: RemoteFile) => Promise<void>,
 ): Promise<Heard | Uint8Array> => {
   if (choice.with !== "local") {
     const canAsk = typeof connection.transcribe === "function"
@@ -86,7 +88,9 @@ export const hearOnline = async (
   const { files } = await capability(connection, "download", "download attachments")(chat, messageId)
   const voice = files.find((file) => file.kind === "voice" || file.mime === "audio/ogg")
   if (!voice) throw new CliError("validation_error", "that message is not a voice message")
-  return readAll(voice)
+  const bytes = await readAll(voice)
+  await read?.(voice)
+  return bytes
 }
 
 /** The local model, on the bytes `hearOnline` fetched. */

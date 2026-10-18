@@ -4,6 +4,7 @@ import { basename, join, resolve } from "node:path"
 import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { CliError } from "@wirecat/cli-base"
+import type { RefreshedFile } from "../domain/attachments.js"
 import type { Id } from "../domain/models.js"
 import type { RemoteFile } from "../ports/messenger.js"
 import { batchProgress } from "./batch.js"
@@ -16,6 +17,21 @@ export interface Saved {
   /** Only with `--all`: the file was already there from an earlier run, and was left as it was. */
   existing?: true
 }
+
+/** The files the messenger gave a new reference for while their bytes were read, to save without a path. */
+export const refreshedFiles = (files: readonly RemoteFile[]): RefreshedFile[] =>
+  files.flatMap(({ kind, name, position, providerRef }) =>
+    providerRef === undefined || Object.keys(providerRef).length === 0
+      ? []
+      : [
+          {
+            kind,
+            providerRef,
+            ...(name === undefined ? {} : { name }),
+            ...(position === undefined ? {} : { position }),
+          },
+        ],
+  )
 
 /**
  * The files are saved whatever happens here: a store that cannot take the paths costs only the later

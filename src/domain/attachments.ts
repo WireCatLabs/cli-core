@@ -17,6 +17,17 @@ export interface DownloadedFile {
   providerRef?: ProviderMetadata
 }
 
+/** A file read without being saved, and the new reference the messenger gave while it was read. */
+export interface RefreshedFile {
+  kind: string
+  name?: string
+  position?: number
+  providerRef: ProviderMetadata
+}
+
+/** What a file is matched to a stored attachment by. */
+export type PlacedFile = Pick<DownloadedFile, "kind" | "name" | "position">
+
 export interface StoredAttachment {
   position: number
   kind: string
@@ -29,7 +40,7 @@ export interface StoredAttachment {
  * order is trusted only when the files and the stored file attachments agree one to one by kind. A
  * wrong path is worse than none: text read from it would be credited to another file.
  */
-export const matchDownloads = (stored: readonly StoredAttachment[], files: readonly DownloadedFile[]) => {
+export const matchDownloads = <F extends PlacedFile>(stored: readonly StoredAttachment[], files: readonly F[]) => {
   const byPosition = new Map(stored.map((one) => [one.position, one]))
   if (files.every(({ position }) => position !== undefined)) {
     return files.map(({ position, kind }) => {

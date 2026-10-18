@@ -48,6 +48,12 @@ shape of this file.
 - **The MCP `messages list` tool offers `topic:` only where the messenger has forum topics.** For a messenger with
   `topics: false` (WhatsApp, MAX) its description and `query` help no longer name `topic:12`, and a `topic:` term
   is refused as an unknown query field, as `messages list` on the command line already refuses it.
+- **A file read without being saved keeps the new reference the messenger gave for it.** `messages transcribe
+  --local`, the MCP `messages photo` tool and the picture indexer (`images embed`) now save a `providerRef` the
+  adapter set while `bytes()` ran on the stored attachment of that account, as downloads have since 0.339.0, through
+  the new store write `attachments.keepProviderRefs` (matched as `keepDownloads` matches; a saved path stays). A ref
+  that cannot be saved costs only another fetch: transcribe warns without showing it, the photo and the picture are
+  answered anyway. `messages list --transcribe` and the MCP `messages transcribe` tool do not save it yet.
 
 ## 0.339.0 — 18.10.2026
 

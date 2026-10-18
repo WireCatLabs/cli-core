@@ -1,4 +1,4 @@
-import type { DownloadedFile } from "../domain/attachments.js"
+import type { DownloadedFile, RefreshedFile } from "../domain/attachments.js"
 import type { Id } from "../domain/models.js"
 import { keysOver } from "./keys.js"
 import type { AttachmentTextEntry, AttachmentView, FileAttachment } from "./sqlite/attachment-texts.js"
@@ -15,6 +15,11 @@ export interface AccountAttachments {
    * attachments it recorded: a file it cannot tell apart from another is not recorded.
    */
   keepDownloads(key: AccountKey, chatId: Id, messageId: Id, files: readonly DownloadedFile[]): Promise<number>
+  /**
+   * The new reference the messenger gave for files read without saving them (a voice message heard, a photo looked
+   * at), matched as `keepDownloads` matches. Answers how many attachments it placed.
+   */
+  keepProviderRefs(key: AccountKey, chatId: Id, messageId: Id, files: readonly RefreshedFile[]): Promise<number>
   /** File attachments of this account's live messages, newest first, below `beforePk`; never one an agent wrote. */
   fileAttachments(
     key: AccountKey,
@@ -47,6 +52,16 @@ export const accountAttachmentsOver = (context: StoreContext): AccountAttachment
       let kept = 0
       write(database, () => {
         kept = attachmentRows.keepDownloads(context, chatKey, messageId, files)
+      })
+      return kept
+    },
+
+    keepProviderRefs: async (key, chatId, messageId, files) => {
+      const chatKey = chatKeyOf(key, chatId)
+      if (chatKey === undefined || files.length === 0) return 0
+      let kept = 0
+      write(database, () => {
+        kept = attachmentRows.keepProviderRefs(context, chatKey, messageId, files)
       })
       return kept
     },

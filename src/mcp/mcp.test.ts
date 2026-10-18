@@ -26,7 +26,7 @@ import { skillCommand } from "../cli/skill-command.js"
 import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
-import type { MessengerAdapter, SendOptions } from "../ports/messenger.js"
+import type { MessengerAdapter, RemoteFile, SendOptions } from "../ports/messenger.js"
 import type { Asker, GuardRequest, SendGuard } from "../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../sends/journal.js"
 import { RESOURCES } from "../sends/permissions.js"
@@ -2435,6 +2435,36 @@ describe("the photo tool", () => {
     expect(isError).toBe(false)
     expect(content[0]).toEqual({ type: "image", mimeType: "image/jpeg", data: Buffer.from(jpeg).toString("base64") })
     expect(JSON.parse(content[1]?.text ?? "").item).toEqual({ chat_id: "7", message_id: "1", bytes: jpeg.length })
+  })
+
+  it("saves a reference the messenger renewed while the photo was read, on the stored attachment", async () => {
+    const OWNER = { provider: "chat", account: "500" }
+    const photo: RemoteFile = {
+      kind: "photo",
+      position: 0,
+      async *bytes() {
+        yield jpeg
+        photo.providerRef = { directPath: "/synthetic/fresh" }
+      },
+    }
+    const { call, client, env } = await connect(scripted({ download: async () => ({ files: [photo], skipped: [] }) }))
+    await call("chats list")
+    const seeded = await openStore({ path: env.MESSAGING_STORE })
+    await seeded.messages.saveMessages(
+      OWNER,
+      "7",
+      [{ ...message, attachments: [{ kind: "photo", providerRef: { directPath: "/synthetic/expired" } }] }],
+      { via: "history" },
+    )
+    await seeded.close()
+
+    const looked = await client.run({ command: "messages photo", arguments: { chat: "Book club", message: "1" } })
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const read = await store.messages.message(OWNER, "1", { chatId: "7" })
+    await store.close()
+
+    expect(looked.isError).not.toBe(true)
+    expect(read?.attachments.map((one) => one.providerRef)).toEqual([{ directPath: "/synthetic/fresh" }])
   })
 
   it("refuses anything else with the command that saves it", async () => {
